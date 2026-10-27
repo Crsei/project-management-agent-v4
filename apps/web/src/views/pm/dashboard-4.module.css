@@ -1,0 +1,680 @@
+.page {
+  --status-success: #10b981;
+  --status-waiting: #f59e0b;
+  --status-error: #ef4444;
+  --status-neutral: #71717a;
+}
+.page [data-pm-header] {
+  align-items: flex-start;
+  min-height: 94px;
+  padding-top: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+.page [data-pm-header] h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 30px;
+  letter-spacing: -0.025em;
+}
+.page [data-pm-header] p {
+  max-width: 680px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.page [data-pm-toolbar] {
+  background: transparent;
+}
+.page [data-pm-header] .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.eyebrow > svg {
+  flex-shrink: 0;
+  color: var(--foreground);
+}
+.page [data-pm-scroll] {
+  padding-top: 20px;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.heading {
+  min-width: 0;
+  flex: 1;
+}
+.heading > p:last-child {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+}
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+.actions > button {
+  height: 36px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.shortcuts {
+  margin-bottom: 16px;
+}
+.quickActions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.quickActions > button {
+  justify-content: flex-start;
+  height: 70px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(24 24 27 / 5%);
+  font-size: 14px;
+}
+.quickActions svg {
+  box-sizing: content-box;
+  flex-shrink: 0;
+  margin-right: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--text-secondary);
+}
+.layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+}
+.main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+}
+.rail {
+  display: flex;
+  width: 360px;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+.canvasCard,
+.tableCard,
+.panel {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(24 24 27 / 5%);
+}
+.canvasCard {
+  position: relative;
+  padding: 16px;
+}
+.canvas {
+  height: 620px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  --canvas-edge: #71717a;
+}
+.canvas :global(.react-flow) {
+  background: var(--surface);
+}
+.canvas :global(.react-flow__background) {
+  opacity: 0.35;
+}
+.canvas :global(.react-flow__panel.bottom.left) {
+  top: 16px;
+  bottom: auto;
+  left: 16px;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgb(24 24 27 / 8%);
+}
+.canvas :global(.react-flow__panel) button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 6px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--surface);
+}
+.canvas :global(.react-flow__panel) button:last-child {
+  border-bottom: 0;
+}
+.canvas :global(.react-flow__panel) button svg {
+  width: 16px;
+  height: 16px;
+}
+.canvas :global(.react-flow__panel) button:nth-child(-n + 2) svg {
+  display: none;
+}
+.canvas :global(.react-flow__panel) button:nth-child(-n + 2)::before {
+  font-size: 20px;
+  line-height: 16px;
+  content: "+";
+}
+.canvas :global(.react-flow__panel) button:nth-child(2)::before {
+  content: "−";
+}
+.canvas :global(.react-flow__edge-path) {
+  stroke-dasharray: 6 6;
+}
+.canvas :global(.react-flow__attribution) {
+  display: none;
+}
+.node {
+  position: relative;
+  min-height: 91px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgb(24 24 27 / 4%);
+}
+.node[data-band="on-track"] {
+  border-color: color-mix(in srgb, var(--status-success) 42%, var(--border));
+  background: color-mix(in srgb, var(--status-success) 5%, var(--surface));
+}
+.node[data-band="at-risk"] {
+  border-color: color-mix(in srgb, var(--status-waiting) 42%, var(--border));
+  background: color-mix(in srgb, var(--status-waiting) 5%, var(--surface));
+}
+.node[data-band="off-track"] {
+  border-color: color-mix(in srgb, var(--status-error) 42%, var(--border));
+  background: color-mix(in srgb, var(--status-error) 5%, var(--surface));
+}
+.node[data-selected="true"] {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.nodeTitle {
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nodeSummary {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.nodeFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.nodeFooter > span:last-child {
+  color: var(--text-secondary);
+}
+.nodeIssue {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--status-error) 30%, var(--border));
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--status-error);
+  font-size: 0;
+}
+.nodeIssue svg {
+  flex-shrink: 0;
+}
+.ports :global(.react-flow__handle) {
+  width: 4px;
+  height: 4px;
+  min-width: 4px;
+  min-height: 4px;
+  opacity: 0;
+}
+.legend {
+  position: absolute;
+  right: 40px;
+  bottom: 32px;
+  left: 40px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  pointer-events: none;
+}
+.edgeLegend {
+  margin-left: auto;
+}
+.edgeLegend::before {
+  display: inline-block;
+  width: 20px;
+  margin-right: 8px;
+  border-top: 1px dashed var(--text-muted);
+  vertical-align: middle;
+  content: "";
+}
+.tableCard {
+  position: relative;
+  overflow: hidden;
+}
+.tableHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+}
+.tableHeader h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  white-space: nowrap;
+}
+.tableTools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.tableTools > div {
+  width: 220px;
+  min-width: 0;
+}
+.tableTools input,
+.tableTools button {
+  height: 32px;
+  min-height: 32px;
+  font-size: 12px;
+}
+.tableCard caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.tableCard table {
+  min-width: 980px;
+}
+.tableCard tr {
+  height: 44px;
+}
+.tableCard th,
+.tableCard td {
+  font-size: 12px;
+  line-height: 16px;
+}
+.tableCard th {
+  background: var(--background);
+  font-weight: 500;
+}
+.projectCell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+.projectCell > span:last-child {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.identifier {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.035em;
+}
+.bandLabel,
+.dueDate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.bandLabel {
+  text-transform: capitalize;
+}
+.bandDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.panel {
+  padding: 16px;
+}
+.panel h2 {
+  margin: 0 0 20px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+.healthSummary {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.donut {
+  position: relative;
+  width: 128px;
+  height: 128px;
+}
+.donut > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.donut > div {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.donut strong {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+}
+.donut > div > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.healthList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.healthRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.healthRow strong {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.pathList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pathRow {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 32px;
+}
+.pathRow:last-child {
+  padding-bottom: 0;
+}
+.pathRow:not(:last-child)::after {
+  position: absolute;
+  top: 40px;
+  bottom: 8px;
+  left: 4px;
+  border-left: 1px solid var(--border);
+  content: "";
+}
+.pathRow > .bandDot {
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+}
+.pathRow > div {
+  min-width: 0;
+  flex: 1;
+}
+.pathAction {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: 16px;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  line-height: 16px;
+}
+.pathTitle {
+  min-width: 0;
+  max-width: 290px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pathRow p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+.attentionList {
+  display: grid;
+  gap: 12px;
+}
+.attentionCard {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--status-error) 20%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--status-error) 5%, var(--surface));
+}
+.attentionCard h3 {
+  margin: 0;
+  color: var(--status-error);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.attentionCard p {
+  margin: 8px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.attentionCard button {
+  min-height: 24px;
+  margin-left: -4px;
+  padding: 4px;
+  color: var(--status-error);
+  font-size: 12px;
+}
+.exclusionNote {
+  margin: 16px 0 12px;
+}
+.panel [data-pm-dependency-issues] {
+  gap: 8px;
+  padding: 0;
+}
+.panel [data-pm-dependency-issues] > li {
+  padding: 10px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.selectedProject {
+  margin-top: 12px;
+}
+.caption,
+.empty {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.empty {
+  padding: 24px 16px;
+}
+.filter {
+  width: 220px;
+}
+.filter button {
+  width: 100%;
+  justify-content: space-between;
+}
+.filter button[aria-pressed="true"] {
+  background: var(--selection);
+}
+.viewOptions {
+  width: min(320px, calc(100vw - 24px));
+  padding: 12px;
+}
+.viewOptions label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+}
+.viewOptions p {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+@media (max-width: 1199px) {
+  .layout {
+    flex-direction: column;
+  }
+  .main,
+  .rail {
+    width: 100%;
+  }
+  .rail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rail > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 767px) {
+  .page [data-pm-header] {
+    min-height: 0;
+    margin-bottom: 12px;
+  }
+  .header {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .actions {
+    flex-wrap: wrap;
+  }
+  .quickActions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .quickActions > button {
+    height: 70px;
+    padding: 12px;
+    text-align: left;
+    white-space: normal;
+    line-height: 20px;
+  }
+  .quickActions svg {
+    margin-right: 0;
+    padding: 6px;
+  }
+  .canvas {
+    height: 520px;
+  }
+  .legend {
+    right: 24px;
+    left: 24px;
+    gap: 8px 12px;
+    padding-top: 12px;
+  }
+  .tableHeader {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .tableTools > div {
+    width: auto;
+    flex: 1;
+  }
+  .rail {
+    display: flex;
+  }
+  .healthSummary {
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+  .donut {
+    width: 112px;
+    height: 112px;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .canvasCard,
+  .tableCard,
+  .panel {
+    box-shadow: none;
+  }
+}
+.tableCard [role="region"] {
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+}
+:global(.dark) .canvas :global(.react-flow) {
+  background: var(--background);
+}

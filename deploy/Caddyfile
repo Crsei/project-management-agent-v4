@@ -1,0 +1,56 @@
+{
+	admin off
+	auto_https off
+	# Error logs must not retain mistyped credential URLs or request headers.
+	log {
+		format filter {
+			wrap json
+			fields {
+				request delete
+			}
+		}
+	}
+}
+
+{$PM_WEB_LISTEN::8080} {
+	# This origin is intentionally HTTP-only behind a separately managed TLS edge.
+	# The shipped deployment never serves demonstration routes, even for a Lab build.
+	@lab path /lab /lab/*
+	handle @lab {
+		respond "Not Found" 404
+	}
+
+	@account path /pm/account /pm/account/*
+	handle @account {
+		root * {$PM_WEB_ROOT:/srv}
+		try_files {path} /index.html
+		header {
+			Cache-Control "no-store"
+			Referrer-Policy "no-referrer"
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+		}
+		file_server
+	}
+
+	@api path /api /api/* /health /health/* /openapi.json
+	handle @api {
+		reverse_proxy {$PM_API_UPSTREAM:api:4100} {
+			# Flush SSE immediately; preserve cookies, Origin, Last-Event-ID and URI.
+			# PUBLIC_ORIGIN on the API must match the browser-visible origin.
+			flush_interval -1
+		}
+	}
+
+	handle /assets/* {
+		root * {$PM_WEB_ROOT:/srv}
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	handle {
+		root * {$PM_WEB_ROOT:/srv}
+		try_files {path} /index.html
+		header Cache-Control "no-cache"
+		file_server
+	}
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@project-management/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "pnpm -w dev",
+    "start": "pnpm -w start",
+    "build": "pnpm -w build",
+    "typecheck": "pnpm -w typecheck",
+    "test": "node --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "fastify": "5.12.7"
+  }
+}

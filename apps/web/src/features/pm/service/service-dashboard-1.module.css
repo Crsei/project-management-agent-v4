@@ -1,0 +1,141 @@
+.queryNotice:empty {
+  display: none;
+}
+.queryNotice {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.queryNotice:not(:empty) {
+  margin-bottom: 10px;
+}
+.unavailableCount {
+  font-size: 14px;
+  line-height: 24px;
+}
+.statusStats > button {
+  min-width: 0;
+  padding: 16px 12px;
+}
+.statusStats > button > span {
+  min-height: 20px;
+  gap: 8px;
+  white-space: normal;
+}
+.statusStats > button > span > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.statusStats > button > span > span:first-child {
+  width: 8px;
+  height: 8px;
+}
+.unavailableChart {
+  display: flex;
+  width: 100%;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border-block: 1px dashed var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+.filters {
+  padding-block: 8px;
+  min-width: 0;
+}
+.filters > div {
+  min-width: 0;
+  max-width: 100%;
+}
+.identifier {
+  display: inline-block;
+  max-width: 104px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issueTitle {
+  min-width: 0;
+}
+.member {
+  max-width: 100%;
+  min-width: 0;
+}
+.member > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.projectName {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.status[data-status="ready"] { color: #0891a2; }
+.status[data-status="in_progress"] { color: #b86a00; }
+.status[data-status="in_review"] { color: #a325be; }
+.status[data-status="done"] { color: #158558; }
+:global(.dark) .status[data-status="ready"] { color: #67e8f9; }
+:global(.dark) .status[data-status="in_progress"] { color: #fbbf24; }
+:global(.dark) .status[data-status="in_review"] { color: #e879f9; }
+:global(.dark) .status[data-status="done"] { color: #6ee7b7; }
+.cover {
+  background-image: linear-gradient(135deg, #173b3c, #325452 55%, #667d76);
+}
+.agendaScope {
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+.agendaOwner {
+  margin-top: 10px;
+  min-width: 0;
+}
+@media (max-width: 767px) {
+  :global([data-pm-page="pm-service-dashboard-1"]) {
+    overflow: auto;
+    overflow-x: hidden;
+  }
+  :global([data-pm-page="pm-service-dashboard-1"]) .rail {
+    display: block;
+    position: static;
+    width: 100%;
+    margin-top: 24px;
+    overflow: visible;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .filters :global(.w-64) {
+    width: 100%;
+    min-width: 0;
+  }
+  .issueTitle {
+    flex-wrap: wrap;
+  }
+  .identifier {
+    max-width: 100%;
+  }
+  .issueTitle > span:last-child {
+    flex-basis: 100%;
+  }
+  .member {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .projectName {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}

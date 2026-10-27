@@ -1,0 +1,149 @@
+name: ${PM_APP_PROJECT:-project-management-app}
+
+x-backend: &backend
+  image: ${PM_BACKEND_IMAGE:-pm-backend:local}
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+    target: backend
+    args:
+      NODE_IMAGE: ${PM_NODE_IMAGE:-node:24-bookworm-slim}
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  stop_grace_period: 30s
+
+services:
+  migrate:
+    <<: *backend
+    env_file:
+      - ${PM_MIGRATION_ENV_FILE:?Set a private database-only migration env file}
+    restart: "no"
+    command: [node, deploy/manage.mjs, migrate]
+    networks: [database]
+
+  api:
+    <<: *backend
+    env_file:
+      - ${PM_RUNTIME_ENV_FILE:?Set a private API runtime env file}
+    restart: unless-stopped
+    # This is an operator constraint, not a distributed filesystem lock.
+    deploy:
+      replicas: 1
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4100"
+      PUBLIC_ORIGIN: ${PM_PUBLIC_ORIGIN:?Set the exact browser-visible origin}
+      COOKIE_SECURE: ${PM_COOKIE_SECURE:-true}
+      BLOB_ROOT: /var/lib/pm/blobs
+      CORE_WORKSPACE_ROOT: /var/lib/pm/core
+      LOCAL_PROJECTS_ENABLED: ${PM_LOCAL_PROJECTS_ENABLED:-false}
+      LOCAL_DATA_ROOT: /var/lib/pm
+      LOCAL_PROJECT_ALLOWED_ROOTS: '["/var/lib/pm/projects"]'
+      LOCAL_PROJECT_DEFAULT_PARENT: /var/lib/pm/projects
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - blob-data:/var/lib/pm/blobs
+      - core-data:/var/lib/pm/core
+      - project-data:/var/lib/pm/projects
+      - ${PM_WEBHOOK_CONFIG_DIRECTORY:-../.local/webhook-config}:/run/pm-webhook-config:ro
+    networks: [default, database]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4100/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      start_period: 20s
+      retries: 12
+
+  worker:
+    <<: *backend
+    env_file:
+      - ${PM_WORKER_ENV_FILE:?Set a separate private Worker env file without S3/AWS/blob credentials}
+    environment:
+      CORE_WORKSPACE_ROOT: /var/lib/pm/core
+    volumes:
+      - core-data:/var/lib/pm/core:ro
+      - project-data:/var/lib/pm/projects:ro
+      - ${PM_WEBHOOK_CONFIG_DIRECTORY:-../.local/webhook-config}:/run/pm-webhook-config:ro
+      - ${PM_WEBHOOK_KEY_DIRECTORY:-../.local/webhook-keys}:/run/pm-webhook-keys:ro
+    restart: unless-stopped
+    command: [node, dist/apps/worker/src/main.js]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [default, database]
+
+  storage:
+    <<: *backend
+    profiles: [maintenance]
+    restart: "no"
+    env_file:
+      - ${PM_STORAGE_ENV_FILE:?Set a private maintenance env file; S3 uses SOURCE_S3_/TARGET_S3_ credentials}
+    entrypoint: [node, dist/scripts/blob-storage.js]
+    volumes:
+      - blob-data:/var/lib/pm/blobs
+      - core-data:/var/lib/pm/core:ro
+      - ${PM_MAINTENANCE_DIRECTORY:-../.local/blob-maintenance}:/maintenance
+    networks: [default, database]
+
+  project-storage:
+    <<: *backend
+    profiles: [maintenance]
+    restart: "no"
+    env_file:
+      - ${PM_STORAGE_ENV_FILE:?Set a private maintenance env file}
+    environment:
+      BLOB_ROOT: /var/lib/pm/blobs
+      CORE_WORKSPACE_ROOT: /var/lib/pm/core
+      LOCAL_DATA_ROOT: /var/lib/pm
+    entrypoint: [node, dist/scripts/local-project-storage.js]
+    volumes:
+      - blob-data:/var/lib/pm/blobs
+      - core-data:/var/lib/pm/core
+      - project-data:/var/lib/pm/projects
+      - ${PM_MAINTENANCE_DIRECTORY:-../.local/blob-maintenance}:/maintenance
+    networks: [default, database]
+
+  web:
+    image: ${PM_WEB_IMAGE:-pm-web:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: web
+      args:
+        NODE_IMAGE: ${PM_NODE_IMAGE:-node:24-bookworm-slim}
+        CADDY_IMAGE: ${PM_CADDY_IMAGE:-caddy:2-alpine}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${PM_WEB_PORT:-34120}:8080"
+    read_only: true
+    tmpfs:
+      - /config
+      - /data
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/health/ready]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+networks:
+  database:
+    external: true
+    name: ${PM_DATABASE_NETWORK:?Set the existing dedicated PostgreSQL Compose network}
+
+volumes:
+  blob-data:
+  core-data:
+  project-data:

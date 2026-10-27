@@ -1,0 +1,17 @@
+# verification artifacts (reference + ported-page captures)
+.ref/
+.mine/
+
+# isolated copy: generated, private, and local-only files
+node_modules/
+dist/
+.local/
+.env
+.env.*
+!.env.example
+.omp/
+.tmp/
+*.tsbuildinfo
+test-results/
+playwright-report/
+storybook-static/

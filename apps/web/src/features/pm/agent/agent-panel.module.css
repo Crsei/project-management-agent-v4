@@ -1,0 +1,163 @@
+.host {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.source {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.backdrop {
+  display: none;
+}
+
+.panel {
+  display: flex;
+  flex: 0 0 380px;
+  width: 380px;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  min-height: 52px;
+  padding: 8px 10px 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-popover);
+  background: var(--agent);
+  color: var(--primary-foreground);
+}
+
+.titleWrap {
+  min-width: 0;
+}
+
+.titleWrap h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.titleWrap p {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+.iconButton:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.context > span {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--pill-radius);
+  background: var(--surface);
+}
+
+.draft {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--border)) !important;
+}
+
+
+@media (max-width: 900px) {
+  .panel {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 40;
+    width: min(92%, 420px);
+    box-shadow: -12px 0 32px -24px rgb(0 0 0 / 45%);
+  }
+
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 35;
+    display: block;
+    border: 0;
+    background: rgb(0 0 0 / 28%);
+    cursor: pointer;
+  }
+}

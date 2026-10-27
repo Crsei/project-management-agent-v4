@@ -1,0 +1,254 @@
+.avatarWrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.presence {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--surface);
+  border-radius: var(--pill-radius);
+  background: var(--muted-foreground);
+}
+.presence[data-presence="available"] {
+  background: var(--status-success);
+}
+.presence[data-presence="away"] {
+  background: var(--status-waiting);
+}
+.presence[data-presence="offline"] {
+  background: var(--status-neutral);
+}
+.cardName {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cardSubtitle {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.muted {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+.missing {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+.receipt {
+  min-height: 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* Member List 2 contact card */
+.contactCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 16px;
+  padding: 24px 16px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module-value);
+  background: var(--surface);
+}
+.contactTop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.contactTop .cardName {
+  max-width: 100%;
+}
+.detailsButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+.contactFooter {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0 -16px;
+  border-top: 1px solid var(--border);
+}
+.contactFooter > button {
+  justify-content: center;
+  gap: 8px;
+  border-radius: 0;
+  height: 44px;
+}
+.contactFooter > button + button {
+  border-left: 1px solid var(--border);
+}
+.contactReceipt {
+  order: -1;
+  margin: 0;
+}
+
+/* Team List 2 measured card hierarchy; all other people cards keep shared defaults. */
+.directoryCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 279px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module-value);
+  background: var(--surface);
+}
+.directoryTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  min-height: 56px;
+  margin-bottom: 16px;
+}
+.directoryTop .avatarWrap {
+  width: 56px;
+  height: 56px;
+}
+.directoryTop .avatarWrap > :first-child {
+  /* Avatar public size stops at40px; this measured56px exception is card-local. */
+  width: 56px !important;
+  height: 56px !important;
+}
+.directoryTop [role="img"] {
+  font-size: 18px;
+}
+.directoryTop [data-pm-engagement] {
+  min-height: 28px;
+  border-radius: var(--pill-radius);
+  font-size: 12px;
+  line-height: 16px;
+}
+.directoryIdentity {
+  min-width: 0;
+  margin-bottom: 20px;
+}
+.directoryIdentity .cardName {
+  font-size: 15px;
+  line-height: 22.5px;
+}
+.directoryIdentity .cardSubtitle {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0 0 16px;
+}
+.facts dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+.facts dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emailRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 32px;
+}
+.emailRow > button {
+  flex-shrink: 0;
+  margin-right: auto;
+}
+.emailText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.directoryFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.directoryFooter .spacer {
+  flex: 1;
+}
+
+/* Shared details dialog */
+.detailsFacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0 0 16px;
+}
+.detailsFacts dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+.detailsFacts dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.teamList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contactCard[data-selected="true"],
+.directoryCard[data-selected="true"],
+.directoryCard:has([aria-checked="true"]) {
+  border-color: var(--primary);
+  background: var(--selection);
+}
+.contactInfo { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.contactCard > .contactInfo { padding: 0 0 12px; }
+.contactInfo .emailText { flex: 1; }
+.contactInfo .emailRow > button { margin-right: 0; }
+.detailsBody { max-height: min(480px, calc(100dvh - 240px)); overflow-y: auto; }
+.detailsBody .teamList { margin-top: 16px; }

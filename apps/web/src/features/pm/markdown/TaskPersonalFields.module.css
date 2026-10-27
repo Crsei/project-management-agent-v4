@@ -1,0 +1,336 @@
+.field,
+.icon,
+.completion,
+.choice {
+  box-sizing: border-box;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  height: 26px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.field > span,
+.field > time,
+.choice > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field > svg,
+.choice > svg {
+  flex-shrink: 0;
+}
+
+.field:hover:not(:disabled),
+.icon:hover:not(:disabled),
+.choice:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.field:disabled,
+.choice:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.field[data-category="backlog"],
+.field[data-category="unstarted"] {
+  color: var(--muted-foreground);
+}
+
+.field[data-category="started"] > svg,
+.choice[data-category="started"] > svg {
+  color: var(--warning);
+}
+
+.field[data-category="completed"] > svg,
+.choice[data-category="completed"] > svg {
+  color: var(--success);
+}
+
+.field[data-category="canceled"] > svg,
+.choice[data-category="canceled"] > svg {
+  color: var(--muted-foreground);
+}
+
+.field[data-priority="urgent"] > svg,
+.choice[data-priority="urgent"] > svg,
+.field[data-overdue] {
+  color: var(--destructive);
+}
+
+.field[data-priority="high"] > svg,
+.choice[data-priority="high"] > svg {
+  color: var(--warning);
+}
+
+.field[data-priority="medium"] > svg,
+.choice[data-priority="medium"] > svg {
+  color: var(--accent);
+}
+
+.field[data-priority="low"] > svg,
+.choice[data-priority="low"] > svg {
+  color: var(--muted-foreground);
+}
+
+.completion {
+  display: inline-flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1.5px solid var(--border-hover, var(--border));
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted-foreground);
+}
+
+.completion {
+  position: relative;
+}
+
+.completion::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
+
+.completion:hover:not(:disabled) {
+  border-color: var(--muted-foreground);
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+.completion:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.completed {
+  border-color: var(--success);
+  background: var(--success);
+  color: var(--primary-foreground);
+}
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  max-width: 100%;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.field:focus-visible,
+.icon:focus-visible,
+.completion:focus-visible,
+.choice:focus-visible,
+.dateBody :is(button, input):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.menu,
+.datePanel {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: min(var(--available-width), calc(100vw - 24px));
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-popover-value, 8px);
+  background: var(--surface);
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.menu {
+  width: 236px;
+}
+
+.menuTitle {
+  margin: 0;
+  padding: 5px 7px 7px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12px;
+  text-align: start;
+}
+
+.choice > span {
+  flex: 1;
+}
+
+.choice[aria-pressed="true"] {
+  background: var(--selection);
+  opacity: 1;
+}
+
+.hint,
+.error {
+  margin: 0;
+  padding: 6px 7px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.error {
+  color: var(--destructive);
+}
+
+.assignee {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 8px 7px 3px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.assignee > svg {
+  flex-shrink: 0;
+}
+
+.datePanel {
+  width: 304px;
+  padding: 12px;
+}
+
+.dateBody {
+  min-width: 0;
+}
+
+.dateHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.dateHeading h3 {
+  min-width: 0;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.dateBody form {
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+.dateBody form > label {
+  flex: 1 1 100%;
+  min-width: 0;
+  gap: 5px;
+}
+
+.dateBody input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+}
+
+.dateBody form > button {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  white-space: normal;
+}
+
+.dateBody form > div {
+  flex-basis: 100%;
+  min-width: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.dateBody > .hint,
+.dateBody > .error {
+  padding-inline: 0;
+}
+
+@media (pointer: coarse) {
+  .field,
+  .choice,
+  .icon {
+    min-height: 44px;
+  }
+
+  .icon {
+    min-width: 40px;
+  }
+
+  .completion::before {
+    inset: -14px;
+  }
+}
+
+@media (forced-colors: active) {
+  .completion {
+    border-color: ButtonText;
+  }
+
+  .completed {
+    background: Highlight;
+    color: HighlightText;
+  }
+}

@@ -1,0 +1,232 @@
+/* 设计模式采用：语义 Token 层（见 docs/frontend-design-adoption.md）
+   顺序：DESIGN-PATTERNS.md 的候选值 → 本应用的语义变量；浅色/深色各自完整可读。 */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-focus: var(--focus);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-pressed: var(--surface-pressed);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border-hover: var(--border-hover);
+  --color-selection: var(--selection);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+  --color-agent: var(--agent);
+  /* 圆角随职责增加：内部控件小于外部容器 */
+  --radius-inline: var(--radius-inline-value);
+  --radius-control: var(--control-radius);
+  --radius-popover: var(--radius-popover-value);
+  --radius-module: var(--radius-module-value);
+  --radius-panel: var(--radius-panel-value);
+  --radius-bubble: var(--radius-bubble-value);
+  --radius-composer: var(--radius-composer-value);
+  --radius-pill: var(--pill-radius);
+  --radius-xs: var(--radius-inline-value);
+  --radius-sm: var(--radius-inline-value);
+  --radius-md: var(--control-radius);
+  --radius-lg: var(--radius-popover-value);
+  --radius-xl: var(--radius-module-value);
+  --radius-2xl: var(--radius-panel-value);
+  /* 排版：正文 14/20、连续阅读 14/24、控件 13/20、元数据 12/16、区块 16/24、页面 20/28 */
+  --text-meta: 12px;
+  --text-meta--line-height: 16px;
+  --text-control: 13px;
+  --text-control--line-height: 20px;
+  --text-body: 14px;
+  --text-body--line-height: 20px;
+  --text-reading: 14px;
+  --text-reading--line-height: 24px;
+  --text-section: 16px;
+  --text-section--line-height: 24px;
+  --text-page: 20px;
+  --text-page--line-height: 28px;
+  --spacing-label: var(--label-height);
+  --spacing-label-sm: var(--label-height-sm);
+  --spacing-control-sm: var(--control-height-sm);
+  --spacing-control: var(--control-height);
+  --spacing-control-lg: var(--control-height-lg);
+  --spacing-row: var(--row-height);
+  --font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+:root {
+  /* 表面：带暖意的中性灰（canvas / surface / surface-raised 三层） */
+  --background: #fafaf9;
+  --surface: #ffffff;
+  --surface-raised: #f4f4f2;
+  --surface-hover: #f4f4f2;
+  --surface-pressed: #eaeae6;
+  --foreground: #232322;
+  --text-secondary: #666660;
+  --text-muted: #6f6f68;
+  --muted: var(--surface-raised);
+  --muted-foreground: var(--text-secondary);
+  /* 主操作使用前景色与反相文字；陶土色仅作少量强调 */
+  --primary: #232322;
+  --primary-foreground: #fafaf9;
+  --accent: #a6533a;
+  --accent-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-hover: rgba(0, 0, 0, 0.18);
+  /* 键盘焦点使用独立标识，与选中/hover 区分 */
+  --ring: #a6533a;
+  --focus: #a6533a;
+  --selection: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  --selection-marker: var(--accent);
+  /* 状态保留独立语义：成功绿、失败红、等待琥珀、信息蓝、Agent 紫 */
+  --info: #1d4ed8;
+  --warning: #92400e;
+  --agent: #6b21a8;
+  --destructive: #b42318;
+  --success: #15803d;
+  --status-neutral: var(--text-secondary);
+  --status-queued: var(--text-secondary);
+  --status-info: var(--info);
+  --status-thinking: var(--agent);
+  --status-waiting: var(--warning);
+  --status-success: var(--success);
+  --status-error: var(--destructive);
+  /* 圆角角色值 */
+  --radius-inline-value: 4px;
+  --control-radius: 6px;
+  --radius-popover-value: 8px;
+  --radius-module-value: 12px;
+  --radius-panel-value: 16px;
+  --radius-bubble-value: 20px;
+  --radius-composer-value: 24px;
+  --pill-radius: 999px;
+  --radius: var(--radius-popover-value);
+  /* 控件与数据行高度 */
+  --label-height: 24px;
+  --label-height-sm: 20px;
+  --control-height-sm: 28px;
+  --control-height: 32px;
+  --control-height-lg: 36px;
+  --touch-target: 44px;
+  --row-height: 44px;
+  --item-height-compact: 32px;
+  --item-height: var(--row-height);
+  --item-height-double: 56px;
+  --tree-indent: 16px;
+  /* 工作区外壳几何：导航 256/56、业务页头 56、集合二级栏 234、属性面板 360 */
+  --workspace-header-height: 56px;
+  --workspace-sidebar-width: 256px;
+  --workspace-sidebar-collapsed: 56px;
+  --workspace-secondary-width: 234px;
+  --workspace-inspector-width: 360px;
+  --workspace-inspector-min: 320px;
+  --workspace-inspector-max: 480px;
+  --workspace-bottom-height: 240px;
+  --layer-overlay: 60;
+  --layer-overlay-step: 20;
+  /* 动效：hover 120–160ms、浮层 160–220ms 减速；布局与运行提示分别实现 */
+  --motion-hover: 140ms;
+  --motion-button: 160ms;
+  --motion-popover: 180ms;
+  --motion-panel: 200ms;
+  --motion-drawer: 240ms;
+  --motion-layout: 280ms;
+  --motion-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --motion-ease-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 材质：默认不透明；仅输入区与浮层使用一层阴影 */
+  --shadow-composer: 0 1px 2px rgba(20, 18, 16, 0.06);
+  /* Composer：输入区初始高度与内滚上限 */
+  --composer-min-height: 68px;
+  --composer-max-height: 240px;
+  --shadow-floating:
+    0 12px 32px rgba(20, 18, 16, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  /* 图表：默认降低饱和度，多系列保留区分色 */
+  --chart-1: #7a6a63;
+  --chart-2: #5b6b7a;
+  --chart-3: #6b7a6a;
+  --chart-4: #8a7a5b;
+  --chart-5: #7a5b6b;
+  --chart-grid: var(--border);
+  --chart-reference: var(--text-secondary);
+  --chart-selected: var(--ring);
+  --chart-backlog: var(--text-muted);
+  --chart-active: var(--info);
+  --chart-completed: var(--success);
+  --chart-cancelled: var(--text-secondary);
+  --canvas-background: var(--background);
+  --canvas-grid: var(--border-hover);
+  --canvas-node-surface: var(--surface);
+  --canvas-node-border: var(--border-hover);
+  --canvas-node-width: 240px;
+  --canvas-node-radius: var(--radius-popover-value);
+  --canvas-port-size: 12px;
+  --canvas-port-color: var(--text-secondary);
+  --canvas-edge: var(--text-secondary);
+  --canvas-selection: var(--accent);
+  --canvas-execution-duration: 1200ms;
+  --canvas-execution-color: var(--status-info);
+  --canvas-execution-width: 3px;
+  --canvas-particle-width: 4px;
+  --canvas-frame: var(--surface-raised);
+  --canvas-note: var(--surface);
+  --canvas-minimap-mask: rgba(127, 127, 127, 0.12);
+}
+
+.dark {
+  --background: #111110;
+  --surface: #181817;
+  --surface-raised: #222220;
+  --surface-hover: #222220;
+  --surface-pressed: #2b2b28;
+  --foreground: #ecece8;
+  --text-secondary: #b0b0a8;
+  --text-muted: #a0a099;
+  --muted: var(--surface-raised);
+  --muted-foreground: var(--text-secondary);
+  --primary: #ecece8;
+  --primary-foreground: #111110;
+  --accent: #de9a7b;
+  --accent-foreground: #111110;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.18);
+  --ring: #de9a7b;
+  --focus: #de9a7b;
+  --selection: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  --selection-marker: var(--accent);
+  --info: #9fc3f0;
+  --warning: #e8c77a;
+  --agent: #c4a6f0;
+  --destructive: #f0a0a0;
+  --success: #6ee7a0;
+  --status-neutral: var(--text-secondary);
+  --status-queued: var(--text-secondary);
+  --status-info: var(--info);
+  --status-thinking: var(--agent);
+  --status-waiting: var(--warning);
+  --status-success: var(--success);
+  --status-error: var(--destructive);
+  --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-floating:
+    0 16px 40px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --chart-1: #b9a79d;
+  --chart-2: #9fb4c6;
+  --chart-3: #a9bda6;
+  --chart-4: #cbb68a;
+  --chart-5: #c4a3b4;
+  --canvas-minimap-mask: rgba(127, 127, 127, 0.2);
+}

@@ -1,0 +1,99 @@
+.shell {
+  width: 100%;
+  height: 100%;
+  min-height: 640px;
+  min-width: 0;
+}
+.body {
+  padding: 16px;
+  overflow: auto;
+  height: 100%;
+}
+.header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.header h1 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.header p {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+.widget {
+  grid-column: span 6;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--surface);
+}
+.widget[data-width="4"] {
+  grid-column: span 4;
+}
+.widget[data-width="8"] {
+  grid-column: span 8;
+}
+.widget[data-width="12"] {
+  grid-column: span 12;
+}
+.actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.query {
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1023px) {
+  .grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .widget,
+  .widget[data-width="4"],
+  .widget[data-width="8"],
+  .widget[data-width="12"] {
+    grid-column: span 6;
+  }
+}
+@media (max-width: 639px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .widget,
+  .widget[data-width="4"],
+  .widget[data-width="8"],
+  .widget[data-width="12"] {
+    grid-column: span 1;
+  }
+  .body {
+    padding: 12px;
+  }
+}
+
+.workspace.workspace {
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+.withoutSidebar > div > aside {
+  display: none;
+}
+.withoutSidebar > header > button:first-child {
+  display: none;
+}

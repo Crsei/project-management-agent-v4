@@ -1,0 +1,253 @@
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel {
+  width: 400px;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow-y: visible;
+  border-left: 1px solid var(--border);
+  background: var(--background);
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 920px;
+  margin-inline: auto;
+}
+
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.titleCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 16px;
+}
+
+.title {
+  min-width: 0;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 30px;
+  overflow-wrap: anywhere;
+}
+
+.prose {
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 22px;
+  min-width: 0;
+}
+
+.page {
+  position: relative;
+}
+
+
+
+.page :global([data-pm-scroll]) {
+  padding: 28px 24px 32px;
+}
+
+
+.body :global([data-pm-issue-properties]) > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.body :global([data-property="state"]),
+.body :global([data-property="priority"]) {
+  grid-row: 1;
+  width: fit-content;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.body :global([data-property="state"]) > span:first-child,
+.body :global([data-property="priority"]) > span:first-child {
+  display: none;
+}
+
+.body :global([data-property="assignees"]),
+.body :global([data-property="dueDate"]),
+.body :global([data-property="counts"]) {
+  grid-row: 2;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.body :global([data-property="labels"]) {
+  grid-row: 3;
+  grid-column: 4;
+}
+
+
+.body :global([data-pm-issue-facts]) > div {
+  min-height: 40px;
+  gap: 4px;
+}
+
+.panel :global([data-pm-attachment-list]) li {
+  border: 0;
+  background: transparent;
+}
+
+.panel :global([data-pm-attachment-list]) li > div:first-child {
+  padding-inline: 0;
+}
+
+.subtaskSection {
+  position: relative;
+}
+
+.subtaskSection > :global([data-pm-add-subissue]) {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.detailLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  align-items: stretch;
+  gap: 32px;
+}
+
+/* One semantic property grid keeps Labels with Project/Module/Cycle. */
+.body :global([data-pm-issue-properties]) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.body :global([data-pm-issue-properties]) :global([data-layout="detail"]),
+.body :global([data-pm-issue-facts-block]),
+.body :global([data-pm-issue-facts]) {
+  display: contents;
+}
+
+.body :global([data-property="state"]) {
+  grid-column: 1;
+}
+
+.body :global([data-property="priority"]) {
+  grid-column: 1;
+  margin-left: 128px;
+}
+
+.body :global([data-property="assignees"]) {
+  grid-column: 1;
+}
+
+.body :global([data-property="counts"]) {
+  grid-column: 2;
+}
+
+.body :global([data-property="dueDate"]) {
+  grid-column: 3;
+}
+
+.body :global([data-pm-issue-facts]) > div:nth-child(-n + 3) {
+  grid-row: 3;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.body :global([data-pm-issue-facts]) > div:nth-child(1) { grid-column: 1; }
+.body :global([data-pm-issue-facts]) > div:nth-child(2) { grid-column: 2; }
+.body :global([data-pm-issue-facts]) > div:nth-child(3) { grid-column: 3; }
+
+.body :global([data-property="labels"]) {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.body :global([data-pm-issue-facts]) > div:nth-child(4) {
+  grid-row: 2;
+  grid-column: 4;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.body :global([data-pm-issue-facts]) > div:nth-child(n + 5) {
+  grid-row: 4;
+  min-height: 0;
+  flex-direction: row;
+  gap: 4px;
+}
+
+.body :global([data-pm-issue-facts]) > div:nth-child(5) { grid-column: 1; }
+.body :global([data-pm-issue-facts]) > div:nth-child(6) { grid-column: 2; }
+.body :global([data-pm-issue-facts]) > div:nth-child(7) { grid-column: 3; }
+
+.body :global([data-pm-issue-properties]) > p {
+  grid-row: 4;
+  grid-column: 4;
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  .detailLayout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .panel {
+    width: 100%;
+  }
+  .body :global([data-pm-issue-properties]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

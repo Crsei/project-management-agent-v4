@@ -1,0 +1,19 @@
+.task-comments { display: grid; gap: 16px; min-width: 0; padding-block: 20px; border-top: 1px solid var(--border); }
+.task-comments > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.task-comments h3 { font-weight: 600; }
+.task-comment-note, .task-comment-history > p { color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
+.task-comment-list { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
+.task-comment-list > li { display: grid; gap: 10px; min-width: 0; border: 1px solid var(--border); border-radius: var(--panel-radius); padding: 14px; }
+.task-comment-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; overflow-wrap: anywhere; color: var(--muted-foreground); }
+.task-comment-meta strong { color: var(--foreground); }
+.task-comment-editor { display: grid; gap: 12px; min-width: 0; }
+.task-comment-editor label { display: grid; gap: 6px; font-size: 13px; }
+.task-comment-editor textarea { width: 100%; min-height: 110px; }
+.task-comment-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.task-comment-editor code, .task-comment-editor pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.task-comment-history { min-width: 0; font-size: 12px; }
+.task-comment-history summary { cursor: pointer; color: var(--muted-foreground); }
+.task-comment-history article { display: grid; gap: 8px; padding-block: 12px; border-bottom: 1px solid var(--border); }
+.task-comment-history article > p { overflow-wrap: anywhere; }
+.task-comment-deleted { color: var(--muted-foreground); border-left: 2px solid var(--border); padding-inline-start: 10px; font-size: 13px; line-height: 1.7; }
+.task-comments [role="alert"] { color: var(--destructive); font-size: 13px; overflow-wrap: anywhere; }

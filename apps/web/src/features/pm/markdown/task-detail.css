@@ -1,0 +1,107 @@
+.markdown-workbench .entity-detail.task-entity-detail {
+  width: min(620px, 100%);
+  container-type: inline-size;
+  container-name: task-detail;
+}
+.markdown-workbench .entity-detail.task-entity-detail.entity-detail-full { width: 100%; }
+.markdown-workbench .task-detail-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 46px;
+  padding: 6px 10px 6px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.markdown-workbench .task-detail-toolbar > .icon-button { width: 28px; height: 28px; }
+.markdown-workbench .task-toolbar-identity { display: flex; align-items: center; gap: 6px; min-width: 0; margin-right: auto; color: var(--muted-foreground); }
+.markdown-workbench .task-toolbar-identity > .mono { white-space: nowrap; }
+.markdown-workbench .task-project-link { min-width: 0; max-width: 145px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border: 0; padding: 3px 4px; border-radius: var(--control-radius); background: transparent; color: var(--text-secondary); font-size: 12px; }
+.markdown-workbench .task-project-link:hover { background: var(--surface-hover); color: var(--foreground); }
+.markdown-workbench .task-complete { display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex-shrink: 0; min-height: 28px; padding: 4px 6px; border: 0; border-radius: var(--control-radius); background: transparent; color: var(--muted-foreground); font-size: 11px; }
+.markdown-workbench .task-complete:hover:not(:disabled) { color: var(--foreground); background: var(--surface-hover); }
+.markdown-workbench .task-complete.is-completed { color: var(--success); }
+.markdown-workbench .task-complete-picker { padding: 0 3px; }
+.markdown-workbench .task-complete-picker select { max-width: 135px; padding: 3px 1px; border: 0; background: transparent; color: inherit; font-size: 11px; }
+.markdown-workbench .task-copy-status { padding: 6px 16px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px; }
+.markdown-workbench .task-detail-modes { display: flex; align-items: center; justify-content: space-between; min-width: 0; border-bottom: 1px solid var(--border); padding-right: 14px; flex-shrink: 0; }
+.markdown-workbench .task-detail-modes .detail-tabs { border: 0; min-width: 0; }
+.markdown-workbench .task-advanced-menu { position: relative; flex-shrink: 0; }
+.markdown-workbench .task-advanced-menu summary { display: flex; align-items: center; gap: 5px; padding: 5px 7px; border-radius: var(--control-radius); color: var(--muted-foreground); font-size: 11px; cursor: pointer; list-style: none; }
+.markdown-workbench .task-advanced-menu summary::-webkit-details-marker { display: none; }
+.markdown-workbench .task-advanced-menu summary:hover, .markdown-workbench .task-advanced-menu[open] summary { color: var(--foreground); background: var(--surface-hover); }
+.markdown-workbench .task-advanced-menu > div { position: absolute; top: calc(100% + 5px); right: 0; z-index: 12; display: grid; min-width: 155px; padding: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-popover-value); box-shadow: var(--shadow-floating); }
+.markdown-workbench .task-advanced-menu button { border: 0; padding: 8px 10px; border-radius: var(--control-radius); text-align: left; background: transparent; color: var(--text-secondary); font-size: 12px; }
+.markdown-workbench .task-advanced-menu button:hover, .markdown-workbench .task-advanced-menu button.active { background: var(--selection); color: var(--foreground); }
+.markdown-workbench .task-entity-detail .detail-save-state { padding: 6px 16px; font-size: 10px; }
+.markdown-workbench .task-entity-detail .detail-content { min-width: 0; }
+.markdown-workbench .task-detail-surface { width: 100%; max-width: 920px; min-width: 0; margin-inline: auto; padding: 20px 24px 32px; overflow-wrap: anywhere; }
+.markdown-workbench textarea.task-title-input { display: block; width: 100%; min-width: 0; padding: 5px 6px; margin: 0 0 12px; border: 1px solid transparent; border-radius: var(--control-radius); background: transparent; color: var(--foreground); font-size: 19px; line-height: 1.4; font-weight: 600; letter-spacing: -.018em; resize: none; overflow: hidden; }
+.markdown-workbench textarea.task-title-input:hover:not(:disabled), .markdown-workbench textarea.task-title-input:focus { border-color: var(--border); background: var(--surface-hover); }
+.markdown-workbench textarea.task-title-input:disabled { opacity: 1; }
+.markdown-workbench .task-readonly-note { padding: 9px 10px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--control-radius); background: var(--surface-raised); color: var(--muted-foreground); font-size: 11px; }
+.markdown-workbench .task-properties { margin: 0; display: grid; gap: 3px; }
+.markdown-workbench .task-property { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: start; min-width: 0; gap: 6px; min-height: 31px; }
+.markdown-workbench .task-property dt { display: flex; align-items: center; gap: 8px; min-width: 0; padding-top: 7px; font-size: 12px; color: var(--muted-foreground); }
+.markdown-workbench .task-property dt svg { opacity: .85; }
+.markdown-workbench .task-property dd { min-width: 0; margin: 0; }
+.markdown-workbench .task-property dd > :is(input, select), .markdown-workbench .task-points-input > input { width: 100%; max-width: 100%; min-height: 29px; padding: 4px 7px; border-color: transparent; border-radius: var(--control-radius); background: transparent; color: var(--foreground); font-size: 12px; }
+.markdown-workbench .task-property dd > :is(input, select):hover:not(:disabled), .markdown-workbench .task-points-input > input:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border); }
+.markdown-workbench .task-property dd > :is(input, select):focus, .markdown-workbench .task-points-input > input:focus { background: var(--surface); border-color: var(--border-hover); }
+.markdown-workbench .task-property [aria-invalid="true"] { border-color: var(--destructive); }
+.markdown-workbench .task-field-note { display: block; color: var(--muted-foreground); font-size: 10px; line-height: 1.55; padding: 1px 7px 3px; }
+.markdown-workbench .task-field-error { display: block; color: var(--destructive); font-size: 11px; line-height: 1.55; padding: 3px 7px; }
+.markdown-workbench .task-points-input { display: flex; align-items: center; min-width: 0; gap: 6px; }
+.markdown-workbench .task-points-input > input { width: min(140px, 75%); }
+.markdown-workbench .task-points-input > span { color: var(--muted-foreground); font-size: 11px; }
+.markdown-workbench .task-unavailable-control { min-height: 29px; border: 0; padding: 4px 7px; background: transparent; color: var(--muted-foreground); font-size: 12px; }
+.markdown-workbench .task-description { margin-top: 26px; }
+.markdown-workbench .task-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.markdown-workbench .task-section-heading h3 { font-size: 13px; font-weight: 600; }
+.markdown-workbench .task-section-heading > button { font-size: 11px; }
+.markdown-workbench .task-description > .markdown-preview { width: 100%; max-width: none; margin: 0; padding: 10px 12px; min-height: 100px; border: 1px solid var(--border); border-radius: var(--control-radius); background: var(--surface); }
+.markdown-workbench .task-description .markdown-preview > :first-child { margin-top: 0; }
+.markdown-workbench .task-description > .task-field-note { margin-top: 6px; padding-inline: 0; }
+.markdown-workbench .task-description .markdown-preview :is(pre, table) { max-width: 100%; overflow-x: auto; }
+.markdown-workbench .task-description .markdown-preview img { max-width: 100%; height: auto; }
+.markdown-workbench .task-advanced-properties { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--border); }
+.markdown-workbench .task-advanced-properties > summary { cursor: pointer; color: var(--muted-foreground); font-size: 12px; }
+.markdown-workbench .task-advanced-properties .properties-fields, .markdown-workbench .task-advanced-properties .property-section { padding-inline: 0; }
+.markdown-workbench .task-advanced-properties .property-hint { margin-top: 10px; }
+.markdown-workbench .task-source-live { display: grid; grid-template-columns: minmax(0, 1fr); height: 100%; min-width: 0; min-height: 0; }
+.markdown-workbench .task-source-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.markdown-workbench .task-source-pane-heading { display: flex; align-items: center; gap: 6px; min-height: 35px; flex-shrink: 0; padding: 4px 12px; color: var(--muted-foreground); font-size: 10px; border-bottom: 1px solid var(--border); background: var(--surface-raised); }
+.markdown-workbench .task-source-pane-heading > .text-button { margin-left: auto; font-size: 10px; }
+.markdown-workbench .task-live-pane { display: none; min-width: 0; min-height: 0; overflow-y: auto; border-left: 1px solid var(--border); }
+.markdown-workbench .task-source-pane .source-editor { min-width: 0; overflow: hidden; }
+@container task-detail (min-width: 940px) {
+  .markdown-workbench .task-source-live { grid-template-columns: minmax(340px, .95fr) minmax(440px, 1.05fr); }
+  .markdown-workbench .task-live-pane { display: block; }
+  .markdown-workbench .task-live-pane .task-detail-surface { padding-inline: 20px; }
+}
+@media (min-width: 1400px) {
+  .markdown-workbench .task-entity-detail.is-source-split:not(.entity-detail-full) { width: min(1120px, calc(100% - 220px)); }
+}
+@media (max-width: 1200px) {
+  .markdown-workbench .entity-detail.task-entity-detail:not(.entity-detail-full) { width: min(620px, 58%); min-width: 390px; }
+}
+@media (max-width: 900px) {
+  .markdown-workbench .has-inspector > .entity-detail.task-entity-detail { width: 100%; min-width: 0; }
+}
+@container task-detail (max-width: 460px) {
+  .markdown-workbench .task-detail-toolbar { padding-inline: 8px; gap: 1px; }
+  .markdown-workbench .task-project-link { max-width: 83px; font-size: 11px; }
+  .markdown-workbench .task-toolbar-identity { gap: 3px; }
+  .markdown-workbench .task-toolbar-identity > .mono { font-size: 10px; }
+  .markdown-workbench .task-complete > span:not(.sr-only) { display: none; }
+  .markdown-workbench .task-complete { width: 27px; padding-inline: 3px; }
+  .markdown-workbench .task-complete-picker { width: auto; max-width: 91px; }
+  .markdown-workbench .task-complete-picker select { max-width: 69px; font-size: 10px; }
+  .markdown-workbench .task-detail-surface { padding: 18px 16px 28px; }
+  .markdown-workbench .task-property { grid-template-columns: 100px minmax(0, 1fr); gap: 3px; }
+  .markdown-workbench .task-property dt { gap: 6px; font-size: 11px; }
+  .markdown-workbench .task-detail-modes { padding-right: 8px; }
+  .markdown-workbench .task-entity-detail .detail-actions { padding-inline: 12px; }
+  .markdown-workbench .task-description > .markdown-preview { padding: 9px; }
+}
+.markdown-workbench :is(.task-advanced-menu, .task-advanced-properties) > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

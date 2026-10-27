@@ -1,0 +1,58 @@
+/* Page-open entrance: opacity + 8px rise, staggered across page-level blocks. */
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The class only carries the duration/easing variables and the tab mode; the
+   animated nodes themselves are tagged by the hook at navigation time. */
+.enter {
+  --pm-enter-duration: 360ms;
+  --pm-enter-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* View/tab switches animate shorter than route changes. */
+.enter[data-pm-nav="tab"] {
+  --pm-enter-duration: 260ms;
+}
+
+[data-pm-enter-target] {
+  animation-name: riseIn;
+  animation-duration: var(--pm-enter-duration, 360ms);
+  animation-timing-function: var(--pm-enter-ease, cubic-bezier(0.16, 1, 0.3, 1));
+  animation-fill-mode: both;
+}
+
+/* Stagger: second block 35ms, third 70ms, everything after 100ms. */
+[data-pm-enter-target]:nth-child(2) {
+  animation-delay: 35ms;
+}
+
+[data-pm-enter-target]:nth-child(3) {
+  animation-delay: 70ms;
+}
+
+[data-pm-enter-target]:nth-child(n + 4) {
+  animation-delay: 100ms;
+}
+
+html[data-pm-motion="reduce"] [data-pm-enter-target],
+html[data-pm-motion="reduce"] [data-pm-enter-target] *,
+html[data-pm-motion="reduce"] .enter {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-pm-enter-target],
+  [data-pm-enter-target] *,
+  .enter {
+    animation: none !important;
+  }
+}

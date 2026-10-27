@@ -1,0 +1,32 @@
+.effect {
+  fill: none;
+  stroke: var(--canvas-execution-color);
+  stroke-width: var(--canvas-execution-width);
+  stroke-linecap: round;
+  pointer-events: none;
+  animation: canvas-edge-flow var(--canvas-execution-duration) linear infinite;
+}
+.flow {
+  stroke-dasharray: 12 88;
+}
+.particles {
+  stroke-width: var(--canvas-particle-width);
+  stroke-dasharray: 0.1 24.9;
+}
+.effect[data-paused] {
+  animation-play-state: paused;
+}
+@keyframes canvas-edge-flow {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .effect {
+    display: none;
+    animation: none !important;
+  }
+}

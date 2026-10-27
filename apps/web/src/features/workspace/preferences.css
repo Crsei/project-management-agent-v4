@@ -1,0 +1,44 @@
+/* Browser preferences override semantic colors, never workflow status colors. */
+html[data-pm-accent="indigo"] { --pm-accent-light: #4b5bd6; --pm-accent-dark: #a8b2ff; }
+html[data-pm-accent="blue"] { --pm-accent-light: #2563c5; --pm-accent-dark: #91bdff; }
+html[data-pm-accent="violet"] { --pm-accent-light: #7348cc; --pm-accent-dark: #c4a6ff; }
+html[data-pm-accent="teal"] { --pm-accent-light: #087b72; --pm-accent-dark: #78d6c9; }
+html[data-pm-accent="rose"] { --pm-accent-light: #b93663; --pm-accent-dark: #ffa1c0; }
+html[data-pm-accent="graphite"] { --pm-accent-light: #525762; --pm-accent-dark: #bdc3cd; }
+html[data-pm-accent] {
+  --accent: var(--pm-accent-light);
+  --accent-foreground: #ffffff;
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-foreground);
+  --ring: var(--accent);
+  --focus: var(--accent);
+  --selection-marker: var(--accent);
+}
+html.dark[data-pm-accent] { --accent: var(--pm-accent-dark); --accent-foreground: #111110; }
+
+/* Navigation and task collections have separate density scopes. */
+html[data-pm-sidebar-density="comfortable"] [data-pm-sidebar] a { min-height: 36px; }
+html[data-pm-sidebar-density="compact"] [data-pm-sidebar] a { min-height: 30px; height: auto; padding-top: 4px; padding-bottom: 4px; }
+html[data-pm-sidebar-density="compact"] [data-pm-sidebar] { gap: 2px; }
+html[data-pm-task-density="compact"] :is([data-pm-task-collection], [data-pm-tasks-panel], [data-pm-issues-panel], [data-pm-timeline-panel]) {
+  --row-height: 34px;
+  --item-height: 34px;
+  --item-height-double: 44px;
+}
+html[data-pm-task-density="compact"] [data-pm-task-collection] .work-table td { height: 34px; padding-top: 4px; padding-bottom: 4px; }
+html[data-pm-task-density="compact"] :is([data-pm-task-collection], [data-pm-tasks-panel]) [data-work-item] { min-height: 34px; padding-top: 5px; padding-bottom: 5px; }
+html[data-pm-task-density="compact"] [data-pm-issues-panel] td { padding-top: 4px; padding-bottom: 4px; }
+@media (pointer: coarse) {
+  html[data-pm-sidebar-density] [data-pm-sidebar] a { min-height: 44px; }
+}
+html[data-pm-task-density="compact"] [data-pm-task-collection] .task-native-list > li { min-height: 34px; padding-top: 5px; padding-bottom: 5px; }
+html[data-pm-task-density="compact"] [data-pm-task-collection] .task-card { padding: 8px; gap: 4px; }
+html[data-pm-task-density="compact"] [data-pm-task-collection] .column-cards { gap: 6px; }
+
+/* Keep animation events alive while respecting both OS and manual reduction. */
+html[data-pm-motion="reduce"] *, html[data-pm-motion="reduce"] *::before, html[data-pm-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

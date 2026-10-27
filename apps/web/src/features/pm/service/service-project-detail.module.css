@@ -1,0 +1,292 @@
+.viewToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+}
+.viewToggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 2px 8px;
+}
+.panelToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.taskToolbar {
+  margin-bottom: 12px;
+}
+.projectToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.toolbarSearch {
+  position: relative;
+  width: 200px;
+  max-width: 100%;
+}
+.toolbarSearchIcon {
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.toolbarInput {
+  width: 100%;
+  height: var(--control-height-sm);
+  padding: 0 10px 0 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.toolbarInput::placeholder {
+  color: var(--muted-foreground);
+}
+.toolbarInput:hover {
+  border-color: var(--border-hover);
+}
+.toolbarInput:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 12%, transparent);
+}
+.toolbarInput::-webkit-search-cancel-button {
+  display: none;
+}
+.toolbarButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-height-sm);
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.toolbarButton:hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+.toolbarButton[data-active="true"] {
+  border-color: var(--border);
+  background: var(--selection);
+  color: var(--foreground);
+}
+.toolbarCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: var(--pill-radius);
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+.toolbarSpacer {
+  flex: 1;
+}
+.filterChips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--control-height-sm);
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--selection);
+  color: var(--foreground);
+  white-space: nowrap;
+}
+.filterChip b {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+.filterChipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-inline-value);
+  color: var(--muted-foreground);
+}
+.filterChipRemove:hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+.filterClear {
+  height: var(--control-height-sm);
+  padding: 0 8px;
+  border-radius: var(--control-radius);
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+.filterClear:hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+.overviewMetrics {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+.overviewGrid > section {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-popover-value);
+  background: var(--surface);
+}
+.overviewGrid > section:nth-child(n+4) {
+  grid-column: 1 / -1;
+}
+.overviewGrid h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.overviewGrid p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 24px;
+}
+.overviewGrid ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  line-height: 20px;
+}
+.overviewMetrics .overviewGrid > [data-pm-project-brief] {
+  gap: 16px;
+  margin: 0;
+}
+.overviewMetrics .overviewGrid > [data-pm-project-brief] > h2 {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.overviewMetrics .overviewGrid > [data-pm-project-brief] > :not(h2) {
+  max-width: none;
+}
+@media (max-width: 1023px) {
+  :global([data-pm-page]) .overviewMetrics .overviewGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 767px) {
+  :global([data-pm-page]) .overviewMetrics .overviewGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.issueTable {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--panel-radius);
+}
+.issueTable table { min-width: 850px; }
+.issueTable th { height: 44px; background: var(--muted); }
+.issueTable td { height: 44px; font-size: 12px; }
+.issueLink {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  max-width: 320px;
+  height: auto;
+  min-height: 32px;
+  padding: 4px 0;
+  text-align: left;
+  white-space: normal;
+}
+.rail { width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.rail > section, .rail ul { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.rail p > span { min-width: 0; overflow-wrap: anywhere; }
+.rail h2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rail h2 > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+.rail h2 svg { width: 16px; height: 16px; flex: none; }
+.timeRow { display: flex; justify-content: space-between; gap: 12px; }
+.timeRow > span { text-align: right; }
+.identities { display: grid; gap: 10px; list-style: none; padding: 0; margin: 0; }
+.identities li { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; font-size: 13px; }
+.identities svg { flex: none; color: var(--muted-foreground); }
+.conversation { display: grid; gap: 16px; margin-bottom: 16px; }
+.conversation h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.conversation > ul { display: grid; gap: 12px; padding: 0; margin: 0; list-style: none; }
+.conversation > ul > li { display: grid; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--panel-radius); }
+.messageMeta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; font-size: 12px; overflow-wrap: anywhere; }
+.messageMeta time, .messageMeta > span { color: var(--muted-foreground); }
+.discussionComposer { padding: 16px; border: 1px solid var(--border); border-radius: var(--panel-radius); }
+.overviewMetrics [data-pm-project-metrics] {
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-popover-value);
+}
+.markdown-workbench.treeView { height: auto; overflow: visible; }
+@media (max-width: 767px) {
+  .viewToggle button { padding: 2px 6px; }
+  .viewToggle button > span { display: none; }
+  .panelToolbar > input { max-width: none; flex: 1 0 100%; }
+  .toolbarSearch { flex: 1 0 100%; width: auto; }
+  .toolbarLabel { display: none; }
+  .toolbarSpacer { display: none; }
+}

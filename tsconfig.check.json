@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "apps/api/src/**/*.ts",
+    "apps/worker/src/**/*.ts",
+    "packages/domain/src/**/*.ts",
+    "packages/application/src/**/*.ts",
+    "packages/contracts/src/**/*.ts",
+    "packages/infrastructure/src/**/*.ts",
+    "packages/pm-schema/**/*.ts",
+    "packages/pm-markdown/**/*.ts",
+    "packages/pm-core/**/*.ts",
+    "apps/api/tests/**/*.ts",
+    "packages/domain/tests/**/*.ts",
+    "packages/application/tests/**/*.ts",
+    "packages/contracts/tests/**/*.ts",
+    "packages/infrastructure/tests/**/*.ts",
+    "tests/**/*.ts",
+    "scripts/local-project*.ts"
+  ],
+  "exclude": [
+    "packages/pm-core/tests/**"
+  ]
+}

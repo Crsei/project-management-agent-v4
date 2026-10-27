@@ -1,0 +1,160 @@
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel {
+  width: 360px;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--background);
+  padding: 32px 28px;
+}
+
+.panel:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  width: 100%;
+  max-width: 824px;
+  margin-inline: auto;
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.identifierChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.identifierChip code {
+  font-size: 12px;
+  color: var(--foreground);
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 28px;
+  overflow-wrap: anywhere;
+}
+
+.prose {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 24px;
+  min-width: 0;
+}
+
+.page {
+  position: relative;
+}
+
+
+
+.page :global([data-pm-scroll]) {
+  padding: 32px 48px;
+}
+
+.panel :global([data-pm-issue-properties]) > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.panel :global([data-layout="detail"]) {
+  gap: 20px;
+}
+
+.panel :global([data-layout="detail"]) > div {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.panel :global([data-pm-issue-facts]) {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+.panel :global([data-pm-issue-facts]) > div {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.attachmentPreview {
+  min-height: 360px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.attachmentPreview figcaption {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.attachmentPreview > div {
+  padding: 24px;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.activityFilter {
+  width: 112px;
+  font-size: 12px;
+}

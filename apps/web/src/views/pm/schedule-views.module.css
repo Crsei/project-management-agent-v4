@@ -1,0 +1,858 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.grid {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.dayHeader {
+  display: grid;
+  grid-template-columns: 56px repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.dayHeaderCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-left: 1px solid var(--border);
+}
+
+.dayHeaderCell[data-weekend] {
+  background-color: var(--muted);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 6px,
+    var(--border) 6px,
+    var(--border) 7px
+  );
+}
+
+.dayHeaderCell[data-today] .dayNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--pill-radius);
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.gutterHeader {
+  padding: 8px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.allDayLane {
+  display: grid;
+  grid-template-columns: 56px repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+  min-height: 36px;
+  background: var(--surface);
+}
+
+.allDayLabel {
+  padding: 8px 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.allDayCell {
+  position: relative;
+  border-left: 1px solid var(--border);
+  min-height: 36px;
+  padding: 4px;
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.scroller {
+  max-height: 560px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hoursBody {
+  display: grid;
+  grid-template-columns: 56px repeat(7, minmax(0, 1fr));
+  position: relative;
+}
+
+.hourLabels {
+  display: flex;
+  flex-direction: column;
+}
+
+.hourLabel {
+  height: 48px;
+  padding: 2px 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+  border-top: 1px solid var(--border);
+}
+
+.dayColumn {
+  position: relative;
+  border-left: 1px solid var(--border);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--border) 0,
+    var(--border) 1px,
+    transparent 1px,
+    transparent 48px
+  );
+}
+
+.dayColumn[data-weekend] {
+  background-color: var(--muted);
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 6px,
+      var(--border) 6px,
+      var(--border) 7px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      var(--border) 0,
+      var(--border) 1px,
+      transparent 1px,
+      transparent 48px
+    );
+}
+
+.eventChip {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--control-radius);
+  background: var(--surface-raised);
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+}
+
+.eventChip:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+.eventChip:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.eventChip[data-selected] {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.eventChip[data-locked] {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.eventIdentifier {
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chipTitle {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.3;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Deep-overlap chips are ~48px wide: tighten padding and drop the visual time
+ * line (time stays in aria/title + agenda). */
+.eventChip[data-narrow] {
+  padding: 3px 4px;
+  font-size: 12px;
+}
+
+.eventChip[data-narrow] .eventTime {
+  display: none;
+}
+
+.eventTime {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.continueMarker {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.continueRight {
+  right: 2px;
+}
+
+.continueLeft {
+  left: 2px;
+}
+
+.allDayChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--pill-radius);
+  background: var(--surface-raised);
+  font-size: 12px;
+  color: var(--foreground);
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.allDayChip:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.section {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.agendaList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agendaRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.agendaRow:last-child {
+  border-bottom: none;
+}
+
+.agendaTime {
+  flex-shrink: 0;
+  width: 180px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.agendaTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editorGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.editorRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editorRow label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.rfcPreview {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.duration {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Page-scoped reference mapping: 57px project header, 56px calendar / 40px
+ * timeline toolbar, 160px month rows and 44px issue rows. Compact32 stays global. */
+.referencePage {
+  background: var(--surface);
+}
+.referencePage :global([data-pm-header]) {
+  min-height: 56px;
+  height: 56px;
+  padding: 0 24px;
+  gap: 16px;
+}
+.referencePage :global([data-pm-header] h1) {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.referencePage :global([data-pm-header] > div:first-child > div) {
+  align-items: center;
+  gap: 24px;
+}
+.referencePage :global([data-pm-toolbar]) {
+  border-bottom: 1px solid var(--border);
+}
+.referencePage :global([data-pm-scroll]) {
+  padding: 0;
+  background: var(--surface);
+}
+.headerActions,
+.rangeNavigation,
+.viewButtons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.headerActions {
+  flex-shrink: 0;
+}
+.calendarToolbar,
+.ganttToolbar,
+.spreadsheetToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+.calendarToolbar,
+.spreadsheetToolbar {
+  min-height: 56px;
+}
+.ganttToolbar {
+  min-height: 40px;
+}
+.rangeNavigation h2 {
+  margin-right: 4px;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+}
+.viewButtons button {
+  border-color: transparent;
+}
+.viewButtons button[aria-pressed="true"] {
+  background: var(--surface-raised);
+}
+.calendarPage :global([data-calendar-mode]) {
+  position: relative;
+}
+.calendarPage :global([data-calendar-mode] > p:first-child) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.calendarPage :global([data-calendar-mode] > div:first-of-type) {
+  background: var(--surface);
+  height: 48px;
+  text-align: right;
+}
+.calendarPage :global([data-calendar-mode] > div:first-of-type > span) {
+  padding: 16px 12px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.calendarPage :global([data-calendar-day]) {
+  position: relative;
+  min-height: 160px;
+  padding: 4px 8px;
+}
+.calendarPage :global([data-calendar-mode="week"] [data-calendar-day]) {
+  min-height: calc(100dvh - 249px);
+}
+.calendarPage :global([data-date-button]) {
+  margin-left: auto;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 400;
+}
+.calendarPage :global([data-calendar-day][data-today] > button) {
+  border-radius: 50%;
+  background: var(--foreground);
+  color: var(--surface);
+  text-decoration: none;
+}
+.calendarPage :global([data-calendar-day][data-selected]) {
+  background: var(--surface);
+  box-shadow: none;
+}
+.calendarPage :global([data-calendar-day] > div) {
+  padding-top: 4px;
+}
+.calendarPage :global([data-calendar-day] > div > p:not([role])) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.calendarPage :global([data-calendar-day] [data-calendar-entry]) {
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--entry-accent, var(--status-info)) 22%,
+      var(--border)
+    );
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-bottom: 4px;
+  position: relative;
+  background: color-mix(
+    in srgb,
+    var(--entry-accent, var(--status-info)) 5%,
+    var(--surface)
+  );
+}
+.calendarPage
+  :global([data-calendar-day] [data-calendar-entry] > div:nth-child(2)) {
+  display: none;
+}
+.calendarPage :global([data-calendar-day] [data-calendar-entry] button) {
+  width: 100%;
+  justify-content: flex-start;
+  height: 32px;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.calendarPage :global([data-calendar-day] [role="checkbox"]) {
+  display: none;
+}
+.calendarPage
+  :global([data-calendar-day] > div > button[aria-label]:last-child) {
+  opacity: 0;
+  width: 100%;
+  justify-content: flex-start;
+}
+.calendarPage
+  :global([data-calendar-day]:hover > div > button[aria-label]:last-child),
+.calendarPage
+  :global(
+    [data-calendar-day]:focus-within > div > button[aria-label]:last-child
+  ) {
+  opacity: 1;
+}
+.calendarPage :global([data-calendar-agenda]),
+.calendarPage :global([data-unscheduled]) {
+  margin: 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+.ganttPage :global([data-pm-scroll]) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.ganttPage :global([data-pm-scroll] > [data-data-state]),
+.ganttPage
+  :global(
+    [data-pm-scroll] > [data-data-state] > div:has([data-timeline-scroll])
+  ) {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.ganttPage :global(section:has(> [data-timeline-scroll])) {
+  --sidebar-width: 360px;
+  border: 0;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.ganttPage :global(section:has(> [data-timeline-scroll]) > div:first-child) {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+.ganttPage
+  :global(section:has(> [data-timeline-scroll]) > div:first-child > button) {
+  display: none;
+}
+.ganttPage :global([data-timeline-scroll]) {
+  flex: 1;
+  max-height: none;
+  min-height: 0;
+}
+.ganttPage :global([data-timeline-row]) {
+  height: 44px;
+  min-height: 44px;
+  border-bottom: 0;
+}
+.ganttPage :global([data-timeline-row] > div:first-child) {
+  padding: 0 12px;
+}
+.ganttPage
+  :global([data-timeline-row] > div:last-child > div[data-schedule-start]) {
+  top: 6px;
+  height: 32px;
+  background: color-mix(
+    in srgb,
+    var(--schedule-accent, var(--status-info)) 6%,
+    var(--surface)
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--schedule-accent, var(--status-info)) 24%,
+    var(--border)
+  );
+}
+.ganttPage
+  :global(
+    [data-timeline-row] > div:last-child > div[data-schedule-start] button
+  ) {
+  font-size: 12px;
+}
+.ganttIssue {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 6px;
+  justify-content: flex-start;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+.issueIdentifier {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.issueTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stateDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.ganttPage .duration {
+  font-size: 12px;
+  flex: none;
+  text-align: right;
+  width: 48px;
+}
+.newIssue {
+  justify-content: flex-start;
+  border-radius: 0;
+  border-top: 1px solid var(--border);
+  height: 40px;
+  min-height: 40px;
+  width: 100%;
+  padding: 0 16px;
+}
+.spreadsheetToolbar {
+  justify-content: flex-end;
+}
+.issueCount {
+  margin-right: auto;
+  font-size: 14px;
+  font-weight: 600;
+}
+.spreadsheetPage :global([data-pm-scroll] > [data-data-state]) {
+  min-height: 100%;
+}
+.spreadsheetPage :global(table caption) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.spreadsheetPage :global(thead) {
+  background: var(--surface-raised);
+}
+.spreadsheetPage :global(th),
+.spreadsheetPage :global(td) {
+  padding: 4px 12px;
+  height: 44px;
+  border-right: 1px solid var(--border);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.spreadsheetPage :global(th) {
+  font-weight: 500;
+}
+.spreadsheetPage :global(th button) {
+  padding: 0;
+  font-size: 12px;
+  justify-content: flex-start;
+}
+.spreadsheetPage :global(td button),
+.spreadsheetPage :global(td [role="combobox"]) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  font-size: 12px;
+  padding: 0 4px;
+}
+.spreadsheetPage :global(td button:hover),
+.spreadsheetPage :global(td [role="combobox"]:hover) {
+  background: var(--surface-hover);
+}
+.spreadsheetPage :global(td button:focus-visible),
+.spreadsheetPage :global(td [role="combobox"]:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.spreadsheetTitle {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+}
+.metadataCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.metadataCell svg {
+  height: 14px;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.ganttSidebarHeader {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.ganttPage :global([data-timeline-row]:has([data-state="backlog"])) {
+  --schedule-accent: var(--status-neutral);
+}
+.ganttPage :global([data-timeline-row]:has([data-state="todo"])) {
+  --schedule-accent: var(--status-info);
+}
+.ganttPage :global([data-timeline-row]:has([data-state="progress"])) {
+  --schedule-accent: var(--status-waiting);
+}
+.ganttPage :global([data-timeline-row]:has([data-state="review"])) {
+  --schedule-accent: var(--status-thinking);
+}
+.ganttPage :global([data-timeline-row]:has([data-state="done"])) {
+  --schedule-accent: var(--status-success);
+}
+.stateProperty {
+  display: inline-flex;
+  align-items: center;
+}
+.spreadsheetPage .stateProperty :global(button) {
+  color: var(--issue-state-color);
+  background: color-mix(in srgb, var(--issue-state-color) 6%, var(--surface));
+  border: 1px solid
+    color-mix(in srgb, var(--issue-state-color) 22%, var(--border));
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 12px;
+}
+.stateProperty svg {
+  fill: currentColor;
+  width: 8px;
+  height: 8px;
+}
+.createSheet {
+  font-size: 14px;
+}
+.createHeader {
+  padding: 24px;
+  padding-right: 64px;
+  border-bottom: 0;
+}
+.createBody {
+  padding: 0 24px 24px;
+}
+.createFooter {
+  padding: 16px 24px;
+}
+
+.scheduleAxis {
+  flex: none;
+  height: 47px;
+  color: var(--text-secondary);
+  background: var(--surface);
+}
+.axisGroups,
+.axisTicks {
+  display: flex;
+  width: 100%;
+}
+.axisGroups {
+  height: 23px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.axisGroups > div {
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 12px;
+  border-right: 1px solid var(--border);
+}
+.axisGroups small {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.axisTicks {
+  height: 24px;
+  font-size: 12px;
+}
+.axisTicks > div {
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.axisTicks small {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.axisTicks > div[data-today] {
+  background: var(--surface-raised);
+  color: var(--foreground);
+  font-weight: 500;
+}
+.ganttPage :global([data-timeline-scroll] > div:first-child) {
+  height: 48px;
+  min-height: 48px;
+}
+.ganttMonth :global([data-timeline-row] > div:last-child) {
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--day-width) * 7 - 1px),
+    var(--border) calc(var(--day-width) * 7 - 1px),
+    var(--border) calc(var(--day-width) * 7)
+  );
+}
+.ganttQuarter :global([data-timeline-row] > div:last-child) {
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--day-width) * 30 - 1px),
+    var(--border) calc(var(--day-width) * 30 - 1px),
+    var(--border) calc(var(--day-width) * 30)
+  );
+}
+.ganttQuarter :global([data-timeline-row] [data-schedule-start]) {
+  min-width: 40px;
+}
+
+.calendarPage :global([data-calendar-entry][data-state="backlog"]) {
+  --entry-accent: var(--status-neutral);
+}
+.calendarPage :global([data-calendar-entry][data-state="todo"]) {
+  --entry-accent: var(--status-info);
+}
+.calendarPage :global([data-calendar-entry][data-state="progress"]) {
+  --entry-accent: var(--status-waiting);
+}
+.calendarPage :global([data-calendar-entry][data-state="review"]) {
+  --entry-accent: var(--status-thinking);
+}
+.calendarPage :global([data-calendar-entry][data-state="done"]) {
+  --entry-accent: var(--status-success);
+}
+.calendarPage :global([data-calendar-day] [data-calendar-entry])::before {
+  content: "";
+  position: absolute;
+  width: 2px;
+  left: 4px;
+  top: 8px;
+  bottom: 8px;
+  border-radius: var(--radius-inline-value);
+  background: var(--entry-accent, var(--status-info));
+}
+
+.createSheet :global([aria-haspopup]),
+.createSheet :global([role="combobox"]) {
+  width: 100%;
+  min-width: 0;
+}

@@ -1,0 +1,24 @@
+import React from 'react';
+import { ArrowUpRight, BookOpen, FileText, GitBranch, Sparkles, Terminal } from 'lucide-react';
+import type { Entity, FileRecord, ProtocolConfiguration } from '@pm-schema';
+import { referenceEntries } from '@pm-schema/relations';
+import { EntityFields } from './EntityFields.tsx';
+
+export function Properties({ file, entity, files, configuration, disabled, lifecycleDisabled, dirty, onPatch, onLink, onLifecycle, onContext, section = 'properties', en = true, draftMode = false, excludeFields = [] }: { file: FileRecord; entity: Entity; files: FileRecord[]; configuration: ProtocolConfiguration; disabled: boolean; lifecycleDisabled: boolean; dirty: boolean; onPatch: (changes: Record<string, unknown>) => void; onLink: (id: string) => void; onLifecycle: (action: 'archive' | 'restore' | 'delete') => void; onContext: () => void; section?: 'properties' | 'relations' | 'context'; en?: boolean; draftMode?: boolean; excludeFields?: readonly string[] }) {
+  const relationships = [...new Set([...referenceEntries(entity, configuration).map(ref => ref.targetId), ...files.filter(other => other.id !== file.id && referenceEntries(other.entity, configuration).some(ref => ref.targetId === file.id)).map(other => other.id)])];
+  const basename = file.path.replace(/\.md$/, '').split('/').pop()!;
+  const backlinks = [...new Set([...entity.links, ...files.filter(f => f.id !== file.id && f.entity.links.some(link => [file.id, entity.title, basename].includes(link))).map(f => f.id)])];
+  return <div className="detail-properties">
+    {dirty && section !== 'context' && <div className="property-hint">{draftMode ? (en ? 'Fields edit the shared Markdown draft. Save explicitly to apply them. Lifecycle actions remain locked until the draft is resolved.' : '字段修改同一份 Markdown 草稿，需显式保存后生效；生命周期操作仍需先处理草稿。') : (en ? 'Save or discard the source draft before editing fields or lifecycle.' : '请先保存或放弃源码草稿，再修改字段或生命周期。')}</div>}
+    {section === 'properties' && <>
+      {draftMode && !excludeFields.includes('assignee') && <p className="property-hint">{en ? 'Use the task view to select an eligible assignee from the member directory.' : '请在任务视图中从成员目录选择可分派负责人。'}</p>}
+      <div className="properties-fields"><EntityFields kind={entity.entity} values={entity} files={files} configuration={configuration} disabled={disabled} section="properties" en={en} exclude={draftMode ? [...excludeFields, 'assignee'] : excludeFields} onChange={onPatch} /></div>
+      <div className="property-section"><h3>{en ? 'Lifecycle' : '生命周期'}</h3><p className="muted">{en ? 'Archive preserves status and references. Permanent deletion requires an archived object without incoming references.' : '归档保留状态与引用。永久删除要求对象已归档且没有入站引用。'}</p><div className="lifecycle-actions"><button className="secondary-button" data-testid={entity.archived ? 'restore-entity' : 'archive-entity'} disabled={lifecycleDisabled} onClick={() => onLifecycle(entity.archived ? 'restore' : 'archive')}>{entity.archived ? (en ? 'Restore' : '恢复') : (en ? 'Archive' : '归档')}</button><button className="secondary-button" data-testid="delete-entity" disabled={lifecycleDisabled || !entity.archived} onClick={() => onLifecycle('delete')}>{en ? 'Delete permanently…' : '永久删除…'}</button></div></div>
+    </>}
+    {section === 'relations' && <>
+      <div className="property-section"><h3><GitBranch size={13} />{en ? 'Relationships' : '关联关系'}</h3><EntityFields kind={entity.entity} values={entity} files={files} configuration={configuration} disabled={disabled} section="relations" en={en} exclude={excludeFields} onChange={onPatch} /><div className="relationship-links">{relationships.map(id => <button key={id} onClick={() => onLink(id)}><FileText size={12} /><span>{id}</span><ArrowUpRight size={12} /></button>)}</div><p className="muted">{en ? 'Includes incoming, outgoing and custom references. Editing a field changes this file only.' : '包含入站、出站与自定义引用。修改字段只更改当前文件。'}</p></div>
+      <div className="property-section"><h3><BookOpen size={13} />{en ? 'Links & backlinks' : '链接与反向链接'}</h3>{backlinks.map(id => <button className="backlink" key={id} onClick={() => onLink(id)}><FileText size={12} /><span>{id}</span><ArrowUpRight size={12} /></button>)}{!backlinks.length && <p className="muted">{en ? 'No linked documents yet.' : '暂无关联文档。'}</p>}</div>
+    </>}
+    {section === 'context' && <div className="property-section"><h3><Sparkles size={13} />{en ? 'Agent context' : '智能体上下文'}</h3><p className="muted">{en ? 'Generate saved dependencies and linked decisions from the current workspace. Unsaved source drafts are not included.' : '根据当前工作区生成已保存的依赖与关联决策，不包含尚未保存的源码草稿。'}</p><button className="secondary-button context-button" data-testid="agent-context" onClick={onContext}><Terminal size={14} />{en ? 'Generate context' : '生成上下文'}</button></div>}
+  </div>;
+}

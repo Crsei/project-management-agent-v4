@@ -1,0 +1,232 @@
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+  outline: none;
+}
+
+.trigger:hover {
+  background: var(--surface-hover);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.chevron {
+  width: 13px;
+  height: 13px;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.card {
+  width: 260px;
+  max-width: calc(100vw - 16px);
+  max-height: min(420px, calc(100dvh - 16px));
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-popover-value);
+  background: var(--surface);
+  box-shadow: var(--shadow-floating);
+  overflow-y: auto;
+}
+
+.card[data-state="open"] {
+  animation: userMenuIn var(--motion-popover) var(--motion-ease-out) both;
+}
+
+@keyframes userMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 8px 10px;
+}
+
+.identityAvatar {
+  border-color: var(--border);
+}
+
+.identityText {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.displayName {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.email {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.separator {
+  height: 1px;
+  margin: 4px -4px;
+  background: var(--border);
+}
+
+.sectionLabel {
+  padding: 8px 8px 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+  text-decoration: none;
+  outline: none;
+}
+
+.item:hover {
+  background: var(--surface-hover);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.item:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.item svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.theme {
+  display: flex;
+  width: 100%;
+  gap: 2px;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: var(--surface-raised);
+}
+
+.themeItem {
+  flex: 1;
+  min-height: 28px;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 4px;
+  border-radius: var(--control-radius);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.themeItem svg {
+  width: 13px;
+  height: 13px;
+}
+
+.themeItem[data-checked] {
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.spinner {
+  animation: userMenuSpin 1s linear infinite;
+}
+
+@keyframes userMenuSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error {
+  margin: 4px;
+  padding: 6px 8px;
+  border-radius: var(--control-radius);
+  background: var(--surface-raised);
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+@container workspace-navigation (max-width: 120px) {
+  .trigger {
+    justify-content: center;
+    padding-inline: 4px;
+  }
+
+  .name,
+  .chevron {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .item,
+  .themeItem {
+    min-height: 44px;
+  }
+}

@@ -1,0 +1,70 @@
+.projectLink,
+.projectChildLink {
+  min-height: 30px;
+  gap: 8px;
+  padding: 4px 12px;
+  line-height: 18px;
+}
+
+.expandProject {
+  width: 30px;
+  height: 30px;
+}
+
+.projectToken {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.projectToken[data-color="0"] { color: #8171ce; }
+.projectToken[data-color="1"] { color: #3f8dab; }
+.projectToken[data-color="2"] { color: #bd7d38; }
+.projectToken[data-color="3"] { color: #ae6b8c; }
+.projectToken[data-color="4"] { color: #5d9678; }
+.projectToken[data-color="5"] { color: #6b85bd; }
+
+.favorite {
+  flex-shrink: 0;
+  color: var(--warning);
+}
+
+.projectSearch {
+  height: 30px;
+  min-height: 30px;
+}
+
+.projectViews {
+  padding-bottom: 4px;
+}
+
+.projectView {
+  min-height: 30px;
+}
+
+.workspaceTrigger {
+  min-height: 48px;
+}
+
+@media (pointer: coarse) {
+  .projectLink,
+  .projectChildLink,
+  .projectView {
+    min-height: 44px;
+  }
+
+  .expandProject {
+    width: 44px;
+    height: 44px;
+  }
+
+  .projectSearch {
+    height: 44px;
+    min-height: 44px;
+  }
+}

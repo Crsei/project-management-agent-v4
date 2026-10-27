@@ -1,0 +1,64 @@
+# Historical bootstrap-only contract. Current implemented API: openapi.yaml.
+openapi: 3.1.0
+info:
+  title: Project Management Bootstrap API
+  version: 0.1.0
+  description: Initialization endpoints only. Business operations are not implemented.
+paths:
+  /health/live:
+    get:
+      operationId: getLiveness
+      responses:
+        '200':
+          description: The API process is responding.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status]
+                properties:
+                  status: { const: alive }
+  /health/ready:
+    get:
+      operationId: getReadiness
+      responses:
+        '503':
+          description: Business services have not been initialized.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status, reason]
+                properties:
+                  status: { const: not_ready }
+                  reason: { const: backend_not_initialized }
+  /api/v1/capabilities:
+    get:
+      operationId: getCapabilities
+      responses:
+        '200':
+          description: All planned capabilities are explicitly disabled.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [stage, business, database, storage, worker, realtime, execution]
+                properties:
+                  stage: { const: bootstrap }
+                  business: { $ref: '#/components/schemas/DisabledCapability' }
+                  database: { $ref: '#/components/schemas/DisabledCapability' }
+                  storage: { $ref: '#/components/schemas/DisabledCapability' }
+                  worker: { $ref: '#/components/schemas/DisabledCapability' }
+                  realtime: { $ref: '#/components/schemas/DisabledCapability' }
+                  execution: { $ref: '#/components/schemas/DisabledCapability' }
+components:
+  schemas:
+    DisabledCapability:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled: { const: false }

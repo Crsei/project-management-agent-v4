@@ -1,0 +1,90 @@
+.document-object-actions {
+  position: relative;
+  min-width: 0;
+  font-size: .875rem;
+}
+.document-object-actions > summary {
+  cursor: pointer;
+  padding: .45rem .65rem;
+  border: 1px solid var(--pm-border, #d5d7dc);
+  border-radius: .4rem;
+}
+.document-object-panel {
+  display: grid;
+  gap: .9rem;
+  min-width: 0;
+  max-height: min(70vh, 46rem);
+  overflow: auto;
+  padding: .85rem;
+  border: 1px solid var(--pm-border, #d5d7dc);
+  border-radius: .4rem;
+  background: var(--pm-surface, var(--background, #fff));
+  color: var(--pm-text, inherit);
+}
+.document-object-panel section,
+.document-object-form form {
+  display: grid;
+  min-width: 0;
+  gap: .5rem;
+}
+.document-object-panel h4,
+.document-object-panel p { margin: 0; }
+.document-object-panel p { line-height: 1.5; }
+.document-object-panel label { display: grid; min-width: 0; gap: .3rem; }
+.document-object-panel input,
+.document-object-panel select {
+  min-width: 0;
+  max-width: 100%;
+  padding: .45rem .55rem;
+  border: 1px solid var(--pm-border, #d5d7dc);
+  border-radius: .35rem;
+  color: inherit;
+  background: inherit;
+}
+.document-object-panel button {
+  min-height: 2.2rem;
+  padding: .35rem .65rem;
+  border: 1px solid var(--pm-border, #d5d7dc);
+  border-radius: .35rem;
+  background: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.document-object-panel button:disabled { opacity: .5; cursor: not-allowed; }
+.document-object-panel button:focus-visible,
+.document-object-actions > summary:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.document-object-results,
+.document-object-recovery {
+  display: grid;
+  gap: .5rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.document-object-results { max-height: 13rem; overflow: auto; }
+.document-object-results li,
+.document-object-buttons,
+.document-object-recovery li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  min-width: 0;
+}
+.document-object-results li > span { flex: 1 1 12rem; overflow-wrap: anywhere; }
+.document-object-form,
+.document-object-drop,
+.document-object-recovery li {
+  padding: .7rem;
+  border: 1px solid var(--pm-border, #d5d7dc);
+  border-radius: .4rem;
+}
+.document-object-drop { border-style: dashed; }
+.document-object-form pre,
+.document-object-reference { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+.document-object-notice { padding: .6rem; border-left: 3px solid currentColor; }
+@media (max-width: 540px) {
+  .document-object-panel { padding: .6rem; }
+  .document-object-results li > span { flex-basis: 100%; }
+  .document-object-panel button { min-height: 2.65rem; }
+}

@@ -1,0 +1,130 @@
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useLocation, useParams } from 'react-router';
+import CodeMirror from '@uiw/react-codemirror';
+import { markdown } from '@codemirror/lang-markdown';
+import { ArrowLeft, ArrowUpRight, AlertTriangle, ChevronDown, Code2, FileText, Link, LoaderCircle, Save, X } from 'lucide-react';
+import type { FileRecord } from '@pm-schema';
+import type { GraphQuery } from '@pm-schema/graph';
+import { KnowledgeGraph } from '@pm-views';
+import type { WorkspaceController } from './controller';
+import { useDetailState, type DetailTab } from './session';
+import { Diagnostics } from './Diagnostics';
+import { Preview } from './Preview';
+import { Properties } from './Properties';
+import { TaskCompletionAction, TaskDetailSurface } from './TaskDetailSurface';
+import { TaskDetailWatch } from './TaskDetailRelated';
+import { DocumentContentEditor } from './DocumentContentEditor';
+import { applyBodyChanges, bodyEditorText, type BodyChange } from './document-body';
+import { PersonalMentionPicker } from '../service/PersonalMentionPicker';
+import { ProjectLocalLocation } from '../service/project-local-location';
+import { EntityAgentPanelAction } from '../agent/agent-entry';
+
+export interface EntityDetailProps {
+  controller: WorkspaceController;
+  en: boolean;
+  fullPage?: boolean;
+  onClose: () => void;
+  onExpand?: () => void;
+  renderBusiness: (file: FileRecord) => ReactNode;
+}
+export function EntityDetail({ controller: c, en, fullPage = false, onClose, onExpand, renderBusiness }: EntityDetailProps) {
+  const [detail, setDetail] = useDetailState();
+  const location = useLocation();
+  const extensions = useMemo(() => [markdown()], []);
+  const graphQuery = useMemo<GraphQuery>(() => ({ centerId: c.selected?.id, depth: 1, archived: c.selected?.entity.archived ? 'include' : 'exclude' }), [c.selected?.id, c.selected?.entity.archived]);
+  const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
+  const [copyState, setCopyState] = useState<{ id: string; status: 'copied' | 'failed' } | null>(null);
+  const [discardVersion, setDiscardVersion] = useState(0);
+  const task = c.selected?.entity.entity === 'work_item' && !c.unsupported;
+  const isDocument = c.selected?.entity.entity === 'document' && !c.unsupported;
+  useEffect(() => {
+    if (isDocument && location.hash || task && location.hash.startsWith('#comment-')) setDetail({ tab: 'content' });
+  }, [isDocument, task, c.selectedId, location.hash, setDetail]);
+  const sourceReadonly = !c.canEditSourceDraft;
+  const tab = c.unsupported ? 'source' : detail.tab;
+  const tabs: { id: DetailTab; label: string }[] = [
+    { id: 'content', label: en ? 'Content' : '内容' },
+    { id: 'source', label: isDocument ? (en ? 'Advanced source' : '高级源码') : (en ? 'Source' : '源码') },
+    { id: 'properties', label: en ? 'Properties' : '属性' },
+    { id: 'relations', label: en ? 'Relations' : '关联' },
+    { id: 'graph', label: en ? 'Graph' : '关系图' },
+    { id: 'business', label: en ? 'Business' : '业务' },
+    { id: 'context', label: en ? 'Context' : '上下文' },
+  ];
+  const sourceEditor = c.unsupported ? <textarea data-testid="unsupported-source" className="unsupported-source" aria-label={en ? 'Read-only Markdown source' : '只读 Markdown 源码'} value={c.unsupported.raw} readOnly spellCheck={false} /> : <div data-testid="source-editor" className="source-editor">{task && c.entity?.project && <PersonalMentionPicker taskId={c.selectedId} projectId={c.entity.project} disabled={sourceReadonly} onInsert={token => {
+    const raw = c.session.drafts.getSnapshot()[c.selectedId]?.raw ?? c.selected?.raw ?? '';
+    c.updateDraft(`${raw}${raw.endsWith('\n') ? '' : '\n'}${token}\n`);
+  }} />}<CodeMirror key={`${c.selectedId}:${discardVersion}`} value={bodyEditorText(c.raw)} height="100%" extensions={extensions} onChange={(_value, change) => {
+    const current = c.session.drafts.getSnapshot()[c.selectedId]?.raw ?? c.selected?.raw ?? '';
+    const changes: BodyChange[] = [];
+    change.changes.iterChanges((from, to, _from, _to, insert) => changes.push({ from, to, insert: insert.toString() }));
+    c.updateDraft(applyBodyChanges(current, changes));
+  }} editable={!sourceReadonly} readOnly={sourceReadonly} basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true, highlightSelectionMatches: true }} aria-label={en ? 'Markdown source' : 'Markdown 源码'} /></div>;
+  const taskSurface = task && <TaskDetailSurface key={`${c.selectedId}:${discardVersion}`} controller={c} en={en} onEditSource={() => setDetail({ tab: 'source' })} />;
+  const agentProjectId = c.selected?.entity.entity === 'project' ? c.selected.id : c.selected?.entity.project;
+  const agentTaskId = c.selected?.entity.entity === 'work_item' ? c.selected.id : undefined;
+  const agentAction = c.selected && !c.unsupported ? <EntityAgentPanelAction entityId={c.selected.id} projectId={agentProjectId} taskId={agentTaskId} title={c.entity?.title ?? c.selected.entity.title} hasDraft={!!c.draft} /> : null;
+  return <section className={`entity-detail ${fullPage ? 'entity-detail-full' : ''} ${task ? 'task-entity-detail' : ''} ${task && tab === 'source' ? 'is-source-split' : ''}`} aria-label={task ? (en ? 'Task detail' : '任务详情') : (en ? 'Entity detail' : '对象详情')} data-testid="entity-detail">
+    {task ? <header className="task-detail-toolbar">
+      {fullPage && <button type="button" className="icon-button" aria-label={en ? 'Back to collection' : '返回集合'} onClick={onClose}><ArrowLeft size={16} /></button>}
+      <div className="task-toolbar-identity">{c.entity?.project && <><button type="button" className="task-project-link" title={c.projects.find(file => file.id === c.entity?.project)?.entity.title || c.entity.project} onClick={() => c.wikiLink(c.entity!.project!)}>{c.projects.find(file => file.id === c.entity?.project)?.entity.title || c.entity.project}</button><span aria-hidden="true">/</span></>}<span className="mono">{c.selectedId}</span></div>
+      <TaskCompletionAction controller={c} en={en} />
+      <TaskDetailWatch controller={c} en={en} />
+      {agentAction}
+      <button type="button" className="icon-button" aria-label={en ? 'Copy task link' : '复制任务链接'} title={en ? 'Copy task link' : '复制任务链接'} onClick={async () => {
+        try {
+          const url = new URL(`/pm/${encodeURIComponent(workspaceSlug || '')}${c.projectId ? `/projects/${encodeURIComponent(c.projectId)}` : ''}/entities/${encodeURIComponent(c.selectedId)}`, window.location.origin);
+          await navigator.clipboard.writeText(url.href);
+          setCopyState({ id: c.selectedId, status: 'copied' });
+        } catch { setCopyState({ id: c.selectedId, status: 'failed' }); }
+      }}><Link size={15} /></button>
+      {!fullPage && onExpand && <button type="button" className="icon-button" aria-label={en ? 'Expand entity' : '展开对象'} title={en ? 'Open full page · same draft' : '全页打开 · 保留草稿'} data-testid="expand-entity" onClick={onExpand}><ArrowUpRight size={16} /></button>}
+      <button type="button" className="icon-button" aria-label={fullPage ? (en ? 'Close task and return' : '关闭任务并返回') : (en ? 'Close inspector' : '关闭详情')} onClick={onClose}><X size={16} /></button>
+    </header> : <div className="detail-heading">
+      {fullPage && <button className="icon-button" aria-label={en ? 'Back to collection' : '返回集合'} onClick={onClose}><ArrowLeft size={18} /></button>}
+      <div className="detail-identity"><div className="detail-identity-meta"><FileText size={13} /><span className="mono">{c.selected?.id || c.unsupported?.id || c.selectedId}</span>{c.entity?.archived && <span className="draft-pill">{en ? 'Archived' : '已归档'}</span>}{c.draft && <span className="draft-pill">{en ? 'Draft' : '草稿'}</span>}</div><h2>{c.entity?.title || c.source?.path.split('/').pop() || (en ? 'Entity unavailable' : '对象不可用')}</h2></div>
+      {isDocument && tab === 'source' && <button type="button" className="secondary-button" data-testid="return-document-content" onClick={() => setDetail({ tab: 'content' })}><FileText size={15} />{en ? 'Editable content' : '可编辑内容'}</button>}
+      {agentAction}
+      {!fullPage && onExpand && c.selected && <button className="icon-button" aria-label={en ? 'Expand entity' : '展开对象'} title={en ? 'Open full page · same draft' : '全页打开 · 保留草稿'} data-testid="expand-entity" onClick={onExpand}><ArrowUpRight size={18} /></button>}
+      {!fullPage && <button className="icon-button" aria-label={en ? 'Close inspector' : '关闭详情'} onClick={onClose}><X size={18} /></button>}
+    </div>}
+    {task && copyState?.id === c.selectedId && <p className="task-copy-status" role={copyState.status === 'failed' ? 'alert' : 'status'}>{copyState.status === 'copied' ? (en ? 'Task link copied.' : '已复制任务链接。') : (en ? 'Clipboard is unavailable. Open the full page and copy its URL.' : '剪贴板不可用，请打开全页后复制地址。')}</p>}
+    {!c.source ? <div className="empty-state" role="status">{en ? 'This entity is not available in the current workspace. It may have been deleted or access may have changed.' : '当前工作区中无法访问此对象。对象可能已删除，或访问权限已更改。'}</div> : <>
+      {task ? <div className="task-detail-modes">
+        <div className="detail-tabs" role="tablist" aria-label={en ? 'Task editing modes' : '任务编辑模式'} onKeyDown={event => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const next = event.key === 'Home' ? 'content' : event.key === 'End' ? 'source' : tab === 'content' ? 'source' : 'content';
+          setDetail({ tab: next });
+          document.getElementById(`entity-tab-${next}`)?.focus();
+        }}>{tabs.slice(0, 2).map(item => <button type="button" key={item.id} id={`entity-tab-${item.id}`} role="tab" tabIndex={tab === item.id || !['content', 'source'].includes(tab) && item.id === 'content' ? 0 : -1} aria-selected={tab === item.id} aria-controls="entity-tab-panel" className={tab === item.id ? 'active' : ''} data-testid={item.id === 'source' ? 'source-tab' : 'preview-tab'} onClick={() => setDetail({ tab: item.id })}>{item.id === 'source' && <Code2 size={13} />}{item.id === 'content' ? (en ? 'Task' : '任务') : (en ? 'Source / live' : '源码 / 实时视图')}</button>)}</div>
+        <details className="task-advanced-menu" onKeyDown={event => {
+          if (event.key === 'Escape') { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); }
+        }}><summary>{tabs.find(item => item.id === tab && !['content', 'source'].includes(item.id))?.label || (en ? 'Advanced' : '高级')}<ChevronDown size={12} /></summary><div>{tabs.slice(2).map(item => <button type="button" key={item.id} id={`entity-tab-${item.id}`} aria-current={tab === item.id ? 'page' : undefined} className={tab === item.id ? 'active' : ''} data-testid={`${item.id}-tab`} onClick={event => {
+          setDetail({ tab: item.id });
+          const menu = event.currentTarget.closest('details');
+          if (menu) { menu.open = false; menu.querySelector('summary')?.focus(); }
+        }}>{item.label}</button>)}</div></details>
+      </div> : <div className="detail-tabs" role="tablist" aria-label={en ? 'Entity sections' : '对象分区'}>{tabs.map(item => <button key={item.id} id={`entity-tab-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls="entity-tab-panel" disabled={!!c.unsupported && item.id !== 'source'} className={tab === item.id ? 'active' : ''} data-testid={item.id === 'source' ? 'source-tab' : item.id === 'content' ? 'preview-tab' : `${item.id}-tab`} onClick={() => setDetail({ tab: item.id })}>{item.label}</button>)}</div>}
+      <div className="detail-save-state"><span className="mono" title={c.source.path}>{c.source.path}</span><span role="status">{c.unsupported || sourceReadonly ? (en ? 'Read only' : '只读') : c.draftDiagnostics.some(issue => issue.severity === 'error') ? (en ? 'Invalid draft / input' : '草稿或输入无效') : c.draft ? (en ? 'Unsaved changes' : '未保存的更改') : (en ? 'Saved' : '已保存')}</span></div>
+      {c.selected?.stale && !c.unsupported && <div className="inline-error">{c.selected.entity.entity === 'project' ? (en ? 'The project source is unavailable or needs repair. Check its registered storage and diagnostics; restore a missing mount or explicitly rebind the original directory rather than creating an empty replacement.' : '项目源码不可用或需要修复。请先核对登记存储与诊断；缺盘时恢复原挂载或显式找回原目录，不要创建空替代目录。') : (en ? 'Disk source needs repair. Edit source and save to restore sync; properties are locked.' : '磁盘源码需要修复。请编辑源码并保存以恢复同步；属性暂时锁定。')} {c.selected.error}<button className="text-button" onClick={() => setDetail({ tab: 'source' })}>{en ? 'Inspect source' : '检查源码'}</button></div>}
+      {c.unsupported && <div className="inline-error">{en ? 'Read-only source' : '只读源码'} · {c.unsupported.schema || (en ? 'Unrecognized metadata' : '无法识别的元数据')}. {en ? 'This protocol cannot be edited or deleted here. Any previous local draft is retained.' : '当前不允许修改或删除此协议源码。之前的本地草稿仍予以保留。'}</div>}
+      {task && c.draftParseError && <div className="inline-error" role="alert">{en ? 'The current Markdown draft is invalid. Task fields and description show the last saved valid document, not the invalid draft. Repair the source before saving.' : '当前 Markdown 草稿无效。任务字段与描述显示最后保存的有效文档，并非当前无效草稿；请修复源码后再保存。'} <button type="button" onClick={() => setDetail({ tab: 'source' })}>{en ? 'Repair source' : '修复源码'}</button></div>}
+      {isDocument && c.draftParseError && <div className="inline-error" role="alert">{en ? 'This draft is invalid and cannot be saved. Its raw Markdown is retained; repair the body or advanced source. Preview shows this draft, not a saved replacement.' : '当前草稿无效，暂不能保存。Markdown 原文已保留，请修复正文或高级源码；预览显示当前草稿，不会用已保存版本替换。'} <button type="button" onClick={() => setDetail({ tab: 'source' })}>{en ? 'Repair source' : '修复源码'}</button></div>}
+      <Diagnostics diagnostics={c.unsupported?.diagnostics || c.selected?.diagnostics || []} />
+      {c.ahead && <div className="conflict-banner"><AlertTriangle size={14} /><span>{en ? 'Disk changed. Your draft is safe.' : '磁盘内容已更改，草稿已保留。'}</span><button onClick={() => { c.setRebaseReviewed(false); c.setConflict({ id: c.selectedId, current: c.selected!, local: c.raw }); }}>{en ? 'Compare versions' : '比较版本'}</button></div>}
+      <Diagnostics diagnostics={c.draftDiagnostics} />
+      <div className={`detail-content detail-content-${tab}`} id="entity-tab-panel" role="tabpanel" aria-labelledby={`entity-tab-${tab}`}>
+        {c.selected?.entity.entity === 'project' && <ProjectLocalLocation key={c.selected.id} projectId={c.selected.id} />}
+        {isDocument && <div hidden={tab !== 'content'} className="document-editing-panel"><DocumentContentEditor key={`${c.selectedId}:${discardVersion}`} controller={c} en={en} onSource={() => setDetail({ tab: 'source' })} /></div>}
+        {isDocument && <div hidden={tab !== 'source'} className="document-source-panel">{sourceEditor}</div>}
+        {tab === 'source' && !isDocument && (task ? <div className="task-source-live"><section className="task-source-pane" aria-label={en ? 'Shared Markdown source' : '共享 Markdown 源码'}><div className="task-source-pane-heading"><Code2 size={13} /><span>{en ? 'Markdown source · shared draft' : 'Markdown 源码 · 共享草稿'}</span><button type="button" className="text-button" onClick={() => setDetail({ tab: 'content' })}>{en ? 'Task view' : '任务视图'}</button></div>{sourceEditor}</section><section className="task-live-pane" aria-label={en ? 'Live task preview' : '实时任务预览'}><div className="task-source-pane-heading"><span>{en ? 'Live task · unsaved until Save' : '实时任务 · 显式保存后生效'}</span></div>{taskSurface}</section></div> : sourceEditor)}
+        {tab === 'content' && !isDocument && (task ? taskSurface : c.entity && <Preview raw={c.raw} body={c.entity.body} viewProps={{ ...c.viewProps, files: c.projected, allFiles: c.projected }} disabled={!c.selected || !c.canEdit(c.selectedId)} onToggle={line => void c.toggleChecklist(line)} onLink={c.wikiLink} />)}
+        {(['properties', 'relations', 'context'] as string[]).includes(tab) && c.selected && c.entity && <Properties key={`${c.selected.id}:${tab}`} file={c.selected} entity={c.entity} files={c.files} configuration={c.configuration} disabled={task ? !c.canEditTaskDraft : isDocument ? sourceReadonly || c.draftParseError || !!c.selected.stale || !!c.entity.archived : !c.canEdit(c.selectedId)} lifecycleDisabled={!c.canManageLifecycle(c.selectedId) || (task || isDocument) && c.draftInvalid} dirty={!!c.draft} draftMode={task || isDocument} excludeFields={isDocument ? ['assignee'] : undefined} section={tab as 'properties' | 'relations' | 'context'} en={en} onPatch={changes => { if (task) c.patchTaskDraft(changes); else if (isDocument) c.patchDocumentDraft(changes); else void c.patch(c.selectedId, changes); }} onLink={c.wikiLink} onLifecycle={action => { if (action === 'delete') { c.setDeleteTarget(c.selected!); c.setDeleteConfirmation(''); c.setError(''); c.setRequestDiagnostics([]); } else void c.lifecycle(c.selected!, action); }} onContext={() => void c.loadContext()} />}
+        {tab === 'graph' && c.selected && <>{!!c.draftIds.size && <p className="property-hint" role="status">{en ? 'This graph uses saved Markdown only. Unsaved local drafts are marked, but their title and relationship changes appear here only after saving.' : '此图谱仅使用已保存的 Markdown。本地草稿会有标记，但标题与关系的更改保存后才会出现在这里。'}</p>}<KnowledgeGraph files={c.files} configuration={c.configuration} source={c.graphSource} query={graphQuery} refreshKey={c.graphRefreshKey} selectedId={c.selected.id} draftIds={c.draftIds} onSelect={c.select} en={en} /></>}
+        {tab === 'business' && c.selected && <>{(c.draft || c.configurationInvalid || c.selected.stale || c.draftInvalid) && <div className="property-hint">{en ? 'Resolve the source draft or diagnostics before changing business state.' : '请先处理源码草稿或诊断，再修改业务状态。'}</div>}<fieldset disabled={!!c.draft || c.draftInvalid || sourceReadonly || !!c.selected.stale}>{renderBusiness(c.selected)}</fieldset></>}
+      </div>
+      <div className="detail-actions"><span className="mono">{c.source.revision.slice(0, 7)}</span><div>{(c.draft || task && c.draftDiagnostics.some(issue => issue.severity === 'error')) && !c.unsupported && <button className="text-button" onClick={() => { if (window.confirm(en ? 'Discard your unsaved draft and input, and load the latest disk version?' : '放弃未保存的草稿与输入，并加载最新磁盘版本？')) { c.removeDraft(c.selectedId); setDiscardVersion(version => version + 1); } }}>{en ? 'Discard' : '放弃'}</button>}<button className="save-button" data-testid="save-file" disabled={!c.selected || !!c.unsupported || !c.draft || c.draftInvalid || sourceReadonly} onClick={() => void c.save()}>{c.busy === c.selectedId ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}{c.unsupported || sourceReadonly ? (en ? 'Read only' : '只读') : c.draftDiagnostics.some(issue => issue.severity === 'error') ? (en ? 'Fix draft to save' : '修复草稿后保存') : c.draft ? (en ? 'Save changes' : '保存更改') : (en ? 'Saved' : '已保存')}<kbd>⌘ S</kbd></button></div></div>
+    </>}
+  </section>;
+}

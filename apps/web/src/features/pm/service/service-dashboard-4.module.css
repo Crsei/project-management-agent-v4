@@ -1,0 +1,144 @@
+.canvas {
+  position: relative;
+}
+.readNotices {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  right: 12px;
+  left: 52px;
+  display: grid;
+  gap: 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.readNotices:empty {
+  display: none;
+}
+.readNotices > :not(:empty) {
+  padding: 8px;
+}
+.canvasMessage {
+  display: flex;
+  min-height: 440px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 32px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+}
+.layoutNotice {
+  position: absolute;
+  z-index: 4;
+  right: 12px;
+  bottom: 76px;
+  left: 12px;
+  margin: 0;
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.workNode {
+  width: 230px;
+}
+.workNode[data-state-group="done"] {
+  border-color: color-mix(in srgb, #10b981 42%, var(--border));
+  background: color-mix(in srgb, #10b981 5%, var(--surface));
+}
+.workNode[data-state-group="working"] {
+  border-color: color-mix(in srgb, #3b82f6 42%, var(--border));
+  background: color-mix(in srgb, #3b82f6 5%, var(--surface));
+}
+.workNode > p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.filters {
+  display: grid;
+  width: min(280px, calc(100vw - 24px));
+  gap: 12px;
+}
+.filters label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  font-size: 12px;
+}
+.filters select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.editorDialog {
+  max-width: min(1100px, calc(100vw - 32px));
+}
+.editor {
+  min-width: 0;
+  margin-top: 20px;
+}
+.tableNotice {
+  position: relative;
+  padding: 12px 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.tableNotice .readNotices {
+  position: static;
+}
+.scopeNote {
+  margin: 16px 0 0;
+  overflow-wrap: anywhere;
+}
+.criticalPanel {
+  min-height: 278px;
+}
+.unavailable {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.unavailable strong {
+  color: var(--foreground);
+  font-weight: 500;
+}
+.unavailable p {
+  margin: 0;
+}
+.unavailable button {
+  max-width: 100%;
+  min-height: 32px;
+  white-space: normal;
+  font-size: 12px;
+  text-align: left;
+}
+@media (max-width: 767px) {
+  .criticalPanel {
+    min-height: 240px;
+  }
+  .readNotices {
+    left: 44px;
+  }
+  .layoutNotice {
+    bottom: 100px;
+  }
+}

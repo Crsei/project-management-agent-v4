@@ -1,0 +1,42 @@
+.queryNotice:empty { display: none; }
+.queryNotice { margin-bottom: 12px; font-size: 12px; line-height: 18px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.queryNotice button { height: 28px; min-height: 28px; margin-top: 6px; padding-inline: 8px; font-size: 12px; }
+.selectField { display: flex; min-width: 0; flex-direction: column; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.selectField select, .issueFilters select { min-width: 0; min-height: 32px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--foreground); font: inherit; }
+.selectField select:focus-visible, .issueFilters select:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.dateActions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dateActions button { min-height: 30px; height: 30px; }
+.timeline:not([data-today-visible])::before, .timeline:not([data-today-visible])::after { display: none; }
+.scrollTarget { scroll-margin-top: 16px; }
+.empty { min-height: 100px; padding: 20px 0; font-size: 13px; line-height: 20px; color: var(--text-secondary); }
+.identity { display: flex; min-width: 0; align-items: center; gap: 8px; font-size: 13px; line-height: 20px; }
+.identity > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.milestoneTabs { display: flex; max-width: 100%; overflow-x: auto; }
+.chartCaption { margin-top: 12px; font-size: 10px; line-height: 16px; color: var(--text-secondary); }
+.undatedMilestones { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; font-size: 12px; line-height: 18px; color: var(--text-secondary); }
+.undatedMilestones summary { cursor: pointer; }
+.undatedMilestones button { display: flex; width: 100%; height: auto; min-height: 30px; justify-content: flex-start; padding: 6px 0; font-size: 12px; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.unavailable { display: flex; min-height: 236px; flex-direction: column; justify-content: center; align-items: center; gap: 12px; padding: 20px; color: var(--text-secondary); text-align: center; }
+.unavailable strong { font-size: 14px; line-height: 20px; font-weight: 500; }
+.unavailable p { max-width: 260px; font-size: 12px; line-height: 18px; }
+.issueFilters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 12px; }
+.issueFilters > input { flex: 1 1 180px; min-width: 0; }
+.issueFilters select { flex: 1 1 130px; }
+.issueList { list-style: none; margin: 0 0 16px; padding: 0; }
+.issueList li + li { border-top: 1px solid var(--border); }
+.issueList button { display: flex; width: 100%; height: auto; min-height: 48px; justify-content: flex-start; gap: 12px; padding: 10px 8px; font-size: 12px; text-align: left; }
+.issueList strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
+.issueList button > span:not(.issueIdentity), .issueList time { flex: none; color: var(--text-secondary); }
+.issueIdentity { flex: none; max-width: 100px; overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary); }
+.eventIcon { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--surface-raised); color: var(--text-secondary); }
+.activityBoundary { margin: 0 0 12px; font-size: 10px; line-height: 15px; color: var(--text-secondary); }
+.memberOverflow { display: grid; place-items: center; border-radius: 50%; background: var(--surface-raised); color: var(--text-secondary); font-size: 12px; }
+@media (max-width: 767px) {
+  .issueList button { flex-wrap: wrap; gap: 6px 10px; }
+  .issueList strong { flex-basis: calc(100% - 110px); }
+  .issueList time { margin-left: auto; }
+  .issueList button > svg { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scrollTarget { scroll-behavior: auto; }
+}

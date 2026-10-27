@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "sourceMap": true
+  },
+  "include": [
+    "apps/api/src/**/*.ts",
+    "apps/worker/src/**/*.ts",
+    "packages/domain/src/**/*.ts",
+    "packages/application/src/**/*.ts",
+    "packages/contracts/src/**/*.ts",
+    "packages/infrastructure/src/**/*.ts",
+    "packages/pm-schema/**/*.ts",
+    "packages/pm-markdown/**/*.ts",
+    "packages/pm-core/**/*.ts",
+    "scripts/blob-storage.ts",
+    "scripts/notification-admin.ts",
+    "scripts/local-project-storage.ts"
+  ],
+  "exclude": [
+    "packages/pm-core/tests/**"
+  ]
+}

@@ -1,0 +1,347 @@
+.tableScroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 0;
+  border-radius: 0;
+  background: var(--background);
+}
+.table {
+  width: 100%;
+  min-width: 920px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+  line-height: 20px;
+}
+.table .tableHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--muted) 20%, var(--background));
+  color: #71717a;
+}
+.table th {
+  height: 37px;
+  padding: 8px 0 8px 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+.table th:first-child {
+  padding-left: 24px;
+}
+.table th:nth-child(2) {
+  padding-left: 0;
+}
+.table td {
+  height: 61px;
+  padding: 12px 0 12px 8px;
+  vertical-align: middle;
+}
+.table td:first-child {
+  padding-left: 24px;
+}
+.table td:nth-child(2) {
+  padding-left: 0;
+}
+.table th:last-child,
+.table td:last-child {
+  padding-right: 24px;
+}
+.table tr {
+  border-color: var(--border);
+}
+.tableRow {
+  cursor: pointer;
+  transition: background-color 120ms;
+}
+.tableRow:hover {
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+}
+.tableRow[data-selected="true"] {
+  background: var(--selection);
+}
+.table .sortButton {
+  position: relative;
+  display: inline-flex;
+  min-height: 0;
+  height: 20px;
+  max-width: 100%;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+.sortIndicator {
+  display: inline-flex;
+  opacity: 0;
+}
+.sortIndicator svg {
+  width: 12px;
+  height: 12px;
+}
+.sortButton:hover .sortIndicator,
+.sortButton:focus-visible .sortIndicator {
+  opacity: 1;
+}
+.table .projectButton {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  height: 36px;
+  min-height: 0;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 8px 0 0;
+  border-radius: 4px;
+  background: none;
+  text-align: left;
+}
+.projectIcon {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+  color: #71717a;
+}
+.projectIcon svg {
+  width: 14px;
+  height: 14px;
+}
+.projectCell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.projectCellTitle {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projectIdentifier {
+  overflow: hidden;
+  color: #71717a;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ownerCell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+.ownerCell > span:last-child,
+.teamCell > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ownerAvatar {
+  border: 0;
+}
+.ownerAvatar > span {
+  font-size: 9px;
+}
+.healthBadge {
+  display: inline-flex;
+  max-width: 100%;
+  height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.healthBadge svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: #71717a;
+}
+.healthBadge[data-band="on-track"] svg {
+  color: #16a34a;
+}
+.healthBadge[data-band="at-risk"] svg {
+  color: #3b82f6;
+}
+.healthBadge > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.milestoneCell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+.milestoneTitle {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.milestoneDate,
+.updatedTime {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.milestoneDate svg,
+.updatedTime svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.teamCell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+.teamIcon {
+  display: flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+.teamIcon svg {
+  width: 14px;
+  height: 14px;
+}
+.updatedCell {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+.updatedTime {
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+.inlineActions {
+  position: absolute;
+  right: -20px;
+  display: inline-flex;
+  border-radius: 4px;
+  background: var(--background);
+  opacity: 0;
+}
+.inlineActions:has([aria-expanded="true"]),
+.tableRow:hover .inlineActions,
+.tableRow:focus-within .inlineActions {
+  opacity: 1;
+}
+.inlineActions > button {
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+}
+.actionColumn {
+  width: 44px;
+}
+.table .rowActionCell {
+  width: 44px;
+  padding: 0 8px;
+  text-align: right;
+}
+.muted {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+:global(.dark) .tableScroll {
+  background: #0a0a0a;
+}
+:global(.dark) .table .tableHeader {
+  background: #141414;
+  color: #a1a1aa;
+}
+:global(.dark) .table tr {
+  border-color: rgb(255 255 255 / 8%);
+}
+:global(.dark) .tableRow:hover {
+  background: rgb(255 255 255 / 4%);
+}
+:global(.dark) .projectIcon {
+  background: rgb(24 24 27 / 80%);
+}
+:global(.dark) .projectCellTitle,
+:global(.dark) .ownerCell,
+:global(.dark) .healthBadge {
+  color: #f4f4f5;
+}
+:global(.dark) .projectIdentifier,
+:global(.dark) .teamCell,
+:global(.dark) .updatedTime {
+  color: #a1a1aa;
+}
+:global(.dark) .inlineActions {
+  background: #0a0a0a;
+}
+@media (max-width: 639px) {
+  .table th:first-child,
+  .table td:first-child {
+    padding-left: 16px;
+  }
+  .table th:last-child,
+  .table td:last-child {
+    padding-right: 16px;
+  }
+  .inlineActions {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tableRow {
+    transition: none;
+  }
+}

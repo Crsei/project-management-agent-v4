@@ -1,0 +1,370 @@
+.list {
+  --personal-columns: 18px 30px minmax(220px, 1fr) 160px 126px 108px 104px 40px;
+  container: personal-task-list / inline-size;
+  width: 100%;
+  min-width: 0;
+  padding: 0 24px 24px 0;
+  color: var(--foreground);
+  background: var(--surface);
+}
+
+.columns,
+.row {
+  display: grid;
+  grid-template-columns: var(--personal-columns);
+  align-items: center;
+  min-width: 0;
+  gap: 0;
+}
+
+.columns {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 32px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.columns > span {
+  min-width: 0;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.group {
+  min-width: 0;
+  margin-top: 10px;
+}
+
+.groupStrip {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  min-width: 0;
+  gap: 8px;
+  padding: 0 8px 0 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.groupHeading {
+  display: flex;
+  min-width: 0;
+  font: inherit;
+}
+
+.groupToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.groupToggle > svg:first-child {
+  color: var(--muted-foreground);
+}
+
+.groupToggle > :is(span, time) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.groupToggle:hover,
+.groupToggle:focus-visible {
+  color: var(--foreground);
+  background: var(--surface-hover);
+}
+
+.count {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.overdue {
+  color: var(--destructive);
+}
+
+.completed {
+  color: var(--success);
+}
+
+.emptyGroup {
+  margin: 0;
+  padding: 10px 26px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.groupToggle:focus-visible,
+.groupAdd:focus-visible,
+.addRow:focus-visible,
+.titleButton:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.groupAdd:disabled,
+.addRow:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.groupAdd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.groupAdd:hover:not(:disabled) {
+  color: var(--foreground);
+  background: var(--surface-hover);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  height: 40px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  font-size: 13.5px;
+}
+
+.row:hover {
+  background: var(--surface-hover);
+}
+
+.row.selected {
+  background: var(--selection);
+}
+
+.row[data-completed] .taskTitle {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+
+.completionCell,
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.titleButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--foreground);
+  font-size: 13.5px;
+  text-align: left;
+}
+
+.titleButton::before {
+  content: '';
+  flex: 0 0 18px;
+}
+
+.taskId {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 104px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font: 11px/1.5 var(--font-mono, monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.taskTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titleButton:hover .taskTitle {
+  text-decoration: underline;
+  text-decoration-color: var(--border-hover);
+  text-underline-offset: 3px;
+}
+
+.draftBadge {
+  flex-shrink: 0;
+}
+
+.metadata {
+  display: contents;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.cell > button {
+  max-width: 100%;
+}
+
+.project {
+  gap: 6px;
+  color: var(--muted-foreground);
+}
+
+.project > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  min-width: 0;
+  padding: 0 10px 0 26px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: left;
+}
+
+.addRow:hover:not(:disabled) {
+  color: var(--foreground);
+  background: var(--surface-hover);
+}
+
+@container personal-task-list (max-width: 920px) {
+  .columns,
+  .row {
+    grid-template-columns: 30px minmax(0, 1fr) 40px;
+  }
+
+  .spacer,
+  .metadataHeading {
+    display: none;
+  }
+
+  .row {
+    height: auto;
+    min-height: 72px;
+    padding: 4px 0;
+  }
+
+  .completionCell,
+  .actions {
+    align-self: start;
+    min-height: 32px;
+  }
+
+  .actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .titleButton {
+    flex-wrap: wrap;
+    gap: 0 7px;
+    min-height: 40px;
+    padding-block: 3px;
+  }
+
+  .titleButton::before {
+    display: none;
+  }
+
+  .taskTitle {
+    order: 2;
+    flex-basis: 100%;
+  }
+
+  .metadata {
+    display: flex;
+    grid-column: 2 / -1;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    min-width: 0;
+    padding: 0 8px 2px;
+  }
+
+  .cell {
+    max-width: 100%;
+    min-height: 28px;
+    padding: 0;
+  }
+
+  .project {
+    max-width: 180px;
+  }
+
+  .groupStrip {
+    padding-left: 8px;
+  }
+
+  .addRow {
+    padding-left: 12px;
+  }
+}
+
+@media (max-width: 560px) {
+  .list {
+    padding-inline: 12px;
+  }
+}
+
+@media (pointer: coarse) {
+  .groupToggle,
+  .groupAdd,
+  .addRow {
+    min-height: 44px;
+  }
+
+  .groupStrip {
+    height: auto;
+    min-height: 44px;
+  }
+
+  .groupAdd {
+    min-width: 44px;
+  }
+}

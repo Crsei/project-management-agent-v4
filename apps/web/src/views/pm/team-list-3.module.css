@@ -1,0 +1,688 @@
+.page {
+  --team-body: #fafafa;
+  --team-card: var(--surface);
+  --team-divider: #f4f4f5;
+}
+:global(.dark) .page {
+  --team-body: #0f0f0f;
+  --team-card: #151515;
+  --team-divider: rgb(255 255 255 / 10%);
+}
+.page :global([data-pm-header]) {
+  min-height: 0;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: 16px;
+  padding: 20px 24px 0;
+  border-bottom: 0;
+}
+.page :global([data-pm-header]) > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.page :global([data-pm-header]) h1 {
+  font-size: 36px;
+  line-height: 40px;
+  font-weight: 600;
+  letter-spacing: -.025em;
+}
+.eyebrow {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 20px;
+}
+.newMember {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.headerActions {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.page :global([data-pm-toolbar]) {
+  padding: 0 24px;
+}
+.tabs {
+  gap: 24px;
+  height: 35px;
+  margin: 24px -24px 0;
+  padding: 0 24px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.tabs :global([role="tab"]) {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 0 12px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+.tabs svg {
+  width: 16px;
+  height: 16px;
+}
+.sectionHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 85px;
+  margin: 0 -24px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.sectionTitle {
+  min-width: 0;
+}
+.sectionHead h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.sectionHead p {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 20px;
+}
+.sectionControls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.search {
+  width: 288px;
+  min-width: 0;
+}
+.search > div {
+  width: 100%;
+}
+.search input {
+  height: 36px;
+  border-radius: 8px;
+  padding-left: 36px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.search > div > svg {
+  top: 10px;
+  left: 12px;
+}
+.search > div > button {
+  height: 36px;
+}
+.filterButton {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.filterCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  font-size: 11px;
+}
+.filterMenu {
+  width: 240px;
+  max-width: calc(100vw - 32px);
+}
+.filterTeam {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page :global([data-pm-scroll]) {
+  padding: 24px;
+  background: var(--team-body);
+}
+.workloadList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.workloadRow {
+  min-width: 0;
+}
+.memberCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 276px;
+  height: 100%;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--team-card);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
+}
+.memberCard[data-selected="true"] {
+  border-color: var(--primary);
+}
+.cardIdentity {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+}
+.cardIdentity:hover {
+  background: transparent;
+}
+.cardIdentity:disabled {
+  opacity: 1;
+}
+.avatarWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.avatar {
+  width: 36px !important;
+  height: 36px !important;
+}
+.presenceDot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--team-card);
+  border-radius: 50%;
+  background: var(--muted-foreground);
+}
+.presenceDot[data-presence="available"] {
+  background: #16a34a;
+}
+.presenceDot[data-presence="away"] {
+  background: #eab308;
+}
+.memberInfo {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+.memberName {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.memberNameText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  line-height: 22.5px;
+  font-weight: 600;
+}
+.status {
+  flex-shrink: 0;
+  max-width: 50%;
+  overflow: hidden;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.status[data-presence="available"] {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+.status[data-presence="away"] {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #a16207;
+}
+:global(.dark) .status[data-presence="available"] {
+  border-color: rgb(16 185 129 / 25%);
+  background: rgb(16 185 129 / 10%);
+  color: #6ee7b7;
+}
+:global(.dark) .status[data-presence="away"] {
+  border-color: rgb(245 158 11 / 25%);
+  background: rgb(245 158 11 / 10%);
+  color: #fcd34d;
+}
+.joinedDate {
+  display: block;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cardTasks {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--team-divider);
+}
+.taskHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin-bottom: 4px;
+}
+.taskHead h4 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.cardActions {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.taskAction {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+}
+.chevron {
+  transition: transform 150ms ease;
+}
+.cardActions :global([aria-expanded="true"]) .chevron {
+  transform: rotate(180deg);
+}
+.taskList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.taskList > li,
+.poolList > li {
+  min-width: 0;
+}
+.taskWithActions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.taskWithActions > .cardTaskRow,
+.taskWithActions > .taskRow {
+  flex: 1 1 120px;
+  width: auto;
+}
+.taskEstimate {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.capacityFacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin: 12px 0 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--team-divider);
+  font-size: 11px;
+  line-height: 16px;
+}
+.capacityFacts > div {
+  min-width: 0;
+}
+.capacityFacts dt {
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.capacityFacts dd {
+  margin: 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.capacityFacts [data-overloaded="true"] dd {
+  color: var(--destructive);
+}
+.cardTaskRow {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 20px;
+  height: auto;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  text-align: left;
+}
+.cardTaskRow:disabled,
+.taskRow:disabled {
+  opacity: 1;
+}
+.taskBullet {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  color: var(--border-hover);
+}
+.taskTitle {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cardFooter {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+  color: var(--muted-foreground);
+}
+.email {
+  font-size: 14px;
+  line-height: 20px;
+}
+.contactValue {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.contactValue > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.copyButton {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0;
+  background: var(--team-card);
+  opacity: 0;
+}
+.contactValue:hover .copyButton,
+.copyButton:focus-visible {
+  opacity: 1;
+}
+.contactMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.contactMeta > :last-child {
+  flex-shrink: 0;
+}
+.copyReceipt {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+.taskRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  height: auto;
+  padding: 8px 16px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+}
+.taskId {
+  max-width: 25%;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.taskAssignees {
+  max-width: 25%;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.emptyRow,
+.unavailable {
+  margin: 0;
+  padding: 4px 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+}
+.deptSection + .deptSection,
+.unassigned {
+  margin-top: 24px;
+}
+.deptHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.deptHead h3 {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.deptCount {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.poolList {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--team-card);
+}
+.poolList > li + li {
+  border-top: 1px solid var(--border);
+}
+.workloadDetails {
+  margin-top: 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+.workloadDetails summary {
+  width: fit-content;
+  cursor: pointer;
+}
+.workloadDetails summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.summaryFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 12px 0 0;
+}
+.summaryFacts > div {
+  display: flex;
+  gap: 6px;
+}
+.summaryFacts dd {
+  margin: 0;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+.memberMetrics {
+  margin-top: 16px;
+}
+.memberMetrics h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 500;
+}
+.memberMetrics .summaryFacts {
+  margin-top: 4px;
+}
+.boundaryNote {
+  margin: 12px 0 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1279px) {
+  .workloadList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1023px) {
+  .page :global([data-pm-header]) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .sectionHead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 767px) {
+  .search input {
+    font-size: 16px;
+    line-height: 24px;
+  }
+}
+@media (max-width: 639px) {
+  .page :global([data-pm-header]) {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+  .page :global([data-pm-header]) > div:first-child {
+    flex: none;
+    width: 100%;
+  }
+  .page :global([data-pm-toolbar]) {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+  .tabs {
+    margin-right: -16px;
+    margin-left: -16px;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+  .sectionHead {
+    margin-right: -16px;
+    margin-left: -16px;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+  .sectionControls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .search,
+  .filterButton {
+    width: 100%;
+  }
+  .page :global([data-pm-scroll]) {
+    padding: 16px;
+  }
+  .workloadList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .taskAssignees {
+    display: none;
+  }
+}
+@media (pointer: coarse) {
+  .copyButton {
+    position: static;
+    flex-shrink: 0;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    margin: -8px 0;
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}

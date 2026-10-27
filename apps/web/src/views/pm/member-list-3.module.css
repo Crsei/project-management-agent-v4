@@ -1,0 +1,498 @@
+.page {
+  --control-radius: 8px;
+}
+
+.page [data-pm-header] {
+  border-bottom: 0;
+  background: var(--background);
+  padding: 24px max(32px, calc((100% - 1280px) / 2)) 32px;
+}
+
+.page [data-pm-header] h1 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.025em;
+}
+
+.page [data-pm-header] p {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.page [data-pm-scroll] {
+  padding: 0 max(32px, calc((100% - 1280px) / 2)) 32px;
+}
+
+.inviteCard {
+  margin-bottom: 32px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.inviteHead {
+  display: flex;
+  min-height: 84px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding: 24px;
+}
+
+.inviteHead h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.inviteHead button {
+  min-height: 36px;
+  height: 36px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.inviteRows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 24px 0;
+}
+
+.inviteRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.multipleRows {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+}
+
+.field,
+.inviteRow > div:has(> label) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field > label,
+.inviteRow label {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.inviteRow input,
+.inviteRow [role="combobox"] {
+  width: 100%;
+  min-height: 40px;
+  height: 40px;
+  font-size: 14px;
+}
+
+.inviteRow > button {
+  margin-top: 28px;
+}
+
+.inviteRow:not(:first-child) label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.inviteRow:not(:first-child) > button {
+  margin-top: 0;
+}
+
+.inviteActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+}
+
+.inviteActions > button {
+  height: 36px;
+  min-height: 36px;
+  font-size: 12px;
+}
+
+.unavailable {
+  min-width: 0;
+  flex: 1 1 240px;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.inviteEditor form > details,
+.inviteEditor form > [role="alert"],
+.inviteEditor form > [role="status"],
+.inviteEditor form > [data-pm-invite-pending-request] {
+  margin: 0 24px 20px;
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.inviteEditor form > details > div {
+  margin-top: 12px;
+}
+
+.fieldError {
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.selectTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+}
+
+.tabScroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.tabList {
+  width: 100%;
+  min-width: max-content;
+  gap: 32px;
+}
+
+.tab {
+  min-height: 42px;
+  padding: 4px 0 16px;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.tab[data-state="active"] {
+  border-bottom-color: var(--foreground);
+}
+
+.filterRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.search {
+  min-width: 0;
+  height: 40px;
+  flex: 1;
+  gap: 6px;
+  border-radius: 8px;
+  padding-inline: 8px;
+}
+
+.search input {
+  min-width: 0;
+  min-height: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.clearSearch {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+}
+
+.filterSelect {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 160px;
+  min-width: 0;
+  height: 40px;
+  flex-shrink: 0;
+  gap: 2px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.filterSelect:nth-child(2) {
+  width: 164px;
+}
+
+.selectLabel {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.selectLabel > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectLabel > svg,
+.selectTrigger > svg,
+.filterSelect > svg {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.panel {
+  min-width: 0;
+  padding: 0;
+}
+
+.table {
+  min-width: 0;
+}
+
+.table [role="region"] {
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.table table {
+  width: 100%;
+  min-width: 740px;
+  table-layout: fixed;
+  font-size: 14px;
+}
+
+.table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.table thead th {
+  height: 40px;
+  padding: 0 8px;
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.table tbody td {
+  height: 56px;
+  padding: 8px;
+}
+
+.memberTable col:nth-child(3) {
+  width: 144px;
+}
+
+.memberTable col:nth-child(4) {
+  width: 128px;
+}
+
+.memberTable col:nth-child(5) {
+  width: 176px;
+}
+
+.memberTable th:first-child,
+.memberTable td:first-child {
+  padding-left: 16px;
+}
+
+.memberTable :global([data-pm-access-role]) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.identityButton {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: 32px;
+  justify-content: flex-start;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.identityButton:disabled {
+  opacity: 1;
+}
+
+.identityButton :global([data-pm-member]) {
+  min-width: 0;
+  gap: 12px;
+}
+
+.security {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.security svg {
+  flex-shrink: 0;
+}
+
+.accessCell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.manageButton {
+  min-width: 0;
+  min-height: 36px;
+  height: 36px;
+  padding-inline: 12px;
+  font-size: 12px;
+}
+
+.menuButton {
+  min-width: 24px;
+  width: 24px;
+  min-height: 32px;
+  height: 32px;
+}
+
+.invitationTable table {
+  min-width: 980px;
+}
+
+.suggestionTable table {
+  min-width: 600px;
+}
+
+.recordIdentity,
+.invitationStatus {
+  overflow-wrap: anywhere;
+}
+
+.invitationStatus,
+.suggestionIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.invitationStatus code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.email {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.summary,
+.sourceUnavailable {
+  margin: 16px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+@media (max-width: 767px) {
+  .page [data-pm-header] {
+    padding: 16px 16px 32px;
+  }
+
+  .page [data-pm-scroll] {
+    padding: 0 16px 24px;
+  }
+
+  .inviteHead {
+    padding: 20px;
+  }
+
+  .inviteRows {
+    padding: 20px 20px 0;
+  }
+
+  .inviteRow,
+  .multipleRows {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .inviteRow:not(:first-child) label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .inviteRow > button {
+    margin-top: 0;
+  }
+
+  .inviteActions {
+    padding: 20px;
+  }
+
+  .inviteEditor form > details,
+  .inviteEditor form > [role="alert"],
+  .inviteEditor form > [role="status"],
+  .inviteEditor form > [data-pm-invite-pending-request] {
+    margin-inline: 20px;
+  }
+
+  .filterRow {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .search {
+    grid-column: 1 / -1;
+  }
+
+  .filterSelect,
+  .filterSelect:nth-child(2) {
+    width: 100%;
+    gap: 4px;
+    padding-inline: 8px;
+  }
+
+  .selectLabel {
+    gap: 6px;
+  }
+}

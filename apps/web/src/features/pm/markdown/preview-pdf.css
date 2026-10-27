@@ -1,0 +1,14 @@
+.markdown-preview .md-pdf-preview { display: inline-flex; flex-direction: column; width: 720px; max-width: 100%; min-width: 0; border: 1px solid var(--border, #d5dae1); border-radius: 5px; overflow: hidden; background: var(--surface-raised, #f6f8fa); }
+.markdown-preview .md-pdf-toolbar { display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: space-between; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--border, #d5dae1); }
+.markdown-preview .md-pdf-toolbar button { padding: 3px 8px; border: 1px solid var(--border, #d5dae1); border-radius: 4px; background: var(--surface, #fff); font-size: 12px; }
+.markdown-preview .md-pdf-toolbar button:disabled { opacity: .45; cursor: not-allowed; }
+.markdown-preview .md-pdf-toolbar output { font-size: 12px; font-variant-numeric: tabular-nums; }
+.markdown-preview .md-pdf-page { display: block; max-height: 720px; padding: 10px; overflow: auto; background: #e5e7eb; }
+.markdown-preview .md-pdf-page canvas { display: block; max-width: 100%; height: auto; margin-inline: auto; background: #fff; }
+.markdown-preview .md-pdf-preview > [role="status"], .markdown-preview .md-pdf-preview > [role="alert"] { padding: 6px 10px; font-size: 12px; }
+.markdown-preview .md-pdf-note { padding: 6px 10px; font-size: 11px; line-height: 1.5; color: var(--muted-foreground, #64748b); }
+@media (max-width: 600px) {
+  .markdown-preview .md-pdf-page { max-height: 480px; padding: 5px; }
+  .markdown-preview .md-pdf-toolbar { gap: 5px; padding-inline: 6px; }
+}
+.markdown-preview .md-pdf-page canvas[hidden] { display: none; }

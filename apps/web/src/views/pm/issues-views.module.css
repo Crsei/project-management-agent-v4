@@ -1,0 +1,677 @@
+/* Family-local styles for the pm-issues pages; shared tokens only. */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.outcome,
+.outcomeCompact {
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.outcomeCompact {
+  min-width: 132px;
+}
+
+.compactFilter,
+.sortSelect {
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 132px;
+}
+
+.createdNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--foreground);
+}
+
+.selectionCount {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.resultCheck {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.resultText {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.resultText code {
+  font-size: 12px;
+}
+
+.mutation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--foreground);
+}
+
+.mutation[data-mutation="rejected"] {
+  border-color: var(--status-error);
+}
+
+.mutation[data-mutation="unknown"] {
+  border-color: var(--status-waiting);
+}
+
+.mutationIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.identityNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.emptyNote {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.formNote {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.formError {
+  font-size: 12px;
+  color: var(--status-error);
+}
+
+.fieldLabel {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.editControls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.draftForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.createForm {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+
+.createGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.createField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.createOutcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.createFooter {
+  justify-content: flex-end;
+  padding: 16px 24px 24px;
+  border: 0;
+}
+
+/* --- attachments -------------------------------------------------------- */
+
+.attachments,
+.attachmentsPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.attachments {
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.attachmentsPanel {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.attachment {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  overflow: hidden;
+}
+
+.attachmentRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.attachmentIcon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.attachmentName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.attachmentError {
+  font-size: 12px;
+  color: var(--status-error);
+}
+
+.attachmentBody {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+}
+
+/* --- sub-issues and subtasks ------------------------------------------- */
+
+.subList {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.subList > li + li {
+  border-top: 1px solid var(--border);
+}
+
+.subtasksHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.progressLabel {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.subtasks {
+  display: flex;
+  flex-direction: column;
+}
+
+.subtask {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.subtaskTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subtaskTitle[data-done] {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+
+.subtaskState {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.subtaskMeta {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- activity and comments --------------------------------------------- */
+
+.activity,
+.comments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activityEntry,
+.comment {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.activityBody,
+.comment > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.activityHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.activityActor {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.activityTime {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.activityText {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.sortButton {
+  margin-left: auto;
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.composerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* --- properties pane ---------------------------------------------------- */
+
+.propertiesPane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.factsBlock {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.facts dt {
+  color: var(--muted-foreground);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+/* Measured reference composition, scoped to issue list pages; compact32 stays. */
+.listPage {
+  position: relative;
+}
+
+.listPage > :global([data-pm-header]) {
+  min-height: 56px;
+  padding: 8px 24px;
+}
+
+.listPage :global([data-pm-header]) h1 {
+  max-width: 240px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.listPage :global([data-pm-header]) p {
+  display: none;
+}
+
+.listPage > :global([data-pm-toolbar]) {
+  padding: 0;
+}
+
+.listPage :global([data-pm-scroll]) {
+  padding: 0;
+}
+
+.projectNavigation {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 24px;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.projectNavigation button {
+  padding-inline: 4px;
+  font-size: 13px;
+}
+
+.currentSection {
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font-weight: 600;
+}
+
+.fullGroups > div > section > header {
+  min-height: 48px;
+  padding: 8px 24px;
+  background: var(--surface-raised);
+}
+
+.fullGroups :global([data-work-item]) {
+  position: relative;
+  min-height: 60px;
+  padding: 8px 64px 8px 24px;
+}
+
+.fullGroups :global([data-work-item]) > div:first-child {
+  display: grid;
+  grid-template-columns: 32px 88px minmax(0, 1fr) auto;
+  grid-template-rows: 20px 16px;
+  column-gap: 12px;
+  row-gap: 4px;
+}
+
+.fullGroups :global([data-work-item]) .rowMore {
+  position: absolute;
+  right: 24px;
+  top: 14px;
+}
+
+.fullGroups :global([data-work-item]) :global([role="checkbox"]) {
+  grid-column: 1;
+  grid-row: 1 / 3;
+}
+
+.fullGroups :global([data-work-item]) > div:first-child > span:not(:global([role="checkbox"])):not(.rowSummary) {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+.fullGroups :global([data-work-item]) > div:first-child > button:not(:global([role="checkbox"])) {
+  grid-column: 3;
+  grid-row: 1;
+  justify-content: flex-start;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.rowSummary {
+  grid-column: 3;
+  grid-row: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+
+.fullGroups :global([data-layout="row"]) {
+  justify-content: flex-end;
+  width: 260px;
+}
+
+.fullGroups :global([data-property="state"]) {
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+}
+
+.fullGroups :global([data-work-item]) > div:first-child > button:global([aria-expanded]) {
+  grid-column: 4;
+  grid-row: 1 / 3;
+  height: 32px;
+  min-height: 32px;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+
+.summaryStrip {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 24px;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.summaryCount {
+  font-weight: 600;
+}
+
+.groupingLabel {
+  margin-left: auto;
+  color: var(--muted-foreground);
+}
+
+.filterTrigger {
+  position: absolute;
+  top: 12px;
+  right: 140px;
+}
+
+.filterPopover {
+  width: 440px;
+  padding: 16px;
+}
+
+.filterPopover .toolbar {
+  align-items: flex-start;
+  gap: 12px;
+  padding: 0;
+}
+
+.createHeader {
+  padding: 24px 56px 0 24px;
+  border: 0;
+}
+
+.createHeader h2 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.createHeader p {
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.createBody {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px;
+}
+
+.moreFields {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  font-size: 13px;
+}
+
+.moreFields summary {
+  cursor: pointer;
+}
+
+.moreFields > div {
+  padding-top: 16px;
+}
+
+.inlineChildForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.inlineChildResult {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Reserve the action dock: fixture controls must never cover recovery actions. */
+.detailPage > :global([data-pm-toolbar]) {
+  position: relative;
+  order: 1;
+  flex: 0 0 64px;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.detailPage :global([data-pm-header]) {
+  position: absolute;
+  right: 24px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-floating);
+}
+
+.fullGroups :global([data-work-item]) > div:first-child > button.rowMore {
+  grid-column: 5;
+  grid-row: 1 / 3;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.linkFeedback {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+}
