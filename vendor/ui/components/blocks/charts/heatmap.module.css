@@ -1,0 +1,48 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 4px;
+  margin-top: 8px;
+}
+.cell {
+  min-height: 76px;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--text-primary);
+}
+.cell:enabled {
+  cursor: pointer;
+}
+.cell:enabled:hover {
+  border-color: var(--text-secondary);
+}
+.cell:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.cell[aria-pressed="true"] {
+  outline: 2px solid var(--chart-selected);
+}
+.cell[data-level="normal"] {
+  border-left: 4px solid var(--chart-1);
+}
+.cell[data-level="over"] {
+  border-left: 4px solid var(--status-error);
+}
+.cell[data-level="unknown"] {
+  border-style: dashed;
+}
+.cell[data-level="unavailable"] {
+  border-left: 4px solid var(--text-secondary);
+}
+.legend {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 8px 0;
+}

@@ -39,7 +39,7 @@
 | `runs` | Session/Run 列表与独立详情 URL：摘要、阶段、步骤/日志、错误、取消/核对、成果；Run 状态与任务状态分开展示 | `RunStatus`、`RunTimeline`、`OperationApproval`、`RunArtifacts` |
 | `proposals` | 待审列表、before/after、作用对象与来源 revision、应用/拒绝/撤销；冲突时保留提案，不基于最新版本自动重做并应用 | `ProposalPreview` |
 | `pulse` | 主动发现列表、来源、观测时间、依据、`FindingDetail`、人工处置/转提案；无可信来源时显示禁用原因，不放演示数据 | `FindingDetail`、`ProposalPreview` |
-| `automations` | 规则列表、编辑表单（触发条件、时区、范围、预算、动作）、测试、启停、运行历史；浏览器不是调度器 | `AutomationEditor` / `History` |
+| `automations`（Agent Chat 视图） | 规则列表、编辑表单（触发条件、时区、范围、预算、动作）、测试、启停、运行历史；浏览器不是调度器 | `AutomationPage` / `AutomationHistory` |
 
 页面布局要点：
 
@@ -69,12 +69,12 @@
 
 截至本文记录时，对本副本源码的核对结果：
 
-- `apps/web/src/routes.tsx` 注册 `:workspaceSlug/agent`（`AgentChatPage`）和 `:workspaceSlug/automations`（懒加载 `AutomationsPage`），保留原 PM 外壳。
+- `apps/web/src/routes.tsx` 保留 `:workspaceSlug/agent`（`AgentChatPage`）；原 `:workspaceSlug/automations` 路由已迁出 PM 外壳，自动化由独立 Agent Chat 的 `?view=automations` 承载。
 - `/agent` 已按 `agent-workspace` 的前端结构接入 assistant-ui：左侧栏（会话工作区、线程搜索/分组/删除）、Composer、Thread 对话区；运行时使用 `useExternalStoreRuntime` 适配 PM 现有 SSE，未引入 AI SDK transport。
 - `issues` 与 `projects/:projectId/issues` 的任务集合工具栏保留次级“Agent 助手”导航按钮（`TaskCollectionControls`），携带当前项目范围及返回路径。任务详情通过共享侧栏打开，默认选中当前任务；侧栏与 `/agent` 共用 `AgentConversation` 和任务选择器。打开入口或选择任务本身不发模型请求、不授权；发送消息仅附加任务/项目 ID，正文由显式授权后的工具读取。展开完整页保留线程、任务和草稿，详见[共享对话交付记录](backend-delivery.md#agent-shared-conversation)。
-- `automations` 已按新的独立请求接通真实规则、只读报告和 Worker 每日调度；不调用模型、Host 或外部连接器，不接管聊天授权。范围与验收见[本次自动化增量交付](../../EXECUTION-PLAN.zh.md#automation-page-delivery)。
+- `automations` 已迁入独立 Agent Chat：PM 继续拥有规则、只读报告和 Worker 每日调度，Agent Chat 通过 `?view=automations` 渲染同一套真实请求；不调用模型、Host 或外部连接器，不接管聊天授权。原 PM 外壳路由与侧栏入口已移除。
 - `runs`、`proposals`、`pulse` 仍未注册路由，不建立占位页；`settings/agent` 仍由原设置中心处理。
-- `apps/web/src/features/pm/pm-shell.tsx` 已有可折叠 Agent 分组，位于原工作区入口后、项目树前，仅包含已接通的“对话”和“自动化”；聊天侧栏的自动化链接也已启用。
+- `apps/web/src/features/pm/pm-shell.tsx` 的可折叠 Agent 分组仅保留已接通的“对话”；PM 内嵌聊天侧栏的自动化入口跳到 Agent Chat 的自动化视图。
 - 侧栏左上角的工作区切换菜单已并入 Project Management / Agent Workspace 全局切换，进入 `/agent` 或按已保存启动页返回 PM。当前只做导航与展示，不自动携带项目/任务上下文；原工作区授权列表、Agent 分组和对话行为不变。
 - 因此第 2–4 节其余部分是接入要求，不是本副本已交付事实；后续实现需逐项补齐并单独验收。
 - 其他页面的具体插入点、共享 Provider/Panel、选区与草稿边界、阶段和后端门禁见 [Agent 页面区域接入计划](agent-page-areas-integration-plan.zh.md)。

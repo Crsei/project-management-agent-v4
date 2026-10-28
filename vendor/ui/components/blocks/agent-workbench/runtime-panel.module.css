@@ -1,0 +1,4 @@
+.runtime { min-width: 0; font-size: 13px; }
+.runtime [role="tablist"] { overflow-x: auto; max-width: 100%; }
+.runtime [role="tab"] { flex-shrink: 0; }
+.notice { padding: 8px 12px; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }

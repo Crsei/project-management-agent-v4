@@ -1,0 +1,213 @@
+.timeline {
+  min-width: 0;
+  container: activity-timeline / inline-size;
+}
+.scroll {
+  overflow-anchor: none;
+  max-height: 400px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.scroll:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.list > li {
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  position: relative;
+  min-height: 56px;
+}
+.main {
+  display: grid;
+  grid-template-columns: 64px 96px minmax(160px, 1fr) 88px 64px 64px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  min-height: inherit;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font-size: 12px;
+  line-height: 16px;
+}
+button.main {
+  cursor: pointer;
+}
+button.main:hover {
+  background: var(--surface-hover);
+}
+button.main:active {
+  background: var(--surface-pressed);
+}
+button.main:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.list > li[data-selected="true"] > .row {
+  background: var(--selection);
+}
+.list > li[data-selected="true"] > .row::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 2px;
+  background: var(--primary);
+}
+.time {
+  font-family: monospace;
+}
+.agent {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.action > svg {
+  flex-shrink: 0;
+  stroke-width: 1.75;
+}
+.action > span {
+  min-width: 0;
+}
+.action > span > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 20px;
+}
+.action small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  margin-top: 4px;
+}
+.status {
+  min-width: 0;
+}
+.duration,
+.tokens {
+  text-align: right;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.expand {
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.expand svg[data-open="true"] {
+  transform: rotate(90deg);
+}
+.details {
+  max-height: 320px;
+  padding: 12px;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  border-radius: 6px;
+  font: 12px/20px monospace;
+  overflow-wrap: anywhere;
+}
+.details dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.details dt {
+  color: var(--text-secondary);
+}
+.details pre {
+  overflow: auto;
+}
+.timeline[data-compact="true"] .row {
+  min-height: 40px;
+}
+.timeline[data-compact="true"] .action small {
+  display: none;
+}
+@container activity-timeline (max-width: 799px) {
+  .main {
+    grid-template-columns: 64px minmax(0, 1fr) 88px;
+  }
+  .agent {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .action {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .status {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .duration {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  .tokens {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+@container activity-timeline (max-width: 479px) {
+  .main {
+    grid-template-columns: 64px minmax(0, 1fr);
+    padding-inline: 8px;
+  }
+  .agent,
+  .duration,
+  .tokens,
+  .action small {
+    display: none;
+  }
+  .action > svg {
+    display: none;
+  }
+  .action > span > span {
+    font-size: 13px;
+  }
+  .time {
+    font-size: 12px;
+  }
+  .status {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+@media (pointer: coarse) {
+  .row {
+    min-height: 56px;
+  }
+  .timeline[data-compact="true"] .row {
+    min-height: 44px;
+  }
+}
+
+.list[data-defer-offscreen] > li { content-visibility: auto; contain-intrinsic-block-size: auto 56px; }

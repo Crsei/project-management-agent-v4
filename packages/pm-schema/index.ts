@@ -49,6 +49,8 @@ export interface WorkflowDefinition {
   initial: string;
   states: { id: string; label: string; category: 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled' }[];
   transitions: { from: string; to: string }[];
+  /** Preferences for category-only task commands, never additional allowed transitions. */
+  default_targets?: Partial<Record<WorkflowDefinition['states'][number]['category'], string>> | undefined;
 }
 export interface CustomFieldDefinition {
   name: string;
@@ -212,10 +214,12 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD').refi
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }, 'Expected a valid calendar date');
 const stateId = nonempty;
+const stateCategory = z.enum(['backlog', 'unstarted', 'started', 'completed', 'canceled']);
 const workflowSchema = z.object({
   initial: stateId,
-  states: z.array(z.object({ id: stateId, label: nonempty, category: z.enum(['backlog', 'unstarted', 'started', 'completed', 'canceled']) }).strict()).min(1),
+  states: z.array(z.object({ id: stateId, label: nonempty, category: stateCategory }).strict()).min(1),
   transitions: z.array(z.object({ from: stateId, to: stateId }).strict()),
+  default_targets: z.partialRecord(stateCategory, stateId).optional(),
 }).strict().superRefine((workflow, context) => {
   const ids = new Set<string>();
   workflow.states.forEach((state, index) => {
@@ -230,6 +234,10 @@ const workflowSchema = z.object({
     if (transitions.has(key)) context.addIssue({ code: 'custom', path: ['transitions', index], message: 'Duplicate transition' });
     transitions.add(key);
   });
+  for (const [category, target] of Object.entries(workflow.default_targets ?? {})) {
+    if (!workflow.states.some(state => state.id === target && state.category === category))
+      context.addIssue({ code: 'custom', path: ['default_targets', category], message: 'Default target must be a state in this category' });
+  }
 });
 /** A registered extension has a single, non-coercing value schema shared with configuration validation. */
 export function customFieldSchema(definition: CustomFieldDefinition): z.ZodType {
@@ -315,7 +323,8 @@ function workflow(states: [string, WorkflowDefinition['states'][number]['categor
 export const defaultConfiguration: ProtocolConfiguration = {
   schema: 'pm/config/v1', custom_fields: [], workflows: {
     project: workflow([['planned', 'unstarted'], ['active', 'started'], ['on_hold', 'started'], ['completed', 'completed'], ['canceled', 'canceled']]),
-    work_item: workflow([['todo', 'unstarted'], ['in_progress', 'started'], ['review', 'started'], ['done', 'completed'], ['canceled', 'canceled']]),
+    work_item: { ...workflow([['todo', 'unstarted'], ['in_progress', 'started'], ['review', 'started'], ['done', 'completed'], ['canceled', 'canceled']]),
+      default_targets: { started: 'in_progress' } },
     ...Object.fromEntries(['cycle', 'milestone', 'module', 'release', 'goal'].map((kind) => [kind, workflow([['planned', 'unstarted'], ['active', 'started'], ['completed', 'completed'], ['canceled', 'canceled']])])),
     requirement: workflow([['draft', 'backlog'], ['approved', 'unstarted'], ['in_progress', 'started'], ['done', 'completed'], ['canceled', 'canceled']]),
   },

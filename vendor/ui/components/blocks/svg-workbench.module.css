@@ -1,0 +1,329 @@
+.workbench {
+  height: 720px;
+  min-height: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 20px;
+}
+.workbench[data-layout="fill"] {
+  height: 100%;
+}
+.shell {
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+}
+.shell h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.sidebar {
+  min-height: 0;
+  min-width: 0;
+}
+.main {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.tools,
+.documentActions,
+.layerActions,
+.sourceActions,
+.exportActions,
+.previewControls,
+.pagination,
+.mobileNav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.tools {
+  padding: 4px 0;
+}
+.documentActions {
+  margin-left: auto;
+}
+.language {
+  width: 88px;
+}
+.layerActions,
+.previewControls {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.previewControls {
+  flex-shrink: 0;
+}
+.zoom {
+  width: 120px;
+}
+.backgroundSelect {
+  width: 120px;
+  margin-left: auto;
+}
+.viewport {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 80px;
+  overflow: hidden;
+  background-color: var(--surface-raised);
+}
+.viewport[data-background="transparent"] {
+  background-image: conic-gradient(
+    var(--border) 25%,
+    transparent 0 50%,
+    var(--border) 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+}
+.viewport[data-background="dark"] {
+  background: #18181b;
+  color: #fafafa;
+}
+.viewport[data-background="light"] {
+  background: #fafafa;
+  color: #18181b;
+}
+.artboard {
+  flex-shrink: 0;
+  overflow: visible;
+  touch-action: none;
+  outline: 1px solid var(--border);
+}
+.artboard:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.viewport[data-grid="true"] .artboard {
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.canvasHelp {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  right: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  padding: 4px 8px;
+  pointer-events: none;
+}
+.status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 4px 12px;
+  min-height: 32px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.status p {
+  min-width: 0;
+  flex: 1;
+}
+.notice {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.filters,
+.assetDetail,
+.properties {
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+.twoFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.twoFields:has(textarea) {
+  grid-template-columns: 1fr;
+}
+.assetList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.iconPreview {
+  width: 24px;
+  height: 24px;
+}
+.pagination {
+  padding: 8px;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.assetDetail {
+  border-top: 1px solid var(--border);
+}
+.assetDetail h3,
+.properties h3 {
+  font-weight: 500;
+  font-size: 14px;
+}
+.assetDetail pre {
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow: auto;
+}
+.assetDetail dl,
+.properties dl {
+  font-size: 12px;
+}
+.assetDetail dd,
+.properties dd {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.properties fieldset {
+  display: grid;
+  gap: 8px;
+  border: 0;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.properties legend {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.sourcePanel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+.sourceActions {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre;
+  min-height: 100px;
+  max-height: 320px;
+  overflow: auto;
+}
+.exportDialog {
+  width: min(900px, calc(100vw - 32px));
+  max-width: 900px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.exportDialog [role="tablist"] {
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.exportDialog [role="tab"] {
+  flex-shrink: 0;
+}
+.exportDialog .code {
+  min-height: 160px;
+}
+.exportActions {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  padding: 8px 0;
+}
+.sizePreviews {
+  display: flex;
+  gap: 24px;
+  align-items: end;
+}
+.sizePreviews figure {
+  text-align: center;
+  font-size: 12px;
+}
+.sizePreviews figure:nth-child(1) svg {
+  width: 16px;
+  height: 16px;
+}
+.sizePreviews figure:nth-child(2) svg {
+  width: 24px;
+  height: 24px;
+}
+.sizePreviews figure:nth-child(3) svg {
+  width: 32px;
+  height: 32px;
+}
+.sizePreviews figure:nth-child(4) svg {
+  width: 48px;
+  height: 48px;
+}
+.optimizeCompare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.optimizeCompare figure {
+  text-align: center;
+}
+.optimizeCompare svg {
+  height: 160px;
+  max-width: 100%;
+}
+.mobileNav {
+  display: none;
+}
+@media (max-width: 1023px) {
+  .mobileNav {
+    display: flex;
+    padding: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .shell > div > aside:first-child {
+    display: none;
+  }
+  .documentActions {
+    margin-left: 0;
+  }
+  .zoom {
+    width: 96px;
+  }
+}
+@media (max-height: 480px) {
+  .canvasHelp {
+    display: none;
+  }
+  .code {
+    min-height: 80px;
+  }
+}
+@media (pointer: coarse) {
+  .filters input,
+  .filters select,
+  .properties input {
+    min-height: 44px;
+  }
+  .tools {
+    gap: 4px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workbench *,
+  .exportDialog * {
+    scroll-behavior: auto;
+  }
+}

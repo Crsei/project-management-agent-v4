@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { Entity } from '../packages/domain/src/core.ts';
 
-const origin = process.env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:4100';
+const origin = process.env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:3223';
 const credentials = JSON.parse(await readFile('.local/access.json', 'utf8')) as { email: string; password: string; userId: string; workspaceId: string };
 const login = await fetch(`${origin}/api/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: credentials.email, password: credentials.password }), signal: AbortSignal.timeout(10_000) });
 assert.equal(login.status, 200, 'Local administrator must be able to log in');

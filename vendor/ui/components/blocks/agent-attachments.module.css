@@ -1,0 +1,35 @@
+/* Attachment media display: icon slots stay at the Item icon geometry, while an
+   image the host reports as ready gets a cropped thumbnail of the same slot. */
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.item {
+  min-width: 0;
+}
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.thumbnail {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+/* A source-image failure stays a note: the attachment status line above it is
+   never rewritten into an error state. */
+.note {
+  padding-left: 12px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}

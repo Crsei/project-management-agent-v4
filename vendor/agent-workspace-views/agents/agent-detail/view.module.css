@@ -1,0 +1,600 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  color: var(--foreground);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 20px;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  min-height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.header svg {
+  width: 16px;
+  height: 16px;
+}
+.columns {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.profile {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.identityRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.identityRow > div {
+  min-width: 0;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface-hover);
+}
+.identityRow h1 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.role {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.introduction {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+}
+.summaryActions {
+  display: flex;
+  gap: 8px;
+}
+.summaryActions button {
+  font-size: 12px;
+  line-height: 16px;
+}
+.summaryActions svg {
+  width: 16px;
+  height: 16px;
+}
+.pauseNotice {
+  margin: 0;
+  color: var(--status-waiting);
+  font-size: 12px;
+  line-height: 20px;
+}
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.resourceTabs {
+  padding: 0 8px;
+  height: 44px;
+  gap: 0;
+}
+.resourceTabs > button {
+  height: 43px;
+  padding: 4px 16px;
+  white-space: nowrap;
+  font-weight: 500;
+  border-radius: 0;
+}
+.resourceTabs > button[data-active],
+.viewTabs > button[data-active] {
+  border-bottom-color: var(--foreground);
+}
+.resourcePanel {
+  padding: 16px;
+}
+.resourcePanel[hidden],
+.contentPanel[hidden],
+.activityPanel[hidden] {
+  display: none;
+}
+.resourcePanel > * + * {
+  margin-top: 12px;
+}
+.task,
+.application {
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+}
+.taskBody {
+  padding: 16px;
+}
+.capabilityHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.capabilityHeading h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.capabilityHeading > button {
+  margin-block: -6px;
+}
+.taskBody p {
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.task footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--background);
+  border-radius: 0 0 var(--radius) var(--radius);
+  font-size: 11px;
+  line-height: 16.5px;
+  color: var(--text-secondary);
+}
+.task footer > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.task footer > span:last-child {
+  text-align: right;
+}
+.task footer i {
+  width: 5px;
+  height: 5px;
+  display: inline-block;
+  background: currentColor;
+  border-radius: var(--pill-radius);
+}
+.taskActive {
+  color: var(--status-success);
+}
+.muted {
+  color: var(--text-secondary);
+}
+.resourceDescription {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.application {
+  padding: 16px;
+}
+.application p {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+}
+.workspace {
+  border-left: 1px solid var(--border);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.viewTabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  height: 48px;
+  padding: 0 16px;
+  gap: 4px;
+  overflow-x: auto;
+}
+.viewTabs > button {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 4px 16px;
+  height: 47px;
+  font-weight: 500;
+  border-radius: 0;
+}
+.workspaceContent {
+  padding: 24px;
+}
+.workspaceContent[data-view="activity"] {
+  padding: 20px;
+}
+.contentPanel {
+  padding: 0;
+}
+.sectionHeading {
+  margin-bottom: 20px;
+}
+.sectionHeading h2 {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+  margin: 0;
+}
+.sectionHeading p {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+}
+.activityPanel {
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  max-width: 1024px;
+}
+.activityHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  border-radius: calc(var(--radius) + 2px) calc(var(--radius) + 2px) 0 0;
+}
+.activityHeader h2 {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  margin: 0;
+}
+.activityHeader > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.filterTabs {
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  border: none;
+  padding: 8px 12px;
+  gap: 6px;
+  overflow-x: auto;
+}
+.filterTabs > button {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  padding: 4px 10px;
+  min-height: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.filterTabs > button[data-active] {
+  border-color: var(--border);
+  background: var(--surface-raised);
+  color: var(--foreground);
+}
+.events {
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+.events ol,
+.skills,
+.schedule ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.events li + li {
+  border-top: 1px solid var(--border);
+}
+.eventTrigger {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 12px 16px;
+  background: transparent;
+  border: 0;
+  outline: none;
+  cursor: pointer;
+}
+.eventTrigger:hover {
+  background: var(--surface-hover);
+}
+.eventTrigger:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+.eventTrigger time {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  width: 40px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.eventTitle {
+  min-width: 0;
+  flex: 1;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.eventSource {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.eventTrigger svg {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.eventTrigger[data-panel-open] svg {
+  transform: rotate(180deg);
+}
+.eventDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 65ch;
+  margin: 0 20px 20px 68px;
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+  font-size: 16px;
+  line-height: 24px;
+}
+.eventDetails[hidden] {
+  display: none;
+}
+.eventDetails > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.eventDetails > div > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+.eventDetails p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 24px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.eventDetails > div:last-child p {
+  color: var(--text-secondary);
+}
+.eventDetails [data-runtime-status] {
+  padding: 0;
+}
+.activityFooter {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.skills {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.skill {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  min-height: 104px;
+}
+.skill [class*="title"] {
+  font-weight: 500;
+}
+.skill [class*="description"] {
+  margin-top: 4px;
+  white-space: normal;
+  line-height: 20px;
+}
+.dayTabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-raised);
+  border: 0;
+  padding: 4px;
+  border-radius: var(--radius);
+  gap: 4px;
+  height: 44px;
+}
+.dayTabs > button {
+  padding: 4px 8px;
+  border: 0;
+  min-height: 36px;
+  border-radius: var(--control-radius);
+  font-size: 14px;
+  line-height: 20px;
+}
+.dayTabs > button[data-active] {
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 1px 3px var(--border);
+}
+.schedule {
+  padding: 0;
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.schedule li + li {
+  border-top: 1px solid var(--border);
+}
+.schedule li > div {
+  padding: 8px 4px;
+}
+.schedule svg {
+  color: var(--status-success);
+}
+.scheduleTime {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.identityForm {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.identityForm label {
+  font-size: 14px;
+  line-height: 20px;
+  margin-bottom: 8px;
+}
+.identityIntroduction {
+  min-height: 100px;
+  line-height: 20px;
+}
+.formActions {
+  display: flex;
+  gap: 8px;
+  margin-top: -4px;
+}
+.identityForm > p {
+  font-size: 12px;
+  line-height: 20px;
+  margin: 0;
+}
+.messageDialog {
+  max-width: 512px;
+}
+.messageDialog h2 {
+  font-size: 18px;
+  line-height: 24px;
+}
+.messageDialog [data-theme-scope] {
+  min-height: 0;
+}
+.conversation {
+  overflow: auto;
+  overscroll-behavior: contain;
+  max-height: 320px;
+  margin: 24px 0;
+}
+.conversation > p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+.messageForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.messageForm > button {
+  align-self: flex-end;
+}
+.messageForm label {
+  font-size: 14px;
+  line-height: 20px;
+  margin-bottom: 8px;
+}
+.messageInput {
+  min-height: 64px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.empty {
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  gap: 12px;
+  text-align: center;
+}
+.empty > svg {
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary);
+}
+.empty h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.empty p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+.skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+.taskSkeleton {
+  height: 164px;
+}
+.applicationSkeleton {
+  height: 80px;
+}
+.eventSkeleton {
+  height: 44px;
+}
+.skillSkeleton {
+  height: 104px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .eventTrigger svg {
+    transition: none;
+  }
+}

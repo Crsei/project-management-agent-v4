@@ -1,0 +1,138 @@
+.calendar {
+  min-width: 0;
+  background: var(--surface);
+}
+.hint {
+  font-size: 12px;
+  padding: 8px;
+  color: var(--muted-foreground);
+}
+.weekdays,
+.days {
+  display: grid;
+}
+.weekdays {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-raised);
+  font-size: 12px;
+  text-align: center;
+  border-block: 1px solid var(--border);
+}
+.weekdays span {
+  padding: 8px;
+}
+.day {
+  min-width: 0;
+  min-height: 144px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 4px;
+  overflow: hidden;
+}
+.day[data-adjacent="true"] > .dateButton {
+  color: var(--muted-foreground);
+}
+.day[data-selected="true"] {
+  box-shadow: inset 0 0 0 1px var(--primary);
+  background: var(--selection);
+}
+.dateButton {
+  display: block;
+  min-width: 32px;
+  height: 32px;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dateButton:hover {
+  background: var(--surface-hover);
+}
+.dateButton:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.day[data-today="true"] .dateButton {
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.dayEntries {
+  font-size: 12px;
+  min-width: 0;
+}
+.dayEntries :global([data-data-state="empty"]) {
+  display: none;
+}
+.dayEntries :global([data-data-state="error"]) {
+  font-size: 11px;
+}
+.dayEntries :global([data-data-state="error"] > div) {
+  padding: 4px;
+}
+.count {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  padding: 4px;
+}
+.agenda {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.agenda h3 {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.agenda:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.weekends {
+  padding: 12px;
+  font-size: 13px;
+}
+.weekends summary {
+  cursor: pointer;
+  min-height: 32px;
+}
+.notice {
+  padding: 4px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 640px) {
+  .day {
+    min-height: 44px;
+    padding: 0;
+  }
+  .dateButton {
+    width: 100%;
+    min-height: 44px;
+  }
+  .dayEntries {
+    display: none;
+  }
+  .weekdays span {
+    padding: 8px 0;
+  }
+  .hint {
+    font-size: 11px;
+  }
+  .agenda {
+    padding: 8px;
+  }
+  .weekends summary {
+    min-height: 44px;
+  }
+}
+@media (pointer: coarse) {
+  .dateButton {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .weekends summary {
+    min-height: 44px;
+  }
+}

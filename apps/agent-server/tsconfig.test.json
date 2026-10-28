@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "customConditions": ["development"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

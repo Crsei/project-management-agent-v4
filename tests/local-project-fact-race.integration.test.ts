@@ -11,8 +11,8 @@ import { lockWorkspace } from '../packages/infrastructure/src/database.ts';
 import type { CapturedServiceFact } from '../packages/application/src/service-facts.ts';
 import { createLocalProjectFixture, localProjectEventually } from './local-project-fixture.ts';
 
-test('local initialization recovery never promotes a live writer before its workspace transaction completes', { timeout: 90_000 }, async () => {
-  const f = await createLocalProjectFixture();
+test('local initialization recovery never promotes a live writer before its workspace transaction completes', { timeout: 90_000 }, async t => {
+  const f = await createLocalProjectFixture({ signal: t.signal });
   const workspaces = new CoreWorkspacePool(f.coreRoot, f.pool);
   const sql = await f.pool.connect();
   let importing: Promise<number> | undefined;
@@ -32,7 +32,7 @@ test('local initialization recovery never promotes a live writer before its work
     assert.equal(completionDeferred, true);
     const importer = new CoreFactImporter(f.pool, workspaces);
     importing = importer.importWorkspace(f.workspaceId);
-    await localProjectEventually(async () => (await f.pool.query('SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)) AND wait_event_type=\'Lock\'', [blocker])).rowCount! > 0, 'the importer to wait on the live writer transaction');
+    await localProjectEventually(async () => (await f.pool.query('SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)) AND wait_event_type=\'Lock\'', [blocker])).rowCount! > 0, 'the importer to wait on the live writer transaction', 20_000, f.signal);
     const journal = new CoreCommandJournal(workspace.root);
     assert.equal(journal.entries().filter(entry => entry.kind === 'fact_completed').length, 0, 'Recovery must not invent a completion timestamp while the original writer owns the lock');
     capture.committed(undefined, record);

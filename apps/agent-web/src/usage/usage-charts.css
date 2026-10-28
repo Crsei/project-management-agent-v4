@@ -1,0 +1,36 @@
+/* Usage visualizations adapted from t3code. Copyright (c) 2026 T3 Tools Inc. MIT; see LICENSE.t3code. */
+.usage-chart, .usage-share { min-width: 0; }
+.usage-chart-note, .usage-chart-empty { color: var(--text-muted, var(--muted-foreground)); font-size: 13px; }
+.usage-chart-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.usage-chart .usage-chart-series { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; min-height: 32px; padding: 4px 8px; font-size: 12px; overflow-wrap: anywhere; text-align: left; }
+.usage-chart .usage-chart-series[aria-pressed="false"] { opacity: .55; text-decoration: line-through; }
+.usage-chart-swatch { display: inline-block; width: 9px; height: 9px; flex: 0 0 9px; margin-right: 5px; border-radius: 2px; }
+.usage-chart-series .usage-chart-swatch { margin-right: 0; }
+.usage-chart-scroll, .usage-chart-table-scroll { max-width: 100%; overflow-x: auto; }
+.usage-chart-plot { display: flex; gap: 8px; padding: 8px 4px 0; }
+.usage-chart-scale { width: 70px; flex: 0 0 70px; height: 200px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; color: var(--text-muted, var(--muted-foreground)); font-size: 11px; text-align: right; overflow-wrap: anywhere; }
+.usage-chart-columns { display: flex; flex: 1; min-width: 0; border-bottom: 1px solid var(--border); background: repeating-linear-gradient(to top, transparent 0, transparent 49px, var(--border) 50px); margin-bottom: 42px; }
+.usage-chart-column { position: relative; flex: 1 1 0; min-width: 0; height: 200px; }
+.usage-chart .usage-chart-column-button { position: relative; display: block; width: 100%; height: 100%; min-height: 0; padding: 0 3px; border: 0; border-radius: 0; background: transparent; }
+.usage-chart .usage-chart-column-button:hover, .usage-chart .usage-chart-column-button:focus-visible { background: var(--surface-hover, #8882); }
+.usage-chart-stack { display: flex; flex-direction: column-reverse; justify-content: flex-start; width: 100%; height: 100%; }
+.usage-chart-band { display: block; flex: 0 0 auto; width: 100%; }
+.usage-chart-unknown { position: absolute; top: 0; left: 50%; transform: translateX(-50%); color: var(--foreground); font-weight: 700; }
+.usage-chart-time { position: absolute; top: calc(100% + 5px); left: 50%; width: 100px; transform: translateX(-50%); font-size: 10px; line-height: 1.2; text-align: center; overflow-wrap: anywhere; color: var(--text-muted, var(--muted-foreground)); }
+.usage-chart-column:first-child .usage-chart-time { left: 0; transform: none; text-align: left; }
+.usage-chart-column:last-child:not(:first-child) .usage-chart-time { left: auto; right: 0; transform: none; text-align: right; }
+.usage-chart-detail { min-height: 36px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; overflow-wrap: anywhere; }
+.usage-chart-detail ul { list-style: none; margin: 6px 0; padding: 0; }
+.usage-chart-detail li { display: flex; justify-content: space-between; gap: 12px; }
+.usage-chart-table-details { margin-top: 12px; font-size: 13px; }
+.usage-chart-table-details summary { cursor: pointer; }
+.usage-chart-table-details table { min-width: max-content; }
+.usage-chart-table-details caption { text-align: left; padding: 8px 0; white-space: normal; }
+.usage-share-heading { margin: 0 0 8px; font-size: 14px; }
+.usage-share-bar { display: flex; gap: 2px; height: 22px; }
+.usage-share .usage-share-segment { flex-basis: 0; min-width: 0; min-height: 0; height: 100%; padding: 0; border: 0; border-radius: 2px; }
+.usage-share .usage-share-segment:focus-visible, .usage-chart :is(button, summary):focus-visible { outline: 2px solid var(--ring, #4778d5); outline-offset: 2px; }
+.usage-share-detail { min-height: 20px; margin-top: 6px; color: var(--text-muted, var(--muted-foreground)); font-size: 12px; overflow-wrap: anywhere; }
+.usage-share-legend { display: flex; flex-wrap: wrap; gap: 5px 16px; list-style: none; padding: 0; margin: 6px 0 0; font-size: 12px; }
+.usage-share-legend li { display: flex; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .usage-chart-scale { width: 55px; flex-basis: 55px; } .usage-chart-detail li { flex-wrap: wrap; gap: 2px 8px; } }

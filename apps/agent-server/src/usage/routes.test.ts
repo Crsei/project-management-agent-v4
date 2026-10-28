@@ -1,0 +1,72 @@
+import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import { app } from "../app.ts";
+import { closeStore } from "../durable/store.ts";
+import { createProviderInstance } from "../providers/instances.ts";
+import { ensureThread } from "../durable/threads.ts";
+import { recordNativeUsage } from "./ledger.ts";
+
+test("usage API enforces access and read-only PM scope, persists snapshots and validates revision", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "usage-api-"));
+  const oldDir = process.env.AGENT_WORKSPACE_DATA_DIR, oldPm = process.env.PM_API_URL, oldFetch = globalThis.fetch;
+  process.env.AGENT_WORKSPACE_DATA_DIR = directory;
+  process.env.PM_API_URL = "http://127.0.0.1:4193";
+  const workspaceId = "0196c319-8b1d-7000-8000-000000000001";
+  let allowed = true; const calls: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input); calls.push(`${init?.method ?? "GET"} ${url}`);
+    if (url.endsWith("/api/v1/agent-contexts")) {
+      const area = { path: null, status: "unconfigured", revision: 1, source: null, canManage: false };
+      return Response.json({ workspaces: allowed ? [{ id: workspaceId, name: "Fixture", fileArea: area, projects: [] }] : [] });
+    }
+    if (url.includes("github")) return Response.json({ "fixture-model": { input_cost_per_token: 0.000001, output_cost_per_token: 0.000002 } });
+    throw new Error("Unexpected network request");
+  };
+  const json = (method: string, body: unknown) => ({ method, headers: { host: "localhost", "content-type": "application/json" }, body: JSON.stringify(body) });
+  try {
+    ensureThread("usage-thread", undefined, { workspaceId, projectId: null });
+    recordNativeUsage({ generationId: "gen", threadId: "usage-thread", instanceId: "instance", provider: "codex", model: "fixture-model", update: { turn: { totals: { uncachedInputTokens: 7, cachedInputTokens: 0, cacheCreationTokens: 0, outputTokens: 4, reasoningTokens: 1 } }, context: { usedTokens: 11, updatedAt: new Date().toISOString() } } });
+    const instance = createProviderInstance({ instanceId: "fixture", driver: "codex", label: "Fixture", enabled: false });
+    await mkdir(join(instance.homeDirectory, "sessions"), { recursive: true });
+    const timestamp = "2026-01-03T12:00:00.000Z";
+    const records = [
+      { type: "session_meta", timestamp, payload: { id: "native-session" } },
+      { type: "turn_context", timestamp, payload: { model: "fixture-model", turn_id: "native-turn" } },
+      { type: "event_msg", timestamp, payload: { type: "token_count", info: { last_token_usage: { input_tokens: 10, cached_input_tokens: 4, output_tokens: 5, reasoning_output_tokens: 2, total_tokens: 15 }, total_token_usage: { input_tokens: 10, cached_input_tokens: 4, output_tokens: 5, reasoning_output_tokens: 2, total_tokens: 15 } } } },
+    ];
+    await writeFile(join(instance.homeDirectory, "sessions", "fixture.jsonl"), records.map((record) => JSON.stringify(record)).join("\n") + "\n");
+    const deniedOrigin = await app.request("http://localhost/api/usage/settings", { headers: { host: "localhost", origin: "https://evil.invalid" } });
+    assert.equal(deniedOrigin.status, 403);
+    const thread = await app.request("http://localhost/api/usage/threads/usage-thread", { headers: { host: "localhost", cookie: "fixture=ok" } });
+    assert.equal(thread.status, 200);
+    const body = await thread.json() as { totals: { outputTokens: number }; context: { usedTokens: number } };
+    assert.equal(body.totals.outputTokens, 4); assert.equal(body.context.usedTokens, 11);
+    assert.ok(calls.includes("GET http://127.0.0.1:4193/api/v1/agent-contexts"));
+    assert.ok(!calls.some((call) => call.includes("/resolve")));
+    allowed = false;
+    assert.equal((await app.request("http://localhost/api/usage/threads/usage-thread", { headers: { host: "localhost" } })).status, 403);
+    const updated = await app.request("http://localhost/api/usage/settings", json("PATCH", { revision: 0, usageModelAliases: { alias: "fixture-model" } }));
+    assert.equal(updated.status, 200);
+    const conflict = await app.request("http://localhost/api/usage/settings", json("PATCH", { revision: 0, usageModelAliases: { other: "model" } }));
+    assert.equal(conflict.status, 409);
+    const cycle = await app.request("http://localhost/api/usage/settings", json("PATCH", { revision: 1, usageModelAliases: { "fixture-model": "alias" } }));
+    assert.equal(cycle.status, 400);
+    const summary = await app.request("http://localhost/api/usage/refresh", json("POST", { sinceDay: "2026-01-01", untilDay: "2026-01-07", timeZone: "UTC" }));
+    assert.equal(summary.status, 200);
+    const usage = await summary.json() as { contractVersion: number; buckets: { totals: { uncachedInputTokens: number; cachedInputTokens: number; outputTokens: number; reasoningTokens: number }; costUsd: number }[] };
+    assert.equal(usage.contractVersion, 6);
+    assert.equal(usage.buckets.length, 1);
+    assert.deepEqual(usage.buckets[0]!.totals, { uncachedInputTokens: 6, cachedInputTokens: 4, cacheCreationTokens: 0, outputTokens: 5, reasoningTokens: 2 });
+    assert.ok(usage.buckets[0]!.costUsd > 0);
+    const invalid = await app.request("http://localhost/api/usage/summary", json("POST", { sinceDay: "2026-01-01", untilDay: "2026-01-07", timeZone: "Not/AZone" }));
+    assert.equal(invalid.status, 400);
+  } finally {
+    closeStore(); globalThis.fetch = oldFetch;
+    if (oldDir === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = oldDir;
+    if (oldPm === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = oldPm;
+    await rm(directory, { recursive: true, force: true });
+  }
+});

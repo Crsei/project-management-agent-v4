@@ -4,8 +4,8 @@ import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import type { ProxyOptions } from "vite"
 
-const PORT = Number(process.env.PM_WEB_PORT ?? 3220)
-const target = process.env.PM_API_URL ?? "http://127.0.0.1:4100"
+const PORT = Number(process.env.PM_WEB_PORT ?? 3223)
+const target = process.env.PM_API_URL ?? "http://127.0.0.1:4193"
 const apiProxy: ProxyOptions = {
   target,
   changeOrigin: false,
@@ -22,10 +22,30 @@ const apiProxy: ProxyOptions = {
       }
       return false
     }
-    if (origin) request.headers.origin = process.env.PM_API_ORIGIN ?? new URL(target).origin
+    if (origin) request.headers.origin = process.env.PM_API_ORIGIN ?? origin
   },
 }
-const proxy = { "/api": apiProxy, "/health": apiProxy, "/openapi.json": apiProxy }
+const agentApiProxy: ProxyOptions = {
+  target: process.env.AGENT_WORKSPACE_API_URL ?? "http://127.0.0.1:4323",
+  changeOrigin: false,
+  rewriteWsOrigin: false,
+  ws: true,
+  timeout: 0,
+  proxyTimeout: 0,
+  rewrite: path => path.replace(/^\/agent(?=\/api(?:\/|$))/, ""),
+}
+const proxy = {
+  "^/agent/api(?:/|$)": agentApiProxy,
+  "^/agent(?:/|$)": {
+    target: process.env.AGENT_WORKSPACE_WEB_URL ?? "http://127.0.0.1:4324",
+    changeOrigin: false,
+    rewriteWsOrigin: false,
+    ws: true,
+    timeout: 0,
+    proxyTimeout: 0,
+  },
+  "/api": apiProxy, "/health": apiProxy, "/openapi.json": apiProxy,
+}
 
 export default defineConfig(({ command, isPreview }) => {
   const setting = process.env.PM_ENABLE_LAB

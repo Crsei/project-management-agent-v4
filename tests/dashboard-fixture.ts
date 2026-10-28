@@ -10,6 +10,7 @@ import type { Actor, Command, CommandReceipt, Entity } from '../packages/domain/
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
 import { createPool, migrate } from '../packages/infrastructure/src/database.ts';
 import { createBoundLocalStorage } from './blob-fixture.ts';
+import { MailFixtureScope, closeMailApp, interruptMailPoolOnAbort } from './mail-fixture-lifecycle.ts';
 
 export const dashboardDatabaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 export type DashboardModule = 'personal' | 'time' | 'sprints' | 'portfolio' | 'planning';
@@ -22,52 +23,45 @@ export type DashboardFixture = {
   send(command: Command, options?: DashboardCommandOptions): Promise<DashboardResponse<CommandReceipt>>;
   read<T>(module: DashboardModule, options?: DashboardCommandOptions): Promise<T>;
   request<T = unknown>(path: string, options?: DashboardRequestOptions): Promise<DashboardResponse<T>>;
+  ownApp(create: () => FastifyInstance): FastifyInstance;
+  deferCleanup(cleanup: () => Promise<unknown>): void;
   member(name: string): Promise<{ user: Actor; cookie: string }>;
   close(): Promise<void>;
 };
 
 /** Every fixture owns its schema, account, HTTP listener and temporary content roots. */
-export async function createDashboardFixture(): Promise<DashboardFixture> {
+export async function createDashboardFixture(options: { signal?: AbortSignal } = {}): Promise<DashboardFixture> {
   if (!dashboardDatabaseUrl) throw new Error('A real TEST_DATABASE_URL or DATABASE_URL is required');
-  const namespace = `test_dashboard_${randomUUID().replaceAll('-', '')}`;
-  const bootstrap = createPool(dashboardDatabaseUrl);
-  let pool: Pool | undefined;
-  let app: FastifyInstance | undefined;
-  let root: string | undefined;
-  let createdSchema = false;
-  let closed = false;
-  async function close() {
-    if (closed) return;
-    closed = true;
-    try { await app?.close(); }
-    finally {
-      try { await pool?.end(); }
-      finally {
-        try { if (createdSchema) await bootstrap.query(`DROP SCHEMA ${namespace} CASCADE`); }
-        finally {
-          await bootstrap.end();
-          if (root) await rm(root, { recursive: true, force: true });
-        }
-      }
-    }
-  }
-  try {
-    await bootstrap.query(`CREATE SCHEMA ${namespace}`);
-    createdSchema = true;
+  // Cold migrations measured 25s; restart recovery also performs durable disk
+  // initialization. This bounds acquisition, not the sum of the suite's cases.
+  const scope = new MailFixtureScope(options.signal, 120_000);
+  return scope.initialize(async () => {
+    const namespace = `test_dashboard_${randomUUID().replaceAll('-', '')}`;
+    const bootstrap = scope.own(createPool(dashboardDatabaseUrl), owned => owned.end());
+    let createdSchema = false;
+    scope.defer(async () => { if (createdSchema) await bootstrap.query(`DROP SCHEMA ${namespace} CASCADE`); });
+    await scope.step(async () => {
+      await bootstrap.query(`CREATE SCHEMA ${namespace}`);
+      createdSchema = true;
+    });
     const scopedUrl = new URL(dashboardDatabaseUrl);
     scopedUrl.searchParams.set('options', `-c search_path=${namespace},public`);
-    pool = createPool(scopedUrl.toString());
-    await migrate(pool);
+    const pool = scope.own(createPool(scopedUrl.toString()), owned => owned.end());
+    const interruption = interruptMailPoolOnAbort(pool, scope.signal, bootstrap);
+    scope.defer(() => interruption.finish());
+    await scope.step(() => migrate(pool));
     const password = 'isolated-dashboard-test-password';
-    const owner = await createUser(pool, { email: `${randomUUID()}@example.test`, name: 'Dashboard owner', password });
-    const workspaceId = (await createWorkspace(pool, owner.id, 'Dashboard integration')).id;
-    root = await mkdtemp(join(tmpdir(), 'pm-dashboard-'));
+    const owner = await scope.step(() => createUser(pool, { email: `${randomUUID()}@example.test`, name: 'Dashboard owner', password }));
+    const workspaceId = (await scope.step(() => createWorkspace(pool, owner.id, 'Dashboard integration'))).id;
+    const root = await scope.acquire(() => mkdtemp(join(tmpdir(), 'pm-dashboard-')), owned => rm(owned, { recursive: true, force: true }));
     const coreRoot = join(root, 'core');
-    app = buildApp({ databaseUrl: scopedUrl.toString(), ...await createBoundLocalStorage(pool, join(root, 'blobs')), coreWorkspaceRoot: coreRoot });
-    const origin = await app.listen({ host: '127.0.0.1', port: 0 });
+    const storage = await scope.step(() => createBoundLocalStorage(pool, join(root, 'blobs')));
+    const app = scope.own(buildApp({ databaseUrl: scopedUrl.toString(), ...storage, coreWorkspaceRoot: coreRoot, signal: scope.signal }), closeMailApp);
+    const origin = await scope.step(() => app.listen({ host: '127.0.0.1', port: 0 }));
     let ownerCookie = '';
     async function request<T = unknown>(path: string, options: DashboardRequestOptions = {}): Promise<DashboardResponse<T>> {
       const response = await fetch(`${origin}${path}`, {
+        signal: scope.signal,
         method: options.method ?? 'GET',
         headers: { cookie: options.cookie ?? ownerCookie, ...(options.body === undefined ? {} : { 'content-type': 'application/json' }), ...options.headers },
         ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
@@ -86,7 +80,15 @@ export async function createDashboardFixture(): Promise<DashboardFixture> {
       return request<CommandReceipt>(`/api/v1/workspaces/${options.workspace ?? workspaceId}/commands`, { method: 'POST', cookie: options.cookie ?? ownerCookie, body: command });
     }
     return {
-      app, pool, owner, workspaceId, origin, coreRoot, ownerCookie, request, send, close,
+      app, pool, owner, workspaceId, origin, coreRoot, ownerCookie, request, send, close: scope.close,
+      ownApp(create) {
+        scope.checkpoint();
+        return scope.own(create(), closeMailApp);
+      },
+      deferCleanup(cleanup) {
+        scope.checkpoint();
+        scope.defer(cleanup);
+      },
       async command<T = Entity>(commandType: string, payload: Record<string, unknown>, options: DashboardCommandOptions = {}): Promise<T> {
         const response = await send({ commandId: randomUUID(), commandType, payload, ...options.extra }, options);
         assert.equal(response.status, 200, JSON.stringify(response.body));
@@ -103,5 +105,5 @@ export async function createDashboardFixture(): Promise<DashboardFixture> {
         return { user, cookie: await signIn(user) };
       },
     };
-  } catch (error) { await close(); throw error; }
+  });
 }

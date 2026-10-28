@@ -6,6 +6,7 @@
 !pnpm-workspace.yaml
 !tsconfig.base.json
 !tsconfig.backend.json
+!tsconfig.agent.json
 !scripts/
 !scripts/build-assets.mjs
 !scripts/blob-storage.ts
@@ -27,6 +28,16 @@
 !apps/web/src/**
 !apps/web/public/
 !apps/web/public/**
+!apps/agent-server/
+!apps/agent-server/**
+!apps/agent-web/
+!apps/agent-web/**
+!apps/agent-desktop/
+!apps/agent-desktop/package.json
+!apps/agent-marketing/
+!apps/agent-marketing/package.json
+!vendor/
+!vendor/**
 !packages/
 !packages/**
 !deploy/
@@ -40,3 +51,5 @@
 **/.local
 **/.env*
 **/*.tsbuildinfo
+**/release
+**/.astro

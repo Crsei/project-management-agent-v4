@@ -1,0 +1,105 @@
+---
+import CommandBlock from '../components/CommandBlock.astro';
+import GuideLayout from '../layouts/GuideLayout.astro';
+import { desktopReleaseUrl } from '../lib/site';
+
+const contents = [
+  { id: 'requirements', label: 'Requirements' },
+  { id: 'source', label: 'Run from source' },
+  { id: 'build', label: 'Package and install' },
+  { id: 'connect', label: 'Local or remote' },
+  { id: 'lifecycle', label: 'Close versus quit' },
+  { id: 'updates', label: 'Updates and limitations' },
+];
+---
+
+<GuideLayout
+  title="Your workspace, with a desktop home."
+  description="Electron hosts the existing Web workspace. Use a managed local server or connect to your own remote one—the server remains the execution authority."
+  eyebrow="Desktop / Build & install"
+  contents={contents}
+>
+  <div class="release-notice">
+    {desktopReleaseUrl ? (
+      <>
+        <strong>A release link is configured for this website.</strong>
+        <p>Check that release’s operating-system, architecture, signing, and installation notes. A configured link is not a claim that every platform has an installer.</p>
+        <a class="button button-primary" href={desktopReleaseUrl}>View configured releases <span aria-hidden="true">↗</span></a>
+      </>
+    ) : (
+      <>
+        <strong>No prebuilt download is configured here.</strong>
+        <p>You can build a real application directory from the source checkout below. There is no placeholder installer or implied signed release.</p>
+        <a class="text-link" href="#build">Go to package instructions <span aria-hidden="true">↓</span></a>
+      </>
+    )}
+  </div>
+
+  <section id="requirements">
+    <h2>What you need</h2>
+    <ul>
+      <li>The independent v3 source checkout, <strong>pnpm 11.9.0</strong>, and <strong>Node.js 24 LTS</strong>.</li>
+      <li>A graphical desktop session with Electron’s required system libraries and working OS sandbox support. A headless shell alone cannot display the application.</li>
+      <li>A compatible Node executable at runtime for a managed local server. It is an explicit external prerequisite, not bundled inside the desktop app. Use Connection Settings to select it, or set an absolute <code>AGENT_WORKSPACE_NODE</code> path.</li>
+      <li>Your provider configuration for local execution, or access to an already running remote workspace server.</li>
+    </ul>
+    <p>Packaging targets the build host’s operating system and architecture. It does not produce cross-platform installers, code signatures, notarization, or an auto-update service.</p>
+  </section>
+
+  <section id="source">
+    <h2>01 / Launch from the checkout</h2>
+    <CommandBlock label="From the monorepo root" code={`pnpm install
+pnpm build:v3
+pnpm --filter @agent-workspace/desktop build
+pnpm --filter @agent-workspace/desktop runtime:install
+pnpm --filter @agent-workspace/desktop start --remote=http://127.0.0.1:3223`} />
+    <p>Initialize and start the full v3 services using the getting-started guide first. The desktop shell defaults to the public v3 connection, where PM login and scope resolution share one origin. The desktop build itself does not download Electron; <code>runtime:install</code> explicitly downloads the official executable. No credentials are bundled.</p>
+    <p>Once Web and Server are built, <code>pnpm --filter @agent-workspace/desktop dev</code> rebuilds the shell and launches it. It does not replace the Web / Server development commands.</p>
+  </section>
+
+  <section id="build">
+    <h2>02 / Package a distributable application</h2>
+    <CommandBlock label="From an installed monorepo checkout" code="pnpm --filter @agent-workspace/desktop package" />
+    <p>This command builds the contracts, client runtime, Agent server, Agent Web app and desktop shell, then stages production Agent dependencies. It requires network access for Electron. The output is an <strong>application directory</strong> under <code>apps/agent-desktop/release/</code>, not an installer or a bundled PM deployment.</p>
+    <dl class="artifact-list">
+      <div><dt>Linux</dt><dd><code>Agent Workspace-linux-&lt;arch&gt;/Agent Workspace</code></dd></div>
+      <div><dt>Windows</dt><dd><code>Agent Workspace-win32-&lt;arch&gt;/Agent Workspace.exe</code></dd></div>
+      <div><dt>macOS</dt><dd><code>Agent Workspace-darwin-&lt;arch&gt;/Agent Workspace.app</code></dd></div>
+    </dl>
+    <ol class="instruction-list">
+      <li>Build on the target OS and architecture. The folder suffix reflects that host, such as <code>linux-x64</code> or <code>darwin-arm64</code>.</li>
+      <li>Copy the <strong>entire output directory</strong> to the destination computer or installation location. Preserve executable permissions and all bundled resources; do not copy only the executable.</li>
+      <li>Install a compatible Node runtime and the platform’s required desktop libraries. Launch the executable on Linux / Windows, or open the <code>.app</code> on macOS.</li>
+      <li>Follow your operating system’s trust and application-signing policy. Unsigned builds may be blocked or warn; this project does not provide a signing or notarization service.</li>
+    </ol>
+    <CommandBlock label="Example: launch a Linux x64 build from the checkout root" code={'"apps/agent-desktop/release/Agent Workspace-linux-x64/Agent Workspace" --remote=http://127.0.0.1:3223'} />
+    <p>If the host cannot launch Electron or lacks sandbox support, use the <a href="/get-started/">browser-based self-host setup</a> on a supported host instead. Do not disable the Electron sandbox to work around an unsupported environment.</p>
+  </section>
+
+  <section id="connect">
+    <h2>03 / Choose where execution lives</h2>
+    <dl class="definition-list">
+      <div><dt>Local managed</dt><dd>The desktop host starts the bundled server against your configured project and persistent data directories, waits for its listening address, and loads the workspace. The local service uses an ephemeral port and host-managed access credentials.</dd></div>
+      <div><dt>Explicit remote</dt><dd>Enter your workspace server URL in Connection Settings. Use HTTPS for any non-loopback host; HTTP is allowed only on loopback. Remote mode does not start a second local execution server or upload your local project.</dd></div>
+    </dl>
+    <p>Checkout local mode uses <code>.local/agent-data</code>; a packaged app uses its independent v3 app-data directory. It never reuses the old global Agent data. <strong>Do not run two Agent servers against the same data directory.</strong></p>
+    <p>The default connection is the full public v3 server at <code>http://127.0.0.1:3223</code>. Managed local mode only hosts the bundled Agent server; it does not deploy PM or proxy the PM catalog. Use the public v3 connection for the integrated workspace/project chat. Packaged local project defaults live under v3 app data, not the application installation folder.</p>
+    <p>Directory and Node selections persist. Explicit <code>--data-dir</code>, <code>--project-root</code>, and <code>--node</code> arguments override environment values; environment values override saved selections. Supported environment names are <code>AGENT_WORKSPACE_DATA_DIR</code>, <code>AGENT_WORKSPACE_PROJECT_ROOT</code>, and <code>AGENT_WORKSPACE_NODE</code>.</p>
+    <CommandBlock label="Explicit local mode, after building the shell" code="pnpm --filter @agent-workspace/desktop start --local" />
+    <CommandBlock label="Remote mode: replace the example with your own HTTPS server" code="pnpm --filter @agent-workspace/desktop start --remote=https://workspace.example.com" />
+    <p>Authenticate to the remote workspace itself when prompted. Do not embed access tokens or provider keys in URLs. Read the <a href="/security/#remote">remote-access requirements</a> before exposing a server.</p>
+  </section>
+
+  <section id="lifecycle">
+    <h2>Closing a window is not quitting.</h2>
+    <p><strong>Close the workspace window:</strong> the desktop application remains available through its connection window, and the managed local server can continue accepted work. Use <strong>Open Workspace</strong> to return.</p>
+    <p><strong>Choose Quit:</strong> after confirmation, the host shuts down its local managed server. Local schedules and runs cannot keep executing once that process exits. A remote server is not stopped by quitting the desktop client.</p>
+    <p>The machine must remain awake, with a live server, for automation to run. No hidden system daemon continues work after application exit. Reopening uses the server’s normal interruption and explicit-continuation rules.</p>
+  </section>
+
+  <section id="updates">
+    <h2>Updates are deliberate, too.</h2>
+    <p>There is no automatic background updater. To replace a source-built package, quit the local host, back up the persistent data directory and any external CLI homes, rebuild from the desired source revision, and replace the application directory. Keep your data and project paths stable.</p>
+    <p>The shell does not add multi-user permissions, Git worktree isolation, SSH / WSL management, or guaranteed execution during sleep. It loads the same workspace and inherits the <a href="/security/">server’s security and operational limits</a>.</p>
+  </section>
+</GuideLayout>

@@ -1,0 +1,65 @@
+.region {
+  min-width: 0;
+}
+.notice {
+  padding: 12px;
+  margin-bottom: 12px;
+  border-block: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 40px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 30%, var(--border));
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--destructive);
+  overflow-wrap: anywhere;
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 160px;
+  padding: 24px;
+  text-align: center;
+}
+.empty h3 {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.empty p {
+  max-width: 320px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.skeletons > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.skeletons span {
+  width: 65%;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--surface-raised);
+}
+.skeletons span:last-child {
+  width: 40%;
+}

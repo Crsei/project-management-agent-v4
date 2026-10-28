@@ -1,0 +1,70 @@
+.options {
+  gap: 8px;
+}
+.option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  background: var(--surface);
+}
+.option:not([data-disabled="true"]):hover {
+  background: var(--surface-hover);
+}
+.option[data-disabled="true"] {
+  cursor: not-allowed;
+}
+.option[data-selected="true"] {
+  border-color: var(--primary);
+  background: var(--selection);
+}
+.option:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.optionText {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.optionText strong {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.optionText > span {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.option kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-tiny);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  background: var(--surface-raised);
+}
+.customLabel {
+  display: block;
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}

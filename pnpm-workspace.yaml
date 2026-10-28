@@ -1,5 +1,9 @@
 packages:
   - apps/*
   - packages/*
+  - vendor/*
 allowBuilds:
   esbuild: true
+  sharp: true
+patchedDependencies:
+  '@muse-code/sdk@1.4.6': patches/@muse-code__sdk@1.4.6.patch

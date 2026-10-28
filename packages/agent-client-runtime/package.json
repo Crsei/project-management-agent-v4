@@ -1,0 +1,28 @@
+{
+  "name": "@agent-workspace/client-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

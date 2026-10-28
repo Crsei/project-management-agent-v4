@@ -1,0 +1,110 @@
+.root {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.search input {
+  width: min(220px, 100%);
+}
+
+.search input:focus-visible,
+.editor :global(.cm-content):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.editor {
+  min-width: 0;
+  max-height: min(480px, 60vh);
+  overflow: auto;
+}
+
+.editor :global(.cm-editor) {
+  color: var(--foreground);
+  background: var(--surface);
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.editor :global(.cm-scroller) {
+  overflow: auto;
+  font-family: inherit;
+}
+
+.editor :global(.cm-content) {
+  min-height: 32px;
+  padding: 8px 0;
+  caret-color: transparent;
+}
+
+.editor :global(.cm-line) {
+  padding: 0 12px 0 8px;
+}
+
+.editor :global(.cm-gutters) {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+}
+
+.editor :global(.cm-gutterElement) {
+  min-width: 40px;
+  padding: 0 8px;
+}
+
+.editor :global(.cm-line[data-highlighted="true"]) {
+  background: var(--selection);
+  box-shadow: inset 2px 0 var(--primary);
+}
+
+.editor :global(.cm-selectionBackground),
+.editor :global(.cm-content ::selection) {
+  background: color-mix(in srgb, var(--primary) 24%, transparent) !important;
+}
+
+.editor :global(.cm-searchMatch) {
+  background: color-mix(in srgb, var(--warning) 24%, transparent);
+  outline: 1px solid var(--warning);
+}
+
+.editor :global(.cm-searchMatch.cm-searchMatch-selected) {
+  background: color-mix(in srgb, var(--primary) 24%, transparent);
+  outline-color: var(--primary);
+}
+
+.notice {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+@media (pointer: coarse) {
+  .toolbar { min-height: 44px; }
+}

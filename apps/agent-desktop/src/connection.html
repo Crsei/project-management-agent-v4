@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'"
+    />
+    <title>Workspace connection — Agent Workspace</title>
+    <link rel="stylesheet" href="./connection.css" />
+    <script type="module" src="./connection.mjs"></script>
+  </head>
+  <body>
+    <header>
+      <span class="brand-mark" aria-hidden="true">aw</span><span>Agent Workspace</span
+      ><span class="desktop-label">Desktop</span>
+    </header>
+    <main>
+      <h1>Your workspace, your runtime</h1>
+      <p class="intro">Run on this computer, or connect to a workspace Server you trust.</p>
+      <form id="connection-form">
+        <fieldset class="mode-picker">
+          <legend>Connection mode</legend>
+          <label
+            ><input type="radio" name="mode" value="local" checked /><span
+              ><strong>Local computer</strong><small>Private Server · local projects</small></span
+            ></label
+          >
+          <label
+            ><input type="radio" name="mode" value="remote" /><span
+              ><strong>Remote Server</strong><small>Your self-hosted workspace</small></span
+            ></label
+          >
+        </fieldset>
+        <section id="local-fields" aria-label="Local Server settings">
+          <div class="field">
+            <label for="project-root">Project root</label>
+            <div class="input-row">
+              <input id="project-root" name="projectRoot" required spellcheck="false" /><button
+                type="button"
+                data-directory="projectRoot"
+              >
+                Browse…
+              </button>
+            </div>
+            <small
+              >The Server runs here. Choose an existing project folder; changing mode never moves
+              your files.</small
+            >
+          </div>
+          <div class="field">
+            <label for="data-dir">Workspace data directory</label>
+            <div class="input-row">
+              <input id="data-dir" name="dataDir" required spellcheck="false" /><button
+                type="button"
+                data-directory="dataDir"
+              >
+                Browse…
+              </button>
+            </div>
+            <small
+              >Uses this v3 checkout’s .local/agent-data (or packaged v3 app data), never the old global Agent directory. Only one Server may own it. Use the public v3 connection for PM scope/catalog features.</small
+            >
+          </div>
+          <div class="field">
+            <label for="node-path">Node executable <span class="muted">≥22.18.0</span></label>
+            <div class="input-row">
+              <input
+                id="node-path"
+                name="nodePath"
+                value="node"
+                required
+                spellcheck="false"
+              /><button type="button" id="choose-node">Browse…</button>
+            </div>
+            <small
+              >Use “node” from PATH, or an absolute executable path. Native PTY runs in Node, not
+              Electron.</small
+            >
+          </div>
+        </section>
+        <section id="remote-fields" aria-label="Remote Server settings" hidden>
+          <div class="field">
+            <label for="remote-url">Workspace Server URL</label
+            ><input
+              id="remote-url"
+              name="remoteUrl"
+              type="url"
+              placeholder="https://workspace.example.com"
+              spellcheck="false"
+              autocomplete="url"
+            /><small
+              >HTTPS is required outside loopback. Use the server origin, not an API URL or a URL
+              containing an access token.</small
+            >
+          </div>
+          <p class="notice">
+            You will sign in on the Server’s workspace login page. Remote sessions are isolated from
+            the local Server and its private access token. Trust the Server before entering
+            credentials.
+          </p>
+        </section>
+        <div class="actions">
+          <button class="primary" type="submit" id="connect">Connect workspace</button
+          ><button type="button" id="open" hidden>Open workspace</button
+          ><button type="button" id="disconnect" hidden>Disconnect</button>
+        </div>
+      </form>
+      <section class="status-panel" aria-labelledby="status-title">
+        <h2 id="status-title">Connection</h2>
+        <p id="status" role="status" aria-live="polite">Preparing desktop connection…</p>
+        <p id="address" class="mono" hidden></p>
+        <p id="error" role="alert" hidden></p>
+        <details id="diagnostics" hidden>
+          <summary>Startup diagnostics</summary>
+          <pre id="details"></pre>
+        </details>
+      </section>
+      <footer>
+        <p>
+          <strong>Close a workspace window</strong> to keep local tasks running. This connection
+          window remains available.
+        </p>
+        <p>
+          <strong>Quit</strong> to stop the local Server and its workers. Schedules do not run after
+          quitting. Remote Servers are managed separately.
+        </p>
+        <button type="button" id="quit">Quit Agent Workspace…</button>
+      </footer>
+    </main>
+  </body>
+</html>

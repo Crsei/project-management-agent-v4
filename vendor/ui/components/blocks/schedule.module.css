@@ -1,0 +1,151 @@
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.controls input[type="date"] {
+  width: 144px;
+}
+.controls select {
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 0 8px;
+}
+.meta {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.dateForm {
+  display: grid;
+  gap: 12px;
+  min-width: 240px;
+}
+.dateForm .controls {
+  padding: 0;
+  border: 0;
+}
+.dateForm p[role="alert"] {
+  color: var(--destructive);
+  font-size: 12px;
+}
+.queue {
+  border-top: 1px solid var(--border);
+  padding: 8px;
+}
+.queue summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 32px;
+}
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  padding: 4px;
+}
+.entry[data-active="true"] {
+  background: var(--selection);
+}
+.entryTitle {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.identifier {
+  font-family: monospace;
+  color: var(--muted-foreground);
+  margin-right: 4px;
+}
+.state {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.notice {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+@media (pointer: coarse) {
+  .controls select,
+  .queue summary {
+    min-height: 44px;
+  }
+  .controls input[type="checkbox"] {
+    width: 44px;
+    height: 44px;
+  }
+  .entry {
+    min-height: 44px;
+  }
+}
+
+.entryTitle > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.state {
+  max-width: 96px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entry {
+  display: block;
+}
+.entryMain {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.entryMeta {
+  display: flex;
+  gap: 8px;
+  padding-left: 24px;
+  font-size: 11px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.entryTitle {
+  display: flex;
+  justify-content: flex-start !important;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  padding-inline: 0 !important;
+}
+.identifier {
+  flex-shrink: 0;
+}
+.entryTitle > span:last-child {
+  flex: 1;
+  text-align: left;
+}
+.entryMeta .state {
+  max-width: 160px;
+}
+
+.entry[data-compact="true"] {
+  padding: 0;
+  border: 0;
+}

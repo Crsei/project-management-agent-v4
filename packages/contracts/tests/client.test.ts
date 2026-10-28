@@ -62,13 +62,13 @@ test('authentication is explicit and token providers refresh per request', async
   let token = 'first';
   const bearer = new ProjectManagementClient({ baseUrl: 'https://example.test', auth: { type: 'bearer', token: () => token }, fetch });
   await bearer.getMe(); token = 'second'; await bearer.getMe();
-  const cookie = new ProjectManagementClient({ baseUrl: 'https://example.test', auth: { type: 'cookie', credentials: 'same-origin', cookie: () => 'pm_session=explicit' }, fetch });
+  const cookie = new ProjectManagementClient({ baseUrl: 'https://example.test', auth: { type: 'cookie', credentials: 'same-origin', cookie: () => 'pm_v3_session=explicit' }, fetch });
   await cookie.getMe();
   assert.deepEqual(seen, [
     { credentials: 'omit', bearer: null, cookie: null },
     { credentials: 'omit', bearer: 'Bearer first', cookie: null },
     { credentials: 'omit', bearer: 'Bearer second', cookie: null },
-    { credentials: 'same-origin', bearer: null, cookie: 'pm_session=explicit' },
+    { credentials: 'same-origin', bearer: null, cookie: 'pm_v3_session=explicit' },
   ]);
   assert.throws(() => new ProjectManagementClient({ baseUrl: 'https://user:password@example.test', auth: { type: 'none' } }), /without embedded credentials/);
 });

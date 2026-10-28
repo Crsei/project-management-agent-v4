@@ -1,0 +1,139 @@
+.node {
+  --canvas-node-active-color: var(--status-info);
+  width: var(--canvas-node-width);
+  border: 1px solid var(--canvas-node-border);
+  border-radius: var(--canvas-node-radius);
+  background: var(--canvas-node-surface);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 20px;
+  overflow: visible;
+}
+.node[data-selected] {
+  border-color: var(--canvas-selection);
+  box-shadow: 0 0 0 1px var(--canvas-selection);
+}
+.node[data-execution-status="thinking"] {
+  --canvas-node-active-color: var(--status-thinking);
+}
+.node[data-execution-active] header {
+  background: color-mix(
+    in srgb,
+    var(--canvas-node-active-color) 8%,
+    var(--canvas-node-surface)
+  );
+}
+.node[data-execution-active] header > span:first-child {
+  color: var(--canvas-node-active-color);
+}
+.node[data-execution-active] {
+  animation: canvas-node-execution var(--canvas-execution-duration) ease-in-out
+    infinite;
+}
+.node[data-execution-paused] {
+  animation-play-state: paused;
+}
+@keyframes canvas-node-execution {
+  50% {
+    background: color-mix(
+      in srgb,
+      var(--canvas-node-active-color) 5%,
+      var(--canvas-node-surface)
+    );
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .node {
+    animation: none !important;
+  }
+}
+.node[data-unknown] {
+  border-style: dashed;
+}
+.node header {
+  min-height: 40px;
+  padding: 8px 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+.node header strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.node header small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.summary {
+  padding: 12px;
+  max-height: 72px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.port {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 12px;
+}
+.port[data-direction="output"] {
+  justify-content: flex-end;
+}
+.port code {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.port :global(.react-flow__handle) {
+  width: var(--canvas-port-size);
+  height: var(--canvas-port-size);
+  border: 2px solid var(--canvas-node-surface);
+  background: var(--canvas-port-color);
+}
+.node footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.issue {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--warning);
+}
+@media (pointer: coarse) {
+  .port {
+    min-height: 44px;
+  }
+  .port :global(.react-flow__handle) {
+    width: 44px;
+    height: 44px;
+    background: transparent;
+    border: 0;
+  }
+  .port :global(.react-flow__handle)::after {
+    content: "";
+    position: absolute;
+    width: var(--canvas-port-size);
+    height: var(--canvas-port-size);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: 2px solid var(--canvas-node-surface);
+    border-radius: 50%;
+    background: var(--canvas-port-color);
+    pointer-events: none;
+  }
+}

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { after, before, describe, it } from 'node:test';
+import { after, before, describe, it as runCase, type TestContext } from 'node:test';
 import type { Pool } from 'pg';
 import { buildApp } from '../apps/api/src/app.ts';
 import { publishOutboxBatch } from '../packages/application/src/outbox.ts';
@@ -11,6 +11,7 @@ import type { Actor, Command, CommandReceipt, Entity } from '../packages/domain/
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
 import { createPool, migrate } from '../packages/infrastructure/src/database.ts';
 import { createBoundLocalStorage } from './blob-fixture.ts';
+import { MailFixtureScope, closeMailApp, interruptMailPoolOnAbort } from './mail-fixture-lifecycle.ts';
 
 type JsonResponse<T = any> = { status: number; body: T; headers: Headers };
 type CommandOptions = { cookie?: string; workspace?: string; extra?: Partial<Command> };
@@ -19,9 +20,10 @@ const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 
 // A real HTTP reader is required: app.inject() buffers streaming replies and
 // cannot verify disconnect/reconnect or authorization changes on a live stream.
-async function eventStream(url: string, cookie: string, lastEventId?: string) {
+async function eventStream(url: string, cookie: string, parent: AbortSignal, lastEventId?: string) {
   const controller = new AbortController();
-  const response = await fetch(url, { headers: { cookie, ...(lastEventId === undefined ? {} : { 'Last-Event-ID': lastEventId }) }, signal: controller.signal });
+  const signal = AbortSignal.any([parent, controller.signal]);
+  const response = await fetch(url, { headers: { cookie, ...(lastEventId === undefined ? {} : { 'Last-Event-ID': lastEventId }) }, signal });
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type') ?? '', /^text\/event-stream/);
   assert.ok(response.body);
@@ -50,7 +52,7 @@ async function eventStream(url: string, cookie: string, lastEventId?: string) {
         }
       }
     } catch (error) {
-      if (!controller.signal.aborted) throw error;
+      if (!signal.aborted) throw error;
     } finally { reader.releaseLock(); }
   })();
   // Observe a read failure immediately, while retaining it for close()/done.
@@ -75,7 +77,7 @@ async function eventStream(url: string, cookie: string, lastEventId?: string) {
   };
 }
 
-describe('first-stage backend: real PostgreSQL, files, HTTP, workers and SSE', { skip: !databaseUrl, timeout: 240_000 }, () => {
+describe('first-stage backend: real PostgreSQL, files, HTTP, workers and SSE', { skip: !databaseUrl }, () => {
   const namespace = `test_backend_${randomUUID().replaceAll('-', '')}`;
   const password = 'integration-password-2026';
   let bootstrap: Pool;
@@ -88,9 +90,24 @@ describe('first-stage backend: real PostgreSQL, files, HTTP, workers and SSE', {
   let owner: Actor;
   let ownerCookie: string;
   let workspaceId: string;
+  let scope: MailFixtureScope;
+
+  // Cases share one database, but never a suite-wide stopwatch. A cancelled
+  // case closes the shared owner; later cases fail before touching an ended pool.
+  function it(name: string, operation: (t: TestContext) => Promise<void>) {
+    return runCase(name, { timeout: 120_000 }, async t => {
+      scope.checkpoint();
+      const cancel = () => { void scope.close().catch(() => undefined); };
+      t.signal.addEventListener('abort', cancel, { once: true });
+      if (t.signal.aborted) cancel();
+      try { scope.checkpoint(); await operation(t); }
+      finally { t.signal.removeEventListener('abort', cancel); }
+    });
+  }
 
   async function request<T = any>(path: string, options: { method?: string; cookie?: string; body?: unknown; headers?: Record<string, string> } = {}): Promise<JsonResponse<T>> {
     const response = await fetch(`${origin}${path}`, {
+      signal: scope.signal,
       method: options.method ?? 'GET',
       headers: { cookie: options.cookie ?? ownerCookie, ...(options.body === undefined ? {} : { 'content-type': 'application/json' }), ...options.headers },
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
@@ -162,36 +179,39 @@ describe('first-stage backend: real PostgreSQL, files, HTTP, workers and SSE', {
     return { user, cookie: await signIn(user) };
   }
 
-  before(async () => {
-    bootstrap = createPool(databaseUrl!);
-    await bootstrap.query(`CREATE SCHEMA ${namespace}`);
-    const url = new URL(databaseUrl!);
-    url.searchParams.set('options', `-c search_path=${namespace},public`);
-    const scopedUrl = url.toString();
-    pool = createPool(scopedUrl);
-    workerPool = createPool(scopedUrl);
-    await migrate(pool);
-    owner = await createUser(pool, { email: 'backend-owner@example.test', name: 'Backend owner', password });
-    workspaceId = (await createWorkspace(pool, owner.id, 'HTTP integration')).id;
-    const testsRoot = resolve(process.env.TMPDIR ?? '.local/tests');
-    await mkdir(testsRoot, { recursive: true });
-    blobRoot = await mkdtemp(join(testsRoot, 'backend-'));
-    coreRoot = await mkdtemp(join(testsRoot, 'core-'));
-    app = buildApp({ databaseUrl: scopedUrl, ...await createBoundLocalStorage(pool, blobRoot), coreWorkspaceRoot: coreRoot });
-    origin = await app.listen({ host: '127.0.0.1', port: 0 });
-    ownerCookie = await signIn(owner);
-  });
-  after(async () => {
-    await app?.close();
-    await workerPool?.end();
-    await pool?.end();
-    if (bootstrap) {
-      try { await bootstrap.query(`DROP SCHEMA ${namespace} CASCADE`); }
-      finally { await bootstrap.end(); }
-    }
-    if (blobRoot) await rm(blobRoot, { recursive: true, force: true });
-    if (coreRoot) await rm(coreRoot, { recursive: true, force: true });
-  });
+  before(async t => {
+    scope = new MailFixtureScope(t.signal, 120_000);
+    await scope.initialize(async () => {
+      bootstrap = scope.own(createPool(databaseUrl!), owned => owned.end());
+      let createdSchema = false;
+      scope.defer(async () => { if (createdSchema) await bootstrap.query(`DROP SCHEMA ${namespace} CASCADE`); });
+      await scope.step(async () => {
+        await bootstrap.query(`CREATE SCHEMA ${namespace}`);
+        createdSchema = true;
+      });
+      const url = new URL(databaseUrl!);
+      url.searchParams.set('options', `-c search_path=${namespace},public`);
+      const scopedUrl = url.toString();
+      pool = scope.own(createPool(scopedUrl), owned => owned.end());
+      workerPool = scope.own(createPool(scopedUrl), owned => owned.end());
+      const interruption = interruptMailPoolOnAbort(pool, scope.signal, bootstrap);
+      const workerInterruption = interruptMailPoolOnAbort(workerPool, scope.signal, bootstrap);
+      scope.defer(() => interruption.finish());
+      scope.defer(() => workerInterruption.finish());
+      await scope.step(() => migrate(pool));
+      owner = await scope.step(() => createUser(pool, { email: 'backend-owner@example.test', name: 'Backend owner', password }));
+      workspaceId = (await scope.step(() => createWorkspace(pool, owner.id, 'HTTP integration'))).id;
+      const testsRoot = resolve(process.env.TMPDIR ?? '.local/tests');
+      await scope.step(() => mkdir(testsRoot, { recursive: true }));
+      blobRoot = await scope.acquire(() => mkdtemp(join(testsRoot, 'backend-')), owned => rm(owned, { recursive: true, force: true }));
+      coreRoot = await scope.acquire(() => mkdtemp(join(testsRoot, 'core-')), owned => rm(owned, { recursive: true, force: true }));
+      const storage = await scope.step(() => createBoundLocalStorage(pool, blobRoot));
+      app = scope.own(buildApp({ databaseUrl: scopedUrl, ...storage, coreWorkspaceRoot: coreRoot, signal: scope.signal }), closeMailApp);
+      origin = await scope.step(() => app.listen({ host: '127.0.0.1', port: 0 }));
+      ownerCookie = await scope.step(() => signIn(owner));
+    }, true);
+  }, { timeout: 120_000 });
+  after(() => scope?.close(), { timeout: 60_000 });
 
   it('INF-05/06 authenticates with a revocable cookie, rejects spoofed actors and reports execution disabled', async () => {
     assert.equal((await request('/api/v1/auth/me', { cookie: '' })).status, 401);
@@ -600,7 +620,7 @@ describe('first-stage backend: real PostgreSQL, files, HTTP, workers and SSE', {
     const project = await activeProject('SSE before', workspace);
     await flushOutbox();
     const baseline = (await request(`${path(workspace)}/changes?after=0`)).body.cursor;
-    const first = await eventStream(`${origin}${path(workspace)}/events?after=${baseline}`, ownerCookie);
+    const first = await eventStream(`${origin}${path(workspace)}/events?after=${baseline}`, ownerCookie, scope.signal);
     t.after(() => first.close());
     let discussion = await conversation(workspace, project);
     await flushOutbox();
@@ -611,7 +631,7 @@ describe('first-stage backend: real PostgreSQL, files, HTTP, workers and SSE', {
     await first.close();
     discussion = await appendMessage(workspace, discussion, 'SSE changed while disconnected');
     await flushOutbox();
-    const resumed = await eventStream(`${origin}${path(workspace)}/events`, ownerCookie, seen.id);
+    const resumed = await eventStream(`${origin}${path(workspace)}/events`, ownerCookie, scope.signal, seen.id);
     t.after(() => resumed.close());
     const recovered = await resumed.waitFor(event => event.event === 'change' && event.data.aggregateVersion === discussion.version);
     assert.ok(BigInt(recovered.id!) > BigInt(seen.id));
@@ -629,7 +649,7 @@ describe('first-stage backend: real PostgreSQL, files, HTTP, workers and SSE', {
     const denied = await request(`${path(workspace)}/events?projectId=${hidden.id}`, { cookie: guest.cookie });
     assert.equal(denied.status, 404);
     const baseline = (await request(`${path(workspace)}/changes?after=0`)).body.cursor;
-    const stream = await eventStream(`${origin}${path(workspace)}/events?after=${baseline}&projectId=${visible.id}`, guest.cookie);
+    const stream = await eventStream(`${origin}${path(workspace)}/events?after=${baseline}&projectId=${visible.id}`, guest.cookie, scope.signal);
     t.after(() => stream.close());
     await conversation(workspace, hidden);
     await flushOutbox();
@@ -654,7 +674,7 @@ describe('first-stage backend: real PostgreSQL, files, HTTP, workers and SSE', {
     await flushOutbox();
     const baseline = (await request(`${path(workspace)}/changes?after=0`)).body.cursor;
     const cookie = await signIn(owner);
-    const stream = await eventStream(`${origin}${path(workspace)}/events?after=${baseline}`, cookie);
+    const stream = await eventStream(`${origin}${path(workspace)}/events?after=${baseline}`, cookie, scope.signal);
     t.after(() => stream.close());
     assert.equal((await request('/api/v1/auth/logout', { method: 'POST', cookie })).status, 200);
     const expired = await stream.waitFor(event => event.event === 'stream_error');

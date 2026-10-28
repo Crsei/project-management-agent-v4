@@ -107,7 +107,7 @@ PM 的既有文档描述当前系统，不代表它们优先于本计划的新�
 | L07 | 嵌入 pm-view | 项目/文档中可用实时看板、表格；创建采用嵌入视图自己的实体与项目范围 |
 | L08 | 关系、树与图 | 正式及自定义引用、层级、阻塞展示、单/多选关系控件、防环和错误类型诊断完整 |
 | L09 | Agent context | Web、API、CLI 能获取由已保存项目、父项、阻塞和关联文档组成的上下文；不是 Agent 自动执行 |
-| L10 | 可配置工作流 | initial、states、label、category、transitions；省略使用默认，空转换表禁止转换，同状态修改允许 |
+| L10 | 可配置工作流 | initial、states、label、category、transitions、可选 default_targets；省略使用默认，空转换表禁止转换，同状态修改允许 |
 | L11 | 状态类别语义 | 完成统计和阻塞按类别计算；completed/canceled 类别按 Lab 解除下游阻塞展示，不硬编码旧 PM 状态 |
 | L12 | 自定义字段 | text/number/boolean/date/select/multi_select/reference；适用实体、必填、默认、选项、目标、范围贯通表单、查询和引用保护 |
 | L13 | 配置校验和修复 | 配置 revision 并发控制，验证候选工作区；无效外部配置可见并锁写，修复后可恢复，不丢本地草稿 |
@@ -130,6 +130,10 @@ PM 的既有文档描述当前系统，不代表它们优先于本计划的新�
 | L30 | 可运行交付与安全基线 | PM 内独立安装/启动，生产静态页/API/SSE 可用；同源/Origin、路径穿越、symlink/hardlink、HTML 预览与敏感信息边界不退化 |
 
 **不是“第一版先缺几项”。** 阶段可以分批实施，但最终交付要求 L01–L30 全部完成。实现形式允许按 PM 工程调整，不能把外部编辑换成手工导入、把 CLI 换成只有 UI、把保存视图换成仅 localStorage，或只重定向到另一个 Lab 服务。
+
+PM 按类别执行生命周期命令时，`default_targets` 可为类别显式指定目标状态，例如 `started: in_progress`。目标必须存在且属于对应类别；当前状态已属目标类别时保持当前状态，有唯一合法目的地时使用该目的地，多个合法目的地才使用显式首选，且首选必须在当前允许的转换中。没有合法首选仍拒绝歧义，不能借此新增转换边或绕过完成、权限、版本检查。
+
+内置 work_item 工作流声明 `default_targets: { started: in_progress }`，避免 `in_progress` 与 `review` 同属 started 时默认开始/重开歧义；已在 review 时再次开始仍保持 review。显式自定义工作流替换整份默认定义，不继承此首选；既有 YAML 不自动改写，需由配置所有者显式选择目标，或保留歧义拒绝。
 
 <a id="pm-extras"></a>
 ## 4. 原 PM 有、Lab 没有的能力：单独保留，可延期文件化

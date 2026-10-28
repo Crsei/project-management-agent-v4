@@ -312,6 +312,23 @@ test('configured workflows apply initial states and categories, with explicit di
   }
 });
 
+test('workflow category defaults round-trip without replacing transitions or leaking into custom definitions', () => {
+  assert.deepEqual(workflowFor('work_item')!.default_targets, { started: 'in_progress' });
+  const configuration = configured();
+  const definition = configuration.workflows.work_item!;
+  assert.equal(definition.default_targets, undefined, 'An explicit workflow must not inherit built-in target IDs');
+  definition.states.push({ id: 'checking', label: 'Checking', category: 'started' });
+  definition.transitions.push({ from: 'queued', to: 'checking' });
+  definition.default_targets = { started: 'shipping' };
+  const parsed = parseConfiguration(configuration);
+  assert.deepEqual(parsed.workflows.work_item, definition);
+  const source = createMarkdown({ id: 'TASK-1', title: 'Explicit review lane' }, parsed);
+  const checking = parseMarkdown(patchMarkdown(source, { status: 'checking' }, parsed), parsed);
+  assert.equal(checking.status, 'checking', 'Category defaults must not restrict explicitly selected native states');
+  const locked = parseConfiguration({ ...parsed, workflows: { work_item: { ...definition, transitions: [] } } });
+  rejects(() => patchMarkdown(source, { status: 'shipping' }, locked), 'TRANSITION_NOT_ALLOWED', 'status');
+});
+
 test('typed extensions validate without coercion, default on reads and preserve exact source/body', () => {
   const configuration = configured();
   const source = raw({ status: 'queued', 'x-unknown': { retained: true } }, '# Typed\n\nBody with spaces  \n');
@@ -344,6 +361,11 @@ test('configuration rejects inconsistent workflows, declarations, constraints an
     { ...state, states: [...state.states, state.states[0]] },
     { ...state, transitions: [{ from: 'queued', to: 'missing' }] },
     { ...state, transitions: [state.transitions[0], state.transitions[0]] },
+    { ...state, default_targets: { started: 'missing' } },
+    { ...state, default_targets: { started: 'queued' } },
+    { ...state, default_targets: { unknown: 'shipping' } },
+    { ...state, default_targets: { started: '' } },
+    { ...state, default_targets: null },
   ]) rejects(() => parseConfiguration({ ...valid, workflows: { work_item: workflow } }), 'CONFIGURATION_INVALID');
   rejects(() => parseConfiguration({ ...valid, schema: 'pm/config/v2' }), 'CONFIGURATION_INVALID');
   rejects(() => parseConfiguration({ ...valid, workflows: { document: state } }), 'CONFIGURATION_INVALID');

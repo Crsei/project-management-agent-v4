@@ -14,6 +14,7 @@ import { accountRecoverySchemas } from './account-recovery-schemas.ts';
 import { accountRecoveryPaths } from './account-recovery-openapi.ts';
 import { webhookResponseSchemas } from './webhook-schemas.ts';
 import { localProjectPaths } from './local-project-openapi.ts';
+import { agentFileAreaPaths } from './agent-file-area-openapi.ts';
 import { automationPaths } from './automation-openapi.ts';
 import { agentChatAccessSchema, agentChatAccessInputSchema, agentChatContextSourceSchema, agentChatToolCallSchema, agentChatToolResultSchema, agentChatMessageSchema, agentChatReasoningEffortSchema, agentChatReasoningSchema } from './agent-chat.ts';
 
@@ -266,6 +267,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
   const paths: OpenApiDocument['paths'] = {
     ...accountRecoveryPaths,
     ...localProjectPaths(),
+    ...agentFileAreaPaths(),
     ...automationPaths(),
     '/health/live': { get: { operationId: 'getLiveness', summary: 'Process liveness only', security: [], responses: { 200: response('Process responds; no business-readiness guarantee.', object({ status: { const: 'alive' } })) } } },
     '/health/ready': { get: { operationId: 'getReadiness', summary: 'Database, storage, live Worker heartbeat and quarantined outbox readiness', security: [], responses: { 200: response('All readiness checks passed.', ref('Readiness')), 503: response('Backend is uninitialized or at least one readiness check failed.', ref('Readiness')) } } },
@@ -315,8 +317,8 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
       description: 'Cancellation is explicit. The server aborts the provider request and waits for the generation handler to persist both partial text and terminal status. cancelled=true confirms persisted cancellation; false means no matching active reply or another terminal outcome won the race. Persistence failure returns 503. Clients must reconcile unknown outcomes via GET thread and must not infer cancellation from a disconnected reader. External provider usage already incurred is not reversible.',
     } },
     '/openapi.json': { get: { operationId: 'getOpenApi', summary: 'Live contract generated from the command registry', security: [], responses: { 200: response('OpenAPI 3.1 document', { type: 'object', additionalProperties: true }) } } },
-    '/api/v1/auth/login': { post: { operationId: 'login', summary: 'Create a server-side session', security: [], requestBody: { required: true, content: json(object({ email: { type: 'string', maxLength: 254 }, password: { type: 'string', maxLength: 256 } })) }, responses: { 200: { ...response('Session actor and expiry; token is only returned in Set-Cookie.', object({ actor: ref('Actor'), expiresAt: timestamp })), headers: { 'Set-Cookie': { description: 'pm_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.', schema: { type: 'string' } } } }, ...errors(400, 401, 403, 429, 503) } } },
-    '/api/v1/auth/logout': { post: { ...secured('Revoke the current session and clear pm_session', object({ loggedOut: { const: true } })), operationId: 'logout' } },
+    '/api/v1/auth/login': { post: { operationId: 'login', summary: 'Create a server-side session', security: [], requestBody: { required: true, content: json(object({ email: { type: 'string', maxLength: 254 }, password: { type: 'string', maxLength: 256 } })) }, responses: { 200: { ...response('Session actor and expiry; token is only returned in Set-Cookie.', object({ actor: ref('Actor'), expiresAt: timestamp })), headers: { 'Set-Cookie': { description: 'pm_v3_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.', schema: { type: 'string' } } } }, ...errors(400, 401, 403, 429, 503) } } },
+    '/api/v1/auth/logout': { post: { ...secured('Revoke the current session and clear pm_v3_session', object({ loggedOut: { const: true } })), operationId: 'logout' } },
     '/api/v1/auth/me': { get: { ...secured('Read the authenticated actor', object({ actor: ref('Actor') })), operationId: 'getMe' } },
     '/api/v1/auth/security': { get: { ...secured('Read own credential version and active sessions; token hashes and unobserved device metadata are never exposed', ref('AccountSecurity')), operationId: 'getAccountSecurity' } },
     '/api/v1/auth/security/password': { post: {
@@ -436,8 +438,8 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
   };
   return {
     openapi: '3.1.0', jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
-    info: { title: 'Project Management API', version: '0.1.0', description: 'Phase-one modular backend. Supersedes the historical bootstrap.openapi.yaml contract. Server-side sessions accept either pm_session cookie or Authorization: Bearer; an Authorization header takes precedence. Origin must match configured PUBLIC_ORIGIN, cross-site writes are rejected, and this server does not enable cross-origin browser CORS. Disabled execution is not represented as available commands.' },
+    info: { title: 'Project Management API', version: '0.1.0', description: 'Phase-one modular backend. Supersedes the historical bootstrap.openapi.yaml contract. Server-side sessions accept either pm_v3_session cookie or Authorization: Bearer; an Authorization header takes precedence. Origin must match configured PUBLIC_ORIGIN, cross-site writes are rejected, and this server does not enable cross-origin browser CORS. Disabled execution is not represented as available commands.' },
     servers: [{ url: '/' }], paths,
-    components: { schemas, securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'pm_session' }, bearerAuth: { type: 'http', scheme: 'bearer', description: 'The same opaque server-side session token, not a JWT. Inject explicitly; never store in a generated client.' } } },
+    components: { schemas, securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'pm_v3_session' }, bearerAuth: { type: 'http', scheme: 'bearer', description: 'The same opaque server-side session token, not a JWT. Inject explicitly; never store in a generated client.' } } },
   };
 }

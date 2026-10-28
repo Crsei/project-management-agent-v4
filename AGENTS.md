@@ -1,6 +1,7 @@
-# Project Management 工作约定
+# Project Management v3 工作约定
 
 - 先读 `README.md`、`docs/domain-design/README.md` 第七节及 `docs/implementation/backend-delivery.md`，再读受影响的领域文档及 INV/SC/INF 编号。当前第一阶段已交付可运行后端核心，按计划完成剩余项及后续阶段。
+- 本次交付先读 `V3-AGENT-CHAT-TASKS.zh.md`：只做纯 Agent Chat、工作区/项目 Session 和文件区域适配；不恢复旧完整执行计划，不新增权限体系或业务完成规则。沿用既有安全与业务检查。
 - 本仓库是独立项目。`project-management-book` 是设计来源，EasyuseUI 是第二阶段的展示接入目标；不自动改写这些仓库的代码或接管既有服务。
 - 业务规则由 domain/application 所有；HTTP、Worker 和未来 Runner 回报入口使用相同应用服务。前端、执行回调和后台投影不得自行决定工作项完成。
 - 未实现能力明确禁用；初始化健康检查不代表数据库、存储、Worker 或 Agent 已就绪。Run 成功不代表 WorkItem 完成，未知副作用先查询核对。
@@ -12,16 +13,16 @@
 
 ## 本地副本环境
 
-- 本目录是 `../project-management` 的独立副本，用于 Agent 接入开发。API 4192、Web 3222、PostgreSQL 55442、Compose 项目 `project-management-agent-v2-backend`；数据库、存储、工作区与账号均在本地 `.local/`。
-- Web 启动：`PM_WEB_PORT=3222 PM_API_URL=http://127.0.0.1:4192 pnpm dev:web`；API/Worker 使用 `pnpm services:start`。不要连接或复用来源项目及其他副本的 4100/4191、55433/55440/55441 服务、数据库、Markdown 根或凭据。
-- 来源 `../project-management` 只读参考；`PM_WEB_PORT` 与 `PM_API_URL` 是本地隔离覆盖，默认值 3220/4100 仍与来源文档一致。
+- 本目录为 `project-management-agent-v3`，来源 `../project-management-agent-v2` 与 `../agent-workspace` 已分别 Git 存档。只修改本仓库，不修改来源代码或接管来源服务。
+- v3 Web 3223、PM API 4193、Agent API 4323、Agent Web 开发上游 4324、PostgreSQL 55443；Compose 项目 `project-management-agent-v3-backend`。数据库、Markdown、附件、Agent 数据与 Provider homes 均独立放在本地 `.local/`。
+- 不连接或复用来源及其他副本的 4100/4191/4192、3220/3222、55433/55440/55441/55442 服务或目录。运行前仍须核对端口、PID 和工作目录；Agent 不能默认复用 `~/.agent-workspace` 或自动导入全局 CLI 凭据。
 
 ## 登录与工作区
 
-- 本机账号仅由 `pnpm bootstrap` 首次创建时写入 `.local/access.json`（0600，含 `email`、`password`、`userId`、`workspaceId`）；已有文件时 bootstrap 不轮换账号。不要把凭据写入日志、提交、前端配置或环境文件。
-- API 登录：`POST /api/v1/auth/login`，请求 `{ "email", "password" }`，成功后返回 `pm_session` Cookie（HttpOnly、SameSite=Strict、Path=/、有效期 8 小时）。后续请求使用该 Cookie 或 `Authorization: Bearer <token>`，Bearer 优先；`GET /api/v1/auth/me` 校验当前会话，`POST /api/v1/auth/logout` 注销。
+- 常规首次初始化由 `pnpm bootstrap` 创建账号并写入 `.local/access.json`（0600，含 `email`、`password`、`userId`、`workspaceId`）；已有文件时 bootstrap 不轮换账号。本机此次经用户明确授权从 v2 恢复账号并同步该访问文件，使用 v2 原账号密码。不要把凭据写入日志、提交、前端配置或环境文件。
+- API 登录：`POST /api/v1/auth/login`，请求 `{ "email", "password" }`，v3 使用独立 `pm_v3_session` Cookie（HttpOnly、SameSite=Strict、Path=/、有效期 8 小时）。Bearer 优先；`GET /api/v1/auth/me` 校验当前会话，`POST /api/v1/auth/logout` 注销。Agent 执行服务使用独立 `agent_v3_access`，不改变原权限规则。
 - CLI 认证优先级：`PM_SESSION_TOKEN` > `PM_EMAIL`/`PM_PASSWORD` > `.local/access.json`（`PM_ACCESS_FILE` 可覆盖路径）。`PM_WORKSPACE_ID` 指定工作区；省略时仅当账号可访问唯一工作区才自动选择，否则报错并列出可访问工作区。
 - Web 登录页需手工输入 `.local/access.json` 中的邮箱与密码，浏览器不读取该文件；登录后从授权列表选择实际工作区。
-- 当前 `.local/access.json` 记录的 `workspaceId` 为 `e317b803-5c03-4eb9-a7d9-79d7a38927bf`（名称 Project Management，管理员 `admin@project-management.local`）。本副本只使用该工作区，其 Markdown 核心位于 `.local/pm-workspaces/<workspaceId>/`；新建项目须在 Web 设置页完成本地目录初始化。
-- 使用该工作区：`PM_API_URL=http://127.0.0.1:4192 PM_WORKSPACE_ID=e317b803-5c03-4eb9-a7d9-79d7a38927bf pnpm run pm protocol`（`task list`、`file` 等命令相同）；不要把工作区 ID 换成其他副本或来源项目的值。
-- 工作区内的示例项目 `PRJ-001`（Nova 客户门户 · 示例项目）位于 `.local/projects/nova-customer-portal`，包含 8 个任务、4 份文档及其里程碑/迭代/模块/需求/发布/目标示例数据，仅用于功能演示；不是真实交付或验收证据。
+- 当前本机已按用户明确要求将 v2 数据与项目复制到 v3 独立存储，保留工作区 `e317b803-5c03-4eb9-a7d9-79d7a38927bf`（Project Management）及项目 `PRJ-001`。保留对象 ID 不代表共享数据库或目录；后续不自动从其他副本导入。工作区和项目侧栏来自真实授权 API，空组也必须可见。
+- 工作区和项目的 Agent 文件区域单独配置并服务端核验；项目可复用其原生已登记本地目录。目录位置不是新的授权或沙箱；不能因路径未配置回退源仓库根目录。
+- CLI 使用 `PM_API_URL=http://127.0.0.1:4193`、`PM_WORKSPACE_ID=e317b803-5c03-4eb9-a7d9-79d7a38927bf`；新增工作区仍从本副本真实授权列表选择。迁入项目目录为 `.local/projects/<workspaceId>/762dee3c-41af-468a-a624-351cc478522e`，工作区 Agent 文件区域为其父目录；不可回指 v2 的项目目录。

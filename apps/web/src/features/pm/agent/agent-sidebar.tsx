@@ -1,5 +1,4 @@
 import { Bot, FileCheck2, MessagesSquare, PlayCircle, Sparkles, X, Zap } from "lucide-react"
-import { Link } from "react-router"
 import { usePmService } from "../service/pm-service"
 import { useText } from "../service/pm-ui"
 import { AgentThreadList } from "./agent-thread-list"
@@ -41,10 +40,10 @@ export function AgentSidebar({ open, onClose, model, modelReady, statusPending, 
       </button>
       {disabled(t("运行记录", "Runs"), PlayCircle)}
       {disabled(t("待审建议", "Proposals"), FileCheck2)}
-      {workspace && <Link className={styles.navButton} to={`/pm/${encodeURIComponent(workspace.id)}/automations`}>
+      {workspace && <a className={styles.navButton} href={`/agent/workspace?${new URLSearchParams({ workspace: workspace.id, view: "automations", returnTo: `/pm/${encodeURIComponent(workspace.id)}/agent` })}`}>
         <Zap size={15} aria-hidden="true" />
         <span>{t("自动化", "Automations")}</span>
-      </Link>}
+      </a>}
       <div className={styles.separator} />
       {error && <div className={styles.noticeError} role="alert">
         <span>{error}</span>

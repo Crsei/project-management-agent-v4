@@ -1,0 +1,15 @@
+.activation {
+  height: auto;
+  min-height: var(--control-height);
+  max-width: 100%;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+  padding-block: 4px;
+  overflow-wrap: anywhere;
+}
+@media (pointer: coarse) {
+  .activation {
+    min-height: 44px;
+  }
+}

@@ -11,11 +11,13 @@ import { buildApp } from '../apps/api/src/app.ts';
 import type { Actor, Command, CommandReceipt } from '../packages/domain/src/core.ts';
 import type { MemberInvitationDto } from '../packages/domain/src/invitations.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
-import { createPool, migrate } from '../packages/infrastructure/src/database.ts';
+import { acquireMailFixtureDatabase, mailTestDatabaseUrl } from './mail-fixture-database.ts';
+import type { MailFixtureDatabase } from './mail-fixture-database.ts';
+import { closeMailApp, MailFixtureScope, mailFixtureInitTimeout, mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';
 import type { InvitationMailConfig } from '../packages/infrastructure/src/invitation-mail.ts';
 import { createBoundLocalStorage } from './blob-fixture.ts';
 
-export const invitationDatabaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+export const invitationDatabaseUrl = mailTestDatabaseUrl;
 export type SmtpFixture = {
   config: InvitationMailConfig;
   messages: { to: string; data: string }[];
@@ -23,7 +25,9 @@ export type SmtpFixture = {
   close(): Promise<void>;
 };
 /** A real loopback SMTP receiver; production SMTP sending remains the nodemailer adapter. */
-export async function createSmtpFixture(): Promise<SmtpFixture> {
+export async function createSmtpFixture(options: { signal?: AbortSignal } = {}): Promise<SmtpFixture> {
+  const scope = new MailFixtureScope(options.signal);
+  return scope.initialize(async () => {
   const sockets = new Set<Socket>();
   const messages: SmtpFixture['messages'] = [];
   const server = createServer(socket => {
@@ -62,15 +66,30 @@ export async function createSmtpFixture(): Promise<SmtpFixture> {
       }
     });
   });
-  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  scope.own(server, async owned => {
+    for (const socket of sockets) socket.destroy();
+    const closing = Promise.withResolvers<void>();
+    owned.close(error => error && (error as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING' ? closing.reject(error) : closing.resolve());
+    await closing.promise;
+  });
+  await scope.step(async () => {
+    const listening = Promise.withResolvers<void>();
+    const failed = (error: Error) => { server.off('listening', ready); listening.reject(error); };
+    const ready = () => { server.off('error', failed); listening.resolve(); };
+    server.once('error', failed);
+    server.once('listening', ready);
+    server.listen(0, '127.0.0.1');
+    await listening.promise;
+  });
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   const fixture: SmtpFixture = { config: { host: '127.0.0.1', port: address.port, secure: false, requireTls: false,
     from: 'invitations@example.test', webOrigin: 'http://127.0.0.1:4100', tokenKey: randomBytes(32), ttlSeconds: 3600, timeoutMs: 2000 },
     messages, mode: 'accept',
-    async close() { for (const socket of sockets) socket.destroy(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); },
+    close: scope.close,
   };
   return fixture;
+  });
 }
 export type InvitationResponse<T> = { status: number; body: T; headers: Headers };
 export type InvitationFixture = {
@@ -81,55 +100,34 @@ export type InvitationFixture = {
   token(email: string): string;
   close(): Promise<void>;
 };
-export async function createInvitationFixture(options: { disabled?: boolean } = {}): Promise<InvitationFixture> {
-  if (!invitationDatabaseUrl) throw new Error('A real TEST_DATABASE_URL or DATABASE_URL is required');
-  const namespace = `test_invitations_${randomUUID().replaceAll('-', '')}`;
-  const bootstrap = createPool(invitationDatabaseUrl);
-  const smtp = await createSmtpFixture();
-  let pool: Pool | undefined;
-  let app: FastifyInstance | undefined;
-  let root: string | undefined;
-  let created = false;
-  let closed = false;
-  async function close() {
-    if (closed) return;
-    closed = true;
-    try { await app?.close(); }
-    finally {
-      try { await pool?.end(); }
-      finally {
-        try { if (created) await bootstrap.query(`DROP SCHEMA ${namespace} CASCADE`); }
-        finally { await bootstrap.end(); await smtp.close(); if (root) await rm(root, { recursive: true, force: true }); }
-      }
-    }
-  }
-  try {
-    await bootstrap.query(`CREATE SCHEMA ${namespace}`);
-    created = true;
-    const url = new URL(invitationDatabaseUrl);
-    url.searchParams.set('options', `-c search_path=${namespace},public`);
-    pool = createPool(url.toString());
-    await migrate(pool);
+export async function createInvitationFixture(options: { disabled?: boolean; signal?: AbortSignal; database?: MailFixtureDatabase } = {}): Promise<InvitationFixture> {
+  const scope = new MailFixtureScope(options.signal, options.database ? mailFixtureInitTimeout : mailSchemaInitTimeout);
+  return scope.initialize(async () => {
+    const { pool, databaseUrl } = await acquireMailFixtureDatabase(scope, options.database);
+    const smtp = await scope.acquire(() => createSmtpFixture({ signal: scope.signal }), owned => owned.close());
+    const root = await scope.acquire(() => mkdtemp(join(tmpdir(), 'pm-invitations-')), owned => rm(owned, { recursive: true, force: true }));
     const password = 'isolated-invitation-owner-password';
-    const owner = await createUser(pool, { email: `${randomUUID()}@example.test`, name: 'Invitation owner', password });
-    const workspaceId = (await createWorkspace(pool, owner.id, 'Invitation integration')).id;
-    root = await mkdtemp(join(tmpdir(), 'pm-invitations-'));
     const coreRoot = join(root, 'core');
-    app = buildApp({ databaseUrl: url.toString(), ...await createBoundLocalStorage(pool, join(root, 'blobs')), coreWorkspaceRoot: coreRoot, ...(options.disabled ? {} : { invitationMail: smtp.config }) });
-    const origin = await app.listen({ host: '127.0.0.1', port: 0 });
+    const storage = await scope.step(() => createBoundLocalStorage(pool, join(root, 'blobs')));
+    const app = scope.own(buildApp({ databaseUrl, ...storage, coreWorkspaceRoot: coreRoot, signal: scope.signal, ...(options.disabled ? {} : { invitationMail: smtp.config }) }), closeMailApp);
+    const origin = await scope.step(() => app.listen({ host: '127.0.0.1', port: 0 }));
+    // Seed a runtime workspace after startup, rather than making every mail case
+    // pay the unrelated existing-workspace import inside Fastify's ready hook.
+    const owner = await scope.step(() => createUser(pool, { email: `${randomUUID()}@example.test`, name: 'Invitation owner', password }));
+    const workspaceId = (await scope.step(() => createWorkspace(pool, owner.id, 'Invitation integration'))).id;
     let ownerCookie = '';
     async function request<T = unknown>(path: string, body?: unknown, cookie = ownerCookie): Promise<InvitationResponse<T>> {
-      const response = await fetch(`${origin}${path}`, { method: body === undefined ? 'GET' : 'POST',
+      const response = await fetch(`${origin}${path}`, { signal: scope.signal, method: body === undefined ? 'GET' : 'POST',
         headers: { cookie, ...(body === undefined ? {} : { 'content-type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       return { status: response.status, body: await response.json() as T, headers: response.headers };
     }
-    const signedIn = await request('/api/v1/auth/login', { email: owner.email, password });
+    const signedIn = await scope.step(() => request('/api/v1/auth/login', { email: owner.email, password }));
     assert.equal(signedIn.status, 200, JSON.stringify(signedIn.body));
     ownerCookie = signedIn.headers.get('set-cookie')!.split(';')[0]!;
     async function send(command: Command, cookie?: string, workspace = workspaceId) {
       return request<CommandReceipt>(`/api/v1/workspaces/${workspace}/commands`, command, cookie);
     }
-    return { pool, app, owner, workspaceId, ownerCookie, smtp, databaseUrl: url.toString(), coreRoot, request, send, close,
+    return { pool, app, owner, workspaceId, ownerCookie, smtp, databaseUrl, coreRoot, request, send, close: scope.close,
       async invite(email = `${randomUUID()}@example.test`, input = {}) {
         const response = await send({ commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email, role: input.role ?? 'member', projectIds: input.projectIds ?? null } });
         assert.equal(response.status, 200, JSON.stringify(response.body));
@@ -144,5 +142,5 @@ export async function createInvitationFixture(options: { disabled?: boolean } = 
         return token;
       },
     };
-  } catch (error) { await close(); throw error; }
+  });
 }

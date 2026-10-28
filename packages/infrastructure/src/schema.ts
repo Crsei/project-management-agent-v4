@@ -7,6 +7,7 @@ export { accountRecoveryTokens, accountRecoveryMailQueue, accountRecoveryRequest
 export { blobStorageBinding, blobStorageOperations, projectBlobStores, projectBlobObjectRoutes, blobStoreAliases, localProjectStorageOperations } from './blob-storage-schema.ts';
 export * from './webhook-schema.ts';
 export { localProjectSettings, localProjectOperations } from './local-projects-schema.ts';
+export { agentFileAreas, agentStorageSettings } from './agent-file-areas-schema.ts';
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey(), email: text('email').notNull().unique(), name: text('name').notNull(),

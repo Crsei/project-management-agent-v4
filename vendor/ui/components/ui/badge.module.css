@@ -1,0 +1,38 @@
+.badge {
+  --badge-color: var(--text-secondary);
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--label-height);
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--badge-color) 24%, transparent);
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--badge-color) 8%, var(--surface));
+  color: var(--badge-color);
+  font-size: 12px;
+  line-height: 16px;
+  vertical-align: middle;
+}
+.badge[data-shape="pill"] {
+  border-radius: var(--pill-radius);
+}
+.badge[data-size="sm"] {
+  min-height: var(--label-height-sm);
+  padding-inline: 4px;
+}
+.badge[data-tone="info"] {
+  --badge-color: var(--info);
+}
+.badge[data-tone="success"] {
+  --badge-color: var(--success);
+}
+.badge[data-tone="warning"] {
+  --badge-color: var(--warning);
+}
+.badge[data-tone="danger"] {
+  --badge-color: var(--destructive);
+}
+.badge[data-tone="agent"] {
+  --badge-color: var(--agent);
+}

@@ -1,0 +1,437 @@
+.content {
+  min-width: 0;
+}
+.content h2 {
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.content input:not([type="checkbox"]),
+.content [role="combobox"] {
+  height: 36px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.content textarea {
+  min-height: 60px;
+  height: 60px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.content button:not([role="switch"]):not([role="checkbox"]):not([role="tab"]),
+.content a {
+  font-size: 14px;
+}
+.settingsGrid {
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr);
+  align-items: start;
+  gap: 32px;
+}
+.sectionRail {
+  display: flex;
+  flex-direction: column;
+  width: 176px;
+  height: auto;
+  padding: 4px;
+  gap: 4px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--muted);
+}
+.sectionTab {
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+  min-height: 36px;
+  height: 36px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.sectionTab[data-active] {
+  border: 0;
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+.general {
+  max-width: 768px;
+}
+.sectionHeading p {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.identifier {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  margin-top: 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.identifier p {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+.identifier code {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+.generalForm {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.generalForm > div:has(> label),
+.operatingDefaults > div,
+.planningBudget > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.generalForm label,
+.planningBudget label {
+  margin-bottom: 0;
+}
+.generalForm > div:has(> label) p,
+.operatingDefaults p,
+.planningBudget > div p {
+  margin-top: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.generalForm label,
+.planningBudget label {
+  font-size: 14px;
+  line-height: 19.25px;
+  font-weight: 500;
+}
+.operatingDefaults {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.operatingDefaults [role="combobox"] {
+  width: 100%;
+}
+.operatingDefaults > div {
+  min-height: 100.25px;
+}
+.acceptRequests {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+.acceptRequests p {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.content [role="switch"] {
+  width: 36px;
+  height: 20px;
+  min-height: 20px;
+  border-radius: var(--pill-radius);
+}
+.content [role="switch"] > span {
+  width: 36px;
+  height: 20px;
+}
+.content [role="switch"] > span > span {
+  width: 16px;
+  height: 16px;
+  left: 1px;
+  translate: none;
+}
+.content [role="switch"] > span > span[data-checked] {
+  transform: translateX(16px);
+}
+.generalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -4px;
+}
+.projectStatus {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+.integrationLinks {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+  margin-top: -4px;
+}
+.integrationLinks h3 {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.integrationLinks p {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+.associations,
+.inheritance,
+.scopeTools {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.associations summary,
+.inheritance summary,
+.scopeTools summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.associations[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.associationRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.inheritance[open] > div {
+  margin-top: 16px;
+}
+.scopeTools {
+  margin-top: 32px;
+}
+.scopeTools[open] > div {
+  margin-top: 12px;
+}
+.rateTable th {
+  height: 40px;
+  padding: 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.rateTable td {
+  height: 53px;
+  padding: 8px;
+}
+.rateTable th:first-child {
+  width: 27%;
+}
+.rateTable th:nth-child(2) {
+  width: 28%;
+}
+.rateTable th:nth-child(3) {
+  width: 30%;
+}
+.rateTable code {
+  font-size: 12px;
+  line-height: 16px;
+}
+.rateTable td:nth-child(2) input {
+  width: 112px;
+}
+.rateTable td:nth-child(3) input {
+  width: 128px;
+}
+.planningBudget {
+  border-top: 1px solid var(--border);
+  padding-top: 32px;
+}
+.planningBudget > div:first-child {
+  max-width: 448px;
+}
+.planningBudget > p {
+  margin-top: 8px;
+}
+.memberFilters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.memberFilters > div {
+  width: 384px;
+}
+.memberFilters [role="combobox"] {
+  width: 144px;
+}
+.memberIdentity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.memberIdentity > svg {
+  width: 24px;
+  height: 24px;
+  color: var(--muted-foreground);
+  padding: 4px;
+  background: var(--muted);
+  border-radius: 4px;
+}
+.content [data-ap-members-table] td {
+  height: 55px;
+}
+.content [data-ap-members-table] td:last-child > div {
+  justify-content: flex-end;
+}
+.content [data-ap-members-table] th:last-child {
+  text-align: right;
+}
+.content [data-ap-members-table] td:last-child button {
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+}
+.content [data-ap-members-table] th:first-child {
+  width: 35%;
+}
+.content [data-ap-members-table] th:nth-child(2) {
+  width: 20%;
+}
+.content [data-ap-members-table] caption {
+  text-align: left;
+  margin-top: 16px;
+  font-size: 12px;
+}
+.groupList {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.groupRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  min-height: 98px;
+}
+.groupRow + .groupRow {
+  border-top: 1px solid var(--border);
+}
+.groupRow > svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.groupRow h3 {
+  font-size: 14px;
+  line-height: 20px;
+}
+.groupRow p {
+  margin-top: 4px;
+}
+.pendingInvitations {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pendingInvitations > h3 {
+  font-size: 14px;
+  line-height: 20px;
+}
+.pendingInvitations button {
+  font-size: 12px;
+}
+.dialog {
+  width: 512px;
+  max-width: calc(100vw - 48px);
+  padding: 24px;
+  border-radius: 8px;
+  gap: 24px;
+}
+.dialog input,
+.dialog [role="combobox"] {
+  height: 36px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+.dialog textarea {
+  height: 60px;
+  min-height: 60px;
+  border-radius: 8px;
+}
+.dialog div:has(> label):not(:has(> [role="checkbox"])) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dialog label {
+  margin-bottom: 0;
+}
+.dialog [role="combobox"] {
+  width: 100%;
+}
+.dialog label {
+  font-size: 14px;
+  line-height: 20px;
+}
+.dialog h2 {
+  font-size: 18px;
+  line-height: 28px;
+}
+.dialog button[type="button"] {
+  font-size: 14px;
+}
+.rateField {
+  position: relative;
+}
+.rateField > label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tableViewport {
+  border: 0;
+  border-radius: 0;
+}
+.tableViewport thead {
+  background: transparent;
+}
+.tableViewport caption {
+  caption-side: bottom;
+  padding: 20px 0 0;
+}
+.content [role="switch"] > span > span[data-checked] {
+  background: var(--background);
+}
+.content [data-ap-matrix-cell] svg {
+  color: var(--foreground);
+}

@@ -415,8 +415,13 @@ async function transitionTask(context: CoreCommandContext, categories: WorkflowD
     const targets = workflow?.states.filter(state => state.category === category &&
       (state.id === record.entity.status || workflow.transitions.some(transition => transition.from === record.entity.status && transition.to === state.id))) ?? [];
     if (!targets.length) continue;
-    if (targets.length !== 1) throw new DomainError('invalid_transition', 'The configured task workflow has ambiguous destinations for this action', 409);
-    return patchScoped(context, 'work_item', capability, { status: targets[0]!.id });
+    const current = targets.find(state => state.id === record.entity.status);
+    if (current) return patchScoped(context, 'work_item', capability, { status: current.id });
+    // A category can contain several lanes (for example work and review).
+    // Only an explicit configured preference may disambiguate allowed targets.
+    const target = targets.length === 1 ? targets[0] : targets.find(state => state.id === workflow?.default_targets?.[category]);
+    if (!target) throw new DomainError('invalid_transition', 'The configured task workflow has ambiguous destinations for this action', 409);
+    return patchScoped(context, 'work_item', capability, { status: target.id });
   }
   throw new DomainError('invalid_transition', 'The configured task workflow has no allowed destination for this action', 409);
 }

@@ -8,6 +8,7 @@ await mkdir(path.join(root, '.local'), { recursive: true, mode: 0o700 });
 const projects = path.join(root, '.local', 'projects');
 await mkdir(projects, { recursive: true, mode: 0o700 });
 await mkdir(path.join(root, '.local', 'backups'), { recursive: true, mode: 0o700 });
+await mkdir(path.join(root, '.local', 'agent-data'), { recursive: true, mode: 0o700 });
 try {
   await writeFile(path.join(root, '.local', 'local-projects.json'), JSON.stringify({
     enabled: true, dataRoot: path.join(root, '.local'), allowedRoots: [projects],
@@ -19,15 +20,23 @@ try {
   console.log('Existing trusted local-project configuration preserved.');
 }
 try {
+  await writeFile(path.join(root, '.local', 'blob-target.json'), JSON.stringify({
+    BLOB_PROVIDER: 'local', BLOB_ROOT: path.join(root, '.local', 'blobs'),
+  }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+} catch (error) {
+  if (error.code !== 'EEXIST') throw error;
+}
+try {
   await access(path.join(root, '.env'));
   console.log('Existing .env preserved. Review .env.example and provide the separate private .env.worker role configuration.');
 } catch {
   const password = randomBytes(32).toString('hex');
   const image = process.env.POSTGRES_IMAGE || 'postgres:16-alpine';
-  const databaseUrl = `postgresql://project_management:${password}@127.0.0.1:55433/project_management`;
+  const databaseUrl = `postgresql://project_management:${password}@127.0.0.1:55443/project_management`;
   await writeFile(path.join(root, '.env'), [
-    'HOST=127.0.0.1', 'PORT=4100', 'PUBLIC_ORIGIN=http://127.0.0.1:4100',
-    'POSTGRES_PORT=55433', `POSTGRES_IMAGE=${image}`, `POSTGRES_PASSWORD=${password}`,
+    'HOST=127.0.0.1', 'PORT=4193', 'PUBLIC_ORIGIN=http://127.0.0.1:3223',
+    'PM_API_URL=http://127.0.0.1:4193', 'PM_WEB_PORT=3223',
+    'POSTGRES_PORT=55443', `POSTGRES_IMAGE=${image}`, `POSTGRES_PASSWORD=${password}`,
     `DATABASE_URL=${databaseUrl}`,
     'BLOB_PROVIDER=local', 'BLOB_ROOT=.local/blobs', 'CORE_WORKSPACE_ROOT=.local/pm-workspaces',
     'COOKIE_SECURE=false', 'WORKER_INTERVAL_MS=500',
@@ -44,4 +53,16 @@ try {
     if (error.code !== 'EEXIST') throw error;
     console.log('Existing .env.worker preserved; verify its database and core root match this installation.');
   }
+}
+try {
+  await writeFile(path.join(root, '.env.agent'), [
+    'HOST=127.0.0.1', 'AGENT_WORKSPACE_API_PORT=4323', 'AGENT_WEB_PORT=4324',
+    'PM_API_URL=http://127.0.0.1:4193', 'AGENT_WORKSPACE_API_ONLY=1',
+    `AGENT_WORKSPACE_DATA_DIR=${path.join(root, '.local', 'agent-data')}`,
+    'VITE_ENABLE_UI_LAB=0', '',
+  ].join('\n'), { flag: 'wx', mode: 0o600 });
+  console.log('Created private .env.agent with isolated v3 data; no Provider credentials or global CLI homes were imported.');
+} catch (error) {
+  if (error.code !== 'EEXIST') throw error;
+  console.log('Existing .env.agent preserved.');
 }

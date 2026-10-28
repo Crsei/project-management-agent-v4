@@ -1,0 +1,122 @@
+.page {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+}
+.header {
+  display: flex;
+  min-height: 56px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.header h1 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header p {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+.toolbar {
+  flex-shrink: 0;
+  padding: 0 24px;
+  background: var(--surface);
+}
+.body {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+}
+.identity {
+  display: inline-flex;
+  max-width: 360px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+.name {
+  display: block;
+  max-width: 280px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.identityDetail {
+  max-width: 100%;
+  align-items: flex-start;
+}
+.identityDetail .name {
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.canvas {
+  display: contents;
+}
+.reference {
+  display: block;
+  overflow: auto;
+  background: var(--background);
+}
+.reference .canvas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ap-content-gap, 24px);
+  width: 100%;
+  max-width: var(--ap-content-width, 1280px);
+  min-height: 100%;
+  margin-inline: auto;
+  padding: 32px;
+}
+.reference .header {
+  min-height: 0;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+  align-items: flex-start;
+}
+.reference .header h1 {
+  font-size: 24px;
+  line-height: 32px;
+}
+.reference .header p {
+  font-size: 14px;
+  line-height: 20px;
+  max-width: 672px;
+}
+.reference .toolbar {
+  padding: 0;
+  background: transparent;
+}
+.reference .body {
+  flex: none;
+  overflow: visible;
+  padding: 0;
+}
+.analytics .canvas {
+  max-width: var(--ap-content-width, 944px);
+  padding: 48px 32px;
+  gap: var(--ap-content-gap, 40px);
+}
+.fullWidth .canvas {
+  max-width: none;
+}

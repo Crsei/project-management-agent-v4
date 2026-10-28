@@ -1,0 +1,166 @@
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.command {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-muted, var(--muted));
+  font: 12px/18px var(--font-mono), monospace;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.row code {
+  font: 12px/18px var(--font-mono), monospace;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.partial {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--warning, var(--text-secondary));
+}
+
+/* Edit diff */
+.diff {
+  min-width: 0;
+}
+.missing {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+
+/* Search results */
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  min-width: 0;
+}
+.result:hover {
+  background: var(--surface-hover);
+}
+.resultSource {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.resultTitle {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.resultDate {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+/* Todo */
+.todos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.todo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  min-width: 0;
+}
+.todoTitle {
+  overflow-wrap: anywhere;
+}
+.todoBadge {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.todo[data-change="created"] .todoBadge {
+  color: var(--success, var(--text-secondary));
+}
+.todo[data-change="removed"] .todoBadge {
+  color: var(--danger, var(--text-secondary));
+  text-decoration: line-through;
+}
+.todo[data-change="status"] .todoBadge {
+  color: var(--text-secondary);
+}
+
+/* Plan */
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.planTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.planSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.planStep {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+.planStepTitle {
+  overflow-wrap: anywhere;
+}
+
+/* MCP */
+.mcpToolName {
+  font: 12px/18px var(--font-mono), monospace;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}

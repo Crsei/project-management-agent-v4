@@ -1,0 +1,236 @@
+.timeline {
+  min-width: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  --sidebar-width: 320px;
+}
+.actions {
+  min-height: 40px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.scroll {
+  overflow: auto;
+  max-height: 64vh;
+  position: relative;
+  overscroll-behavior: contain;
+}
+.header,
+.row {
+  display: flex;
+  width: calc(var(--sidebar-width) + var(--timeline-width));
+  min-width: 100%;
+}
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  min-height: 44px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+}
+.sidebar {
+  width: var(--sidebar-width);
+  flex: none;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  overflow: hidden;
+}
+.header .sidebar {
+  background: var(--surface-raised);
+}
+.row {
+  min-height: 44px;
+  border-bottom: 1px solid var(--border);
+}
+.row[data-selected="true"] .sidebar {
+  background: var(--selection);
+}
+.row[data-active="true"] .sidebar {
+  box-shadow: inset 2px 0 var(--primary);
+}
+.track {
+  position: relative;
+  flex: 1;
+  min-width: var(--timeline-width);
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc(var(--day-width) - 1px),
+    var(--border) calc(var(--day-width) - 1px),
+    var(--border) var(--day-width)
+  );
+}
+.axis {
+  display: flex;
+  flex: 1;
+}
+.dayTicks > div {
+  flex: none;
+  text-align: center;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+.axis small {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.axis [data-today="true"] {
+  color: var(--primary);
+  font-weight: 600;
+  background: var(--selection);
+}
+.bar {
+  position: absolute;
+  top: 10px;
+  height: 24px;
+  background: var(--selection);
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  display: flex;
+  align-items: stretch;
+  z-index: 1;
+  min-width: 8px;
+  color: var(--foreground);
+}
+.bar[data-single="true"] {
+  border-style: dashed;
+  background: var(--surface-raised);
+}
+.barMain {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.barMain:disabled {
+  cursor: default;
+}
+.barMain[data-draggable="true"] {
+  cursor: grab;
+}
+.barMain:active[data-draggable="true"] {
+  cursor: grabbing;
+}
+.barMain:focus-visible,
+.handle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.handle {
+  width: 8px;
+  flex: none;
+  cursor: ew-resize;
+  color: var(--primary);
+  font-size: 10px;
+}
+.bar[data-clip-start="true"] {
+  border-left-style: dashed;
+}
+.bar[data-clip-end="true"] {
+  border-right-style: dashed;
+}
+.continueStart,
+.continueEnd {
+  font-size: 12px;
+  pointer-events: none;
+}
+.todayLine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--primary);
+  opacity: 0.4;
+  pointer-events: none;
+}
+.missing,
+.invalid {
+  display: block;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.invalid {
+  color: var(--destructive);
+}
+.expanded {
+  position: fixed;
+  inset: 8px;
+  z-index: 35;
+}
+.expanded .scroll {
+  max-height: calc(100dvh - 100px);
+}
+@media (max-width: 640px) {
+  .timeline {
+    --sidebar-width: 260px;
+  }
+}
+@media (pointer: coarse) {
+  .handle {
+    display: none;
+  }
+  .bar {
+    height: 44px;
+    top: 2px;
+  }
+  .row {
+    min-height: 48px;
+  }
+  .barMain {
+    min-width: 44px;
+  }
+  .bar {
+    min-width: 44px;
+  }
+  .sidebar {
+    min-height: 48px;
+  }
+}
+
+.sidebar > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.axis {
+  flex-direction: column;
+}
+.months,
+.dayTicks {
+  display: flex;
+}
+.months span {
+  flex: none;
+  text-align: left;
+  padding: 0 4px;
+  font-size: 11px;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+.months {
+  height: 16px;
+}
+.dayTicks {
+  min-height: 28px;
+}

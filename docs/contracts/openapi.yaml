@@ -5,7 +5,7 @@ info:
   title: Project Management API
   version: 0.1.0
   description: "Phase-one modular backend. Supersedes the historical bootstrap.openapi.yaml contract. Server-side sessions
-    accept either pm_session cookie or Authorization: Bearer; an Authorization header takes precedence. Origin must
+    accept either pm_v3_session cookie or Authorization: Bearer; an Authorization header takes precedence. Origin must
     match configured PUBLIC_ORIGIN, cross-site writes are rejected, and this server does not enable cross-origin browser
     CORS. Disabled execution is not represented as available commands."
 servers:
@@ -3554,6 +3554,847 @@ paths:
                     required:
                       - error
                       - diagnostics
+  /api/v1/agent-contexts:
+    get:
+      operationId: getAgentContexts
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters: []
+      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
+        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
+        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
+        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
+        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
+        or unconfigured directories and never falls back to the repository root. Directory paths are execution
+        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
+        directory may survive a failed database commit.
+      responses:
+        "200":
+          description: Current authorized context or saved directory mapping. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspaces:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        name:
+                          type: string
+                        fileArea:
+                          type: object
+                          properties:
+                            path:
+                              type:
+                                - string
+                                - "null"
+                            status:
+                              type: string
+                              enum:
+                                - available
+                                - unconfigured
+                                - unavailable
+                            revision:
+                              type: integer
+                              minimum: 0
+                              maximum: 9007199254740991
+                            source:
+                              anyOf:
+                                - type: string
+                                  enum:
+                                    - explicit
+                                    - project_location
+                                    - default
+                                - type: "null"
+                            canManage:
+                              type: boolean
+                            reason:
+                              type: string
+                          required:
+                            - path
+                            - status
+                            - revision
+                            - source
+                            - canManage
+                          additionalProperties: false
+                        projects:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                              name:
+                                type: string
+                              fileArea:
+                                type: object
+                                properties:
+                                  path:
+                                    type:
+                                      - string
+                                      - "null"
+                                  status:
+                                    type: string
+                                    enum:
+                                      - available
+                                      - unconfigured
+                                      - unavailable
+                                  revision:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 9007199254740991
+                                  source:
+                                    anyOf:
+                                      - type: string
+                                        enum:
+                                          - explicit
+                                          - project_location
+                                          - default
+                                      - type: "null"
+                                  canManage:
+                                    type: boolean
+                                  reason:
+                                    type: string
+                                required:
+                                  - path
+                                  - status
+                                  - revision
+                                  - source
+                                  - canManage
+                                additionalProperties: false
+                            required:
+                              - id
+                              - name
+                              - fileArea
+                            additionalProperties: false
+                      required:
+                        - id
+                        - name
+                        - fileArea
+                        - projects
+                      additionalProperties: false
+                required:
+                  - workspaces
+                additionalProperties: false
+        "400":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/agent-storage-settings:
+    get:
+      operationId: getAgentStorageSettings
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
+        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
+        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
+        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
+        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
+        or unconfigured directories and never falls back to the repository root. Directory paths are execution
+        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
+        directory may survive a failed database commit.
+      responses:
+        "200":
+          description: Current authorized context or saved directory mapping. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  defaultRoot:
+                    type:
+                      - string
+                      - "null"
+                  effectiveRoot:
+                    type:
+                      - string
+                      - "null"
+                  revision:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  canManage:
+                    type: boolean
+                required:
+                  - defaultRoot
+                  - effectiveRoot
+                  - revision
+                  - canManage
+                additionalProperties: false
+        "400":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: saveAgentStorageSettings
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
+        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
+        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
+        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
+        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
+        or unconfigured directories and never falls back to the repository root. Directory paths are execution
+        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
+        directory may survive a failed database commit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                directory:
+                  oneOf:
+                    - type: object
+                      properties:
+                        mode:
+                          type: string
+                          const: existing
+                        path:
+                          type: string
+                          minLength: 1
+                          maxLength: 4096
+                      required:
+                        - mode
+                        - path
+                      additionalProperties: false
+                    - type: object
+                      properties:
+                        mode:
+                          type: string
+                          const: new
+                        parentPath:
+                          type: string
+                          minLength: 1
+                          maxLength: 4096
+                        folderName:
+                          type: string
+                          minLength: 1
+                          maxLength: 255
+                      required:
+                        - mode
+                        - parentPath
+                        - folderName
+                      additionalProperties: false
+                expectedRevision:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+              required:
+                - directory
+                - expectedRevision
+              additionalProperties: false
+      responses:
+        "200":
+          description: Current authorized context or saved directory mapping. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  defaultRoot:
+                    type:
+                      - string
+                      - "null"
+                  effectiveRoot:
+                    type:
+                      - string
+                      - "null"
+                  revision:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  canManage:
+                    type: boolean
+                required:
+                  - defaultRoot
+                  - effectiveRoot
+                  - revision
+                  - canManage
+                additionalProperties: false
+        "400":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/agent-file-area:
+    put:
+      operationId: saveWorkspaceAgentFileArea
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
+        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
+        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
+        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
+        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
+        or unconfigured directories and never falls back to the repository root. Directory paths are execution
+        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
+        directory may survive a failed database commit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                directory:
+                  oneOf:
+                    - type: object
+                      properties:
+                        mode:
+                          type: string
+                          const: existing
+                        path:
+                          type: string
+                          minLength: 1
+                          maxLength: 4096
+                      required:
+                        - mode
+                        - path
+                      additionalProperties: false
+                    - type: object
+                      properties:
+                        mode:
+                          type: string
+                          const: new
+                        parentPath:
+                          type: string
+                          minLength: 1
+                          maxLength: 4096
+                        folderName:
+                          type: string
+                          minLength: 1
+                          maxLength: 255
+                      required:
+                        - mode
+                        - parentPath
+                        - folderName
+                      additionalProperties: false
+                expectedRevision:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+              required:
+                - directory
+                - expectedRevision
+              additionalProperties: false
+      responses:
+        "200":
+          description: Current authorized context or saved directory mapping. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fileArea:
+                    type: object
+                    properties:
+                      path:
+                        type:
+                          - string
+                          - "null"
+                      status:
+                        type: string
+                        enum:
+                          - available
+                          - unconfigured
+                          - unavailable
+                      revision:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      source:
+                        anyOf:
+                          - type: string
+                            enum:
+                              - explicit
+                              - project_location
+                              - default
+                          - type: "null"
+                      canManage:
+                        type: boolean
+                      reason:
+                        type: string
+                    required:
+                      - path
+                      - status
+                      - revision
+                      - source
+                      - canManage
+                    additionalProperties: false
+                required:
+                  - fileArea
+                additionalProperties: false
+        "400":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/projects/{projectId}/agent-file-area:
+    put:
+      operationId: saveProjectAgentFileArea
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^PRJ-\d+$
+      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
+        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
+        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
+        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
+        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
+        or unconfigured directories and never falls back to the repository root. Directory paths are execution
+        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
+        directory may survive a failed database commit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                directory:
+                  oneOf:
+                    - type: object
+                      properties:
+                        mode:
+                          type: string
+                          const: existing
+                        path:
+                          type: string
+                          minLength: 1
+                          maxLength: 4096
+                      required:
+                        - mode
+                        - path
+                      additionalProperties: false
+                    - type: object
+                      properties:
+                        mode:
+                          type: string
+                          const: new
+                        parentPath:
+                          type: string
+                          minLength: 1
+                          maxLength: 4096
+                        folderName:
+                          type: string
+                          minLength: 1
+                          maxLength: 255
+                      required:
+                        - mode
+                        - parentPath
+                        - folderName
+                      additionalProperties: false
+                expectedRevision:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+              required:
+                - directory
+                - expectedRevision
+              additionalProperties: false
+      responses:
+        "200":
+          description: Current authorized context or saved directory mapping. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fileArea:
+                    type: object
+                    properties:
+                      path:
+                        type:
+                          - string
+                          - "null"
+                      status:
+                        type: string
+                        enum:
+                          - available
+                          - unconfigured
+                          - unavailable
+                      revision:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      source:
+                        anyOf:
+                          - type: string
+                            enum:
+                              - explicit
+                              - project_location
+                              - default
+                          - type: "null"
+                      canManage:
+                        type: boolean
+                      reason:
+                        type: string
+                    required:
+                      - path
+                      - status
+                      - revision
+                      - source
+                      - canManage
+                    additionalProperties: false
+                required:
+                  - fileArea
+                additionalProperties: false
+        "400":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/agent-contexts/resolve:
+    post:
+      operationId: resolveAgentContext
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters: []
+      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
+        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
+        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
+        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
+        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
+        or unconfigured directories and never falls back to the repository root. Directory paths are execution
+        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
+        directory may survive a failed database commit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                workspaceId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                projectId:
+                  anyOf:
+                    - type: string
+                      pattern: ^PRJ-\d+$
+                    - type: "null"
+              required:
+                - workspaceId
+                - projectId
+              additionalProperties: false
+      responses:
+        "200":
+          description: Current authorized context or saved directory mapping. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scope:
+                    type: object
+                    properties:
+                      workspaceId:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      projectId:
+                        anyOf:
+                          - type: string
+                            pattern: ^PRJ-\d+$
+                          - type: "null"
+                    required:
+                      - workspaceId
+                      - projectId
+                    additionalProperties: false
+                  workspaceName:
+                    type: string
+                  projectName:
+                    type:
+                      - string
+                      - "null"
+                  path:
+                    type: string
+                required:
+                  - scope
+                  - workspaceName
+                  - projectName
+                  - path
+                additionalProperties: false
+        "400":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
+            details.currentRevision. Preserve unsaved input; re-read before any retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/workspaces/{workspaceId}/automations/capabilities:
     get:
       operationId: getAutomationCapabilities
@@ -6477,7 +7318,7 @@ paths:
                 additionalProperties: false
           headers:
             Set-Cookie:
-              description: pm_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.
+              description: pm_v3_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.
               schema:
                 type: string
         "400":
@@ -6517,7 +7358,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/v1/auth/logout:
     post:
-      summary: Revoke the current session and clear pm_session
+      summary: Revoke the current session and clear pm_v3_session
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -24712,7 +25553,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: pm_session
+      name: pm_v3_session
     bearerAuth:
       type: http
       scheme: bearer

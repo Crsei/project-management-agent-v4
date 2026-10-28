@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { homedir } from 'node:os';
 import { constants, closeSync, fstatSync, openSync, readFileSync } from 'node:fs';
 import type { LocalProjectConfiguration } from '../../application/src/local-projects.ts';
 
@@ -35,6 +36,7 @@ export function runtimeConfig(env: NodeJS.ProcessEnv = process.env) {
   return {
     databaseUrl: env.DATABASE_URL,
     coreWorkspaceRoot: localProjects.coreRoot,
+    chatSpaceRoot: env.PM_CHAT_SPACE_ROOT ?? path.join(homedir(), '.pmv3'),
     localProjects,
     publicOrigin: env.PUBLIC_ORIGIN ?? `http://${env.HOST ?? '127.0.0.1'}:${env.PORT ?? '4100'}`,
     cookieSecure: env.COOKIE_SECURE === 'true',

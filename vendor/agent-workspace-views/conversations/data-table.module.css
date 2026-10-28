@@ -1,0 +1,101 @@
+.viewport {
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.viewport:focus-visible,
+.table tr:focus-visible,
+.resizer:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.table {
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--foreground);
+}
+.table caption {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  background: var(--background);
+}
+.table th,
+.table td {
+  position: relative;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.table thead th {
+  background: var(--muted);
+  font-weight: 500;
+  vertical-align: middle;
+}
+.table tbody th {
+  font-weight: 500;
+}
+.table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.table tbody tr[data-selected],
+.table tbody tr[data-active] {
+  background: color-mix(in srgb, var(--primary) 8%, var(--background));
+}
+.table tbody tr[data-active] > :first-child {
+  box-shadow: inset 2px 0 var(--primary);
+}
+.table tbody tr[tabindex]:hover {
+  background: var(--muted);
+}
+.header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  padding-right: 4px;
+}
+.header > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.table .selection {
+  width: 44px;
+  padding: 10px 12px;
+  vertical-align: middle;
+}
+.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.resizer:hover,
+.resizer[data-resizing],
+.resizer:focus-visible {
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
+}
+.table .empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--muted-foreground);
+}

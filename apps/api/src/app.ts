@@ -1,5 +1,6 @@
 import { lstatSync, mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import Fastify from 'fastify';
 import type { FastifyRequest } from 'fastify';
@@ -54,6 +55,7 @@ import { registerWebhookRoutes } from './webhook-routes.ts';
 import { registerArtifactFilesRoutes } from './artifact-files-routes.ts';
 import { registerAgentChatRoutes } from './agent-chat-routes.ts';
 import { registerAutomationRoutes } from './automation-routes.ts';
+import { registerAgentFileAreaRoutes } from './agent-file-area-routes.ts';
 import type { AgentChatConfiguration } from '../../../packages/infrastructure/src/agent-chat-config.ts';
 import { createAgentChatTools } from './agent-chat-tools.ts';
 import { createAgentChatAccessService } from '../../../packages/application/src/agent-chat-access.ts';
@@ -80,10 +82,14 @@ const kinds = ['project', 'work_item', 'milestone', 'conversation', 'intent', 'd
 const uuid = z.uuid().toLowerCase();
 const commandSchema = z.strictObject({ commandId: uuid, commandType: z.string().min(1).max(120), targetId: z.string().min(1).max(80).optional(), projectId: z.string().min(1).max(80).optional(), expectedVersions: z.record(z.string().min(1).max(80), z.number().int().positive()).optional(), payload: z.record(z.string(), z.unknown()) });
 
-export function buildApp(options: { logger?: boolean; databaseUrl?: string; blobStore?: BlobStorageProvider; blobStorageLocator?: BlobStorageLocator | null; coreWorkspaceRoot?: string; localProjects?: Omit<LocalProjectConfiguration, 'coreRoot'> & { coreRoot?: string }; publicOrigin?: string; cookieSecure?: boolean; invitationMail?: InvitationMailConfig; accountRecoveryMail?: AccountRecoveryMailConfig; webhooks?: WebhookConfig; agentChat?: AgentChatConfiguration | null } = {}) {
+export function buildApp(options: { logger?: boolean; databaseUrl?: string; blobStore?: BlobStorageProvider; blobStorageLocator?: BlobStorageLocator | null; coreWorkspaceRoot?: string; chatSpaceRoot?: string; localProjects?: Omit<LocalProjectConfiguration, 'coreRoot'> & { coreRoot?: string }; publicOrigin?: string; cookieSecure?: boolean; invitationMail?: InvitationMailConfig; accountRecoveryMail?: AccountRecoveryMailConfig; webhooks?: WebhookConfig; agentChat?: AgentChatConfiguration | null; signal?: AbortSignal } = {}) {
   if ((options.blobStore === undefined) !== (options.blobStorageLocator === undefined)) throw new Error('Blob provider and locator must be supplied together');
   // Bound receiving a request, not durable work after its body has arrived.
   // A socket idle timer otherwise cuts off valid slow commits as unknown.
+  // onReady recovers up to four real workspaces, including fsync and watcher
+  // initialization. HDD recovery exceeded Fastify's 10s default in regression.
+  // Fastify uses pluginTimeout for these hooks too: each startup phase gets
+  // 60s, separately from HTTP/request deadlines. Never return ready mid-recovery.
   const app = Fastify({ logger: options.logger ? {
     level: 'info',
     redact: ['req.headers.authorization', 'req.headers.cookie', 'req.body'],
@@ -92,7 +98,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
         return { method: request.method, url: request.routeOptions?.url ?? '[unmatched]' };
       },
     },
-  } : false, bodyLimit: 12 * 1024 * 1024, connectionTimeout: 0, requestTimeout: 120_000, routerOptions: { maxParamLength: 8192 } });
+  } : false, bodyLimit: 12 * 1024 * 1024, connectionTimeout: 0, requestTimeout: 120_000, pluginTimeout: options.databaseUrl ? 60_000 : 10_000, routerOptions: { maxParamLength: 8192 } });
   const pool = options.databaseUrl ? createPool(options.databaseUrl) : undefined;
   const blobProvider = options.blobStore ?? createBlobStore({ provider: 'disabled' });
   // Commands already hold a business connection while reading/writing bytes.
@@ -109,20 +115,33 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     return coreWorkspaces.rootFor(workspaceId);
   });
   const controller = new AbortController();
+  const abort = () => controller.abort(options.signal?.reason);
+  options.signal?.addEventListener('abort', abort, { once: true });
+  if (options.signal?.aborted) abort();
+  let startupWork: Promise<void> | undefined;
   let importWork: Promise<void> | undefined;
   const registry = createRegistry(blobs, options.invitationMail, validateInvitationProjects, options.webhooks);
   const cookieOptions = { path: '/', httpOnly: true, sameSite: 'strict' as const, secure: options.cookieSecure ?? false };
   void app.register(cookie);
   app.addHook('onReady', async () => {
-    if (!pool) return;
-    if (options.blobStorageLocator) {
-      try { await blobs.init(); }
-      catch { app.log.error({ code: 'blob_storage_unavailable' }, 'Storage is not ready'); }
-    }
-    if (coreWorkspaces) {
+    startupWork = (async () => {
+      controller.signal.throwIfAborted();
+      if (pool && options.blobStorageLocator) {
+        try { await blobs.init(); }
+        catch { app.log.error({ code: 'blob_storage_unavailable' }, 'Storage is not ready'); }
+      }
+      controller.signal.throwIfAborted();
+    })();
+    await startupWork;
+  });
+  app.addHook('onReady', async () => {
+    startupWork = (async () => {
+      controller.signal.throwIfAborted();
+      if (!pool || !coreWorkspaces) return;
       const importer = new CoreFactImporter(pool, coreWorkspaces);
       try { await importer.runBatch(100); }
       catch { app.log.error({ code: 'core_fact_import_unavailable' }, 'Core facts are not current'); }
+      controller.signal.throwIfAborted();
       importWork = (async () => {
         while (!controller.signal.aborted) {
           await delay(2000, undefined, { signal: controller.signal }).catch(() => undefined);
@@ -131,10 +150,15 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
           catch { app.log.error({ code: 'core_fact_import_unavailable' }, 'Core facts are not current'); }
         }
       })();
-    }
+    })();
+    await startupWork;
   });
   app.addHook('onClose', async () => {
     controller.abort();
+    options.signal?.removeEventListener('abort', abort);
+    // A hook timeout does not cancel its Promise. Join late initialization before
+    // closing the workspace pool, or its late watcher/loop could escape cleanup.
+    await startupWork?.catch(() => undefined);
     await importWork;
     try { await coreWorkspaces?.close(); }
     finally {
@@ -146,7 +170,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     }
   });
   app.addHook('onRequest', async (request) => {
-    if (request.headers.origin && request.headers.origin !== (options.publicOrigin ?? 'http://127.0.0.1:4100')) throw new DomainError('origin_forbidden', 'Request origin is not allowed', 403);
+    if (request.headers.origin && request.headers.origin !== (options.publicOrigin ?? 'http://127.0.0.1:4193')) throw new DomainError('origin_forbidden', 'Request origin is not allowed', 403);
     if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && request.headers['sec-fetch-site'] === 'cross-site') throw new DomainError('origin_forbidden', 'Cross-site writes are not allowed', 403);
   });
   app.setErrorHandler((error, request, reply) => {
@@ -166,8 +190,8 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
       if (!request.headers.authorization.startsWith('Bearer ')) throw new DomainError('unauthenticated', undefined, 401);
       return request.headers.authorization.slice(7);
     }
-    if (!request.cookies.pm_session) throw new DomainError('unauthenticated', undefined, 401);
-    return request.cookies.pm_session;
+    if (!request.cookies.pm_v3_session) throw new DomainError('unauthenticated', undefined, 401);
+    return request.cookies.pm_v3_session;
   }
   async function actor(request: FastifyRequest) { return authenticate(database(), token(request)); }
   function params(request: FastifyRequest) { return z.object({ workspaceId: uuid, id: z.string().min(1).max(80).optional(), commandId: uuid.optional() }).parse(request.params); }
@@ -307,10 +331,10 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     reply.header('Cache-Control', 'no-store');
     const body = z.strictObject({ email: z.string().max(254), password: z.string().max(256) }).parse(request.body);
     const session = await login(database(), body, { sourceIp: request.ip });
-    reply.setCookie('pm_session', session.token, { ...cookieOptions, expires: new Date(session.expiresAt) });
+    reply.setCookie('pm_v3_session', session.token, { ...cookieOptions, expires: new Date(session.expiresAt) });
     return { actor: session.actor, expiresAt: session.expiresAt };
   });
-  app.post('/api/v1/auth/logout', async (request, reply) => { reply.header('Cache-Control', 'no-store'); await actor(request); await logout(database(), token(request)); reply.clearCookie('pm_session', cookieOptions); return { loggedOut: true }; });
+  app.post('/api/v1/auth/logout', async (request, reply) => { reply.header('Cache-Control', 'no-store'); await actor(request); await logout(database(), token(request)); reply.clearCookie('pm_v3_session', cookieOptions); return { loggedOut: true }; });
   app.get('/api/v1/auth/me', async (request, reply) => { reply.header('Cache-Control', 'no-store'); return { actor: await actor(request) }; });
   registerAccountSecurityRoutes(app, { database, token });
   registerAccountRecoveryRoutes(app, { database, token, ...(options.accountRecoveryMail ? { mailConfig: options.accountRecoveryMail } : {}) });
@@ -536,6 +560,10 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     return readChanges(database(), await actor(request), params(request).workspaceId, query.after, query.projectId);
   });
   registerEventStream(app, database, actor);
+  registerAgentFileAreaRoutes(app, { database, actor, config: { ...localProjects, chatSpaceRoot: options.chatSpaceRoot ?? path.join(homedir(), '.pmv3') }, workspace: async workspaceId => {
+    if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'Configure DATABASE_URL and migrate the database', 503);
+    return coreWorkspaces.get(workspaceId);
+  } });
   // The Markdown core is authoritative for its objects; PM-only modules keep their own storage.
   if (coreWorkspaces) registerCoreRoutes(app, { database, actor, pool: coreWorkspaces, localProjects, bindLocalProject,
     checkLocalProject: mount => checkProjectBlobStorage(storagePool ?? database(), mount),

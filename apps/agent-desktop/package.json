@@ -1,0 +1,23 @@
+{
+  "name": "@agent-workspace/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Secure Electron host for the Agent Workspace Web and local Server",
+  "type": "module",
+  "main": "dist/main.mjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "runtime:install": "node scripts/ensure-electron.mjs",
+    "start": "node scripts/launch.mjs",
+    "dev": "pnpm run build && pnpm run start",
+    "package": "node scripts/package.mjs",
+    "test": "node --test src/policy.test.mjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.0.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

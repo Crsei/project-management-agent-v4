@@ -1,0 +1,721 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 24px;
+  width: 100%;
+}
+
+.card {
+  min-width: 0;
+  overflow: clip;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--background);
+  scroll-margin-top: 140px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px;
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.index {
+  font: 12px monospace;
+  color: var(--muted-foreground);
+  align-self: flex-start;
+  padding-top: 4px;
+}
+.cardTitle h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+.cardTitle p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.reset {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--background);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.reset:hover {
+  color: var(--primary);
+  background: var(--muted);
+}
+.reset:focus-visible,
+.viewport:focus-visible,
+.snapControls button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -3px;
+}
+
+.viewport {
+  position: relative;
+  height: 300px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 40%, transparent)
+    transparent;
+  border-block: 1px solid var(--border);
+}
+
+.cardFooter {
+  padding: 20px 24px 22px;
+}
+.cardFooter > p {
+  margin: 0 0 14px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--muted-foreground);
+}
+.technique {
+  display: inline-block;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font: 10px/1.5 monospace;
+}
+.micro {
+  font: 9px/1.6 monospace;
+  letter-spacing: 1px;
+}
+.eyebrow {
+  font: 9px/1.6 monospace;
+  letter-spacing: 1.5px;
+}
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  opacity: 0.75;
+}
+.endNote {
+  padding: 24px 0;
+  text-align: center;
+  font: 10px/1.8 monospace;
+  color: var(--muted-foreground);
+}
+
+.revealViewport {
+  background: color-mix(in srgb, var(--success) 5%, var(--background));
+}
+.revealIntro {
+  padding: 34px 28px 24px;
+}
+.revealIntro .eyebrow {
+  color: var(--success);
+}
+.revealIntro h3 {
+  margin: 16px 0 18px;
+  font-size: 23px;
+  font-weight: 500;
+  letter-spacing: -1px;
+}
+.revealList {
+  display: grid;
+  gap: 18px;
+  padding: 0 24px 12px;
+}
+.revealItem {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-height: 145px;
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--success) 15%, var(--border));
+  border-radius: 12px;
+  background: var(--background);
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 700ms ease,
+    transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.revealViewport[data-motion="ready"] .revealItem[data-visible="false"] {
+  opacity: 0;
+  transform: translateY(28px);
+}
+.revealMark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--success) 8%, var(--background));
+  color: var(--success);
+  font-size: 42px;
+  line-height: 1;
+}
+.revealItem .micro {
+  color: var(--muted-foreground);
+}
+.revealItem h4 {
+  margin: 8px 0 5px;
+  font-size: 17px;
+  font-weight: 500;
+}
+.revealItem p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--muted-foreground);
+}
+
+.readingViewport {
+  background: var(--background);
+}
+.readingToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 39px;
+  padding: 0 24px;
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+}
+.readingToolbar > .micro {
+  color: var(--muted-foreground);
+}
+.readingPercent {
+  font: 10px monospace;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+.progressTrack {
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 3px;
+  background: var(--muted);
+}
+.progressFill {
+  height: 100%;
+  width: 100%;
+  background: var(--primary);
+  transform-origin: left;
+}
+.readingArticle {
+  padding: 30px 32px 0;
+}
+.readingArticle > .eyebrow {
+  color: var(--primary);
+}
+.readingArticle h3 {
+  margin: 15px 0;
+  font-size: 31px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -1.5px;
+}
+.readingLead {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  line-height: 1.9;
+}
+.readingArt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 200px;
+  overflow: hidden;
+  margin: 24px 0 28px;
+  padding: 24px;
+  border-radius: 8px;
+  background: #e7e1f5;
+  color: #4a3874;
+}
+.readingArt > span {
+  z-index: 1;
+  font:
+    36px/0.95 Georgia,
+    serif;
+  letter-spacing: -1px;
+}
+.readingArt i {
+  font-weight: 400;
+}
+.readingArt > div {
+  position: absolute;
+  right: 10%;
+  width: 130px;
+  height: 190px;
+  border: 28px solid #a99ac7;
+  border-radius: 90px;
+  transform: rotate(30deg);
+}
+.readingArticle section {
+  padding: 10px 0 16px;
+}
+.readingArticle h4 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.readingArticle section p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 2.1;
+  color: var(--muted-foreground);
+}
+
+.parallaxViewport {
+  background: #dde9e6;
+}
+.parallaxScene {
+  position: relative;
+  min-height: 800px;
+  overflow: clip;
+}
+.parallaxBackground {
+  position: absolute;
+  inset: -100px 0;
+  background: linear-gradient(180deg, #d9e7eb, #e5ece4 46%, #9cae99);
+  will-change: transform;
+}
+.sun {
+  position: absolute;
+  top: 150px;
+  right: 18%;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: #f6dfaa;
+  box-shadow: 0 0 80px #f6dfaa70;
+}
+.mountainBack,
+.mountainFront {
+  position: absolute;
+  display: block;
+  inset: 220px -20% -20%;
+  background: #8ca79c;
+  clip-path: polygon(
+    0 26%,
+    14% 13%,
+    28% 23%,
+    50% 0,
+    69% 22%,
+    80% 12%,
+    100% 24%,
+    100% 100%,
+    0 100%
+  );
+}
+.mountainFront {
+  inset: 340px -15% -20%;
+  background: linear-gradient(180deg, #597f73, #345d50);
+  clip-path: polygon(
+    0 19%,
+    22% 0,
+    38% 13%,
+    64% 5%,
+    77% 25%,
+    100% 10%,
+    100% 100%,
+    0 100%
+  );
+}
+.parallaxForeground {
+  position: relative;
+  z-index: 1;
+  padding: 55px 32px 45px;
+  color: #254c42;
+}
+.landscapeLabel {
+  font: 9px monospace;
+  letter-spacing: 2px;
+}
+.parallaxForeground > h3 {
+  margin: 24px 0 25px;
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -2px;
+}
+.landscapeNote {
+  margin-top: 245px;
+  padding: 24px;
+  border: 1px solid #ffffff40;
+  border-radius: 12px;
+  background: #f0f3eae8;
+  color: #254c42;
+}
+.landscapeNote h4 {
+  margin: 14px 0;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -1px;
+}
+.landscapeNote p {
+  font-size: 12px;
+  line-height: 1.9;
+}
+.speedBadge {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 5px 8px;
+  border: 1px solid #254c4230;
+  border-radius: 4px;
+  font: 10px/1.6 monospace;
+}
+
+.contactsViewport {
+  background: var(--background);
+}
+.contactsIntro {
+  padding: 24px;
+}
+.contactsIntro .micro {
+  color: var(--muted-foreground);
+}
+.contactsIntro h3 {
+  margin: 12px 0 6px;
+  font-size: 20px;
+  font-weight: 500;
+}
+.contactsIntro p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.contactGroup {
+  position: relative;
+}
+.stickyLetter {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  margin: 0;
+  padding: 0 24px;
+  border-block: 1px solid var(--border);
+  background: var(--muted);
+}
+.stickyLetter > span:first-child {
+  font: 14px monospace;
+  color: var(--primary);
+}
+.stickyLetter > span:last-child {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.contact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 69px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 9%, var(--background));
+  color: var(--primary);
+  font-size: 12px;
+}
+.avatar[data-color="1"] {
+  background: color-mix(in srgb, var(--success) 9%, var(--background));
+  color: var(--success);
+}
+.avatar[data-color="2"] {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.contact p {
+  margin: 0;
+  font-size: 12px;
+}
+.contact div > span {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.contactDot {
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.snapDemo {
+  position: relative;
+}
+.snapViewport {
+  scroll-snap-type: y mandatory;
+}
+.snapSlide {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  min-height: 100%;
+  padding: 22px 28px 48px;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+}
+.snapSlide[data-tone="peach"],
+.horizontalCard[data-tone="peach"] {
+  background: #f5e3d5;
+  color: #704631;
+}
+.snapSlide[data-tone="sage"],
+.horizontalCard[data-tone="sage"] {
+  background: #e0e9db;
+  color: #3c5a40;
+}
+.snapSlide[data-tone="lilac"],
+.horizontalCard[data-tone="lilac"] {
+  background: #e5dff2;
+  color: #52416f;
+}
+.horizontalCard[data-tone="blue"] {
+  background: #dbe6f0;
+  color: #3c546f;
+}
+.snapNumber {
+  font: 10px monospace;
+  letter-spacing: 1px;
+  opacity: 0.8;
+}
+.snapMark {
+  position: absolute;
+  top: -25px;
+  right: 22px;
+  font:
+    175px/1.2 Georgia,
+    serif;
+  opacity: 0.17;
+}
+.snapWord {
+  position: relative;
+  font-size: clamp(24px, 5vw, 38px);
+  font-weight: 600;
+  letter-spacing: -1.5px;
+}
+.snapSlide h3 {
+  margin: 6px 0 7px;
+  font-size: 16px;
+  font-weight: 500;
+}
+.snapSlide p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.snapControls {
+  position: absolute;
+  inset: auto 24px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.snapControls button {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid #00000020;
+  border-radius: 50%;
+  background: #ffffff55;
+  color: #493f42;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.snapControls button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.snapDots {
+  display: flex;
+  gap: 5px;
+}
+.snapDots button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+}
+.snapDots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #493f4250;
+}
+.snapDots button[aria-pressed="true"] span {
+  width: 14px;
+  border-radius: 5px;
+  background: #493f42;
+}
+
+.horizontalViewport {
+  background: #262530;
+  color: #f4f1fb;
+}
+.horizontalRunway {
+  position: relative;
+}
+.horizontalSticky {
+  position: sticky;
+  top: 0;
+  height: 298px;
+  overflow: hidden;
+}
+.horizontalLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 22px 24px 18px;
+  color: #b8b3c6;
+}
+.horizontalLabel > span:last-child {
+  flex-shrink: 0;
+  font-size: 10px;
+}
+.horizontalTrack {
+  display: flex;
+  gap: 14px;
+  width: max-content;
+  padding: 0 24px;
+  will-change: transform;
+}
+.horizontalCard {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 208px;
+  height: 221px;
+  padding: 20px;
+  border-radius: 9px;
+}
+.horizontalMark {
+  align-self: center;
+  font:
+    72px/1 Georgia,
+    serif;
+}
+.horizontalCard h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 19px;
+  font-weight: 500;
+}
+.horizontalCard p {
+  margin: 6px 0 0;
+  font-size: 10px;
+  opacity: 0.75;
+}
+.horizontalViewport[data-reduced-motion="true"] {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.horizontalViewport[data-reduced-motion="true"] .horizontalSticky {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+  overflow: visible;
+}
+
+@media (max-width: 480px) {
+  .cardHeader {
+    padding: 20px;
+  }
+  .cardTitle h2 {
+    font-size: 15px;
+  }
+  .cardFooter {
+    padding: 18px 20px 20px;
+  }
+  .revealIntro {
+    padding-inline: 22px;
+  }
+  .revealIntro h3 {
+    font-size: 21px;
+  }
+  .revealList {
+    padding-inline: 18px;
+  }
+  .revealItem {
+    padding: 18px;
+    gap: 16px;
+  }
+  .revealMark {
+    width: 48px;
+    height: 48px;
+    font-size: 32px;
+    border-radius: 12px;
+  }
+  .readingArticle {
+    padding-inline: 24px;
+  }
+  .parallaxForeground {
+    padding-inline: 24px;
+  }
+  .landscapeNote {
+    padding: 20px;
+  }
+  .landscapeNote h4 {
+    font-size: 18px;
+  }
+  .horizontalLabel {
+    padding-inline: 18px;
+  }
+  .horizontalLabel .micro {
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revealViewport[data-motion="ready"] .revealItem[data-visible="false"] {
+    opacity: 1;
+    transform: none;
+  }
+  .revealItem {
+    transition: none;
+  }
+  .parallaxBackground,
+  .horizontalTrack {
+    will-change: auto;
+  }
+}

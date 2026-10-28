@@ -1,0 +1,26 @@
+.native-timeline { display: flex; flex-direction: column; gap: .65rem; min-width: 0; }
+.native-answer { min-width: 0; overflow-wrap: anywhere; }
+.native-output-card { border: 1px solid var(--color-border, #d7dbe0); border-radius: .65rem; padding: .55rem .7rem; min-width: 0; content-visibility: auto; contain-intrinsic-size: auto 64px; font-size: .8rem; }
+.native-output-card header { display: flex; gap: .5rem; align-items: baseline; justify-content: space-between; }
+.native-output-card header button { background: transparent; border: 0; padding: 0; text-align: left; font-weight: 600; cursor: pointer; min-width: 0; overflow-wrap: anywhere; }
+.native-status { flex: none; color: var(--color-muted-foreground, #69717c); font-size: .72rem; }
+.native-card-body { margin-top: .55rem; min-width: 0; overflow-wrap: anywhere; }
+.native-card-body pre { max-height: 22rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: color-mix(in srgb, currentColor 5%, transparent); border-radius: .35rem; padding: .55rem; }
+.native-card-body ul, .native-card-body ol { padding-inline-start: 1.25rem; }
+.native-card-body a { text-decoration: underline; }
+.native-card-body small { color: var(--color-muted-foreground, #69717c); }
+.native-error, .native-error p { color: var(--color-destructive, #c33232); }
+.native-diff .addition { background: rgba(30, 150, 70, .17); }
+.native-diff .deletion { background: rgba(210, 65, 65, .17); }
+.native-before-after { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: .5rem; }
+.native-command-output { background: #17191d; color: #e9edf3; border-radius: .35rem; padding: .5rem; min-width: 0; }
+.native-command-output .xterm { width: 100%; }
+.native-command-output button, .native-interaction button { border: 1px solid currentColor; border-radius: .3rem; padding: .25rem .55rem; margin: .3rem .4rem .1rem 0; cursor: pointer; }
+.native-interaction button:disabled { opacity: .5; cursor: not-allowed; }
+.native-interaction fieldset { border: 0; padding: .4rem 0; }
+.native-interaction legend { font-weight: 600; }
+.native-option { display: flex; align-items: flex-start; gap: .35rem; margin: .3rem 0; }
+.native-option small { display: block; }
+.native-text-input { width: 100%; border: 1px solid var(--color-border, #aaa); border-radius: .3rem; padding: .4rem; }
+.native-generation-status { color: var(--color-muted-foreground, #69717c); font-size: .72rem; }
+@media (max-width: 420px) { .native-output-card { padding: .5rem; } .native-output-card header { flex-wrap: wrap; } }

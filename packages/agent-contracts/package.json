@@ -1,0 +1,79 @@
+{
+  "name": "@agent-workspace/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    "./usage": {
+      "types": "./dist/usage.d.ts",
+      "development": "./src/usage.ts",
+      "default": "./dist/usage.js"
+    },
+    "./output": {
+      "types": "./dist/output.d.ts",
+      "development": "./src/output.ts",
+      "default": "./dist/output.js"
+    },
+    "./terminal-output": {
+      "types": "./dist/terminal-output.d.ts",
+      "development": "./src/terminal-output.ts",
+      "default": "./dist/terminal-output.js"
+    },
+    "./settings": {
+      "types": "./dist/settings.d.ts",
+      "development": "./src/settings.ts",
+      "default": "./dist/settings.js"
+    },
+    "./diagnostics": {
+      "types": "./dist/diagnostics.d.ts",
+      "development": "./src/diagnostics.ts",
+      "default": "./dist/diagnostics.js"
+    },
+    "./workspace": {
+      "types": "./dist/workspace.d.ts",
+      "development": "./src/workspace.ts",
+      "default": "./dist/workspace.js"
+    },
+    "./durable": {
+      "types": "./dist/durable.d.ts",
+      "development": "./src/durable.ts",
+      "default": "./dist/durable.js"
+    },
+    "./provider": {
+      "types": "./dist/provider.d.ts",
+      "development": "./src/provider.ts",
+      "default": "./dist/provider.js"
+    },
+    "./automation": {
+      "types": "./dist/automation.d.ts",
+      "development": "./src/automation.ts",
+      "default": "./dist/automation.js"
+    },
+    "./inspector": {
+      "types": "./dist/inspector.d.ts",
+      "development": "./src/inspector.ts",
+      "default": "./dist/inspector.js"
+    },
+    "./chat": {
+      "types": "./dist/chat.d.ts",
+      "development": "./src/chat.ts",
+      "default": "./dist/chat.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

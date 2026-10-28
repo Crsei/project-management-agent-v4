@@ -37,8 +37,8 @@ function postgresEnvironment(databaseUrl: string): NodeJS.ProcessEnv {
   });
 }
 
-it('LP-A08: stopped real SQL/core/project/blob backup restores into entirely new roots, with source roots hidden and historical references intact', { timeout: 300_000 }, async () => {
-  const f = await createLocalProjectFixture();
+it('LP-A08: stopped real SQL/core/project/blob backup restores into entirely new roots, with source roots hidden and historical references intact', { timeout: 300_000 }, async t => {
+  const f = await createLocalProjectFixture({ signal: t.signal });
   const restoreDatabase = `test_local_restore_${randomUUID().replaceAll('-', '')}`;
   const adminUrl = new URL(f.databaseUrl); adminUrl.searchParams.delete('options');
   const admin = createPool(adminUrl.toString());

@@ -1,0 +1,44 @@
+/* Usage presentation adapted from t3code UsagePage. Copyright (c) 2026 T3 Tools Inc. MIT; see LICENSE.t3code. */
+.usage-page { box-sizing: border-box; min-height: 100vh; padding: 28px clamp(16px, 4vw, 48px) 48px; color: var(--foreground); background: var(--surface, var(--background)); overflow-wrap: anywhere; }
+.usage-page *, .usage-page *::before, .usage-page *::after { box-sizing: border-box; }
+.usage-page h1 { font-size: 28px; margin: 8px 0 2px; }
+.usage-page h2 { font-size: 18px; margin: 0 0 12px; }
+.usage-page h3 { font-size: 15px; margin: 12px 0; }
+.usage-page p { margin: 8px 0; }
+.usage-page a { color: var(--ring, #4778d5); text-decoration: underline; text-underline-offset: 2px; }
+.usage-page button, .usage-page select { font: inherit; color: inherit; background: var(--surface-raised, var(--background)); border: 1px solid var(--border); border-radius: 7px; min-height: 36px; padding: 6px 11px; }
+.usage-page button { cursor: pointer; }
+.usage-page button:disabled { opacity: .55; cursor: not-allowed; }
+.usage-page :is(button, select, a):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.usage-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.usage-header p, .usage-muted, .usage-shortcuts { color: var(--text-muted, var(--muted-foreground)); font-size: 13px; }
+.usage-toolbar, .usage-periods, .usage-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.usage-toolbar label { display: flex; align-items: center; gap: 8px; }
+.usage-tabs { display: flex; gap: 4px; margin-right: auto; }
+.usage-tabs button[aria-selected="true"], .usage-periods button[aria-pressed="true"] { border-color: var(--ring); background: var(--selection, var(--surface-hover)); font-weight: 700; }
+.usage-periods { margin: 18px 0; }
+.usage-panel, .usage-hero { border: 1px solid var(--border); background: var(--surface-raised, var(--background)); border-radius: 10px; margin: 16px 0; padding: 18px; min-width: 0; }
+.usage-hero, .usage-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
+.usage-hero span, .usage-stat-grid span { display: block; font-size: 13px; color: var(--text-muted, var(--muted-foreground)); }
+.usage-hero strong { display: block; font-size: 26px; overflow-wrap: anywhere; }
+.usage-stat-grid strong { display: block; margin-top: 4px; }
+.usage-updating .usage-hero strong { opacity: .65; }
+.usage-notice { padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px; overflow-wrap: anywhere; }
+.usage-table-wrap { overflow-x: auto; max-width: 100%; }
+.usage-page table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.usage-page th, .usage-page td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; white-space: nowrap; }
+.usage-page th { font-weight: 600; }
+.usage-page .usage-text-button { min-height: 0; padding: 0; border: 0; color: var(--ring, #4778d5); background: none; text-decoration: underline; text-align: left; }
+.usage-rows, .usage-account-list { list-style: none; margin: 0; padding: 0; }
+.usage-rows li, .usage-account-list > li { display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 5px 16px; padding: 10px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.usage-rows li span:last-child { color: var(--text-muted, var(--muted-foreground)); }
+.usage-pool-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.usage-pool { border: 1px solid var(--border); border-radius: 8px; padding: 14px; min-width: 0; }
+.usage-pool h3 { margin-top: 0; }
+.usage-segments { display: flex; gap: 2px; margin: 12px 0; }
+.usage-segment { flex: 1; height: 10px; background: var(--selection, var(--border)); border-radius: 3px; overflow: hidden; }
+.usage-segment span { display: block; height: 100%; background: var(--ring, #4778d5); }
+.usage-segment-missing { background: transparent; border: 1px dashed var(--border); }
+.usage-actions { justify-content: flex-end; margin-top: 18px; }
+.usage-shortcuts { margin-top: 24px !important; }
+@media (max-width: 480px) { .usage-page { padding: 16px; } .usage-header { margin-bottom: 16px; } .usage-toolbar { align-items: stretch; } .usage-tabs { width: 100%; } .usage-tabs button { flex: 1; } .usage-toolbar label { flex: 1; min-width: 0; } .usage-toolbar select { min-width: 0; max-width: 100%; } .usage-panel, .usage-hero { padding: 14px; } .usage-hero { grid-template-columns: 1fr 1fr; } .usage-hero strong { font-size: 20px; } }

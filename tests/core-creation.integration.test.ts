@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { describe, it } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../apps/api/src/app.ts';
@@ -19,10 +19,10 @@ function nativeIdentity(workspaceId: string, actorId: string, key: string): stri
   return createHash('sha256').update(JSON.stringify([workspaceId, actorId, 'CreateCoreEntity', null, key])).digest('hex');
 }
 
-describe('authorized durable native creation outcomes', { skip: !dashboardDatabaseUrl, timeout: 240_000 }, () => {
-  it('retains original identity/revision after source changes and deletion, never recreating the original', async t => {
-    const f = await createDashboardFixture();
-    t.after(() => f.close());
+describe('authorized durable native creation outcomes', { skip: !dashboardDatabaseUrl }, () => {
+  it('retains original identity/revision after source changes and deletion, never recreating the original', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
+    t.after(() => f.close(), { timeout: 60_000 });
     const project = await f.command<Entity>('CreateProject', { name: 'Creation outcome project', goal: '', ownerId: f.owner.id, completionCriteria: [] });
     const base = `/api/v1/workspaces/${f.workspaceId}/core`;
     const key = randomUUID();
@@ -59,9 +59,9 @@ describe('authorized durable native creation outcomes', { skip: !dashboardDataba
     assert.equal(commandReceipts.rows.length, 0, 'A native outcome is never a PM command receipt');
   });
 
-  it('GET remains read-only during SQL audit failure; explicit recovery commits the exact original audit once', async t => {
-    const f = await createDashboardFixture();
-    t.after(() => f.close());
+  it('GET remains read-only during SQL audit failure; explicit recovery commits the exact original audit once', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
+    t.after(() => f.close(), { timeout: 60_000 });
     const project = await f.command<Entity>('CreateProject', { name: 'Audit recovery', goal: '', ownerId: f.owner.id, completionCriteria: [] });
     await f.pool.query(`CREATE FUNCTION reject_creation_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
       IF NEW.source='core_http' THEN RAISE EXCEPTION 'injected creation audit failure'; END IF; RETURN NEW; END $$;
@@ -101,10 +101,10 @@ describe('authorized durable native creation outcomes', { skip: !dashboardDataba
     assert.equal((await readdir(join(f.coreRoot, f.workspaceId, 'work-items'))).filter(name => name.endsWith('.md')).length, 1);
   });
 
-  it('recovers a real process interruption after the file commit from the original durable journals after restart', async t => {
-    const f = await createDashboardFixture();
+  it('recovers a real process interruption after the file commit from the original durable journals after restart', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
     const restarted: { app?: FastifyInstance } = {};
-    t.after(async () => { await restarted.app?.close(); await f.close(); });
+    t.after(() => f.close(), { timeout: 60_000 });
     const project = await f.command<Entity>('CreateProject', { name: 'Crash project', goal: '', ownerId: f.owner.id, completionCriteria: [] });
     await f.app.close();
     const key = randomUUID(), commandId = nativeIdentity(f.workspaceId, f.owner.id, key);
@@ -130,16 +130,28 @@ describe('authorized durable native creation outcomes', { skip: !dashboardDataba
       writeSync(1,JSON.stringify({id:result.id,revision:result.revision}));
       process.exit(73);
     `;
-    const child = spawnSync(process.execPath, ['--input-type=module', '--eval', script, JSON.stringify({ root: join(f.coreRoot, f.workspaceId), actorId: f.owner.id, commandId, input })], { cwd: process.cwd(), encoding: 'utf8', timeout: 30_000 });
-    assert.equal(child.status, 73, child.stderr);
-    const original = JSON.parse(child.stdout) as { id: string; revision: string };
+    const child = spawn(process.execPath, ['--input-type=module', '--eval', script, JSON.stringify({ root: join(f.coreRoot, f.workspaceId), actorId: f.owner.id, commandId, input })], {
+      cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000, killSignal: 'SIGKILL', signal: t.signal,
+    });
+    let stdout = '', stderr = '', childError: Error | undefined;
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => { stdout = (stdout + chunk).slice(-64_000); });
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => { stderr = (stderr + chunk).slice(-64_000); });
+    child.on('error', error => { childError = error; });
+    // Even abort/spawn failure must join close, not leave an owned process alive.
+    const exited = Promise.withResolvers<number | null>();
+    child.once('close', exited.resolve);
+    f.deferCleanup(() => exited.promise);
+    const status = await exited.promise;
+    if (childError) throw childError;
+    assert.equal(status, 73, stderr);
+    const original = JSON.parse(stdout) as { id: string; revision: string };
     const blobRoot = join(dirname(f.coreRoot), 'blobs');
-    restarted.app = buildApp({ databaseUrl: f.pool.options.connectionString!, blobStore: new LocalBlobStore(blobRoot), blobStorageLocator: { provider: 'local', root: blobRoot }, coreWorkspaceRoot: f.coreRoot });
+    restarted.app = f.ownApp(() => buildApp({ databaseUrl: f.pool.options.connectionString!, blobStore: new LocalBlobStore(blobRoot), blobStorageLocator: { provider: 'local', root: blobRoot }, coreWorkspaceRoot: f.coreRoot, signal: t.signal }));
     const origin = await restarted.app.listen({ host: '127.0.0.1', port: 0 });
     const endpoint = `${origin}/api/v1/workspaces/${f.workspaceId}/core/creation-attempts/${key}`;
-    const before = await fetch(endpoint, { headers: { cookie: f.ownerCookie } });
+    const before = await fetch(endpoint, { signal: t.signal, headers: { cookie: f.ownerCookie } });
     assert.deepEqual(await before.json(), { status: 'pending', reason: 'audit_pending' });
-    const response = await fetch(`${endpoint}/recover`, { method: 'POST', headers: { cookie: f.ownerCookie, 'content-type': 'application/json' }, body: '{}' });
+    const response = await fetch(`${endpoint}/recover`, { signal: t.signal, method: 'POST', headers: { cookie: f.ownerCookie, 'content-type': 'application/json' }, body: '{}' });
     assert.equal(response.status, 200);
     const recovered = coreCreationAttemptSchema.parse(await response.json());
     assert.equal(recovered.status, 'committed');
@@ -150,34 +162,39 @@ describe('authorized durable native creation outcomes', { skip: !dashboardDataba
     assert.equal((await readdir(join(f.coreRoot, f.workspaceId, 'work-items'))).filter(name => name.endsWith('.md')).length, 1);
   });
 
-  it('does not report a changed historical creation as the original successful revision', async t => {
-    const f = await createDashboardFixture();
+  it('does not report a changed historical creation as the original successful revision', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
     const restarted: { app?: FastifyInstance } = {};
-    t.after(async () => { await restarted.app?.close(); await f.close(); });
+    t.after(() => f.close(), { timeout: 60_000 });
     const project = await f.command<Entity>('CreateProject', { name: 'Historical creation', goal: '', ownerId: f.owner.id, completionCriteria: [] });
     await f.app.close();
     const workspace = new Workspace(join(f.coreRoot, f.workspaceId));
     const key = randomUUID(), input = { entity: 'work_item', project: project.id, title: 'Historical original' };
-    let changed: FileRecord;
-    await workspace.init();
-    try {
-      const original = await workspace.createEntity(input, key);
-      changed = await workspace.patch(original.id, { title: 'A later historical edit' }, original.revision);
-    } finally { await workspace.close(); }
+    let workspaceWork: Promise<FileRecord> | undefined = undefined;
+    f.deferCleanup(async () => { await workspaceWork?.catch(() => undefined); await workspace.close(); });
+    workspaceWork = (async () => {
+      try {
+        await workspace.init();
+        t.signal.throwIfAborted();
+        const original = await workspace.createEntity(input, key);
+        return await workspace.patch(original.id, { title: 'A later historical edit' }, original.revision);
+      } finally { await workspace.close(); }
+    })();
+    const changed = await workspaceWork;
     const blobRoot = join(dirname(f.coreRoot), 'blobs');
-    restarted.app = buildApp({ databaseUrl: f.pool.options.connectionString!, blobStore: new LocalBlobStore(blobRoot), blobStorageLocator: { provider: 'local', root: blobRoot }, coreWorkspaceRoot: f.coreRoot });
+    restarted.app = f.ownApp(() => buildApp({ databaseUrl: f.pool.options.connectionString!, blobStore: new LocalBlobStore(blobRoot), blobStorageLocator: { provider: 'local', root: blobRoot }, coreWorkspaceRoot: f.coreRoot, signal: t.signal }));
     const origin = await restarted.app.listen({ host: '127.0.0.1', port: 0 });
     const endpoint = `${origin}/api/v1/workspaces/${f.workspaceId}/core`;
-    const response = await fetch(`${endpoint}/entities`, { method: 'POST', headers: { cookie: f.ownerCookie, 'content-type': 'application/json', 'Idempotency-Key': key }, body: JSON.stringify(input) });
+    const response = await fetch(`${endpoint}/entities`, { signal: t.signal, method: 'POST', headers: { cookie: f.ownerCookie, 'content-type': 'application/json', 'Idempotency-Key': key }, body: JSON.stringify(input) });
     assert.equal(response.status, 409, JSON.stringify(await response.json()));
-    const current = await fetch(`${endpoint}/files/${changed.id}`, { headers: { cookie: f.ownerCookie } });
+    const current = await fetch(`${endpoint}/files/${changed.id}`, { signal: t.signal, headers: { cookie: f.ownerCookie } });
     assert.equal((await current.json() as FileRecord).revision, changed.revision);
     assert.equal((await readdir(join(f.coreRoot, f.workspaceId, 'work-items'))).filter(name => name.endsWith('.md')).length, 1);
   });
 
-  it('keeps historical ambiguous pending blocked and preserves the journal; rejects invalid assignments durably', async t => {
-    const f = await createDashboardFixture();
-    t.after(() => f.close());
+  it('keeps historical ambiguous pending blocked and preserves the journal; rejects invalid assignments durably', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
+    t.after(() => f.close(), { timeout: 60_000 });
     const project = await f.command<Entity>('CreateProject', { name: 'Ambiguous pending', goal: '', ownerId: f.owner.id, completionCriteria: [] });
     const root = join(f.coreRoot, f.workspaceId), base = `/api/v1/workspaces/${f.workspaceId}/core`;
     const key = randomUUID(), input = { entity: 'work_item', title: 'Ambiguous', project: project.id };
@@ -198,9 +215,9 @@ describe('authorized durable native creation outcomes', { skip: !dashboardDataba
     assert.equal(items.body.items.filter(file => file.entity.entity === 'work_item').length, 0);
   });
 
-  it('isolates actor keys, denies revoked/project-hidden outcomes, and applies task policy to source/PATCH/items', async t => {
-    const f = await createDashboardFixture();
-    t.after(() => f.close());
+  it('isolates actor keys, denies revoked/project-hidden outcomes, and applies task policy to source/PATCH/items', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
+    t.after(() => f.close(), { timeout: 60_000 });
     const p1 = await f.command<Entity>('CreateProject', { name: 'Allowed', goal: '', ownerId: f.owner.id, completionCriteria: [] });
     const p2 = await f.command<Entity>('CreateProject', { name: 'Hidden', goal: '', ownerId: f.owner.id, completionCriteria: [] });
     const member = await f.member('Scoped creator');
@@ -232,9 +249,9 @@ describe('authorized durable native creation outcomes', { skip: !dashboardDataba
     assert.equal((await f.request(`${outcome}/recover`, { method: 'POST', cookie: member.cookie, body: {} })).status, 404);
   });
 
-  it('uses configured task state capability without granting ordinary edits or losing checklist authority', async t => {
-    const f = await createDashboardFixture();
-    t.after(() => f.close());
+  it('uses configured task state capability without granting ordinary edits or losing checklist authority', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
+    t.after(() => f.close(), { timeout: 60_000 });
     const project = await f.command<Entity>('CreateProject', { name: 'State capability', goal: '', ownerId: f.owner.id, completionCriteria: [] });
     const member = await f.member('Complete only');
     await f.command('SetWorkspaceMember', { userId: member.user.id, capabilities: ['domain.read', 'workitem.complete'], projectIds: [project.id] });

@@ -1,0 +1,79 @@
+.frame {
+  min-width: 0;
+  color: var(--foreground);
+}
+.embeddedFrame {
+  position: relative;
+}
+.header {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.embeddedHeader {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+}
+.details {
+  width: 360px;
+  padding: 12px;
+}
+.detailsTitle {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.metadata {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.metadata p {
+  margin: 0;
+}
+.heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.heading h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.header p,
+.meta {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-block: 8px;
+}
+.swatch {
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+  border-radius: 2px;
+}
+.tooltip {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}

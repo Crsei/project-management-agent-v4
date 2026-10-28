@@ -1,0 +1,49 @@
+.dialog {
+  width: min(960px, calc(100% - 32px));
+  max-width: 960px;
+  height: min(720px, calc(100dvh - 32px));
+  padding: 16px;
+}
+.dialog > div {
+  flex: 1;
+}
+.content {
+  min-width: 0;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+.meta {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.tabs {
+  display: flex;
+  overflow: auto;
+  border-bottom: 1px solid var(--border);
+  gap: 4px;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.imageArea {
+  overflow: auto;
+  max-height: 480px;
+}
+.image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+@media (max-width: 600px) {
+  .dialog {
+    width: calc(100% - 16px);
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 12px;
+  }
+}

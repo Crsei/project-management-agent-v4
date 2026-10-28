@@ -1,0 +1,84 @@
+.chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: var(--control-height);
+  border: 1px solid var(--border);
+  border-radius: var(--pill-radius);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  vertical-align: middle;
+}
+.chip[data-selected="true"] {
+  border-color: var(--primary);
+  background: var(--selection);
+  color: var(--primary);
+}
+.chip[data-disabled="true"] {
+  opacity: 0.5;
+}
+.main,
+.remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: calc(var(--control-height) - 2px);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--motion-button) ease-out;
+}
+.main,
+.label {
+  padding: 4px 12px;
+  border-radius: var(--pill-radius);
+}
+.remove {
+  width: var(--control-height);
+  height: calc(var(--control-height) - 2px);
+  border-radius: var(--pill-radius);
+}
+.main + .remove {
+  border-left: 1px solid var(--border);
+}
+.main:not(:disabled):hover,
+.remove:not(:disabled):hover {
+  background: var(--surface-hover);
+}
+.main:not(:disabled):active,
+.remove:not(:disabled):active {
+  background: var(--surface-pressed);
+}
+.main:focus-visible,
+.remove:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.main:disabled,
+.remove:disabled {
+  cursor: default;
+}
+.busyHint {
+  padding-right: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+}
+@media (pointer: coarse) {
+  .main,
+  .remove {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .main,
+  .remove {
+    transition: none;
+  }
+}

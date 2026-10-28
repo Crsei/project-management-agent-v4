@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { readFile,writeFile } from 'node:fs/promises';
+import { readFile,unlink,writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe,it } from 'node:test';
 import { z } from 'zod';
@@ -38,9 +38,9 @@ async function inbox(f:DashboardFixture,cookie=f.ownerCookie):Promise<Notificati
 function stateCommand(item:NotificationInboxItem,change:{read:boolean}|{archived:boolean}):Command {
  return {commandId:randomUUID(),commandType:'read' in change?'SetNotificationRead':'SetNotificationArchived',targetId:item.event.eventId,expectedVersions:{[item.event.eventId]:item.state.version},payload:change};
 }
-describe('durable selected notifications through real core, SQL commands and read-only Worker', {skip:!dashboardDatabaseUrl,timeout:240_000},()=>{
- it('freezes explicit watches/new mentions, merges reasons, excludes the actor and never auto-subscribes',async t=>{
-  const f=await createDashboardFixture();t.after(()=>f.close());const {task,project}=await setup(f);
+describe('durable selected notifications through real core, SQL commands and read-only Worker', {skip:!dashboardDatabaseUrl},()=>{
+ it('freezes explicit watches/new mentions, merges reasons, excludes the actor and never auto-subscribes', { timeout: 180_000 }, async t=>{
+  const f=await createDashboardFixture({ signal: t.signal });t.after(()=>f.close());const {task,project}=await setup(f);
   const watch=await f.member('Watcher'),mention=await f.member('Mention only'),both=await f.member('Both reasons'),late=await f.member('Late watcher');
   for(const member of [watch,mention,both,late])await grant(f,member.user.id,project.id);
   for(const member of [watch,both])await f.command('WatchTask',{taskId:task.id},{cookie:member.cookie,extra:{projectId:project.id}});
@@ -58,8 +58,8 @@ describe('durable selected notifications through real core, SQL commands and rea
   const received=(await inbox(f,mention.cookie))[0]!;assert.equal(received.target?.taskId,task.id);assert.equal(received.target?.commentId,savedComment.id);
   assert.equal((await inbox(f)).length,0);assert.equal((await inbox(f,late.cookie)).length,0);
  });
- it('rechecks original watch identity, authorizes added mention IDs only, and rolls invalid saves back',async t=>{
-  const f=await createDashboardFixture();t.after(()=>f.close());const {task,project}=await setup(f),member=await f.member('Revocable mention');await grant(f,member.user.id,project.id);
+ it('rechecks original watch identity, authorizes added mention IDs only, and rolls invalid saves back', { timeout: 180_000 }, async t=>{
+  const f=await createDashboardFixture({ signal: t.signal });t.after(()=>f.close());const {task,project}=await setup(f),member=await f.member('Revocable mention');await grant(f,member.user.id,project.id);
   const watch=await f.command<{id:string;version:number}>('WatchTask',{taskId:task.id},{cookie:member.cookie,extra:{projectId:project.id}});
   await f.command('CreateTaskComment',{content:'watch-only fact'},{extra:{targetId:task.id,projectId:project.id}});
   await f.command('UnwatchTask',{}, {cookie:member.cookie,extra:{targetId:watch.id,projectId:project.id,expectedVersions:{[watch.id]:watch.version}}});
@@ -73,8 +73,8 @@ describe('durable selected notifications through real core, SQL commands and rea
   assert.equal(rejected.body.error?.code,'mention_not_eligible');assert.equal((await f.pool.query('SELECT count(*)::int AS n FROM service_fact_events')).rows[0].n,before);
   await drain(f);assert.equal((await f.pool.query('SELECT 1 FROM notification_recipients WHERE recipient_id=$1',[member.user.id])).rows.length,0);
  });
- it('enforces personal CAS, no-op state, atomic private invalidation and current original-receipt authorization after move/delete',async t=>{
-  const f=await createDashboardFixture();t.after(()=>f.close());const {task,project}=await setup(f),member=await f.member('Inbox owner');await grant(f,member.user.id,project.id);
+ it('enforces personal CAS, no-op state, atomic private invalidation and current original-receipt authorization after move/delete', { timeout: 180_000 }, async t=>{
+  const f=await createDashboardFixture({ signal: t.signal });t.after(()=>f.close());const {task,project}=await setup(f),member=await f.member('Inbox owner');await grant(f,member.user.id,project.id);
   await f.command('CreateTaskComment',{content:personalMentionToken(member.user.id,'Reader')},{extra:{targetId:task.id,projectId:project.id}});await drain(f);
   const received=(await inbox(f,member.cookie))[0]!,input=stateCommand(received,{read:true});
   const saved=await f.send(input,{cookie:member.cookie});assert.equal(saved.status,200,JSON.stringify(saved.body));const state=notificationStateSchema.parse(saved.body.result);assert.equal(state.version,2);
@@ -90,11 +90,16 @@ describe('durable selected notifications through real core, SQL commands and rea
   assert.equal((await f.send(input,{cookie:member.cookie})).status,404);
   const moved=(await f.request<FileRecord>(`/api/v1/workspaces/${f.workspaceId}/core/files/${task.id}`)).body;
   const archived=await f.request<FileRecord>(`/api/v1/workspaces/${f.workspaceId}/core/entities/${task.id}/archive`,{method:'POST',body:{revision:moved.revision}});
-  assert.equal((await f.request(`/api/v1/workspaces/${f.workspaceId}/core/entities/${task.id}`,{method:'DELETE',body:{revision:archived.body.revision}})).status,200);
+  assert.equal(archived.status,200);
+  const deletion=await f.request<{error:{code:string}}>(`/api/v1/workspaces/${f.workspaceId}/core/entities/${task.id}`,{method:'DELETE',body:{revision:archived.body.revision}});
+  assert.equal(deletion.status,422);
+  assert.equal(deletion.body.error.code,'DELETE_REFERENCED');
+  // Retained SQL history blocks API deletion; external Markdown loss must still redact.
+  await unlink(join(f.coreRoot,f.workspaceId,archived.body.path));
   assert.equal((await f.request(`/api/v1/workspaces/${f.workspaceId}/commands/${input.commandId}`,{cookie:member.cookie})).status,404);
  });
- it('captures command/native project, task and milestone revisions, without source prose or native PM receipts',async t=>{
-  const f=await createDashboardFixture();t.after(()=>f.close());const {task,project}=await setup(f);
+ it('captures command/native project, task and milestone revisions, without source prose or native PM receipts', { timeout: 180_000 }, async t=>{
+  const f=await createDashboardFixture({ signal: t.signal });t.after(()=>f.close());const {task,project}=await setup(f);
   await f.command('CreateMilestone',{title:'Milestone secret title',criteria:[]},{extra:{projectId:project.id}});
   const base=`/api/v1/workspaces/${f.workspaceId}/core`,key=randomUUID();
   const native=await f.request<FileRecord>(`${base}/entities`,{method:'POST',headers:{'Idempotency-Key':key},body:{entity:'work_item',title:'Native secret title',project:project.id,body:'Private body never enters source'}});assert.equal(native.status,200);
@@ -108,8 +113,8 @@ describe('durable selected notifications through real core, SQL commands and rea
   const original=new CoreCommandJournal(join(f.coreRoot,f.workspaceId)).entries().find(entry=>entry.kind==='http_completed'&&entry.targetId===native.body.id);assert.ok(original);
   assert.equal((await f.pool.query('SELECT 1 FROM command_receipts WHERE command_id::text=$1',[original.commandId])).rows.length,0);
  });
- it('recovers file-before-SQL failure by original fact identity, never rewriting the Markdown or resetting a delivered state',async t=>{
-  const f=await createDashboardFixture();t.after(()=>f.close());const {project}=await setup(f);
+ it('recovers file-before-SQL failure by original fact identity, never rewriting the Markdown or resetting a delivered state', { timeout: 180_000 }, async t=>{
+  const f=await createDashboardFixture({ signal: t.signal });t.after(()=>f.close());const {project}=await setup(f);
   await f.pool.query(`CREATE FUNCTION reject_service_fact() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.entity_kind='work_item' THEN RAISE EXCEPTION 'isolated fact failure';END IF;RETURN NEW;END $$; CREATE TRIGGER reject_service_fact BEFORE INSERT ON service_fact_events FOR EACH ROW EXECUTE FUNCTION reject_service_fact()`);
   const key=randomUUID(),base=`/api/v1/workspaces/${f.workspaceId}/core`;
   const response=await f.request(`${base}/entities`,{method:'POST',headers:{'Idempotency-Key':key},body:{entity:'work_item',project:project.id,title:'Saved despite SQL failure'}});assert.equal(response.status,503);
@@ -122,8 +127,8 @@ describe('durable selected notifications through real core, SQL commands and rea
   const facts=await f.pool.query('SELECT fact_id,after_revision FROM service_fact_events WHERE source_kind=\'core_http\' AND entity_id=$1',[entry.captured.fact.entityId]);assert.deepEqual(facts.rows,[{fact_id:entry.captured.fact.factId,after_revision:entry.captured.fact.afterRevision}]);
   assert.equal((await f.pool.query('SELECT 1 FROM service_fact_events WHERE source_kind=\'core_observation\' AND entity_id=$1',[entry.captured.fact.entityId])).rows.length,0);
  });
- it('imports only a real observed offline A-to-C difference, with unknown author/time and no mention expansion',async t=>{
-  const f=await createDashboardFixture();t.after(()=>f.close());const {task,project}=await setup(f),member=await f.member('Observation watcher');await grant(f,member.user.id,project.id);
+ it('imports only a real observed offline A-to-C difference, with unknown author/time and no mention expansion', { timeout: 180_000 }, async t=>{
+  const f=await createDashboardFixture({ signal: t.signal });t.after(()=>f.close());const {task,project}=await setup(f),member=await f.member('Observation watcher');await grant(f,member.user.id,project.id);
   await f.command('WatchTask',{taskId:task.id},{cookie:member.cookie,extra:{projectId:project.id}});
   const file=(await f.request<FileRecord>(`/api/v1/workspaces/${f.workspaceId}/core/files/${task.id}`)).body;
   await f.app.close();const filename=join(f.coreRoot,f.workspaceId,file.path);
@@ -135,8 +140,8 @@ describe('durable selected notifications through real core, SQL commands and rea
   assert.deepEqual(rows.rows,[{occurred_at:null,actor_id:null,new_mention_ids:[]}]);
   assert.equal((await f.pool.query('SELECT count(*)::int AS n FROM notification_recipients WHERE recipient_id=$1',[member.user.id])).rows[0].n,1);
  });
- it('rolls a recipient page back on real SQL failure, recovers expired leases, and never resets state on duplicate delivery',async t=>{
-  const f=await createDashboardFixture();t.after(()=>f.close());const {task,project}=await setup(f),member=await f.member('Failure recipient');await grant(f,member.user.id,project.id);
+ it('rolls a recipient page back on real SQL failure, recovers expired leases, and never resets state on duplicate delivery', { timeout: 180_000 }, async t=>{
+  const f=await createDashboardFixture({ signal: t.signal });t.after(()=>f.close());const {task,project}=await setup(f),member=await f.member('Failure recipient');await grant(f,member.user.id,project.id);
   const comment=await f.command<{id:string}>('CreateTaskComment',{content:personalMentionToken(member.user.id,'Recipient')},{extra:{targetId:task.id,projectId:project.id}});
   const fact=(await f.pool.query<{fact_id:string}>('SELECT fact_id FROM service_fact_events WHERE entity_id=$1',[comment.id])).rows[0]!.fact_id;
   await f.pool.query(`CREATE FUNCTION reject_notification_invalidation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.aggregate_kind='notification_state' THEN RAISE EXCEPTION 'isolated recipient page failure';END IF;RETURN NEW;END $$;CREATE TRIGGER reject_notification_invalidation BEFORE INSERT ON outbox FOR EACH ROW EXECUTE FUNCTION reject_notification_invalidation()`);
@@ -166,8 +171,8 @@ describe('durable selected notifications through real core, SQL commands and rea
    await restore.query('COMMIT');
   }catch(error){await restore.query('ROLLBACK');throw error;}finally{restore.release();}
  });
- it('keeps genuine native A-to-B-to-A-to-B saves distinct while the same explicit native key replays once',async t=>{
-  const f=await createDashboardFixture();t.after(()=>f.close());const {task}=await setup(f),base=`/api/v1/workspaces/${f.workspaceId}/core`;
+ it('keeps genuine native A-to-B-to-A-to-B saves distinct while the same explicit native key replays once', { timeout: 180_000 }, async t=>{
+  const f=await createDashboardFixture({ signal: t.signal });t.after(()=>f.close());const {task}=await setup(f),base=`/api/v1/workspaces/${f.workspaceId}/core`;
   const original=(await f.request<FileRecord>(`${base}/files/${task.id}`)).body,rawB=patchMarkdown(original.raw,{priority:'high'});
   const key=randomUUID(),first=await f.request<FileRecord>(`${base}/files/${task.id}`,{method:'PUT',headers:{'Idempotency-Key':key},body:{raw:rawB,revision:original.revision}});assert.equal(first.status,200);
   assert.equal((await f.request(`${base}/files/${task.id}`,{method:'PUT',headers:{'Idempotency-Key':key},body:{raw:rawB,revision:original.revision}})).status,200);

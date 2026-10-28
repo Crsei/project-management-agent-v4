@@ -27,7 +27,6 @@ import {
   UsersRound,
   Wifi,
   WifiOff,
-  Zap,
 } from "lucide-react"
 import { WorkspaceShell } from "@/components/blocks/workspace-shell"
 import {
@@ -615,7 +614,6 @@ function ServiceFrame({ children }: { children: ReactNode }) {
   ] as const
   const agentLinks = [
     ["agent", Bot, en ? "Chat" : "对话", pathname === `${base}/agent`],
-    ["automations", Zap, en ? "Automations" : "自动化", pathname === `${base}/automations`],
   ] as const
   const navigationLinkClass = shellStyles.navigationLink
   const connectionStates: Record<string, string> = {

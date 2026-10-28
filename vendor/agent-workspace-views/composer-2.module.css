@@ -1,0 +1,64 @@
+.attachmentList {
+  display: flex;
+  gap: 8px;
+  width: max-content;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.attachmentList > li {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.attachment {
+  max-width: 256px;
+}
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+.notice > span {
+  min-width: 0;
+  flex: 1;
+}
+.notice[data-error="true"] {
+  color: var(--status-error);
+}
+.tool {
+  color: var(--text-secondary);
+}
+.summary {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.summary h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 24px;
+  font-weight: 600;
+}
+.summary p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+.summaryLabel {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 20px;
+}
+.menu {
+  min-width: 256px;
+}

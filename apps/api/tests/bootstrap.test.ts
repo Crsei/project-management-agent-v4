@@ -46,8 +46,7 @@ test('a fully received request retains its result when processing exceeds ten se
   assert.deepEqual(await response.json(), { completed: true });
 });
 
-test('configuration fails early for invalid ports and defaults to loopback', () => {
-  assert.deepEqual(readConfig({}), { host: '127.0.0.1', port: 4100 });
+test('configuration rejects invalid ports and empty hosts while accepting an explicit listen port', () => {
   for (const value of ['', '0', '65536', 'NaN', '1.5', '-1', ' 4100 ']) {
     assert.throws(() => readConfig({ PORT: value }), /PORT/);
   }

@@ -1,0 +1,150 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { desktopReleaseUrl, workspaceLabel, workspaceNote, workspaceUrl } from '../lib/site';
+
+const capabilities = [
+  {
+    number: '01',
+    title: 'Work that survives the tab',
+    description: 'The server persists accepted executions, events, and results in SQLite. Reconnect to the record instead of keeping a browser tab alive.',
+    detail: 'A server restart marks unfinished work interrupted. Continuation is explicit—not a silent replay.',
+  },
+  {
+    number: '02',
+    title: 'Your providers, clearly separated',
+    description: 'Use DeepSeek, OpenAI, or Anthropic APIs, and Codex or Claude CLI instances. Save per-thread choices and separate provider accounts.',
+    detail: 'Credentials stay on the server. Native session features depend on the provider and compatible CLI.',
+  },
+  {
+    number: '03',
+    title: 'Explore a branch. Bring context back.',
+    description: 'Fork from a recorded execution boundary, pursue another direction, then preview and confirm a context transfer to the parent thread.',
+    detail: 'Context merge is not Git merge. Branches share the working directory unless you isolate it yourself.',
+  },
+  {
+    number: '04',
+    title: 'Give repeat work a deliberate trigger',
+    description: 'Create schedules, authorize eligible quota-reset continuations, or watch a GitHub pull request. Dispatches use the same durable execution queue.',
+    detail: 'The server must stay running. Queued or dispatched never means completed.',
+  },
+  {
+    number: '05',
+    title: 'Keep the project within reach',
+    description: 'Inspect files and Git diffs, use a real local terminal, and preview a site alongside the conversation instead of leaving your workspace.',
+    detail: 'Files and Git inspectors are read-only. The terminal has the server process’s real shell permissions.',
+  },
+  {
+    number: '06',
+    title: 'Make context intentional',
+    description: 'Keep agents, reusable prompt skills, text documents, and sequential workflows with the thread. Submitted runs retain their input and configuration snapshot.',
+    detail: 'New documents are not model context until selected. Skills are instructions, not executable scripts.',
+  },
+];
+---
+
+<SiteLayout
+  title="A durable home for your agents"
+  description="A self-hosted, single-user workspace for agent conversations, durable execution, provider accounts, context branching, and deliberate automation."
+>
+  <section class="hero container">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="accent-rule" aria-hidden="true"></span> Self-hosted / Single-user</p>
+      <h1>A durable home<br />for your agents<span class="accent-text">.</span></h1>
+      <p class="hero-lead">Keep the conversation, the execution, and the project in one place. Use your own providers. Let the server hold the state—not the browser tab.</p>
+      <div class="button-row">
+        <a class="button button-primary" href={workspaceUrl}>{workspaceLabel}<span aria-hidden="true">↗</span></a>
+        <a class="button button-outline" href="/get-started/">Set up your own<span aria-hidden="true">→</span></a>
+      </div>
+      <p class="entry-note">{workspaceNote}</p>
+    </div>
+    <figure class="execution-illustration" aria-labelledby="execution-caption">
+      <figcaption id="execution-caption">
+        <span>One workspace. Clear responsibilities.</span>
+        <span class="diagram-label">Architecture illustration</span>
+      </figcaption>
+      <div class="diagram-interface">
+        <span class="diagram-symbol" aria-hidden="true">⌘</span>
+        <div><strong>Web or Desktop</strong><span>Conversation · context · project inspectors</span></div>
+      </div>
+      <div class="diagram-connection"><span aria-hidden="true">↓</span><span>Submit an execution / subscribe to events</span></div>
+      <div class="diagram-server">
+        <div class="diagram-server-heading"><span class="diagram-square" aria-hidden="true"></span><strong>Your server</strong><span>Execution authority</span></div>
+        <ol class="diagram-steps">
+          <li><span class="diagram-step-index">1</span><div><strong>Record the request</strong><span>Inputs, settings, and context snapshot</span></div></li>
+          <li><span class="diagram-step-index">2</span><div><strong>Run with your provider</strong><span>Queued work and explicit cancellation</span></div></li>
+          <li><span class="diagram-step-index">3</span><div><strong>Keep the result</strong><span>SQLite history, outputs, and events</span></div></li>
+        </ol>
+      </div>
+      <p class="diagram-footnote">Disconnect the view. Keep the record.<br /><strong>The server must remain running to execute work.</strong></p>
+    </figure>
+  </section>
+
+  <section class="principle-strip">
+    <div class="container principle-inner">
+      <p><span class="eyebrow">The important distinction</span>A browser is a view.<br /><strong>The server owns the run.</strong></p>
+      <p>Closing a tab does not cancel an accepted task. Stopping the server is different: unfinished work is recorded as interrupted, with explicit continuation and preserved results.</p>
+      <a class="text-link" href="/security/#execution">Understand the boundaries <span aria-hidden="true">↗</span></a>
+    </div>
+  </section>
+
+  <section class="section container" id="capabilities" aria-labelledby="capabilities-heading">
+    <div class="section-heading">
+      <div><p class="eyebrow">Inside the workspace</p><h2 id="capabilities-heading">Less lost context.<br />More deliberate work.</h2></div>
+      <p>One place for the tools around a conversation, with a durable record of what actually happened.</p>
+    </div>
+    <div class="capability-grid">
+      {capabilities.map(({ number, title, description, detail }) => (
+        <article class="capability">
+          <span class="feature-number" aria-hidden="true">{number}</span>
+          <h3>{title}</h3>
+          <p>{description}</p>
+          <p class="capability-detail">{detail}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="automation-section" aria-labelledby="automation-heading">
+    <div class="container automation-layout">
+      <div>
+        <p class="eyebrow">Automation, with a boundary</p>
+        <h2 id="automation-heading">Choose the trigger.<br />Inspect the outcome.</h2>
+        <p>Background work is still real work. Every trigger leads to a recorded run, not an optimistic success badge.</p>
+        <a class="text-link" href="/get-started/#automation">Set up automation <span aria-hidden="true">→</span></a>
+      </div>
+      <dl class="automation-list">
+        <div><dt><span aria-hidden="true">01 /</span> Schedules</dt><dd>Intervals or a fixed time and weekdays, using the server’s timezone. Missed work is skipped or coalesced—not replayed as a backlog.</dd></div>
+        <div><dt><span aria-hidden="true">02 /</span> Quota recovery</dt><dd>Opt in when the provider supplies an eligible usage-limit error and reset time. No guessed reset, automatic account switching, or unconditional CLI replay.</dd></div>
+        <div><dt><span aria-hidden="true">03 /</span> GitHub PR Watch</dt><dd>Establish a baseline, then react to relevant PR changes through the same queue. External PR text is untrusted context, not permission to merge.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section container" aria-labelledby="deploy-heading">
+    <div class="section-heading">
+      <div><p class="eyebrow">Your infrastructure</p><h2 id="deploy-heading">Start in the browser.<br />Keep a place on your desktop.</h2></div>
+      <p>The website explains the product. Your workspace server is where your data, credentials, and executions live.</p>
+    </div>
+    <div class="deployment-grid">
+      <article class="deployment-card">
+        <div class="deployment-type">Web + Server</div>
+        <h3>Self-host the workspace</h3>
+        <p>Initialize this independent v3 checkout, then run its PM and Agent services at one public origin. Configure a Provider deliberately; an unconfigured model does not produce a fake reply.</p>
+        <div class="mini-command"><code>pnpm install<br />pnpm setup:local<br /># Follow the database/bootstrap/storage steps<br />pnpm build:v3<br />pnpm services:start</code></div>
+        <a class="text-link" href="/get-started/">Read the setup guide <span aria-hidden="true">→</span></a>
+      </article>
+      <article class="deployment-card">
+        <div class="deployment-type">Electron Desktop</div>
+        <h3>The same workspace, in a window</h3>
+        <p>Use a local server managed by the desktop shell, or connect to an explicit remote server. Execution stays on the server in either mode.</p>
+        <p class="deployment-note">Source builds require Node.js and desktop system libraries. Packaging produces an application directory, not a signed installer.</p>
+        <a class="text-link" href={desktopReleaseUrl || '/desktop/#build'}>{desktopReleaseUrl ? 'View desktop releases' : 'Build the desktop app'} <span aria-hidden="true">↗</span></a>
+      </article>
+    </div>
+  </section>
+
+  <section class="closing-section container">
+    <div><p class="eyebrow">A tool, not a promise of autonomy</p><h2>Your work. Your providers.<br />Your decision to run.</h2></div>
+    <div><p>Designed for a single trusted workspace—not multi-tenant hosting. Understand the shell access, shared directory, and always-on server requirements before opening it to a network.</p><a class="button button-outline" href="/security/">Read security &amp; limits <span aria-hidden="true">→</span></a></div>
+  </section>
+</SiteLayout>

@@ -1,0 +1,388 @@
+.row {
+  min-height: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.identity {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 200px;
+  flex: 1;
+}
+.identifier {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.title {
+  font-size: 13px;
+  text-align: left;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 0;
+}
+a.title:hover {
+  text-decoration: underline;
+}
+a.title:focus-visible,
+a.identifier:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.row[data-selected],
+.card[data-selected] {
+  background: var(--selection);
+}
+.row[data-active],
+.card[data-active] {
+  box-shadow: inset 2px 0 var(--primary);
+}
+.card {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 8px;
+}
+.card .identity {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.card .title {
+  flex-basis: 100%;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  /* Reserve two lines so one- and two-line titles share the same card height. */
+  line-height: 20px;
+  min-height: 40px;
+  padding: 0;
+}
+.properties {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.properties > div {
+  min-width: 0;
+}
+/* Fixed two-column grid with fixed rows keeps every board card the same size;
+   long values ellipsize within their cell instead of changing the card height. */
+.properties[data-layout="card"] {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 32px;
+  gap: 4px 8px;
+  align-content: start;
+  align-items: center;
+}
+.properties[data-layout="card"] > div {
+  min-width: 0;
+  overflow: hidden;
+}
+.properties[data-layout="card"] input,
+.properties[data-layout="card"] .picker {
+  max-width: 100%;
+}
+.properties[data-layout="card"] > span {
+  grid-column: 1 / -1;
+}
+@media (pointer: coarse) {
+  .properties[data-layout="card"] {
+    grid-auto-rows: 44px;
+  }
+}
+.properties[data-layout="detail"] {
+  flex-direction: column;
+  align-items: stretch;
+}
+.properties[data-layout="detail"] > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fieldLabel {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.picker {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  max-width: 180px;
+  overflow: hidden;
+  padding: 0 8px;
+}
+.dateInput {
+  width: 140px;
+  font-size: 12px;
+}
+.readValue {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  white-space: nowrap;
+}
+.readValue[data-overdue] {
+  color: var(--status-waiting);
+}
+.avatarGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.avatarGroup > span + span {
+  margin-left: -8px;
+}
+.labels {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.labels > span {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  max-width: 96px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.overflow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+.mutation {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.mutation[data-mutation="rejected"] {
+  color: var(--destructive);
+}
+.responsiveOverflow {
+  display: none;
+}
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+.detail form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.detail textarea {
+  min-height: 80px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  padding: 8px;
+  font-size: 13px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.display {
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+.display label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 12px;
+}
+.quick {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  width: min(320px, calc(100vw - 32px));
+}
+.workspace {
+  height: 100%;
+  min-height: 0;
+}
+.scroll {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+}
+.view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.head h1 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.head > :last-child {
+  margin-left: auto;
+}
+.summary {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 1200px) {
+  .row .lowProperty {
+    display: none;
+  }
+  .responsiveOverflow {
+    display: block;
+  }
+}
+@media (max-width: 640px) {
+  .row .identity {
+    flex-basis: 100%;
+  }
+  .row .properties {
+    flex-wrap: wrap;
+  }
+  .head h1 {
+    font-size: 20px;
+  }
+}
+@media (pointer: coarse) {
+  .row {
+    min-height: 44px;
+  }
+  a.title {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .card a.title {
+    /* Keep the two-line clamp so coarse-pointer cards stay the same height. */
+    display: -webkit-box;
+  }
+  .card .title {
+    min-height: 44px;
+  }
+}
+.workspace > .workspace {
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.laneTitle {
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border-block: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+.enhancementHint {
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.batch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.batch label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.batch select,
+.display select {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  padding: 0 4px;
+}
+.batchPreview {
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px;
+  font-size: 13px;
+  list-style: none;
+}
+.savedRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+.savedRow > :first-child {
+  min-width: 0;
+  white-space: normal;
+  height: auto;
+  min-height: 32px;
+}
+.deferred {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 48px;
+}
+.deferred:focus-within,
+.deferredCard:focus-within {
+  content-visibility: visible;
+}
+.deferredCard {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 254px;
+}
+@media (pointer: coarse) {
+  .batch select,
+  .display select {
+    min-height: 44px;
+  }
+}

@@ -1,0 +1,17 @@
+/* V01–V12 are scoped to Agent Workspace examples; shared defaults stay intact. */
+.tokens {
+  --workbench-user-background: #edf4ff;
+  --workbench-user-border: #dbeafe;
+  --workbench-user-radius: 16px;
+  --workbench-content-width: 760px;
+  --workbench-user-width: 72%;
+  --workbench-body-line-height: 1.6;
+}
+.tokens [data-call-id] {
+  border-radius: 10px;
+}
+:global(.dark) .tokens,
+:global([data-theme="dark"]) .tokens {
+  --workbench-user-background: color-mix(in srgb, #60a5fa 14%, var(--surface));
+  --workbench-user-border: color-mix(in srgb, #60a5fa 28%, var(--border));
+}

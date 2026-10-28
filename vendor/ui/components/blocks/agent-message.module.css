@@ -1,0 +1,9 @@
+.parts { display: grid; gap: 8px; min-width: 0; font-size: 14px; line-height: 24px; }
+.tool { display: grid; gap: 4px; min-width: 0; }
+.phase { color: var(--text-muted); font-size: 12px; line-height: 20px; border-top: 1px solid var(--border); padding-top: 8px; }
+.references { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; line-height: 20px; }
+.references > span { display: inline-flex; align-items: center; gap: 4px; }
+.error { border-left: 2px solid var(--destructive); padding: 8px 12px; color: var(--destructive); overflow-wrap: anywhere; }
+.error strong { font-size: 13px; font-weight: 500; }
+.error p { margin: 4px 0 0; white-space: pre-wrap; }
+.turnActions { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; color: var(--text-muted); font-size: 12px; line-height: 16px; }

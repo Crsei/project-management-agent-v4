@@ -51,12 +51,12 @@ Node 调用方可通过 `auth: { type: 'bearer', token: () => currentSessionToke
 ```ts
 let sessionCookie: string | undefined;
 const api = new ProjectManagementClient({
-  baseUrl: 'http://127.0.0.1:4100',
+  baseUrl: 'http://127.0.0.1:4193',
   auth: {
     type: 'cookie', credentials: 'same-origin',
     cookie: () => sessionCookie,
     onSetCookie: cookies => {
-      const session = cookies.find(cookie => cookie.startsWith('pm_session='));
+      const session = cookies.find(cookie => cookie.startsWith('pm_v3_session='));
       if (session) sessionCookie = session.split(';', 1)[0];
     },
   },
@@ -73,6 +73,8 @@ await api.login({ email, password });
 `api.localProjects` 提供工作区 `settings/saveSettings`、受限 `directories`、`preview`、`initialize/initialization/recover`、项目 `location/migrate/relocate`。本地创建必须携带 `{input, directory}` 与固定 `Idempotency-Key`；`directory` 为已有绝对路径，或父绝对路径加新文件夹名。开启本地能力后，正式 `CreateProject` 和原生创建入口也必须携带 `localDirectory`。主机目录权限要求全局 `access.manage`，写入另要求 `planning.edit`，不能靠路径字符串扩权。
 
 本地操作返回 `LocalProjectAttempt`，不是 `CommandReceipt`；原 PM 命令仍按原 `commandId` 查询收据。结果未知时保留原键、输入和目录；查询 `not_found` 不允许另建意图。用户显式恢复可在核对不存在后重发完全相同的初始化输入/键，服务端仍按原键去重，客户端不会自动重试。目录迁移要求 `writersStopped:true`；`relocate` 必须明确 `mode:'move'|'rebind'`，后者仅找回已完整移动、原路径缺失且身份匹配的目录。
+
+`api.agentContexts` 提供授权 `catalog`、`resolve`、`saveWorkspace` / `saveProject` 及 `storageSettings` / `saveStorageSettings`。根设置返回工作区保存的默认根（未覆盖时为 null）、有效根、revision 和 canManage；写入采用 `{ directory, expectedRevision }`。保存映射优先于原生项目位置，未分配作用域再采用 Chat Space 默认目录。目录册只读；默认目录首次授权 resolve 才创建并登记，之后缺失不兜底或重建。根设置改变不移动已有文件，冲突与未知响应先读取核对、不自动重试。
 
 ## 实时更新与恢复
 

@@ -1,0 +1,109 @@
+.section {
+  min-width: 0;
+  padding: 12px 0;
+}
+.heading {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+}
+.meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.warning {
+  margin: 8px 0;
+  border-left: 2px solid var(--status-waiting);
+  padding: 8px 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.graph {
+  height: 480px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.links {
+  margin-top: 12px;
+  display: grid;
+  gap: 4px;
+}
+.dependency {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-align: left;
+  border-radius: 4px;
+}
+.link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+.chart {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  min-width: 0;
+}
+.chart svg {
+  width: 100%;
+  height: 160px;
+  color: var(--primary);
+}
+.chart text {
+  fill: var(--text-secondary);
+  font-size: 11px;
+}
+.historyTable {
+  max-height: 360px;
+  overflow: auto;
+}
+.virtualViewport {
+  position: relative;
+  overflow: auto;
+  overflow-anchor: none;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.virtualViewport:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.virtualContent {
+  position: relative;
+  width: 100%;
+}
+.virtualItem {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+}
+@media (pointer: coarse) {
+  .link {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+@media (max-width: 639px) {
+  .graph {
+    height: 360px;
+  }
+}

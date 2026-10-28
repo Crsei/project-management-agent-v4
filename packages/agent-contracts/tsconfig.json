@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.agent.json",
+  "compilerOptions": {
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": [],
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "rewriteRelativeImportExtensions": true,
+    "noEmit": false
+  },
+  "include": ["src"],
+  "exclude": ["dist", "node_modules"]
+}

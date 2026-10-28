@@ -1,0 +1,76 @@
+---
+import '../styles/global.css';
+import { workspaceLabel, workspaceNote, workspaceUrl } from '../lib/site';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const navigation = [
+  { href: '/', label: 'Product' },
+  { href: '/get-started/', label: 'Self-host' },
+  { href: '/desktop/', label: 'Desktop' },
+  { href: '/security/', label: 'Operations' },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#fafaf9" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={`${title} — agent-workspace`} />
+    <meta property="og:description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>{title} — agent-workspace</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="wordmark" href="/" aria-label="agent-workspace home">
+          <svg viewBox="0 0 24 24" width="25" height="25" fill="none" aria-hidden="true">
+            <path d="M2 2h8v8H2zm12 0h8v8h-8zM2 14h8v8H2z" fill="currentColor" />
+            <path d="M14 14h8v8h-8z" fill="var(--accent)" />
+          </svg>
+          <span>agent<span class="wordmark-separator">-</span>workspace</span>
+        </a>
+        <nav class="primary-navigation" aria-label="Main navigation">
+          {navigation.map(({ href, label }) => (
+            <a href={href} aria-current={Astro.url.pathname === href ? 'page' : undefined}>{label}</a>
+          ))}
+        </nav>
+        <a class="button button-small button-outline header-entry" href={workspaceUrl}>
+          {workspaceLabel}<span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </header>
+    <main id="main-content" tabindex="-1">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-top">
+          <div>
+            <a class="footer-name" href="/">agent-workspace</a>
+            <p>A single-user workspace. On infrastructure you control.</p>
+          </div>
+          <nav aria-label="Footer navigation">
+            <a href="/get-started/">Getting started</a>
+            <a href="/desktop/">Desktop builds</a>
+            <a href="/security/">Security &amp; limits</a>
+          </nav>
+        </div>
+        <div class="footer-bottom">
+          <p>Web · Server · Desktop. No hosted account required.</p>
+          <p>{workspaceNote}</p>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

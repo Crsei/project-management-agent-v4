@@ -59,7 +59,7 @@ test('all local schema refs resolve and transport capabilities are described', (
   assert.ok(stream.parameters.some((parameter: { name: string; in: string }) => parameter.name === 'Last-Event-ID' && parameter.in === 'header'));
   assert.ok(stream.responses[410]);
   assert.ok(contract.paths['/health/ready']!.get.responses[503].content['application/json'].schema.$ref.endsWith('/Readiness'));
-  assert.deepEqual(contract.components.securitySchemes.sessionCookie, { type: 'apiKey', in: 'cookie', name: 'pm_session' });
+  assert.deepEqual(contract.components.securitySchemes.sessionCookie, { type: 'apiKey', in: 'cookie', name: 'pm_v3_session' });
   const entity = contract.components.schemas.Entity!;
   for (const field of ['createdAt', 'updatedAt']) {
     assert.ok(entity.required.includes(field));

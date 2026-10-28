@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type { Pool } from 'pg';
@@ -13,39 +14,36 @@ import { publishOutboxBatch } from '../packages/application/src/outbox.ts';
 import { intentCommands } from '../packages/application/src/intent.ts';
 import type { Actor, Entity } from '../packages/domain/src/core.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
-import { createPool, migrate } from '../packages/infrastructure/src/database.ts';
+import { acquireMailFixtureDatabase } from './mail-fixture-database.ts';
+import { MailFixtureScope, mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';
+import { startOwnedMailWorker } from './mail-worker-process.ts';
+import { assertV3WorkerTestDatabase, outboxWorkerEnvironment } from './worker-environment.ts';
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL('../', import.meta.url));
 const cli = fileURLToPath(new URL('../scripts/outbox-admin.ts', import.meta.url));
-const worker = fileURLToPath(new URL('../apps/worker/src/main.ts', import.meta.url));
 
 describe('Controlled outbox recovery on PostgreSQL and the operator CLI', { skip: !databaseUrl }, () => {
-  const namespace = `test_outbox_recovery_${randomUUID().replaceAll('-', '')}`;
-  let bootstrap: Pool;
   let pool: Pool;
   let actor: Actor;
   let isolatedUrl: string;
+  let coreRoot: string;
+  let scope: MailFixtureScope;
 
-  before(async () => {
-    bootstrap = createPool(databaseUrl!);
-    await bootstrap.query(`CREATE SCHEMA ${namespace}`);
-    const url = new URL(databaseUrl!);
-    url.searchParams.set('options', `-c search_path=${namespace},public`);
-    isolatedUrl = url.toString();
-    pool = createPool(isolatedUrl);
-    await migrate(pool);
-    actor = await createUser(pool, { email: 'outbox-operator@example.test', name: 'Outbox fixture owner', password: 'outbox-recovery-password-01' });
-  });
+  before(async t => {
+    assertV3WorkerTestDatabase(databaseUrl!);
+    scope = new MailFixtureScope(t.signal, mailSchemaInitTimeout);
+    await scope.initialize(async () => {
+      const database = await acquireMailFixtureDatabase(scope);
+      pool = database.pool;
+      isolatedUrl = database.databaseUrl;
+      coreRoot = await scope.acquire(() => mkdtemp(join(tmpdir(), 'pm-outbox-worker-')), root => rm(root, { recursive: true, force: true }));
+      actor = await scope.step(() => createUser(pool, { email: 'outbox-operator@example.test', name: 'Outbox fixture owner', password: 'outbox-recovery-password-01' }));
+    });
+  }, { timeout: mailSchemaInitTimeout });
 
-  after(async () => {
-    await pool?.end();
-    if (bootstrap) {
-      await bootstrap.query(`DROP SCHEMA IF EXISTS ${namespace} CASCADE`);
-      await bootstrap.end();
-    }
-  });
+  after(async () => { await scope?.close(); }, { timeout: 30_000 });
 
   async function fixture(eventCount = 1): Promise<{ workspace: string; entity: Entity }> {
     const workspace = (await createWorkspace(pool, actor.id, 'Outbox recovery')).id;
@@ -64,32 +62,29 @@ describe('Controlled outbox recovery on PostgreSQL and the operator CLI', { skip
     return { workspace, entity };
   }
 
-  async function operator(action: 'failed' | 'retry', workspace: string) {
-    return execute(process.execPath, [cli, action, '--workspace', workspace], { cwd: root, env: { ...process.env, DATABASE_URL: isolatedUrl } });
+  async function operator(action: 'failed' | 'retry', workspace: string, signal: AbortSignal) {
+    return execute(process.execPath, [cli, action, '--workspace', workspace], {
+      cwd: root, env: outboxWorkerEnvironment(isolatedUrl, coreRoot), signal,
+      timeout: 15_000, maxBuffer: 65_536, killSignal: 'SIGTERM',
+    });
   }
 
-  async function restartWorkerForOneCycle(): Promise<void> {
-    const child = spawn(process.execPath, [worker], { cwd: root, env: { ...process.env, DATABASE_URL: isolatedUrl, WORKER_INTERVAL_MS: '25' }, stdio: 'ignore' });
-    const closed = new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
+  async function restartWorkerForOneCycle(signal: AbortSignal): Promise<void> {
+    const child = scope.own(startOwnedMailWorker({ env: outboxWorkerEnvironment(isolatedUrl, coreRoot), signal }), worker => worker.stop());
     try {
-      let observed = false;
-      for (let attempt = 0; attempt < 100; attempt++) {
-        assert.equal(child.exitCode, null, 'Restarted worker exited before completing a cycle');
+      await child.until(() => child.hasEvent('worker_started'), 'restarted Worker startup');
+      await child.until(async () => {
         const heartbeat = await pool.query("SELECT id FROM service_heartbeats WHERE role='worker' AND details->>'state'='running'");
-        if (heartbeat.rowCount) { observed = true; break; }
-        await delay(25);
-      }
-      assert.equal(observed, true, 'Restarted worker did not record a completed cycle');
+        return !!heartbeat.rowCount;
+      }, 'restarted Worker completed cycle');
     } finally {
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
-      const deadline = setTimeout(() => child.kill('SIGKILL'), 4000);
-      deadline.unref();
-      try { assert.equal(await closed, 0, 'Own test worker must exit cleanly'); }
-      finally { clearTimeout(deadline); }
+      assert.deepEqual(await child.stop(), { code: 0, signal: null, forced: false }, child.diagnostics());
+      assert.equal(child.hasEvent('worker_stopped'), true, child.diagnostics());
+      assert.equal(child.hasEvent('worker_cycle_failed'), false, child.diagnostics());
     }
   }
 
-  it('quarantines after ten failures, survives worker restart and resumes original ordered event IDs only after manual retry', async () => {
+  it('quarantines after ten failures, survives worker restart and resumes original ordered event IDs only after manual retry', { timeout: 60_000 }, async t => {
     const { workspace } = await fixture(3);
     const unrelated = await fixture();
     await pool.query('UPDATE outbox SET attempts=10 WHERE workspace_id=$1', [unrelated.workspace]);
@@ -105,11 +100,11 @@ describe('Controlled outbox recovery on PostgreSQL and the operator CLI', { skip
     await pool.query('DROP FUNCTION audit_fail_publication()');
     // Recovery of the underlying fault plus a real Worker process restart must
     // preserve quarantine rather than silently skip or recreate the old rows.
-    await restartWorkerForOneCycle();
+    await restartWorkerForOneCycle(t.signal);
     assert.equal((await pool.query('SELECT count(*)::int AS n FROM events')).rows[0]!.n, 0);
     assert.deepEqual((await listOutboxFailures(pool, workspace)).map(row => row.eventId), originals.rows.map(row => row.event_id));
     await pool.query('UPDATE outbox SET last_error=$2 WHERE workspace_id=$1', [workspace, 'private-connection-and-provider-details']);
-    const failed = await operator('failed', workspace.toUpperCase());
+    const failed = await operator('failed', workspace.toUpperCase(), t.signal);
     assert.equal(failed.stderr, '');
     assert.ok(!failed.stdout.includes('private-connection-and-provider-details'));
     assert.ok(!failed.stdout.includes('sensitive-test-payload'));
@@ -117,7 +112,7 @@ describe('Controlled outbox recovery on PostgreSQL and the operator CLI', { skip
     assert.equal(listed.length, 3);
     for (const row of listed) assert.deepEqual(Object.keys(row).sort(), ['attempts', 'eventId', 'safeError', 'type']);
     assert.deepEqual(listed.map(row => row.safeError), ['publish_failed', 'publish_failed', 'publish_failed']);
-    assert.deepEqual(JSON.parse((await operator('retry', workspace.toUpperCase())).stdout), { workspace, count: 3 });
+    assert.deepEqual(JSON.parse((await operator('retry', workspace.toUpperCase(), t.signal)).stdout), { workspace, count: 3 });
     assert.deepEqual((await pool.query('SELECT attempts FROM outbox WHERE workspace_id=$1 ORDER BY id', [workspace])).rows.map(row => row.attempts), [0, 0, 0]);
     assert.equal((await listOutboxFailures(pool, unrelated.workspace))[0]!.attempts, 10);
     assert.equal(await publishOutboxBatch(pool), 3);
@@ -125,7 +120,7 @@ describe('Controlled outbox recovery on PostgreSQL and the operator CLI', { skip
     assert.deepEqual(events.rows.map(row => row.event_id), originals.rows.map(row => row.event_id));
     assert.deepEqual(events.rows.map(row => row.sequence), originals.rows.map(row => row.aggregate_sequence));
     assert.deepEqual(events.rows.map(row => row.cursor), ['1', '2', '3']);
-    assert.deepEqual(JSON.parse((await operator('retry', workspace)).stdout), { workspace, count: 0 });
+    assert.deepEqual(JSON.parse((await operator('retry', workspace, t.signal)).stdout), { workspace, count: 0 });
     assert.equal(await publishOutboxBatch(pool), 0);
     assert.deepEqual((await pool.query('SELECT count(*)::int AS n,count(DISTINCT event_id)::int AS unique_events FROM events WHERE workspace_id=$1', [workspace])).rows[0], { n: 3, unique_events: 3 });
     assert.deepEqual((await pool.query('SELECT command_id,receipt FROM command_receipts ORDER BY command_id')).rows, receipts);
@@ -140,7 +135,7 @@ describe('Controlled outbox recovery on PostgreSQL and the operator CLI', { skip
     }
   });
 
-  it('rolls back the retry when its mandatory audit recorder fails', async () => {
+  it('rolls back the retry when its mandatory audit recorder fails', { timeout: 30_000 }, async () => {
     const { workspace } = await fixture();
     await pool.query('UPDATE outbox SET attempts=10 WHERE workspace_id=$1', [workspace]);
     await assert.rejects(retryFailedOutbox(pool, workspace, async operation => {

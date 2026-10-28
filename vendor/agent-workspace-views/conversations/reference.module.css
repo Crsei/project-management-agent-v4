@@ -1,0 +1,163 @@
+.root {
+  min-height: 0;
+  min-width: 0;
+}
+.message {
+  min-width: 0;
+  margin-bottom: 28px;
+}
+.messageHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.messageHeader strong {
+  font-weight: 600;
+}
+.messageHeader small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.messageBody {
+  min-width: 0;
+}
+.message[data-thread-role="user"] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.message[data-thread-role="user"] .messageBody {
+  max-width: min(100%, 560px);
+  padding: 12px 16px;
+  border-radius: 20px;
+  background: var(--muted);
+}
+.message[data-thread-role="user"] .messageBody > :last-child {
+  margin-bottom: 0;
+}
+.contexts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-block: 8px;
+}
+.messageActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.activity {
+  margin-block: 8px 16px;
+}
+.activityTitle {
+  justify-content: flex-start;
+  height: auto;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 4px 0;
+  color: var(--muted-foreground);
+  white-space: normal;
+  text-align: left;
+  font-size: 13px;
+}
+.activityTitle > span:first-of-type {
+  flex: 1;
+}
+.activitySteps {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0 0 24px;
+  border-left: 1px solid var(--border);
+  margin-left: 8px;
+}
+.panel {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-block: 16px;
+}
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.root .panelTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.panelActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.panelBody {
+  padding: 16px;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 56px;
+  min-height: 56px;
+  padding-inline: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.headerTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 14px;
+}
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  min-width: 0;
+}
+.notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-block: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.mainViews {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.mainViews[hidden],
+.mainView[hidden],
+.resourceContent[hidden] {
+  display: none !important;
+}
+.mainView {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.resourceContent {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

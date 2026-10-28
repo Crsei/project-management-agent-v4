@@ -1,5 +1,4 @@
 import { Navigate, Outlet, Route, Routes } from "react-router"
-import { lazy, Suspense } from "react"
 import { PmHome, PmLabLayout, PmProductLayout } from "@/features/pm/pm-shell"
 import { PmErrorRoute } from "@/routes/error-page"
 import { PmNotFound } from "@/routes/not-found"
@@ -28,7 +27,6 @@ import { useWorkspaceStore } from "@/providers/app-providers"
 import { PmServiceProvider, usePmService } from "@/features/pm/service/pm-service"
 import { ServiceGuard } from "@/features/pm/service/pm-ui"
 
-const AutomationsPage = lazy(() => import("@/features/pm/automation").then(module => ({ default: module.AutomationsPage })))
 
 function WorkspaceStartRoute() {
   const { workspace, error } = usePmService()
@@ -66,7 +64,6 @@ export function AppRoutes() {
         <Route path=":workspaceSlug/entities/:entityId" element={<ServiceEntityPage />} />
         <Route path=":workspaceSlug/documents" element={<ServiceDocuments />} />
         <Route path=":workspaceSlug/agent" element={<AgentChatPage />} />
-        <Route path=":workspaceSlug/automations" element={<Suspense fallback={<div role="status" className="p-6">Loading…</div>}><AutomationsPage /></Suspense>} />
         <Route path=":workspaceSlug/views" element={<ServiceViews />} />
         <Route path=":workspaceSlug/members" element={<ServicePeople />} />
         <Route path=":workspaceSlug/notifications" element={<ServiceNotifications />} />

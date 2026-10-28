@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash,randomBytes,randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Pool } from 'pg';
-import { describe,it } from 'node:test';
+import { after,before,describe,it } from 'node:test';
 import { createUser,login } from '../packages/infrastructure/src/auth.ts';
 import { deliverAccountRecoveryMailBatch } from '../packages/application/src/account-recovery-delivery.ts';
 import { createRecoveryFixture,recoveryDatabaseUrl,recoveryPassword } from './account-recovery-fixture.ts';
@@ -10,6 +10,9 @@ import type { RecoveryResponse } from './account-recovery-fixture.ts';
 import { AccountRecoveryClient } from '../packages/contracts/src/account-recovery-client.ts';
 import { fenceRestoredAccountRecovery } from '../packages/application/src/account-recovery-restore.ts';
 import { decryptMailToken } from '../packages/infrastructure/src/system-mail.ts';
+import { createMailFixtureDatabase } from './mail-fixture-database.ts';
+import type { MailFixtureDatabase } from './mail-fixture-database.ts';
+import { mailFixtureCaseTimeout,mailFixtureCleanupTimeout,mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';
 const base='/api/v1/auth/password-recovery';
 const nextPassword='isolated-recovery-next-password';
 async function waitForBlocked(pool:Pool,blocker:number,query:string) {
@@ -24,9 +27,12 @@ async function waitForBlocked(pool:Pool,blocker:number,query:string) {
   }
   assert.fail('The real operation did not wait on the owned user lock');
 }
-describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl,timeout:120000},()=>{
-  it('starts every account unverified and binds only through password, same-account session and fresh mail',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());
+describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl,concurrency:false},()=>{
+  let database:MailFixtureDatabase;
+  before(async t=>{database=await createMailFixtureDatabase({signal:t.signal});},{timeout:mailSchemaInitTimeout});
+  after(()=>database?.close(),{timeout:mailFixtureCleanupTimeout});
+  it('starts every account unverified and binds only through password, same-account session and fresh mail',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});
     const before=(await f.request('/api/v1/auth/security')).body;
     assert.equal(before.recoveryEmail.email,null);assert.equal(before.recoveryEmail.verifiedAt,null);assert.equal(before.recoveryEmail.emailVersion,1);
     assert.equal((await f.pool.query('SELECT count(*)::int AS n FROM memberships WHERE user_id=$1',[f.user.id])).rows[0].n,0);
@@ -39,7 +45,7 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     const token=f.token('verify-recovery-email',email);
     const stranger=await createUser(f.pool,{email:`${randomUUID()}@example.test`,password:recoveryPassword,name:'Other account'});
     const session=await login(f.pool,{email:stranger.email,password:recoveryPassword});
-    const forbidden=await f.request('/api/v1/auth/security/recovery-email/confirm',{actionId:randomUUID(),token,expectedRecoveryEmailVersion:1},`pm_session=${session.token}`);
+    const forbidden=await f.request('/api/v1/auth/security/recovery-email/confirm',{actionId:randomUUID(),token,expectedRecoveryEmailVersion:1},`pm_v3_session=${session.token}`);
     assert.notEqual(forbidden.body.status,'committed');
     const verified=await f.request('/api/v1/auth/security/recovery-email/confirm',{actionId:randomUUID(),token,expectedRecoveryEmailVersion:1});assert.equal(verified.body.status,'committed');
     const after=(await f.request('/api/v1/auth/security')).body;
@@ -47,8 +53,8 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     assert.equal((await f.pool.query('SELECT email FROM users WHERE id=$1',[f.user.id])).rows[0].email,f.user.email);
     const rejected=await f.request(`${base}/complete`,{actionId:randomUUID(),token,newPassword:nextPassword},'');assert.equal(rejected.status,409);
   });
-  it('uniformly accepts unknown/unverified/verified/limited addresses and never rotates active tokens or resends request identities',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();
+  it('uniformly accepts unknown/unverified/verified/limited addresses and never rotates active tokens or resends request identities',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const email=await f.bind();
     for(const address of [`${randomUUID()}@example.test`,f.user.email,email,email,email,email]) {
       const requestId=randomUUID(),result=await f.request(`${base}/requests`,{requestId,email:address},'');
       assert.equal(result.status,202);assert.deepEqual(result.body,{requestId,status:'accepted'});
@@ -64,8 +70,8 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     await deliverAccountRecoveryMailBatch(f.pool,f.config);assert.equal(f.smtp.messages.length,2);
     assert.equal((await f.request(`${base}/requests/lookup`,{requestId:randomUUID()},'')).body.request,null);
   });
-  it('atomically consumes one token, revokes every session and recovers the immutable original result without credentials',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();
+  it('atomically consumes one token, revokes every session and recovers the immutable original result without credentials',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const email=await f.bind();
     await login(f.pool,{email:f.user.email,password:recoveryPassword});
     await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);
     const token=f.token('recovery',email),actionId=randomUUID();
@@ -80,8 +86,8 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     const stored=JSON.stringify((await f.pool.query('SELECT * FROM account_password_reset_actions')).rows);
     assert.equal(stored.includes(token),false);assert.equal(stored.includes(nextPassword),false);assert.equal(stored.includes('scrypt'),false);
   });
-  it('fences delayed reset actions, preserves the active token and rejects a different token for the same action identity',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();
+  it('fences delayed reset actions, preserves the active token and rejects a different token for the same action identity',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const email=await f.bind();
     await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);
     const token=f.token('recovery',email),actionId=randomUUID();
     assert.equal((await f.request(`${base}/actions/lookup`,{actionId,token},'')).body.action,null);
@@ -89,7 +95,7 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     assert.equal((await f.request(`${base}/complete`,{actionId,token,newPassword:nextPassword},'')).status,409);
     assert.equal((await f.request(`${base}/inspect`,{token},'')).status,200);
     const second=await createUser(f.pool,{email:`${randomUUID()}@example.test`,password:recoveryPassword,name:'Other'});
-    const otherSession=await login(f.pool,{email:second.email,password:recoveryPassword}),otherCookie=`pm_session=${otherSession.token}`,otherEmail=`${randomUUID()}@example.test`;
+    const otherSession=await login(f.pool,{email:second.email,password:recoveryPassword}),otherCookie=`pm_v3_session=${otherSession.token}`,otherEmail=`${randomUUID()}@example.test`;
     assert.equal((await f.request('/api/v1/auth/security/recovery-email',{actionId:randomUUID(),expectedCredentialVersion:1,expectedRecoveryEmailVersion:1,email:otherEmail,currentPassword:recoveryPassword},otherCookie)).body.status,'committed');
     await deliverAccountRecoveryMailBatch(f.pool,f.config);
     assert.equal((await f.request('/api/v1/auth/security/recovery-email/confirm',{actionId:randomUUID(),token:f.token('verify-recovery-email',otherEmail),expectedRecoveryEmailVersion:1},otherCookie)).body.status,'committed');
@@ -101,8 +107,8 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     }
     assert.equal((await f.pool.query('SELECT credential_version FROM users WHERE id=$1',[f.user.id])).rows[0].credential_version,1);
   });
-  it('keeps old trust when cancelling a candidate and unbind invalidates all links without extending or revoking sessions',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind(),candidate=`${randomUUID()}@example.test`;
+  it('keeps old trust when cancelling a candidate and unbind invalidates all links without extending or revoking sessions',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const email=await f.bind(),candidate=`${randomUUID()}@example.test`;
     const before=(await f.request('/api/v1/auth/security')).body;
     await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);const token=f.token('recovery',email);
     const begun=await f.request('/api/v1/auth/security/recovery-email',{actionId:randomUUID(),expectedCredentialVersion:1,expectedRecoveryEmailVersion:2,email:candidate,currentPassword:recoveryPassword});
@@ -112,16 +118,16 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     const after=(await f.request('/api/v1/auth/security')).body;assert.equal(after.recoveryEmail.email,null);assert.equal(after.recoveryEmail.emailVersion,3);assert.deepEqual(after.sessions,before.sessions);
     assert.equal((await f.request(`${base}/inspect`,{token},'')).status,409);
   });
-  it('has one winner for concurrent complete on the same user lock',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);
+  it('has one winner for concurrent complete on the same user lock',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const email=await f.bind();await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);
     const token=f.token('recovery',email);
     const results=await Promise.all([nextPassword,'concurrent-other-password'].map(newPassword=>f.request(`${base}/complete`,{actionId:randomUUID(),token,newPassword},'')));
     assert.equal(results.filter(item=>item.body.status==='committed').length,1);
     assert.equal((await f.pool.query('SELECT credential_version FROM users WHERE id=$1',[f.user.id])).rows[0].credential_version,2);
     assert.equal((await f.pool.query("SELECT count(*)::int AS n FROM account_recovery_tokens WHERE status='consumed' AND purpose='reset_password'")).rows[0].n,1);
   });
-  for(const resetFirst of [false,true]) it(`orders reset and ordinary password change with reset first=${resetFirst}`,async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);const token=f.token('recovery',email);
+  for(const resetFirst of [false,true]) it(`orders reset and ordinary password change with reset first=${resetFirst}`,{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const email=await f.bind();await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);const token=f.token('recovery',email);
     const blocker=await f.pool.connect();
     let changing:Promise<RecoveryResponse>|undefined,resetting:Promise<RecoveryResponse>|undefined;
     try {
@@ -138,8 +144,8 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
       else{assert.equal(changed!.body.status,'committed');assert.equal(resetResult!.body.status,'rejected');assert.equal((await f.request('/api/v1/auth/me')).status,200);}
     }finally{await blocker.query('ROLLBACK');blocker.release();await Promise.allSettled([changing,resetting]);}
   });
-  it('does not let a previously verified old-password login survive a reset that wins the user lock',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);const token=f.token('recovery',email),blocker=await f.pool.connect();
+  it('does not let a previously verified old-password login survive a reset that wins the user lock',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const email=await f.bind();await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);const token=f.token('recovery',email),blocker=await f.pool.connect();
     let resetting:Promise<RecoveryResponse>|undefined,signingIn:Promise<RecoveryResponse>|undefined;
     try{
       await blocker.query('BEGIN');await blocker.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[f.user.id]);const pid=(await blocker.query<{pid:number}>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
@@ -149,8 +155,8 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
       assert.equal((await f.request('/api/v1/auth/login',{email:f.user.email,password:nextPassword},'')).status,200);
     }finally{await blocker.query('ROLLBACK');blocker.release();await Promise.allSettled([resetting,signingIn]);}
   });
-  it('rejects expiry with receipt-only recovery and persists source/address throttles outside failed business transactions',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());await f.bind();
+  it('rejects expiry with receipt-only recovery and persists source/address throttles outside failed business transactions',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});await f.bind();
     const token=randomBytes(32).toString('base64url'),id=randomUUID();
     await f.pool.query("INSERT INTO account_recovery_tokens(id,user_id,purpose,token_hash,credential_version,recovery_email_version,created_at,expires_at) VALUES($1,$2,'reset_password',$3,1,2,clock_timestamp()-interval '20 minutes',clock_timestamp()-interval '1 second')",[id,f.user.id,createHash('sha256').update(token).digest('hex')]);
     assert.equal((await f.request(`${base}/inspect`,{token},'')).status,409);
@@ -161,8 +167,8 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     assert.ok((await f.pool.query('SELECT 1 FROM account_auth_limits WHERE attempts>20')).rowCount);
     assert.equal((await f.pool.query('SELECT credential_version FROM users WHERE id=$1',[f.user.id])).rows[0].credential_version,1);
   });
-  for(const fault of ['drop','malformed','503'] as const) it(`recovers one real committed reset after ${fault} response fault without resending password`,async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);
+  for(const fault of ['drop','malformed','503'] as const) it(`recovers one real committed reset after ${fault} response fault without resending password`,{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const email=await f.bind();await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);
     const token=f.token('recovery',email),actionId=randomUUID();
     const client=new AccountRecoveryClient(async(path,input)=>{
       const response=await fetch(`${f.origin}${path}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});
@@ -179,10 +185,10 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     assert.equal((await f.pool.query('SELECT credential_version FROM users WHERE id=$1',[f.user.id])).rows[0].credential_version,2);
     assert.equal((await f.pool.query('SELECT count(*)::int AS n FROM account_password_reset_actions')).rows[0].n,1);assert.equal(f.smtp.messages.length,2);
   });
-  it('replaces trust only after new verification and arbitrates a shared candidate email through the unique index',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const old=await f.bind();
+  it('replaces trust only after new verification and arbitrates a shared candidate email through the unique index',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const old=await f.bind();
     await f.request(`${base}/requests`,{requestId:randomUUID(),email:old},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);const oldToken=f.token('recovery',old);
-    const second=await createUser(f.pool,{email:`${randomUUID()}@example.test`,password:recoveryPassword,name:'Competing account'}),session=await login(f.pool,{email:second.email,password:recoveryPassword}),cookie=`pm_session=${session.token}`,candidate=`${randomUUID()}@example.test`;
+    const second=await createUser(f.pool,{email:`${randomUUID()}@example.test`,password:recoveryPassword,name:'Competing account'}),session=await login(f.pool,{email:second.email,password:recoveryPassword}),cookie=`pm_v3_session=${session.token}`,candidate=`${randomUUID()}@example.test`;
     await f.request('/api/v1/auth/security/recovery-email',{actionId:randomUUID(),expectedCredentialVersion:1,expectedRecoveryEmailVersion:2,email:candidate,currentPassword:recoveryPassword});await deliverAccountRecoveryMailBatch(f.pool,f.config);const firstToken=f.token('verify-recovery-email',candidate);
     assert.equal((await f.request('/api/v1/auth/security')).body.recoveryEmail.email,old);
     await f.request('/api/v1/auth/security/recovery-email',{actionId:randomUUID(),expectedCredentialVersion:1,expectedRecoveryEmailVersion:1,email:candidate,currentPassword:recoveryPassword},cookie);await deliverAccountRecoveryMailBatch(f.pool,f.config);const secondToken=f.token('verify-recovery-email',candidate);
@@ -192,8 +198,8 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     const owner=(await f.pool.query('SELECT id FROM users WHERE recovery_email=$1',[candidate])).rows[0].id;
     assert.equal((await f.request(`${base}/inspect`,{token:oldToken},'')).status,owner===f.user.id ? 409 : 200);
   });
-  it('fences restored sessions/tokens/mail in one caller transaction without rewriting trust, credentials or immutable receipts',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();
+  it('fences restored sessions/tokens/mail in one caller transaction without rewriting trust, credentials or immutable receipts',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const email=await f.bind();
     await f.request(`${base}/requests`,{requestId:randomUUID(),email},'');
     const resetQueue=(await f.pool.query("SELECT id,token_id,token_ciphertext FROM account_recovery_mail_queue WHERE purpose='reset_password' AND status='queued'")).rows[0];
     const token=decryptMailToken(f.config.tokenKey,`reset_password:${resetQueue.token_id}:${resetQueue.id}`,resetQueue.token_ciphertext),actionId=randomUUID();
@@ -218,8 +224,8 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     assert.equal((await f.request(`${base}/inspect`,{token},'')).status,409);
     const delivery=await deliverAccountRecoveryMailBatch(f.pool,f.config);assert.equal(delivery.attempted,0);assert.equal(f.smtp.messages.length,1);
   });
-  it('does not issue fake tokens when disabled and rejects queries or widened body inputs',async t=>{
-    const f=await createRecoveryFixture({disabled:true});t.after(()=>f.close());
+  it('does not issue fake tokens when disabled and rejects queries or widened body inputs',{timeout:mailFixtureCaseTimeout},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal,disabled:true});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});
     const disabled=await f.request(`${base}/requests`,{requestId:randomUUID(),email:f.user.email},'');assert.equal(disabled.status,503);
     assert.equal((await f.pool.query('SELECT count(*)::int AS n FROM account_recovery_tokens')).rows[0].n,0);
     assert.equal((await f.request(`${base}/inspect?token=private-query-value`,{token:'x'.repeat(43)},'')).status,400);

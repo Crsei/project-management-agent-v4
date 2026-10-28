@@ -22,7 +22,7 @@ function copyCommand(f: LocalProjectFixture, source: Entity, folderName: string)
 // Run explicitly with TEST_DATABASE_URL, after generating the shared client/contracts.
 describe('project copy and guarded deletion', { timeout: 600_000, concurrency: 1 }, () => {
   it('copies native content/tasks with fresh IDs and no grants/history/code; restart and same key return the original mapping', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const source = await project(f, 'Source project', 'source');
     await writeFile(join(f.parents[0], 'source', 'user-code.ts'), 'User-owned code\n');
     const first = await f.command<Entity>('CreateWorkItem', { title: 'Parent', description: 'Substantive task', acceptanceCriteria: [] }, { projectId: source.id });
@@ -52,7 +52,7 @@ describe('project copy and guarded deletion', { timeout: 600_000, concurrency: 1
   });
 
   it('a binding failure retains the original command/map; GET does not write and explicit recovery after restart produces no second destination', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const source = await project(f, 'Recovery source', 'source');
     await f.command('CreateWorkItem', { title: 'Frozen task', description: 'Frozen content', acceptanceCriteria: [] }, { projectId: source.id });
     const input = copyCommand(f, source, 'recover');
@@ -81,7 +81,7 @@ describe('project copy and guarded deletion', { timeout: 600_000, concurrency: 1
   });
 
   it('keeps artifacts and immutable business history, enforces both delete transports, but deletes an unreferenced archived project without deleting its code directory', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     let retained = await project(f, 'History retained', 'history');
     const upload = await f.command<{ upload: Entity }>('StageUpload', { contentBase64: Buffer.from('Immutable artifact').toString('base64'), fileName: 'history.txt', mediaType: 'text/plain' }, { projectId: retained.id });
     await f.command('RegisterArtifact', { title: 'Historical artifact', kind: 'document', uploadId: upload.upload.id }, { projectId: retained.id, expectedVersions: { [upload.upload.id]: upload.upload.version } });

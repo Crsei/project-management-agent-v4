@@ -1,0 +1,42 @@
+{
+  "name": "@agent-workspace/server",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "node --conditions=development --watch --import ./scripts/dev-environment.mjs src/index.ts",
+    "build": "pnpm run typecheck && node scripts/build.mjs",
+    "start": "node dist/index.mjs",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.test.json --noEmit",
+    "test": "node --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@agent-workspace/contracts": "workspace:*",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.309",
+    "@assistant-ui/ai-sdk": "^0.0.12",
+    "@cursor/sdk": "1.0.35",
+    "@muse-code/sdk": "1.4.6",
+    "@hono/node-server": "^1.19.1",
+    "@lydell/node-pty": "1.2.0-beta.15",
+    "ai": "^7.0.130",
+    "tar": "^7.5.7",
+    "yauzl": "^3.4.0",
+    "hono": "^4.9.7",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@agent-workspace/client-runtime": "workspace:*",
+    "@types/node": "^26.6.4",
+    "@types/ws": "^8.18.2",
+    "@types/yauzl": "^3.4.0",
+    "esbuild": "^0.25.10",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

@@ -1,7 +1,7 @@
-name: ${PM_APP_PROJECT:-project-management-app}
+name: ${PM_APP_PROJECT:-project-management-agent-v3-app}
 
 x-backend: &backend
-  image: ${PM_BACKEND_IMAGE:-pm-backend:local}
+  image: ${PM_BACKEND_IMAGE:-pm-v3-backend:local}
   build:
     context: ..
     dockerfile: deploy/Dockerfile
@@ -35,7 +35,7 @@ services:
       replicas: 1
     environment:
       HOST: 0.0.0.0
-      PORT: "4100"
+      PORT: "4193"
       PUBLIC_ORIGIN: ${PM_PUBLIC_ORIGIN:?Set the exact browser-visible origin}
       COOKIE_SECURE: ${PM_COOKIE_SECURE:-true}
       BLOB_ROOT: /var/lib/pm/blobs
@@ -54,7 +54,7 @@ services:
       - ${PM_WEBHOOK_CONFIG_DIRECTORY:-../.local/webhook-config}:/run/pm-webhook-config:ro
     networks: [default, database]
     healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:4100/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4193/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 5s
       timeout: 3s
       start_period: 20s
@@ -109,8 +109,45 @@ services:
       - ${PM_MAINTENANCE_DIRECTORY:-../.local/blob-maintenance}:/maintenance
     networks: [default, database]
 
+  agent:
+    image: ${AGENT_BACKEND_IMAGE:-pm-v3-agent:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: agent
+      args:
+        NODE_IMAGE: ${PM_NODE_IMAGE:-node:24-bookworm-slim}
+    init: true
+    env_file:
+      - ${AGENT_RUNTIME_ENV_FILE:?Set a private v3 Agent env file with a new 32+ character access token}
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4323"
+      PM_API_URL: http://api:4193
+      AGENT_WORKSPACE_API_ONLY: "1"
+      AGENT_WORKSPACE_DATA_DIR: /var/lib/agent
+      AGENT_WORKSPACE_PROJECT_ROOT: /var/lib/pm/projects
+    volumes:
+      - agent-data:/var/lib/agent
+      # Exact paths returned by PM resolve must also exist in the execution container.
+      - project-data:/var/lib/pm/projects
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:4323/api/access').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   web:
-    image: ${PM_WEB_IMAGE:-pm-web:local}
+    image: ${PM_WEB_IMAGE:-pm-v3-web:local}
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -122,8 +159,10 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      agent:
+        condition: service_healthy
     ports:
-      - "127.0.0.1:${PM_WEB_PORT:-34120}:8080"
+      - "127.0.0.1:${PM_WEB_PORT:-3223}:8080"
     read_only: true
     tmpfs:
       - /config
@@ -147,3 +186,4 @@ volumes:
   blob-data:
   core-data:
   project-data:
+  agent-data:

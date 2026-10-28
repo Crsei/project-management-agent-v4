@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import type { Command, Entity } from '../packages/domain/src/core.ts';
 import type { InvitationAcceptDto, InvitationInspectDto, InvitationListDto, InvitationReceiptDto, MemberInvitationDto } from '../packages/domain/src/invitations.ts';
 import { memberRoleCapabilities } from '../packages/domain/src/members.ts';
@@ -9,6 +9,9 @@ import { createUser, createWorkspace } from '../packages/infrastructure/src/auth
 import { readInvitationMailConfig } from '../packages/infrastructure/src/invitation-mail.ts';
 import { createInvitationFixture, invitationDatabaseUrl } from './member-invitations-fixture.ts';
 import type { InvitationFixture } from './member-invitations-fixture.ts';
+import { createMailFixtureDatabase } from './mail-fixture-database.ts';
+import type { MailFixtureDatabase } from './mail-fixture-database.ts';
+import { mailFixtureCaseTimeout, mailFixtureCleanupTimeout, mailFixtureInitTimeout, mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';
 
 function mutation(commandType: string, invitation: MemberInvitationDto): Command {
   return { commandId: randomUUID(), commandType, targetId: invitation.id, expectedVersions: { [invitation.id]: invitation.version }, payload: {} };
@@ -28,10 +31,13 @@ describe('invitation SMTP configuration', () => {
   });
 });
 
-describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip: !invitationDatabaseUrl, timeout: 180_000 }, () => {
+describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip: !invitationDatabaseUrl, concurrency: false }, () => {
+  let database: MailFixtureDatabase;
   let f: InvitationFixture;
-  beforeEach(async () => { f = await createInvitationFixture(); });
-  afterEach(async () => { await f?.close(); });
+  before(async t => { database = await createMailFixtureDatabase({ signal: t.signal }); }, { timeout: mailSchemaInitTimeout });
+  after(() => database?.close(), { timeout: mailFixtureCleanupTimeout });
+  beforeEach(async t => { f = await createInvitationFixture({ database, signal: t.signal }); }, { timeout: mailFixtureInitTimeout });
+  afterEach(async () => { await f?.close(); }, { timeout: mailFixtureCleanupTimeout });
   async function mail(invitation: MemberInvitationDto): Promise<string> {
     const delivered = await deliverInvitationMailBatch(f.pool, f.smtp.config);
     assert.equal(delivered.smtpAccepted, 1);
@@ -43,9 +49,9 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     return response.body.result as MemberInvitationDto;
   }
 
-  it('disables writes without SMTP configuration rather than making a fake pending queue', async () => {
+  it('disables writes without SMTP configuration rather than making a fake pending queue', { timeout: mailFixtureCaseTimeout }, async t => {
     await f.close();
-    f = await createInvitationFixture({ disabled: true });
+    f = await createInvitationFixture({ database, signal: t.signal, disabled: true });
     const result = await f.send({ commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: 'disabled@example.test', role: 'member', projectIds: null } });
     assert.equal(result.status, 409);
     assert.equal(result.body.error?.code, 'invitation_mail_disabled');
@@ -55,7 +61,7 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.equal((await f.pool.query('SELECT count(*)::int AS count FROM invitation_mail_queue')).rows[0].count, 0);
   });
 
-  it('sends an actual fragment link and atomically creates an invited account exactly once', async () => {
+  it('sends an actual fragment link and atomically creates an invited account exactly once', { timeout: mailFixtureCaseTimeout }, async () => {
     const invitation = await f.invite(undefined, { role: 'guest' });
     const encrypted = (await f.pool.query('SELECT token_ciphertext FROM invitation_mail_queue WHERE invitation_id=$1', [invitation.id])).rows[0].token_ciphertext;
     const token = await mail(invitation);
@@ -99,7 +105,7 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.equal(revoked.version, 2, 'Acceptance replay must never reactivate a revoked grant');
   });
 
-  it('requires the existing account password and never resets or renames that account', async () => {
+  it('requires the existing account password and never resets or renames that account', { timeout: mailFixtureCaseTimeout }, async () => {
     const password = 'original-existing-account-password';
     const user = await createUser(f.pool, { email: `${randomUUID()}@example.test`, password, name: 'Existing identity' });
     const before = (await f.pool.query('SELECT password_hash,name FROM users WHERE id=$1', [user.id])).rows[0];
@@ -118,7 +124,7 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.equal((await f.request('/api/v1/auth/login', { email: user.email, password }, '')).status, 200);
   });
 
-  it('serializes command idempotency, unique active emails and invitation CAS', async () => {
+  it('serializes command idempotency, unique active emails and invitation CAS', { timeout: mailFixtureCaseTimeout }, async () => {
     const create: Command = { commandId: randomUUID(), commandType: 'CreateMemberInvitation', payload: { email: 'unique@example.test', role: 'member', projectIds: null } };
     const replies = await Promise.all([f.send(create), f.send(create)]);
     assert.equal(replies[0]!.status, 200);
@@ -132,7 +138,7 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.equal(raced.filter(reply => reply.body.error?.code === 'version_conflict').length, 1);
   });
 
-  it('marks ambiguous network outcomes unknown and rotates tokens only on explicit resend', async () => {
+  it('marks ambiguous network outcomes unknown and rotates tokens only on explicit resend', { timeout: mailFixtureCaseTimeout }, async () => {
     const invitation = await f.invite();
     f.smtp.mode = 'drop_after_data';
     const ambiguous = await deliverInvitationMailBatch(f.pool, f.smtp.config);
@@ -164,7 +170,7 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.equal((await deliverInvitationMailBatch(f.pool, f.smtp.config)).attempted, 0);
   });
 
-  it('distinguishes explicit SMTP rejection and expired sending leases without leaking SMTP diagnostics', async () => {
+  it('distinguishes explicit SMTP rejection and expired sending leases without leaking SMTP diagnostics', { timeout: mailFixtureCaseTimeout }, async () => {
     const rejected = await f.invite();
     f.smtp.mode = 'reject';
     assert.equal((await deliverInvitationMailBatch(f.pool, f.smtp.config)).failed, 1);
@@ -184,7 +190,7 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.equal(f.smtp.messages.length, 0);
   });
 
-  it('rejects expired tokens, disabled accounts and stale inviter authorization', async () => {
+  it('rejects expired tokens, disabled accounts and stale inviter authorization', { timeout: mailFixtureCaseTimeout }, async () => {
     const expired = await f.invite();
     const expiredToken = await mail(expired);
     await f.pool.query("UPDATE member_invitations SET expires_at=now()-interval '1 second' WHERE id=$1", [expired.id]);
@@ -203,7 +209,7 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.equal((await f.pool.query('SELECT count(*)::int AS count FROM users WHERE email=$1', [stale.email])).rows[0].count, 0);
   });
 
-  it('enforces workspace management boundaries, legal projects and duplicate-member protection', async () => {
+  it('enforces workspace management boundaries, legal projects and duplicate-member protection', { timeout: mailFixtureCaseTimeout }, async () => {
     const ordinary = await createUser(f.pool, { email: `${randomUUID()}@example.test`, name: 'Ordinary member', password: 'ordinary-account-password' });
     await f.pool.query("INSERT INTO memberships(workspace_id,user_id,capabilities,project_ids) VALUES($1,$2,ARRAY['domain.read'],NULL)", [f.workspaceId, ordinary.id]);
     const signIn = await f.request('/api/v1/auth/login', { email: ordinary.email, password: 'ordinary-account-password' }, '');
@@ -222,7 +228,7 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.deepEqual((await f.pool.query('SELECT capabilities,version FROM memberships WHERE workspace_id=$1 AND user_id=$2', [f.workspaceId, user.id])).rows[0], { capabilities: ['domain.read'], version: 1 });
   });
 
-  it('revalidates authoritative projects at acceptance and allows access-only administrators to invite', async () => {
+  it('revalidates authoritative projects at acceptance and allows access-only administrators to invite', { timeout: mailFixtureCaseTimeout }, async () => {
     const projectReply = await f.send({ commandId: randomUUID(), commandType: 'CreateProject', payload: { name: 'Invite project', goal: 'Bounded membership', ownerId: f.owner.id, completionCriteria: ['Reviewed'] } });
     assert.equal(projectReply.status, 200, JSON.stringify(projectReply.body));
     const project = projectReply.body.result as Entity;
@@ -238,7 +244,7 @@ describe('member invitations: real PostgreSQL, HTTP and SMTP boundaries', { skip
     assert.equal((await f.pool.query('SELECT count(*)::int AS count FROM users WHERE email=$1', [invitation.email])).rows[0].count, 0);
   });
 
-  it('serializes invited account creation across workspaces without duplicate users or lost grants', async () => {
+  it('serializes invited account creation across workspaces without duplicate users or lost grants', { timeout: mailFixtureCaseTimeout }, async () => {
     const email = `${randomUUID()}@example.test`;
     const first = await f.invite(email, { role: 'guest' });
     const firstToken = await mail(first);

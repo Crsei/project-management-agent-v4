@@ -1,0 +1,58 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px;
+  min-width: 0;
+}
+.content h3 {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+.title {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.field {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-height: 32px;
+  font-size: 12px;
+  line-height: 16px;
+  padding-block: 8px;
+}
+.field dt {
+  color: var(--text-secondary);
+}
+.field dd {
+  display: flex;
+  align-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+.field dd > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.field dd button {
+  flex-shrink: 0;
+}
+.feedback {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.feedback:empty {
+  display: none;
+}
+.content > div > section + section {
+  margin-top: 24px;
+}

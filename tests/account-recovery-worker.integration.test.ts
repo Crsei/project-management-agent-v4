@@ -1,17 +1,18 @@
-/// <reference lib="es2024.promise" />
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { createHash,randomBytes,randomUUID } from 'node:crypto';
-import { setTimeout as delay } from 'node:timers/promises';
-import { describe,it } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { after,before,describe,it } from 'node:test';
 import { deliverAccountRecoveryMailBatch } from '../packages/application/src/account-recovery-delivery.ts';
 import { encryptMailToken } from '../packages/infrastructure/src/system-mail.ts';
 import { createRecoveryFixture,recoveryDatabaseUrl } from './account-recovery-fixture.ts';
+import { createMailFixtureDatabase,type MailFixtureDatabase } from './mail-fixture-database.ts';
+import { mailWorkerEnvironment,startOwnedMailWorker,type OwnedMailWorker } from './mail-worker-process.ts';
 
-describe('identity mail independent delivery',{skip:!recoveryDatabaseUrl,timeout:120000},()=>{
-  it('records DATA disconnect as unknown, wipes ciphertext and never redelivers or rotates an active reset token',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();
+describe('identity mail independent delivery',{skip:!recoveryDatabaseUrl},()=>{
+  let database:MailFixtureDatabase;
+  before(async t=>{database=await createMailFixtureDatabase({signal:t.signal});},{timeout:60000});
+  after(()=>database?.close(),{timeout:15000});
+  it('records DATA disconnect as unknown, wipes ciphertext and never redelivers or rotates an active reset token',{timeout:30000},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:15000});const email=await f.bind();
     await f.request('/api/v1/auth/password-recovery/requests',{requestId:randomUUID(),email},'');f.smtp.mode='drop_after_data';
     const results=await Promise.all([deliverAccountRecoveryMailBatch(f.pool,f.config),deliverAccountRecoveryMailBatch(f.pool,f.config)]);
     assert.equal(results.reduce((n,r)=>n+r.attempted,0),1);assert.equal(results.reduce((n,r)=>n+r.unknown,0),1);
@@ -22,8 +23,8 @@ describe('identity mail independent delivery',{skip:!recoveryDatabaseUrl,timeout
     await deliverAccountRecoveryMailBatch(f.pool,f.config);assert.equal(f.smtp.messages.length,2);
     assert.equal((await f.pool.query("SELECT count(*)::int AS n FROM account_recovery_tokens WHERE purpose='reset_password'")).rows[0].n,1);
   });
-  it('converges expired sending leases to unknown and cancels expired queued ciphertext even with issuance disabled',async t=>{
-    const f=await createRecoveryFixture();t.after(()=>f.close());const email=await f.bind();
+  it('converges expired sending leases to unknown and cancels expired queued ciphertext even with issuance disabled',{timeout:30000},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:15000});const email=await f.bind();
     await f.request('/api/v1/auth/password-recovery/requests',{requestId:randomUUID(),email},'');
     await f.pool.query("UPDATE account_recovery_mail_queue SET status='sending',token_ciphertext=NULL,lease_id=$1,lease_expires_at=clock_timestamp()-interval '1 second' WHERE purpose='reset_password' AND status='queued'",[randomUUID()]);
     const first=await deliverAccountRecoveryMailBatch(f.pool);assert.equal(first.expiredLeases,1);
@@ -38,21 +39,38 @@ describe('identity mail independent delivery',{skip:!recoveryDatabaseUrl,timeout
     assert.deepEqual(cancelled,{status:'cancelled',token_ciphertext:null});assert.equal(f.smtp.messages.length,1);
     await deliverAccountRecoveryMailBatch(f.pool,f.config);assert.equal(f.smtp.messages.length,1);
   });
-  it('keeps heartbeat independent while a real SMTP DATA attempt hangs in a separate owned Worker process',async()=>{
-    const f=await createRecoveryFixture(),email=await f.bind();
+  it('keeps heartbeat independent while a real SMTP DATA attempt hangs in a separate owned Worker process',{timeout:45000},async t=>{
+    const f=await createRecoveryFixture({database,signal:t.signal});
+    let worker:OwnedMailWorker|undefined=undefined;
+    t.after(async()=>{
+      try {await worker?.stop();} finally {await f.close();}
+    },{timeout:30000});
+    // Cleanup already owns the fixture if binding or request initialization fails.
+    const email=await f.bind();
     await f.request('/api/v1/auth/password-recovery/requests',{requestId:randomUUID(),email},'');
-    f.smtp.mode='hang_after_data';const c=f.config;
-    const worker=spawn(process.execPath,['apps/worker/src/main.ts'],{cwd:fileURLToPath(new URL('../',import.meta.url)),stdio:['ignore','ignore','ignore'],env:{...process.env,DATABASE_URL:f.databaseUrl,WORKER_INTERVAL_MS:'25',SMTP_HOST:c.host,SMTP_PORT:String(c.port),SMTP_SECURE:'false',SMTP_REQUIRE_TLS:'false',SMTP_FROM:c.from,SMTP_USER:'',SMTP_PASSWORD:'',SMTP_TIMEOUT_MS:String(c.timeoutMs),INVITATION_WEB_ORIGIN:'',INVITATION_TOKEN_KEY:'',INVITATION_TTL_SECONDS:'',ACCOUNT_RECOVERY_WEB_ORIGIN:c.webOrigin,ACCOUNT_RECOVERY_TOKEN_KEY:c.tokenKey.toString('base64'),PASSWORD_RESET_TTL_SECONDS:String(c.resetTtlSeconds),RECOVERY_EMAIL_VERIFY_TTL_SECONDS:String(c.verifyTtlSeconds)}});
-    const exit=Promise.withResolvers<void>();worker.once('close',()=>exit.resolve());worker.once('error',()=>exit.resolve());
-    async function until(check:()=>Promise<boolean>) {const end=Date.now()+15000;while(Date.now()<end){if(await check())return;await delay(25);}assert.fail('Owned Worker did not reach expected committed state');}
+    f.smtp.mode='hang_after_data';
+    // Leave a real in-flight SMTP window in which to observe an independent heartbeat.
+    const config={...f.config,timeoutMs:8000};
+    worker=startOwnedMailWorker({signal:t.signal,env:mailWorkerEnvironment({databaseUrl:f.databaseUrl,coreRoot:f.coreRoot,recoveryMail:config})});
     try {
-      await until(async()=>f.smtp.messages.length===2);
-      const heartbeat=(await f.pool.query("SELECT heartbeat_at FROM service_heartbeats WHERE role='worker'")).rows[0]?.heartbeat_at;
-      assert.ok(heartbeat);
-      await until(async()=>(await f.pool.query("SELECT 1 FROM service_heartbeats WHERE role='worker' AND heartbeat_at>$1",[heartbeat])).rowCount===1);
-      await until(async()=>(await f.pool.query("SELECT 1 FROM account_recovery_mail_queue WHERE purpose='reset_password' AND status='unknown'")).rowCount===1);
+      await worker.until(()=>f.smtp.messages.length===2,'the actual recovery SMTP DATA attempt');
+      await worker.until(async()=>(await f.pool.query("SELECT 1 FROM service_heartbeats WHERE role='worker'")).rowCount===1,'the first independent heartbeat',3000);
+      const heartbeat=(await f.pool.query("SELECT heartbeat_at FROM service_heartbeats WHERE role='worker'")).rows[0].heartbeat_at;
+      assert.equal((await f.pool.query("SELECT status FROM account_recovery_mail_queue WHERE purpose='reset_password'")).rows[0].status,'sending','SMTP must still be in flight before observing heartbeat progress');
+      await worker.until(async()=>(await f.pool.query("SELECT 1 FROM service_heartbeats WHERE role='worker' AND heartbeat_at>$1",[heartbeat])).rowCount===1,'heartbeat progress during the SMTP hang',3000);
+      assert.equal((await f.pool.query("SELECT status FROM account_recovery_mail_queue WHERE purpose='reset_password'")).rows[0].status,'sending','Heartbeat must advance before the SMTP deadline, not after it');
+      await worker.until(async()=>(await f.pool.query("SELECT 1 FROM account_recovery_mail_queue WHERE purpose='reset_password' AND status='unknown'")).rowCount===1,'the committed unknown SMTP outcome',10000);
       assert.equal(f.smtp.messages.length,2);
       assert.equal((await f.pool.query("SELECT token_ciphertext FROM account_recovery_mail_queue WHERE purpose='reset_password'")).rows[0].token_ciphertext,null);
-    }finally{worker.kill('SIGTERM');const stopped=await Promise.race([exit.promise.then(()=>true),delay(10000,false,{ref:false})]);if(!stopped){worker.kill('SIGKILL');await exit.promise;}await f.close();}
+      const finalHeartbeat=(await f.pool.query("SELECT heartbeat_at FROM service_heartbeats WHERE role='worker'")).rows[0].heartbeat_at;
+      await worker.until(async()=>(await f.pool.query("SELECT 1 FROM service_heartbeats WHERE role='worker' AND heartbeat_at>$1",[finalHeartbeat])).rowCount===1,'a post-finalization Worker cycle',3000);
+      assert.equal(f.smtp.messages.length,2,'Unknown delivery outcomes must never be retried');
+      assert.equal(worker.hasEvent('account_recovery_mail_cycle_failed'),false,worker.diagnostics());
+      const stopped=await worker.stop();
+      assert.deepEqual(stopped,{code:0,signal:null,forced:false},worker.diagnostics());
+    } catch(error) {
+      t.diagnostic(worker.diagnostics());
+      throw error;
+    }
   });
 });

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useLocation, useParams } from "react-router"
+import { useParams } from "react-router"
 import { Bot, Check, ChevronsUpDown, FolderKanban, LayoutGrid, LoaderCircle, RefreshCw, Settings, Users } from "lucide-react"
 import {
   DropdownMenu,
@@ -21,7 +21,6 @@ import { WorkspaceIdentityBadge } from "./pm-workspace-identity-badge"
 export function PmWorkspaceSwitcher() {
   const { workspace, workspaces, loading, error, refresh } = usePmService()
   const { workspaceSlug } = useParams<{ workspaceSlug?: string }>()
-  const { pathname } = useLocation()
   const en = useI18n().locale === "en"
   const startPage = useWorkspaceStore(state => state.startPage)
   const [refreshing, setRefreshing] = useState(false)
@@ -30,7 +29,6 @@ export function PmWorkspaceSwitcher() {
   const visibleError = error ?? refreshError
   const name = workspace?.name ?? (en ? "Choose workspace" : "选择工作区")
   const base = workspace ? `/pm/${encodeURIComponent(workspaceSlug || workspace.id)}` : ""
-  const agentActive = !!base && pathname.replace(/\/+$/, "") === `${base}/agent`
   const products = [
     {
       id: "project-management" as const,
@@ -41,13 +39,13 @@ export function PmWorkspaceSwitcher() {
     },
     {
       id: "agent-workspace" as const,
-      title: "Agent Workspace",
-      description: en ? "Chat, execution and automation" : "对话、执行和自动化",
-      href: workspace ? `${base}/agent` : "",
+      title: "Agent Chat",
+      description: en ? "Sessions and conversations" : "会话和对话",
+      href: workspace ? `/agent/workspace?${new URLSearchParams({ workspace: workspace.id, returnTo: `${base}/${startPage}` })}` : "",
       icon: Bot,
     },
   ]
-  const currentProduct = products[agentActive ? 1 : 0]
+  const currentProduct = products[0]
   const CurrentProductIcon = currentProduct.icon
   const canManageMembers = allowed(workspace, "access.manage")
   const canReadMembers = canManageMembers || !!workspace?.capabilities.includes("directory.read")
@@ -97,7 +95,7 @@ export function PmWorkspaceSwitcher() {
                 disabled={current || !product.href}
                 aria-current={current ? "location" : undefined}
                 className={`min-h-11 gap-2.5 py-1.5 ${current ? "bg-selection data-disabled:opacity-100" : ""}`}
-                render={current || !product.href ? undefined : <Link to={product.href} data-navigation-close />}
+                render={current || !product.href ? undefined : <a href={product.href} data-navigation-close />}
               >
                 <span className={`inline-flex size-8 shrink-0 items-center justify-center rounded-control ${product.id === "agent-workspace" ? "bg-agent text-primary-foreground" : "bg-primary text-primary-foreground"}`} aria-hidden="true">
                   <Icon className="size-4" strokeWidth={1.75} />

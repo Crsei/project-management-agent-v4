@@ -1,0 +1,200 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "tw-shimmer";
+@import "./showcase-tokens.css";
+
+@custom-variant data-open (&:where([data-state="open"], [data-open]:not([data-open="false"])));
+@custom-variant data-closed (&:where([data-state="closed"], [data-closed]:not([data-closed="false"])));
+
+@theme inline {
+  @keyframes collapsible-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
+    }
+  }
+  @keyframes collapsible-up {
+    from {
+      height: var(--radix-collapsible-content-height, var(--collapsible-panel-height, auto));
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-ibm-plex-mono);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  /* DESIGN-PATTERNS 圆角：行内 4 / 控件 6 / Popover 8 / 内容模块 12 / Dialog 16 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+  --radius-4xl: 24px;
+}
+
+/* 语义角色圆角（DESIGN-PATTERNS「圆角与边界」），由组件按职责引用 */
+@theme inline {
+  --radius-inline: 4px;
+  --radius-control: 6px;
+  --radius-menu: 8px;
+  --radius-module: 12px;
+  --radius-dialog: 16px;
+  --radius-bubble: 20px;
+  --radius-composer: 24px;
+}
+
+:root {
+  --radius: 8px;
+  /* canvas / surface / raised / ink / secondary / border / accent（DESIGN-PATTERNS 候选初值，映射到本项目语义变量） */
+  --background: #fafaf9;
+  --foreground: #232322;
+  --card: #ffffff;
+  --card-foreground: #232322;
+  --popover: #ffffff;
+  --popover-foreground: #232322;
+  --primary: #232322;
+  --primary-foreground: #fafaf9;
+  --secondary: #f4f4f2;
+  --secondary-foreground: #232322;
+  --muted: #f4f4f2;
+  --muted-foreground: #666660;
+  --accent: #f4f4f2;
+  --accent-foreground: #232322;
+  --destructive: #b4342a;
+  --success: #2f7d5b;
+  --warning: #8a6100;
+  --danger: #b4342a;
+  --brand: #a6533a;
+  --brand-foreground: #fafaf9;
+  --border: rgb(0 0 0 / 10%);
+  --input: rgb(0 0 0 / 10%);
+  --ring: #a6533a;
+  --sidebar: #f4f4f2;
+  --sidebar-foreground: #232322;
+  --sidebar-primary: #a6533a;
+  --sidebar-primary-foreground: #fafaf9;
+  --sidebar-accent: rgb(0 0 0 / 5%);
+  --sidebar-accent-foreground: #232322;
+  --sidebar-border: rgb(0 0 0 / 10%);
+  --sidebar-ring: #a6533a;
+}
+
+.dark {
+  --background: #111110;
+  --foreground: #ecece8;
+  --card: #181817;
+  --card-foreground: #ecece8;
+  --popover: #181817;
+  --popover-foreground: #ecece8;
+  --primary: #ecece8;
+  --primary-foreground: #111110;
+  --secondary: #222220;
+  --secondary-foreground: #ecece8;
+  --muted: #222220;
+  --muted-foreground: #b0b0a8;
+  --accent: #222220;
+  --accent-foreground: #ecece8;
+  --destructive: #ff9e8f;
+  --success: #6fcba0;
+  --warning: #e0b15c;
+  --danger: #ff9e8f;
+  --brand: #de9a7b;
+  --brand-foreground: #111110;
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 10%);
+  --ring: #de9a7b;
+  --sidebar: #161615;
+  --sidebar-foreground: #ecece8;
+  --sidebar-primary: #de9a7b;
+  --sidebar-primary-foreground: #111110;
+  --sidebar-accent: rgb(255 255 255 / 6%);
+  --sidebar-accent-foreground: #ecece8;
+  --sidebar-border: rgb(255 255 255 / 10%);
+  --sidebar-ring: #de9a7b;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  :root {
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground text-sm;
+    font-optical-sizing: auto;
+    /* DESIGN-PATTERNS 排版：普通正文 14px / 20px；数值用等宽数字 */
+    line-height: 20px;
+  }
+
+  /* 变化的数字统一等宽数字，便于对齐读数 */
+  .tabular,
+  time,
+  [data-slot$="-duration"] {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Vite 版替代 next/font：字体族由 index.html 的 Google Fonts <link> 载入，
+   这里补齐 Next 版由 next/font 注入在 <body> 上的两个 CSS 变量。 */
+:root {
+  --font-inter: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-ibm-plex-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* 首帧骨架（index.html 内联 <style>）用的是未分层样式，会压过 @layer base；
+   这里同样用未分层规则把 body 的底色与字色交还给主题变量。 */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}

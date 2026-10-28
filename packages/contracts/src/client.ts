@@ -20,6 +20,7 @@ import type { ArtifactVisibility, ArtifactCopyOriginResponse } from './artifact-
 import type { WebhookOverview, WebhookDeliveryPage, WebhookDeliveryDetail } from '../../domain/src/webhooks.ts';
 import { AccountRecoveryClient } from './account-recovery-client.ts';
 import { createLocalProjectClient } from './local-project-client.ts';
+import { createAgentContextClient } from './agent-file-area-client.ts';
 import { agentChatAccessSchema, agentChatContextSourceSchema, agentChatToolCallSchema, type AgentChatAccess, type AgentChatAccessInput, type AgentChatMessage, type AgentChatReasoningEffort, type AgentChatStatus, type AgentChatStreamEvent, type AgentChatThreadDetail, type AgentChatThreadList } from './agent-chat.ts';
 export type { DashboardRecord } from '../../domain/src/dashboard.ts';
 export type { PersonalDashboard, SelfProfile, PrivateNote, PrivateNoteData, TaskWatch, TaskWatchData, ProjectMeeting, ProjectMeetingData, MeetingParticipant } from '../../domain/src/dashboard-personal.ts';
@@ -42,6 +43,7 @@ export type { NotificationState, NotificationReason, NotificationOrigin, Notific
 export type { ArtifactVisibility, ArtifactCopyOrigin, ArtifactCopyOriginResponse } from './artifact-files.ts';
 export type { WebhookOverview, WebhookTargetDto, WebhookEndpointDto, WebhookDeliveryDto, WebhookDeliveryPage, WebhookDeliveryDetail } from '../../domain/src/webhooks.ts';
 export type { LocalDirectory, LocalProjectInitialization, LocalProjectSettings, LocalProjectDirectoryListing, LocalProjectPreview, LocalProjectLocation, LocalProjectAttempt } from './local-projects.ts';
+export type { AgentScope, AgentFileArea, AgentCatalog, AgentFileAreaUpdate, ResolvedAgentContext } from './agent-file-areas.ts';
 export type { AgentChatMessage, AgentChatMessageRole, AgentChatMessageStatus, AgentChatThread, AgentChatThreadList, AgentChatThreadDetail, AgentChatStatus, AgentChatReasoningEffort, AgentChatStreamEvent, AgentChatAccess, AgentChatAccessInput, AgentChatScope, AgentChatToolCapability, AgentChatContextSource, AgentChatToolCall, AgentChatToolResult, AgentChatToolEntity, AgentChatToolComment, AgentChatToolRelation, AgentChatToolReceipt } from './agent-chat.ts';
 // BEGIN GENERATED COMMAND PAYLOAD TYPES
 export type CommandPayloadMap = {
@@ -243,6 +245,12 @@ export class ProjectManagementClient {
     const queryStart = path.indexOf('?');
     const query = queryStart < 0 ? undefined : Object.fromEntries(new URLSearchParams(path.slice(queryStart + 1)));
     const response = await this.#send(method, queryStart < 0 ? path : path.slice(0, queryStart), signal ? { signal } : {}, body, query, headers);
+    const result: unknown = await response.json();
+    if (!response.ok) throw new ApiError(response.status, result);
+    return result as T;
+  });
+  readonly agentContexts = createAgentContextClient(async <T>(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal): Promise<T> => {
+    const response = await this.#send(method, path, signal ? { signal } : {}, body, undefined, headers);
     const result: unknown = await response.json();
     if (!response.ok) throw new ApiError(response.status, result);
     return result as T;

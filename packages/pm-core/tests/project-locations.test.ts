@@ -10,19 +10,36 @@ import { ProjectLocations, enumerateProjectMounts, previewProjectDirectory, read
 import { DurableState, requestHash } from '../state.ts';
 import { readCurrentCore } from '../readonly.ts';
 import { createMarkdown } from '../../pm-markdown/index.ts';
+import { MailFixtureScope } from '../../../tests/mail-fixture-lifecycle.ts';
 
 async function fixture(t: TestContext) {
-  const base = await mkdtemp(path.join(tmpdir(), 'pm-project-locations-'));
-  const root = path.join(base, 'workspace');
-  const first = path.join(base, 'first-code'), second = path.join(base, 'second-code');
-  await mkdir(root); await mkdir(first); await mkdir(second);
-  let workspace = new Workspace(root);
-  await workspace.init();
-  t.after(async () => { await workspace.close(); await rm(base, { recursive: true, force: true }); });
-  return { base, root, first, second, get workspace() { return workspace; }, restart: async () => { await workspace.close(); workspace = new Workspace(root); await workspace.init(); return workspace; } };
+  const scope = new MailFixtureScope(t.signal, 60_000);
+  t.after(() => scope.close(), { timeout: 30_000 });
+  return scope.initialize(async () => {
+    const base = await scope.acquire(() => mkdtemp(path.join(tmpdir(), 'pm-project-locations-')), owned => rm(owned, { recursive: true, force: true }));
+    const root = path.join(base, 'workspace');
+    const first = path.join(base, 'first-code'), second = path.join(base, 'second-code');
+    await scope.step(async () => { await mkdir(root); await mkdir(first); await mkdir(second); });
+    let workspace = new Workspace(root);
+    let ready: Promise<void> = Promise.resolve();
+    scope.defer(async () => { await ready.catch(() => undefined); await workspace.close(); });
+    ready = workspace.init();
+    await scope.step(() => ready);
+    return {
+      base, root, first, second, get workspace() { return workspace; },
+      restart: async () => {
+        await workspace.close();
+        scope.checkpoint();
+        workspace = new Workspace(root);
+        ready = workspace.init();
+        await scope.step(() => ready);
+        return workspace;
+      },
+    };
+  });
 }
 
-test('two physical roots share aggregate IDs/configuration and expose virtual paths only', async t => {
+test('two physical roots share aggregate IDs/configuration and expose virtual paths only', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const readme = '# Existing source\nDo not import or modify.\n';
   await writeFile(path.join(f.first, 'README.md'), readme);
@@ -52,7 +69,7 @@ test('two physical roots share aggregate IDs/configuration and expose virtual pa
   assert.equal(enumerateProjectMounts(f.root).length, 2);
 });
 
-test('all ordinary edits, raw saves, archive and deletion use the registered core', async t => {
+test('all ordinary edits, raw saves, archive and deletion use the registered core', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const project = await f.workspace.initializeProject({ entity: 'project', title: 'Edits' }, 'edit-project', { workspaceId: 'workspace-1', root: f.first });
   let task = await f.workspace.create({ project: project.id, title: 'Dates', 'x-pm-start': '2026-10-24', due: '2026-10-25' });
@@ -68,7 +85,7 @@ test('all ordinary edits, raw saves, archive and deletion use the registered cor
   assert.equal(Workspace.inspectCreation(f.root, 'edit-project').current?.revision, project.revision);
 });
 
-test('missing registered roots never recreate directories, including after restart and readonly scans', async t => {
+test('missing registered roots never recreate directories, including after restart and readonly scans', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const project = await f.workspace.initializeProject({ entity: 'project', title: 'Missing' }, 'missing-key', { workspaceId: 'workspace-1', root: f.first });
   const parked = path.join(f.base, 'unmounted'); await rename(f.first, parked);
@@ -81,7 +98,7 @@ test('missing registered roots never recreate directories, including after resta
   assert.equal(await readFile(path.join(parked, '.pm/core/projects', `${project.id}.md`), 'utf8'), project.raw);
 });
 
-test('preflight refuses overlaps, foreign metadata, sensitive roots and filesystem links', async t => {
+test('preflight refuses overlaps, foreign metadata, sensitive roots and filesystem links', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const project = await f.workspace.initializeProject({ entity: 'project', title: 'Safe' }, 'safe-key', { workspaceId: 'workspace-1', root: f.first });
   await mkdir(path.join(f.first, 'nested'));
@@ -104,7 +121,7 @@ test('preflight refuses overlaps, foreign metadata, sensitive roots and filesyst
   assert.throws(() => new FileRepository(f.root).read(`project-roots/${project.id}/../project.json`));
 });
 
-test('external project membership changes never enter the aggregate or readonly view', async t => {
+test('external project membership changes never enter the aggregate or readonly view', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const one = await f.workspace.initializeProject({ entity: 'project', title: 'One' }, 'owner-one', { workspaceId: 'workspace-1', root: f.first });
   const two = await f.workspace.initializeProject({ entity: 'project', title: 'Two' }, 'owner-two', { workspaceId: 'workspace-1', root: f.second });
@@ -116,7 +133,7 @@ test('external project membership changes never enter the aggregate or readonly 
   assert.throws(() => readCurrentCore(f.root), /unavailable/);
 });
 
-test('an interrupted original initialization resumes the reserved ID/key without writable success', async t => {
+test('an interrupted original initialization resumes the reserved ID/key without writable success', { timeout: 90_000 }, async t => {
   const f = await fixture(t); await f.workspace.close();
   const repository = new FileRepository(f.root), state = new DurableState(repository), locations = new ProjectLocations(f.root);
   const input = { entity: 'project', title: 'Interrupted', body: 'Keep exact original bytes' };
@@ -140,7 +157,7 @@ test('an interrupted original initialization resumes the reserved ID/key without
   assert.equal(next.id, 'PRJ-002');
 });
 
-test('legacy authority remains real until migration, then relocation preserves revisions and binary attachments', async t => {
+test('legacy authority remains real until migration, then relocation preserves revisions and binary attachments', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const project = await f.workspace.createEntity({ entity: 'project', title: 'Legacy', body: 'Historical project body' }, 'legacy-original');
   const task = await f.workspace.create({ project: project.id, title: 'Legacy task' }, 'legacy-task');
@@ -169,7 +186,7 @@ test('legacy authority remains real until migration, then relocation preserves r
   assert.equal(readCurrentCore(f.root).files.length, 3);
 });
 
-test('explicit moved-folder rebinding refuses active duplicates and preserves the original store identity', async t => {
+test('explicit moved-folder rebinding refuses active duplicates and preserves the original store identity', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const project = await f.workspace.initializeProject({ entity: 'project', title: 'Moved code' }, 'moved-project', { workspaceId: 'workspace-1', root: f.first });
   const original = f.workspace.projectLocation(project.id)!;
@@ -185,7 +202,7 @@ test('explicit moved-folder rebinding refuses active duplicates and preserves th
   await assert.rejects(access(f.first), { code: 'ENOENT' });
 });
 
-test('stopped restore rebinding reads only copied destinations and leaves readonly state byte-identical', async t => {
+test('stopped restore rebinding reads only copied destinations and leaves readonly state byte-identical', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const project = await f.workspace.initializeProject({ entity: 'project', title: 'Restore' }, 'restore-project', { workspaceId: 'workspace-1', root: f.first });
   await f.workspace.close();
@@ -201,15 +218,28 @@ test('stopped restore rebinding reads only copied destinations and leaves readon
   assert.equal(beforeMap.includes(f.first), false);
 });
 
-test('watcher observes registered core changes without importing arbitrary code Markdown', { timeout: 10_000 }, async t => {
+test('watcher observes registered core changes without importing arbitrary code Markdown', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const project = await f.workspace.initializeProject({ entity: 'project', title: 'Watch' }, 'watch-project', { workspaceId: 'workspace-1', root: f.first });
   const task = await f.workspace.create({ project: project.id, title: 'Before external edit' });
-  const changed = new Promise<void>(resolve => {
-    const off = f.workspace.onChange(event => { if (event.reason === 'external' && f.workspace.get(task.id).entity.title === 'External edit') { off(); resolve(); } });
+  // Neighboring durable cases took 8–17s on the regression HDD. Setup must not
+  // consume the watcher's original 10s observation deadline.
+  const changed = Promise.withResolvers<void>();
+  const observation = AbortSignal.any([t.signal, AbortSignal.timeout(10_000)]);
+  const off = f.workspace.onChange(event => {
+    if (event.reason === 'external' && f.workspace.get(task.id).entity.title === 'External edit') changed.resolve();
   });
-  await writeFile(path.join(f.first, '.pm/core/work-items', `${task.id}.md`), task.raw.replace('# Before external edit', '# External edit'));
-  await changed;
+  const aborted = () => changed.reject(observation.reason);
+  observation.addEventListener('abort', aborted, { once: true });
+  if (observation.aborted) aborted();
+  void changed.promise.catch(() => undefined);
+  try {
+    await writeFile(path.join(f.first, '.pm/core/work-items', `${task.id}.md`), task.raw.replace('# Before external edit', '# External edit'));
+    await changed.promise;
+  } finally {
+    off();
+    observation.removeEventListener('abort', aborted);
+  }
   await writeFile(path.join(f.first, 'NOT-AN-ENTITY.md'), createMarkdown({ id: 'TASK-900', title: 'Code tree is not imported' }));
   await f.workspace.rescan();
   assert.equal(f.workspace.items().some(file => file.id === 'TASK-900'), false);
@@ -218,7 +248,7 @@ test('watcher observes registered core changes without importing arbitrary code 
   assert.equal(f.workspace.get(task.id).revision, revisionOf(await readFile(path.join(f.first, '.pm/core/work-items', `${task.id}.md`), 'utf8')));
 });
 
-test('new-folder mode creates only the reserved root and refuses inode replacement', async t => {
+test('new-folder mode creates only the reserved root and refuses inode replacement', { timeout: 90_000 }, async t => {
   const f = await fixture(t), root = path.join(f.base, 'new-code');
   const input = { entity: 'project', title: 'New folder' };
   const directory = { workspaceId: 'workspace-1', root, mode: 'new' as const };
@@ -232,7 +262,7 @@ test('new-folder mode creates only the reserved root and refuses inode replaceme
   await assert.rejects(access(root), { code: 'ENOENT' });
 });
 
-test('a durable partial migration stays fenced on restart and resumes only its original transfer key', async t => {
+test('a durable partial migration stays fenced on restart and resumes only its original transfer key', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const project = await f.workspace.createEntity({ entity: 'project', title: 'Migration recovery' });
   const task = await f.workspace.create({ project: project.id, title: 'Keep task revision' });
@@ -264,7 +294,7 @@ test('a durable partial migration stays fenced on restart and resumes only its o
   assert.equal(readCurrentCore(f.root).files.length, 2);
 });
 
-test('preflight identity survives guard awaits and a crash before mount registration', async t => {
+test('preflight identity survives guard awaits and a crash before mount registration', { timeout: 90_000 }, async t => {
   const f = await fixture(t), parked = path.join(f.base, 'preflight-original');
   const input = { entity: 'project', title: 'Original directory only' };
   const directory = { workspaceId: 'workspace-1', root: f.first };
@@ -284,7 +314,7 @@ test('preflight identity survives guard awaits and a crash before mount registra
   assert.equal(Workspace.inspectCreation(f.root, 'preflight-key').request?.id, result.id);
 });
 
-test('a real unwritable selected directory stays pending without modifying existing files', async t => {
+test('a real unwritable selected directory stays pending without modifying existing files', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const original = Buffer.from('User-owned source remains exact\r\n');
   await writeFile(path.join(f.first, 'README.md'), original);
@@ -304,7 +334,7 @@ test('a real unwritable selected directory stays pending without modifying exist
   assert.equal((await f.workspace.initializeProject(input, 'permission-key', directory)).revision, recovered.revision);
 });
 
-test('ENOSPC after the identity marker preserves the reservation and resumes without duplicate identity', async t => {
+test('ENOSPC after the identity marker preserves the reservation and resumes without duplicate identity', { timeout: 90_000 }, async t => {
   const f = await fixture(t);
   const input = { entity: 'project', title: 'Capacity recovery' };
   const directory = { workspaceId: 'workspace-1', root: f.first, mode: 'existing' as const };

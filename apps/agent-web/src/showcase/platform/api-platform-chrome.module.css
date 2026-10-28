@@ -1,0 +1,200 @@
+.shell {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface);
+}
+.shell[data-ap-reference="true"] {
+  --primary: var(--foreground);
+  --primary-foreground: var(--surface);
+  --ring: var(--foreground);
+  --selection: var(--surface-raised);
+  --font-sans: system-ui, sans-serif;
+  font-family: var(--font-sans);
+}
+:global(html.dark) .shell[data-ap-reference="true"] {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --surface: #171717;
+  --surface-raised: #262626;
+  --muted: #262626;
+  --surface-hover: #262626;
+  --border: rgb(255 255 255 / 10%);
+  --ap-provider-anthropic: lab(70.0429 42.5156 75.8207);
+}
+.shell[data-ap-reference="true"] {
+  --ap-chart-positive: #10b981;
+  --ap-chart-negative: #ef4444;
+  --ap-chart-warning: #f59e0b;
+  --ap-chart-neutral: #a3a3a3;
+  --ap-provider-anthropic: lab(57.1026 64.2584 89.8886);
+  --ap-provider-mistral: lab(64.272 57.1788 90.3583);
+  --background: #ffffff;
+}
+.shell[data-ap-reference="true"] {
+  background: var(--background);
+}
+.shell[data-ap-reference="true"] :global([data-ap-page]) {
+  letter-spacing: -0.15px;
+}
+:global(html.dark)
+  .shell[data-ap-reference="true"]
+  :global([data-ap-page="audio-playground"] textarea),
+:global(html.dark) .shell[data-ap-reference="true"] :global([data-ap-page="evaluations"] input),
+:global(html.dark)
+  .shell[data-ap-reference="true"]
+  :global([data-ap-page="response-review"] textarea) {
+  background: transparent;
+  border-color: rgb(255 255 255 / 15%);
+}
+.shell[data-ap-reference="true"] :global([role="switch"] > span > span) {
+  background: var(--surface);
+}
+.shell[data-ap-reference="true"] :global([data-overlay-backdrop]) {
+  background: rgb(0 0 0 / 80%);
+  backdrop-filter: none;
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--background);
+}
+.brand {
+  display: flex;
+  height: 56px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.brandLink {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+}
+.brandSubtitle {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.navigation {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.directory {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.groupTitle {
+  padding: 16px 8px 8px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  margin-block: 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  line-height: 20px;
+}
+.navLink span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.navLink:hover {
+  background: var(--surface-hover);
+}
+.navLink[aria-current="page"] {
+  background: var(--selection);
+  font-weight: 500;
+}
+.navLink:focus-visible,
+.brandLink:focus-visible,
+.directory:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.identity {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.identity strong {
+  font-weight: 500;
+}
+.identity p {
+  color: var(--muted-foreground);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  font-size: 11px;
+}
+.workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  flex-shrink: 0;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.pageTitle {
+  font-size: 14px;
+  line-height: 20px;
+}
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.fixtureLabel {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  font-size: 12px;
+  line-height: 16px;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}

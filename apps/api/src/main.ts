@@ -14,7 +14,7 @@ const invitationMail = readInvitationMailConfig();
 const accountRecoveryMail = readAccountRecoveryMailConfig();
 const agentChat = readAgentChatConfig();
 const storage = runtime.databaseUrl ? readBlobStoreConfig() : { provider: 'disabled' as const };
-const app = buildApp({ logger: true, ...(runtime.databaseUrl ? { databaseUrl: runtime.databaseUrl } : {}), blobStore: createBlobStore(storage), blobStorageLocator: blobStorageLocator(storage), coreWorkspaceRoot: runtime.coreWorkspaceRoot, localProjects: runtime.localProjects, publicOrigin: runtime.publicOrigin, cookieSecure: runtime.cookieSecure, ...(invitationMail ? { invitationMail } : {}), ...(accountRecoveryMail ? { accountRecoveryMail } : {}), webhooks: readWebhookConfig(), ...(agentChat ? { agentChat } : {}) });
+const app = buildApp({ logger: true, ...(runtime.databaseUrl ? { databaseUrl: runtime.databaseUrl } : {}), blobStore: createBlobStore(storage), blobStorageLocator: blobStorageLocator(storage), coreWorkspaceRoot: runtime.coreWorkspaceRoot, chatSpaceRoot: runtime.chatSpaceRoot, localProjects: runtime.localProjects, publicOrigin: runtime.publicOrigin, cookieSecure: runtime.cookieSecure, ...(invitationMail ? { invitationMail } : {}), ...(accountRecoveryMail ? { accountRecoveryMail } : {}), webhooks: readWebhookConfig(), ...(agentChat ? { agentChat } : {}) });
 let closing = false;
 
 async function shutdown() {

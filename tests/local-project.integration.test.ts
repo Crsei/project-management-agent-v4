@@ -9,9 +9,10 @@ import { ProjectManagementClient } from '../packages/contracts/src/client.ts';
 import type { LocalDirectory, LocalProjectAttempt, LocalProjectInitialization, LocalProjectLocation, LocalProjectSettings } from '../packages/contracts/src/local-projects.ts';
 import type { Command, Entity } from '../packages/domain/src/core.ts';
 import type { FileRecord } from '../packages/pm-schema/index.ts';
-import { createLocalProjectFixture, localProjectEventually } from './local-project-fixture.ts';
+import { createLocalProjectFixture, localProjectCaseTimeout, localProjectEventually } from './local-project-fixture.ts';
 import type { LocalProjectFixture } from './local-project-fixture.ts';
 import { lockWorkspace } from '../packages/infrastructure/src/database.ts';
+import { MailFixtureScope } from './mail-fixture-lifecycle.ts';
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/a9sAAAAASUVORK5CYII=', 'base64');
 type Ready = Extract<LocalProjectAttempt, { status: 'ready' }>;
@@ -32,7 +33,7 @@ async function upload(f: LocalProjectFixture, projectId: string, bytes: Buffer, 
   return f.command<Delivery>('RegisterArtifact', { title: fileName, kind: mediaType === 'image/png' ? 'image' : 'document', uploadId: upload.id }, { projectId, expectedVersions: { [upload.id]: upload.version } });
 }
 async function download(f: LocalProjectFixture, versionId: string, cookie = f.ownerCookie): Promise<Buffer> {
-  const response = await fetch(`${f.origin}/api/v1/workspaces/${f.workspaceId}/artifact-versions/${versionId}/content`, { headers: { cookie }, signal: AbortSignal.timeout(20_000) });
+  const response = await fetch(`${f.origin}/api/v1/workspaces/${f.workspaceId}/artifact-versions/${versionId}/content`, { headers: { cookie }, signal: AbortSignal.any([f.signal, AbortSignal.timeout(20_000)]) });
   assert.equal(response.status, 200);
   return Buffer.from(await response.arrayBuffer());
 }
@@ -49,9 +50,10 @@ async function filesBelow(root: string): Promise<string[]> {
 
 // These cases deliberately do not skip without PostgreSQL. The explicit command
 // is an acceptance gate, not a model/unit suite or a health-check substitution.
-describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries', { timeout: 300_000, concurrency: 1 }, () => {
-  it('LP-A01/A02/A03/A06: keeps two roots separate, preserves source bytes, aggregates Markdown and persists uploads across restart', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries', { concurrency: 1 }, () => {
+  it('LP-A01/A02/A03/A06: keeps two roots separate, preserves source bytes, aggregates Markdown and persists uploads across restart', { timeout: localProjectCaseTimeout }, async t => {
+    const lifetime = new AbortController();
+    const f = await createLocalProjectFixture({ signal: AbortSignal.any([t.signal, lifetime.signal]) }); t.after(() => f.close());
     const rootA = join(f.parents[0], 'existing-code');
     await mkdir(join(rootA, 'src'), { recursive: true });
     const originals: Record<string, Buffer> = { 'README.md': Buffer.from('# User README\r\nDo not rewrite.\r\n'), 'src/main.bin': Buffer.from([0, 255, 127, 10, 0, 13]) };
@@ -93,7 +95,7 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     for (const root of [rootA, rootB]) for (const path of await filesBelow(join(root, '.pm'))) beforeWorker.set(path, await readFile(path));
     await f.startWorker();
     const conversation = await f.command<Entity>('CreateConversation', { title: 'Real Worker publication' });
-    await localProjectEventually(async () => (await f.pool.query("SELECT 1 FROM events WHERE envelope->>'aggregateId'=$1", [conversation.id])).rowCount! > 0, 'the real Worker to publish a real PM outbox event');
+    await localProjectEventually(async () => (await f.pool.query("SELECT 1 FROM events WHERE envelope->>'aggregateId'=$1", [conversation.id])).rowCount! > 0, 'the real Worker to publish a real PM outbox event', 20_000, f.signal);
     const afterWorkerPaths = [...await filesBelow(join(rootA, '.pm')), ...await filesBelow(join(rootB, '.pm'))];
     assert.deepEqual(afterWorkerPaths.sort(), [...beforeWorker.keys()].sort(), 'The real Worker does not create project authority files');
     for (const [path, bytes] of beforeWorker) assert.deepEqual(await readFile(path), bytes, 'Worker observation never mutates project authority');
@@ -109,12 +111,19 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     await localProjectEventually(async () => {
       const read = await f.request<FileRecord>(`${core}/files/${task.body.id}`);
       return read.status === 200 && read.body.raw === external && read.body.revision !== edited.body.revision;
-    }, 'the external-root watcher to publish changed authoritative bytes');
+    }, 'the external-root watcher to publish changed authoritative bytes', 20_000, f.signal);
     for (const [name, bytes] of Object.entries(originals)) assert.deepEqual(await readFile(join(rootA, name)), bytes);
+    const stoppedOrigin = f.origin;
+    lifetime.abort(new Error('Completed local-project acceptance lifetime'));
+    const closing = f.close();
+    assert.equal(f.close(), closing, 'Concurrent fixture close calls share the actual cleanup Promise');
+    await closing;
+    await assert.rejects(lstat(f.root), { code: 'ENOENT' });
+    await assert.rejects(fetch(`${stoppedOrigin}/health/live`, { signal: AbortSignal.timeout(2_000) }));
   });
 
-  it('LP-A02/A05/A06: rejects unauthorized host probing, untrusted origins, escaping/symlink/nested/duplicate and hard-linked markers', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+  it('LP-A02/A05/A06: rejects unauthorized host probing, untrusted origins, escaping/symlink/nested/duplicate and hard-linked markers', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const prefix = `/api/v1/workspaces/${f.workspaceId}/local-projects`;
     const configured = await f.request<LocalProjectSettings>(`${prefix}/settings`);
     assert.equal(configured.status, 200); assert.equal(configured.body.enabled, true); assert.equal(configured.body.canManage, true);
@@ -178,14 +187,14 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.deepEqual(files.body.items.filter(file => file.entity.entity === 'project').map(file => file.id), [a.record.id]);
     const binary = await upload(f, a.record.id, Buffer.from('private object'));
     const outsider = await f.member('No workspace access');
-    const hidden = await fetch(`${f.origin}/api/v1/workspaces/${f.workspaceId}/artifact-versions/${binary.artifactVersion.id}/content`, { headers: { cookie: outsider.cookie } });
+    const hidden = await fetch(`${f.origin}/api/v1/workspaces/${f.workspaceId}/artifact-versions/${binary.artifactVersion.id}/content`, { headers: { cookie: outsider.cookie }, signal: AbortSignal.any([f.signal, AbortSignal.timeout(30_000)]) });
     assert.equal(hidden.status, 404); assert.equal((await hidden.text()).includes(a.location.path!), false);
     const arbitrary = await f.request(`/api/v1/workspaces/${f.workspaceId}/core/files/${encodeURIComponent(join(a.location.path!, '.pm/project.json'))}`);
     assert.ok(arbitrary.status >= 400, 'Authorized ordinary core file reads never accept host absolute paths');
   });
 
-  it('LP-A04/A09: original key survives duplicate/mismatched submissions and every native/command entry requires a local directory', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+  it('LP-A04/A09: original key survives duplicate/mismatched submissions and every native/command entry requires a local directory', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const prefix = `/api/v1/workspaces/${f.workspaceId}`;
     const input: LocalProjectInitialization = { input: { entity: 'project', title: 'Exactly once' }, directory: { mode: 'new', parentPath: f.parents[0], folderName: 'once' } };
     const key = randomUUID();
@@ -214,12 +223,14 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.deepEqual((await f.request(`${prefix}/core/creation-attempts/${command.commandId}`)).body, { status: 'not_found' }, 'A PM command receipt never becomes a native journal outcome');
   });
 
-  it('LP-A04: recovers real dropped HTTP responses using the fixed original initialization key', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+  it('LP-A04: recovers real dropped HTTP responses using the fixed original initialization key', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const key = randomUUID(), path = `/api/v1/workspaces/${f.workspaceId}/local-projects/initializations`;
     const body: LocalProjectInitialization = { input: { entity: 'project', title: 'Lost successful response' }, directory: { mode: 'new', parentPath: f.parents[0], folderName: 'lost-response' } };
     const completion = Promise.withResolvers<Ready>();
-    const proxy = createServer((incoming, outgoing) => {
+    const proxyScope = new MailFixtureScope(t.signal);
+    t.after(proxyScope.close);
+    const proxy = proxyScope.own(createServer((incoming, outgoing) => {
       void (async () => {
         const chunks: Buffer[] = [];
         for await (const chunk of incoming) chunks.push(Buffer.from(chunk));
@@ -230,11 +241,17 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
         if (upstream.body.status !== 'ready') throw new Error('Expected durable initialization');
         outgoing.destroy(); completion.resolve(upstream.body);
       })().catch(error => { completion.reject(error); outgoing.destroy(); });
+    }), async owned => {
+      owned.closeAllConnections();
+      const closing = Promise.withResolvers<void>();
+      owned.close(error => error && (error as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING' ? closing.reject(error) : closing.resolve());
+      await closing.promise;
     });
-    const listening = once(proxy, 'listening'); proxy.listen(0, '127.0.0.1'); await listening;
-    t.after(async () => { const closed = once(proxy, 'close'); proxy.closeAllConnections(); proxy.close(); await closed; });
+    await proxyScope.initialize(async () => {
+      const listening = once(proxy, 'listening'); proxy.listen(0, '127.0.0.1'); await listening;
+    });
     const address = proxy.address(); assert.ok(address && typeof address !== 'string');
-    await assert.rejects(fetch(`http://127.0.0.1:${address.port}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'Idempotency-Key': key }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) }));
+    await assert.rejects(fetch(`http://127.0.0.1:${address.port}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'Idempotency-Key': key }, body: JSON.stringify(body), signal: AbortSignal.any([f.signal, AbortSignal.timeout(30_000)]) }));
     const committed = await completion.promise;
     await f.restartApi();
     assert.deepEqual((await f.request(`${path}/${key}`)).body, committed);
@@ -246,8 +263,8 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.equal((await readdir(f.parents[0])).length, 1, 'Result lookup/recovery never retries an unknown create under a new key');
   });
 
-  it('LP-A04: survives a genuine API SIGKILL after disk commit but before SQL audit commit; GET is read-only and recovery is exactly once', async t => {
-    const f = await createLocalProjectFixture();
+  it('LP-A04: survives a genuine API SIGKILL after disk commit but before SQL audit commit; GET is read-only and recovery is exactly once', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal });
     const lock = await f.pool.connect();
     t.after(async () => { lock.release(); await f.close(); });
     const lockNamespace = randomInt(1, 2_147_483_647), lockId = randomInt(1, 2_147_483_647);
@@ -260,7 +277,7 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
       await localProjectEventually(async () => {
         const waiting = await f.pool.query("SELECT 1 FROM pg_locks WHERE locktype='advisory' AND classid=$1::oid AND objid=$2::oid AND objsubid=2 AND NOT granted", [lockNamespace, lockId]);
         return waiting.rowCount! > 0;
-      }, 'the real API to block at its post-file SQL audit boundary');
+      }, 'the real API to block at its post-file SQL audit boundary', 20_000, f.signal);
       const names = (await readdir(join(root, '.pm/core/projects'))).filter(file => file.endsWith('.md'));
       assert.equal(names.length, 1);
       const original = await readFile(join(root, '.pm/core/projects', names[0]!));
@@ -288,8 +305,8 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     } finally { await lock.query('SELECT pg_advisory_unlock($1,$2)', [lockNamespace, lockId]); }
   });
 
-  it('LP-A05: missing disks are unavailable rather than silently recreated and become readable under their original identity when reattached', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+  it('LP-A05: missing disks are unavailable rather than silently recreated and become readable under their original identity when reattached', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const a = await initialize(f, 'Removable disk project', { mode: 'new', parentPath: f.parents[0], folderName: 'removable' });
     const artifact = await upload(f, a.record.id, Buffer.from('History on the removable disk'));
     const root = a.location.path!, offline = join(f.parents[0], 'owned-offline-disk');
@@ -299,7 +316,7 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.equal(location.status, 200); assert.equal(location.body.status, 'unavailable');
     const write = await f.request(`${prefix}/core/entities`, { method: 'POST', headers: { 'Idempotency-Key': randomUUID() }, body: { entity: 'work_item', project: a.record.id, title: 'Must not use an empty fallback root' } });
     assert.ok(write.status >= 400);
-    const read = await fetch(`${f.origin}${prefix}/artifact-versions/${artifact.artifactVersion.id}/content`, { headers: { cookie: f.ownerCookie } }); assert.ok(read.status >= 400);
+    const read = await fetch(`${f.origin}${prefix}/artifact-versions/${artifact.artifactVersion.id}/content`, { headers: { cookie: f.ownerCookie }, signal: AbortSignal.any([f.signal, AbortSignal.timeout(30_000)]) }); assert.ok(read.status >= 400);
     await assert.rejects(lstat(root), { code: 'ENOENT' });
     assert.equal(await readFile(join(offline, '.pm/core/projects', `${a.record.id}.md`), 'utf8'), a.record.raw);
     await f.stopServices(); await rename(offline, root); await f.restartApi();
@@ -308,8 +325,8 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.deepEqual(await download(f, artifact.artifactVersion.id), Buffer.from('History on the removable disk'));
   });
 
-  it('LP-A07: migrates a genuine legacy project and relocates it without changing IDs, revisions, historic references or original user files', async t => {
-    const f = await createLocalProjectFixture({ localProjectsEnabled: false }); t.after(() => f.close());
+  it('LP-A07: migrates a genuine legacy project and relocates it without changing IDs, revisions, historic references or original user files', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ localProjectsEnabled: false, signal: t.signal }); t.after(() => f.close());
     const disabled = await f.request<LocalProjectSettings>(`/api/v1/workspaces/${f.workspaceId}/local-projects/settings`);
     assert.equal(disabled.status, 200); assert.equal(disabled.body.enabled, false); assert.equal(disabled.body.reason, 'not_configured');
     const project = await f.command<Entity>('CreateProject', { name: 'Legacy project before local directories', goal: 'Preserve this body', ownerId: f.owner.id, completionCriteria: [] });
@@ -364,8 +381,8 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.deepEqual(await download(f, copied.artifactVersion.id), png);
   });
 
-  it('LP-A07: explicitly rebinds an externally renamed matching root, rejects a clone while the original exists, and never recreates the missing source', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+  it('LP-A07: explicitly rebinds an externally renamed matching root, rejects a clone while the original exists, and never recreates the missing source', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const project = await initialize(f, 'Externally moved project', { mode: 'new', parentPath: f.parents[0], folderName: 'before-external-move' });
     const originalRoot = project.location.path!, prefix = `/api/v1/workspaces/${f.workspaceId}`;
     const task = await f.request<FileRecord>(`${prefix}/core/entities`, { method: 'POST', headers: { 'Idempotency-Key': randomUUID() }, body: { entity: 'work_item', project: project.record.id, title: 'Task survives an OS folder move' } });
@@ -399,8 +416,8 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
     assert.equal(await readFile(join(movedRoot, '.pm/core/work-items', `${task.body.id}.md`), 'utf8'), updated.body.raw);
   });
 
-  it('LP-A05: missing workspace authority state fails closed without creating replacement IDs or journals', async t => {
-    const f = await createLocalProjectFixture(); t.after(() => f.close());
+  it('LP-A05: missing workspace authority state fails closed without creating replacement IDs or journals', { timeout: localProjectCaseTimeout }, async t => {
+    const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const project = await initialize(f, 'Workspace authority must survive', { mode: 'new', parentPath: f.parents[0], folderName: 'retained-project' });
     const prefix = `/api/v1/workspaces/${f.workspaceId}`;
     const state = join(f.coreRoot, f.workspaceId, '.pm/state'), offlineState = `${state}.owned-offline`;

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
-import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { buildApp } from '../apps/api/src/app.ts';
 import { publishOutboxBatch } from '../packages/application/src/outbox.ts';
@@ -10,15 +9,16 @@ import type { Command, Entity } from '../packages/domain/src/core.ts';
 import type { TimeDashboard, TimeTimer, TimeWorklog } from '../packages/domain/src/dashboard-time.ts';
 import { createDashboardFixture, dashboardDatabaseUrl, type DashboardFixture } from './dashboard-fixture.ts';
 import { LocalBlobStore } from '../packages/infrastructure/src/blobs.ts';
+import { unlink } from 'node:fs/promises';
 
 async function task(f: DashboardFixture, name = 'Private timed task'): Promise<Entity> {
   const project = await f.command<Entity>('CreateProject', { name, goal: 'Time tracking acceptance', ownerId: f.owner.id, completionCriteria: ['A real task'] });
   return f.command<Entity>('CreateWorkItem', { title: name, description: 'Do the work', acceptanceCriteria: [{ id: randomUUID(), text: 'Done' }], assigneeId: f.owner.id }, { extra: { projectId: project.id } });
 }
 
-describe('dashboard time: real PostgreSQL and HTTP behavior', { skip: !dashboardDatabaseUrl, timeout: 180_000 }, () => {
-  it('serializes concurrent starts, enforces the DB constraint and atomically stops once', async t => {
-    const f = await createDashboardFixture();
+describe('dashboard time: real PostgreSQL and HTTP behavior', { skip: !dashboardDatabaseUrl }, () => {
+  it('serializes concurrent starts, enforces the DB constraint and atomically stops once', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
     t.after(() => f.close());
     const item = await task(f);
     const starts = await Promise.all(Array.from({ length: 5 }, () => f.send({ commandId: randomUUID(), commandType: 'StartTimer', payload: { taskId: item.id } })));
@@ -49,27 +49,26 @@ describe('dashboard time: real PostgreSQL and HTTP behavior', { skip: !dashboard
     assert.equal(counts.rows[0]!.count, '1');
   });
 
-  it('recovers a server start from a fresh API instance without resetting the timer', async t => {
-    const f = await createDashboardFixture();
-    const restart: { app?: FastifyInstance } = {};
-    t.after(async () => { await restart.app?.close(); await f.close(); });
+  it('recovers a server start from a fresh API instance without resetting the timer', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
+    t.after(() => f.close());
     const item = await task(f, 'Restart timer task');
     const active = await f.command<TimeTimer>('StartTimer', { taskId: item.id });
     await f.app.close();
     const blobRoot = join(dirname(f.coreRoot), 'blobs');
-    restart.app = buildApp({ databaseUrl: f.pool.options.connectionString!, blobStore: new LocalBlobStore(blobRoot), blobStorageLocator: { provider: 'local', root: blobRoot }, coreWorkspaceRoot: f.coreRoot });
-    const origin = await restart.app.listen({ host: '127.0.0.1', port: 0 });
-    const response = await fetch(`${origin}/api/v1/workspaces/${f.workspaceId}/dashboard/time`, { headers: { cookie: f.ownerCookie } });
+    const restart = f.ownApp(() => buildApp({ databaseUrl: f.pool.options.connectionString!, blobStore: new LocalBlobStore(blobRoot), blobStorageLocator: { provider: 'local', root: blobRoot }, coreWorkspaceRoot: f.coreRoot, signal: t.signal }));
+    const origin = await restart.listen({ host: '127.0.0.1', port: 0 });
+    const response = await fetch(`${origin}/api/v1/workspaces/${f.workspaceId}/dashboard/time`, { signal: t.signal, headers: { cookie: f.ownerCookie } });
     assert.equal(response.status, 200);
     const recovered = z.object({ activeTimer: z.object({ id: z.string(), startedAt: z.iso.datetime() }).nullable() }).parse(await response.json());
     assert.equal(recovered.activeTimer?.id, active.id);
     assert.equal(recovered.activeTimer?.startedAt, active.startedAt);
-    const stop = await fetch(`${origin}/api/v1/workspaces/${f.workspaceId}/commands`, { method: 'POST', headers: { cookie: f.ownerCookie, 'content-type': 'application/json' }, body: JSON.stringify({ commandId: randomUUID(), commandType: 'StopTimer', targetId: active.id, expectedVersions: { [active.id]: active.version }, payload: {} }) });
+    const stop = await fetch(`${origin}/api/v1/workspaces/${f.workspaceId}/commands`, { signal: t.signal, method: 'POST', headers: { cookie: f.ownerCookie, 'content-type': 'application/json' }, body: JSON.stringify({ commandId: randomUUID(), commandType: 'StopTimer', targetId: active.id, expectedVersions: { [active.id]: active.version }, payload: {} }) });
     assert.equal(stop.status, 200);
   });
 
-  it('keeps logs private and permits stopping after task scope revocation without hidden references', async t => {
-    const f = await createDashboardFixture();
+  it('keeps logs private and permits stopping after task scope revocation without hidden references', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
     t.after(() => f.close());
     const first = await task(f, 'Revoked secret timer title');
     const second = await task(f, 'Still accessible task');
@@ -106,17 +105,20 @@ describe('dashboard time: real PostgreSQL and HTTP behavior', { skip: !dashboard
     assert.ok(!changes.body.events.some(value => value.event.aggregateId === timer.id || value.event.aggregateId === own.worklogs[0]!.id));
   });
 
-  it('redacts a deleted task while retaining a usable own stop command', async t => {
-    const f = await createDashboardFixture();
+  it('protects retained timer history and redacts an externally removed task while permitting stop', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
     t.after(() => f.close());
     const item = await task(f, 'Deleted task reference');
     const timer = await f.command<TimeTimer>('StartTimer', { taskId: item.id });
-    const source = await f.request<{ revision: string }>(`/api/v1/workspaces/${f.workspaceId}/core/files/${item.id}`);
+    const source = await f.request<{ revision: string; path: string }>(`/api/v1/workspaces/${f.workspaceId}/core/files/${item.id}`);
     assert.equal(source.status, 200);
     const archived = await f.request<{ revision: string }>(`/api/v1/workspaces/${f.workspaceId}/core/entities/${item.id}/archive`, { method: 'POST', body: { revision: source.body.revision } });
     assert.equal(archived.status, 200);
-    const deleted = await f.request(`/api/v1/workspaces/${f.workspaceId}/core/entities/${item.id}`, { method: 'DELETE', body: { revision: archived.body.revision } });
-    assert.equal(deleted.status, 200);
+    const deleted = await f.request<{ error: { code: string } }>(`/api/v1/workspaces/${f.workspaceId}/core/entities/${item.id}`, { method: 'DELETE', body: { revision: archived.body.revision } });
+    assert.equal(deleted.status, 422);
+    assert.equal(deleted.body.error.code, 'DELETE_REFERENCED');
+    // External source loss remains possible even though the API retains history.
+    await unlink(join(f.coreRoot, f.workspaceId, source.body.path));
     const snapshot = await f.read<TimeDashboard>('time');
     assert.equal(snapshot.activeTimer?.task.taskId, null);
     assert.equal(snapshot.activeTimer?.task.unavailable, true);
@@ -126,8 +128,8 @@ describe('dashboard time: real PostgreSQL and HTTP behavior', { skip: !dashboard
     assert.equal(stopped.worklogs[0]!.task.unavailable, true);
   });
 
-  it('records real manual intervals and clips totals in the personal IANA zone', async t => {
-    const f = await createDashboardFixture();
+  it('records real manual intervals and clips totals in the personal IANA zone', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
     t.after(() => f.close());
     const item = await task(f, 'Manual work task');
     await f.pool.query("UPDATE users SET time_zone='America/New_York',profile_version=profile_version+1 WHERE id=$1", [f.owner.id]);
@@ -150,8 +152,8 @@ describe('dashboard time: real PostgreSQL and HTTP behavior', { skip: !dashboard
     assert.equal((await f.read<TimeDashboard>('time')).worklogs.length, 1);
   });
 
-  it('keeps heartbeat and preference versions independent, honors TTL and rejects stale tabs', async t => {
-    const f = await createDashboardFixture();
+  it('keeps heartbeat and preference versions independent, honors TTL and rejects stale tabs', { timeout: 180_000 }, async t => {
+    const f = await createDashboardFixture({ signal: t.signal });
     t.after(() => f.close());
     const preference = await f.command<{ id: string; version: number }>('SetPresencePreference', { preference: 'away' });
     const heartbeat = await f.command<{ id: string; version: number; heartbeatAt: string }>('HeartbeatPresence', {});

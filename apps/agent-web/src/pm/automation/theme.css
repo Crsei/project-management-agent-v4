@@ -1,0 +1,35 @@
+/*
+ * The automation panels were authored against Radix gray/accent scales. Agent Chat
+ * uses PM's shared semantic tokens, so map the scale locally instead of shipping a
+ * second theme file.
+ */
+.pm-automation {
+  --gray-1: var(--surface);
+  --gray-2: var(--surface-raised);
+  --gray-3: var(--surface-hover);
+  --gray-5: var(--selection);
+  --gray-6: var(--border);
+  --gray-7: var(--border-hover, var(--border));
+  --gray-8: var(--border-hover, var(--border));
+  --gray-11: var(--text-muted);
+  --gray-12: var(--foreground);
+  --green-3: color-mix(in srgb, var(--success) 14%, var(--surface));
+  --green-6: var(--success);
+  --green-11: var(--success);
+  --red-2: color-mix(in srgb, var(--destructive) 10%, var(--surface));
+  --red-3: color-mix(in srgb, var(--destructive) 16%, var(--surface));
+  --red-6: var(--destructive);
+  --red-11: var(--destructive);
+  --amber-2: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  --amber-6: var(--warning);
+  --blue-8: var(--ring);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.pm-automation :is(button, input, select, textarea) { font-size: 14px; line-height: 1.5; }
+.pm-automation select { height: 32px; min-height: 32px; padding: 0 8px; border: .5px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--foreground); }
+.pm-automation input::placeholder, .pm-automation textarea::placeholder { color: var(--text-muted); }
+.pm-automation input:focus-visible, .pm-automation select:focus-visible, .pm-automation textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.pm-automation .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

@@ -1,6 +1,6 @@
-# 部署
+# v3 部署
 
-支持两种明确分开的 Linux 运行方式：既有专用 PostgreSQL Compose + 独立 API/Worker Node 进程，以及新增 API/Worker/Web 应用 Compose。后者连接**已经存在的专用 PostgreSQL 网络**，不创建、替换或停止数据库容器。所有默认发布端口仅绑定 loopback；不改动其他 PostgreSQL、Plane 或 Agent 服务。配置交付不等于已通过生产部署，实际运行证据与未验收矩阵见本文末尾。
+只管理独立 `project-management-agent-v3`：公共 Web `3223`、PM API `4193`、Agent API `4323`、Agent Web 开发上游 `4324`、PostgreSQL `55443`。本机五进程与生产 PM API/Worker/Agent API/Caddy Compose 是两种明确分开的拓扑；应用 Compose 连接**本 v3 已存在的专用 PostgreSQL 网络**，不接管来源数据库。配置交付不等于真实 Provider/CLI 或生产部署已通过，v3 实测以[任务验收记录](../V3-AGENT-CHAT-TASKS.zh.md)为准；本页保留的早期 PM 证据只适用于其记录批次。
 
 ## 启动与配置
 
@@ -12,30 +12,46 @@ pnpm setup:local
 pnpm db:up
 pnpm db:migrate
 pnpm bootstrap
-pnpm build
-# 先准备与 API 实际存储位置一致的无凭据目标描述符；下面仅用于全新空库/空存储。
-pnpm storage bind --new --stopped --target-config /secure/pm-storage-target.json
+pnpm build:v3
+# 仅全新空库/空存储；setup 的描述符对应默认 .local/blobs。
+pnpm storage bind --new --stopped --target-config .local/blob-target.json
 pnpm services:start
 pnpm services:status
 ```
 
-`setup:local` 分别创建 0600 的 `.env` 与 `.env.worker`，随机生成数据库密码；已有文件不覆盖。新安装显式选择 `BLOB_PROVIDER=local`；**首次启动前仍须停写绑定存储**。目标描述符例如 `{"BLOB_PROVIDER":"local","BLOB_ROOT":"/实际绝对路径/blobs"}`，路径必须与 API 配置相同；已有成果的旧安装使用 `bind --adopt` 全量核验，不能用 `--new` 冒充空库。维护前记录 `--target-store-id` 与 `--operation-id`，未知结果只核对原身份。镜像默认 `postgres:16-alpine`，可在首次 setup 时显式传入 POSTGRES_IMAGE；数据库使用 Compose project `project-management-agent-v2-backend` 的独立命名卷，宿主端口默认 55433（本副本为 55442）。
+`setup:local` 创建 0600 的 `.env`、`.env.worker`、`.env.agent` 并随机生成**新 v3**数据库密码，已有文件不覆盖，不复制旧账号/Provider 凭据。独立数据在本仓 `.local/`；Agent 默认 `.local/agent-data`，不使用原全局目录，不隐式导入全局 CLI homes。新安装显式选择 Local，仍须停写绑定；`blob-target.json` 的绝对 BLOB_ROOT 必须与 API 配置一致。已有成果使用 `bind --adopt` 全量核验，不能用 `--new` 冒充空库。数据库 Compose project 为 `project-management-agent-v3-backend`，卷与来源隔离，宿主默认55443。
 
 管理员信息在 `.local/access.json`，内容不输出日志。正式业务命令需要登录会话、当前成员能力和版本。新账号通过 `pnpm account:create --email EMAIL --name NAME` 生成，需另由管理员显式授予 Workspace/Project 能力。
 
 | 配置 | 默认/职责 |
 | --- | --- |
-| HOST / PORT | 127.0.0.1 / 4100，API 监听地址 |
-| PUBLIC_ORIGIN | http://127.0.0.1:4100，允许的浏览器来源；未来前端同源/BFF 接入须明确配置 |
+| HOST / PORT | 127.0.0.1 / 4193，PM API 监听地址 |
+| PUBLIC_ORIGIN | http://127.0.0.1:3223，精确浏览器来源 |
 | DATABASE_URL | 私有数据库连接；不得写入文档、日志或版本库 |
 | BLOB_PROVIDER / BLOB_ROOT | 默认 local，根目录 `.local/blobs`；仍须显式绑定才可用。disabled 明确禁用，S3 必须显式选择和配置，不隐式回退 Local |
 | CORE_WORKSPACE_ROOT | `.local/pm-workspaces`；每个 PM workspace 一个真实目录，存放权威 Markdown/配置/状态 |
+| PM_CHAT_SPACE_ROOT | 默认 PM API 服务用户的 `~/.pmv3`；Chat 文件区域默认根目录，支持绝对路径覆盖，不改变 PM 核心、Agent SQLite 或 Provider homes |
 | CHOKIDAR_USEPOLLING | 默认 false；宿主 inotify 配额耗尽时设为 true，文件监听改为轮询（权威不变） |
 | COOKIE_SECURE | 本地 HTTP 为 false；HTTPS 部署需 true，并在该部署下重新验证认证 |
 | WORKER_INTERVAL_MS | 500；失败时指数退避，最大 30 秒 |
 | EVENT_RETENTION_DAYS | 7；事件过期后通过实体快照恢复 |
 
 Worker 使用独立 `.env.worker`，不继承 API 的 S3/AWS 凭据；管理脚本只传系统运行变量和该角色配置。升级已有安装需由操作者准备 Worker 文件，不能把 API 整份环境复制过去。Worker 需要 `DATABASE_URL`、只读核心目录及按功能分配的邮件/Webhook 配置；迁移角色只需数据库，Web 不得取得这些秘密。
+
+### 五进程开发与本机服务管理
+
+`pnpm dev:v3` 直接启动 PM API/Worker/Agent API 源码与两套 Web dev；Web 有 HMR，后端源码修改后显式重启。`pnpm services:start` 使用 `build:v3` 的 API/Worker/Agent 产物和两套 Web preview，仅用于本机内测。两者不能在同一端口并行；切换模式先 `pnpm services:stop`。`services:status` 分别显示进程身份与 HTTP 就绪，不声明模型已配置或执行成功。Ctrl-C 只停止该次 dev 启动的自身进程；常驻进程由 `services:stop` 管理。
+
+管理器记录 `.local/services.json`，发送信号前同时验证 PID、Linux `/proc` 启动时间、精确 cwd 与允许入口；端口占用时拒绝启动，不按端口查杀，不删除数据库/Agent 数据。日志在 `.local/logs`。PM 认证 Cookie 为 `pm_v3_session`，Agent 为 `agent_v3_access`，保留原 Origin/认证/目录保护，没有新增角色或授权规则。
+
+开发/preview 的公共 PM Web 首先将 `/agent/api/*` 去掉 `/agent` 转发 Agent API，再将 `/agent/*` 交给 Agent Web；两套 SPA 与 Provider 深链接、`/agent/assets`、流和 WS 同源。隔离覆盖变量：`PM_WEB_PORT`、`PM_API_URL`、`PM_API_ORIGIN`、`AGENT_WORKSPACE_API_URL`、`AGENT_WORKSPACE_WEB_URL`；Agent Vite 监听用 `AGENT_WEB_PORT`。Provider 设置为 `/agent/settings/providers`，私有环境为 `.env.agent`，没有模型配置不会返回假成功。
+
+Agent Web 的本机 preview 会直接服务 `dist`，构建使用 `emptyOutDir:false` 保留旧的带哈希 JS/CSS。已经打开的页面可能尚未加载 Git、Terminal 或设置页；如果重建时清空 `dist`，这些页面稍后点击会因旧 chunk 消失而进入错误边界。不要在服务中用 `--emptyOutDir`、`rm dist` 或发布同步的删除选项覆盖此保护；历史构建资源会占用额外磁盘，只在停止 preview、确认旧页面不再使用后显式清理。配置不兼容的 Agent API/Web 必须配套更新，`services:start` 不会替换已有后端 PID。
+
+Chat Space 目录与检查器增量需应用 `0037_agent_storage_defaults.sql`，同时更新 PM API、Agent API 和 Agent Web。`PM_CHAT_SPACE_ROOT=/absolute/path pnpm services:start` 仅将该环境覆盖传给 PM API；已有进程不会被该命令隐式重启。设置页 `/agent/settings/file-areas` 可在可信路径内保存工作区默认根目录，既有映射和原生项目路径不迁移。目录结构为 `<root>/workspaces/<workspaceId>/workspace` 或 `projects/<projectId>`；默认根父目录必须存在，首次授权解析才创建缺少的默认叶目录，已登记目录丢失不会重建。
+
+Inspector 文件 / Git / PTY 请求按 PM 当前身份解析 scope；不再通过 `AGENT_WORKSPACE_PROJECT_ROOT` 给检查器兜底。PM API 和 Agent API 必须能访问同一实际文件区域；容器部署应显式挂载该目录并统一路径，不把宿主 `~` 当容器用户主目录。终端拥有服务进程 shell 权限，目录作用域不是安全沙箱；本次只验证本机隔离服务，不声明容器/公网部署验收。
+
 
 ### 本地项目目录与附件身份
 
@@ -144,10 +160,10 @@ pnpm storage:projects restore --stopped --restored-target \
 - **任何 Vite build 操作默认关闭 Lab**，包括 `--mode development`、自定义 mode 或外部 `NODE_ENV`；不能仅以 `import.meta.env.PROD` 推断生产安全策略。根 `build:web` 调用前端 TypeScript + Vite 默认 production build，根后端 `build` 不构建 Web。
 - 只有在受控非生产展示环境中，操作者可通过进程环境 `PM_ENABLE_LAB=true` 显式构建带 Lab 的静态产物；不是运行时 URL、localStorage 或浏览器可切换的开关。`PM_ENABLE_LAB` 仅接受 `true`/`false`，无效值导致配置报错。Vite 配置仅读取注入的进程环境，不把 `.env` 里的服务秘密加载到浏览器。
 - 默认生产产物中 Lab 路由不注册，客户端导航进入 not-found；`deploy/Caddyfile` 另在 HTTP 层对 `/lab` 和所有子路径返回 **404**，即使误用了带 Lab 的展示产物也拒绝访问。该生产代理不提供 Lab 开放开关；受控展示应使用独立非生产 preview，不修改此代理。
-- Vite 开发/preview 转发 `/api`、`/health`、`/openapi.json`；其存在不是生产反代证据。生产 Caddy 保留原 URI、Cookie、Origin、Last-Event-ID，API 的 `PUBLIC_ORIGIN` 必须是浏览器实际看到的 origin。没有 Origin 重写或宽松 CORS。`flush_interval -1` 立即转发两种 SSE，既不缓存也不合成成功响应。
-- Caddy 提供 SPA 深链接回退，但 `/api` 与缺失的 `/assets` 只返回各自真实 HTTP 结果，不返回 SPA 伪成功。生产 `/pm` 仍使用真实会话、授权与服务错误，不加载 fixture 代替后端。
+- Vite 开发/preview 保留 PM `/api`、`/health`、`/openapi.json`；Agent `/agent/api/*` 优先剥离 `/agent` 到 Agent API，`/agent/*` 到独立 Agent Web。目标与端口可通过上面变量隔离覆盖，不通配 CORS。生产 Caddy 等价路由并保留 Cookie、Host、Origin、Last-Event-ID；`PUBLIC_ORIGIN` 必须精确匹配公共来源，`flush_interval -1` 即时转发流，WS 由 reverse_proxy 保持升级。
+- Caddy 对两套 SPA 提供深链接回退；PM `/assets/*`、Agent `/agent/assets/*` 和 API 的缺失结果不回退 HTML。PM Lab 与 Agent `/agent/showcase/*` 均返回404，不使用 fixture 冒充真实后端。
 
-## API / Worker / Web 容器部署
+## PM API / Worker / Agent API / 双 Web 容器部署
 
 ### 职责、拓扑与秘密
 
@@ -157,10 +173,11 @@ pnpm storage:projects restore --stopped --restored-target \
 | migrate | 一次性运行当前镜像的迁移与摘要检查；失败阻止 API/Worker 启动。只连接指定数据库，不自动建业务样例或账号。 |
 | API | 唯一 HTTP/认证/命令入口及 Markdown 核心进程；独占核心写权限，使用显式绑定的 Local/S3 provider；readiness 检查真实依赖，初始化不等于外部服务验收。 |
 | Worker | 独立 outbox/保留维护、通知、邀请/找回邮件和受限 Webhook 循环；核心卷只读，不挂载 blob 卷，不取得 S3/AWS 凭据，不执行 Agent。心跳不等于邮件送达或接收器就绪。 |
+| Agent API | 独立 SQLite/Provider homes 的 Agent 执行服务；用固定 `PM_API_URL=http://api:4193` resolve，本次用户 Cookie/Authorization 只向该 PM origin 转发。与 PM 挂载相同绝对项目路径以使用真实 cwd，不增加 PM 权限或自动完成任务。 |
 | storage | maintenance profile 下的编译后维护 CLI；仅停写时显式绑定/核验/迁移/激活/恢复，不随 API 启动自动修复绑定。 |
 | Web | 多阶段构建后的静态产物与 Caddy 同源反代；只在 loopback 发布临时可配置端口，不注入数据库或 SMTP 凭据。 |
 
-`deploy/Dockerfile` 使用 Node 24/pnpm 11.9.0 锁定安装、后端与 Web 构建；先复制 manifest 缓存依赖，源码更新不重新安装。最终后端镜像只保留生产依赖、编译产物和迁移入口；Web 镜像使用 Caddy。根 `.dockerignore` 是唯一构建上下文白名单，排除 `.env`、本机访问文件、`.local`、测试、node_modules 与历史产物；构建内另对私有路径做存在性拒绝，不读取秘密内容。服务秘密只能由私有运行环境注入；不使用 Docker ARG、前端 VITE 变量或镜像 COPY 保存秘密。运行环境含数据库凭据，读取 Docker 元数据的权限也必须受控。
+`deploy/Dockerfile` 使用 Node24/pnpm11.9.0 单锁文件构建 PM 与 Agent。PM 后端只携带自身生产依赖、产物及迁移入口；Agent 镜像通过 pnpm deploy 携带独立生产图；Web 镜像同时包含 `/srv/pm` 与 `/srv/agent` 的静态构建和 Caddy。`.dockerignore` 白名单包含所有导入 workspace 源包与 manifest，排除秘密、`.local`、node_modules、测试目录与历史产物；不将凭据放入 ARG/COPY/前端变量。生产实际构建/部署由操作者另行验收，不能沿用源仓结果。
 
 默认镜像来自官方仓库；若宿主 Docker daemon 的仓库镜像配置不可达，可由操作者显式设置 `PM_NODE_IMAGE`、`PM_CADDY_IMAGE` 为批准的同版本镜像来源（或固定 digest），不改 daemon、不静默替换运行时。本机实际使用 `docker.m.daocloud.io/library/node:24-bookworm-slim` 与 `docker.m.daocloud.io/library/caddy:2`，这是受控替代来源的烟测，不证明任意镜像/网络环境可用。
 
@@ -171,21 +188,25 @@ pnpm storage:projects restore --stopped --restored-target \
 先由操作者准备独立的 `/secure/pm-deploy.env`（0600，不在仓库/构建上下文），只包含部署参数：
 
 ```dotenv
-PM_APP_PROJECT=project-management-app
+PM_APP_PROJECT=project-management-agent-v3-app
 PM_RUNTIME_ENV_FILE=/secure/pm-runtime.env
 PM_MIGRATION_ENV_FILE=/secure/pm-migration.env
 PM_WORKER_ENV_FILE=/secure/pm-worker.env
 PM_STORAGE_ENV_FILE=/secure/pm-storage-maintenance.env
+AGENT_RUNTIME_ENV_FILE=/secure/pm-v3-agent.env
 PM_MAINTENANCE_DIRECTORY=/secure/pm-maintenance
-PM_DATABASE_NETWORK=project-management-backend_default
-PM_PUBLIC_ORIGIN=http://127.0.0.1:34120
-PM_WEB_PORT=34120
+PM_DATABASE_NETWORK=project-management-agent-v3-backend_default
+PM_PUBLIC_ORIGIN=http://127.0.0.1:3223
+PM_WEB_PORT=3223
 PM_COOKIE_SECURE=false
 ```
 
-四份环境文件按角色隔离：migration 仅数据库；runtime 为 API 数据库、所选存储及按需邮件配置；worker 为数据库、邮件及批准 Webhook 元数据/密钥路径，禁止 S3/AWS；storage 为数据库及显式 `SOURCE_S3_*`/`TARGET_S3_*` 维护凭据。即使不开 maintenance profile，也须提供 Compose 插值要求的环境文件路径。容器数据库主机使用该**现有专用网络中可解析的 PostgreSQL 服务名**（通常 `postgres:5432`），不是宿主 loopback。此处不提供或复制秘密。SMTP 功能对应的 API/Worker 配置必须一致；Webhook 元数据挂载与 Worker-only 密钥挂载分别配置。`PM_PUBLIC_ORIGIN` 必须精确匹配浏览器来源；公网 HTTPS 必须启用 secure Cookie，并重新验收。
+环境按角色隔离：migration仅数据库；runtime为 PM API 的数据库/存储及按需邮件；worker为数据库、邮件及批准 Webhook 元数据/密钥，禁止 S3/AWS；storage仅维护配置；Agent只有 v3 Provider 配置和新32+字符 `AGENT_WORKSPACE_ACCESS_TOKEN`，不复制 PM 数据库/旧 Provider 凭据。Agent容器非loopback监听仍要求原访问令牌保护，不能借部署关闭。Compose插值需要这些路径，即使未开maintenance。数据库主机为本v3专用网络中的 `postgres:5432`，不是宿主loopback；HTTPS必须secure Cookie并独立验收。
 
 本地项目功能在应用 Compose 中默认关闭；显式 `PM_LOCAL_PROJECTS_ENABLED=true` 后，API 使用 `/var/lib/pm/projects` 的 `project-data` 卷，Worker 将同一项目卷只读挂载以解析映射后的核心文件，不获得 legacy blob 卷或 S3 凭据。该只读项目卷本身包含附件，不能宣称 OS 层附件保密隔离；Worker 实现仅消费核心事实。容器 UI 选择的是容器可见目录，不是假装浏览任意宿主路径。需要既有宿主代码目录时，操作者必须给 API/维护角色可写、Worker 只读的相同绝对路径 bind mount，并同步可信 allowedRoots；禁止以 symlink 模拟挂载。`project-storage` maintenance service 运行编译后的项目维护 CLI，挂载核心/项目/legacy 卷和 `/maintenance`，仅显式停写操作，不随 API 自行修复。外部根备份必须逐根导出，不能只归档 `core-data`/`blob-data`。
+
+Agent 与 API 同挂载 `project-data:/var/lib/pm/projects`，因此 resolve 返回的绝对目录在执行容器中真实存在；添加其他宿主 bind mount 必须给两者提供相同绝对路径并同步原可信 allowedRoots，不能只让前端看到字符串。Agent 数据使用独立 `agent-data` 卷，不共享来源 Provider homes。`scripts/agent-docker.sh build|start|stop|status|logs` 固定只管理 `project-management-agent-v3-app`，读取操作者显式准备的 `V3_DEPLOY_ENV_FILE`（默认本仓私有 `.env.deploy`），不创建或复制秘密；不能用于停止数据库或其他项目。
+
 
 `project-storage` 使用当前原 provider 的 `BLOB_PROVIDER`/`BLOB_ROOT` 或显式 `S3_*` 环境；跨 global-provider 迁移的旧 `storage` CLI 仍使用无凭据描述符及 `SOURCE_S3_*`/`TARGET_S3_*`。这些只属于停写维护角色，不复制给 Worker/Web，也不写入项目标记或备份清单。
 
@@ -202,13 +223,13 @@ docker compose --env-file /secure/pm-deploy.env -f deploy/compose.app.yaml run -
 # 仅在全新安装执行；私有 host 配置需连接同一个库的管理员可达地址。
 node --env-file=/secure/pm-runtime-host.env scripts/bootstrap.ts
 docker compose --env-file /secure/pm-deploy.env -f deploy/compose.app.yaml up -d --wait
-curl --fail http://127.0.0.1:34120/health/ready
-curl -i http://127.0.0.1:34120/lab/pm
+curl --fail http://127.0.0.1:3223/health/ready
+curl -i http://127.0.0.1:3223/lab/pm
 ```
 
 源代码 bootstrap 前需 `pnpm install --frozen-lockfile`；复用既有账号入口，管理员访问文件仍只写入当前管理宿主 `.local/access.json`（0600），不进入镜像。已有安装跳过 bootstrap。不要对已有业务库执行 smoke 创建验收数据，实际验收应另建隔离 schema/临时内容根。
 
-升级先构建新镜像，记录当前应用容器 ID，再 `stop web api worker`（仅这一应用 Compose）并用 `docker wait` 核对旧进程全部退出，再 `run --rm migrate`，成功后 `up -d --no-build --force-recreate --wait` 显式替换已停的应用容器。迁移失败不启动新业务进程、不篡改历史迁移；数据库前向修复或恢复方案须由操作者决定，不能盲目降级旧镜像。`logs api worker` 仅看安全状态，不导出私有环境、Cookie、邀请令牌或口令。
+升级先构建新镜像，记录本v3容器ID，再 `stop web agent api worker`（仅本v3应用Compose）并用 `docker wait` 核对全部退出；迁移成功后显式 `up -d --no-build --force-recreate --wait`。Agent SQLite/Provider homes 另做停写私有备份，不能把PM数据库备份当Agent历史备份。迁移失败不启动新进程、不改历史迁移，未知请求沿原ID核对；日志不导出环境、Cookie、令牌或口令。
 
 同一镜像的暂停/恢复也按停写后的显式替换流程处理：先记录本应用 `ps -q api worker web` 的容器 ID，`stop` 后以 `docker wait` 核对旧进程全部退出，再 `up -d --no-build --force-recreate --wait`，最后检查同源 `/health/ready` 与原对象/字节。本机 Compose v2.18.1 曾在停止后 `up --wait` 报 `exited (0)`，随后 `start` 返回 0 却未启动 API；不把命令退出码当健康证据，不忽略真实 502，不允许新旧 API 交叠。初次启动仍使用上面的 `up`。
 

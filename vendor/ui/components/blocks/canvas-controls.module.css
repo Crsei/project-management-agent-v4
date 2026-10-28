@@ -1,0 +1,379 @@
+.workspace {
+  height: 880px;
+  border-radius: var(--canvas-node-radius);
+}
+.fill {
+  --canvas-min-height: 0px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.fill > .workspace {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+  border: 0;
+}
+.fill .canvasRegion,
+.fill .canvasSurface {
+  min-height: 0;
+}
+.projectFill {
+  height: 100%;
+  min-height: 0;
+  gap: 8px;
+}
+.projectFill > .actions,
+.projectFill > p {
+  padding: 0 12px;
+}
+.projectFill > .actions {
+  padding-top: 8px;
+}
+.palette,
+.stack,
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.palette {
+  padding: 12px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  min-width: 0;
+}
+.field > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.field select,
+.builder select,
+.field textarea,
+.json {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 8px;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 20px;
+}
+.field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+.builder select:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible,
+.json:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.field [aria-invalid="true"] {
+  border-color: var(--destructive);
+}
+.field :disabled {
+  opacity: 0.5;
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  list-style: none;
+}
+.paletteItem {
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 8px;
+  justify-content: flex-start;
+  text-align: left;
+}
+.paletteItem > span {
+  flex: 1;
+  min-width: 0;
+}
+.paletteItem small {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+}
+.muted {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.error {
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+.toolbar > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.sidebarFull {
+  display: block;
+}
+.sidebarSmall {
+  display: none;
+  padding: 4px;
+}
+.navigation {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+.navigation .field {
+  margin-bottom: 8px;
+}
+.nodeLink {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  width: 100%;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  text-align: left;
+  border-radius: var(--radius-md);
+}
+.nodeLink:hover {
+  background: var(--muted);
+}
+.nodeLink[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.bottom {
+  padding: 4px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bottom[data-collapsed="true"] {
+  padding-bottom: 4px;
+}
+.bottomTabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.bottomToggle {
+  margin-left: auto;
+}
+.bottomFeedback {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.bottomBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bottom h3 {
+  font-size: 13px;
+  font-weight: 500;
+}
+.bottom ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dialog {
+  max-height: min(80dvh, 720px);
+  overflow: auto;
+}
+.json {
+  min-height: 240px;
+  font-family: var(--font-mono);
+  resize: vertical;
+}
+.shortcut {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 13px;
+}
+@container workspace-navigation (max-width: 100px) {
+  .sidebarFull {
+    display: none;
+  }
+  .sidebarSmall {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+@media (pointer: coarse) {
+  .field select,
+  .field textarea,
+  .nodeLink {
+    min-height: 44px;
+  }
+}
+@media (max-width: 639px) {
+  .workspace {
+    height: 1000px;
+  }
+  .toolbar {
+    gap: 8px;
+  }
+}
+
+.canvasRegion {
+  height: 100%;
+  min-height: 360px;
+}
+.canvasRegion > div {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.canvasSurface {
+  flex: 1;
+  min-height: 360px;
+}
+
+.execution {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow: auto;
+}
+.execution > div:last-of-type {
+  min-height: 0;
+  flex: 1;
+}
+.output {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 8px;
+  background: var(--surface-raised);
+}
+.actions select {
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--foreground);
+  padding: 0 8px;
+}
+@media (pointer: coarse) {
+  .actions select {
+    min-height: 44px;
+  }
+}
+.builder {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
+  border: 1px solid var(--border);
+  padding: 8px;
+}
+.builder legend {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.builder label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+}
+.builder input[type="checkbox"] {
+  min-width: 16px;
+  min-height: 16px;
+}
+@media (pointer: coarse) {
+  .builder input[type="checkbox"] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+.execution summary {
+  min-height: 32px;
+  padding: 4px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.execution summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .execution summary,
+  .builder select {
+    min-height: 44px;
+  }
+}
+
+.canvasRegion {
+  position: relative;
+}
+.canvasRegion > .layoutNotice {
+  position: absolute;
+  z-index: 20;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  height: auto;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-floating);
+  font-size: 12px;
+  line-height: 20px;
+}

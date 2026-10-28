@@ -1,0 +1,135 @@
+.activity {
+  min-width: 0;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--foreground);
+  background: var(--background);
+}
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.identity {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.identity h3 {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.identity p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.activity[data-status="completed"] .status {
+  color: var(--status-success, var(--foreground));
+}
+.activity[data-status="failed"] .status,
+.error {
+  color: var(--status-error, var(--destructive));
+}
+.activity[data-status="unknown"] .status,
+.activity[data-status="waiting"] .status {
+  color: var(--status-waiting, var(--foreground));
+}
+.activity[data-status="running"] .status {
+  color: var(--status-info, var(--foreground));
+}
+.duration {
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+.boundary {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.notice,
+.error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+.details[data-state="closed"] {
+  display: none;
+}
+.details dl {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.details dt {
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.details dd {
+  min-width: 0;
+  margin: 4px 0 0;
+}
+.details pre {
+  max-width: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--muted);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 20px;
+}
+.details pre:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.details dd p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 20px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.expanded {
+  transform: rotate(180deg);
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

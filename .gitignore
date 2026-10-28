@@ -9,6 +9,9 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.agent.example
+**/.astro/
+apps/agent-desktop/release/
 .omp/
 .tmp/
 *.tsbuildinfo

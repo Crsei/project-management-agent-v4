@@ -1,0 +1,42 @@
+.frame {
+  border: 1px dashed var(--canvas-node-border);
+  border-radius: var(--canvas-node-radius);
+  background: color-mix(in srgb, var(--canvas-frame) 60%, transparent);
+  padding: 8px 12px;
+  color: var(--text-secondary);
+}
+.frame strong,
+.note strong {
+  display: block;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.frame small {
+  font-size: 12px;
+  line-height: 20px;
+}
+.note {
+  width: 200px;
+  min-height: 120px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--canvas-node-border);
+  border-radius: var(--canvas-node-radius);
+  background: var(--canvas-note);
+  color: var(--foreground);
+}
+.note p {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.frame[data-selected],
+.note[data-selected] {
+  border-color: var(--canvas-selection);
+  box-shadow: 0 0 0 1px var(--canvas-selection);
+}

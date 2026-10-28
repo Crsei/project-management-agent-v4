@@ -9,7 +9,7 @@ import chokidar from 'chokidar';
 import type { Pool } from 'pg';
 import { Workspace, revisionOf } from '../../../packages/pm-core/index.ts';
 import { createMarkdown, parseMarkdown } from '../../../packages/pm-markdown/index.ts';
-import type { FileRecord } from '../../../packages/pm-schema/index.ts';
+import type { FileRecord, WorkflowDefinition } from '../../../packages/pm-schema/index.ts';
 import { DomainError, type Actor, type Capability, type Command, type CommandReceipt, type Entity } from '../../../packages/domain/src/core.ts';
 import { CoreScope } from '../src/core-routes.ts';
 import {
@@ -402,6 +402,189 @@ test('work item commands update content, metadata, dependencies and lifecycle st
   const restored = committedEntity(await executeCoreCommand(contextFor(workspace, lifecycleScope, coreCommand('RestoreArchivedObject', { kind: 'work_item', reason: 'needed' }, { targetId: item.id }), pool)));
   assert.equal(restored.data.archived, false);
   assert.equal(restored.data.archivedAt, null);
+});
+
+test('default lifecycle commands choose the configured work lane and remain idempotent in the current category', async (t: TestContext) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'core-adapter-default-workflow-'));
+  let workspace = new Workspace(root);
+  const pool = unitSqlPool();
+  t.after(async () => { await workspace.close(); await pool.end(); await rm(root, { recursive: true, force: true }); });
+  await workspace.init();
+  const scope = scopeWith();
+  const item = await workspace.create({ title: 'Default workflow' });
+  for (const [commandType, status] of [
+    ['ReadyWorkItem', 'in_progress'], ['StartWorkItem', 'in_progress'], ['CompleteWorkItem', 'done'],
+    ['ReopenWorkItem', 'in_progress'], ['CancelWorkItem', 'canceled'], ['ReopenWorkItem', 'in_progress'],
+  ]) {
+    const command = coreCommand(commandType!, {}, { targetId: item.id });
+    const result = committedEntity(await executeCoreCommand(contextFor(workspace, scope, command, pool)));
+    assert.equal(result.data.labStatus, status);
+    const saved = workspace.get(item.id);
+    assert.deepEqual(committedEntity(await executeCoreCommand(contextFor(workspace, scope, command, pool))), result);
+    assert.deepEqual(committedEntity(await executeCoreCommand(contextFor(workspace, scope, coreCommand(commandType!, {}, { targetId: item.id }), pool))), result);
+    assert.equal(workspace.get(item.id).raw, saved.raw);
+    assert.equal(workspace.get(item.id).revision, saved.revision);
+  }
+
+  // Persist/reload the native definition, retaining the independently selectable review lane.
+  await workspace.saveConfiguration(workspace.configuration().config, 'absent');
+  await workspace.close();
+  workspace = new Workspace(root);
+  await workspace.init();
+  const reviewing = await workspace.patch(item.id, { status: 'review' }, workspace.get(item.id).revision);
+  for (const commandType of ['ReadyWorkItem', 'StartWorkItem']) {
+    const result = committedEntity(await executeCoreCommand(contextFor(workspace, scope, coreCommand(commandType, {}, { targetId: item.id }), pool)));
+    assert.equal(result.data.labStatus, 'review', 'Starting already-started work must not move it out of review');
+    assert.equal(workspace.get(item.id).raw, reviewing.raw);
+    assert.equal(workspace.get(item.id).revision, reviewing.revision);
+  }
+  assert.equal(committedEntity(await executeCoreCommand(contextFor(workspace, scope, coreCommand('CompleteWorkItem', {}, { targetId: item.id }), pool))).data.status, 'done');
+});
+
+test('custom multiple-destination workflows reject ambiguity unless they explicitly select an allowed category target', async (t: TestContext) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'core-adapter-custom-workflow-'));
+  const workspace = new Workspace(root);
+  const pool = unitSqlPool();
+  t.after(async () => { await workspace.close(); await pool.end(); await rm(root, { recursive: true, force: true }); });
+  await workspace.init();
+  const workflow: WorkflowDefinition = {
+    initial: 'queued',
+    states: [
+      { id: 'queued', label: 'Queued', category: 'unstarted' },
+      { id: 'running', label: 'Running', category: 'started' },
+      { id: 'checking', label: 'Checking', category: 'started' },
+      { id: 'shipped', label: 'Shipped', category: 'completed' },
+      { id: 'merged', label: 'Merged', category: 'completed' },
+      { id: 'abandoned', label: 'Abandoned', category: 'canceled' },
+      { id: 'shelved', label: 'Shelved', category: 'canceled' },
+    ],
+    transitions: [
+      { from: 'queued', to: 'running' }, { from: 'queued', to: 'checking' },
+      { from: 'queued', to: 'abandoned' }, { from: 'queued', to: 'shelved' },
+      { from: 'running', to: 'checking' },
+      { from: 'running', to: 'shipped' }, { from: 'running', to: 'merged' },
+      { from: 'shipped', to: 'running' }, { from: 'shipped', to: 'checking' },
+      { from: 'abandoned', to: 'running' }, { from: 'abandoned', to: 'checking' },
+    ],
+  };
+  const configuration = await workspace.saveConfiguration({ schema: 'pm/config/v1', workflows: { work_item: workflow } }, 'absent');
+  const scope = scopeWith();
+  const cases = [
+    ['queued', 'ReadyWorkItem', 'checking'], ['queued', 'StartWorkItem', 'checking'],
+    ['running', 'CompleteWorkItem', 'merged'], ['shipped', 'ReopenWorkItem', 'checking'],
+    ['abandoned', 'ReopenWorkItem', 'checking'],
+    ['queued', 'CancelWorkItem', 'shelved'],
+  ] as const;
+  const items: FileRecord[] = [];
+  for (const [status, commandType] of cases) {
+    const item = await workspace.create({ title: commandType, status });
+    items.push(item);
+    const receipt = await executeCoreCommand(contextFor(workspace, scope, coreCommand(commandType, {}, { targetId: item.id }), pool));
+    assert.equal(rejectionOf(receipt).code, 'invalid_transition');
+    assert.match(rejectionOf(receipt).message, /ambiguous destinations/);
+    assert.equal(receipt.httpStatus, 409);
+    assert.equal(workspace.get(item.id).raw, item.raw);
+    assert.equal(workspace.get(item.id).revision, item.revision);
+  }
+  const current = await workspace.create({ title: 'Already started', status: 'running' });
+  for (const defaultTargets of [undefined, { started: 'checking', completed: 'merged', canceled: 'shelved' }] as const) {
+    if (defaultTargets) {
+      configuration.config.workflows.work_item!.default_targets = defaultTargets;
+      await workspace.saveConfiguration(configuration.config, configuration.revision);
+    }
+    for (const commandType of ['ReadyWorkItem', 'StartWorkItem']) {
+      const result = committedEntity(await executeCoreCommand(contextFor(workspace, scope, coreCommand(commandType, {}, { targetId: current.id }), pool)));
+      assert.equal(result.data.labStatus, 'running', 'Current-category idempotency precedes ambiguity and a different configured preference');
+      assert.equal(workspace.get(current.id).revision, current.revision);
+    }
+  }
+  for (const [index, [, commandType, status]] of cases.entries()) {
+    const item = items[index]!;
+    const result = committedEntity(await executeCoreCommand(contextFor(workspace, scope, coreCommand(commandType, {}, { targetId: item.id }), pool)));
+    assert.equal(result.data.labStatus, status, 'Configured targets, not built-in IDs or state order, disambiguate the action');
+  }
+});
+
+test('workflow target preferences cannot authorize missing edges or hide remaining ambiguity', async (t: TestContext) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'core-adapter-workflow-edges-'));
+  const workspace = new Workspace(root);
+  const pool = unitSqlPool();
+  t.after(async () => { await workspace.close(); await pool.end(); await rm(root, { recursive: true, force: true }); });
+  await workspace.init();
+  await workspace.saveConfiguration({ schema: 'pm/config/v1', workflows: { work_item: {
+    initial: 'queued',
+    states: [
+      { id: 'queued', label: 'Queued', category: 'unstarted' },
+      { id: 'backlog', label: 'Backlog', category: 'backlog' },
+      { id: 'running', label: 'Running', category: 'started' },
+      { id: 'checking', label: 'Checking', category: 'started' },
+      { id: 'preferred', label: 'Preferred', category: 'started' },
+      { id: 'shipped', label: 'Shipped', category: 'completed' },
+    ],
+    transitions: [
+      { from: 'queued', to: 'running' }, { from: 'backlog', to: 'running' },
+      { from: 'backlog', to: 'checking' }, { from: 'checking', to: 'shipped' }, { from: 'shipped', to: 'queued' },
+    ],
+    default_targets: { started: 'preferred', completed: 'shipped' },
+  } } }, 'absent');
+  const scope = scopeWith();
+  for (const [source, commandType, status] of [
+    ['queued', 'StartWorkItem', 'running'], ['shipped', 'ReopenWorkItem', 'queued'],
+    ['preferred', 'StartWorkItem', 'preferred'],
+  ] as const) {
+    const item = await workspace.create({ title: commandType, status: source });
+    const result = committedEntity(await executeCoreCommand(contextFor(workspace, scope, coreCommand(commandType, {}, { targetId: item.id }), pool)));
+    assert.equal(result.data.labStatus, status, 'The unique reachable destination wins over an unreachable preference');
+  }
+  for (const [source, commandType, message] of [
+    ['backlog', 'StartWorkItem', /ambiguous destinations/], ['queued', 'CompleteWorkItem', /no allowed destination/],
+  ] as const) {
+    const item = await workspace.create({ title: commandType, status: source });
+    const receipt = await executeCoreCommand(contextFor(workspace, scope, coreCommand(commandType, {}, { targetId: item.id }), pool));
+    assert.equal(rejectionOf(receipt).code, 'invalid_transition');
+    assert.match(rejectionOf(receipt).message, message);
+    assert.equal(receipt.httpStatus, 409);
+    assert.equal(workspace.get(item.id).raw, item.raw);
+    assert.equal(workspace.get(item.id).revision, item.revision);
+  }
+});
+
+test('category target selection preserves completion, reopening, scope and version authorization', async (t: TestContext) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'core-adapter-workflow-authority-'));
+  const workspace = new Workspace(root);
+  const pool = unitSqlPool();
+  t.after(async () => { await workspace.close(); await pool.end(); await rm(root, { recursive: true, force: true }); });
+  await workspace.init();
+  const project = await workspace.createEntity({ entity: 'project', title: 'Authorized lifecycle' });
+  const item = await workspace.create({ title: 'Protected work', project: project.id });
+  const editor = scopeWith([project.id], ['domain.read', 'planning.edit']);
+  for (const [scope, commandType, code, httpStatus] of [
+    [editor, 'CompleteWorkItem', 'permission_denied', 403],
+    [scopeWith([project.id], ['domain.read']), 'StartWorkItem', 'permission_denied', 403],
+    [scopeWith(['OTHER-1']), 'StartWorkItem', 'not_found_or_forbidden', 404],
+  ] as const) {
+    const receipt = await executeCoreCommand(contextFor(workspace, scope, coreCommand(commandType, {}, { targetId: item.id }), pool));
+    assert.equal(rejectionOf(receipt).code, code);
+    assert.equal(receipt.httpStatus, httpStatus);
+    assert.equal(workspace.get(item.id).raw, item.raw);
+  }
+  committedEntity(await executeCoreCommand(contextFor(workspace, editor, coreCommand('StartWorkItem', {}, { targetId: item.id }), pool)));
+  const completer = scopeWith([project.id], ['domain.read', 'workitem.complete']);
+  committedEntity(await executeCoreCommand(contextFor(workspace, completer, coreCommand('CompleteWorkItem', {}, { targetId: item.id }), pool)));
+  const completed = workspace.get(item.id);
+  for (const commandType of ['ReadyWorkItem', 'StartWorkItem', 'CancelWorkItem', 'ReopenWorkItem']) {
+    const receipt = await executeCoreCommand(contextFor(workspace, editor, coreCommand(commandType, {}, { targetId: item.id }), pool));
+    assert.equal(rejectionOf(receipt).code, 'permission_denied', 'A start shortcut must not bypass terminal-state reopening authorization');
+    assert.equal(receipt.httpStatus, 403);
+    assert.equal(workspace.get(item.id).raw, completed.raw);
+  }
+  const stale = await executeCoreCommand(contextFor(workspace, scopeWith(), coreCommand('ReopenWorkItem', {}, {
+    targetId: item.id, expectedVersions: { [item.id]: coreVersion(item.revision) },
+  }), pool));
+  assert.equal(rejectionOf(stale).code, 'version_conflict');
+  assert.equal(workspace.get(item.id).raw, completed.raw);
+  const reopener = scopeWith([project.id], ['domain.read', 'workitem.cancel_reopen']);
+  assert.equal(committedEntity(await executeCoreCommand(contextFor(workspace, reopener, coreCommand('ReopenWorkItem', {}, { targetId: item.id }), pool))).data.status, 'in_progress');
 });
 
 test('authorized core completion needs no delivery records or planning-edit permission, including without a project', async (t: TestContext) => {
