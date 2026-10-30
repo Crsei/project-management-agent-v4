@@ -2,7 +2,7 @@
   "version": 1,
   "source": "apps/server/src/provider/AntigravityInstallation.ts",
   "beforeSha256": "f4dc537fb1e3ea9e24e391b97b77ec10133dfacb133cf487b49354710a7c41f1",
-  "afterSha256": "389710529b4c613df9e4f6ee4ed7249e91082adb045d7c80b90c117fd997c0a3",
+  "afterSha256": "6802373bcfd21cac62e046593d7e5831e2f7e1e4d80aa0874783353742ffa52f",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -31,11 +31,42 @@
       ]
     },
     {
+      "start": 81,
+      "before": [],
+      "after": [
+        "export interface AntigravityInstallationOperation {\n",
+        "  readonly state: ProviderInstallState;\n",
+        "  /** Exact worker settlement, including scoped cleanup; retains non-cancellation failures. */\n",
+        "  readonly completion: Effect.Effect<void, AntigravityInstallationError>;\n",
+        "}\n"
+      ]
+    },
+    {
+      "start": 94,
+      "before": [],
+      "after": [
+        "  readonly startOperation: Effect.Effect<AntigravityInstallationOperation, AntigravityInstallationError>;\n"
+      ]
+    },
+    {
       "start": 160,
       "before": [],
       "after": [
         "  const cwd = yield* HostProcess.WorkingDirectory;\n",
         "  const home = yield* HostProcess.HomeDirectory;\n"
+      ]
+    },
+    {
+      "start": 175,
+      "before": [
+        "  let running: { readonly operationId: string; readonly fiber: Fiber.Fiber<void> } | undefined;\n"
+      ],
+      "after": [
+        "  let running: {\n",
+        "    readonly operationId: string;\n",
+        "    readonly fiber: Fiber.Fiber<void>;\n",
+        "    readonly completion: Effect.Effect<void, AntigravityInstallationError>;\n",
+        "  } | undefined;\n"
       ]
     },
     {
@@ -66,12 +97,78 @@
       ]
     },
     {
+      "start": 707,
+      "before": [
+        "  const start = gate\n"
+      ],
+      "after": [
+        "  const startOperation: Effect.Effect<AntigravityInstallationOperation, AntigravityInstallationError> = gate\n"
+      ]
+    },
+    {
+      "start": 711,
+      "before": [
+        "        if (isRunning(current)) return current;\n"
+      ],
+      "after": [
+        "        if (isRunning(current) && running) return { state: current, completion: running.completion };\n"
+      ]
+    },
+    {
+      "start": 731,
+      "before": [],
+      "after": [
+        "        let outcome: Exit.Exit<void, AntigravityInstallationError> = Exit.void;\n"
+      ]
+    },
+    {
+      "start": 751,
+      "before": [],
+      "after": [
+        "          Effect.onExit((exit) => Effect.sync(() => { outcome = exit; })),\n"
+      ]
+    },
+    {
+      "start": 759,
+      "before": [
+        "        running = { operationId, fiber };\n",
+        "        return next;\n"
+      ],
+      "after": [
+        "        const completion = Fiber.await(fiber).pipe(\n",
+        "          Effect.flatMap((workerExit) => {\n",
+        "            const exit = Exit.isFailure(workerExit) ? workerExit : outcome;\n",
+        "            return Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)\n",
+        "              ? Effect.failCause(exit.cause)\n",
+        "              : Effect.void;\n",
+        "          }),\n",
+        "        );\n",
+        "        running = { operationId, fiber, completion };\n",
+        "        return { state: next, completion };\n"
+      ]
+    },
+    {
+      "start": 764,
+      "before": [],
+      "after": [
+        "  // The native setup API publishes state without taking ownership of the background worker.\n",
+        "  const start = startOperation.pipe(Effect.map((operation) => operation.state));\n"
+      ]
+    },
+    {
       "start": 805,
       "before": [
         "              const candidate = Option.getOrElse(resolved, () => path.resolve(binaryPath));\n"
       ],
       "after": [
         "              const candidate = Option.getOrElse(resolved, () => path.resolve(cwd, expandHomePath(binaryPath, home)));\n"
+      ]
+    },
+    {
+      "start": 868,
+      "before": [],
+      "after": [
+        "    startOperation,\n"
       ]
     }
   ]

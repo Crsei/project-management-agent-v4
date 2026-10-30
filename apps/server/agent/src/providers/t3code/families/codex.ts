@@ -2,7 +2,7 @@ import path from "node:path";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
+import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import type * as Scope from "effect/Scope";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -107,12 +107,22 @@ function withCodexInstallation<A, E>(context: ProviderDriverContext, lease: PmPr
 export const codexInstallationMethods: PmProviderInstallationMethods = {
   prepare: (context, signal, progress, lease) => withCodexInstallation(context, lease, Effect.gen(function* () {
     const installation = yield* CodexInstallation.CodexInstallation;
-    const first = yield* installation.start;
-    const result = ["succeeded", "failed", "cancelled"].includes(first.phase) ? first
-      : Option.getOrThrow(yield* installation.changes.pipe(
-        Stream.tap(state => Effect.sync(() => progress?.({ message: state.message ?? `Codex installation: ${state.phase}` }))),
-        Stream.filter(state => ["succeeded", "failed", "cancelled"].includes(state.phase)), Stream.runHead,
-      ));
+    const states = yield* Stream.toQueue(installation.changes, { capacity: "unbounded" });
+    const operation = yield* Effect.acquireRelease(installation.startOperation, captured => Effect.gen(function* () {
+      const current = yield* installation.state;
+      if (captured.state.operationId && current.operationId === captured.state.operationId
+        && ["downloading", "extracting", "verifying"].includes(current.phase))
+        yield* installation.cancel(captured.state.operationId).pipe(Effect.orDie);
+    }).pipe(Effect.ensuring(captured.completion.pipe(Effect.orDie))));
+    const first = operation.state;
+    let result = first;
+    while (!["succeeded", "failed", "cancelled"].includes(result.phase)) {
+      if (!first.operationId) return yield* Effect.fail(pmExecutionError(500, "provider_install_failed", "Codex did not start an installation operation."));
+      const state = yield* Queue.take(states);
+      if (state.operationId !== first.operationId) continue;
+      yield* Effect.sync(() => progress?.({ message: state.message ?? `Codex installation: ${state.phase}` }));
+      result = state;
+    }
     if (result.phase !== "succeeded") return yield* Effect.fail(pmExecutionError(412, "provider_not_configured", result.message ?? "Codex installation did not complete."));
     return { message: result.message ?? "Codex runtime is ready." };
   }), signal),

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/AntigravityInstallation.test.ts",
+  "beforeSha256": "72eab06a873ae79c66e0c8e3db76065a1a1c24abf5fcff20e199b127aef3368f",
+  "afterSha256": "9a6e3439962c2f7f8cd42f063dc89e4d06751a447b7efd3ce8866024d19b02fa",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 491,
+      "before": [
+        "        const first = yield* installation.start;\n"
+      ],
+      "after": [
+        "        const operation = yield* installation.startOperation;\n",
+        "        const first = operation.state;\n"
+      ]
+    },
+    {
+      "start": 504,
+      "before": [],
+      "after": [
+        "        expect(Exit.isFailure(yield* Effect.exit(operation.completion))).toBe(true);\n"
+      ]
+    },
+    {
+      "start": 552,
+      "before": [],
+      "after": [
+        "        const concurrentOperation = yield* installation.startOperation;\n",
+        "        expect(concurrentOperation.state.operationId).toBe(started.operationId);\n"
+      ]
+    },
+    {
+      "start": 558,
+      "before": [],
+      "after": [
+        "        yield* concurrentOperation.completion;\n"
+      ]
+    }
+  ]
+}

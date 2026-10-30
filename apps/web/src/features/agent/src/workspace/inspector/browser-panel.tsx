@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@agent/components/ui/button";
 import { Input } from "@agent/components/ui/input";
-import { agentText, useAgentText, type AgentText } from "../../i18n";
+import { useAgentText, type AgentText } from "../../i18n";
+import { agentText } from "../../i18n-text.ts";
 
 type Viewport = "fit" | "desktop" | "tablet" | "mobile";
 

@@ -5,11 +5,12 @@ const usage = `Offline Agent maintenance (no HTTP exports; never stops processes
   pnpm agent:backup restore --bundle <backup-dir> --target <separate-empty-dir> --stopped
   pnpm agent:backup verify --bundle <backup-dir> [--target <restored-dir>] --stopped
 
-include: private 0700/0600 bundle includes API credentials, instance env and dedicated in-data-dir CLI homes.
-exclude: omits those secrets plus endpoint/executable overrides; restores durable history/settings/model config,
+include: private 0700/0600 bundle includes API credentials, provider-private credentials/identity, instance env and dedicated in-data-dir CLI homes.
+exclude: omits those secrets plus endpoint/executable overrides; restores durable history/settings/model config and Agent attachments,
 clears native resume references, and requires explicit endpoint/credential configuration and CLI re-login.
 Both modes contain private conversations. Neither mode includes .env.agent, global/external CLI homes,
 PM PostgreSQL/Markdown/attachments or user project/source files; keep a separate existing PM backup.
+Both modes retain provider-attachments and omit rebuildable provider-cache probes.
 Stop only the verified owning Agent service first. Stale locks fail closed; no process is killed.
 Restore never writes the source and never overwrites a nonempty target. Do not start the restored service
 until its environment, project access and secret policy have been reviewed explicitly.`;

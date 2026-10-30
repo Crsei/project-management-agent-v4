@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { workspaceClient } from "../network.ts";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 
 export const CHAT_MIGRATION_BACKUP_KEY = "agent-workspace:chat-migration-backup:v1";
 export const CHAT_MIGRATION_MARKER_KEY = "agent-workspace:chat-migration-complete:v1";

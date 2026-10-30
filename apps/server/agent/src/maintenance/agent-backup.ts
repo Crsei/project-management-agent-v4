@@ -59,7 +59,7 @@ function readJson(filename: string): JsonObject {
 function safeRelative(value: unknown): string {
   if (typeof value !== "string" || !value || value.includes("\\") || value.includes("\0")
     || path.posix.isAbsolute(value) || value.split("/").some((part) => !part || part === "." || part === "..")
-    || !(value === USAGE_SOURCES || value === CURSOR_USAGE_CACHE || /^(?:workspace\.sqlite|provider-instances\.json|providers\.json|provider-homes\/.+)$/.test(value)))
+    || !(value === USAGE_SOURCES || value === CURSOR_USAGE_CACHE || /^(?:workspace\.sqlite|provider-instances\.json|providers\.json|(?:provider-homes|provider-private|provider-attachments)\/.+)$/.test(value)))
     throw new Error("Unsafe backup member path.");
   return value;
 }
@@ -313,7 +313,7 @@ export async function createAgentBackup(options: { source: string; bundle: strin
   regular(path.join(source, DATABASE));
   // Check root classification before reading any credentials/home contents.
   for (const name of readdirSync(source)) {
-    if (!derivedUsageCache(name) && ![DATABASE, `${DATABASE}-wal`, `${DATABASE}-shm`, CONFIG, CREDENTIALS, USAGE_SOURCES, CURSOR_USAGE_CACHE, "provider-homes", "workspace.lock", "agent-restore.json"].includes(name))
+    if (!derivedUsageCache(name) && ![DATABASE, `${DATABASE}-wal`, `${DATABASE}-shm`, CONFIG, CREDENTIALS, USAGE_SOURCES, CURSOR_USAGE_CACHE, "provider-homes", "provider-private", "provider-attachments", "provider-cache", "workspace.lock", "agent-restore.json"].includes(name))
       throw new Error("Unclassified Agent data file found; backup refuses to silently omit persistent data.");
   }
   const release = acquireOfflineLock(source);
@@ -346,11 +346,15 @@ export async function createAgentBackup(options: { source: string; bundle: strin
     if (options.secrets === "include") {
       if (existsSync(path.join(source, CREDENTIALS))) copyRestricted(path.join(source, CREDENTIALS), path.join(staging!, CREDENTIALS));
       if (existsSync(path.join(source, CURSOR_USAGE_CACHE))) copyRestricted(path.join(source, CURSOR_USAGE_CACHE), path.join(staging!, CURSOR_USAGE_CACHE));
-      const homes = path.join(source, "provider-homes");
-      if (existsSync(homes)) {
-        directory(homes);
-        for (const relative of walk(homes)) copyRestricted(path.join(homes, relative), path.join(staging!, "provider-homes", relative));
-      }
+    }
+    // Attachments are durable private conversation data, not credentials. Native
+    // probe caches are rebuildable; the private store (including identity) is not.
+    for (const name of options.secrets === "include"
+      ? ["provider-homes", "provider-private", "provider-attachments"] : ["provider-attachments"]) {
+      const root = path.join(source, name);
+      if (!existsSync(root)) continue;
+      directory(root);
+      for (const relative of walk(root)) copyRestricted(path.join(root, relative), path.join(staging!, name, relative));
     }
     const files = walk(staging!).map((relative) => {
       safeRelative(relative);
@@ -360,11 +364,11 @@ export async function createAgentBackup(options: { source: string; bundle: strin
     const manifest: AgentBackupManifest = {
       format: "agent-offline-backup", version: 1, createdAt: new Date().toISOString(), secrets: options.secrets, privateData: true,
       coverage: inspectDatabase(path.join(staging!, DATABASE)), providerInstances, files,
-      exclusions: ["PM database, Markdown, attachments and user project/source files (use the existing PM backup separately)",
+      exclusions: ["PM database, Markdown, PM attachments and user project/source files (use the existing PM backup separately)",
         ".env.agent and all process/global environment, browser cookies/preferences, external/global provider homes",
         "workspace.lock and worker_owner execution ownership; provider probe observations",
-        "rebuildable transcript/database usage scan caches and interrupted atomic-write temporary files",
-        ...(options.secrets === "exclude" ? ["providers.json, all provider home contents, instance env and native config secrets/endpoints/executable/argument overrides; native resume/fork references are cleared; providers remain disabled until explicitly reconfigured and enabled; hub management keys are removed and hubs disabled"] : [])],
+        "rebuildable provider-cache probes, transcript/database usage scan caches and interrupted atomic-write temporary files",
+        ...(options.secrets === "exclude" ? ["providers.json, provider-private credential/identity store, all provider home contents, instance env and native config secrets/endpoints/executable/argument overrides; native resume/fork references are cleared; providers remain disabled until explicitly reconfigured and enabled; hub management keys are removed and hubs disabled"] : [])],
     };
     restrictedWrite(path.join(staging!, "manifest.json"), json(manifest));
     privateBundle(staging!);
@@ -396,7 +400,7 @@ function loadBundle(value: string): { root: string; manifest: AgentBackupManifes
     paths.add(relative);
     const bytes = readFileSync(path.join(root, relative));
     if (bytes.length !== member.bytes || sha256(bytes) !== member.sha256) throw new Error("Backup file checksum verification failed.");
-    if (manifest.secrets === "exclude" && (relative === CREDENTIALS || relative === CURSOR_USAGE_CACHE || relative.startsWith("provider-homes/")))
+    if (manifest.secrets === "exclude" && (relative === CREDENTIALS || relative === CURSOR_USAGE_CACHE || relative.startsWith("provider-homes/") || relative.startsWith("provider-private/")))
       throw new Error("Credential-excluded bundle contains credential files.");
   }
   if (!paths.has(DATABASE)) throw new Error("Backup is missing its database.");
@@ -418,8 +422,10 @@ function loadBundle(value: string): { root: string; manifest: AgentBackupManifes
       for (const instance of validateConfiguration(config)) {
         if (Object.keys(object(instance.env)).length
           || (instance.envSensitivity !== undefined && Object.keys(object(instance.envSensitivity)).length)
-          || ["environment", "apiKeyEnv", "baseUrl", "executable", "observations"].some((key) => key in instance))
+          || ["environment", "apiKeyEnv", "baseUrl", "executable", "observations", "cliHome"].some((key) => key in instance))
           throw new Error("Credential-excluded configuration contains excluded fields.");
+        if (getNativeProviderAdapter(String(instance.driver)) && instance.enabled !== false)
+          throw new Error("Credential-excluded native providers must remain explicitly disabled.");
         if (instance.config !== undefined && Object.keys(object(instance.config)).some((key) => excludedConfigField(String(instance.driver), key)))
           throw new Error("Credential-excluded native configuration contains excluded fields.");
       }

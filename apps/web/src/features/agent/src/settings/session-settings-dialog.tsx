@@ -5,7 +5,8 @@ import type { ProviderInstance } from "@agent-workspace/contracts/provider";
 import { getProviderInstanceDisplayName, resolveProviderModelSelection } from "@agent-workspace/client-runtime/providers";
 import { Button } from "@agent/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@agent/components/ui/dialog";
-import { agentText, useAgentText } from "../i18n";
+import { useAgentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 import { ModelOptionControls, modelOptionsValid, providerSelectable, visibleProviderModels } from "./model-option-controls";
 import "./chat-preferences.css";
 

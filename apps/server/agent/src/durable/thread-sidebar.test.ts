@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { Hono } from "hono";
 import { chatRoutes } from "../chat.ts";
 import { createProviderInstance } from "../providers/instances.ts";
+import * as Effect from "effect/Effect";
+import { startPmProviderApplication, stopPmProviderApplication } from "../providers/t3code/application.ts";
+import { makePmProviderCredentials } from "../providers/t3code/credentials.ts";
+import { codexDriver, makeCodexDriverLayer } from "../providers/t3code/families/codex.ts";
+import { makePmProviderFamily } from "../providers/t3code/registration.ts";
 import { generateThreadTitle } from "./thread-title.ts";
 import { closeStore, writeRecord } from "./store.ts";
 import { ensureThread, getThread, getThreadHistory, saveFormattedMessage, updateThread } from "./threads.ts";
@@ -22,6 +27,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   globalThis.fetch = originalFetch;
+  await stopPmProviderApplication();
   closeStore();
   await rm(directory, { recursive: true, force: true });
   if (originalDirectory === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR;
@@ -42,6 +48,82 @@ function generation(threadId: string, status: ChatGeneration["status"], createdA
   };
   writeRecord("chat:generations", item.id, item);
   return item;
+}
+
+async function startTitleProvider() {
+  await startPmProviderApplication({
+    families: new Map([[codexDriver.driverKind, makePmProviderFamily(codexDriver, makeCodexDriverLayer)]]),
+    protocols: new Map(),
+  });
+}
+
+interface TitleCall {
+  args: string[];
+  input: string;
+  cwd: string;
+  home: string;
+  secretEnv: boolean;
+}
+
+async function titlePeer(name: string, title: string, mcpOutput = JSON.stringify([
+  { name: "external.server", enabled: true },
+  { name: "already-off", enabled: false },
+]), mcpExitCode = 0) {
+  const executable = join(directory, name);
+  const log = join(directory, `${name}.jsonl`);
+  await writeFile(executable, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+if (args.includes("--version")) { process.stdout.write("codex-cli 0.156.1\\n"); process.exit(0); }
+if (args.includes("--help")) process.exit(0);
+const record = input => fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({
+  args, input, cwd: process.cwd(), home: process.env.CODEX_HOME,
+  secretEnv: Boolean(process.env.ACCESS_TOKEN || process.env.OPENAI_API_KEY || process.env.OPENAI_BASE_URL || process.env.T3CODE_CODEX_LAUNCH_ARGS)
+}) + "\\n");
+// Native discovery has no stdin stream; only exec receives the title prompt.
+if (args.includes("mcp") && args.includes("list")) {
+  record("");
+  process.stdout.write(${JSON.stringify(mcpOutput)});
+  process.exit(${mcpExitCode});
+}
+if (args[0] !== "exec") process.exit(1);
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => input += chunk);
+process.stdin.on("end", () => {
+  record(input);
+  fs.writeFileSync(args[args.indexOf("--output-last-message") + 1], JSON.stringify({title: ${JSON.stringify(title)}, needsRefinement: false}));
+});
+`);
+  await chmod(executable, 0o700);
+  return {
+    executable,
+    calls: async () => (await readFile(log, "utf8")).trim().split("\n").map(line => JSON.parse(line) as TitleCall),
+  };
+}
+
+async function assertIsolatedTitle(calls: TitleCall[], home: string, message: string) {
+  assert.equal(calls.length, 2);
+  const [enumeration, execution] = calls as [TitleCall, TitleCall];
+  assert.ok(enumeration.args.includes("mcp") && enumeration.args.includes("list") && enumeration.args.includes("--json"));
+  for (const call of calls) {
+    assert.ok(call.args.includes("features.plugins=false"));
+    assert.ok(call.args.includes("features.apps=false"));
+    assert.equal(call.home, home);
+    assert.notEqual(call.cwd, directory);
+    assert.equal(call.cwd, execution.cwd);
+  }
+  assert.equal(execution.args[0], "exec");
+  assert.ok(execution.args.includes("--ephemeral"));
+  assert.equal(execution.args[execution.args.indexOf("-s") + 1], "read-only");
+  assert.equal(execution.args[execution.args.indexOf("--model") + 1], "title-model");
+  assert.ok(execution.args.includes('mcp_servers={"external.server"={enabled=false}}'));
+  assert.ok(execution.input.includes(message));
+  assert.match(execution.input, /untrusted/i);
+  assert.match(execution.input, /do not use tools/i);
+  await assert.rejects(stat(execution.cwd), { code: "ENOENT" });
+  for (const flag of ["--output-schema", "--output-last-message"])
+    await assert.rejects(stat(execution.args[execution.args.indexOf(flag) + 1]!), { code: "ENOENT" });
 }
 
 test("sidebar revisions are independent, persisted, conflict-safe and manual settle clears pin", () => {
@@ -173,111 +255,108 @@ test("sidebar and title routes enforce PM scope and title unavailable preserves 
 });
 
 test("Codex title helper uses isolated ephemeral read-only execution and leaves history intact", async () => {
-  const executable = join(directory, "codex-fixture");
-  const log = join(directory, "title-commands.jsonl");
-  await writeFile(executable, `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-const log = process.env.TITLE_FIXTURE_LOG;
-let input = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", chunk => input += chunk);
-process.stdin.on("end", () => {
-  fs.appendFileSync(log, JSON.stringify({args, input, cwd: process.cwd(), home: process.env.CODEX_HOME}) + "\\n");
-  if (args.includes("mcp")) process.stdout.write(JSON.stringify([{name: "external.server", enabled: true}]));
-  else fs.writeFileSync(args[args.indexOf("--output-last-message") + 1], JSON.stringify({title: "Real generated title"}));
-});
-`);
-  await chmod(executable, 0o700);
-  const instance = createProviderInstance({ instanceId: "title-codex", driver: "codex", label: "Fixture", config: { binaryPath: executable }, environment: [{ name: "TITLE_FIXTURE_LOG", value: log, sensitive: false }], customModels: [{ id: "title-model", label: "Title model" }] });
+  const peer = await titlePeer("codex-fixture", "Real generated title");
+  const home = join(directory, "native-home");
+  await mkdir(home);
+  const workspaceFile = join(directory, "workspace.txt");
+  const nativeHistory = join(home, "history.jsonl");
+  await writeFile(workspaceFile, "Keep the workspace unchanged");
+  await writeFile(nativeHistory, "Keep native history unchanged");
+  const instance = createProviderInstance({ instanceId: "title-codex", driver: "codex", label: "Fixture",
+    config: { binaryPath: peer.executable, homePath: home }, customModels: [{ id: "title-model", label: "Title model" }] });
+  await startTitleProvider();
   ensureThread("title", "Original", scope);
   updateThread("title", { settings: { providerInstanceId: instance.instanceId, model: "title-model", systemPrompt: "", temperature: 1 }, revision: 0 });
   saveFormattedMessage("title", { id: "prompt", parent_id: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Discuss a real topic" }] } });
   const history = getThreadHistory("title");
+  const revision = getThread("title")!.revision;
   const area = { path: null, status: "unconfigured", revision: 1, source: null, canManage: false };
   globalThis.fetch = async (input) => new Response(JSON.stringify(String(input).endsWith("/resolve")
     ? { scope, workspaceName: "Workspace", projectName: "Project", path: directory }
     : { workspaces: [{ id: scope.workspaceId, name: "Workspace", fileArea: area, projects: [{ id: scope.projectId, name: "Project", fileArea: area }] }] }), { status: 200, headers: { "content-type": "application/json" } });
   const app = new Hono().route("/api", chatRoutes);
-  const result = await app.request("http://localhost/api/chat/threads/title/regenerate-title", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ revision: 1 }) });
+  const regenerate = (revision: number) => app.request("http://localhost/api/chat/threads/title/regenerate-title", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ revision }) });
+  const result = await regenerate(revision);
   assert.equal(result.status, 200);
   assert.equal((await result.json()).thread.title, "Real generated title");
   assert.deepEqual(getThreadHistory("title"), history);
-  const calls = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line) as { args: string[]; input: string; cwd: string; home: string });
-  assert.equal(calls.length, 2);
-  assert.ok(calls[0]!.args.includes("mcp"));
-  assert.ok(calls[1]!.args.includes("--ephemeral"));
-  assert.ok(calls[1]!.args.includes("read-only"));
-  assert.ok(calls[1]!.args.includes('mcp_servers={"external.server"={enabled=false}}'));
-  assert.ok(calls[1]!.args.includes("features.plugins=false"));
-  assert.ok(calls[1]!.input.includes("Discuss a real topic"));
-  assert.notEqual(calls[1]!.cwd, directory);
+  const calls = await peer.calls();
+  await assertIsolatedTitle(calls, home, "Discuss a real topic");
+  const current = getThread("title")!;
+  updateThread("title", { settings: { ...current.settings, temperature: 0.5 }, revision: current.revision });
+  assert.equal((await regenerate(current.revision)).status, 409);
+  assert.equal(getThread("title")!.title, "Real generated title");
+  assert.deepEqual(getThreadHistory("title"), history);
+  assert.deepEqual(await peer.calls(), calls, "a stale settings revision must fail before native title dispatch");
+  assert.equal(await readFile(workspaceFile, "utf8"), "Keep the workspace unchanged");
+  assert.equal(await readFile(nativeHistory, "utf8"), "Keep native history unchanged");
 });
 
 test("managed Codex title uses the prepared runtime and broker without weakening title isolation", async () => {
-  const binary = join(directory, "codex");
-  const log = join(directory, "managed-title.jsonl");
-  await writeFile(binary, `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-if (args.includes("--version")) { process.stdout.write("codex-cli 0.156.1\\n"); process.exit(0); }
-if (args.includes("--help")) process.exit(0);
-let input = "";
-process.stdin.on("data", chunk => input += chunk);
-process.stdin.on("end", () => {
-  fs.appendFileSync(process.env.TITLE_FIXTURE_LOG, JSON.stringify({
-    mcp: args.includes("mcp"), managed: args.some(arg => arg.includes('model_provider="openai_token_sharing"')),
-    broker: args.some(arg => arg.includes("model_providers.openai_token_sharing=")),
-    ephemeral: args.includes("--ephemeral"), readOnly: args.includes("read-only"),
-    disabled: args.some(arg => arg.includes('mcp_servers=')),
-    secretEnv: Boolean(process.env.ACCESS_TOKEN || process.env.OPENAI_API_KEY || process.env.OPENAI_BASE_URL || process.env.T3CODE_CODEX_LAUNCH_ARGS)
-  }) + "\\n");
-  if (args.includes("mcp")) process.stdout.write(JSON.stringify([{name:"external.server",enabled:true}]));
-  else fs.writeFileSync(args[args.indexOf("--output-last-message") + 1], JSON.stringify({title:"Managed title"}));
-});
-`);
-  await chmod(binary, 0o700);
+  const peer = await titlePeer("codex", "Managed title");
   const instance = createProviderInstance({ instanceId: "managed-title", driver: "codex", label: "Managed fixture",
     config: { setupMode: "managed" }, environment: [
       { name: "PATH", value: `${directory}:${process.env.PATH ?? ""}`, sensitive: false },
-      { name: "TITLE_FIXTURE_LOG", value: log, sensitive: false },
       { name: "ACCESS_TOKEN", value: "fixture-only", sensitive: true },
+      { name: "OPENAI_API_KEY", value: "fixture-only", sensitive: true },
+      { name: "OPENAI_BASE_URL", value: "https://fixture.invalid", sensitive: false },
     ], customModels: [{ id: "title-model", label: "Title model" }] });
-  const privateDir = join(instance.homeDirectory, ".managed-codex");
-  await mkdir(join(privateDir, "runtime"), { recursive: true, mode: 0o700 });
-  await writeFile(join(privateDir, "runtime", "active.json"), JSON.stringify({ source: "local", executable: binary, version: "0.156.1" }), { mode: 0o600 });
-  await writeFile(join(privateDir, "credentials.json"), JSON.stringify({ hostId: "fixture", activeClientId: "fixture",
-    profiles: [{ clientId: "fixture", subject: "fixture", idToken: "fixture", accessToken: "fixture-only",
-      expiresAt: Date.now() + 3600_000, earliestRefreshAt: null, scopes: ["chatgpt.tokens.use.direct"] }] }), { mode: 0o600 });
+  // Seed only this fixture's source-owned store. Legacy credentials.json and
+  // runtime/active.json are not the current provider's account/runtime contract.
+  await Effect.runPromise(Effect.gen(function* () {
+    const credentials = yield* makePmProviderCredentials()("codex-chatgpt", instance.instanceId);
+    yield* credentials.set(new TextEncoder().encode(JSON.stringify({
+      activeClientId: "oaiapp_fixture",
+      sessions: [{ clientId: "oaiapp_fixture", subject: "fixture", email: null, accessToken: "fixture-only",
+        refreshToken: null, expiresAt: Date.now() + 3600_000, earliestRefreshAt: null,
+        scopes: ["chatgpt.tokens.use.direct"] }],
+    })));
+  }));
+  await startTitleProvider();
   ensureThread("managed-title", "Original", scope);
   updateThread("managed-title", { settings: { providerInstanceId: instance.instanceId, model: "title-model", systemPrompt: "", temperature: 1 } });
   saveFormattedMessage("managed-title", { id: "prompt", parent_id: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Managed title fixture" }] } });
+  const original = getThread("managed-title")!;
+  const history = getThreadHistory("managed-title");
   globalThis.fetch = async () => new Response(JSON.stringify({ scope, workspaceName: "Workspace", projectName: "Project", path: directory }), { status: 200 });
-  assert.equal(await generateThreadTitle(getThread("managed-title")!), "Managed title");
-  const calls = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
-  assert.equal(calls.length, 2);
-  assert.ok(calls.every((call) => call.managed && call.broker && !call.secretEnv));
-  assert.ok(calls[0].mcp && calls[1].ephemeral && calls[1].readOnly && calls[1].disabled);
+  assert.equal(await generateThreadTitle(original), "Managed title");
+  const calls = await peer.calls();
+  await assertIsolatedTitle(calls, instance.homeDirectory, "Managed title fixture");
+  for (const call of calls) {
+    const command = call.args[0] === "exec" ? "exec" : "mcp list";
+    assert.ok(call.args.includes('model_provider="openai_token_sharing"'), `${command} must select the managed provider`);
+    assert.ok(call.args.some(arg => arg.startsWith("model_providers.openai_token_sharing=") && arg.includes("__managed-chatgpt-token")),
+      `${command} must use the managed token broker`);
+    assert.equal(call.secretEnv, false, `${command} must not receive stripped ambient credential overrides`);
+  }
+  assert.deepEqual(getThread("managed-title"), original);
+  assert.deepEqual(getThreadHistory("managed-title"), history);
 });
 
-test("Codex title generation fails closed when MCP enumeration cannot be trusted", async () => {
-  const executable = join(directory, "codex-invalid");
-  const called = join(directory, "exec-called");
-  await writeFile(executable, `#!/usr/bin/env node
-const fs = require("node:fs");
-if (process.argv.includes("exec")) fs.writeFileSync(process.env.CALL_MARKER, "unexpected");
-else process.stdout.write("not-json");
-`);
-  await chmod(executable, 0o700);
-  const instance = createProviderInstance({ instanceId: "invalid-codex", driver: "codex", label: "Fixture", config: { binaryPath: executable }, environment: [{ name: "CALL_MARKER", value: called, sensitive: false }], customModels: [{ id: "title-model", label: "Title model" }] });
-  ensureThread("failure", "Original", scope);
-  updateThread("failure", { settings: { providerInstanceId: instance.instanceId, model: "title-model", systemPrompt: "", temperature: 1 }, revision: 0 });
-  saveFormattedMessage("failure", { id: "prompt", parent_id: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Keep this history" }] } });
-  const original = getThread("failure")!;
-  const history = getThreadHistory("failure");
-  globalThis.fetch = async () => new Response(JSON.stringify({ scope, workspaceName: "Workspace", projectName: "Project", path: directory }), { status: 200, headers: { "content-type": "application/json" } });
-  await assert.rejects(generateThreadTitle(original), /MCP/);
-  await assert.rejects(readFile(called), { code: "ENOENT" });
-  assert.deepEqual(getThread("failure"), original);
-  assert.deepEqual(getThreadHistory("failure"), history);
+test("Codex title generation fails closed when MCP enumeration cannot be trusted", async (t) => {
+  for (const failure of [
+    { name: "malformed", output: "not-json", exitCode: 0 },
+    { name: "invalid-schema", output: JSON.stringify([{ name: "external.server" }]), exitCode: 0 },
+    { name: "nonzero", output: "[]", exitCode: 2 },
+  ]) await t.test(failure.name, async () => {
+    const peer = await titlePeer(`codex-invalid-${failure.name}`, "Must not generate", failure.output, failure.exitCode);
+    const instance = createProviderInstance({ instanceId: `invalid-codex-${failure.name}`, driver: "codex", label: "Fixture",
+      config: { binaryPath: peer.executable, homePath: join(directory, `home-${failure.name}`) },
+      customModels: [{ id: "title-model", label: "Title model" }] });
+    await startTitleProvider();
+    const threadId = `failure-${failure.name}`;
+    ensureThread(threadId, "Original", scope);
+    updateThread(threadId, { settings: { providerInstanceId: instance.instanceId, model: "title-model", systemPrompt: "", temperature: 1 }, revision: 0 });
+    saveFormattedMessage(threadId, { id: "prompt", parent_id: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Keep this history" }] } });
+    const original = getThread(threadId)!;
+    const history = getThreadHistory(threadId);
+    globalThis.fetch = async () => new Response(JSON.stringify({ scope, workspaceName: "Workspace", projectName: "Project", path: directory }), { status: 200, headers: { "content-type": "application/json" } });
+    await assert.rejects(generateThreadTitle(original), { status: 503, code: "title_generation_unavailable" });
+    const calls = await peer.calls();
+    assert.equal(calls.length, 1, "enumeration failure must prevent inference dispatch");
+    assert.ok(calls[0]!.args.includes("mcp") && calls[0]!.args.includes("list"));
+    await assert.rejects(stat(calls[0]!.cwd), { code: "ENOENT" });
+    assert.deepEqual(getThread(threadId), original);
+    assert.deepEqual(getThreadHistory(threadId), history);
+  });
 });

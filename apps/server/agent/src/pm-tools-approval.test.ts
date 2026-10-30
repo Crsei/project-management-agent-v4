@@ -68,7 +68,9 @@ test("destructive PM tools wait for approval and execute the original request on
   initializeNativeOutput(generationId, "approval-thread", "running");
   ensureThread("approval-thread", "Approval", { workspaceId, projectId: null });
   ensureThread("other-thread", "Other", { workspaceId, projectId: null });
-  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId: "approval-thread", messageId: "approval-message", generationId, headers: new Headers(headers) });
+  let live = true;
+  const authorizeExecution = async () => { if (!live) throw new Error("Native generation authorization is no longer live"); };
+  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId: "approval-thread", messageId: "approval-message", generationId, headers: new Headers(headers), authorizeExecution });
   const send = async (input: unknown) => {
     const response = await fetch(`${bridge.url}/tools/call`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
     return { status: response.status, body: await response.json() as PmToolCallRecord };
@@ -82,6 +84,7 @@ test("destructive PM tools wait for approval and execute the original request on
     assert.equal(pending.body.result, null);
     assert.equal(pending.body.error, null);
     assert.equal(calls.length, 0);
+    live = false;
 
     const repeated = await send(input);
     assert.deepEqual(repeated.body, pending.body);
@@ -125,6 +128,7 @@ test("destructive PM tools wait for approval and execute the original request on
     assert.equal(doubleApprove.status, 409);
     assert.equal(calls.length, 1);
 
+    live = true;
     const rejectedId = randomUUID();
     const rejectedPending = await send({ operationId: rejectedId, name: "pm_delete_task", arguments: { id: "TASK-2", revision: "rev-1" } });
     assert.equal(rejectedPending.body.status, "pending_approval");
@@ -154,7 +158,7 @@ test("an unknown PM outcome after approval stays unknown and is never redispatch
   const generationId = randomUUID();
   initializeNativeOutput(generationId, "unknown-thread", "running");
   ensureThread("unknown-thread", "Unknown", { workspaceId, projectId: null });
-  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId: "unknown-thread", messageId: "unknown-message", generationId, headers: new Headers(headers) });
+  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId: "unknown-thread", messageId: "unknown-message", generationId, headers: new Headers(headers), authorizeExecution: async () => {} });
   try {
     const operationId = randomUUID();
     const created = await fetch(`${bridge.url}/tools/call`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operationId, name: "pm_transition_task", arguments: { id: "TASK-3", revision: "rev-1", status: "done" } }) });

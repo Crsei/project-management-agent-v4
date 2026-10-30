@@ -19,16 +19,15 @@ for (const generation of ["v1", "v2"] as const) {
       await writeOpenCodeCliFixture({ binaryPath: binary, generation, versionStatePath, processRecordPath: record });
       const stored = updateProviderInstance(f.context.instanceId, { config: { binaryPath: binary, serverUrl: "", serverPassword: "configured-test-password" } }, f.context.revision);
       const context = providerContext(stored, f.context.cwd);
-      const readProcesses = async () => (await readFile(record, "utf8")).trim().split("\n").map(line =>
-        JSON.parse(line) as { pid: number; cwd: string; home: string; data: string; wrongPasswordPresent: boolean });
+      type NativeProcess = { pid: number; cwd: string; home: string; data: string; wrongPasswordPresent: boolean };
       const checked = await opencodeAdapter.check(context);
       assert.deepEqual(checked.models.map(model => model.id), ["native-api/model/one"]);
-      const inventoryProcesses = await readProcesses();
+      const inventoryProcesses = (await readFile(record, "utf8")).trim().split("\n").map(line => JSON.parse(line) as NativeProcess);
       assert.ok(inventoryProcesses.length > 0, "The original catalog must launch an owned local server");
       for (const owned of inventoryProcesses) assert.doesNotThrow(() => process.kill(owned.pid, 0));
       const result = await f.run(context, { model: "native-api/model/one", prompt: "ADD 19 23" });
       assert.equal(result.text, "計算=42");
-      const processes = await readProcesses();
+      const processes = (await readFile(record, "utf8")).trim().split("\n").map(line => JSON.parse(line) as NativeProcess);
       for (const owned of processes) {
         assert.equal(owned.cwd, context.cwd); assert.equal(owned.home, context.env.HOME); assert.equal(owned.data, context.env.XDG_DATA_HOME);
         if (generation === "v2") assert.equal(owned.wrongPasswordPresent, false);

@@ -2,7 +2,7 @@ import { AssistantChatTransport, type ResumableClientStorage } from "@assistant-
 import type { UIMessage, ChatTransport } from "ai";
 import { flushThreadSettings } from "@agent/hooks/use-chat-settings";
 import { workspaceClient } from "../network";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 import { canSendThread } from "../pm/state";
 import { getPmReferences } from "../pm/pm-chat-bridge";
 import { getResponseStreamingMode } from "./response-streaming";

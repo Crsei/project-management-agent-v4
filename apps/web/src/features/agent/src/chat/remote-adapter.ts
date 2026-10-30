@@ -11,7 +11,7 @@ import {
 } from "@assistant-ui/react";
 import { createSimpleTitleAdapter } from "@assistant-ui/core/react";
 import { workspaceClient } from "../network";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 import type { ChatGenerationView, PmContext, RemoteThread } from "@agent-workspace/contracts/chat";
 import { ensureChatMigration } from "./migration";
 import { chatStreams } from "./transport";

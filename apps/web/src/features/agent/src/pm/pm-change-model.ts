@@ -1,7 +1,8 @@
 import type { NativeOutputItem } from "@agent-workspace/contracts/output";
 
 import type { PmChangeKind, PmChangeSet, PmChangeState } from "./pm-types";
-import { agentText, type AgentText } from "../i18n";
+import type { AgentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 
 /** Display labels for the change kinds the PM tool bridge can report. */
 const KIND_LABELS: Readonly<Record<PmChangeKind, [string, string]>> = {

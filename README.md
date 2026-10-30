@@ -167,7 +167,7 @@ Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity�
 
 当前配置流程、实际执行及发布记录见 [t3code Provider 原生流程切换](docs/reference/t3code-provider-config-diff-30eb7e7bb1.zh.md#v4-native-provider-flow)。原调查和前两轮实施保留为历史记录；旧的强制独立 Home 与配置文件教程已被替换。
 
-原模块移植见 [t3code Provider 模块移植计划清单](docs/implementation/t3code-provider-module-migration-plan.zh.md)：固定上游源码、分阶段切片与 `gpt-6.1-sol / xhigh` 派发及验收约定；来源/合同、14包导入、配置认证宿主与Chat执行桥、OpenCode原模块隔离验收已完成。OpenCode已通过真实模型调用、原生续聊、SSE/历史及浏览器显示；其余Provider和客户端接入继续按计划推进，尚未切换常驻服务。会话与持久化仍沿用现有Agent Chat保存方式，未完成统一设计。
+原模块移植见 [t3code Provider 模块移植计划清单](docs/implementation/t3code-provider-module-migration-plan.zh.md)：固定上游源码、分阶段切片与 `gpt-6.1-sol / xhigh` 派发及验收约定。十类Provider、客户端模型/配置/Composer、原生Usage、数据连续性及离线同步已接入；14个完整原包位于 `vendor/t3code/packages`，选入的原server模块位于 `vendor/t3code/apps/server`，根目录 `packages/agent-*` 是PM宿主边界，不是重复Provider实现。最终审查与本副本Web/Agent受控发布已完成；发布后OpenCode真实调用、原生续聊、重启后续聊及项目内嵌Chat的只读PM工具均通过。其他提供商真实账号、额度及全仓库后端检查仍有明确限制，不能用模块测试替代账号验收；详见计划执行记录。会话与持久化仍沿用现有Agent Chat保存方式，未完成统一设计。
 
 ##### 配置并使用 Provider
 
@@ -210,9 +210,11 @@ pnpm agent:backup restore --bundle <私有备份目录> --target <独立空目�
 pnpm agent:backup:verify --bundle <私有备份目录> --target <恢复目录> --stopped
 ```
 
-必须显式选择 `--secrets exclude` 或 `--secrets include`。两种备份都包含私有会话，目录 / 文件权限为 0700 / 0600，不能放在公共 Web 根目录。`exclude` 保留一致的会话、历史、设置和模型配置，但排除凭据、实例环境、原生私有配置及应用自有 home，清除原生续聊引用并停用恢复的实例；恢复后必须明确检查原生配置并启用。`include` 纳入私有实例配置、历史凭据及数据目录内部的应用自有 homes；外部 Home 只保留路径引用，不收集其内容，恢复时也不创建该目录；应用目录内的符号链接仍被拒绝。两种模式均不修改原始数据。
+必须显式选择 `--secrets exclude` 或 `--secrets include`。两种备份都包含私有会话及 `provider-attachments` 内的Agent附件，目录 / 文件权限为 0700 / 0600，不能放在公共 Web 根目录。`exclude` 保留一致的会话、历史、设置和模型配置，但排除凭据、`provider-private` 凭据/环境身份、实例环境、原生私有配置及应用自有 home，清除原生续聊引用并停用恢复的实例；恢复后必须明确检查原生配置并启用。`include` 纳入上述私有凭据/身份、私有实例配置及数据目录内部的应用自有 homes；外部 Home 只保留路径引用，不收集其内容，恢复时也不创建该目录；应用目录内的符号链接仍被拒绝。可重建的 `provider-cache` 探测缓存不进入任一备份；两种模式均不修改原始数据。
 
-工具校验文件摘要、SQLite 一致快照和记录覆盖，拒绝活跃 / 陈旧锁、不明确的文件、路径穿越及非空目标；不通过 HTTP 提供秘密备份。Agent 备份包含 Chat 保存的 PM 工具结果和核心文件差异快照，仍**不包含完整权威 PM 数据**：PostgreSQL、Markdown 根目录、附件、用户项目源码、`.env.agent`、浏览器登录或全局 / 外部 CLI home 不在其中；PM 仍需既有完整备份流程。恢复校验通过不代表 Provider 已登录、PM 范围已获授权或真实模型可执行。
+恢复时同样核验 `exclude` 策略：原生实例必须明确为 `enabled:false`，不得携带旧 `cliHome` 覆盖；缺失禁用标志也会拒绝，即使备份文件摘要已重新计算。拒绝发生在创建恢复目标之前。
+
+工具校验文件摘要、SQLite 一致快照和记录覆盖，拒绝活跃 / 陈旧锁、不明确的文件、路径穿越及非空目标；不通过 HTTP 提供秘密备份。Agent 备份包含 Chat 保存的 PM 工具结果和核心文件差异快照，仍**不包含完整权威 PM 数据**：PostgreSQL、Markdown 根目录、PM附件、用户项目源码、`.env.agent`、浏览器登录或全局 / 外部 CLI home 不在其中；PM 仍需既有完整备份流程。恢复校验通过不代表 Provider 已登录、PM 范围已获授权或真实模型可执行。
 
 ### 统一 Agent Chat 与 PM 工具
 

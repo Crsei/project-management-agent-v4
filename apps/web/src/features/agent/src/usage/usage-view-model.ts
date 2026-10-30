@@ -1,7 +1,7 @@
 // Adapted from t3code usageMerge.ts and usageProgress.ts.
 // Copyright (c) 2026 T3 Tools Inc. MIT; see LICENSE.t3code.
 import { USAGE_CONTRACT_VERSION, type UsageBucket, type UsageProviderKind, type UsageSource, type UsageSummary, type UsageSummaryInput } from "@agent-workspace/contracts/usage";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 import { aggregate, type UsageTotals } from "./page-data.ts";
 
 export type UsageMetric = "cost" | "tokens";

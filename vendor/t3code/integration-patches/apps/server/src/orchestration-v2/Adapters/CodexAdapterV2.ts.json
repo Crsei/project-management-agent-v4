@@ -2,7 +2,7 @@
   "version": 1,
   "source": "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
   "beforeSha256": "44f0cfba17c5ddf47cd5b75ab443d18c3a8080cc4638034b5b7e75c36a75e422",
-  "afterSha256": "c12bf486f7142b91ac6588308daefcc811bd36fb777899cb1d93bddccec78f73",
+  "afterSha256": "d123d510381feccfc93233a6a5c0a9f8c24499c3fc4ce96773c533c35d39f24d",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -186,6 +186,8 @@
       "start": 1504,
       "before": [],
       "after": [
+        "          // The adapter supplies a complete, possibly managed-account-sanitized environment.\n",
+        "          extendEnv: false,\n",
         "          ...(input.runtimePolicy.cwd == null ? {} : { cwd: input.runtimePolicy.cwd }),\n"
       ]
     },

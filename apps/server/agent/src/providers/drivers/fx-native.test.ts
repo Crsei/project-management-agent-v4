@@ -32,7 +32,7 @@ test("original FX status probes preserve native models/login without creating a 
 test("original FX selects native model/effort and forces the first supervised mode through typed ACP v2", { timeout: 30_000 }, async t => {
   const f = await createAcpTestHarness("fx");
   try {
-    const result = await f.run(f.context, { model: "default", prompt: "ADD 6 7", signal: t.signal,
+    const result = await f.run(f.context, { model: "native/default", prompt: "ADD 6 7", signal: t.signal,
       modelOptions: [{ id: "effort", value: "medium" }] });
     assert.equal(result.text, "Native total=13");
     const wire = await f.records();

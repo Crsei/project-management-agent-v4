@@ -28376,7 +28376,7 @@
       "git_mode": "100644",
       "bytes": 36172,
       "category": "behavior-test",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T11",
       "role": "test-only"
     },
@@ -28628,7 +28628,7 @@
       "git_mode": "100644",
       "bytes": 17559,
       "category": "behavior-test",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T9",
       "role": "test-only"
     },
@@ -29060,7 +29060,7 @@
       "git_mode": "100644",
       "bytes": 13052,
       "category": "native-provider-driver",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T9",
       "role": "runtime-or-build-input"
     },

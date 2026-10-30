@@ -16,7 +16,11 @@ const namespace = "pm-tool-calls";
 const inputSchema = z.object({ operationId: z.uuid(), name: z.string().min(1), arguments: z.unknown() }).strict();
 type Input = z.infer<typeof inputSchema>;
 type Stored = { record: PmToolCallRecord; request: Input & { scope: { kind: "workspace" | "projects"; projectIds: string[] }; threadId: string; messageId: string; generationId: string } };
-type Context = { scope: AgentScope; threadId: string; messageId: string; generationId: string; headers?: Headers };
+type Context = {
+  scope: AgentScope; threadId: string; messageId: string; generationId: string; headers?: Headers;
+  /** Request-local live Chat authorization; never copied into a stored request. */
+  authorizeExecution: (action: "tool") => Promise<void>;
+};
 
 /** Only PM's write tools change business state; read tools never appear as changes. */
 const changeDefinitions: Record<string, { kind: PmChangeKind; label: string }> = {
@@ -183,6 +187,14 @@ async function call(context: Context, input: Input): Promise<PmToolCallRecord> {
     if (JSON.stringify(existing.request) !== JSON.stringify(request) || existing.record.workspaceId !== context.scope.workspaceId) throw new Error("operationId already belongs to another request");
     return existing.record;
   }
+  // New native work must remain authorized after asynchronous body admission.
+  await context.authorizeExecution("tool");
+  // Another request may have claimed the same operation while authorization awaited PM.
+  const admitted = readRecord<Stored>(namespace, input.operationId);
+  if (admitted) {
+    if (JSON.stringify(admitted.request) !== JSON.stringify(request) || admitted.record.workspaceId !== context.scope.workspaceId) throw new Error("operationId already belongs to another request");
+    return admitted.record;
+  }
   const pending = destructivePmToolNames[input.name] === true;
   const value: Stored = { request, record: { operationId: input.operationId, name: input.name, status: pending ? "pending_approval" : "running", result: null, error: null, threadId: context.threadId, messageId: context.messageId, generationId: context.generationId, workspaceId: context.scope.workspaceId, createdAt: new Date().toISOString(), finishedAt: null } };
   save(value);
@@ -190,7 +202,7 @@ async function call(context: Context, input: Input): Promise<PmToolCallRecord> {
   return dispatch(value, context.headers);
 }
 
-/** The loopback endpoint exists only for this generation. Headers remain in memory. */
+/** The loopback endpoint exists only for this generation. Headers and authorization remain in memory. */
 export async function openPmToolBridge(context: Context): Promise<{ url: string; close: () => Promise<void> }> {
   // JSON-RPC IDs are local to a transport; Pi supplies its generation-local namespace.
   const mcpCalls = new Map<string, { signature: string; operationId: string; result: Promise<PmToolCallRecord> }>();
@@ -205,7 +217,11 @@ export async function openPmToolBridge(context: Context): Promise<{ url: string;
       return;
     }
     try {
-      if (req.method === "GET" && req.url === "/tools/list") { res.end(JSON.stringify(await pmFetch(context.scope.workspaceId, "", context.headers))); return; }
+      if (req.method === "GET" && req.url === "/tools/list") {
+        await context.authorizeExecution("tool");
+        res.end(JSON.stringify(await pmFetch(context.scope.workspaceId, "", context.headers)));
+        return;
+      }
       if (req.method !== "POST" || !["/tools/call", "/tools/result", "/tools/mcp-call"].includes(req.url ?? "")) { res.writeHead(404).end(JSON.stringify({ error: "not_found" })); return; }
       const chunks: Buffer[] = []; let size = 0;
       for await (const chunk of req) { const bytes = Buffer.from(chunk); size += bytes.length; if (size > 1024 * 1024) throw new Error("Input too large"); chunks.push(bytes); }

@@ -17,7 +17,7 @@ import { runProviderMaintenanceCommandWithSpawner } from "../../../../../../vend
 import type { PmProviderBoundaryError, PmProviderHostService, PmProviderLease } from "./contract.ts";
 import { providerBoundaryError } from "./config-mapping.ts";
 import { makePmProviderPlatformLayer } from "./host-runtime.ts";
-import { getStoredInstance } from "../instances.ts";
+import { getStoredInstance, providerDataDirectory } from "../instances.ts";
 import { ProviderAuthSessionInvalidation } from "../../../../../../vendor/t3code/apps/server/src/provider/ProviderAuthService.ts";
 
 export type PmProviderInstallationMethods = {
@@ -28,7 +28,9 @@ export type PmProviderInstallationMethods = {
     lease?: PmProviderLease,
   ) => Promise<{ message: string }>;
 };
-export type PmProviderManagement = Pick<NativeProviderAdapter, "check" | "authenticate" | "logout" | "prepare" | "update" | "removeInstallation">;
+export type PmProviderManagement = Pick<NativeProviderAdapter, "check" | "authenticate" | "logout" | "prepare" | "update" | "removeInstallation"> & {
+  readonly shutdown: () => Promise<void>;
+};
 export type PmProviderCapabilitiesProjector = (input: {
   readonly context: ProviderDriverContext;
   readonly lease: PmProviderLease;
@@ -122,6 +124,34 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
   readonly installations?: ReadonlyMap<ProviderDriver, PmProviderInstallationMethods>;
   readonly capabilities?: ReadonlyMap<ProviderDriver, PmProviderCapabilitiesProjector>;
 } = {}): PmProviderManagement {
+  const root = providerDataDirectory();
+  const shutdownController = new AbortController();
+  const admitted = new Set<Promise<unknown>>();
+  let closing: Promise<void> | undefined;
+  const runMaintenance = <A>(context: ProviderDriverContext, task: (signal: AbortSignal) => Promise<A>, signal?: AbortSignal): Promise<A> => {
+    if (shutdownController.signal.aborted)
+      return Promise.reject(providerBoundaryError("Provider application is not accepting maintenance.", "provider_host_closed", 503));
+    if (providerDataDirectory() !== root)
+      return Promise.reject(providerBoundaryError("Provider application data root changed before maintenance."));
+    const lifetime = signal ? AbortSignal.any([signal, shutdownController.signal]) : shutdownController.signal;
+    // Register synchronously, including provisional instances, before source dispatch can begin.
+    const pending = Promise.resolve().then(() => {
+      lifetime.throwIfAborted();
+      if (providerDataDirectory() !== root) throw providerBoundaryError("Provider application data root changed before maintenance.");
+      return task(lifetime);
+    });
+    admitted.add(pending);
+    const release = () => { admitted.delete(pending); };
+    void pending.then(release, release);
+    return pending;
+  };
+  const shutdown = () => {
+    if (closing) return closing;
+    // Individual callers retain their original result/error; shutdown owns settlement, not success.
+    closing = Promise.allSettled(admitted).then(() => undefined);
+    shutdownController.abort(new Error("Provider application is shutting down."));
+    return closing;
+  };
   const sessionInvalidation = makePmProviderAuthSessionInvalidation(host);
   const stopSessions = (lease: PmProviderLease) => sessionInvalidation.invalidateSessions({
     requestingInstanceId: lease.instance.instanceId,
@@ -138,14 +168,14 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
   const use = <A, E>(context: ProviderDriverContext, purpose: Parameters<PmProviderHostService["acquire"]>[1],
     task: (lease: PmProviderLease) => Effect.Effect<A, E, Scope.Scope>, signal?: AbortSignal) =>
     Effect.runPromise(Effect.scoped(Effect.flatMap(host.acquire(context, purpose), task)), { signal });
-  const runInstallation = async (action: keyof PmProviderInstallationMethods, context: ProviderDriverContext,
-    signal?: AbortSignal, progress?: Parameters<NonNullable<NativeProviderAdapter["prepare"]>>[2]) => {
+  const runInstallation = (action: keyof PmProviderInstallationMethods, context: ProviderDriverContext,
+    signal?: AbortSignal, progress?: Parameters<NonNullable<NativeProviderAdapter["prepare"]>>[2]) => runMaintenance(context, async lifetime => {
     const method = options.installations?.get(context.driver)?.[action];
     if (!method) throw providerBoundaryError("This Provider has no capability registered for this installation action.",
       action === "prepare" ? "unsupported_install" : "unsupported_remove", 409);
     const current = getStoredInstance(context.instanceId);
     // A provisional instance's real installation service owns provisioning locks; no account row exists yet.
-    if (!current) return method(context, signal, progress);
+    if (!current) return method(context, lifetime, progress);
     if (current.revision !== context.revision) throw providerBoundaryError("Provider configuration changed before installation.");
     return use(context, "maintenance", lease => Effect.gen(function* () {
       yield* lease.assertCurrent;
@@ -154,14 +184,18 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
         catch: () => providerBoundaryError("Unable to invalidate shared Provider installation revisions.", "provider_configuration_changed", 409),
       });
       const result = yield* Effect.tryPromise({
-        try: () => method(context, signal, progress, lease),
+        try: () => method(context, lifetime, progress, lease),
         catch: error => error instanceof Error ? error : providerBoundaryError("Provider installation failed.", "provider_installation_failed", 500),
-      });
+      }).pipe(
+        // The family receives the external abort signal and owns native cleanup.
+        // Do not release this lease while its cancellation acknowledgement is still pending.
+        Effect.uninterruptible,
+      );
       yield* lease.assertCurrent;
       if (lease.instance.invalidateCaches) yield* lease.instance.invalidateCaches;
       return result;
-    }), signal);
-  };
+    }), lifetime);
+  }, signal);
   const authenticate: NativeProviderAdapter["authenticate"] = (context, authOptions) => use(context, "auth", lease => Effect.gen(function* () {
     const auth = lease.instance.auth;
     if (!auth) return yield* Effect.fail(providerBoundaryError("Authentication is managed externally for this Provider.", "unsupported_auth", 409));
@@ -240,6 +274,7 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
     yield* lease.assertCurrent;
   }), authOptions.signal);
   return {
+    shutdown,
     check: (context, signal) => use(context, "status", lease => Effect.gen(function* () {
       const snapshot = yield* lease.instance.snapshot.refresh;
       const auth = lease.instance.auth;
@@ -261,7 +296,7 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
     }), signal),
     prepare: (context, signal, progress) => runInstallation("prepare", context, signal, progress),
     removeInstallation: (context, signal, progress) => runInstallation("removeInstallation", context, signal, progress),
-    update: (context, signal, progress) => use(context, "maintenance", lease => Effect.gen(function* () {
+    update: (context, signal, progress) => runMaintenance(context, lifetime => use(context, "maintenance", lease => Effect.gen(function* () {
       const capabilities = yield* lease.instance.snapshot.resolveMaintenance({ fresh: true });
       const action = capabilities.update;
       if (!action) return yield* Effect.fail(providerBoundaryError("The source installer has no proven update action.", "unsupported_update", 409));
@@ -280,6 +315,6 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
       if (!refreshed.installed || refreshed.availability === "unavailable")
         return yield* Effect.fail(providerBoundaryError("The update command completed but native Provider installation was not confirmed.", "provider_update_failed", 412));
       return { message: "Provider update command completed and native status was refreshed." };
-    }), signal),
+    }), lifetime), signal),
   };
 }

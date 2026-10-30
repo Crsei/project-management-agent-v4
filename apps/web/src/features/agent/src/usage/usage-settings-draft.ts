@@ -1,5 +1,5 @@
 // Adapted from t3code usage price settings. Copyright (c) 2026 T3 Tools Inc. MIT; see LICENSE.t3code.
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 import type { UsageLimitSourceInput, UsageLimitSourceView, UsageModelPriceOverride, UsageSettings, UsageSettingsUpdate } from "@agent-workspace/contracts/usage";
 
 export type PriceDraft = { model: string; input: string; output: string; cacheRead: string; cacheWrite: string };

@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { chmod, lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyHostBuildInputs } from "./host-inputs.mjs";
 
 const toolRoot = fileURLToPath(new URL("../", import.meta.url));
 const repository = path.resolve(toolRoot, "../..");
@@ -78,6 +79,7 @@ const manifest = JSON.parse(manifestBytes);
 const inventoryBytes = await readFile(path.join(toolRoot, "sync-inventory.json"));
 const inventory = JSON.parse(inventoryBytes);
 if (inventory.version !== 1 || inventory.upstreamCommit !== manifest.upstream.commit || hash(manifestBytes) !== inventory.sourceManifestSha256) throw new Error("Source manifest/inventory identity mismatch.");
+await verifyHostBuildInputs(repository, inventory);
 const commit = execFileSync("git", ["-C", source, "rev-parse", "HEAD"], { encoding: "utf8", env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } }).trim();
 if (commit !== inventory.upstreamCommit) throw new Error(`Wrong source commit: expected ${inventory.upstreamCommit}, received ${commit}`);
 

@@ -15,7 +15,8 @@ import {
   getChatBrowserPreferences,
   useChatBrowserPreferences,
 } from "@agent/src/settings/browser-preferences";
-import { agentText, useAgentText, type AgentText } from "../../i18n";
+import { useAgentText, type AgentText } from "../../i18n";
+import { agentText } from "../../i18n-text.ts";
 
 type TerminalStatus = "connecting" | "connected" | "disconnected" | "error";
 

@@ -2,7 +2,7 @@
   "version": 1,
   "source": "apps/server/src/provider/CodexProvider.ts",
   "beforeSha256": "caf0ec1f08fae5c29f8ae1f1bda141d4873bd9ccd7d20eef72481b4fe209b429",
-  "afterSha256": "1b367d568e8c156138de4b8bc1b7672eb48a94d931081ebac547f7fcdc5fe530",
+  "afterSha256": "3a57e12be4d7c602c32d29b8d19bcf9ffc2038a7488ea982c987110fc7521424",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -14,6 +14,52 @@
     "vendor/t3code/opencode-patches.json"
   ],
   "splices": [
+    {
+      "start": 467,
+      "before": [],
+      "after": [
+        "  readonly extendEnv?: boolean | undefined;\n"
+      ]
+    },
+    {
+      "start": 480,
+      "before": [
+        "    { env: environment, extendEnv: true },\n"
+      ],
+      "after": [
+        "    { env: environment, extendEnv: input.extendEnv ?? true },\n"
+      ]
+    },
+    {
+      "start": 487,
+      "before": [
+        "        extendEnv: true,\n"
+      ],
+      "after": [
+        "        extendEnv: input.extendEnv ?? true,\n"
+      ]
+    },
+    {
+      "start": 516,
+      "before": [],
+      "after": [
+        "  readonly extendEnv?: boolean;\n"
+      ]
+    },
+    {
+      "start": 602,
+      "before": [],
+      "after": [
+        "  readonly extendEnv?: boolean;\n"
+      ]
+    },
+    {
+      "start": 690,
+      "before": [],
+      "after": [
+        "    readonly extendEnv?: boolean;\n"
+      ]
+    },
     {
       "start": 703,
       "before": [
@@ -30,6 +76,16 @@
       ],
       "after": [
         "    cwd: yield* HostProcess.WorkingDirectory,\n"
+      ]
+    },
+    {
+      "start": 730,
+      "before": [
+        "    ...(managedAuth ? { skipNativeUsage: true } : {}),\n"
+      ],
+      "after": [
+        "    // Managed runtime resolution already removed foreign account overrides.\n",
+        "    ...(managedAuth ? { skipNativeUsage: true, extendEnv: false } : {}),\n"
       ]
     }
   ]

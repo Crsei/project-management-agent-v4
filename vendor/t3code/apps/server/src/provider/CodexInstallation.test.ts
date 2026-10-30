@@ -138,13 +138,15 @@ it.effect.each(["0.156.0", "0.156.1", "0.156.2", "0.157.0"])(
   (version) =>
     Effect.gen(function* () {
       const h = yield* makeHarness({ local: { version } });
-      expect(yield* h.installation.start).toMatchObject({
+      const operation = yield* h.installation.startOperation;
+      expect(operation.state).toMatchObject({
         source: "local",
         phase: "succeeded",
         installedVersion: version,
         executablePath: h.localBinaryPath,
         canRemove: false,
       });
+      yield* operation.completion;
       expect(yield* h.installation.resolve()).toMatchObject({
         source: "local",
         executablePath: h.localBinaryPath,
@@ -307,8 +309,9 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { installation, fs, baseDir } = yield* makeHarness();
-      yield* installation.start;
+      const operation = yield* installation.startOperation;
       expect((yield* terminalState(installation)).phase).toBe("succeeded");
+      yield* operation.completion;
       const executable = yield* installation.resolve();
       expect(executable.executablePath).toBe(`${baseDir}/tools/codex/0.156.1/bin/codex`);
       expect(
@@ -373,9 +376,11 @@ it.effect("cancels an in-flight download and cleans the staging directory", () =
       Deferred.succeed(downloading, undefined).pipe(Effect.andThen(Effect.never)),
     );
     const { installation, fs } = yield* makeHarness({ body });
-    const started = yield* installation.start;
+    const operation = yield* installation.startOperation;
+    const started = operation.state;
     yield* Deferred.await(downloading);
     expect((yield* installation.cancel(started.operationId!)).phase).toBe("cancelled");
+    yield* operation.completion;
     expect(
       (yield* fs.readDirectory(installation.managedDirectory)).filter((name) =>
         name.startsWith(".install-"),

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, type ReactNode } from "react";
 import type { AgentScope } from "../../pm/state";
-import { agentText } from "../../i18n";
+import { agentText } from "../../i18n-text.ts";
 import { inspectUrl } from "./api";
 
 type InspectorScope = AgentScope & { threadId?: string };

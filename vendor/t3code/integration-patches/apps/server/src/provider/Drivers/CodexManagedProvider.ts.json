@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/CodexManagedProvider.ts",
+  "beforeSha256": "ffbc09597c3c312984f26e8cf81c15c60752472358193d3281c34c226e04e68a",
+  "afterSha256": "ae86ef4e52e9886b7ef7561f024b250137b93f44b57bcecc4d36c72bda5990ec",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 317,
+      "before": [],
+      "after": [
+        "                  extendEnv: false,\n"
+      ]
+    }
+  ]
+}

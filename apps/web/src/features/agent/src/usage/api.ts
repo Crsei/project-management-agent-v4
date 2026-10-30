@@ -4,7 +4,7 @@ import type {
   UsageLimitSourceInput, UsageLimitSourceView, UsageLimitsReport, UsageSettings,
   UsageSettingsUpdate, UsageSummaryInput,
 } from "@agent-workspace/contracts/usage";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 import { workspaceClient } from "../network.ts";
 import { decodeUsageSummary, invalidateUsageSettings } from "./usage-summary-data.ts";
 

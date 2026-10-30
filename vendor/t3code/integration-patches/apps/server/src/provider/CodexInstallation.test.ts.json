@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexInstallation.test.ts",
+  "beforeSha256": "4b4835a77e93c320410d873fd4306a6323f483a3db6b9cfd805befa148c773e3",
+  "afterSha256": "93758bd45fc5592d6d53bb2872d3a032f8c047e1d5d1e8da5861aa4e752ef7e8",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 140,
+      "before": [
+        "      expect(yield* h.installation.start).toMatchObject({\n"
+      ],
+      "after": [
+        "      const operation = yield* h.installation.startOperation;\n",
+        "      expect(operation.state).toMatchObject({\n"
+      ]
+    },
+    {
+      "start": 147,
+      "before": [],
+      "after": [
+        "      yield* operation.completion;\n"
+      ]
+    },
+    {
+      "start": 309,
+      "before": [
+        "      yield* installation.start;\n"
+      ],
+      "after": [
+        "      const operation = yield* installation.startOperation;\n"
+      ]
+    },
+    {
+      "start": 311,
+      "before": [],
+      "after": [
+        "      yield* operation.completion;\n"
+      ]
+    },
+    {
+      "start": 375,
+      "before": [
+        "    const started = yield* installation.start;\n"
+      ],
+      "after": [
+        "    const operation = yield* installation.startOperation;\n",
+        "    const started = operation.state;\n"
+      ]
+    },
+    {
+      "start": 378,
+      "before": [],
+      "after": [
+        "    yield* operation.completion;\n"
+      ]
+    }
+  ]
+}

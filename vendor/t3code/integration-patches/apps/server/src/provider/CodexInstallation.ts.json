@@ -2,7 +2,7 @@
   "version": 1,
   "source": "apps/server/src/provider/CodexInstallation.ts",
   "beforeSha256": "9a25f3a6440cb8685ff9971f290587e063166cd9a8ce48810c46e4dcd337a64b",
-  "afterSha256": "65a36c1adb70965624065c08a87c34aa01d39ff8d144577f69e29a79a348e17e",
+  "afterSha256": "38b37073f3a2ab7e7e16a5f4e36289b9dd0490aa85215dface8d366a272a3ec7",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -24,6 +24,24 @@
       ]
     },
     {
+      "start": 123,
+      "before": [],
+      "after": [
+        "export interface CodexInstallationOperation {\n",
+        "  readonly state: ProviderInstallState;\n",
+        "  /** Exact worker settlement, including scoped cleanup; retains non-cancellation failures. */\n",
+        "  readonly completion: Effect.Effect<void, CodexInstallationError>;\n",
+        "}\n"
+      ]
+    },
+    {
+      "start": 128,
+      "before": [],
+      "after": [
+        "  readonly startOperation: Effect.Effect<CodexInstallationOperation, CodexInstallationError>;\n"
+      ]
+    },
+    {
       "start": 151,
       "before": [],
       "after": [
@@ -37,6 +55,87 @@
       ],
       "after": [
         "  const managedDirectory = options.managedDirectory ?? path.join(options.baseDir, \"tools\", \"codex\");\n"
+      ]
+    },
+    {
+      "start": 181,
+      "before": [
+        "  let running: { readonly operationId: string; readonly fiber: Fiber.Fiber<void> } | undefined;\n"
+      ],
+      "after": [
+        "  let running: {\n",
+        "    readonly operationId: string;\n",
+        "    readonly fiber: Fiber.Fiber<void>;\n",
+        "    readonly completion: Effect.Effect<void, CodexInstallationError>;\n",
+        "  } | undefined;\n"
+      ]
+    },
+    {
+      "start": 614,
+      "before": [
+        "  const start = gate\n"
+      ],
+      "after": [
+        "  const startOperation: Effect.Effect<CodexInstallationOperation, CodexInstallationError> = gate\n"
+      ]
+    },
+    {
+      "start": 618,
+      "before": [
+        "        if (isRunning(current)) return current;\n",
+        "        if (yield* reuseLocal()) return yield* SubscriptionRef.get(state);\n"
+      ],
+      "after": [
+        "        if (isRunning(current) && running) return { state: current, completion: running.completion };\n",
+        "        if (yield* reuseLocal()) return { state: yield* SubscriptionRef.get(state), completion: Effect.void };\n"
+      ]
+    },
+    {
+      "start": 639,
+      "before": [],
+      "after": [
+        "        let outcome: Exit.Exit<void, CodexInstallationError> = Exit.void;\n"
+      ]
+    },
+    {
+      "start": 659,
+      "before": [],
+      "after": [
+        "          Effect.onExit((exit) => Effect.sync(() => { outcome = exit; })),\n"
+      ]
+    },
+    {
+      "start": 667,
+      "before": [
+        "        running = { operationId, fiber };\n",
+        "        return next;\n"
+      ],
+      "after": [
+        "        const completion = Fiber.await(fiber).pipe(\n",
+        "          Effect.flatMap((workerExit) => {\n",
+        "            const exit = Exit.isFailure(workerExit) ? workerExit : outcome;\n",
+        "            return Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)\n",
+        "              ? Effect.failCause(exit.cause)\n",
+        "              : Effect.void;\n",
+        "          }),\n",
+        "        );\n",
+        "        running = { operationId, fiber, completion };\n",
+        "        return { state: next, completion };\n"
+      ]
+    },
+    {
+      "start": 672,
+      "before": [],
+      "after": [
+        "  // The native setup API publishes state without taking ownership of the background worker.\n",
+        "  const start = startOperation.pipe(Effect.map((operation) => operation.state));\n"
+      ]
+    },
+    {
+      "start": 799,
+      "before": [],
+      "after": [
+        "    startOperation,\n"
       ]
     }
   ]

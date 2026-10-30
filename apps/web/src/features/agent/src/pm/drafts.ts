@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuiState, type AssistantRuntime } from "@assistant-ui/react";
 import type { AgentScope } from "@agent-workspace/contracts/chat";
 import { scopeKey } from "./state";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 
 const PREFIX = "pm-v3:agent-draft:";
 type ComposerDraft = ReturnType<AssistantRuntime["thread"]["composer"]["getState"]>;

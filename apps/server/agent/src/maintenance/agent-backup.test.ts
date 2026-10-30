@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, statSync, chmodSync, symlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import { createAgentBackup, restoreAgentBackup, verifyAgentBackup } from "./agent-backup.ts";
 import { getStoredInstance, listStoredInstances, providerContext } from "../providers/instances.ts";
+import { makePmProviderCredentials } from "../providers/t3code/credentials.ts";
 
 type Fixture = {
   root: string; source: string; bundle: string; target: string; home: string; close: () => void;
@@ -116,6 +120,74 @@ test("explicit secret-inclusive offline bundle recovers credentials and dedicate
     assert.equal(JSON.parse(String(restoredRecords(f.target).find((row) => row.namespace === "chat:threads")!.value)).nativeSession.sessionId, "old-native-session");
     assert.equal(existsSync(path.join(f.source, "workspace.lock")), false);
   } finally { f.close(); }
+});
+
+test("migrated private credentials and attachment bytes survive only their declared backup policy", async () => {
+  for (const secrets of ["include", "exclude"] as const) {
+    const f = fixture();
+    try {
+      const bytes = Uint8Array.from([17, 29, 43, 71]);
+      const credentials = await Effect.runPromise(makePmProviderCredentials(f.source)("backup-test", "instance-a"));
+      await Effect.runPromise(credentials.set(bytes));
+      for (const [relative, content] of [
+        ["provider-attachments/thread-a/document.txt", "retained attachment bytes"],
+        ["provider-cache/t3code/probe.json", "discarded observation"],
+      ]) {
+        const filename = path.join(f.source, relative!);
+        mkdirSync(path.dirname(filename), { recursive: true, mode: 0o700 });
+        writeFileSync(filename, content!, { mode: 0o600 });
+      }
+      const manifest = await create(f, secrets);
+      restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      verifyAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      assert.equal(readFileSync(path.join(f.target, "provider-attachments/thread-a/document.txt"), "utf8"), "retained attachment bytes");
+      assert.equal(existsSync(path.join(f.target, "provider-cache")), false);
+      assert.equal(manifest.files.some(member => member.path.startsWith("provider-private/")), secrets === "include");
+      const restored = await Effect.runPromise(makePmProviderCredentials(f.target)("backup-test", "instance-a"));
+      const recovered = await Effect.runPromise(restored.get);
+      if (secrets === "include") assert.equal(Buffer.compare(Option.getOrThrow(recovered), bytes), 0);
+      else assert.equal(Option.isNone(recovered), true);
+      assert.equal(Buffer.compare(Option.getOrThrow(await Effect.runPromise(credentials.get)), bytes), 0);
+    } finally { f.close(); }
+  }
+});
+
+test("credential-excluded manifests cannot smuggle a migrated private store into restore", async () => {
+  const f = fixture();
+  try {
+    const manifest = await create(f);
+    const relative = "provider-private/secrets/injected.bin";
+    const bytes = Buffer.from("synthetic-private-binding");
+    mkdirSync(path.join(f.bundle, "provider-private/secrets"), { recursive: true, mode: 0o700 });
+    writeFileSync(path.join(f.bundle, relative), bytes, { mode: 0o600 });
+    manifest.files.push({ path: relative, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+    writeFileSync(path.join(f.bundle, "manifest.json"), JSON.stringify(manifest));
+    assert.throws(() => restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true }));
+    assert.equal(existsSync(f.target), false);
+  } finally { f.close(); }
+});
+
+test("excluded recovery refuses implicit execution and external native Homes before writing a target", async () => {
+  for (const change of ["implicit-enable", "explicit-enable", "external-home"]) {
+    const f = fixture();
+    try {
+      const manifest = await create(f);
+      const configPath = path.join(f.bundle, "provider-instances.json");
+      const config = JSON.parse(readFileSync(configPath, "utf8"));
+      const native = config.instances.find((instance: { driver: string }) => instance.driver === "codex");
+      if (change === "implicit-enable") delete native.enabled;
+      else if (change === "explicit-enable") native.enabled = true;
+      else native.cliHome = "/synthetic-external-native-home";
+      const bytes = Buffer.from(JSON.stringify(config));
+      writeFileSync(configPath, bytes);
+      const member = manifest.files.find(entry => entry.path === "provider-instances.json")!;
+      member.bytes = bytes.length;
+      member.sha256 = createHash("sha256").update(bytes).digest("hex");
+      writeFileSync(path.join(f.bundle, "manifest.json"), JSON.stringify(manifest));
+      assert.throws(() => restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true }));
+      assert.equal(existsSync(f.target), false);
+    } finally { f.close(); }
+  }
 });
 
 test("live PID locks, stale locks, and live database owner all fail closed without signals or source changes", async () => {

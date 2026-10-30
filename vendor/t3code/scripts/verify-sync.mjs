@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 if (process.argv[2] !== "--source" || !process.argv[3] || process.argv.length !== 4) throw new Error("Usage: node vendor/t3code/scripts/verify-sync.mjs --source PINNED_CHECKOUT");
 const source = path.resolve(process.argv[3]);
 const script = fileURLToPath(new URL("./sync.mjs", import.meta.url));
+const repository = fileURLToPath(new URL("../../../", import.meta.url));
 const temporary = await mkdtemp(path.join(os.tmpdir(), "pm-provider-sync-"));
 const environment = { ...process.env, GIT_CONFIG_GLOBAL: os.devNull, GIT_CONFIG_NOSYSTEM: "1", GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" };
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -52,6 +53,28 @@ try {
   assert.ok(patched);
   assert.equal(sha(await readFile(path.join(pristine, patched.destination))), patched.upstreamSha256);
   assert.equal(sha(await readFile(path.join(destination, patched.destination))), patched.sha256);
+
+  const copyHostInputs = async root => {
+    for (const entry of inventory.runtimeResources.hostBuildInputs) {
+      const target = path.join(root, entry.path);
+      await mkdir(path.dirname(target), { recursive: true });
+      await cp(path.join(repository, entry.path), target);
+    }
+  };
+  const hostTool = path.join(temporary, "host-tool-drift");
+  await cp(destination, hostTool, { recursive: true });
+  await copyHostInputs(hostTool);
+  const hostScript = path.join(hostTool, "vendor/t3code/scripts/sync.mjs");
+  sync(destination, ["--check"], 0, source, hostScript);
+  for (const entry of inventory.runtimeResources.hostBuildInputs) {
+    const altered = path.join(hostTool, entry.path);
+    const rejectedOutput = path.join(temporary, "host-tool-drift-output");
+    await appendFile(altered, "\n// controlled unreviewed tool change\n");
+    sync(rejectedOutput, [], 1, source, hostScript);
+    await assert.rejects(lstat(rejectedOutput), { code: "ENOENT" });
+    await cp(path.join(repository, entry.path), altered);
+  }
+  sync(destination, ["--check"], 0, source, hostScript);
 
   const groupWrite = path.join(temporary, "group-write");
   await cp(destination, groupWrite, { recursive: true });
@@ -112,6 +135,7 @@ try {
 
   const badTool = path.join(temporary, "bad-patch-tool");
   await cp(destination, badTool, { recursive: true });
+  await copyHostInputs(badTool);
   await appendFile(path.join(badTool, patched.patch.path), "\n");
   assert.match(sync(path.join(temporary, "wrong-patch"), [], 1, source, path.join(badTool, "vendor/t3code/scripts/sync.mjs")).stderr, /Wrong patch hash/);
 
@@ -120,7 +144,7 @@ try {
   await symlink(destination, path.join(symlinkRoot, "vendor"), process.platform === "win32" ? "junction" : "dir");
   assert.match(sync(symlinkRoot, [], 1).stderr, /Unsafe symlink\/non-directory/);
   assert.deepEqual(await snapshot(destination), before);
-  console.log(JSON.stringify({ cleanOfflineReconstruction: true, repeatNoDiff: true, pristine: true, unrelatedPmPreserved: true, destinationConflictRefusedBeforeWrites: true, groupWriteAcceptedUntouched: true, executableModeConflictRefusedBeforeWrites: true, unsafeSpecialModesRefusedBeforeWrites: true, wrongSourceHashRefused: true, wrongCommitRefused: true, wrongPatchRefused: true, symlinkRefused: true, files: first.files }));
+  console.log(JSON.stringify({ cleanOfflineReconstruction: true, repeatNoDiff: true, pristine: true, unrelatedPmPreserved: true, destinationConflictRefusedBeforeWrites: true, groupWriteAcceptedUntouched: true, executableModeConflictRefusedBeforeWrites: true, unsafeSpecialModesRefusedBeforeWrites: true, wrongSourceHashRefused: true, wrongCommitRefused: true, wrongPatchRefused: true, hostToolDriftRefusedBeforeWrites: true, symlinkRefused: true, files: first.files }));
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

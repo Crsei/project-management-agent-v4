@@ -2,7 +2,7 @@
   "version": 1,
   "source": "apps/server/src/textGeneration/CodexTextGeneration.ts",
   "beforeSha256": "88db35e9f02ba381d5ca87e244e4a5a5321f72a84f89d6d627081c89cd8f1564",
-  "afterSha256": "9f88a44c74f6c7f82c85841f1a1b0195bdc68c6809644aaa69b2e314f9a9fe5f",
+  "afterSha256": "000c0a367b60292a464914de54ad02af95fd3927ee846ec22c0a1edbfbc06875",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -32,6 +32,13 @@
       ],
       "after": [
         "  const resolvedEnvironment = environment ?? (yield* HostProcess.Environment);\n"
+      ]
+    },
+    {
+      "start": 169,
+      "before": [],
+      "after": [
+        "          extendEnv: false,\n"
       ]
     },
     {
@@ -81,6 +88,13 @@
         "    Effect.timeout(CODEX_MCP_LIST_TIMEOUT_MS),\n",
         "    Effect.mapError(cause => normalizeCliError(\"codex\", \"listMcpServers\", cause,\n",
         "      \"Could not verify that native MCP tools are disabled for isolated text generation\")),\n"
+      ]
+    },
+    {
+      "start": 306,
+      "before": [],
+      "after": [
+        "        extendEnv: false,\n"
       ]
     }
   ]

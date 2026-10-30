@@ -121,11 +121,17 @@ export interface CodexExecutable {
   readonly version: string;
   readonly managedVersionDirectory: string | null;
 }
+export interface CodexInstallationOperation {
+  readonly state: ProviderInstallState;
+  /** Exact worker settlement, including scoped cleanup; retains non-cancellation failures. */
+  readonly completion: Effect.Effect<void, CodexInstallationError>;
+}
 interface CodexInstallationService {
   readonly managedDirectory: string;
   readonly resolve: () => Effect.Effect<CodexExecutable, CodexInstallationError>;
   readonly acquire: () => Effect.Effect<CodexExecutable, CodexInstallationError, Scope.Scope>;
   readonly start: Effect.Effect<ProviderInstallState, CodexInstallationError>;
+  readonly startOperation: Effect.Effect<CodexInstallationOperation, CodexInstallationError>;
   readonly cancel: (
     operationId: string,
   ) => Effect.Effect<ProviderInstallState, CodexInstallationError>;
@@ -180,7 +186,11 @@ export const makeCodexInstallation = Effect.fn("makeCodexInstallation")(function
   const executableName = platform === "win32" ? "codex.exe" : "codex";
   const gate = yield* Semaphore.make(1);
   let leases = 0;
-  let running: { readonly operationId: string; readonly fiber: Fiber.Fiber<void> } | undefined;
+  let running: {
+    readonly operationId: string;
+    readonly fiber: Fiber.Fiber<void>;
+    readonly completion: Effect.Effect<void, CodexInstallationError>;
+  } | undefined;
   const state = yield* SubscriptionRef.make<ProviderInstallState>({
     driver: DRIVER,
     operationId: null,
@@ -613,12 +623,12 @@ export const makeCodexInstallation = Effect.fn("makeCodexInstallation")(function
       ),
     ),
   );
-  const start = gate
+  const startOperation: Effect.Effect<CodexInstallationOperation, CodexInstallationError> = gate
     .withPermit(
       Effect.gen(function* () {
         const current = yield* SubscriptionRef.get(state);
-        if (isRunning(current)) return current;
-        if (yield* reuseLocal()) return yield* SubscriptionRef.get(state);
+        if (isRunning(current) && running) return { state: current, completion: running.completion };
+        if (yield* reuseLocal()) return { state: yield* SubscriptionRef.get(state), completion: Effect.void };
         if (!asset) {
           return yield* installationError(
             "start",
@@ -638,6 +648,7 @@ export const makeCodexInstallation = Effect.fn("makeCodexInstallation")(function
           message: "Downloading Codex.",
         };
         yield* SubscriptionRef.set(state, next);
+        let outcome: Exit.Exit<void, CodexInstallationError> = Exit.void;
         const work = install(asset).pipe(
           Effect.onExit((exit) =>
             Exit.isFailure(exit)
@@ -658,6 +669,7 @@ export const makeCodexInstallation = Effect.fn("makeCodexInstallation")(function
                 })
               : Effect.void,
           ),
+          Effect.onExit((exit) => Effect.sync(() => { outcome = exit; })),
           Effect.ignoreCause,
           Effect.ensuring(
             Effect.sync(() => {
@@ -666,11 +678,21 @@ export const makeCodexInstallation = Effect.fn("makeCodexInstallation")(function
           ),
         );
         const fiber = yield* Effect.forkIn(Effect.interruptible(work), serviceScope);
-        running = { operationId, fiber };
-        return next;
+        const completion = Fiber.await(fiber).pipe(
+          Effect.flatMap((workerExit) => {
+            const exit = Exit.isFailure(workerExit) ? workerExit : outcome;
+            return Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
+              ? Effect.failCause(exit.cause)
+              : Effect.void;
+          }),
+        );
+        running = { operationId, fiber, completion };
+        return { state: next, completion };
       }).pipe(Effect.uninterruptible),
     )
     .pipe(Effect.mapError(wrapFailure("start", "Could not start the Codex installation.")));
+  // The native setup API publishes state without taking ownership of the background worker.
+  const start = startOperation.pipe(Effect.map((operation) => operation.state));
 
   const cancel = Effect.fn("CodexInstallation.cancel")(function* (operationId: string) {
     return yield* gate.withPermit(
@@ -798,6 +820,7 @@ export const makeCodexInstallation = Effect.fn("makeCodexInstallation")(function
     resolve,
     acquire,
     start,
+    startOperation,
     cancel,
     state: SubscriptionRef.get(state),
     changes: SubscriptionRef.changes(state),

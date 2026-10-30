@@ -1,7 +1,8 @@
 import { PatchDiff, type FileDiffOptions } from "@pierre/diffs/react";
 import { Component, useMemo, type ReactNode } from "react";
 import { useChatBrowserPreferences } from "@agent/src/settings/browser-preferences";
-import { agentText, useAgentText } from "../../i18n";
+import { useAgentText } from "../../i18n";
+import { agentText } from "../../i18n-text.ts";
 
 const DIFF_OPTIONS: FileDiffOptions<undefined, undefined> = {
   themeType: "system",

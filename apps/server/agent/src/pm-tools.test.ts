@@ -22,12 +22,20 @@ test("tool bridge preserves identity, forbids browser origins, and reconciles lo
   const workspaceId = randomUUID(), generationId = randomUUID(), operationId = randomUUID();
   const threadId = "thread", messageId = "message";
   let calls = 0; let forwardedCookie: string | undefined; let requestBody: Record<string, unknown> | undefined;
+  let live = true;
+  const admission = Promise.withResolvers<void>(), reachedAdmission = Promise.withResolvers<void>();
+  let authorizations = 0;
+  const authorizeExecution = async () => {
+    if (!live) throw new Error("Generation authorization is no longer live");
+    if (++authorizations === 2) reachedAdmission.resolve();
+    await admission.promise;
+  };
   const server = createServer(async (req, res) => {
     forwardedCookie = req.headers.cookie;
     if (req.method === "GET") { res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ tools: [] })); return; }
     let text = ""; for await (const chunk of req) text += String(chunk);
     const body = JSON.parse(text) as Record<string, unknown>;
-    if (req.url?.endsWith("/call")) { calls++; requestBody = body; req.socket.destroy(); return; }
+    if (req.url?.endsWith("/call")) { calls++; requestBody = body; reachedAdmission.resolve(); req.socket.destroy(); return; }
     assert.deepEqual(body, requestBody);
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify({ operationId, name: "pm_query", status: "succeeded", result: { kind: "query", items: [], nextCursor: null, truncated: false, sources: [] }, error: null, threadId, messageId, generationId, workspaceId, createdAt: new Date().toISOString(), finishedAt: new Date().toISOString() }));
@@ -36,17 +44,24 @@ test("tool bridge preserves identity, forbids browser origins, and reconciles lo
   const address = server.address(); assert.ok(address && typeof address !== "string");
   process.env.PM_API_URL = `http://127.0.0.1:${address.port}`;
   initializeNativeOutput(generationId, threadId, "running");
-  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId, messageId, generationId, headers: new Headers({ cookie: "pm_v4_session=fixture" }) });
+  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId, messageId, generationId, headers: new Headers({ cookie: "pm_v4_session=fixture" }), authorizeExecution });
   try {
     const input = { operationId, name: "pm_query", arguments: { entity: null } };
     const post = (endpoint: string, origin?: string) => fetch(`${bridge.url}/tools/${endpoint}`, { method: "POST", headers: { "content-type": "application/json", ...(origin ? { origin } : {}) }, body: JSON.stringify(input) });
     assert.equal((await post("call", "https://other.example")).status, 403);
-    const unknown = await (await post("call")).json() as { status: string };
-    assert.equal(unknown.status, "unknown"); assert.equal(calls, 1);
+    const pending = Promise.all([post("call"), post("call")]);
+    await reachedAdmission.promise;
+    admission.resolve();
+    const initial = await Promise.all((await pending).map(async response => z.object({ status: z.enum(["running", "unknown"]) }).parse(await response.json())));
+    assert.ok(initial.some(record => record.status === "unknown")); assert.equal(calls, 1);
+    live = false;
     const same = await (await post("call")).json() as { status: string };
     assert.equal(same.status, "unknown"); assert.equal(calls, 1);
     const recovered = await (await post("result")).json() as { status: string };
     assert.equal(recovered.status, "succeeded"); assert.equal(calls, 1);
+    const rejected = await fetch(`${bridge.url}/tools/call`, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...input, operationId: randomUUID() }) });
+    assert.equal(rejected.status, 400); assert.equal(calls, 1);
     assert.equal(forwardedCookie, "pm_v4_session=fixture");
     assert.deepEqual(requestBody?.scope, { kind: "workspace", projectIds: [] });
     assert.ok(getNativeOutput(generationId)?.items.some((item) => item.id === `pm-tool:${operationId}`));
@@ -66,6 +81,8 @@ test("MCP duplicate request IDs reuse the original write and reject changed inpu
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
   const workspaceId = randomUUID(), generationId = randomUUID(), threadId = "mcp-thread", messageId = "mcp-message";
   const received: Array<Record<string, unknown>> = [];
+  let live = true;
+  const authorizeExecution = async () => { if (!live) throw new Error("Generation authorization is no longer live"); };
   const server = createServer(async (req, res) => {
     let body = ""; for await (const chunk of req) body += String(chunk);
     const input = JSON.parse(body) as Record<string, unknown>;
@@ -77,7 +94,7 @@ test("MCP duplicate request IDs reuse the original write and reject changed inpu
   const address = server.address(); assert.ok(address && typeof address !== "string");
   process.env.PM_API_URL = `http://127.0.0.1:${address.port}`;
   initializeNativeOutput(generationId, threadId, "running");
-  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId, messageId, generationId, headers: new Headers({ cookie: "pm_v4_session=fixture" }) });
+  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId, messageId, generationId, headers: new Headers({ cookie: "pm_v4_session=fixture" }), authorizeExecution });
   const child = spawn(process.execPath, [path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url, "mcp"], { stdio: ["pipe", "pipe", "pipe"] });
   const exit = once(child, "exit");
   const output = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
@@ -91,12 +108,17 @@ test("MCP duplicate request IDs reuse the original write and reject changed inpu
     await request({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26" } });
     const call = { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "pm_create_task", arguments: { title: "once" } } };
     const first = await request(call);
+    live = false;
     const repeated = await request(call);
     assert.deepEqual(repeated, first);
     assert.equal(received.length, 1);
     const conflict = await request({ ...call, params: { ...call.params, arguments: { title: "different" } } });
     assert.ok(conflict.error);
     assert.equal(received.length, 1);
+    const denied = await request({ ...call, id: 3 });
+    assert.ok(denied.error);
+    assert.equal(received.length, 1);
+    live = true;
     const reply = z.object({ result: z.object({ structuredContent: z.object({ operationId: z.uuid() }) }) }).parse(first);
     assert.equal(reply.result.structuredContent.operationId, received[0]?.operationId);
     const restarted = spawn(process.execPath, [path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url, "mcp"], { stdio: ["pipe", "pipe", "pipe"] });

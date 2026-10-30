@@ -9,6 +9,7 @@ Source revision: `30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c` (MIT, T3 Tools Inc.)
 - `integration-patches/*.json`: deterministic zero-based line splices against original bytes. Each splice retains complete old/new lines; whole-file preimage and postimage hashes are required. There is no fuzzy matching and no duplicate full upstream source tree. JSON patch files themselves are hashed inputs.
 - `sync-imports.json`: TypeScript AST inventory of actual selected/patched module imports, type imports, re-exports, literal dynamic imports, `createRequire` calls and static `import.meta.url` resources, plus selected package exports/types. PM host-boundary targets are not copied. Runtime-computed resource paths remain explicitly distinguishable from statically resolved files.
 - `integration-patches.json` and family/import ledgers: adaptation rationale and historically observed parent evidence, not a substitute for M6 acceptance. The six Markdown dependencies retain their existing exact files, upstream external patches, npm release integrity and license provenance in `import-markdown-patches.json`; sync hashes those existing assets rather than introducing another copy.
+- `runtimeResources.hostBuildInputs`: exact build, package, shipped verifier and shared validator fingerprints. Sync/build/package check all required entries and regular contained files before publishing; build also records this verified toolchain, and packaging rejects output built with different or missing tool fingerprints.
 
 The reasoning constant extraction preserves the exact original `threadExecution.ts:148–154` declaration and its surrounding local provenance comments. The settings-field extraction is traceable to the original `ProviderSettingsForm.tsx`; neither pulls the foreign thread/orchestrator or React tree into the browser-safe package.
 
@@ -42,6 +43,8 @@ node vendor/t3code/scripts/imports.mjs --check
 
 The first command uses disposable roots and a local no-hardlink Git clone. It exercises clean offline reconstruction, exact repeat-no-diff, pristine and patched hash distinction, preservation of an unrelated PM sentinel, destination-conflict refusal before any missing file is created, wrong source hash/commit and patch hash refusal, and symlink refusal. POSIX permission fixtures explicitly change a reconstructed non-executable file from 0644 to 0664 and assert sync/check preserve its hash, mode, inode, modification and metadata-change timestamps. Changing its executable class or setting any of setuid/setgid/sticky must refuse before a deliberately missing file can be created. The harness never edits the designated upstream checkout or chmods repository files. The import command checks the frozen actual syntax inventory and refuses unresolved local/workspace closure. `imports.mjs --write` is a deliberate maintainer recapture operation: review changes first, then recapture corresponding sync hashes/patches; never use it to bless unexplained drift.
 
+Host-tool fixtures copy the recorded tooling into a disposable source root, prove its baseline sync succeeds, then alter each tool independently and require rejection before any destination exists. This checks drift, not just the presence of descriptive hashes. Reconstruction still owns only `vendor/t3code/**`; it neither copies nor overwrites PM host scripts.
+
 Future upstream commits require a new reviewed pinned manifest and new exact patches. This same-commit tool deliberately does not guess upgrade merges or erase local changes.
 
 After **reviewed intentional** same-commit changes, first update the selected source actions/ownership and explicitly allowlist any new local additions in `sync-inventory.json`. Then author deterministic snapshots without running Provider code:
@@ -57,6 +60,8 @@ python3 vendor/t3code/scripts/capture.py --source "$SOURCE"
 ## Independently runnable Agent artifact
 
 The existing build bundles original source and ordinary dependency closure while keeping Effect/platform and the three disk-backed SDKs external. It now emits `build-inputs.json` describing **actual input hashes**, emitted externals and their original importer ownership. Packaging consumes this record, the frozen syntax inventory's opaque `createRequire` edges and the already installed, lockfile-pinned dependency graph; it does not run a package manager or build.
+
+The build validates host-tool provenance before deleting its normal output directory. Intentional tooling updates require reviewed recapture and a fresh build; changing only the inventory after an older build cannot make that output current. The packager refuses missing/stale `hostBuildInputs` in `build-inputs.json` before creating its destination.
 
 Parent commands, **unexecuted by T18**:
 

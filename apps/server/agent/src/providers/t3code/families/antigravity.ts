@@ -119,12 +119,13 @@ async function withInstallation<A>(context: ProviderDriverContext, signal: Abort
 export const antigravityInstallationMethods: PmProviderInstallationMethods = {
   prepare: (context, signal, progress, lease) => withInstallation(context, signal, installation => Effect.gen(function* () {
     const states = yield* Stream.toQueue(installation.changes, { capacity: "unbounded" });
-    const started = yield* Effect.acquireRelease(installation.start, initial => Effect.gen(function* () {
+    const operation = yield* Effect.acquireRelease(installation.startOperation, captured => Effect.gen(function* () {
       const current = yield* installation.state;
-      if (initial.operationId && current.operationId === initial.operationId
+      if (captured.state.operationId && current.operationId === captured.state.operationId
         && ["downloading", "extracting", "verifying"].includes(current.phase))
-        yield* installation.cancel(initial.operationId).pipe(Effect.orDie);
-    }));
+        yield* installation.cancel(captured.state.operationId).pipe(Effect.orDie);
+    }).pipe(Effect.ensuring(captured.completion.pipe(Effect.orDie))));
+    const started = operation.state;
     const operationId = started.operationId;
     if (!operationId) return yield* Effect.fail(pmExecutionError(500, "provider_install_failed", "Antigravity did not start an installation operation."));
     for (;;) {

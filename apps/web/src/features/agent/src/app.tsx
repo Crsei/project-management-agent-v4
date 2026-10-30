@@ -4,7 +4,7 @@ import { TooltipProvider } from "@agent/components/ui/tooltip";
 import { Assistant } from "./assistant";
 import { AccessGate } from "./access-gate";
 import { SettingsLayout, SettingsNotFound } from "./settings/settings-layout";
-import { agentText } from "./i18n";
+import { agentText } from "./i18n-text.ts";
 import { USAGE_PATH } from "./usage/navigation";
 
 const ShowcaseApp = lazy(() => import("./showcase/app"));

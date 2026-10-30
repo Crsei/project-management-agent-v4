@@ -12,7 +12,7 @@ import type {
   ProvidersResponse,
 } from "@agent-workspace/contracts/provider";
 import { workspaceClient } from "@agent/src/network";
-import { agentText } from "@agent/src/i18n";
+import { agentText } from "@agent/src/i18n-text.ts";
 
 const ACTIVE_AUTH_PHASES: Record<ProviderAuthState["phase"], boolean> = {
   idle: false,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { agentOutputFrameSchema, commandOutputFrameSchema, type AgentOutputSnapshot, type CommandOutputFrame } from "@agent-workspace/contracts/output";
 import { workspaceClient } from "../network";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 
 /** Fetch-based SSE keeps every request on the authenticated workspace client. */
 export async function readOutputStream<T>(path: string, signal: AbortSignal, parse: (data: unknown) => T, receive: (frame: T) => void): Promise<void> {

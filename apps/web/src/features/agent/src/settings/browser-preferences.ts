@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 import "./chat-preferences.css";
 
 export type ChatBrowserPreferences = {

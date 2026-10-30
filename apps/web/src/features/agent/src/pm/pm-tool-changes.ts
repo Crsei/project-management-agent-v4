@@ -1,6 +1,6 @@
 import type { PmToolCallRecord } from "@agent-workspace/contracts/pm-tools";
 import type { PmChangeKind, PmChangeSet, PmChangeState } from "./pm-types";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 
 const writes: Record<string, { kind: PmChangeKind; zh: string; en: string }> = {
   pm_create_project: { kind: "create", zh: "创建项目", en: "Create project" },

@@ -1,4 +1,4 @@
-import { agentText } from "../../i18n";
+import { agentText } from "../../i18n-text.ts";
 
 const formatters = new Map<string, { date: Intl.DateTimeFormat; dateTime: Intl.DateTimeFormat; time: Intl.DateTimeFormat }>();
 

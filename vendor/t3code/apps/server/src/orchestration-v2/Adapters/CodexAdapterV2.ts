@@ -1508,6 +1508,8 @@ export const layerAppServerClientFactory: Layer.Layer<
             resolveCodexLaunchArgs(input.settings.launchArgs, input.environment),
           ),
           env: environment,
+          // The adapter supplies a complete, possibly managed-account-sanitized environment.
+          extendEnv: false,
           ...(input.runtimePolicy.cwd == null ? {} : { cwd: input.runtimePolicy.cwd }),
           threadId: input.threadId,
         }).pipe(Effect.provideService(AgentScope, agentScope));

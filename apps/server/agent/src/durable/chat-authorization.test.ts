@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
-import { createServer, type Server } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
+import { createServer, request, type Server } from "node:http";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import type { UIMessage } from "ai";
+import { z } from "zod";
 import type { AgentScope } from "@agent-workspace/contracts/chat";
 import type { ProviderDriverContext } from "../providers/driver-adapter.ts";
 import { codexAdapter } from "../providers/drivers/codex.ts";
@@ -29,6 +32,10 @@ let onResolve: (() => Promise<void> | void) | undefined;
 let resolutions: { cookie: string | undefined; authorization: string | undefined; unexpected: string | undefined }[];
 let admitted: PromiseWithResolvers<ProviderDriverContext>;
 let release: PromiseWithResolvers<void>;
+let cleanup: PromiseWithResolvers<void> | undefined;
+let cleanupStarted: PromiseWithResolvers<void>;
+let toolDiscoveries: number;
+let toolDispatches: number;
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), "chat-authorization-"));
@@ -39,7 +46,29 @@ beforeEach(async () => {
   resolutions = [];
   admitted = Promise.withResolvers<ProviderDriverContext>();
   release = Promise.withResolvers<void>();
+  cleanup = undefined;
+  cleanupStarted = Promise.withResolvers<void>();
+  toolDiscoveries = 0;
+  toolDispatches = 0;
   pmServer = createServer(async (incoming, outgoing) => {
+    if (incoming.url?.startsWith(`/api/v1/workspaces/${scope.workspaceId}/agent-tools`)) {
+      outgoing.setHeader("content-type", "application/json");
+      if (incoming.method === "GET") {
+        toolDiscoveries++;
+        outgoing.end(JSON.stringify({ tools: [] }));
+        return;
+      }
+      let body = "";
+      for await (const chunk of incoming) body += String(chunk);
+      const input = z.object({ operationId: z.uuid(), name: z.string(), arguments: z.unknown(),
+        threadId: z.string(), messageId: z.string(), generationId: z.string() }).parse(JSON.parse(body));
+      assert.ok(incoming.url.endsWith("/call"));
+      toolDispatches++;
+      await appendFile(join(directory, "native-pm-effects.log"), `${JSON.stringify(input)}\n`);
+      outgoing.end(JSON.stringify({ ...input, status: "succeeded", result: { kind: "task", items: [], nextCursor: null, truncated: false, sources: [] },
+        error: null, workspaceId: scope.workspaceId, createdAt: new Date().toISOString(), finishedAt: new Date().toISOString() }));
+      return;
+    }
     if (incoming.method === "GET" && incoming.url === "/api/v1/agent-contexts") {
       outgoing.writeHead(200, { "content-type": "application/json" });
       outgoing.end(JSON.stringify({ workspaces: [{ id: scope.workspaceId, projects: [] }] }));
@@ -71,7 +100,7 @@ beforeEach(async () => {
     methods: [], canLogout: false,
     capabilities: { nativeResume: false, nativeFork: false, boundedFork: false, modelTransition: "portable", portableHandoff: true },
   });
-  // This seam only holds the Chat generation open. The permission callback under test is the real PM HTTP recheck.
+  // This seam holds the Chat lifecycle; native CLI/MCP children exercise the real bridge and PM HTTP authorization.
   codexAdapter.run = async (context, options) => {
     const aborted = Promise.withResolvers<never>();
     const onAbort = () => aborted.reject(Object.assign(new Error("Authorization fixture cancelled"), { code: "aborted" }));
@@ -81,7 +110,11 @@ beforeEach(async () => {
       admitted.resolve(context);
       await Promise.race([release.promise, aborted.promise]);
       return { text: "Authorization fixture completed" };
-    } finally { options.signal?.removeEventListener("abort", onAbort); }
+    } finally {
+      options.signal?.removeEventListener("abort", onAbort);
+      cleanupStarted.resolve();
+      await cleanup?.promise;
+    }
   };
   ensureThread("authorization-chat", undefined, scope);
   updateThread("authorization-chat", { settings: { providerInstanceId: "authorization-provider", model: "authorization-model", systemPrompt: "Original instructions", temperature: 1 } });
@@ -89,6 +122,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   release.resolve();
+  cleanup?.resolve();
   await stopChatRuntime();
   codexAdapter.check = originalCheck;
   codexAdapter.run = originalRun;
@@ -110,6 +144,27 @@ async function start(messageId = "authorization-user"): Promise<{ generation: Ch
   assert.equal(context.execution?.generationId, generation.id);
   assert.ok(context.authorizeExecution);
   return { generation, context };
+}
+
+async function nativeRequest(context: ProviderDriverContext, action: "list" | "call" | "mcp", input?: unknown) {
+  assert.ok(context.pmToolBridge);
+  const bridge = context.pmToolBridge;
+  const child = spawn(bridge.command, [...bridge.args, ...(action === "mcp" ? ["mcp"] : ["tools", action])], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const exit = once(child, "exit");
+  let stdout = "", stderr = "";
+  child.stdout.setEncoding("utf8").on("data", chunk => { stdout += chunk; });
+  child.stderr.setEncoding("utf8").on("data", chunk => { stderr += chunk; });
+  child.stdin.end(input === undefined ? "" : `${JSON.stringify(input)}\n`);
+  const [code] = await exit;
+  return { code, stdout, stderr };
+}
+
+async function assertNoNativeEffects(): Promise<void> {
+  assert.equal(toolDispatches, 0, "A rejected native call must never reach PM dispatch.");
+  assert.deepEqual(listRecords("pm-tool-calls"), [], "Rejected new operations must not become durable calls.");
+  await assert.rejects(readFile(join(directory, "native-pm-effects.log")), { code: "ENOENT" });
 }
 
 test("live authorization rechecks initiating PM headers without persisting or transporting the callback or credentials", async () => {
@@ -194,4 +249,74 @@ test("runtime drain invalidates a callback even while its PM authorization reque
     await stopChatRuntime();
   } finally { respond.resolve(); }
   await pending;
+});
+
+for (const transport of ["call", "mcp"] as const) {
+  test(`native ${transport} bridge rejects discovery and a new write after file-area cwd changes`, async () => {
+    const { context } = await start();
+    resolvedPath = join(directory, "replacement");
+    const listed = await nativeRequest(context, "list");
+    assert.notEqual(listed.code, 0);
+    assert.equal(toolDiscoveries, 0, "Stale native discovery must not reach PM.");
+    const input = { operationId: crypto.randomUUID(), name: "pm_create_task", arguments: { projectId: "PRJ-1", title: "Must not be created" } };
+    const result = await nativeRequest(context, transport, transport === "mcp"
+      ? { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: input.name, arguments: input.arguments } }
+      : input);
+    if (transport === "mcp") z.object({ error: z.object({ message: z.string() }) }).parse(JSON.parse(result.stdout));
+    else assert.notEqual(result.code, 0);
+    await assertNoNativeEffects();
+  });
+
+  test(`native ${transport} bridge rejects fresh dispatch while cancellation cleanup remains pending`, async () => {
+    cleanup = Promise.withResolvers<void>();
+    const { generation, context } = await start();
+    const cancellation = cancelChat(generation.id);
+    await cleanupStarted.promise;
+    try {
+      assert.equal(getChatGeneration(generation.id)?.status, "running", "The test must hold the native cleanup boundary open.");
+      const input = { operationId: crypto.randomUUID(), name: "pm_create_task", arguments: { projectId: "PRJ-1", title: "Must not be created" } };
+      const result = await nativeRequest(context, transport, transport === "mcp"
+        ? { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: input.name, arguments: input.arguments } }
+        : input);
+      if (transport === "mcp") z.object({ error: z.object({ message: z.string() }) }).parse(JSON.parse(result.stdout));
+      else assert.notEqual(result.code, 0);
+      await assertNoNativeEffects();
+    } finally { cleanup.resolve(); await cancellation; }
+  });
+}
+
+test("native bridge rechecks authorization after asynchronous request body admission", async () => {
+  const { context } = await start();
+  assert.ok(context.pmToolBridge);
+  const url = context.pmToolBridge.args.find(value => /^http:\/\/127\.0\.0\.1:\d+$/.test(value));
+  assert.ok(url);
+  const input = JSON.stringify({ operationId: crypto.randomUUID(), name: "pm_create_task", arguments: { projectId: "PRJ-1", title: "Must not be created" } });
+  const response = Promise.withResolvers<number>();
+  const incoming = request(`${url}/tools/call`, {
+    method: "POST", headers: { "content-type": "application/json", expect: "100-continue" },
+  }, res => { res.resume(); res.once("end", () => response.resolve(res.statusCode!)); });
+  incoming.once("error", response.reject);
+  const continued = once(incoming, "continue");
+  incoming.flushHeaders();
+  await continued;
+  incoming.write(input.slice(0, -1));
+  try {
+    // Completing another native request leaves this one waiting for the final body chunk.
+    assert.equal((await nativeRequest(context, "list")).code, 0);
+    resolvedPath = join(directory, "replacement");
+    incoming.end(input.slice(-1));
+    assert.equal(await response.promise, 400);
+    await assertNoNativeEffects();
+  } finally { incoming.destroy(); }
+});
+
+test("native bridge rechecks cwd after asynchronous PM authorization", async () => {
+  const { context } = await start();
+  onResolve = () => { resolvedPath = join(directory, "replacement"); };
+  const result = await nativeRequest(context, "call", {
+    operationId: crypto.randomUUID(), name: "pm_create_task",
+    arguments: { projectId: "PRJ-1", title: "Must not be created" },
+  });
+  assert.notEqual(result.code, 0);
+  await assertNoNativeEffects();
 });

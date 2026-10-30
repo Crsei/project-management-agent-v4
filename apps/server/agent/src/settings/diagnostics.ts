@@ -156,7 +156,7 @@ export function collectAgentStorage(): AgentStorage {
             status: "missing", bytes: null, sensitive: true,
             backupPolicy: internal
               ? "实际配置的专属 Agent home；include 私有离线备份纳入，exclude 不读取内容并在新目标建立空 home，需显式重新登录和启用。"
-              : "实际配置位于 Agent 数据目录外；从不隐式读取。include 备份拒绝此配置；exclude 恢复到新目标空 home，需显式重新登录和启用。" });
+              : "实际配置位于专属 provider-homes 范围外；从不隐式读取。include 仅保留路径引用，不收集内容或在恢复时创建该目录；exclude 清除此覆盖，需显式重新配置、登录和启用。" });
         }
       }
     }
@@ -173,7 +173,7 @@ export function collectAgentStorage(): AgentStorage {
   return { dataDirectory: directory, entries,
     exclusions: ["PM PostgreSQL、Markdown、附件与项目源文件：由既有 PM 备份负责，本工具不读取或修改。",
       "服务 .env.agent、浏览器偏好及 Cookie：不自动备份，恢复环境须单独配置和重新登录。",
-      "全局或数据目录外的 CLI home：永不隐式导入；include 模式遇到此配置会拒绝。",
+      "全局或数据目录外的 CLI home：永不隐式导入；include 仅保留路径引用，不收集内容，恢复时不创建这些目录。",
       "诊断下载只含状态白名单，不是备份，也不包含上述实际路径。"],
     maintenance: { offlineOnly: true, httpBackupAvailable: false, restoreRequiresEmptyTarget: true,
       commands: ["pnpm agent:backup create --source <Agent数据目录> --bundle <新私有备份目录> --secrets exclude --stopped",

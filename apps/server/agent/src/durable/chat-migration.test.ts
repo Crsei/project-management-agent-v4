@@ -6,6 +6,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { Hono } from "hono";
 import {
   migrateLocalChatHistory,
+  ensureChatMigration,
   CHAT_MIGRATION_BACKUP_KEY,
   CHAT_MIGRATION_MARKER_KEY,
 } from "../../../../web/src/features/agent/src/chat/migration.ts";
@@ -167,4 +168,35 @@ test("backup failure prevents remote import and leaves all original keys availab
   assert.equal(requests, 0);
   assert.equal(storage.getItem(CHAT_MIGRATION_MARKER_KEY), null);
   assert.ok(storage.getItem("agent-workspace:threads"));
+});
+
+test("migration failure localization follows the current browser language and retains retryable backup", async (t) => {
+  const descriptors = new Map(["document", "localStorage"].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+  t.after(() => {
+    for (const [name, descriptor] of descriptors) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else Reflect.deleteProperty(globalThis, name);
+    }
+  });
+  const storage = legacyStorage();
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
+  Reflect.deleteProperty(globalThis, "document");
+  globalThis.fetch = async () => { throw new Error("network unavailable"); };
+  await assert.rejects(ensureChatMigration(), /旧会话迁移失败.*network unavailable/);
+  const backup = storage.getItem(CHAT_MIGRATION_BACKUP_KEY);
+  assert.ok(backup);
+  assert.equal(storage.getItem(CHAT_MIGRATION_MARKER_KEY), null);
+  const document = { documentElement: { lang: "en" } };
+  Object.defineProperty(globalThis, "document", { configurable: true, value: document });
+  await assert.rejects(ensureChatMigration(), /Migrating old sessions failed.*network unavailable/);
+  document.documentElement.lang = "zh-CN";
+  await assert.rejects(ensureChatMigration(), /旧会话迁移失败.*network unavailable/);
+  assert.equal(storage.getItem(CHAT_MIGRATION_BACKUP_KEY), backup);
+  assert.ok(storage.getItem("agent-workspace:threads"));
+  assert.equal(getThread("legacy-thread"), null);
+  useLocalRoutes();
+  await ensureChatMigration();
+  assert.equal(storage.getItem(CHAT_MIGRATION_BACKUP_KEY), backup);
+  assert.ok(storage.getItem(CHAT_MIGRATION_MARKER_KEY));
+  assert.equal(getThreadHistory("legacy-thread").messages.length, 2);
 });

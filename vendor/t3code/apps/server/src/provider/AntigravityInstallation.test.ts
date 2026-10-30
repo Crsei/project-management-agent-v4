@@ -489,7 +489,8 @@ it.layer(NodeServices.layer)("Antigravity installation", (it) => {
         }),
       });
       yield* Effect.gen(function* () {
-        const first = yield* installation.start;
+        const operation = yield* installation.startOperation;
+        const first = operation.state;
         yield* Deferred.await(cleanupStarted);
         expect(yield* installation.state).toMatchObject({
           operationId: first.operationId,
@@ -502,6 +503,7 @@ it.layer(NodeServices.layer)("Antigravity installation", (it) => {
         yield* Deferred.succeed(releaseCleanup, undefined);
         yield* Fiber.await(yield* Deferred.await(firstWorker));
         yield* Deferred.await(stagingReleased);
+        expect(Exit.isFailure(yield* Effect.exit(operation.completion))).toBe(true);
         expect(yield* installation.state).toMatchObject({
           operationId: current.operationId,
           phase: testCase.restart ? "verifying" : "succeeded",
@@ -550,12 +552,15 @@ it.layer(NodeServices.layer)("Antigravity installation", (it) => {
           started.operationId,
           started.operationId,
         ]);
+        const concurrentOperation = yield* installation.startOperation;
+        expect(concurrentOperation.state.operationId).toBe(started.operationId);
         expect(
           yield* installation.changes.pipe(Stream.runHead, Effect.map(Option.getOrThrow)),
         ).toMatchObject({ phase: "downloading", operationId: started.operationId });
         yield* Deferred.succeed(release, undefined);
         expect((yield* terminalState(installation)).phase).toBe("succeeded");
         yield* Deferred.await(stagingReleased);
+        yield* concurrentOperation.completion;
 
         const next = yield* installation.start;
         expect(next.operationId).not.toBe(started.operationId);

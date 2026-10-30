@@ -89,7 +89,6 @@ test("actual store ownership/counts and revision-bound Provider observations are
   const storage = collectAgentStorage();
   assert.equal(storage.dataDirectory, directory);
   assert.equal(storage.entries.find((entry) => entry.kind === "provider-credentials")!.status, "unavailable");
-  assert.match(storage.entries.find((entry) => entry.path === path.join(directory, "outside-default-homes"))!.backupPolicy, /include 备份拒绝/);
   assert.equal(storage.maintenance.httpBackupAvailable, false);
   for (let index = 0; index < 15; index++) writeRecord("durable:runs", `fake-private-run-${index}`,
     { status: "failed", errorClass: "provider_error", endedAt: `2026-10-28T12:00:${String(index).padStart(2, "0")}.000Z` });

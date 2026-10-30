@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { usageProviderKindSchema, usageSummarySchema } from "@agent-workspace/contracts/usage";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 import { isUsageContractCompatible, type UsageSummaryRead } from "./usage-view-model.ts";
 
 const envelopeSchema = usageSummarySchema.omit({ buckets: true, sources: true }).extend({ buckets: z.array(z.unknown()), sources: z.array(z.unknown()) });

@@ -465,6 +465,7 @@ export const withCodexAppServerClient = Effect.fn("withCodexAppServerClient")(fu
   readonly launchArgs?: string | undefined;
   readonly cwd: string;
   readonly environment?: NodeJS.ProcessEnv | undefined;
+  readonly extendEnv?: boolean | undefined;
 }) {
   // Expand CODEX_HOME explicitly: spawn passes a literal ~ that Codex rejects.
   const resolvedHomePath = input.homePath
@@ -478,14 +479,14 @@ export const withCodexAppServerClient = Effect.fn("withCodexAppServerClient")(fu
   const spawnCommand = yield* resolveSpawnCommand(
     input.binaryPath,
     codexAppServerArgs(input.launchArgs),
-    { env: environment, extendEnv: true },
+    { env: environment, extendEnv: input.extendEnv ?? true },
   );
   const child = yield* spawner
     .spawn(
       ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         cwd: input.cwd,
         env: environment,
-        extendEnv: true,
+        extendEnv: input.extendEnv ?? true,
         forceKillAfter: CODEX_APP_SERVER_PROBE_FORCE_KILL_AFTER,
         shell: spawnCommand.shell,
       }),
@@ -514,6 +515,7 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
   readonly launchArgs?: string;
   readonly cwd: string;
   readonly environment?: NodeJS.ProcessEnv;
+  readonly extendEnv?: boolean;
   readonly skipNativeUsage?: boolean;
 }) {
   const spawnedAtMs = DateTime.toEpochMillis(yield* DateTime.now);
@@ -600,6 +602,7 @@ export const probeCodexSkillsForCwd = Effect.fn("probeCodexSkillsForCwd")(functi
   readonly launchArgs?: string;
   readonly cwd: string;
   readonly environment?: NodeJS.ProcessEnv;
+  readonly extendEnv?: boolean;
 }) {
   const { client } = yield* withCodexAppServerClient(input);
   const skillsResponse = yield* client.request("skills/list", { cwds: [input.cwd] });
@@ -688,6 +691,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     readonly launchArgs?: string;
     readonly cwd: string;
     readonly environment?: NodeJS.ProcessEnv;
+    readonly extendEnv?: boolean;
     readonly skipNativeUsage?: boolean;
   }) => Effect.Effect<
     CodexAppServerProviderSnapshot,
@@ -728,7 +732,8 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     launchArgs: resolveCodexLaunchArgs(codexSettings.launchArgs, resolvedEnvironment),
     cwd: yield* HostProcess.WorkingDirectory,
     environment: resolvedEnvironment,
-    ...(managedAuth ? { skipNativeUsage: true } : {}),
+    // Managed runtime resolution already removed foreign account overrides.
+    ...(managedAuth ? { skipNativeUsage: true, extendEnv: false } : {}),
   }).pipe(
     // Process teardown can outlast the work budget without discarding a completed snapshot.
     Effect.timeoutOption(Duration.millis(CODEX_AUTH_PROBE_TIMEOUT_MS)),

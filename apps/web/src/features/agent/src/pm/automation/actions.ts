@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AutomationApiError, type AutomationClient } from "../../../../../../../../packages/contracts/src/automation-client";
 import { automationRuleSchema, automationRunSchema, type AutomationRule, type AutomationRun } from "../../../../../../../../packages/contracts/src/automation";
 import { isDirty, type AutomationJournal, type PendingRequest } from "./journal";
-import { agentText } from "../../i18n";
+import { agentText } from "../../i18n-text.ts";
 
 type Settled = { kind: PendingRequest["kind"]; rule: AutomationRule | null; run: AutomationRun | null; ruleId: string | null };
 

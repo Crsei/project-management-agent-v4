@@ -5,7 +5,7 @@ import { getProviderModelTraits, resolveProviderModelSelection } from "@agent-wo
 import type { AgentCatalog, AgentFileArea } from "../../../../../../../packages/contracts/src/agent-file-areas";
 import type { Actor, Workspace } from "../../../../../../../packages/contracts/src/client";
 import { workspaceClient } from "../network";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 
 export type { AgentScope, AgentCatalog, AgentFileArea, Actor, Workspace };
 export type PmIdentity = { actor: Actor; workspaces: Workspace[] };

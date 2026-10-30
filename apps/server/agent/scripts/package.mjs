@@ -3,6 +3,7 @@ import { chmod, lstat, mkdir, readFile, readdir, readlink, realpath, symlink, wr
 import { createRequire, isBuiltin } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyHostBuildInputs } from "../../../../vendor/t3code/scripts/host-inputs.mjs";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const repository = path.resolve(packageRoot, "../../..");
@@ -24,8 +25,13 @@ const externalName = (specifier) => {
   if (specifier.startsWith(".") || path.isAbsolute(specifier) || specifier.includes(":")) throw new Error(`Nonportable external import: ${specifier}`);
   return packageName(specifier);
 };
+const sourceInventory = JSON.parse(await readFile(path.join(repository, "vendor/t3code/sync-inventory.json"), "utf8"));
+const hostBuildInputs = await verifyHostBuildInputs(repository, sourceInventory);
 const buildInputs = JSON.parse(await readFile(path.join(buildRoot, "build-inputs.json"), "utf8"));
 if (buildInputs.version !== 1) throw new Error("Unsupported build input inventory.");
+if (JSON.stringify(buildInputs.hostBuildInputs) !== JSON.stringify(hostBuildInputs)) {
+  throw new Error("Host build tool provenance changed after build; rebuild from the reviewed toolchain.");
+}
 const diskSdks = { "@anthropic-ai/claude-agent-sdk": "0.3.276", "@cursor/sdk": "1.0.38", "@muse-code/sdk": "1.4.6" };
 // Cursor's createRequire alias is intentionally opaque to esbuild's import metafile.
 // The frozen disk-resource boundary must close these SDKs even without static imports.

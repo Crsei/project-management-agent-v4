@@ -698,7 +698,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
       };
       const bridge = generation.idleCompaction ? undefined : await openPmToolBridge({
         scope: snapshot.scope, threadId: generation.threadId, messageId: generation.messageId,
-        generationId: generation.id, headers: requestHeaders,
+        generationId: generation.id, headers: requestHeaders, authorizeExecution,
       });
       const observe = async (phase: string) => {
         try {

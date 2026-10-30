@@ -167,6 +167,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       const child = yield* commandSpawner.spawn(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
           env: input.env,
+          extendEnv: false,
           cwd: input.cwd,
           shell: spawnCommand.shell,
           forceKillAfter: "1 second",
@@ -286,6 +287,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       );
       const command = ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         env,
+        extendEnv: false,
         cwd,
         shell: spawnCommand.shell,
         stdin: {

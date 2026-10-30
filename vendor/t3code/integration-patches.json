@@ -5,7 +5,7 @@
     "M3": "Historical accepted parent evidence only: original OpenCode package 16 files/142 tests, shared consumers 99, actual native + HTTP/SSE/browser check/history, source/test types and isolated production build.",
     "M4": "Parent accepted module/protocol gate: 297 retained-source files, 3512 tests passed and 2 skipped; 217 consumer tests passed with zero skips; source/test types and isolated production build passed. Real OpenCode, Codex and final unmodified Pi calls passed; Claude returned API 403 and remaining account/platform gaps remain explicit.",
     "M5": "Parent accepted module/browser gate: 298 retained-source files, 3523 passed and 2 skipped; 15 original package and selected server/source/test types passed. PM builds, client17, metadata/readiness31, Composer4, host/usage103 and isolated Claude quota3 passed. Web lint/types/build, Agent lint and isolated production build passed. Actual OpenCode HTTP/SSE/full-page/PM-embedded calls completed in one native session; real OpenCode Go quota failed and displayed failure/unknown, not zero.",
-    "M6": "T18 authored deterministic input hashes, exact preimage/postimage patches, actual syntax import/export inventory, refusal-first offline sync and portable SDK/resource packaging. No M6 check, build, test, formatter, install, native execution, smoke or service operation was run by T18; parent acceptance remains open.",
+    "M6": "Parent accepted Agent634/634 with zero skips/cancels, source/test types/lint/build, sync1159/AST6526 and final relocated linux-x64 artifact SDK/PTY/SQLite/worker/Claude-history/API smoke. These results include the Codex title environment fix; M7 security/backup/provenance repairs require refreshed source/artifact acceptance before release.",
     "source_inventory": "Pinned source/hash/blob metadata is provenance evidence, not runtime/test/build acceptance. Removed reference-only business tests are not passes.",
     "persistence": "Current Agent Chat persistence remains unchanged and has not undergone a unified redesign."
   },
@@ -379,8 +379,51 @@
       "id": "PM-M6-GIT-EXECUTABLE-CLASS-ADMISSION",
       "paths": ["scripts/sync.mjs", "scripts/verify-sync.mjs", "scripts/capture.py", "source-manifest.json", "sync-inventory.json", "sync-imports.json", "SYNC.md", "../../apps/server/agent/scripts/verify-artifact.mjs"],
       "reason": "Source reconstruction records Git-style executable classes, not every filesystem read/write permission bit. Accept matching non-executable 0664 versus canonical 0644 without chmod or rewriting an existing file; preserve hash and executable-class refusal. Reject setuid/setgid/sticky regular files before writes and constrain new-file modes to canonical 0644/0755. Permanent POSIX fixtures assert ordinary-permission acceptance is byte/mode/inode/mtime/ctime untouched and executable/special-mode conflicts cannot partially restore a missing file. The artifact verifier's child-exit callback uses explicit if/else rather than an unused-expression conditional.",
-      "verification": "Parent observed the original nine offline scenarios pass for 1159 files, then current-repository check rejected LICENSE0664 versus inventory0644. Parent also observed Agent source/test types and isolated build pass, with one artifact-verifier no-unused-expressions lint warning. T18 implemented these reported fixes and authored the new permission cases without running tests/build/lint; parent owns post-fix verification.",
-      "status": "implemented-pending-parent-mode-and-lint-verification"
+      "verification": "Parent observed the original nine offline scenarios pass for 1159 files, then current-repository check rejected LICENSE0664 versus inventory0644. T18 implemented executable-class admission, unsafe-mode refusal and explicit artifact-verifier if/else without running tests/build/lint. Parent bg162 subsequently reported sync/AST1159/6526 and relocated SDK/PTY/SQLite/worker/API smoke passed; this is historical evidence before the later Codex source refresh.",
+      "status": "parent-sync-and-artifact-evidence-recorded-before-Codex-source-refresh"
+    },
+    {
+      "id": "PM-M6-CODEX-AUTHORITATIVE-PREPARED-ENVIRONMENT",
+      "paths": ["apps/server/src/textGeneration/CodexTextGeneration.ts"],
+      "modifiedCallsites": [
+        "listEnabledMcpServers: ChildProcess.make for the codex mcp list --json preflight",
+        "runCodexJson.runCodexCommand: ChildProcess.make for the ephemeral read-only codex exec generation"
+      ],
+      "unchangedBoundaries": [
+        "apps/server/src/provider/CodexManagedRuntime.ts: prepared managed environment removes ACCESS_TOKEN, T3CODE_CODEX_LAUNCH_ARGS, OPENAI_API_KEY and OPENAI_BASE_URL",
+        "../../apps/server/agent/src/providers/t3code/upstream-services/process-platform.ts: bindPmProviderCommand continues merging genuinely partial env overrides unless extendEnv:false explicitly identifies a complete environment"
+      ],
+      "reason": "The original managed runtime's prepared environment is authoritative after credential/launch-override sanitization. Both text-generation constructors already receive that complete map (plus the explicit native Home) but omitted extendEnv:false, allowing the correctly partial-environment-aware PM spawner to merge the bound context again and resurrect deliberately removed keys. Set extendEnv:false only at these two complete prepared-environment spawn boundaries, covering MCP discovery and actual generation. Do not change generic partial-env merging, native Home selection, authentication ownership, PM policy or Chat persistence.",
+      "verification": "Parent found this credential-resurrection bug through the managed Codex title full-suite assertion and applied exactly the two extendEnv:false properties at frozen source lines170/290. Parent owns fresh consumer assertions and post-fix verification. T18 only inspected the frozen source, recorded rationale and recaptured deterministic metadata; no checks/builds/tests/native calls were run by T18. Earlier bg162 portable-artifact evidence predates these source bytes, so a refreshed final artifact is required.",
+      "status": "parent-source-fix-recorded-pending-refreshed-source-and-artifact-verification"
+    },
+    {
+      "id": "PM-M7-CODEX-ENVIRONMENT-AND-INSTALLER-OWNERSHIP",
+      "paths": ["apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts", "apps/server/src/provider/CodexProvider.ts", "apps/server/src/provider/Drivers/CodexManagedProvider.ts", "../../apps/server/agent/src/providers/t3code/families/codex.ts", "../../apps/server/agent/src/providers/t3code/management.ts"],
+      "reason": "Complete prepared Chat/status/skills maps must not resurrect stripped managed overrides through partial-env merging; explicit extendEnv:false identifies only those complete maps. Prepare owns its original installer operation, cancels only that active operation and awaits source cleanup before releasing PM maintenance. Generic partial merging and later-operation ownership remain unchanged; the subsequent exact-worker receipt patch completes terminal-state cleanup ownership.",
+      "verification": "Parent reproduced two environment failures and installer cleanup escaping maintenance; after repair nine controlled real-child/original-installer regressions passed, with zero skips/cancels. Not real managed-account inference. Integrated and artifact revalidation remains parent-owned.",
+      "status": "focused-parent-regression-passed"
+    },
+    {
+      "id": "PM-M7-LIVE-BRIDGE-AND-OFFLINE-RECOVERY",
+      "paths": ["../../apps/server/agent/src/pm-tools.ts", "../../apps/server/agent/src/durable/chat-runtime.ts", "../../apps/server/agent/src/maintenance/agent-backup.ts"],
+      "reason": "Fresh native tool discovery/dispatch must use the existing live generation/controller/revision/scope/cwd authorization after asynchronous body admission and before persistence/effects. Accepted-operation reconciliation and explicit human approval retain their original authority. Backup includes migrated private credentials/identity only under include, retains Agent attachments in both policies, excludes rebuildable native probes and rejects private records in exclude bundles.",
+      "verification": "Parent reproduced six native bridge authorization failures, then passed all23 focused cases; backup classification failed before repair, then13 backup tests and actual CLI create/restore/verify for both policies passed. No PM business state changed by these controlled checks.",
+      "status": "focused-parent-regression-and-backup-cli-smoke-passed"
+    },
+    {
+      "id": "PM-M7-HOST-TOOL-PROVENANCE-ADMISSION",
+      "paths": ["scripts/host-inputs.mjs", "scripts/sync.mjs", "scripts/verify-sync.mjs", "../../apps/server/agent/scripts/build.mjs", "../../apps/server/agent/scripts/package.mjs"],
+      "reason": "Check the recorded build/package/verifier/validator fingerprints before sync writes, build output deletion or packaging. Build records the verified toolchain; packaging rejects older output from another toolchain even if current source hashes match. Exact records, regular contained files and all required tool entries are mandatory; no guessed fallback or automatic recapture.",
+      "verification": "Parent reproduced acceptance of a changed build script under old sync --check. Offline reconstruction and independent drift refusal for all four host tools passed; a pre-audit build was rejected before package creation. The audited outside-repository artifact passed the shipped verifier. Later lifecycle changes require a fresh release artifact.",
+      "status": "parent-provenance-admission-passed"
+    },
+    {
+      "id": "PM-M7-EXACT-INSTALLER-JOIN-AND-APPLICATION-DRAIN",
+      "paths": ["apps/server/src/provider/CodexInstallation.ts", "apps/server/src/provider/AntigravityInstallation.ts", "apps/server/src/provider/CodexInstallation.test.ts", "apps/server/src/provider/AntigravityInstallation.test.ts", "../../apps/server/agent/src/providers/t3code/families/codex.ts", "../../apps/server/agent/src/providers/t3code/families/antigravity.ts", "../../apps/server/agent/src/providers/t3code/management.ts", "../../apps/server/agent/src/providers/t3code/application.ts", "../../apps/server/agent/src/providers/maintenance.ts", "../../apps/server/agent/src/runtime.ts"],
+      "reason": "Original installers capture an exact worker completion receipt under their existing start gate. PM joins pointer/staging/finalizer cleanup, including post-success cleanup failure and replacement-operation races. Application/root shutdown fences admission synchronously, cancels every admitted operation before waiting, and retains hosts/store/exclusion until all cleanup settles. The original state-only start remains an active native-consumer API over the same implementation.",
+      "verification": "Parent reproduced early cleanup release independently for both original installers, five shutdown-lifetime failures, and four later-worker/root-construction race failures. Exact-worker8/8 and lifecycle12/12 regressions passed, as did Agent/selected-server types and affected lint. Original suite298files3523passed2skipped; skips are not passes. Final integrated and release evidence is recorded separately in the migration plan.",
+      "status": "parent-behavior-and-type-verification-passed"
     }
   ]
 }

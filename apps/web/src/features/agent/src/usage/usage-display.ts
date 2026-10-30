@@ -1,6 +1,7 @@
 // Usage presentation adapted from t3code usageFormat and usageBreakdown.
 // Copyright (c) 2026 T3 Tools Inc. MIT; see LICENSE.t3code.
-import { agentText, type AgentText } from "../i18n";
+import type { AgentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 import type { UsageTotals } from "./page-data";
 
 const compactNumber = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 });

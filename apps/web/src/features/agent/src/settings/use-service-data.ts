@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { workspaceClient } from "../network";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 
 /** Read-only service data, never persisted in browser storage. */
 export function useServiceData<T>(resource: string) {

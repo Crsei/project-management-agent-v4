@@ -3,7 +3,7 @@ import { pmJson, PmApiError, usePmChatState } from "./state";
 import type { Entity } from "../../../../../../../packages/contracts/src/client";
 import type { PmChangeSet, PmIssue, PmReference } from "./pm-types";
 import { setPmChatContext, setPmReferences } from "./pm-chat-bridge";
-import { agentText } from "../i18n";
+import { agentText } from "../i18n-text.ts";
 
 export const PM_REFERENCE_LIMIT = 20;
 

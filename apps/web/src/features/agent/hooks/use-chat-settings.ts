@@ -6,7 +6,7 @@ import { threadSettingsSchema, type RemoteSettings, type RemoteThread } from "@a
 import { UNSELECTED_THREAD_SETTINGS, type ChatDefaultsResponse } from "@agent-workspace/contracts/settings";
 import { pendingRemoteSettings } from "./remote-settings-patch";
 import { acceptRemoteThread } from "@agent/src/pm/state";
-import { agentText } from "@agent/src/i18n";
+import { agentText } from "@agent/src/i18n-text.ts";
 
 export type ChatSettings = RemoteSettings & { dictation: boolean; speak: boolean };
 export type SettingsUpdater = {

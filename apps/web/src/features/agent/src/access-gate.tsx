@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@agent/components/ui/button";
 import { Input } from "@agent/components/ui/input";
 import { workspaceClient } from "./network";
-import { agentText, useAgentText } from "./i18n";
+import { useAgentText } from "./i18n";
+import { agentText } from "./i18n-text.ts";
 
 export function AccessGate({ children }: { children: ReactNode }) {
   const t = useAgentText();

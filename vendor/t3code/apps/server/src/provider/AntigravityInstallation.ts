@@ -80,6 +80,11 @@ export interface AntigravityExecutable {
   readonly version: string | null;
   readonly managedVersionDirectory: string | null;
 }
+export interface AntigravityInstallationOperation {
+  readonly state: ProviderInstallState;
+  /** Exact worker settlement, including scoped cleanup; retains non-cancellation failures. */
+  readonly completion: Effect.Effect<void, AntigravityInstallationError>;
+}
 
 interface AntigravityInstallationService {
   readonly managedDirectory: string;
@@ -93,6 +98,7 @@ interface AntigravityInstallationService {
     environment?: NodeJS.ProcessEnv,
   ) => Effect.Effect<AntigravityExecutable, AntigravityInstallationError, Scope.Scope>;
   readonly start: Effect.Effect<ProviderInstallState, AntigravityInstallationError>;
+  readonly startOperation: Effect.Effect<AntigravityInstallationOperation, AntigravityInstallationError>;
   readonly cancel: (
     operationId: string,
   ) => Effect.Effect<ProviderInstallState, AntigravityInstallationError>;
@@ -176,7 +182,11 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
   const activePath = path.join(managedDirectory, "active.json");
   const gate = yield* Semaphore.make(1);
   const leases = new Map<string, number>();
-  let running: { readonly operationId: string; readonly fiber: Fiber.Fiber<void> } | undefined;
+  let running: {
+    readonly operationId: string;
+    readonly fiber: Fiber.Fiber<void>;
+    readonly completion: Effect.Effect<void, AntigravityInstallationError>;
+  } | undefined;
   const state = yield* SubscriptionRef.make<ProviderInstallState>({
     driver: DRIVER,
     operationId: null,
@@ -708,11 +718,11 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
     ),
   );
 
-  const start = gate
+  const startOperation: Effect.Effect<AntigravityInstallationOperation, AntigravityInstallationError> = gate
     .withPermit(
       Effect.gen(function* () {
         const current = yield* SubscriptionRef.get(state);
-        if (isRunning(current)) return current;
+        if (isRunning(current) && running) return { state: current, completion: running.completion };
         if (!releaseAsset) {
           return yield* installationError(
             "start",
@@ -732,6 +742,7 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
           message: "Downloading Google's official Antigravity runtime.",
         };
         yield* SubscriptionRef.set(state, next);
+        let outcome: Exit.Exit<void, AntigravityInstallationError> = Exit.void;
         const work = install(releaseAsset).pipe(
           Effect.onExit((exit) =>
             Exit.isFailure(exit)
@@ -752,6 +763,7 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
                 })
               : Effect.void,
           ),
+          Effect.onExit((exit) => Effect.sync(() => { outcome = exit; })),
           Effect.ignoreCause,
           Effect.ensuring(
             Effect.sync(() => {
@@ -760,11 +772,21 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
           ),
         );
         const fiber = yield* Effect.forkIn(Effect.interruptible(work), serviceScope);
-        running = { operationId, fiber };
-        return next;
+        const completion = Fiber.await(fiber).pipe(
+          Effect.flatMap((workerExit) => {
+            const exit = Exit.isFailure(workerExit) ? workerExit : outcome;
+            return Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
+              ? Effect.failCause(exit.cause)
+              : Effect.void;
+          }),
+        );
+        running = { operationId, fiber, completion };
+        return { state: next, completion };
       }).pipe(Effect.uninterruptible),
     )
     .pipe(Effect.mapError(wrapFailure("start", "Could not start the Antigravity installation.")));
+  // The native setup API publishes state without taking ownership of the background worker.
+  const start = startOperation.pipe(Effect.map((operation) => operation.state));
 
   const cancel = Effect.fn("AntigravityInstallation.cancel")(function* (operationId: string) {
     return yield* gate.withPermit(
@@ -869,6 +891,7 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
     resolve,
     acquire,
     start,
+    startOperation,
     cancel,
     state: SubscriptionRef.get(state),
     changes: SubscriptionRef.changes(state),
