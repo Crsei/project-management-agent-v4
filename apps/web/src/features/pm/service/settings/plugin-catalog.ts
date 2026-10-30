@@ -17,7 +17,7 @@ import {
   Video,
   Webhook,
   type LucideIcon,
-} from "lucide-react"
+} from "lucide-pm"
 
 type LocalizedText = readonly [zh: string, en: string]
 

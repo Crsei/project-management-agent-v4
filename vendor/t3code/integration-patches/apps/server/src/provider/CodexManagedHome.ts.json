@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexManagedHome.ts",
+  "beforeSha256": "a9452c10185733a11b7f124bce145a8beaaf286522baaad7e6c393ab84d4ff6d",
+  "afterSha256": "141e1534852cc30780b5362d0d852daf8b49bf7181bee8eb3d7f4bcdbbc16a49",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 3,
+      "before": [],
+      "after": [
+        "import * as Context from \"effect/Context\";\n"
+      ]
+    },
+    {
+      "start": 4,
+      "before": [],
+      "after": [
+        "\n",
+        "/** PM supplies its already-owned managed native Home; unbound upstream use keeps native layout. */\n",
+        "export const CodexManagedHomePath = Context.Reference<string | undefined>(\n",
+        "  \"t3/provider/CodexManagedHomePath\", { defaultValue: () => undefined },\n",
+        ");\n"
+      ]
+    },
+    {
+      "start": 11,
+      "before": [],
+      "after": [
+        "  const managedHome = yield* CodexManagedHomePath;\n",
+        "  if (managedHome) return yield* resolveCodexHomeLayout({ ...config, homePath: managedHome, shadowHomePath: \"\" });\n"
+      ]
+    }
+  ]
+}

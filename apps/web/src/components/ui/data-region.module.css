@@ -5,6 +5,7 @@
   padding: 12px;
   margin-bottom: 12px;
   border-block: 1px solid var(--border);
+  box-shadow: inset 0 2px 0 var(--status-info), inset 0 1px 0 var(--edge-highlight);
   font-size: 12px;
   line-height: 20px;
   color: var(--text-secondary);
@@ -19,7 +20,8 @@
   padding: 12px;
   margin-bottom: 12px;
   border: 1px solid color-mix(in srgb, var(--destructive) 30%, var(--border));
-  border-radius: 6px;
+  border-radius: var(--radius-popover-value);
+  box-shadow: inset 0 2px 0 var(--destructive), var(--edge-shadow);
   font-size: 12px;
   line-height: 20px;
   color: var(--destructive);

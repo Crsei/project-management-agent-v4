@@ -68,7 +68,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
   const disabled = !c.canEditSourceDraft || !split;
   const [selection, setSelection] = useState({ from: 0, to: 0 });
   const [history, setHistory] = useState({ undo: 0, redo: 0 });
-  const [layout, setLayout] = useState<'split' | 'edit' | 'preview'>('split');
+  const [layout, setLayout] = useState<'split' | 'edit' | 'preview'>('edit');
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [menu, setMenu] = useState<{ target: Target; x?: number; y?: number } | null>(null);
   const [palette, setPalette] = useState<{ target: Target; query: string; index: number } | null>(null);
@@ -83,7 +83,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
     if (!location.hash) return;
     let positionFrame = 0;
     const revealFrame = requestAnimationFrame(() => {
-      setLayout('split');
+      setLayout('edit');
       positionFrame = requestAnimationFrame(() => {
         const controller = latest.current;
         if (view.current) selectDocumentFragment(view.current, controller.session.drafts.getSnapshot()[controller.selectedId]?.raw ?? controller.selected?.raw ?? '', location.hash);
@@ -106,7 +106,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
     if (view.current.composing) throw new Error(label('Finish composing text before applying a command.', '请先完成输入法组字，再执行命令。'));
     if (write && !latest.current.canEditSourceDraft) throw new Error(label('Editing is locked. Resolve the access, revision or pending-write notice first.', '编辑已锁定，请先处理权限、版本冲突或待确认写入。'));
     const parts = splitDocumentBody(current.raw);
-    if (!parts) throw new Error(label('The YAML boundary is invalid. Repair the advanced Markdown source.', 'YAML 分隔符无效，请在高级 Markdown 源码中修复。'));
+    if (!parts) throw new Error(label('The YAML boundary is invalid. Repair the Markdown source.', 'YAML 分隔符无效，请修复 Markdown 源码。'));
     if (bodyEditorText(parts.body) !== view.current.state.doc.toString()) throw new Error(label('The editor is synchronizing a source change. Try again after it updates.', '编辑器正在同步源码更改，请同步完成后重试。'));
     return { editor: view.current, ...parts };
   }
@@ -237,7 +237,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   }
 
-  const readonlyReason = !split ? label('The YAML boundary is invalid; repair advanced source.', 'YAML 分隔符无效，请修复高级源码。') : c.selected?.entity.archived ? label('Archived document. Restore it in Properties before editing.', '文档已归档，请在属性中恢复后编辑。') : c.ahead || c.conflict?.id === c.selectedId ? label('Disk changed. Compare versions before editing; your draft is retained.', '磁盘版本已更改，请先比较版本；当前草稿已保留。') : c.writesBlocked ? label('A write is pending or its result is unknown. Resolve its recovery record first.', '写入待确认或结果未知，请先处理原始恢复记录。') : c.configurationInvalid ? label('Workspace configuration has errors. Repair it before editing.', '工作区配置有错误，请先修复配置。') : c.query.isError || c.accessError ? label('Workspace access or refresh failed. Your draft is retained; editing is locked.', '工作区访问或刷新失败，草稿已保留，编辑暂时锁定。') : c.busy ? label('Saving or updating. Editing will resume when it finishes.', '正在保存或更新，完成后可继续编辑。') : label('You do not have write access. The document remains readable.', '当前没有写入权限，仍可阅读文档。');
+  const readonlyReason = !split ? label('The YAML boundary is invalid; repair the Markdown source.', 'YAML 分隔符无效，请修复 Markdown 源码。') : c.selected?.entity.archived ? label('Archived document. Editing is locked.', '文档已归档，编辑已锁定。') : c.ahead || c.conflict?.id === c.selectedId ? label('Disk changed. Compare versions before editing; your draft is retained.', '磁盘版本已更改，请先比较版本；当前草稿已保留。') : c.writesBlocked ? label('A write is pending or its result is unknown. Resolve its recovery record first.', '写入待确认或结果未知，请先处理原始恢复记录。') : c.configurationInvalid ? label('Workspace configuration has errors. Repair it before editing.', '工作区配置有错误，请先修复配置。') : c.query.isError || c.accessError ? label('Workspace access or refresh failed. Your draft is retained; editing is locked.', '工作区访问或刷新失败，草稿已保留，编辑暂时锁定。') : c.busy ? label('Saving or updating. Editing will resume when it finishes.', '正在保存或更新，完成后可继续编辑。') : label('You do not have write access. The document remains readable.', '当前没有写入权限，仍可阅读文档。');
   const insertionTarget = { id: c.selectedId, scope: c.session.scope, raw: c.raw, ...selection };
   const filtered = commands.filter(command => `${command.id} ${command.label} ${command.labelEn}`.toLocaleLowerCase().includes(palette?.query.toLocaleLowerCase() ?? ''));
   const block = blocks.find(candidate => selection.from >= candidate.from && selection.from < candidate.to);
@@ -266,7 +266,6 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
       <button type="button" onClick={openPalette} aria-label={label('Search commands', '搜索命令')} title={label('Editor commands · Ctrl/⌘ P · slash at line start', '编辑命令 · Ctrl/⌘ P · 行首输入 /')}>/</button>
       <button type="button" aria-label={label('Toggle outline', '切换大纲')} aria-pressed={outlineOpen} onClick={() => setOutlineOpen(open => !open)}><ListTree size={16} /></button>
       <div className="document-layout-controls" role="group" aria-label={label('Editor layout', '编辑器布局')}>{([['edit', Code2, 'Editor', '编辑器'], ['split', Columns2, 'Editor and preview', '编辑与预览'], ['preview', Eye, 'Preview', '预览']] as const).map(([mode, Icon, english, zh]) => <button type="button" key={mode} aria-label={label(english, zh)} aria-pressed={layout === mode} onClick={() => setLayout(mode)}><Icon size={16} /></button>)}</div>
-      <button type="button" className="document-source-button" onClick={onSource}>{label('Advanced source', '高级源码')}</button>
     </div>
     {error && <p className="document-editor-error" role="alert">{error}<button type="button" onClick={() => setError('')} aria-label={label('Dismiss editor error', '关闭编辑错误')}>×</button></p>}
     <div className="document-editing-workspace">
@@ -320,7 +319,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
       const { body: text } = requireTarget(insertionTarget);
       apply({ text: text.slice(0, insertionTarget.from) + markdownText + text.slice(insertionTarget.to), selection: { from: insertionTarget.from + markdownText.length, to: insertionTarget.from + markdownText.length } }, insertionTarget);
     }} />
-    <p className="document-editor-hint">{label('Markdown is the source of truth, including the H1 title. Formatting and preview update this draft; Save or Ctrl/⌘ S persists it. At line start, / opens commands.', 'Markdown（含 H1 标题）是唯一正文来源。格式和预览共用此草稿；点击保存或 Ctrl/⌘ S 后写入。行首输入 / 打开命令。')}</p>
+    <p className="document-editor-hint">{label('Markdown is the source of truth, including the H1 title. Real-time saving is on: edits save automatically after they settle, and Save or Ctrl/⌘ S writes immediately. At line start, / opens commands.', 'Markdown（含 H1 标题）是唯一正文来源。实时保存已开启：停止输入后自动写入，也可点击保存或 Ctrl/⌘ S 立即写入。行首输入 / 打开命令。')}</p>
     <Dialog open={!!palette} onOpenChange={open => { if (!open) setPalette(null); }}><DialogContent className="document-command-dialog" finalFocus={() => view.current?.contentDOM ?? null}><DialogTitle>{label('Editor commands', '编辑器命令')}</DialogTitle><DialogDescription>{label('Search all formatting, insertion and structural commands. Applies to the selection you opened this menu with.', '搜索全部格式、插入和结构命令，操作打开菜单时的选区。')}</DialogDescription><input autoFocus aria-label={label('Search editor commands', '搜索编辑器命令')} value={palette?.query ?? ''} onChange={event => setPalette(current => current && { ...current, query: event.target.value, index: 0 })} onKeyDown={event => {
       if (!palette || !filtered.length) return;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setPalette({ ...palette, index: (palette.index + (event.key === 'ArrowDown' ? 1 : filtered.length - 1)) % filtered.length }); }

@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "source": "packages/provider-cursor/src/server/driver.ts",
+  "beforeSha256": "ed29a06f3c987d027f2341098e5d4da08d2d38b22d71ddc850c8f9e52472b820",
+  "afterSha256": "26d64d9ac9faefcf1c10f52aa81ec4d1a6898fe34c35f188de835b76d4133806",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 7,
+      "before": [],
+      "after": [
+        "import * as Option from \"effect/Option\";\n",
+        "import { CursorHostPaths } from \"./CursorHostPaths.ts\";\n",
+        "import { bindCursorNativeMetadata, readCursorNativeMetadata } from \"./CursorNativeMetadata.ts\";\n"
+      ]
+    },
+    {
+      "start": 115,
+      "before": [],
+      "after": [
+        "    const hostPaths = yield* Effect.serviceOption(CursorHostPaths);\n"
+      ]
+    },
+    {
+      "start": 117,
+      "before": [
+        "      path.join(\n",
+        "        host.paths.stateDir,\n",
+        "        \"provider-auth\",\n",
+        "        encodeURIComponent(instanceId),\n",
+        "        \"cursor.json\",\n"
+      ],
+      "after": [
+        "      Option.isSome(hostPaths) ? hostPaths.value.legacyCredentialsFile : path.join(\n",
+        "        host.paths.stateDir, \"provider-auth\", encodeURIComponent(instanceId), \"cursor.json\",\n"
+      ]
+    },
+    {
+      "start": 183,
+      "before": [
+        "                        Effect.map((close) => ({ ...session, close })),\n"
+      ],
+      "after": [
+        "                        Effect.map((close) => {\n",
+        "                          const wrapped = { ...session, close };\n",
+        "                          const metadata = readCursorNativeMetadata(session);\n",
+        "                          if (metadata) bindCursorNativeMetadata(wrapped, metadata);\n",
+        "                          return wrapped;\n",
+        "                        }),\n"
+      ]
+    },
+    {
+      "start": 187,
+      "before": [
+        "                (session) => session.close.pipe(Effect.ignore),\n"
+      ],
+      "after": [
+        "                (session) => session.close.pipe(Effect.orDie),\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+/* Usage model dialog adapted from t3code. Copyright (c) 2026 T3 Tools Inc. MIT; see LICENSE.t3code. */
+.usage-model-detail[data-slot="dialog-content"] { width: min(100% - 2rem, 760px); max-width: 760px; max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.usage-model-detail-title { display: flex; align-items: flex-start; gap: 8px; padding-right: 2rem; overflow-wrap: anywhere; }
+.usage-model-detail-title > svg { flex-shrink: 0; margin-top: 2px; }
+.usage-model-detail-title small { display: block; margin-top: 4px; font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
+.usage-model-detail-body { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.usage-model-detail-body h3 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+.usage-model-detail-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.usage-model-detail-stats dt { color: var(--muted-foreground); font-size: 12px; }
+.usage-model-detail-stats dd { font-size: 20px; font-weight: 500; overflow-wrap: anywhere; margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+.usage-model-detail-breakdowns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 32px; }
+.usage-model-detail-note { color: var(--muted-foreground); font-size: 12px; margin: 0; }
+.usage-model-detail a { color: var(--foreground); text-decoration: underline; text-underline-offset: 3px; }
+.usage-model-detail :is(a, button):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (max-width: 560px) { .usage-model-detail-stats, .usage-model-detail-breakdowns { grid-template-columns: repeat(2, minmax(0, 1fr)); } .usage-model-detail-breakdowns { grid-template-columns: 1fr; } }

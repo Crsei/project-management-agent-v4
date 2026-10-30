@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/OpenCodeAdapterV2.testkit.ts",
+  "beforeSha256": "4288193f6754a551528fea0644f848a755c20658bc04e75e5fe22ee5c248bb4f",
+  "afterSha256": "d89be2485375f5e0ce3a744fc50fc235f267fe4b11a6c0b6ef7a377e938b77be",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1,
+      "before": [
+        "import * as NodeServices from \"@effect/platform-node/NodeServices\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 10,
+      "before": [
+        "import * as TestProviderHost from \"@t3tools/provider-testing/TestProviderHost\";\n",
+        "import * as ProviderEventLoggers from \"@t3tools/provider-core/server/ProviderEventLoggers\";\n",
+        "import * as IdAllocator from \"@t3tools/provider-core/server/IdAllocator\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 14,
+      "before": [
+        "import * as ProviderAdapterRegistry from \"../ProviderAdapterRegistry.ts\";\n",
+        "import { type OrchestratorV2ProviderReplayHarness } from \"../testkit/ProviderReplayHarness.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 123,
+      "before": [
+        "        key === \"before\")\n"
+      ],
+      "after": [
+        "        key === \"before\" ||\n",
+        "        key === \"server\" ||\n",
+        "        key === \"name\")\n"
+      ]
+    },
+    {
+      "start": 170,
+      "before": [],
+      "after": [
+        "        }\n",
+        "      }\n",
+        "      // PM server names are random per operation, like native prompt IDs. Correlate the\n",
+        "      // recorded name once, then require the exact name for admission, re-add and cleanup.\n",
+        "      if (expectedFrame?.type === \"mcp.add\" && actualFrame?.type === \"mcp.add\") {\n",
+        "        const recordedName = frameRecord(expectedFrame.input)?.server;\n",
+        "        const actualName = frameRecord(actualFrame.input)?.server;\n",
+        "        if (typeof recordedName === \"string\" && recordedName.startsWith(\"pm-recorded-\")\n",
+        "          && typeof actualName === \"string\" && !messageIds.has(recordedName)) {\n",
+        "          conflictingMessageId = [...messageIds.values()].includes(actualName);\n",
+        "          if (!conflictingMessageId) messageIds.set(recordedName, actualName);\n"
+      ]
+    },
+    {
+      "start": 422,
+      "before": [
+        "function layerOpenCodeProviderAdapterRegistryReplay(transcript: OpenCodeSdkReplayTranscript) {\n",
+        "  return ProviderAdapterRegistry.layerFromAdaptersEffect(\n",
+        "    OpenCodeAdapterV2Driver.create({\n",
+        "      instanceId: OPENCODE_DEFAULT_INSTANCE_ID,\n",
+        "      environment: [],\n",
+        "      displayName: undefined,\n",
+        "      enabled: true,\n",
+        "      config: { ...OpenCodeAdapterV2Driver.defaultConfig(), serverUrl: \"replay://opencode\" },\n",
+        "    }).pipe(Effect.map((adapter) => [adapter])),\n",
+        "  ).pipe(\n",
+        "    Layer.provide(\n",
+        "      Layer.mergeAll(\n",
+        "        layerOpenCodeReplayRuntime(transcript),\n",
+        "        TestProviderHost.layer().pipe(Layer.provide(NodeServices.layer)),\n",
+        "        NodeServices.layer,\n",
+        "        IdAllocator.layer,\n",
+        "        Layer.succeed(\n",
+        "          ProviderEventLoggers.ProviderEventLoggers,\n",
+        "          ProviderEventLoggers.NoOpProviderEventLoggers,\n",
+        "        ),\n",
+        "      ),\n",
+        "    ),\n",
+        "  );\n",
+        "}\n"
+      ],
+      "after": [
+        "/** The source SDK replay, without an application registry or business orchestrator. */\n",
+        "export const makeOpenCodeReplayAdapter = (transcript: OpenCodeSdkReplayTranscript) =>\n",
+        "  OpenCodeAdapterV2Driver.create({\n",
+        "    instanceId: OPENCODE_DEFAULT_INSTANCE_ID,\n",
+        "    environment: [],\n",
+        "    displayName: undefined,\n",
+        "    enabled: true,\n",
+        "    config: { ...OpenCodeAdapterV2Driver.defaultConfig(), serverUrl: \"replay://opencode\" },\n",
+        "  }).pipe(Effect.provide(layerOpenCodeReplayRuntime(transcript)));\n"
+      ]
+    },
+    {
+      "start": 455,
+      "before": [
+        "export const OpenCodeOrchestratorReplayHarness: OrchestratorV2ProviderReplayHarness<\n",
+        "  OpenCodeSdkReplayTranscript,\n",
+        "  OpenCodeOrchestratorReplayHarnessError\n",
+        "> = {\n"
+      ],
+      "after": [
+        "/** Legacy source export name; its composition is provider-native only. */\n",
+        "export const OpenCodeOrchestratorReplayHarness = {\n"
+      ]
+    },
+    {
+      "start": 460,
+      "before": [
+        "  decodeTranscript: (transcript) =>\n"
+      ],
+      "after": [
+        "  decodeTranscript: (transcript: ProviderReplayTranscript) =>\n"
+      ]
+    },
+    {
+      "start": 470,
+      "before": [
+        "  makeProviderAdapterRegistryLayer: layerOpenCodeProviderAdapterRegistryReplay,\n"
+      ],
+      "after": [
+        "  makeAdapter: makeOpenCodeReplayAdapter,\n"
+      ]
+    }
+  ]
+}

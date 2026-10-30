@@ -2,6 +2,8 @@
 
 用户要求继续核对 t3code Usage，并用 subagents 同样复制、适配前后端；沿用 `openai-codex/gpt-6.1-terra:xhigh`。来源 `/data2-HDD-SATA-20T/Digital_avatar/haoweiyao/t3code`，revision `d53873b6a4799e87afd63c8d288ef0089f5a3748`，MIT/T3 Tools Inc. 2026；只读来源，归属保留在 LICENSE.t3code。用户未授权提交、推送或重启常驻服务。
 
+当前 v4 输入框已按后续用户要求隐藏上下文 / token / 费用及本轮供应商用量，并移除自动轮询；后台采集、Usage 页和显式 `/usage-limits` 保留，见[输入框调整与实际验证](../reference/t3code-provider-config-diff-30eb7e7bb1.zh.md#v4-composer-effort)。以下 Composer 展示范围与验收保留为原始移植历史，不代表当前仍展示；原生 Home 的后续切换见同文[第15节](../reference/t3code-provider-config-diff-30eb7e7bb1.zh.md#v4-native-provider-flow)。
+
 ## 语义与边界
 
 完整范围以来源 `docs/user/usage.md` 为基线：原生历史的 token / 缓存 / 模型 / 日或小时趋势 / API 等价成本与 speed premium，公开价格缓存、自定义价格及模型映射，订阅额度窗口与账号池、重置时间/credits、CLIProxyAPI hubs，Composer `/usage-limits` 与真实上下文用量。费用估算不是账单，reasoning 属于 output 子集，不重复相加；三个 input 分类互斥。不能从正文估算缺失 token。

@@ -1,0 +1,500 @@
+{
+  "version": 1,
+  "source": "packages/provider-acp/src/server/adapter.ts",
+  "beforeSha256": "f13f74b38919c97674b52872fde2e29a27476054539cacb8840f215a7070cc91",
+  "afterSha256": "a0cf31ff7bd478d599e6361ae94a54ca25a70c812b686ed48dafb0b40be9952b",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 36,
+      "before": [
+        "import { type SelfInvocation, selfInvocationArgs } from \"@t3tools/shared/nodeRuntime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 66,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n",
+        "import * as McpProviderSession from \"@t3tools/provider-core/server/mcpSession\";\n"
+      ],
+      "after": [
+        "import * as ProviderRuntimeHost from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n",
+        "import * as HostProcess from \"@t3tools/shared/HostProcess\";\n"
+      ]
+    },
+    {
+      "start": 102,
+      "before": [
+        "import { buildRuntimeInstructions } from \"@t3tools/provider-core/server/runtimeInstructions\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 127,
+      "before": [],
+      "after": [
+        "/** Evidence is scoped to the actual opened original ACP connection. */\n",
+        "export interface AcpSessionEvidence {\n",
+        "  readonly protocol: \"acp-v1.ndjson-jsonrpc\" | \"acp-v2.ndjson-jsonrpc\";\n",
+        "  readonly cwd: string;\n",
+        "  readonly homeDirectory: string;\n",
+        "  readonly readLegacy: (input: {\n",
+        "    readonly nativeSessionId: string;\n",
+        "    readonly turnId?: string;\n",
+        "    readonly messageId?: string;\n",
+        "    readonly ensure: ProviderAdapter.ProviderAdapterV2EnsureThreadInput;\n",
+        "  }) => Effect.Effect<ProviderAdapter.ProviderAdapterV2ThreadSnapshot, Error>;\n",
+        "  readonly adoptBuffered?: (input: {\n",
+        "    readonly request: ProviderContinuationRequests.ProviderContinuationRequest;\n",
+        "    readonly turn: Omit<ProviderAdapter.ProviderAdapterV2TurnInput, \"message\">;\n",
+        "    readonly isCurrent: Effect.Effect<boolean, Error>;\n",
+        "  }) => Effect.Effect<boolean, Error>;\n",
+        "}\n",
+        "const sessionEvidence = new WeakMap<ProviderAdapter.ProviderAdapterV2SessionRuntime, AcpSessionEvidence>();\n",
+        "export const readAcpSessionEvidence = (runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime) =>\n",
+        "  sessionEvidence.get(runtime);\n"
+      ]
+    },
+    {
+      "start": 263,
+      "before": [],
+      "after": [
+        "  /** Native metadata only, without starting a prompt or replacing the requested session. */\n",
+        "  readonly readLegacySessionMetadata?: (nativeSessionId: string) => Effect.Effect<{\n",
+        "    readonly cwd: string;\n",
+        "    readonly headMessageId?: string;\n",
+        "  }, EffectAcpErrors.AcpError>;\n"
+      ]
+    },
+    {
+      "start": 429,
+      "before": [
+        "  readonly selfInvocation: SelfInvocation;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 593,
+      "before": [
+        "  readonly endpoint?: string;\n",
+        "  readonly authorization?: string;\n"
+      ],
+      "after": [
+        "  readonly binding?: ProviderRuntimeHost.ProviderRuntimeHostBinding;\n"
+      ]
+    },
+    {
+      "start": 597,
+      "before": [
+        "function acpMcpContext(\n",
+        "  session: McpProviderSession.McpProviderSessionConfig | undefined,\n",
+        "  self: SelfInvocation,\n",
+        "): AcpMcpContext {\n",
+        "  if (session === undefined) {\n",
+        "    return { servers: [], acpServers: [] };\n",
+        "  }\n",
+        "  // codex-acp 1.2.0 and pi-acp drop injected HTTP servers; bridge through stdio instead.\n"
+      ],
+      "after": [
+        "function acpMcpContext(binding: ProviderRuntimeHost.ProviderRuntimeHostBinding | undefined): AcpMcpContext {\n"
+      ]
+    },
+    {
+      "start": 606,
+      "before": [
+        "    servers: [\n",
+        "      {\n",
+        "        name: \"t3-code\",\n",
+        "        command: self.command,\n",
+        "        args: [...selfInvocationArgs(self, [\"acp-mcp-bridge\"])],\n",
+        "        env: [\n",
+        "          { name: \"ELECTRON_RUN_AS_NODE\", value: \"1\" },\n",
+        "          { name: \"T3_ACP_MCP_ENDPOINT\", value: session.endpoint },\n",
+        "          { name: \"T3_ACP_MCP_AUTHORIZATION\", value: session.authorizationHeader },\n",
+        "        ],\n",
+        "      },\n",
+        "    ],\n",
+        "    acpServers: [{ type: \"acp\", name: \"t3-code\", serverId: \"t3-code\" }],\n",
+        "    endpoint: session.endpoint,\n",
+        "    authorization: session.authorizationHeader,\n",
+        "    processEnvironment: {\n",
+        "      T3_ACP_MCP_ENDPOINT: session.endpoint,\n",
+        "      T3_ACP_MCP_AUTHORIZATION: session.authorizationHeader,\n",
+        "      T3_ACP_MCP_NODE: self.command,\n",
+        "      ...(self.entrypoint === undefined ? {} : { T3_ACP_MCP_ENTRYPOINT: self.entrypoint }),\n",
+        "    },\n"
+      ],
+      "after": [
+        "    ...(binding ? { binding } : {}),\n",
+        "    servers: binding?.mcpServers.map(server => ({\n",
+        "      name: server.name, command: server.command, args: [...server.args], env: [],\n",
+        "    })) ?? [],\n",
+        "    acpServers: binding?.mcpServers.map(server => ({\n",
+        "      type: \"acp\" as const, name: server.name, serverId: server.name,\n",
+        "    })) ?? [],\n"
+      ]
+    },
+    {
+      "start": 1356,
+      "before": [
+        "  const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n",
+        "  const { flavor, selfInvocation: self } = options;\n",
+        "  const readMcpContext = (threadId: ThreadId | null) =>\n",
+        "    threadId === null\n",
+        "      ? Effect.succeed(acpMcpContext(undefined, self))\n",
+        "      : mcpSessions.read(threadId).pipe(Effect.map((session) => acpMcpContext(session, self)));\n"
+      ],
+      "after": [
+        "  const runtimeHost = yield* ProviderRuntimeHost.ProviderRuntimeHost;\n",
+        "  const homeDirectory = yield* HostProcess.HomeDirectory;\n",
+        "  const processEnvironment = yield* HostProcess.Environment;\n",
+        "  const { flavor } = options;\n",
+        "  const readBinding = (threadId: ThreadId | null) => threadId === null\n",
+        "    ? Effect.succeed(undefined)\n",
+        "    : runtimeHost.read({ threadId, providerInstanceId: options.instanceId });\n",
+        "  const readMcpContext = (threadId: ThreadId | null) => readBinding(threadId).pipe(Effect.map(acpMcpContext));\n"
+      ]
+    },
+    {
+      "start": 1379,
+      "before": [],
+      "after": [
+        "        const binding = yield* readBinding(input.threadId);\n",
+        "        const cwd = input.runtimePolicy.cwd ?? host.paths.cwd;\n",
+        "        if (binding && binding.cwd !== cwd) return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "          driver, detail: \"ACP host transport belongs to another working directory.\",\n",
+        "        });\n",
+        "        const assertHostBinding = Effect.gen(function* () {\n",
+        "          if (!binding) return;\n",
+        "          const live = yield* readBinding(input.threadId);\n",
+        "          if (live?.executionId !== binding.executionId) return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver, detail: \"The generation-owned ACP host transport is no longer active.\",\n",
+        "          });\n",
+        "          if (binding.mcpServers.length > 0)\n",
+        "            yield* runtimeHost.authorize({ ...binding, action: \"tool\" });\n",
+        "        });\n",
+        "        yield* assertHostBinding;\n",
+        "        let legacyMetadata: { readonly cwd: string; readonly headMessageId?: string } | undefined;\n"
+      ]
+    },
+    {
+      "start": 1558,
+      "before": [],
+      "after": [
+        "        const observedWork = new Map<string, \"running\" | \"requires_action\" | \"idle\">();\n",
+        "        const continuationRequestGenerations = new WeakMap<ProviderContinuationRequests.ProviderContinuationRequest, number>();\n",
+        "        const bufferedAdoptions = new WeakMap<ProviderAdapter.ProviderAdapterV2TurnMessage, {\n",
+        "          readonly generation: number;\n",
+        "          readonly isCurrent: Effect.Effect<boolean, Error>;\n",
+        "        }>();\n",
+        "        const nativeHeadMessages = new Map<string, string>();\n"
+      ]
+    },
+    {
+      "start": 1982,
+      "before": [
+        "            cwd: input.runtimePolicy.cwd ?? process.cwd(),\n"
+      ],
+      "after": [
+        "            cwd,\n"
+      ]
+    },
+    {
+      "start": 3685,
+      "before": [
+        "            if (\n",
+        "              isHtmlRender &&\n",
+        "              (status === \"failed\" || (status === \"completed\" && isError)) &&\n",
+        "              previous?.status !== \"failed\" &&\n",
+        "              previous?.status !== \"completed\"\n",
+        "            ) {\n",
+        "              // A failed call may have published before the provider lost its result.\n",
+        "              yield* mcpSessions.takeHtmlRender(\n",
+        "                context.input.threadId,\n",
+        "                input,\n",
+        "                htmlRenderFromToolItem({ toolName, output }),\n",
+        "              );\n",
+        "            }\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3705,
+      "before": [
+        "              const page = reportedPage\n",
+        "                ? yield* mcpSessions.takeHtmlRender(context.input.threadId, input, reportedPage)\n",
+        "                : (previousPage ??\n",
+        "                  (yield* mcpSessions.takeHtmlRender(context.input.threadId, input)));\n"
+      ],
+      "after": [
+        "              const page = reportedPage ?? previousPage;\n"
+      ]
+    },
+    {
+      "start": 4072,
+      "before": [],
+      "after": [
+        "              if (sourceMessageId !== null && role === \"assistant\")\n",
+        "                nativeHeadMessages.set(notification.sessionId, sourceMessageId);\n"
+      ]
+    },
+    {
+      "start": 4140,
+      "before": [
+        "          yield* continuationRequests.offer({\n"
+      ],
+      "after": [
+        "          const request: ProviderContinuationRequests.ProviderContinuationRequest = {\n"
+      ]
+    },
+    {
+      "start": 4144,
+      "before": [],
+      "after": [
+        "            ...(binding ? { hostExecution: { threadId: binding.threadId, executionId: binding.executionId } } : {}),\n"
+      ]
+    },
+    {
+      "start": 4179,
+      "before": [
+        "          });\n"
+      ],
+      "after": [
+        "          };\n",
+        "          continuationRequestGenerations.set(request, generation);\n",
+        "          yield* continuationRequests.offer(request);\n"
+      ]
+    },
+    {
+      "start": 5794,
+      "before": [],
+      "after": [
+        "              if (rawNotification.update.sessionUpdate === \"state_update\")\n",
+        "                observedWork.set(rawNotification.sessionId, rawNotification.update.state);\n"
+      ]
+    },
+    {
+      "start": 6337,
+      "before": [
+        "          if (mcpContext.endpoint === undefined || mcpContext.authorization === undefined) {\n",
+        "            return undefined;\n",
+        "          }\n"
+      ],
+      "after": [
+        "          const scopedBinding = mcpContext.binding;\n",
+        "          if (mcpContext.acpServers.length === 0 || !scopedBinding) return undefined;\n"
+      ]
+    },
+    {
+      "start": 6341,
+      "before": [
+        "            endpoint: mcpContext.endpoint,\n",
+        "            authorization: mcpContext.authorization,\n"
+      ],
+      "after": [
+        "            servers: scopedBinding.mcpServers, cwd, environment: processEnvironment,\n",
+        "            assertCurrent: Effect.gen(function* () {\n",
+        "              const live = yield* runtimeHost.read(scopedBinding);\n",
+        "              if (live?.executionId !== scopedBinding.executionId)\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "                  driver, detail: \"The generation-owned ACP MCP transport is no longer active.\",\n",
+        "                });\n",
+        "              yield* runtimeHost.authorize({ ...scopedBinding, action: \"tool\" });\n",
+        "            }),\n"
+      ]
+    },
+    {
+      "start": 6378,
+      "before": [],
+      "after": [
+        "            if (binding && resumeSessionId !== undefined && input.resumeFromSession === undefined) {\n",
+        "              // Read before session/load or session/resume can rewrite metadata with the caller's cwd.\n",
+        "              if (flavor.readLegacySessionMetadata) {\n",
+        "                legacyMetadata = yield* flavor.readLegacySessionMetadata(resumeSessionId);\n",
+        "              } else {\n",
+        "                let cursor: string | undefined;\n",
+        "                const seen = new Set<string>();\n",
+        "                do {\n",
+        "                  const page = yield* runtime.listSessions(cursor);\n",
+        "                  const found = page.sessions.find(session => session.sessionId === resumeSessionId);\n",
+        "                  if (found) { legacyMetadata = { cwd: found.cwd }; break; }\n",
+        "                  const next = page.nextCursor ?? undefined;\n",
+        "                  if (next !== undefined && seen.has(next))\n",
+        "                    return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver, detail: \"ACP native metadata pagination repeated a cursor.\" });\n",
+        "                  if (next !== undefined) seen.add(next);\n",
+        "                  cursor = next;\n",
+        "                } while (cursor !== undefined);\n",
+        "              }\n",
+        "              if (!legacyMetadata || legacyMetadata.cwd !== cwd)\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver,\n",
+        "                  detail: \"ACP native metadata does not confirm the requested legacy session directory.\" });\n",
+        "            }\n"
+      ]
+    },
+    {
+      "start": 6598,
+      "before": [],
+      "after": [
+        "              if (initialStart.failure._tag === \"ProviderAdapterProtocolError\") return yield* initialStart.failure;\n"
+      ]
+    },
+    {
+      "start": 6606,
+      "before": [],
+      "after": [
+        "              if (binding) return yield* initialStart.failure;\n"
+      ]
+    },
+    {
+      "start": 7173,
+      "before": [
+        "          const mcpSession = yield* mcpSessions.read(turnInput.threadId);\n"
+      ],
+      "after": [
+        "          yield* assertHostBinding;\n"
+      ]
+    },
+    {
+      "start": 7176,
+      "before": [
+        "            hasT3Mcp: acpMcpContext(mcpSession, self).servers.length > 0,\n",
+        "            hasDeviceTools: mcpSession?.capabilities?.has(\"device\") === true,\n"
+      ],
+      "after": [
+        "            hasT3Mcp: false,\n",
+        "            hasDeviceTools: false,\n"
+      ]
+    },
+    {
+      "start": 7272,
+      "before": [
+        "              text: buildRuntimeInstructions({\n",
+        "                harness: flavor.runtimeHarness ?? driver,\n",
+        "                model: turnInput.modelSelection.model,\n",
+        "              }),\n"
+      ],
+      "after": [
+        "              text: [`<runtime_info>You are running through the ${flavor.runtimeHarness ?? driver} harness.</runtime_info>`,\n",
+        "                binding?.instructionText].filter(Boolean).join(\"\\n\\n\"),\n"
+      ]
+    },
+    {
+      "start": 7309,
+      "before": [],
+      "after": [
+        "            const adoption = bufferedAdoptions.get(turnInput.message);\n",
+        "            if (adoption && (!(yield* adoption.isCurrent) || (yield* Ref.get(stoppedRunQuarantine))\n",
+        "              || (yield* Ref.get(runtimeRestartRequired)))) return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "                driver, detail: \"The native buffered continuation no longer belongs to a live generation.\",\n",
+        "              });\n"
+      ]
+    },
+    {
+      "start": 7374,
+      "before": [],
+      "after": [
+        "                if (adoption && (!wasRequested || (yield* Ref.get(continuationGeneration)) !== adoption.generation))\n",
+        "                  return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "                    driver, detail: \"The native buffered continuation was superseded before admission.\",\n",
+        "                  });\n"
+      ]
+    },
+    {
+      "start": 8297,
+      "before": [],
+      "after": [
+        "                  if (binding?.nativePermissions === \"deny-ungranted\" && pending.type !== \"user_input\"\n",
+        "                    && requestInput.decision !== undefined && ![\"cancel\", \"decline\"].includes(requestInput.decision)) {\n",
+        "                    return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "                      driver, detail: \"Native permissions require a separate host grant.\",\n",
+        "                    });\n",
+        "                  }\n"
+      ]
+    },
+    {
+      "start": 8536,
+      "before": [],
+      "after": [
+        "        if (started.protocolGeneration !== undefined) {\n",
+        "          const evidence: AcpSessionEvidence = {\n",
+        "            protocol: started.protocolGeneration === 1 ? \"acp-v1.ndjson-jsonrpc\" : \"acp-v2.ndjson-jsonrpc\",\n",
+        "            cwd, homeDirectory,\n",
+        "            readLegacy: ({ nativeSessionId, ensure, turnId, messageId }) => Effect.gen(function* () {\n",
+        "              yield* assertHostBinding;\n",
+        "              if (input.initialNativeThreadId !== nativeSessionId || (yield* Ref.get(activeSessionId)) !== nativeSessionId)\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver,\n",
+        "                  detail: \"The ACP operation did not load the requested native legacy session.\" });\n",
+        "              const metadata = legacyMetadata;\n",
+        "              if (!metadata || metadata.cwd !== cwd || ensure.threadId !== input.threadId)\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver,\n",
+        "                  detail: \"ACP native legacy metadata does not confirm the requested directory and session.\" });\n",
+        "              yield* runtime.drainEvents;\n",
+        "              const work = observedWork.get(nativeSessionId);\n",
+        "              const loadedSnapshot = yield* Ref.get(snapshot);\n",
+        "              const backgroundPending = sessionRuntime.hasPendingBackgroundWork\n",
+        "                ? yield* sessionRuntime.hasPendingBackgroundWork : false;\n",
+        "              if (work === \"running\" || work === \"requires_action\" || agentRequests.size > 0 || backgroundPending\n",
+        "                || loadedSnapshot.loadingRole === \"user\"\n",
+        "                || (yield* Ref.get(activeTurn)) !== null || (yield* Ref.get(pendingRuntimeRequests)).size > 0)\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver,\n",
+        "                  detail: \"ACP legacy session has unfinished native work or pending requests.\" });\n",
+        "              const now = yield* DateTime.now;\n",
+        "              const providerThread = makeProviderThread({\n",
+        "                driver, providerInstanceId: options.instanceId, idAllocator,\n",
+        "                appThreadId: ensure.threadId, providerSessionId: input.providerSessionId, nativeThreadId: nativeSessionId, now,\n",
+        "              });\n",
+        "              const head = metadata.headMessageId ?? nativeHeadMessages.get(nativeSessionId);\n",
+        "              const adopted = yield* sessionRuntime.readThreadSnapshot({ providerThread: {\n",
+        "                ...providerThread, nativeConversationHeadRef: head ? { driver, nativeId: head, strength: \"strong\" } : null,\n",
+        "              } });\n",
+        "              if (turnId && !adopted.providerTurns.some(turn => turn.status === \"completed\" && turn.nativeTurnRef?.nativeId === turnId))\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver, detail: \"ACP native history did not prove the completed turn cursor.\" });\n",
+        "              if (messageId && messageId !== head && !adopted.providerTurns.some(turn => turn.status === \"completed\" && turn.nativeTurnRef?.nativeId === messageId))\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver, detail: \"ACP native history did not prove the message cursor.\" });\n",
+        "              return adopted;\n",
+        "            }),\n",
+        "            ...(postSettleContinuationEnabled || followsAgentWorkState ? {\n",
+        "              adoptBuffered: ({ request, turn, isCurrent }: Parameters<NonNullable<AcpSessionEvidence[\"adoptBuffered\"]>>[0]) => Effect.gen(function* () {\n",
+        "                yield* assertHostBinding;\n",
+        "                if (!(yield* isCurrent) || request.driver !== driver || request.threadId !== input.threadId\n",
+        "                  || request.providerThreadId !== turn.providerThread.id || request.delivery === \"message_text\"\n",
+        "                  || turn.providerThread.nativeThreadRef?.nativeId !== (yield* Ref.get(activeSessionId))\n",
+        "                  || (yield* Ref.get(activeTurn)) !== null) return false;\n",
+        "                const generation = continuationRequestGenerations.get(request);\n",
+        "                if (generation === undefined || (yield* Ref.get(continuationGeneration)) !== generation\n",
+        "                  || (yield* Ref.get(stoppedRunQuarantine)) || (yield* Ref.get(runtimeRestartRequired))) return false;\n",
+        "                if (!(yield* Ref.get(continuationRequested)) && (yield* Ref.get(wakeBuffer)).length === 0) return false;\n",
+        "                const messageId = request.messageId ?? (yield* idAllocator.allocate.message({\n",
+        "                  threadId: turn.threadId, ordinal: turn.providerTurnOrdinal,\n",
+        "                }));\n",
+        "                // The original provider-owned marker selects the buffer-only branch; it never builds/sends a prompt.\n",
+        "                const message: ProviderAdapter.ProviderAdapterV2TurnMessage = {\n",
+        "                  messageId, text: \"\", attachments: [], createdBy: \"agent\", creationSource: \"provider\",\n",
+        "                };\n",
+        "                bufferedAdoptions.set(message, { generation, isCurrent });\n",
+        "                yield* sessionRuntime.startTurn({ ...turn, message }).pipe(\n",
+        "                  Effect.ensuring(Effect.sync(() => { bufferedAdoptions.delete(message); })),\n",
+        "                );\n",
+        "                return true;\n",
+        "              }),\n",
+        "            } : {}),\n",
+        "          };\n",
+        "          yield* Effect.acquireRelease(\n",
+        "            Effect.sync(() => { sessionEvidence.set(sessionRuntime, evidence); }),\n",
+        "            () => Effect.sync(() => { sessionEvidence.delete(sessionRuntime); }),\n",
+        "          );\n",
+        "        }\n"
+      ]
+    }
+  ]
+}

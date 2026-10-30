@@ -1,0 +1,34 @@
+/* 自托管字体：仅 Inter 与 MiSans，不依赖用户系统安装或外部字体 CDN。
+   文件位于 src/assets/fonts，由 Vite 按 base 生成 URL；新增字重前先确认授权与体积。 */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../assets/fonts/InterVariable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "MiSans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/MiSans-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "MiSans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fonts/MiSans-Medium.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "MiSans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../assets/fonts/MiSans-Semibold.woff2") format("woff2");
+}

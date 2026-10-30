@@ -1,0 +1,76 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import { Hono } from "hono";
+import { closeStore, getDatabase } from "../durable/store.ts";
+import { observePmCoreChanges, pmCoreChangesRoutes, stopPmCoreChanges } from "./index.ts";
+import type { PmCoreChangesPage } from "@agent-workspace/contracts/pm-core-changes";
+
+test("core observations persist net changes across restart and refuse to infer deletions from partial scans", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pm-core-observe-"));
+  const oldDir = process.env.AGENT_WORKSPACE_DATA_DIR, oldPm = process.env.PM_API_URL, oldFetch = globalThis.fetch;
+  process.env.AGENT_WORKSPACE_DATA_DIR = directory; process.env.PM_API_URL = "http://127.0.0.1:4194";
+  const scope = { workspaceId: "0196c319-8b1d-7000-8000-000000000001", projectId: "PRJ-001" };
+  let files = [{ path: "work-items/TASK-001.md", projectId: scope.projectId, entityId: "TASK-001", content: "original" }];
+  let complete = true, allowed = true;
+  globalThis.fetch = async (_url, init) => {
+    assert.equal(new Headers(init?.headers).get("cookie"), "session=fixture");
+    if (!allowed) return Response.json({}, { status: 403 });
+    return Response.json({ files, complete, ...(complete ? {} : { error: "Incomplete scan" }) });
+  };
+  const app = new Hono().route("/api", pmCoreChangesRoutes);
+  const url = `http://localhost/api/pm-core-changes?workspaceId=${scope.workspaceId}&projectId=${scope.projectId}`;
+  const list = async () => (await app.request(url, { headers: { cookie: "session=fixture" } })).json() as Promise<PmCoreChangesPage>;
+  try {
+    await observePmCoreChanges(scope, { cookie: "session=fixture" });
+    assert.deepEqual((await list()).items, []);
+    files[0]!.content = "invalid markdown";
+    let result = await list();
+    assert.equal(result.items[0]?.kind, "modified");
+    assert.equal(result.items[0]?.before, "original");
+    assert.equal(result.items[0]?.after, "invalid markdown");
+    assert.equal(result.items[0]?.source, "file_observation");
+    await stopPmCoreChanges(); closeStore();
+    files = []; complete = false;
+    result = await list();
+    assert.equal(result.observation.status, "incomplete");
+    assert.equal(result.items.length, 1);
+    complete = true;
+    result = await list();
+    assert.equal(result.items[1]?.kind, "deleted");
+    assert.equal(result.items[1]?.before, "invalid markdown");
+    files = [{ path: "docs/DOC-001.md", projectId: scope.projectId, entityId: "DOC-001", content: "x".repeat(256 * 1024 + 1) }];
+    result = await list(); assert.equal(result.items[2]?.kind, "added");
+    assert.equal(result.items[2]?.afterTruncated, true);
+    const detailUrl = `http://localhost/api/pm-core-changes/${result.items[2]!.id}?workspaceId=${scope.workspaceId}&projectId=${scope.projectId}`;
+    const detail = await (await app.request(detailUrl, { headers: { cookie: "session=fixture" } })).json() as { item: { after: string } };
+    assert.equal(detail.item.after.length, 256 * 1024 + 1);
+    files.push(...Array.from({ length: 52 }, (_, index) => ({ path: `docs/DOC-${index + 2}.md`, projectId: scope.projectId, entityId: `DOC-${index + 2}`, content: String(index) })));
+    result = await list();
+    assert.equal(result.items.length, 50);
+    assert.ok(result.nextCursor);
+    const next = await (await app.request(`${url}&after=${result.nextCursor}`, { headers: { cookie: "session=fixture" } })).json() as PmCoreChangesPage;
+    assert.equal(next.items.length, 5);
+    assert.equal(next.nextCursor, null);
+    const created = { workspaceId: scope.workspaceId, projectId: "PRJ-002" };
+    files = [{ path: "projects/PRJ-002.md", projectId: created.projectId, entityId: created.projectId, content: "project" }];
+    await observePmCoreChanges(created, { cookie: "session=fixture" });
+    await observePmCoreChanges(created, { cookie: "session=fixture" }, { operationId: "receipt", createdProjectId: created.projectId });
+    await observePmCoreChanges(created, { cookie: "session=fixture" }, { operationId: "receipt", createdProjectId: created.projectId });
+    const createdUrl = `http://localhost/api/pm-core-changes?workspaceId=${scope.workspaceId}&projectId=${created.projectId}`;
+    const createdPage = await (await app.request(createdUrl, { headers: { cookie: "session=fixture" } })).json() as PmCoreChangesPage;
+    assert.equal(createdPage.items.length, 1);
+    assert.equal(createdPage.items[0]?.kind, "added");
+    assert.equal(createdPage.items[0]?.source, "file_observation");
+    assert.ok(!JSON.stringify(getDatabase().prepare("SELECT value FROM records").all()).includes("session=fixture"));
+    allowed = false;
+    assert.equal((await app.request(url, { headers: { cookie: "session=fixture" } })).status, 403);
+  } finally {
+    await stopPmCoreChanges(); closeStore(); globalThis.fetch = oldFetch;
+    if (oldDir === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = oldDir;
+    if (oldPm === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = oldPm;
+    await rm(directory, { recursive: true, force: true });
+  }
+});

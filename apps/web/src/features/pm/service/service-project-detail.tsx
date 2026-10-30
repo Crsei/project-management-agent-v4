@@ -6,6 +6,7 @@ import { PMView } from "@pm-views"
 import { CalendarDays, CheckCheck, ChevronRight, ClipboardList, Clock3, FileText, FolderKanban, Paperclip, Users, Zap } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import type { FilterCondition, FilterField } from "@/components/blocks/filter-card"
 import { MessageContent } from "@/components/blocks/message-content"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
@@ -28,7 +29,6 @@ import { ProjectFinancialRegion, ProjectHealthRegion, ProjectPortfolioSummary } 
 import { ProjectTimeline, ProjectCalendar, useProjectTaskEditing } from "./project-task-editing"
 import { ProjectTaskToolbar, type ProjectTaskSort } from "./project-task-toolbar"
 import { ProjectAuditHistory } from "./project-audit"
-import { ProjectLocalLocation } from "./project-local-location"
 import { ProjectAgentPanelAction } from "../agent/agent-entry"
 import { ProjectMenuButton, useProjectMenuActions } from "./project-menu"
 
@@ -36,6 +36,22 @@ type Tab = ProjectDetailViewProps["interaction"]["tab"]
 const briefTabs: readonly Tab[] = ["overview", "board", "list", "table", "calendar", "timeline", "tree", "graph", "files", "activity"]
 const workspaceTabs: readonly Tab[] = ["overview", "board", "list", "table", "calendar", "timeline", "tree", "graph", "files", "activity", "comments"]
 const inaccessible = (error: unknown) => error instanceof CoreApiError && [401, 403, 404].includes(error.status)
+
+/** Presentation-only tones; business state and permissions stay in the workflow. */
+const labelTones = ["var(--accent)", "var(--info)", "var(--success)", "var(--warning)", "var(--agent)", "var(--destructive)"]
+const labelTone = (id: string) => labelTones[Array.from(id).reduce((hash, character) => (hash * 31 + (character.codePointAt(0) ?? 0)) % 997, 0) % labelTones.length]
+
+/** Mirrors the task query DSL: overdue excludes terminal categories, and week includes today. */
+const taskDueBuckets = (due: string | null, date: string, terminal: boolean) => {
+  if (!due) return ["none"]
+  const week = new Date(Date.parse(`${date}T00:00:00Z`) + 7 * 86_400_000).toISOString().slice(0, 10)
+  const buckets: string[] = []
+  if (due < date && !terminal) buckets.push("overdue")
+  if (due === date) buckets.push("today")
+  if (due >= date && due <= week) buckets.push("week")
+  if (due > week) buckets.push("later")
+  return buckets
+}
 
 /** Formal project details retain the same Markdown editing session as the entity page. */
 export function ServiceProjectDetail() {
@@ -94,7 +110,7 @@ function ProjectDetailContent({ projectId }: { projectId: string }) {
   const [metadataOpen, setMetadataOpen] = useDraftState(`project-detail:${projectId}`, "metadataOpen", () => window.matchMedia("(min-width: 1280px)").matches)
   const [scrolls, setScrolls] = useDraftState<Partial<Record<string, number>>>(`project-detail:${projectId}`, "scrolls", {})
   const [taskQuery, setTaskQuery] = useDraftState(`project-tasks:${projectId}`, "query", "")
-  const [taskStatus, setTaskStatus] = useDraftState(`project-tasks:${projectId}`, "status", "all")
+  const [taskConditions, setTaskConditions] = useDraftState<FilterCondition[]>(`project-tasks:${projectId}`, "conditions", [])
   const [taskSort, setTaskSort] = useDraftState<ProjectTaskSort>(`project-tasks:${projectId}`, "sort", "default")
   const [uploadOpen, setUploadOpen] = useState(false)
   const action = useAction()
@@ -130,9 +146,33 @@ function ProjectDetailContent({ projectId }: { projectId: string }) {
   const identityNames = new Map(projectDirectory?.identities.map(person => [person.id, person.name]))
   const teamMembers = projectDirectory ? [...new Map(projectDirectory.teams.flatMap(team => team.members).map(member => [member.id, member])).values()] : undefined
   const projectExtras = extras.data?.projects.find(project => project.projectId === projectId)
-  const records = ownItems.map(item => ({ ...issueRecord(item), stateId: string(item.data.labStatus) || string(item.data.status), labelIds: strings(item.data.labels) }))
+  const records = ownItems.map(item => {
+    const file = sourceById.get(item.id)
+    const checklist = file?.entity.checklist ?? []
+    return {
+      ...issueRecord(item),
+      stateId: string(item.data.labStatus) || string(item.data.status),
+      labelIds: strings(item.data.labels),
+      subItemCount: file ? checklist.length : null,
+      subtasks: file ? { completed: checklist.filter(entry => entry.checked).length, total: checklist.length } : null,
+    }
+  })
+  const workflow = snapshot ? workflowFor("work_item", snapshot.configuration) : undefined
+  const categories = new Map(ownItems.map(item => [item.id, sourceById.has(item.id) && snapshot ? statusCategory(sourceById.get(item.id)!.entity, snapshot.configuration) : undefined]))
   const taskNeedle = taskQuery.trim().toLocaleLowerCase()
-  const filteredRecords = records.filter(record => (taskStatus === "all" || record.stateId === taskStatus) && (!taskNeedle || `${record.identifier} ${record.title}`.toLocaleLowerCase().includes(taskNeedle)))
+  const taskFilters = taskConditions.filter(condition => condition.values.length)
+  const matchesTaskFilters = (record: (typeof records)[number], condition: FilterCondition) => {
+    const selected = new Set(condition.values)
+    const category = categories.get(record.id)
+    const hit = condition.field === "status" ? selected.has(record.stateId)
+      : condition.field === "assignee" ? record.assigneeIds.some(id => selected.has(id))
+      : condition.field === "priority" ? selected.has(record.priorityId)
+      : condition.field === "labels" ? record.labelIds.some(id => selected.has(id))
+      : condition.field === "due" ? taskDueBuckets(record.dueDate, date, category === "completed" || category === "canceled").some(bucket => selected.has(bucket))
+      : undefined
+    return hit === undefined ? true : condition.operator === "isNot" ? !hit : hit
+  }
+  const filteredRecords = records.filter(record => taskFilters.every(condition => matchesTaskFilters(record, condition)) && (!taskNeedle || `${record.identifier} ${record.title}`.toLocaleLowerCase().includes(taskNeedle)))
   const priorityOrder: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 }
   const visibleRecords = [...filteredRecords].sort((a, b) => {
     if (taskSort === "title") return a.title.localeCompare(b.title)
@@ -143,9 +183,7 @@ function ProjectDetailContent({ projectId }: { projectId: string }) {
   const visibleIds = new Set(visibleRecords.map(record => record.id))
   const visibleOwnItems = ownItems.filter(item => visibleIds.has(item.id))
   const taskView = activeTab === "board" || activeTab === "list" || activeTab === "table" || activeTab === "calendar" || activeTab === "timeline" || activeTab === "tree" || activeTab === "graph"
-  const filteredView = !!taskNeedle || taskStatus !== "all"
-  const workflow = snapshot ? workflowFor("work_item", snapshot.configuration) : undefined
-  const categories = new Map(ownItems.map(item => [item.id, sourceById.has(item.id) && snapshot ? statusCategory(sourceById.get(item.id)!.entity, snapshot.configuration) : undefined]))
+  const filteredView = !!taskNeedle || taskFilters.length > 0
   const completed = ownItems.filter(item => categories.get(item.id) === "completed").length
   const overdue = ownItems.filter(item => string(item.data.dueDate) && string(item.data.dueDate) < date && !["completed", "canceled"].includes(categories.get(item.id) ?? "")).length
   const contributors = [...new Set([string(entity?.data.ownerId), ...ownItems.map(item => string(item.data.assigneeId))].filter(Boolean))]
@@ -153,10 +191,10 @@ function ProjectDetailContent({ projectId }: { projectId: string }) {
   const completionKnown = !!items.data && !!snapshot && ownItems.every(item => categories.get(item.id) !== undefined)
   const percentage = completionKnown && total ? Math.round(completed / total * 100) : null
   const issueCatalog: ControlledIssueCatalog = {
-    states: [...(workflow?.states ?? []).map(state => ({ id: state.id, label: state.label, category: state.category })), ...[...new Set(records.map(record => record.stateId))].filter(id => !workflow?.states.some(state => state.id === id)).map(id => ({ id, label: id }))],
-    priorities: [...new Set(records.map(record => record.priorityId).filter(Boolean))].map(id => ({ id, label: id })),
+    states: [...(workflow?.states ?? []).map(state => ({ id: state.id, label: state.label, category: state.category, color: state.category === "completed" ? "var(--success)" : state.category === "started" ? "var(--info)" : "var(--text-muted)" })), ...[...new Set(records.map(record => record.stateId))].filter(id => !workflow?.states.some(state => state.id === id)).map(id => ({ id, label: id, color: "var(--text-muted)" }))],
+    priorities: [...new Set(records.map(record => record.priorityId).filter(Boolean))].map(id => ({ id, label: id, color: id === "urgent" ? "var(--destructive)" : id === "high" ? "var(--warning)" : id === "low" ? "var(--text-muted)" : "var(--text-secondary)" })),
     assignees: [...new Set([...(projectDirectory?.identities.map(person => person.id) ?? []), ...contributors])].map(id => ({ id, label: identityNames.get(id) ?? (id === service.actor?.id ? service.actor.name : id) })),
-    labels: [...new Set(records.flatMap(record => record.labelIds))].map(id => ({ id, label: id })),
+    labels: [...new Set(records.flatMap(record => record.labelIds))].map(id => ({ id, label: id, color: labelTone(id) })),
     projects: entity ? [{ id: entity.id, label: string(entity.data.name) }] : [], modules: [], cycles: [], estimatePoints: [],
   }
   const due = string(entity?.data.dueDate) || null
@@ -173,7 +211,20 @@ function ProjectDetailContent({ projectId }: { projectId: string }) {
   const sourceIssue = !!source && (!!source.stale || !!source.error || source.diagnostics?.some(diagnostic => diagnostic.severity === "error") || !!snapshot?.configurationErrors.some(diagnostic => diagnostic.severity === "error"))
   const canEdit = !!entity && !!source && !sourceIssue && !drafts[projectId] && writable(entity) && allowed(service.workspace, "planning.edit", projectId) && service.capabilities?.business.enabled === true
   const canCreate = canEdit && !action.locked && !editing.locked
-  const taskToolbar = taskView ? <ProjectTaskToolbar query={taskQuery} status={taskStatus} sort={taskSort} states={issueCatalog.states} canCreate={canCreate} t={t} onQueryChange={setTaskQuery} onStatusChange={setTaskStatus} onSortChange={setTaskSort} onCreate={createIssue} /> : undefined
+  const taskFilterFields: FilterField[] = [
+    { id: "status", label: t("状态", "Status"), options: issueCatalog.states.map(state => ({ value: state.id, label: state.label })) },
+    { id: "assignee", label: t("负责人", "Assignee"), options: issueCatalog.assignees.map(person => ({ value: person.id, label: person.label })) },
+    { id: "priority", label: t("优先级", "Priority"), options: issueCatalog.priorities.map(priority => ({ value: priority.id, label: priority.label })) },
+    { id: "due", label: t("截止日期", "Due date"), options: [
+      { value: "overdue", label: t("已逾期", "Overdue") },
+      { value: "today", label: t("今天", "Today") },
+      { value: "week", label: t("未来 7 天", "Next 7 days") },
+      { value: "later", label: t("更晚", "Later") },
+      { value: "none", label: t("无截止日期", "No due date") },
+    ] },
+    { id: "labels", label: t("标签", "Labels"), options: issueCatalog.labels.map(label => ({ value: label.id, label: label.label })) },
+  ]
+  const taskToolbar = taskView ? <ProjectTaskToolbar query={taskQuery} conditions={taskConditions} fields={taskFilterFields} sort={taskSort} canCreate={canCreate} t={t} agent={<ProjectAgentPanelAction compact projectId={projectId} title={source?.entity.title ?? string(entity?.data.name)} hasDraft={!!drafts[projectId]} />} onQueryChange={setTaskQuery} onConditionsChange={setTaskConditions} onSortChange={setTaskSort} onCreate={createIssue} /> : undefined
   const editable = (item: Entity) => canEdit && !editing.locked && writable(item) && !drafts[item.id] && sourceById.has(item.id) && !sourceById.get(item.id)?.stale && !sourceById.get(item.id)?.error && !sourceById.get(item.id)?.diagnostics?.some(diagnostic => diagnostic.severity === "error")
   const canDependency = ownItems.some(editable)
   const refresh = () => { setBlockedAccess(null); void projectQuery.refetch(); void core.refetch() }
@@ -242,8 +293,8 @@ function ProjectDetailContent({ projectId }: { projectId: string }) {
       data: { state: error ? "error" : loading ? "loading" : record ? "success" : "empty", refreshing: !!record && (projectQuery.isFetching || core.isFetching), error: error ? { category: "request", message: error.message, reason: record ? t("显示上次快照，可能已过期。", "The retained snapshot may be stale.") : t("未加载任何示例数据。", "No example data has been loaded.") } : undefined, onRetry: refresh, emptyTitle: t("项目不存在或不可访问", "Project not found or unavailable"), emptyDescription: t("当前正式服务中没有可读取的项目记录，不回退示例。", "No readable project record exists in the formal service. There is no fixture fallback."), emptyHeadingLevel: 2 }, today: date }}
     capabilities={{ edit: canEdit, createIssue: canCreate, attach: !!entity && allowed(service.workspace, "delivery.write", projectId), dependency: canDependency }}
     actions={{ back: () => navigate(backTo), edit: () => menu.openDialog(projectId, "settings"), setInteraction, openIssue: openEntity, createIssue, patchIssue: editing.patch, issueCapabilities: { canCreate, canEditField: (item, field) => ["title", "state", "priority", "assignees", "startDate", "dueDate"].includes(field) && editing.canEdit(item.id), canMove: (item, target) => editing.canMove(item.id, target), canEditRelation: () => false }, attach: () => setUploadOpen(true), openAttachment: id => { const version = versions.data?.find(candidate => candidate.id === id); if (version) void action.run(() => downloadProjectAttachment(service.client, service.workspace!.id, version)) }, reconcile: () => { void action.run(() => action.reconcile()) } }}
-    headerActions={<><ProjectAgentPanelAction compact projectId={projectId} title={source?.entity.title ?? string(entity?.data.name)} hasDraft={!!drafts[projectId]} />{entity && <><ProjectFavoriteButton project={entity} /><ProjectMenuButton projectId={projectId} /></>}<div className={styles.viewToggle} role="group" aria-label={t("项目详情视图", "Project detail view")}>{projectDetailViews.map(view => <Button key={view} variant={variant === view ? "secondary" : "ghost"} size="sm" aria-pressed={variant === view} aria-label={view === "detail1" ? t("项目简报视图", "Project brief view") : t("项目工作区视图", "Project workspace view")} onClick={() => { const search = new URLSearchParams(params); search.set("view", view); if (view === "detail1" && !briefTabs.includes(activeTab)) search.set("tab", "timeline"); setParams(search) }}>{view === "detail1" ? <FileText size={14} /> : <Zap size={14} />}<span>{view === "detail1" ? t("简报", "Brief") : t("工作区", "Workspace")}</span></Button>)}</div><Button variant="ghost" size="icon" disabled={!record} aria-label={t("打开项目源码与编辑器", "Open project source and editor")} onClick={openProjectSource}><FileText size={16} /></Button></>}
-    feedback={<><CommandNotice /><ProjectLocalLocation key={projectId} projectId={projectId} />{action.localError && <p role="alert">{action.localError}</p>}{sourceIssue && <p role="alert" className="text-sm">{t("源文件或配置存在诊断；请在完整对象页处理后编辑。", "Source or configuration diagnostics must be resolved in the full entity page before editing.")}</p>}{drafts[projectId] && <p className="text-sm">{t("保留有未保存的 Markdown 草稿。请打开完整对象继续编辑；此页显示服务端版本。", "An unsaved Markdown draft is retained. Open the entity to continue editing; this page shows the server version.")}<Button variant="ghost" onClick={() => openEntityId(projectId)}>{t("继续编辑", "Resume editing")}</Button></p>}</>}
+    headerActions={<>{!taskView && <ProjectAgentPanelAction compact projectId={projectId} title={source?.entity.title ?? string(entity?.data.name)} hasDraft={!!drafts[projectId]} />}{entity && <><ProjectFavoriteButton project={entity} /><ProjectMenuButton projectId={projectId} /></>}<div className={styles.viewToggle} role="group" aria-label={t("项目详情视图", "Project detail view")}>{projectDetailViews.map(view => <Button key={view} variant={variant === view ? "secondary" : "ghost"} size="sm" aria-pressed={variant === view} aria-label={view === "detail1" ? t("项目简报视图", "Project brief view") : t("项目工作区视图", "Project workspace view")} onClick={() => { const search = new URLSearchParams(params); search.set("view", view); if (view === "detail1" && !briefTabs.includes(activeTab)) search.set("tab", "timeline"); setParams(search) }}>{view === "detail1" ? <FileText size={14} /> : <Zap size={14} />}<span>{view === "detail1" ? t("简报", "Brief") : t("工作区", "Workspace")}</span></Button>)}</div><Button variant="ghost" size="icon" disabled={!record} aria-label={t("打开项目源码与编辑器", "Open project source and editor")} onClick={openProjectSource}><FileText size={16} /></Button></>}
+    feedback={<><CommandNotice />{action.localError && <p role="alert">{action.localError}</p>}{sourceIssue && <p role="alert" className="text-sm">{t("源文件或配置存在诊断；请在完整对象页处理后编辑。", "Source or configuration diagnostics must be resolved in the full entity page before editing.")}</p>}{drafts[projectId] && <p className="text-sm">{t("保留有未保存的 Markdown 草稿。请打开完整对象继续编辑；此页显示服务端版本。", "An unsaved Markdown draft is retained. Open the entity to continue editing; this page shows the server version.")}<Button variant="ghost" onClick={() => openEntityId(projectId)}>{t("继续编辑", "Resume editing")}</Button></p>}</>}
     toolbar={taskToolbar}
     metricsInOverview
     regions={record && entity ? {

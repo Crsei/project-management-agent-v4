@@ -1,15 +1,16 @@
 import type { CSSProperties } from "react"
-import { CircleCheck, CircleDashed, CircleHelp, Clock3, ContactRound, ListFilter, Plus, SlidersHorizontal } from "lucide-react"
+import { CircleCheck, CircleDashed, CircleHelp, Clock3, ContactRound, Plus, SlidersHorizontal } from "lucide-react"
 import { Avatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { DataRegion } from "@/components/ui/data-region"
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCaption, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useI18n } from "@/lib/i18n-provider"
 import { ControlledFeedback } from "./controlled-presentation"
 import { PeopleRoleLabel } from "./people-views"
 import { PmPage, PmSearch } from "./presentation-page"
-import type { ControlledMember, ControlledPresence, MemberDirectoryViewProps } from "./people-controlled-contracts"
+import type { ControlledMember, MemberDirectoryViewProps } from "./people-controlled-contracts"
+import { activeMemberConditionCount, MemberDirectoryFilter, memberDirectoryFilterFields } from "./member-directory-filters"
 import styles from "./member-list-1.module.css"
 
 const presences = ["available", "away", "offline"] as const
@@ -25,7 +26,6 @@ export function MemberList1View(props: MemberDirectoryViewProps) {
   const { readModel: model, interaction: state, capabilities, actions } = props
   const loading = model.data.state === "loading"
   const dataState = (model.data.state ?? "success") === "success" && model.members.length === 0 ? "empty" : model.data.state
-  const filterCount = Number(!!state.query) + (state.roleFilters?.length ?? 0) + (state.presenceFilters?.length ?? 0) + Number(state.activeFilter !== "all")
   const presenceLabel = (presence: ControlledMember["presence"]) => presence === "available" ? text("在线", "Available") : presence === "away" ? text("离开", "Away") : presence === "offline" ? text("离线", "Offline") : text("在线状态未知", "Presence unknown")
   const columns = [
     { id: "member", label: text("成员", "Member"), weight: 36, mobileWidth: 320 },
@@ -80,24 +80,28 @@ export function MemberList1View(props: MemberDirectoryViewProps) {
     return <span className={styles.joined} title={member.joinedAt ?? text("服务未提供加入时间", "Join date is not provided by the service")}>{member.joinedAt ? <time dateTime={member.joinedAt}>{dateFormat.format(new Date(member.joinedAt))}</time> : "—"}</span>
   }
 
-  const filterMenu = <DropdownMenu>
-    <DropdownMenuTrigger render={<Button variant="ghost" className={styles.filterTrigger} disabled={loading} data-pm-filter-trigger />}><ListFilter aria-hidden="true" size={16} />{text("筛选", "Filter")}{filterCount > 0 && <span className={styles.filterCounter}>{filterCount}</span>}</DropdownMenuTrigger>
-    <DropdownMenuContent align="start" className={`${styles.menu} ${styles.filterMenu}`}>
-      <div className={styles.searchField}><PmSearch value={state.query} onChange={(query) => actions.setInteraction((previous) => ({ ...previous, query }))} label={text("搜索成员或团队", "Search members or teams")} /></div>
-      <DropdownMenuGroup><DropdownMenuLabel className={styles.menuLabel}>{text("访问角色", "Access role")}</DropdownMenuLabel>
-        {model.roles.map((role) => <DropdownMenuCheckboxItem key={role.value} disabled={capabilities.filterRole === false} checked={state.roleFilters?.includes(role.value) ?? false} closeOnClick={false} onCheckedChange={(checked) => actions.setInteraction((previous) => ({ ...previous, roleFilters: checked ? [...new Set([...(previous.roleFilters ?? []), role.value])] : (previous.roleFilters ?? []).filter((value) => value !== role.value) }))}>{role.label}</DropdownMenuCheckboxItem>)}
-      </DropdownMenuGroup>
-      {capabilities.filterPresence && <><DropdownMenuSeparator className={styles.separator} /><DropdownMenuGroup><DropdownMenuLabel className={styles.menuLabel}>{text("可用性", "Availability")}</DropdownMenuLabel>
-        {presences.map((presence) => <DropdownMenuCheckboxItem key={presence} checked={state.presenceFilters?.includes(presence) ?? false} closeOnClick={false} onCheckedChange={(checked) => actions.setInteraction((previous) => ({ ...previous, presenceFilters: checked ? [...new Set<ControlledPresence>([...(previous.presenceFilters ?? []), presence])] : (previous.presenceFilters ?? []).filter((value) => value !== presence) }))}><PresenceIcon presence={presence} />{presenceLabel(presence)}</DropdownMenuCheckboxItem>)}
-      </DropdownMenuGroup></>}
-      <DropdownMenuSeparator className={styles.separator} /><DropdownMenuGroup><DropdownMenuLabel className={styles.menuLabel}>{text("成员状态", "Membership status")}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={state.activeFilter} onValueChange={(activeFilter) => { if (activeFilter === "all" || activeFilter === "active" || activeFilter === "inactive") actions.setInteraction((previous) => ({ ...previous, activeFilter })) }}>
-          <DropdownMenuRadioItem value="all">{text("全部成员", "All members")}</DropdownMenuRadioItem><DropdownMenuRadioItem value="active">{text("有效成员", "Active memberships")}</DropdownMenuRadioItem><DropdownMenuRadioItem value="inactive">{text("已停用成员", "Inactive memberships")}</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuGroup>
-      <DropdownMenuSeparator className={styles.separator} /><DropdownMenuItem onClick={() => actions.setInteraction((previous) => ({ ...previous, query: "", roleFilter: null, roleFilters: [], presenceFilters: [], activeFilter: "all", securityFilter: "any" }))}>{text("清除筛选", "Clear filters")}</DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
+  const conditions = state.conditions ?? []
+  const filterFields = memberDirectoryFilterFields(text, {
+    roles: model.roles,
+    roleAvailable: capabilities.filterRole !== false,
+    presenceAvailable: capabilities.filterPresence !== false,
+    securityAvailable: capabilities.filterSecurity === true,
+    teams: model.teamOptions,
+  })
+  const filterCount = activeMemberConditionCount(conditions) + Number(!!state.query)
+  const filterMenu = <MemberDirectoryFilter
+    text={text}
+    label={text("筛选", "Filter")}
+    fields={filterFields}
+    conditions={conditions}
+    onChange={(next) => actions.setInteraction((previous) => ({ ...previous, conditions: next }))}
+    disabled={loading}
+    variant="ghost"
+    className={styles.filterTrigger}
+    dataPm
+    activeCount={filterCount}
+    header={<div className={`${styles.searchField} px-3 pt-3`}><PmSearch value={state.query} onChange={(query) => actions.setInteraction((previous) => ({ ...previous, query }))} label={text("搜索成员或团队", "Search members or teams")} /></div>}
+  />
   const displayMenu = <DropdownMenu>
     <DropdownMenuTrigger render={<Button variant="secondary" className={styles.displayTrigger} disabled={loading} data-pm-display-trigger />}><SlidersHorizontal aria-hidden="true" size={16} />{text("显示", "Display")}</DropdownMenuTrigger>
     <DropdownMenuContent align="end" className={styles.menu}>

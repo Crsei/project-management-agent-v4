@@ -8,6 +8,7 @@ import { ControlledFeedback } from "./controlled-presentation"
 import type { MemberDirectorySort, MemberDirectoryViewProps } from "./people-controlled-contracts"
 import { PeopleRoleLabel } from "./people-views"
 import { PmPage, PmSearch } from "./presentation-page"
+import { MemberDirectoryFilter, memberDirectoryFilterFields } from "./member-directory-filters"
 import styles from "./member-list-2.module.css"
 
 export function MemberList2View(props: MemberDirectoryViewProps) {
@@ -39,6 +40,22 @@ export function MemberList2View(props: MemberDirectoryViewProps) {
     readingPosition={props.readingPosition}
     onReadingPositionChange={props.onReadingPositionChange}
     actions={<div className={styles.actions}>
+      <MemberDirectoryFilter
+        text={text}
+        label={text("筛选", "Filter")}
+        fields={memberDirectoryFilterFields(text, {
+          roles: model.roles,
+          roleAvailable: capabilities.filterRole !== false,
+          presenceAvailable: capabilities.filterPresence !== false,
+          securityAvailable: capabilities.filterSecurity === true,
+          teams: model.teamOptions ?? model.teams.map(team => ({ id: team.id, name: team.name })),
+        })}
+        conditions={state.conditions ?? []}
+        onChange={(next) => actions.setInteraction((previous) => ({ ...previous, conditions: next }))}
+        disabled={loading}
+        variant="outline"
+        dataPm
+      />
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button id="pm-members-sort" variant="outline" disabled={loading || sortChoices.length === 0} />}><ArrowUpDown aria-hidden="true" />{text("排序", "Sort")}</DropdownMenuTrigger>
         <DropdownMenuContent className={styles.menu} align="end">

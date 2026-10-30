@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "source": "apps/server/src/textGeneration/TextGeneration.ts",
+  "beforeSha256": "ccfeac11ef70b561ae6506835b34b9f4c4389b9e3b0e0de2296de7372c2add81",
+  "afterSha256": "c43ecf6973b6468b663711fb37696e406f04cd045e6d28443c7ce676fda01164",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 9,
+      "before": [
+        "import * as SourceControlProviderRegistry from \"../sourceControl/SourceControlProviderRegistry.ts\";\n",
+        "import * as ThreadTitleLinks from \"./ThreadTitleLinks.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 57,
+      "before": [
+        "  const sourceControl = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 83,
+      "before": [
+        "        Effect.flatMap((textGeneration) =>\n",
+        "          Effect.gen(function* () {\n",
+        "            const linkedContext =\n",
+        "              input.linkedContext ??\n",
+        "              (yield* ThreadTitleLinks.resolveThreadTitleLinks(input).pipe(\n",
+        "                Effect.provideService(\n",
+        "                  SourceControlProviderRegistry.SourceControlProviderRegistry,\n",
+        "                  sourceControl,\n",
+        "                ),\n",
+        "              ));\n",
+        "            return yield* textGeneration.generateThreadTitle({ ...input, linkedContext });\n",
+        "          }),\n",
+        "        ),\n"
+      ],
+      "after": [
+        "        Effect.flatMap((textGeneration) => textGeneration.generateThreadTitle(input)),\n"
+      ]
+    }
+  ]
+}

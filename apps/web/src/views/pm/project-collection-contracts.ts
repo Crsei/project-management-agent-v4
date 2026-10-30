@@ -1,6 +1,7 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react"
 import type { DataRegionProps } from "@/components/ui/data-region"
 import type { BadgeProps } from "@/components/ui/badge"
+import type { FilterCondition } from "@/components/blocks/filter-card"
 
 /** Service-independent display projection. Business content is never UI copy. */
 export type ProjectCollectionRecord = {
@@ -92,6 +93,12 @@ export type ProjectCollectionViewProps = {
   interaction: ProjectCollectionViewInteraction
   capabilities: ProjectCollectionCapabilities
   actions: ProjectCollectionActions
+  /** Host-owned filter conditions; when present the view renders the shared filter card. */
+  filters?: {
+    conditions: readonly FilterCondition[]
+    onChange: (conditions: FilterCondition[]) => void
+    onClear?: () => void
+  }
   hasDraft?: boolean
   pendingRequestId?: string
   feedback?: ReactNode

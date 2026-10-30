@@ -1,0 +1,236 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.testkit.ts",
+  "beforeSha256": "235e406f53b9541d4c07df4606df4d19d6e6a3f1962850ce3e914b366b912cd5",
+  "afterSha256": "e880ae1bfd70bdd279546874bcc29625042edb70002360d4485e8ae94290bc93",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [
+        "import * as NodeServices from \"@effect/platform-node/NodeServices\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 10,
+      "before": [
+        "import * as Layer from \"effect/Layer\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 19,
+      "before": [
+        "import * as IdAllocator from \"@t3tools/provider-core/server/IdAllocator\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 21,
+      "before": [
+        "import { resolveAttachmentPath } from \"../../attachmentStore.ts\";\n",
+        "import * as ProviderAdapterRegistry from \"../ProviderAdapterRegistry.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 24,
+      "before": [
+        "import type { OrchestratorV2ProviderReplayHarness } from \"../testkit/ProviderReplayHarness.ts\";\n",
+        "import * as TestProviderHost from \"@t3tools/provider-testing/TestProviderHost\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 49,
+      "before": [],
+      "after": [
+        "\n",
+        "export interface OpenCode2ReplayRequest {\n",
+        "  readonly type: string;\n",
+        "  readonly input?: unknown;\n",
+        "}\n"
+      ]
+    },
+    {
+      "start": 62,
+      "before": [],
+      "after": [
+        "  if (method === \"GET\" && path === \"/api/mcp\") return { type: \"mcp.list\", input: query };\n"
+      ]
+    },
+    {
+      "start": 133,
+      "before": [],
+      "after": [
+        "  onRequest: ((request: OpenCode2ReplayRequest) => void) | undefined,\n"
+      ]
+    },
+    {
+      "start": 155,
+      "before": [],
+      "after": [
+        "        onRequest?.(operation);\n"
+      ]
+    },
+    {
+      "start": 196,
+      "before": [],
+      "after": [
+        "    readonly onRequest?: (request: OpenCode2ReplayRequest) => void;\n"
+      ]
+    },
+    {
+      "start": 209,
+      "before": [
+        "        replayHttpClient(controller, options?.replayGate, options?.onPrompt),\n"
+      ],
+      "after": [
+        "        replayHttpClient(controller, options?.replayGate, options?.onPrompt, options?.onRequest),\n"
+      ]
+    },
+    {
+      "start": 243,
+      "before": [],
+      "after": [
+        "    readonly onRequest?: (request: OpenCode2ReplayRequest) => void;\n"
+      ]
+    },
+    {
+      "start": 252,
+      "before": [
+        "const layerReplayHost = TestProviderHost.layer().pipe(Layer.provide(NodeServices.layer));\n",
+        "\n",
+        "const layerReplayHostWithAttachments = (\n",
+        "  attachmentsDir: string,\n",
+        "  resolveExtractedTextPath?: (path: string) => Effect.Effect<string | undefined>,\n",
+        ") =>\n",
+        "  Layer.effect(\n",
+        "    ProviderHost.ProviderHost,\n",
+        "    Effect.gen(function* () {\n",
+        "      const host = yield* ProviderHost.ProviderHost;\n",
+        "      return ProviderHost.ProviderHost.of({\n",
+        "        ...host,\n",
+        "        paths: { ...host.paths, attachmentsDir },\n",
+        "        resolveAttachmentPath: (attachment) =>\n",
+        "          resolveAttachmentPath({ attachmentsDir, attachment }),\n",
+        "        ...(resolveExtractedTextPath === undefined ? {} : { resolveExtractedTextPath }),\n",
+        "      });\n",
+        "    }),\n",
+        "  ).pipe(Layer.provide(layerReplayHost));\n",
+        "\n",
+        "function layerRegistry(\n",
+        "  transcript: OpenCode2ReplayTranscript,\n",
+        "  options?: { readonly replayGate?: ProviderReplayGate },\n",
+        ") {\n",
+        "  return Layer.unwrap(\n",
+        "    makeReplayAdapter(transcript, { external: true, ...options }).pipe(\n",
+        "      Effect.map((adapter) => ProviderAdapterRegistry.layerFromAdapters([adapter])),\n",
+        "    ),\n",
+        "  ).pipe(Layer.provide(Layer.mergeAll(layerReplayHost, IdAllocator.layer, NodeServices.layer)));\n",
+        "}\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 290,
+      "before": [],
+      "after": [
+        "    readonly threadId?: ThreadId;\n",
+        "    readonly onRequest?: (request: OpenCode2ReplayRequest) => void;\n"
+      ]
+    },
+    {
+      "start": 297,
+      "before": [],
+      "after": [
+        "    const host = yield* ProviderHost.ProviderHost;\n",
+        "    if (options?.attachmentsDir !== undefined && options.attachmentsDir !== host.paths.attachmentsDir) {\n",
+        "      return yield* Effect.die(new Error(\"Native replay attachments must use the actual PM registry root.\"));\n",
+        "    }\n"
+      ]
+    },
+    {
+      "start": 306,
+      "before": [
+        "    ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem));\n"
+      ],
+      "after": [
+        "    ).pipe(\n",
+        "      Effect.provideService(FileSystem.FileSystem, fileSystem),\n",
+        "      Effect.provideService(ProviderHost.ProviderHost, {\n",
+        "        ...host,\n",
+        "        ...(options?.resolveExtractedTextPath === undefined ? {} : {\n",
+        "          resolveExtractedTextPath: options.resolveExtractedTextPath,\n",
+        "        }),\n",
+        "      }),\n",
+        "    );\n"
+      ]
+    },
+    {
+      "start": 308,
+      "before": [
+        "      threadId: ThreadId.make(\"thread:opencode2-adapter\"),\n"
+      ],
+      "after": [
+        "      threadId: options?.threadId ?? ThreadId.make(\"thread:opencode2-adapter\"),\n"
+      ]
+    },
+    {
+      "start": 320,
+      "before": [
+        "  }).pipe(\n",
+        "    Effect.provide(\n",
+        "      Layer.mergeAll(\n",
+        "        options?.attachmentsDir === undefined\n",
+        "          ? layerReplayHost\n",
+        "          : layerReplayHostWithAttachments(\n",
+        "              options.attachmentsDir,\n",
+        "              options.resolveExtractedTextPath,\n",
+        "            ),\n",
+        "        IdAllocator.layer,\n",
+        "        NodeServices.layer,\n",
+        "      ),\n",
+        "    ),\n",
+        "  );\n"
+      ],
+      "after": [
+        "  });\n"
+      ]
+    },
+    {
+      "start": 335,
+      "before": [
+        "export const OpenCode2OrchestratorReplayHarness: OrchestratorV2ProviderReplayHarness<\n",
+        "  OpenCode2ReplayTranscript,\n",
+        "  OpenCodeReplayTranscriptDecodeError\n",
+        "> = {\n"
+      ],
+      "after": [
+        "/** Legacy source export name; its composition is provider-native only. */\n",
+        "export const OpenCode2OrchestratorReplayHarness = {\n"
+      ]
+    },
+    {
+      "start": 352,
+      "before": [
+        "  makeProviderAdapterRegistryLayer: layerRegistry,\n"
+      ],
+      "after": [
+        "  makeAdapter: (transcript: OpenCode2ReplayTranscript, options?: {\n",
+        "    readonly replayGate?: ProviderReplayGate;\n",
+        "  }) => makeReplayAdapter(transcript, { external: true, ...options }),\n"
+      ]
+    }
+  ]
+}

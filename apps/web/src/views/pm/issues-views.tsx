@@ -54,7 +54,11 @@ import {
 } from "@/components/blocks/work-item-properties"
 import { WorkItemRow, WorkItemMutationNotice } from "@/components/blocks/work-item"
 import { MessageContent } from "@/components/blocks/message-content"
-import { isMutationLocked } from "@/lib/work-items-model"
+import {
+  filterValues,
+  isMutationLocked,
+  withFilterValues,
+} from "@/lib/work-items-model"
 import type {
   MutationState,
   WorkItemCapabilities,
@@ -332,11 +336,7 @@ function ClearFiltersButton({
   onViewChange: (view: WorkItemsViewState) => void
 }) {
   const { text } = useText()
-  const active =
-    !!view.query ||
-    view.filters.state.length > 0 ||
-    view.filters.priority.length > 0 ||
-    view.filters.assignees.length > 0
+  const active = !!view.query || view.filters.length > 0
   if (!active) return null
   return (
     <Button
@@ -347,7 +347,7 @@ function ClearFiltersButton({
         onViewChange({
           ...view,
           query: "",
-          filters: { state: [], priority: [], assignees: [], labels: [] },
+          filters: [],
         })
       }
     >
@@ -518,27 +518,37 @@ export function IssueListToolbar({
         <>
           <WorkItemAssigneePicker
             label={text("状态筛选", "Filter by state")}
-            value={view.filters.state}
+            value={filterValues(view.filters, "state")}
             options={catalog.states}
             disabled={disabled}
-            onChange={(state) => patch({ filters: { ...view.filters, state } })}
+            onChange={(state) =>
+              patch({ filters: withFilterValues(view.filters, "state", state) })
+            }
           />
           <WorkItemAssigneePicker
             label={text("优先级筛选", "Filter by priority")}
-            value={view.filters.priority}
+            value={filterValues(view.filters, "priority")}
             options={catalog.priorities}
             disabled={disabled}
             onChange={(priority) =>
-              patch({ filters: { ...view.filters, priority } })
+              patch({
+                filters: withFilterValues(view.filters, "priority", priority),
+              })
             }
           />
           <WorkItemAssigneePicker
             label={text("负责人筛选", "Filter by assignee")}
-            value={view.filters.assignees}
+            value={filterValues(view.filters, "assignees")}
             options={catalog.assignees}
             disabled={disabled}
             onChange={(assignees) =>
-              patch({ filters: { ...view.filters, assignees } })
+              patch({
+                filters: withFilterValues(
+                  view.filters,
+                  "assignees",
+                  assignees,
+                ),
+              })
             }
           />
         </>
@@ -546,27 +556,37 @@ export function IssueListToolbar({
         <>
           <CompactSelectFilter
             label={text("状态筛选", "Filter by state")}
-            value={view.filters.state}
+            value={filterValues(view.filters, "state")}
             options={catalog.states}
             disabled={disabled}
-            onChange={(state) => patch({ filters: { ...view.filters, state } })}
+            onChange={(state) =>
+              patch({ filters: withFilterValues(view.filters, "state", state) })
+            }
           />
           <CompactSelectFilter
             label={text("优先级筛选", "Filter by priority")}
-            value={view.filters.priority}
+            value={filterValues(view.filters, "priority")}
             options={catalog.priorities}
             disabled={disabled}
             onChange={(priority) =>
-              patch({ filters: { ...view.filters, priority } })
+              patch({
+                filters: withFilterValues(view.filters, "priority", priority),
+              })
             }
           />
           <CompactSelectFilter
             label={text("负责人筛选", "Filter by assignee")}
-            value={view.filters.assignees}
+            value={filterValues(view.filters, "assignees")}
             options={catalog.assignees}
             disabled={disabled}
             onChange={(assignees) =>
-              patch({ filters: { ...view.filters, assignees } })
+              patch({
+                filters: withFilterValues(
+                  view.filters,
+                  "assignees",
+                  assignees,
+                ),
+              })
             }
           />
         </>

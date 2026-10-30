@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/userInputAttachments.ts",
+  "beforeSha256": "8b206a6e16e406896ad2382b648fdd696eef5a760e07797a14b80435b6768fec",
+  "afterSha256": "a9ef143be149f58bed2666d527ebafe440de277165aa015f10a6892a81c93dc4",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 4,
+      "before": [
+        "import { resolveAttachmentPath } from \"../attachmentStore.ts\";\n"
+      ],
+      "after": [
+        "import { ProviderHost } from \"@t3tools/provider-core/server/ProviderHost\";\n"
+      ]
+    },
+    {
+      "start": 27,
+      "before": [],
+      "after": [
+        "    const host = yield* ProviderHost;\n"
+      ]
+    },
+    {
+      "start": 31,
+      "before": [
+        "        const path = resolveAttachmentPath({ attachmentsDir: input.attachmentsDir, attachment });\n"
+      ],
+      "after": [
+        "        const path = host.resolveAttachmentPath(attachment);\n"
+      ]
+    }
+  ]
+}

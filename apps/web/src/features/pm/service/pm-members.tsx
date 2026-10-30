@@ -12,6 +12,7 @@ import { memberViews, resolveVariant, usePmDisplaySetting } from "./pm-display-s
 import { ServiceGuard, CommandNotice, useText, allowed, queryData, useDraftState } from "./pm-ui"
 import { useMemberDirectory, useMemberInvitations } from "./pm-member-hooks"
 import { directoryMemberRecord, invitationRecord, memberRoleValues, visibleDirectoryMembers } from "./pm-member-model"
+import { matchesInvitationConditions } from "@/views/pm/member-directory-filters"
 import { MemberAccessForm, MemberInvitationForm, MemberInvitationOperationDialog, MemberSelfProfileEditor, type InvitationOperation } from "./pm-member-editors"
 
 export function ServiceMembers() {
@@ -38,7 +39,7 @@ export function ServiceMembers() {
   const [interaction, setInteraction] = useDraftState<MemberDirectoryInteraction>("members-directory", "interaction", {
     query: "", roleFilter: null, activeFilter: "all", sort: "name", display: "grid",
     comfortable: false, hiddenColumns: [], tab: "members", selectedIds: [],
-    selectedId: null, detailOpen: false,
+    selectedId: null, detailOpen: false, conditions: [],
   })
   const canManage = allowed(workspace, "access.manage") && !!query.data?.capabilities.canManageMembers
   const canEditProfile = !!query.data?.capabilities.canEditSelfProfile
@@ -57,18 +58,22 @@ export function ServiceMembers() {
   if (roleAvailable) sortOptions.push("role")
   const effectiveState: MemberDirectoryInteraction = {
     ...interaction,
-    roleFilter: roleAvailable && variant === "member3" ? interaction.roleFilter : null,
-    roleFilters: roleAvailable && variant === "member1" ? interaction.roleFilters : [],
-    presenceFilters: variant === "member1" ? interaction.presenceFilters : [],
-    activeFilter: variant === "member1" ? interaction.activeFilter : "all",
+    roleFilter: null,
+    roleFilters: [],
+    presenceFilters: [],
+    activeFilter: "all",
     securityFilter: "any",
+    conditions: interaction.conditions ?? [],
     sort: sortOptions.includes(interaction.sort) ? interaction.sort : "name",
   }
   const filtered = visibleDirectoryMembers(all, effectiveState, variant)
+  const filtersActive = !!interaction.query.trim() || (effectiveState.conditions ?? []).some(condition => condition.values.length > 0)
+  const memberData = queryData({ ...query, data: query.data?.members }, filtered.length)
+  const teamOptions = [...new Map(all.flatMap(member => member.teams ?? []).map(team => [team.id, team])).values()].map(team => ({ id: team.id, name: team.name }))
   const invitationItems = invitationQuery.data?.items ?? []
   const invitations = invitationItems.map(invitationRecord).filter(invitation =>
     invitation.email.toLocaleLowerCase().includes(interaction.query.trim().toLocaleLowerCase()) &&
-    (effectiveState.roleFilter === null || invitation.role === effectiveState.roleFilter)
+    matchesInvitationConditions(invitation, effectiveState.conditions)
   )
   const selectedEditor = query.data?.members.find(member => member.userId === editor?.userId)
   const manage = (member: ControlledMember, mode: "role" | "capabilities") => {
@@ -108,8 +113,8 @@ export function ServiceMembers() {
         teams: [], teamsAvailable: true, roles,
         invitations, invitationsData: canManage ? queryData({ ...invitationQuery, data: invitationQuery.data?.items }, invitations.length) : { state: "empty" },
         invitationsNotice: invitationNotice, suggestedContacts: null, totalMemberCount: all.length,
-        sortOptions, copyReceipt: copyReceipt && all.some(member => member.userId === copyReceipt.membershipId) ? copyReceipt : null,
-        data: queryData({ ...query, data: query.data?.members }, filtered.length),
+        sortOptions, teamOptions, copyReceipt: copyReceipt && all.some(member => member.userId === copyReceipt.membershipId) ? copyReceipt : null,
+        data: filtersActive ? { ...memberData, emptyTitle: t("没有匹配的成员", "No matching members"), emptyDescription: t("当前搜索和筛选下没有成员。清除条件以查看全部可见成员。", "No members match the current search and filters. Clear conditions to see all visible members.") } : memberData,
         sourceDescription: t("目录按当前授权范围脱敏；团队不授予权限。2FA 没有权威来源，状态与筛选明确不可用。", "The directory is redacted to your current access scope. Teams grant no permissions. No authoritative 2FA source is configured; its status and filters are unavailable."),
       }}
       interaction={effectiveState}

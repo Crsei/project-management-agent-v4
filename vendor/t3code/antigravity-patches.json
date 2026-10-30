@@ -1,0 +1,322 @@
+{
+  "version": 1,
+  "owner": "T11",
+  "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "hostContract": "pm-provider-host/1",
+  "sourceFiles": [
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.test.ts",
+      "sourceSha256": "a138db5a545bf0bbe9c8f7e8d8b4d34bf52d627940d36683fc928d20e050e19a",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.ts",
+      "sourceSha256": "fafa11d521a86021857f18f546c6423c066804508483189ac4609563e7815312",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/AntigravityAuth.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/AntigravityAuth.test.ts",
+      "sourceSha256": "0ce0b3c65c158508fa940859555f64b011449a15354314a157539e9dac5e0752",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/AntigravityAuth.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/AntigravityAuth.ts",
+      "sourceSha256": "0847c8d50aedf55df6f3af952cc4fdb7fc6e300b8281557c339cb2bd8a188279",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/AntigravityInstallation.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/AntigravityInstallation.test.ts",
+      "sourceSha256": "72eab06a873ae79c66e0c8e3db76065a1a1c24abf5fcff20e199b127aef3368f",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/AntigravityInstallation.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/AntigravityInstallation.ts",
+      "sourceSha256": "f4dc537fb1e3ea9e24e391b97b77ec10133dfacb133cf487b49354710a7c41f1",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/AntigravityProvider.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/AntigravityProvider.test.ts",
+      "sourceSha256": "b4a627690471e02dee283b400e7f37fa0e779e835990987c6bda5bba84870dda",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/AntigravityProvider.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/AntigravityProvider.ts",
+      "sourceSha256": "9033fad6d2c21c9c46eff22c00bfe38c77db00849f4cf9d3fbd36bbc76d2adca",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/AntigravityDriver.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/AntigravityDriver.test.ts",
+      "sourceSha256": "d89655833bc7e54a72de5939a963d46e96f2fe2bd147deedaeece4a22ddd28bf",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/AntigravityDriver.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/AntigravityDriver.ts",
+      "sourceSha256": "b299470b25e0d0b52e0302deb86e1b05dba40cc826721572296188af405fe003",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/AntigravitySkills.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/AntigravitySkills.test.ts",
+      "sourceSha256": "b241b7f058aaf7a55213e4928b644ba76c218953d3c2b654c4e9ca556946b330",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/AntigravitySkills.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/AntigravitySkills.ts",
+      "sourceSha256": "d69a5b5c732f66ffc16650a33423bf05ec417bb51206b7d80b3b623648ef3a75",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/AntigravityUsage.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/AntigravityUsage.ts",
+      "sourceSha256": "07875b1fd259ec39a37073d9658d6252568e277327fbf5fafe10f2db8fa60cf6",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/antigravityUsageReader.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/antigravityUsageReader.test.ts",
+      "sourceSha256": "c9fd006288ba6194fe2d9f2baa4ed16ba468d8247861e3e13f17395ff22293db",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/antigravityUsageReader.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/antigravityUsageReader.ts",
+      "sourceSha256": "9a2e5158f44543af13a284da4f22f2bfc1daac34a18c6d503d861170acbd23e3",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/acp/AntigravityAcpSupport.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/acp/AntigravityAcpSupport.test.ts",
+      "sourceSha256": "349a798568cc645ed92005f31238b37193e39d523203e0ae2899ee898a2cbf74",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/acp/AntigravityAcpSupport.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/acp/AntigravityAcpSupport.ts",
+      "sourceSha256": "5acd5459e4b8dc2aa2820ee0590b4390c5fec025552353d45a76f12c7446a0aa",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/acp/AntigravityClientFiles.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/acp/AntigravityClientFiles.ts",
+      "sourceSha256": "daf201dc07194fdf4d261a6b6e3d64c59823945f6aa725c80f90d3275ef1e06a",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/acp/AntigravityProtocol.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/acp/AntigravityProtocol.test.ts",
+      "sourceSha256": "31d85b1013f66c338b2c93d8b04a80e5e5d2df12987ff452afa537e082a0f5b1",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/acp/AntigravityProtocol.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/acp/AntigravityProtocol.ts",
+      "sourceSha256": "66d358c4243860c11195bac7807849f6af3a85cd93064505388708266c238197",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/acp/AntigravitySessionFiles.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/acp/AntigravitySessionFiles.ts",
+      "sourceSha256": "0ceb055dfc4599436c1543c4e4c040b5e95e02b4669fac71bb648eb49ba740a7",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/antigravityAuthSupport.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/antigravityAuthSupport.test.ts",
+      "sourceSha256": "a3609f2c2bb1399879b373fa4dd7f4c6b030a0960abaf9fa575e8f8eae0be67c",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/antigravityAuthSupport.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/antigravityAuthSupport.ts",
+      "sourceSha256": "ac46c412bace04d42ddac7545162fb5bc76b77d3182ed83397c3382140338580",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/antigravityCallback.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/antigravityCallback.test.ts",
+      "sourceSha256": "e91ada70cae2c20672b5c8c8ad63698c79fffe694cd41a4ac4ce35988007da6f",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/antigravityCallback.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/antigravityCallback.ts",
+      "sourceSha256": "d4b336bf18296b5c86f8b9ef94b563f068e90cf24792c1eb483445ab77e2cce1",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/antigravityRelease.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/antigravityRelease.ts",
+      "sourceSha256": "0e84926afd00b67e284d6afcd911466c4c733e006207d76d329a7f73b1d6711b",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/antigravityUsageLimits.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/antigravityUsageLimits.test.ts",
+      "sourceSha256": "f69aff41d74ca94f6094c9faeaf1ca44fa82989a084807517d0f351e07ac14a8",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/antigravityUsageLimits.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/antigravityUsageLimits.ts",
+      "sourceSha256": "a20e595f02faa680f6d6ac0bf4126b2d69eb44c58ef319c099e4a25966837519",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/AntigravityTextGeneration.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/textGeneration/AntigravityTextGeneration.test.ts",
+      "sourceSha256": "438f9a4e0ffa746771ed107fcb03c87c33e92c2d808da05f8abb832682a241db",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/AntigravityTextGeneration.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/textGeneration/AntigravityTextGeneration.ts",
+      "sourceSha256": "fe83e4097f7e97cde750763491cc7e766fdfbcb61b12c76afedd26557bdb36be",
+      "action": "copied-missing-pinned-source-before-host-adaptation"
+    }
+  ],
+  "patches": [
+    {
+      "id": "PM-ANTIGRAVITY-FACADE-CUTOVER",
+      "paths": [
+        "../../apps/server/agent/src/providers/drivers/antigravity.ts",
+        "../../apps/server/agent/src/providers/t3code/families/antigravity.ts"
+      ],
+      "reason": "DTO-only facade preserves public identity/settings but delegates native management/execution to the pure application-access getter. Concrete closed assembly uses the original driver, installer, model manifest/catalog, continuation port, original usage reader and same ProviderRuntimeHost. The identical runtimeHost is also supplied to makePmProviderHostServices and makePmProviderContinuationRequests so retained instances recheck current generation authority rather than capturing first-acquisition context.execution. Native continuation offers originate in the shared ACP adapter, which owns capture of the original runtime binding identity. Optional raw logs explicitly disabled."
+    },
+    {
+      "id": "PM-ANTIGRAVITY-PRIVATE-PATH-OWNERSHIP",
+      "paths": [
+        "apps/server/src/provider/antigravityAuthSupport.ts",
+        "apps/server/src/provider/Drivers/AntigravityDriver.ts",
+        "apps/server/src/provider/AntigravityInstallation.ts"
+      ],
+      "reason": "Narrow AntigravityProfileDirectories Reference preserves existing app-owned profile/history/temp paths, and original installer uses existing per-instance stateDirectory. No credential files are inspected, imported, relocated or converted. Bound HostProcess environment/Home/cwd are respected; installation paths expand against bound home/cwd. Auth publishes the actual private credential binding and configured source method. A per-profile cached source sweep is awaited once, so creating a second cwd-specific driver cannot delete another live runtime temp directory."
+    },
+    {
+      "id": "PM-ANTIGRAVITY-OPERATION-LEGACY-EVIDENCE",
+      "paths": [
+        "apps/server/src/provider/acp/AntigravitySessionFiles.ts",
+        "apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.ts",
+        "apps/server/src/provider/Drivers/AntigravityDriver.ts"
+      ],
+      "reason": "Original ACP flavor supplies metadata-only UUID4/native .meta cwd + .db ownership verification. No prompt, generic new-session probe, SQLite usage completion inference or credential access. Shared ACP owns negotiated operation-scoped evidence and native resume acknowledgement/stable-state checks; explicit unsupported turn/message cursors are not fabricated."
+    },
+    {
+      "id": "PM-ANTIGRAVITY-HOST-ATTACHMENTS-AND-TRANSPORT",
+      "paths": [
+        "apps/server/src/provider/acp/AntigravityAcpSupport.ts",
+        "apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.ts"
+      ],
+      "reason": "Prompt attachment lookup now requires the supplied ProviderHost resolver rather than source-app attachmentStore. The production PM Host remains authoritative for registered files. Remove obsolete selfInvocation dependency; shared ACP RuntimeHost stdio transport, permission admission, native cancellation and lifecycle remain owned by T13. No source business MCP/browser/device service is enabled."
+    },
+    {
+      "id": "PM-ANTIGRAVITY-AUTH-SNAPSHOT",
+      "paths": [
+        "apps/server/src/provider/AntigravityProvider.ts"
+      ],
+      "reason": "canLogout is projected only from the actual authenticated native handshake, never from the lightweight synthetic installation probe. Installation/catalog/authenticated identity/native inference remain separate; no platform or account readiness is fabricated."
+    },
+    {
+      "id": "PM-ANTIGRAVITY-ORIGINAL-TEST-HOST",
+      "paths": [
+        "apps/server/src/provider/AntigravityProvider.test.ts",
+        "apps/server/src/provider/Drivers/AntigravityDriver.test.ts",
+        "apps/server/src/provider/acp/AntigravityAcpSupport.test.ts",
+        "apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.test.ts"
+      ],
+      "reason": "Retain original native behavior suites while replacing reference-only t3 config/settings/secret/business host layers with the shared actual-PM native-test-host.testkit.ts composition, bound native platform and real RuntimeHost. Source adapter PDF fixtures register their actual bytes through the PM attachment registry; declared size matches those bytes. Pure prompt tests use an explicit test-owned attachment lookup port. Remove only the obsolete t3-code.html_render business artifact fixture, which requires a tool/server not admitted in PM."
+    },
+    {
+      "id": "PM-ANTIGRAVITY-CONSUMER-NATIVE-FIXTURE",
+      "paths": [
+        "../../apps/server/agent/src/providers/drivers/antigravity.test.ts"
+      ],
+      "reason": "Repair the controlled native executable, not the source parser: pinned effect-acp schema-v1.gen.ts, client.ts legacy negotiation and antigravity-initialize.json establish that native Antigravity reports protocolVersion 2 with v1 agentInfo/agentCapabilities, authenticate/logout and terminal stopReason replies. Decode requests and encode replies/notifications with that original v1 schema; grouped model options use group, not groupId. Remove invented incomplete usage counters. Replace the text .db placeholder with executable-owned SQLite identity/cwd/model/mode/calculator/turn/state persistence. Direct and legacy resumes read existing identity/cwd/idle state without rewriting metadata, creating replacement sessions or probe prompts; calculator totals demonstrate actual persisted continuation. Retain custom native HOME/environment isolation, model enforcement, failed credentials, native failure/cancel, callback exceptions and temporary setup cleanup. Add real process-crash unfinished-work rejection, persisted identity tampering rejection, loopback path/destination/state rejection, native denial and separate controlled account-flow binding. No production family, shared ACP or host change was needed; no Antigravity CLI, Google account, real model or platform acceptance is claimed."
+    }
+  ],
+  "removedSupersededPaths": [
+    "../../apps/server/agent/src/providers/drivers/antigravity-auth.ts",
+    "../../apps/server/agent/src/providers/drivers/antigravity-installation.ts",
+    "../../apps/server/agent/src/providers/drivers/antigravity-files.ts",
+    "../../apps/server/agent/src/providers/drivers/antigravity-release.ts",
+    "../../apps/server/agent/src/providers/drivers/antigravity-auth.test.ts",
+    "../../apps/server/agent/src/providers/drivers/antigravity-installation.test.ts",
+    "../../apps/server/agent/src/providers/drivers/antigravity-files.test.ts"
+  ],
+  "familyExports": [
+    "antigravityDriver",
+    "makeAntigravityDriverLayer(context,runtimeHost)",
+    "antigravityProtocolResolver",
+    "antigravityCapabilities",
+    "antigravityInstallationMethods",
+    "antigravityUsageLayer"
+  ],
+  "sourceHostExports": [
+    "AntigravityProfileDirectories",
+    "readAntigravitySessionMetadata(input)",
+    "readAntigravityInstallation(instance)"
+  ],
+  "dependencies": {
+    "runtime": [
+      "@t3tools/contracts",
+      "@t3tools/shared",
+      "@t3tools/provider-core",
+      "@t3tools/provider-acp",
+      "effect-acp",
+      "effect@4.0.5",
+      "@effect/platform-node@4.0.5",
+      "node:sqlite (Node.js built-in, via original @t3tools/shared/nodeSqliteClient)",
+      "yauzl"
+    ],
+    "testOnly": [
+      "apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts (shared real-PM fixture)",
+      "@effect/vitest@4.0.5",
+      "vite-plus/test",
+      "apps/server/scripts/acp-mock-agent.ts (T13 manifest owner)"
+    ],
+    "resources": [
+      "apps/server/src/provider/model-manifest.json (existing parent-owned original catalog)",
+      "Native downloaded executable + exact localharness_external sibling; no additional Antigravity worker entrypoint"
+    ]
+  },
+  "parentIntegration": [
+    "Production driver/capability/installation/protocol maps register the closed family exports. Shared registration/build/manifests/locks remain parent-owned.",
+    "Retain original driver/layer/controller per full context identity until invalidation/shutdown (SolHostLifetime); account and maintenance leases still use existing PM locks/revisions.",
+    "Existing-instance prepare/remove callbacks consume the supplied fourth-argument maintenance lease and exact retained original installer via readAntigravityInstallation(lease.instance), never constructing a second service. Only provisional instances use a private source scope. Parent management owns lease admission, peer revision invalidation and release; installer cancellation is registered atomically with start and drained before lease release.",
+    "Shared ACP T13 supplies readAcpSessionEvidence(runtime), actual negotiated protocol accessor, pre-resume source metadata capture, zero-prompt legacy resume and RuntimeHost stdio admission/cleanup; never static protocol/version guesses.",
+    "T16 consumes original AntigravityUsage.layer and reader; no usage product/persistence rewrite in this slice."
+  ],
+  "platformAndAccountPrerequisites": {
+    "publishedPinnedRuntime": "Source pins Antigravity 1.3.0 executable/harness pairs for darwin/linux/win32 on x64/arm64; unsupported host combinations fail explicitly. Linux is not macOS and installation metadata does not prove auth/readiness. No platform-specific capability is emulated.",
+    "linux": "Actual Google runtime requires IPv6 socket support, functional Google networking and a usable CA bundle; original WSL IPv6 diagnostic remains. One-file runtime may unpack about 1 GiB; installer performs original disk/hash/member/native-handshake verification.",
+    "windows": "Original native Windows executable/process cleanup and shallow temp path handling remain. POSIX shell fixture tests are explicitly skipped on Windows; Windows native acceptance requires Windows hardware/runtime, not a false Linux pass.",
+    "authentication": "oauth-personal needs an eligible Google Antigravity subscription/account; oauth-business needs GCP project/location and enterprise access; gemini-api-key needs a configured actual key; agent-platform needs actual API key or GCP project/location/native authorized ADC per original source. No login, inference or account prerequisite was exercised here.",
+    "callback": "Browser login must originate from the native Google URL with one nonempty state and a native 127.0.0.1 high-port redirect. Forward only the validated same loopback destination/state; no global credential import or remote callback destination."
+  },
+  "preparedRegressionEntrypoints": [
+    "node --test apps/server/agent/src/providers/drivers/antigravity.test.ts (parent Node/TS runner configuration)",
+    "pnpm --dir vendor/t3code exec vp test run apps/server/src/provider/AntigravityAuth.test.ts apps/server/src/provider/AntigravityInstallation.test.ts apps/server/src/provider/AntigravityProvider.test.ts apps/server/src/provider/Drivers/AntigravityDriver.test.ts apps/server/src/provider/Drivers/AntigravitySkills.test.ts apps/server/src/provider/Drivers/antigravityUsageReader.test.ts apps/server/src/provider/antigravityAuthSupport.test.ts apps/server/src/provider/antigravityCallback.test.ts apps/server/src/provider/antigravityUsageLimits.test.ts apps/server/src/provider/acp/AntigravityAcpSupport.test.ts apps/server/src/provider/acp/AntigravityProtocol.test.ts apps/server/src/provider/acp/AntigravitySessionFiles.test.ts apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.test.ts apps/server/src/textGeneration/AntigravityTextGeneration.test.ts"
+  ],
+  "parentVerification": {
+    "consumer": "All 13 Antigravity consumer cases passed within the 217/217 native-consumer gate, zero skips on this Linux host.",
+    "retainedSource": "Full original-source gate: 297 files passed; 3512 tests passed and 2 skipped. Skips are not passes.",
+    "fixture": "Controlled peer decodes and encodes the pinned ACP-v1 schema negotiated by the actual original Antigravity client, including model and mode config options; SQLite owns identity, cwd, arithmetic history and terminal states. Rejections assert state and no replacement/probe prompts rather than copied internal exception wording.",
+    "actualAccount": "Actual Antigravity executable is not installed; no real Google account or inference acceptance is claimed."
+  },
+  "verification": {
+    "executed": false,
+    "statement": "No tests, builds, types, lint, formatters, smoke, dependency installation, provider installation/login/inference, external service changes or restart executed by T11. Pinned-source manifest copy only; hashes quoted from frozen parent manifest, not a new integrity check."
+  },
+  "persistence": "Existing Chat records/journal/native continuation sidecars remain the current design. Session/persistence has not undergone a unified redesign; this migration does not replace it."
+}

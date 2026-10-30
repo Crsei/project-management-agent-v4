@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { stringify as stringifyYaml } from 'yaml';
 import { entityDefinitions, entityKinds, workflowFor, type EntityKind, type FileRecord } from '@pm-schema';
@@ -14,10 +14,12 @@ import { allowed, CommandNotice } from '../service/pm-ui';
 import { teamTaskCreateProjectProblem } from '../service/team-task-actions-model';
 import { PersonalMentionPicker } from '../service/PersonalMentionPicker';
 import { LocalProjectCreationFields } from './LocalProjectCreationFields';
+import { ProjectCreationFields } from './ProjectCreationFields';
 import { InlineSubtasks, TaskProperties, TaskTitleField } from './TaskDocumentFields';
 import { MarkdownBodyEditor } from './MarkdownBodyEditor';
 import './task-creation.css';
 import './task-document.css';
+import './project-creation.css';
 
 export interface EntityCreationSurfaceProps {
   mode: 'compact' | 'dialog' | 'page';
@@ -60,6 +62,11 @@ function CreationLabels({ value, suggestions, disabled, label, uid, onChange }: 
   }} onBlur={() => setText(rendered)} /><datalist id={`${uid}-labels`}>{suggestions.map(item => <option key={item} value={item} />)}</datalist></label>;
 }
 
+function CreationContent({ project, children }: { project: boolean; children: ReactNode }) {
+  if (!project) return children;
+  return <div className="project-creation-body">{children}</div>;
+}
+
 export function EntityCreationSurface({ mode, initial, projectId, draftId, onCreated, onClose, onExpand }: EntityCreationSurfaceProps) {
   const session = useCoreSession();
   const c = useEntityCreation({ initial, projectId, draftId, onCreated: file => {
@@ -79,6 +86,7 @@ export function EntityCreationSurface({ mode, initial, projectId, draftId, onCre
   const uid = useId();
   const [expanded, setExpanded] = useState(mode !== 'compact');
   const [dirty, setDirty] = useState(false);
+  const composing = useRef(false);
   const draft = c.draft;
   const snapshot = c.sources.data;
   const documentMode = mode === 'page' && draft?.kind === 'work_item';
@@ -96,10 +104,11 @@ export function EntityCreationSurface({ mode, initial, projectId, draftId, onCre
   if (!workspace?.capabilities.includes('domain.read') || project && !allowed(workspace, 'domain.read', project)) return <section className="task-creation" role="alert"><p>{t('当前无权读取此草稿的项目。私有内容已隐藏；重新获得相同账号的授权后可恢复。', 'You cannot currently read this draft’s project. Private content is hidden; the same account may resume after access is restored.')}</p>{onClose && <button type="button" className="secondary-button" onClick={onClose}>{t('返回', 'Back')}</button>}</section>;
   if (projectId && (draft.kind === 'project' || project !== projectId)) return <section className="task-creation" role="alert"><p>{t('此草稿属于其他项目，未移动或修改。请返回原创建意图继续恢复。', 'This draft belongs to another project and has not been moved or changed. Reopen the original intent to continue recovery.')}</p><Link className="secondary-button" to={recoveryLink(draft.draftId)}>{t('打开原草稿', 'Open original draft')}</Link>{onClose && <button type="button" className="secondary-button" onClick={onClose}>{t('返回项目任务', 'Back to project tasks')}</button>}</section>;
   const task = draft.kind === 'work_item';
+  const projectCreation = draft.kind === 'project';
   const editable = creationDraftEditable(draft) && !c.busy && c.canWrite;
   const uncertain = hasUncertainCreationDrafts({ [draft.draftId]: draft });
   const completed = creationComplete(draft);
-  const submitLabel = c.busy ? t('正在创建…', 'Creating…') : draft.attempt?.phase === 'committed' ? t('继续未完成项', 'Continue remaining actions') : draft.kind === 'project' && c.localSettings.data?.enabled ? t('创建并初始化项目', 'Create and initialize project') : mode === 'page' ? t('创建任务', 'Create task') : t('创建', 'Create');
+  const submitLabel = c.busy ? t('正在创建…', 'Creating…') : draft.attempt?.phase === 'committed' ? t('继续未完成项', 'Continue remaining actions') : projectCreation ? c.localSettings.data?.enabled ? t('创建并初始化项目', 'Create and initialize project') : t('创建项目', 'Create project') : mode === 'page' ? t('创建任务', 'Create task') : t('创建', 'Create');
   const submitDisabled = c.busy || !!c.guard || c.storageFailed || uncertain || !c.canWrite || completed || draft.attempt?.phase === 'rejected' || draft.children.some(child => child.attempt?.phase === 'rejected') || draft.watchAttempt?.phase === 'rejected';
   const issues = [...c.issues, ...(draft.attempt?.diagnostics ?? [])];
   const fieldError = (name: string) => issues.find(issue => issue.field === name)?.message;
@@ -120,36 +129,52 @@ export function EntityCreationSurface({ mode, initial, projectId, draftId, onCre
     {attempt.phase === 'rejected' && <button type="button" className="secondary-button" disabled={c.busy || !c.canWrite} onClick={() => c.resetRejected(childId)}>{t('保留草稿并编辑已拒绝项', 'Keep draft and edit rejected item')}</button>}
     <Diagnostics diagnostics={attempt.diagnostics} />
   </div>;
-  return <section className={`task-creation task-creation-${mode}${documentMode ? ' task-document' : ''}`} aria-label={task ? t('创建任务', 'Create task') : t('创建 Markdown 对象', 'Create Markdown entity')}>
+  return <section className={`task-creation task-creation-${mode}${documentMode ? ' task-document' : ''}${projectCreation ? ' project-creation' : ''}`} aria-label={projectCreation ? t('创建项目', 'Create project') : task ? t('创建任务', 'Create task') : t('创建 Markdown 对象', 'Create Markdown entity')}>
     <CommandNotice />
-    <form className={documentMode ? 'task-document-form' : undefined} onSubmit={event => { event.preventDefault(); void c.submit(); }} onInput={documentMode ? () => setDirty(true) : undefined} onKeyDown={event => {
+    <form className={documentMode ? 'task-document-form' : undefined} onSubmit={event => { event.preventDefault(); if (!projectCreation || !composing.current && !submitDisabled) void c.submit(); }} onInput={documentMode ? () => setDirty(true) : undefined} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} onKeyDown={event => {
+      if (projectCreation && (composing.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) return;
+      if (projectCreation && (event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
+        if (!submitDisabled) event.currentTarget.requestSubmit();
+        return;
+      }
       if (mode === 'page' && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         if (!event.currentTarget.querySelector<HTMLButtonElement>('[data-testid="create-task-submit"]')?.disabled) event.currentTarget.requestSubmit();
       }
     }} aria-busy={c.busy}>
+      <CreationContent project={projectCreation}>
       {documentMode ? <div className="doc-toolbar">
         <span className="doc-toolbar-status" role="status">{(c.busy || dirty) && (c.busy ? t('正在创建…', 'Creating…') : c.storageFailed ? t('草稿仅保留在此页内存', 'Draft is only in this page') : t('草稿已自动保存在此浏览器', 'Draft saved in this browser'))}</span>
         <button type="button" className="secondary-button doc-agent-button" onClick={() => {
-          const next = new URLSearchParams();
+          const next = new URLSearchParams({ workspace: workspace?.id || workspaceSlug || '' });
           if (project) next.set('project', project);
           next.set('returnTo', `${location.pathname}${location.search}${location.hash}`);
-          navigate(`${root}/agent?${next}`);
+          navigate(`/agent/workspace?${next}`);
         }} aria-label={t('打开 Agent 助手', 'Open the Agent assistant')} title={t('打开 Agent 助手；当前项目作为上下文，未保存草稿会保留', 'Open the Agent assistant with this project as context; the draft is kept')}><Bot size={15} aria-hidden="true" />Agent</button>
         <button type="submit" className="primary-button" data-busy={c.busy || undefined} data-testid="create-task-submit" disabled={submitDisabled}>
           {c.busy && <LoaderCircle className="doc-spinner" size={14} aria-hidden="true" />}{submitLabel}
         </button>
-      </div> : <header className="creation-heading"><div><h2>{task ? t('新建任务', 'New task') : t('新建对象', 'New entity')}</h2>{projectId && <p>{t('项目', 'Project')}: {snapshot.files.find(file => file.id === projectId && file.entity.entity === 'project')?.entity.title || projectId}</p>}</div><div className="creation-inline-actions">{onClose && <button type="button" className="secondary-button" onClick={onClose}>{t('取消 / 返回', 'Cancel / back')}</button>}<button type="submit" className="primary-button" data-testid="create-task-submit" disabled={submitDisabled}>{submitLabel}</button></div></header>}
+      </div> : projectCreation ? mode === 'dialog' ? null : <header className="project-creation-heading"><h2>{t('新建项目', 'New project')}</h2></header> : <header className="creation-heading"><div><h2>{task ? t('新建任务', 'New task') : t('新建对象', 'New entity')}</h2>{projectId && <p>{t('项目', 'Project')}: {snapshot.files.find(file => file.id === projectId && file.entity.entity === 'project')?.entity.title || projectId}</p>}</div><div className="creation-inline-actions">{onClose && <button type="button" className="secondary-button" onClick={onClose}>{t('取消 / 返回', 'Cancel / back')}</button>}<button type="submit" className="primary-button" data-testid="create-task-submit" disabled={submitDisabled}>{submitLabel}</button></div></header>}
       {c.storageFailed && <div className="creation-alert" role="alert"><p>{t('浏览器恢复存储不可用或已满。已禁止发送；当前输入保留在本页内存，请勿关闭。', 'Browser recovery storage is unavailable or full. Sending is blocked; current text remains in this page’s memory. Keep it open.')}</p><button type="button" className="secondary-button" onClick={c.saveLocally}>{t('重试保存草稿', 'Retry saving draft')}</button></div>}
-      {c.guard && <p className="creation-alert" role="status">{c.guard}</p>}
+      {c.guard && !projectCreation && <p className="creation-alert" role="status">{c.guard}</p>}
       {c.recoveryDraftId && <p className="creation-alert"><Link to={recoveryLink(c.recoveryDraftId)}>{t('恢复其他项目中尚待核对的原创建意图', 'Recover the other unconfirmed creation intent')}</Link></p>}
       {recoverableDrafts.length > 0 && <details className="creation-saved-drafts"><summary>{t('恢复其他创建草稿', 'Recover other creation drafts')} · {recoverableDrafts.length}</summary><ul>{recoverableDrafts.map(item => <li key={item.draftId}><Link to={recoveryLink(item.draftId)}>{String(item.values.title || (en ? entityDefinitions[item.kind].label : zhKind[item.kind]))} · {item.values.project ? snapshot.files.find(file => file.id === item.values.project && file.entity.entity === 'project')?.entity.title || String(item.values.project) : t('工作区', 'Workspace')}</Link></li>)}</ul></details>}
-      {c.error && <p className="creation-alert" role="alert">{c.error}</p>}
+      {c.error && !projectCreation && <p className="creation-alert" role="alert">{c.error}</p>}
       {!c.canWrite && <p className="creation-alert" role="status">{t('当前只读；草稿已保留，未发送写入。', 'Read-only. Your draft is retained; no write was sent.')}</p>}
       {c.directory.error && task && <div className="creation-alert" role="alert"><p>{t('成员目录读取失败，不会将读取失败当作没有成员。', 'Member directory failed to load; this is not an empty directory.')}</p><button type="button" className="secondary-button" onClick={() => { void c.directory.refetch(); }}>{t('重新读取成员', 'Read members again')}</button></div>}
-      {!task && <label>{t('对象类型', 'Entity type')}<select aria-label="New entity type" data-testid="new-entity-type" value={draft.kind} disabled={!editable} onChange={event => c.changeKind(event.target.value as EntityKind)}>{entityKinds.filter(kind => !projectId || kind !== 'project').map(kind => <option key={kind} value={kind}>{en ? kind === 'cycle' ? 'Sprint (cycle)' : entityDefinitions[kind].label : zhKind[kind]}</option>)}</select></label>}
-      {draft.kind === 'project' && <LocalProjectCreationFields controller={c} />}
-      {documentMode ? <>
+      {!task && !projectCreation && <label>{t('对象类型', 'Entity type')}<select aria-label="New entity type" data-testid="new-entity-type" value={draft.kind} disabled={!editable} onChange={event => c.changeKind(event.target.value as EntityKind)}>{entityKinds.filter(kind => !projectId || kind !== 'project').map(kind => <option key={kind} value={kind}>{en ? kind === 'cycle' ? 'Sprint (cycle)' : entityDefinitions[kind].label : zhKind[kind]}</option>)}</select></label>}
+      {projectCreation ? <>
+        <ProjectCreationFields values={draft.values} body={draft.body} disabled={!editable} en={en} errors={Object.fromEntries(issues.filter(issue => issue.field).map(issue => [issue.field!, issue.message]))} onChange={c.changeFields} onBodyChange={c.changeBody} />
+        <div className="project-creation-location"><LocalProjectCreationFields controller={c} /></div>
+        {c.error && <p className="creation-alert" role="alert">{c.error}</p>}
+        {c.guard && <p className="project-creation-guard" role="status">{c.guard}</p>}
+        <details className="creation-advanced project-creation-advanced">
+          <summary>{t('高级属性与关系', 'Advanced properties and relations')}</summary>
+          <div className="creation-advanced-fields"><EntityFields kind="project" errors={Object.fromEntries(issues.filter(issue => issue.field).map(issue => [issue.field!, issue.message]))} creating en={en} values={draft.values} files={snapshot.files} configuration={snapshot.configuration} disabled={!editable} exclude={['title', 'owner', 'due', 'x-pm-icon', 'x-pm-color', ...(c.localSettings.data?.enabled ? ['status'] : [])]} onChange={c.changeFields} /></div>
+          <details><summary>{t('提交属性预览', 'Property preview')}</summary><pre>{stringifyYaml({ ...draft.values, entity: draft.kind })}</pre></details>
+        </details>
+      </> : documentMode ? <>
         <TaskTitleField value={String(draft.values.title ?? '')} disabled={!editable} invalid={!!fieldError('title')} describedBy={fieldError('title') ? `${uid}-title-error` : undefined} en={en} autoFocus required testId="new-task-title" placeholder={t('需要完成什么？', 'What needs to be done?')} onValue={title => c.changeFields({ title })} />
         {fieldError('title') && <p className="doc-field-error" id={`${uid}-title-error`} role="alert">{fieldError('title')}</p>}
         <TaskProperties
@@ -228,7 +253,7 @@ export function EntityCreationSurface({ mode, initial, projectId, draftId, onCre
           </> : null}
         </aside>
       </div>
-      {expanded && <details className="creation-advanced" open={!task || undefined}><summary>{t('高级属性与关系', 'Advanced properties and relations')}</summary>{task && <label>{t('对象类型', 'Entity type')}<select aria-label="New entity type" data-testid="new-entity-type" value={draft.kind} disabled={!editable || draft.children.length > 0 || draft.watch} onChange={event => c.changeKind(event.target.value as EntityKind)}>{entityKinds.filter(kind => !projectId || kind !== 'project').map(kind => <option key={kind} value={kind}>{en ? kind === 'cycle' ? 'Sprint (cycle)' : entityDefinitions[kind].label : zhKind[kind]}</option>)}</select></label>}<div className="creation-advanced-fields"><EntityFields kind={draft.kind} errors={Object.fromEntries(issues.filter(issue => issue.field).map(issue => [issue.field!, issue.message]))} creating en={en} values={draft.values} files={snapshot.files} configuration={snapshot.configuration} disabled={!editable} exclude={task ? taskFields : projectId ? ['title', 'project'] : draft.kind === 'project' && c.localSettings.data?.enabled ? ['title', 'status'] : ['title']} onChange={c.changeFields} /></div><details><summary>{t('提交属性预览', 'Property preview')}</summary><pre>{stringifyYaml({ ...draft.values, entity: draft.kind })}</pre></details></details>}
+      {expanded && <details className="creation-advanced" open={!task || undefined}><summary>{t('高级属性与关系', 'Advanced properties and relations')}</summary>{task && <label>{t('对象类型', 'Entity type')}<select aria-label="New entity type" data-testid="new-entity-type" value={draft.kind} disabled={!editable || draft.children.length > 0 || draft.watch} onChange={event => c.changeKind(event.target.value as EntityKind)}>{entityKinds.filter(kind => !projectId || kind !== 'project').map(kind => <option key={kind} value={kind}>{en ? kind === 'cycle' ? 'Sprint (cycle)' : entityDefinitions[kind].label : zhKind[kind]}</option>)}</select></label>}<div className="creation-advanced-fields"><EntityFields kind={draft.kind} errors={Object.fromEntries(issues.filter(issue => issue.field).map(issue => [issue.field!, issue.message]))} creating en={en} values={draft.values} files={snapshot.files} configuration={snapshot.configuration} disabled={!editable} exclude={task ? taskFields : projectId ? ['title', 'project'] : ['title']} onChange={c.changeFields} /></div><details><summary>{t('提交属性预览', 'Property preview')}</summary><pre>{stringifyYaml({ ...draft.values, entity: draft.kind })}</pre></details></details>}
       {!expanded && <div className="creation-inline-actions"><button type="button" className="secondary-button" disabled={c.busy} onClick={() => { if (onExpand) onExpand(c.draftId); else setExpanded(true); }}>{t('展开完整创建页', 'Expand full creation page')}</button>{draft.watch && <span>{t('创建后关注', 'Watch after creation')}</span>}</div>}
       </>}
       {renderAttempt(draft.attempt)}
@@ -236,6 +261,12 @@ export function EntityCreationSurface({ mode, initial, projectId, draftId, onCre
       {draft.attempt?.phase === 'committed' && !completed && <p role="status">{t('父任务已确认，关联项尚未全部完成。返回或刷新仍保留分项进度，不会重建父任务。', 'Parent confirmed; related actions are not all complete. Navigation and refresh preserve individual outcomes and will not recreate the parent.')}{draft.attempt.entityId && <> <Link to={`${projectRoot}/entities/${encodeURIComponent(draft.attempt.entityId)}`}>{t('打开已确认父项', 'Open confirmed parent')}</Link></>}</p>}
       {completed && <div role="status"><p>{t('所有请求均已确认。原创建不会重复；若文件已删除，可结束此意图。', 'All requested outcomes are confirmed. Creation will not repeat; you can finish this intent if its file was deleted.')}</p><div className="creation-inline-actions"><button type="button" className="secondary-button" disabled={c.busy} onClick={() => { void c.openConfirmed(); }}>{t('打开已确认对象', 'Open confirmed entity')}</button><button type="button" className="secondary-button" disabled={c.busy} onClick={async () => { if (await c.dismissCompleted()) onClose?.(); }}>{t('结束已完成创建意图', 'Dismiss completed creation intent')}</button></div></div>}
       <Diagnostics diagnostics={c.issues} />
+      </CreationContent>
+      {projectCreation && <footer className="project-creation-footer">
+        <span className="project-creation-shortcut" aria-hidden="true"><kbd>Ctrl / ⌘</kbd><kbd>↵</kbd></span>
+        {onClose && <button type="button" className="secondary-button" onClick={onClose}>{t('取消', 'Cancel')}</button>}
+        <button type="submit" className="primary-button" data-testid="create-task-submit" aria-keyshortcuts="Control+Enter Meta+Enter" disabled={submitDisabled}>{c.busy && <LoaderCircle size={14} aria-hidden="true" />}{submitLabel}</button>
+      </footer>}
     </form>
   </section>;
 }

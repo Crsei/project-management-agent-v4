@@ -9,7 +9,11 @@ import {
   PopoverContent,
 } from "../ui/popover"
 import { FilterToolbar } from "./filter-toolbar"
-import { WorkItemAssigneePicker } from "./work-item-properties"
+import {
+  WorkItemsFilterChips,
+  WorkItemsFilterMenu,
+} from "./work-items-filter"
+import { WorkItemsSortMenu } from "./work-items-sort"
 import type {
   WorkItemCatalog,
   WorkItemProperty,
@@ -130,31 +134,6 @@ export function WorkItemsDisplayOptions({
             </>
           )}
           <label>
-            {t("workItems.sort")}
-            <select
-              aria-label={t("workItems.sort")}
-              value={view.sort}
-              onChange={(e) =>
-                onViewChange({
-                  ...view,
-                  sort: e.target.value as WorkItemsViewState["sort"],
-                  sortDirection: "asc",
-                })
-              }
-            >
-              {["manual", "title", "dueDate", "priority"].map((value) => (
-                <option key={value} value={value}>
-                  {t(`workItems.${value}` as "workItems.sort")}
-                </option>
-              ))}
-            </select>
-          </label>
-          {view.sort !== "manual" && (
-            <p className="text-xs text-muted-foreground">
-              {t("workItems.autoSortHint")}
-            </p>
-          )}
-          <label>
             <Checkbox
               checked={view.showEmptyGroups}
               onCheckedChange={(showEmptyGroups) =>
@@ -194,40 +173,6 @@ export function WorkItemsToolbar({
   extensions,
 }: WorkItemsToolbarProps) {
   const { t } = useI18n()
-  const options = {
-    state: catalog.states,
-    priority: catalog.priorities,
-    assignees: catalog.assignees,
-    labels: catalog.labels,
-  }
-  const filters = (
-    <Popover>
-      <PopoverTrigger render={<Button variant="ghost" />}>
-        {t("commonComponents.filters")}
-      </PopoverTrigger>
-      <PopoverContent>
-        <div className={styles.display}>
-          <p className="text-xs">{t("workItems.filterHint")}</p>
-          {(Object.keys(options) as (keyof typeof options)[]).map((field) => (
-            <div key={field}>
-              <span>{t(`workItems.${field}` as "workItems.sort")}</span>
-              <WorkItemAssigneePicker
-                label={t(`workItems.${field}` as "workItems.sort")}
-                value={view.filters[field]}
-                options={options[field]}
-                onChange={(value) =>
-                  onViewChange({
-                    ...view,
-                    filters: { ...view.filters, [field]: value },
-                  })
-                }
-              />
-            </div>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
   return (
     <div>
       <FilterToolbar
@@ -267,7 +212,16 @@ export function WorkItemsToolbar({
             />
           </>
         }
-        filters={filters}
+        filters={
+          <WorkItemsFilterMenu
+            view={view}
+            onViewChange={onViewChange}
+            catalog={catalog}
+          />
+        }
+        sort={
+          <WorkItemsSortMenu view={view} onViewChange={onViewChange} />
+        }
         actions={
           <>
             <WorkItemsDisplayOptions
@@ -279,51 +233,11 @@ export function WorkItemsToolbar({
           </>
         }
       />
-      <div className={styles.chips}>
-        {(Object.keys(options) as (keyof typeof options)[]).flatMap((field) =>
-          view.filters[field].map((id) => (
-            <Button
-              key={`${field}:${id}`}
-              variant="secondary"
-              size="sm"
-              aria-label={t("workItems.removeFilter", {
-                name:
-                  options[field].find((option) => option.id === id)?.label ??
-                  id,
-              })}
-              onClick={() =>
-                onViewChange({
-                  ...view,
-                  filters: {
-                    ...view.filters,
-                    [field]: view.filters[field].filter(
-                      (value) => value !== id,
-                    ),
-                  },
-                })
-              }
-            >
-              {options[field].find((option) => option.id === id)?.label ?? id} ×
-            </Button>
-          )),
-        )}
-        {(view.query ||
-          Object.values(view.filters).some((values) => values.length)) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              onViewChange({
-                ...view,
-                query: "",
-                filters: { state: [], priority: [], assignees: [], labels: [] },
-              })
-            }
-          >
-            {t("workItems.clearFilters")}
-          </Button>
-        )}
-      </div>
+      <WorkItemsFilterChips
+        view={view}
+        onViewChange={onViewChange}
+        catalog={catalog}
+      />
     </div>
   )
 }

@@ -11,12 +11,24 @@
       "types": "./dist/index.d.ts",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers.d.ts",
+      "development": "./src/providers.ts",
+      "default": "./dist/providers.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@agent-workspace/contracts": "workspace:*",
+    "@t3tools/client-runtime": "workspace:*",
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/provider-core": "workspace:*",
+    "effect": "4.0.5"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "packages/client-runtime/src/modelTraits.ts",
+  "beforeSha256": "b82393510510d1f5789750f44d348e1f526b48cd38b4e8b29ac53a3b3dd6161c",
+  "afterSha256": "e3f663e5d2b6bf4e7c28c2af9270883ebfe52e4fb2418056165d3d5b04d9b55e",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 12,
+      "before": [
+        "import { REASONING_EFFORT_OPTION_IDS } from \"./state/threadExecution.ts\";\n"
+      ],
+      "after": [
+        "import { REASONING_EFFORT_OPTION_IDS } from \"./modelTraitConstants.ts\";\n"
+      ]
+    }
+  ]
+}

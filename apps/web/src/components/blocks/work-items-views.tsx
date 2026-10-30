@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { GroupedList, type GroupedListProps } from "./grouped-list"
 import { Board } from "./work-items-board-base"
@@ -282,6 +282,7 @@ export type WorkItemBoardProps = WorkItemsViewProps & {
   queryKey: string
   manualOrder?: boolean
   allowAppend?: boolean
+  getGroupIcon?: (key: string) => ReactNode
   lanes?: readonly WorkItemsLaneSnapshot[]
   canMove?: (item: WorkItemRecord, source: string, target: string) => boolean
   onMove?: (intent: WorkItemsBoardMove) => void

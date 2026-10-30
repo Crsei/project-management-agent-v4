@@ -1,6 +1,15 @@
+import type {
+  ModelCapabilities,
+  ProviderDriverKind,
+  ProviderOptionDescriptor as NativeProviderOptionDescriptor,
+  ProviderOptionSelection as NativeProviderOptionSelection,
+  ProviderSettingsFormControl,
+} from "@t3tools/contracts";
+import type { ProviderIcon, ProviderEnvironmentField } from "@t3tools/provider-core/client";
+
 export type ProviderDriver =
   | "codex" | "claude" | "cursor" | "grok" | "opencode"
-  | "antigravity" | "muse" | "pi" | "acpRegistry";
+  | "antigravity" | "muse" | "pi" | "acpRegistry" | "fx";
 
 export type ProviderConfig = Record<string, string | number | boolean | string[]>;
 export type ProviderConfigInput = Record<string, string | number | boolean | string[] | null>;
@@ -16,6 +25,9 @@ export type ProviderConfigField = {
   min?: number;
   max?: number;
   required?: boolean;
+  /** Original schema control; PM type remains the serialized form compatibility boundary. */
+  control?: ProviderSettingsFormControl;
+  secret?: boolean;
 };
 export type ProviderDriverDefinition = {
   driver: ProviderDriver;
@@ -25,8 +37,18 @@ export type ProviderDriverDefinition = {
   fields: ProviderConfigField[];
   docsUrl?: string;
   source: string;
-  models?: ProviderModel[];
   installationAction?: { label: string; description: string };
+  updateAction?: { label: string; description: string };
+  removalAction?: { label: string; description: string };
+  environmentFields?: readonly ProviderEnvironmentField[];
+  featured?: boolean;
+  supportsCustomModels?: boolean;
+  acpRegistryAgentIds?: string[];
+  /** Original client metadata; driver keeps PM's existing `claude` identifier. */
+  clientDriver: ProviderDriverKind;
+  modelFamilies: readonly string[];
+  icon?: ProviderIcon;
+  badgeLabel?: string;
 };
 
 export type ProviderAuthMode = "agent";
@@ -34,14 +56,31 @@ export type ProviderAuthMode = "agent";
 export type ProviderAuthStatus = "authenticated" | "unauthenticated" | "unknown" | "not-installed";
 
 export type ProviderModelSource = "builtin" | "discovered" | "custom";
-export type ProviderCustomModel = { id: string; label: string };
+export type ProviderOptionDescriptor = NativeProviderOptionDescriptor;
+export type ProviderOptionSelection = NativeProviderOptionSelection;
+export type ProviderModelCapabilities = ModelCapabilities;
+export type ProviderCustomModel = { id: string; label: string; capabilities?: ProviderModelCapabilities | undefined };
+export type ProviderEnvironmentEntry = { name: string; value: string; sensitive: boolean; valueRedacted?: boolean };
+export type ProviderModelPreferences = { hidden: string[]; order: string[]; favorites: string[]; options: Record<string, ProviderOptionSelection[]> };
+export type ProviderMaintenanceAction = "install" | "update" | "remove";
+export type ProviderMaintenanceProgress = { message?: string; bytesDownloaded?: number; bytesTotal?: number };
+export type ProviderMaintenanceState = ProviderMaintenanceProgress & { status: "idle" | "running" | "succeeded" | "failed" | "cancelled"; action?: ProviderMaintenanceAction; startedAt?: string; finishedAt?: string };
+export type ProviderSettings = { revision: number; healthRefreshIntervalSeconds: number };
 
 export type ProviderModel = {
   id: string;
   label: string;
-  source?: ProviderModelSource;
+  shortName?: string | undefined;
+  badge?: "new" | undefined;
+  subProvider?: string | undefined;
+  source?: ProviderModelSource | undefined;
   temperature: boolean;
-  reasoning?: boolean;
+  reasoning?: boolean | undefined;
+  capabilities?: ProviderModelCapabilities | undefined;
+  isDefault?: boolean | undefined;
+  legacy?: boolean | undefined;
+  disabledReason?: string | undefined;
+  aliases?: string[] | undefined;
 };
 
 export type ProviderCapabilities = {
@@ -90,12 +129,14 @@ export type ProviderFailure = {
 export type ProviderInstanceInput = {
   instanceId?: string;
   driver: ProviderDriver;
-  label: string;
+  label?: string;
   enabled?: boolean;
   accentColor?: string;
+  registryIconUrl?: string;
   config?: ProviderConfigInput;
-  env?: Record<string, string | null>;
+  environment?: ProviderEnvironmentEntry[];
   customModels?: ProviderCustomModel[];
+  modelPreferences?: ProviderModelPreferences;
 };
 
 export type ProviderInstanceUpdate = Partial<Omit<ProviderInstanceInput, "instanceId" | "driver">>;
@@ -106,11 +147,16 @@ export type ProviderInstance = {
   label: string;
   enabled: boolean;
   accentColor?: string;
+  registryIconUrl?: string;
   config: ProviderConfig;
   secretConfigKeys: string[];
   authMethods?: ProviderAuthMethod[];
   authMode: ProviderAuthMode;
   authStatus: ProviderAuthStatus;
+  /** Checked original runtime readiness, independent of whether its account identity is known. */
+  nativeSessionReady: boolean;
+  /** Native Codex requirement, independent of the reported account identity. */
+  requiresOpenaiAuth?: boolean;
   authLabel?: string;
   email?: string;
   configured: boolean;
@@ -118,8 +164,10 @@ export type ProviderInstance = {
   models: ProviderModel[];
   modelsSource: "builtin" | "discovered" | "mixed";
   customModels?: ProviderCustomModel[];
+  modelPreferences?: ProviderModelPreferences;
   lastConnectionTest?: ProviderTestResult;
   installation?: ProviderInstallation;
+  updateRequiredModels?: { id: string; label: string; minVersion: string }[];
   authCheckedAt?: string;
   message?: string;
   canLogin: boolean;
@@ -127,7 +175,7 @@ export type ProviderInstance = {
   loginMethod?: ProviderLoginMethod;
   docsUrl?: string;
   capabilities?: ProviderCapabilities;
-  envKeys?: string[];
+  environment?: ProviderEnvironmentEntry[];
   revision?: number;
 };
 
@@ -136,20 +184,26 @@ export type ProvidersResponse = { providers: ProviderInstance[]; drivers: Provid
 export type ProviderTestResult = {
   ok: boolean;
   latencyMs: number;
-  error?: string;
-  models?: ProviderModel[];
-  checkedAt?: string;
-  instanceRevision?: number;
-  kind?: "agent-status";
-  authentication?: "authenticated" | "unauthenticated" | "unknown";
+  error?: string | undefined;
+  models?: ProviderModel[] | undefined;
+  checkedAt?: string | undefined;
+  instanceRevision?: number | undefined;
+  kind?: "agent-status" | undefined;
+  authentication?: "authenticated" | "unauthenticated" | "unknown" | undefined;
+  /** Absent only on historical saved checks; absence is not readiness. */
+  nativeSessionReady?: boolean | undefined;
+  requiresOpenaiAuth?: boolean | undefined;
 };
 
 export type ProviderInstallation = {
   status: "installed" | "not-installed" | "unknown" | "not-applicable";
-  checkedAt?: string;
-  version?: string;
-  executablePath?: string;
-  error?: string;
+  checkedAt?: string | undefined;
+  version?: string | undefined;
+  latestVersion?: string | undefined;
+  updateAvailable?: boolean | undefined;
+  updateSupported?: boolean | undefined;
+  executablePath?: string | undefined;
+  error?: string | undefined;
 };
 
 export type ProviderLoginMethod = "credentials" | "device-code" | "browser" | "terminal";

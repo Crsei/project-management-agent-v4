@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/userInputAttachments.test.ts",
+  "beforeSha256": "ba052f27ef162ea9ae3a009b998dddf5d9a639e19583ff39e382d81a2c8c347c",
+  "afterSha256": "562695fb467ce332261c39747b530e218b6b748c98a4ef66c50b6147a08a1a02",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 12,
+      "before": [],
+      "after": [
+        "import * as Exit from \"effect/Exit\";\n",
+        "import { fileURLToPath } from \"node:url\";\n",
+        "import { ProviderHost } from \"@t3tools/provider-core/server/ProviderHost\";\n",
+        "import * as TestProviderHost from \"@t3tools/provider-testing/TestProviderHost\";\n",
+        "import { makeTestServerConfigLayer } from \"./testUtils/providerHostFixtures.ts\";\n"
+      ]
+    },
+    {
+      "start": 14,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 17,
+      "before": [
+        "import * as Cleanup from \"../orchestration-v2/ResourceCleanupService.ts\";\n",
+        "import * as TerminalManager from \"../terminal/Manager.ts\";\n",
+        "import * as PreviewManager from \"../preview/Manager.ts\";\n",
+        "import * as ScheduledTaskService from \"../scheduledTasks/ScheduledTaskService.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 26,
+      "before": [
+        "const layer = Layer.merge(\n",
+        "  ServerConfig.layerTest(process.cwd(), { prefix: \"t3-answer-paths-\" }),\n",
+        "  DocumentText.layer,\n"
+      ],
+      "after": [
+        "const configLayer = makeTestServerConfigLayer(process.cwd(), { prefix: \"t3-answer-paths-\" });\n",
+        "const workerEntry = fileURLToPath(new URL(\"../../../../../../apps/server/agent/src/providers/t3code/document-text-worker.ts\", import.meta.url));\n",
+        "const workerLayer = Layer.succeed(DocumentText.DocumentTextWorkerEntry, workerEntry);\n",
+        "const hostLayer = Layer.effect(ProviderHost, Effect.gen(function* () {\n",
+        "  const base = yield* ProviderHost;\n",
+        "  const config = yield* ServerConfig.ServerConfig;\n",
+        "  return { ...base, resolveAttachmentPath: attachment => /^[a-z0-9_-]+$/i.test(attachment.id)\n",
+        "    ? NodePath.join(config.attachmentsDir, attachment.id + NodePath.extname(attachment.name)) : null };\n",
+        "})).pipe(Layer.provide(TestProviderHost.layer()), Layer.provide(configLayer));\n",
+        "const layer = Layer.mergeAll(configLayer, workerLayer, hostLayer,\n",
+        "  DocumentText.layer.pipe(Layer.provide(workerLayer)),\n"
+      ]
+    },
+    {
+      "start": 61,
+      "before": [
+        "          const expected = failure ? undefined : path + \".txt\";\n",
+        "          expect(yield* Fiber.join(extraction)).toBe(expected);\n",
+        "          expect(yield* Fiber.join(duplicate)).toBe(expected);\n",
+        "          expect(yield* documents.ensure(path)).toBe(expected);\n"
+      ],
+      "after": [
+        "          const extractionResult = yield* Effect.exit(Fiber.join(extraction));\n",
+        "          const duplicateResult = yield* Effect.exit(Fiber.join(duplicate));\n",
+        "          const cachedResult = yield* Effect.exit(documents.ensure(path));\n",
+        "          if (failure) {\n",
+        "            expect(Exit.isFailure(extractionResult)).toBe(true);\n",
+        "            expect(Exit.isFailure(duplicateResult)).toBe(true);\n",
+        "            expect(Exit.isFailure(cachedResult)).toBe(true);\n",
+        "          } else {\n",
+        "            for (const result of [extractionResult, duplicateResult, cachedResult]) {\n",
+        "              expect(result._tag).toBe(\"Success\");\n",
+        "              if (Exit.isSuccess(result)) expect(result.value).toBe(path + \".txt\");\n",
+        "            }\n",
+        "          }\n"
+      ]
+    },
+    {
+      "start": 126,
+      "before": [
+        "          expect(yield* documents.ensure(path)).toBeUndefined();\n",
+        "          expect(yield* documents.ensure(path)).toBeUndefined();\n"
+      ],
+      "after": [
+        "          expect(Exit.isFailure(yield* Effect.exit(documents.ensure(path)))).toBe(true);\n",
+        "          expect(Exit.isFailure(yield* Effect.exit(documents.ensure(path)))).toBe(true);\n"
+      ]
+    },
+    {
+      "start": 157,
+      "before": [
+        "            expect(yield* documents.ensure(path)).toBeUndefined();\n"
+      ],
+      "after": [
+        "            expect(Exit.isFailure(yield* Effect.exit(documents.ensure(path)))).toBe(true);\n"
+      ]
+    },
+    {
+      "start": 223,
+      "before": [],
+      "after": [
+        "              ..._args.filter(arg => arg.startsWith(\"--max-old-space-size=\")),\n"
+      ]
+    },
+    {
+      "start": 314,
+      "before": [
+        "      yield* Effect.gen(function* () {\n",
+        "        const cleanup = yield* Cleanup.ResourceCleanupService;\n",
+        "        yield* cleanup.cleanupAttachments([file.id]);\n",
+        "        expect(NodeFS.existsSync(path)).toBe(false);\n",
+        "        expect(NodeFS.existsSync(path + \".txt\")).toBe(false);\n",
+        "        NodeFS.writeFileSync(path + \".txt\", \"orphaned extraction\");\n",
+        "        yield* cleanup.cleanupAttachments([file.id]);\n",
+        "        expect(NodeFS.existsSync(path + \".txt\")).toBe(false);\n",
+        "      }).pipe(\n",
+        "        Effect.provide(\n",
+        "          Cleanup.layer.pipe(\n",
+        "            Layer.provide(\n",
+        "              Layer.mergeAll(\n",
+        "                Layer.mock(TerminalManager.TerminalManager)({}),\n",
+        "                Layer.mock(PreviewManager.PreviewManager)({}),\n",
+        "                Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),\n",
+        "              ),\n",
+        "            ),\n",
+        "          ),\n",
+        "        ),\n",
+        "      );\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 339,
+      "before": [
+        "    \"preserves corrupt documents, PDFs and unknown binaries without an extracted path\",\n"
+      ],
+      "after": [
+        "    \"fails corrupt document extraction while preserving PDFs and unsupported binary paths\",\n"
+      ]
+    },
+    {
+      "start": 351,
+      "before": [
+        "          const answers = yield* appendUserInputAttachmentPaths({\n"
+      ],
+      "after": [
+        "          const result = yield* Effect.exit(appendUserInputAttachmentPaths({\n"
+      ]
+    },
+    {
+      "start": 355,
+      "before": [
+        "          });\n",
+        "          expect(answers.q).toContain(path);\n",
+        "          expect(answers.q).not.toContain(\"text extracted\");\n"
+      ],
+      "after": [
+        "          }));\n",
+        "          if (extension === \"docx\" || extension === \"ipynb\") expect(Exit.isFailure(result)).toBe(true);\n",
+        "          else {\n",
+        "            expect(result._tag).toBe(\"Success\");\n",
+        "            if (Exit.isSuccess(result)) {\n",
+        "              expect(result.value.q).toContain(path);\n",
+        "              expect(result.value.q).not.toContain(\"text extracted\");\n",
+        "            }\n",
+        "          }\n"
+      ]
+    },
+    {
+      "start": 1075,
+      "before": [
+        "      expect(yield* (yield* DocumentText.DocumentText).ensure(unsupportedPath)).toBeUndefined();\n"
+      ],
+      "after": [
+        "      expect(Exit.isFailure(yield* Effect.exit((yield* DocumentText.DocumentText).ensure(unsupportedPath)))).toBe(true);\n"
+      ]
+    }
+  ]
+}

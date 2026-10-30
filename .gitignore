@@ -11,7 +11,7 @@ dist/
 !.env.example
 !.env.agent.example
 **/.astro/
-apps/agent-desktop/release/
+apps/desktop/release/
 .omp/
 .tmp/
 *.tsbuildinfo

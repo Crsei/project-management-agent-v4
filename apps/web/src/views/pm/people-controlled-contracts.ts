@@ -1,4 +1,5 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react"
+import type { FilterCondition } from "@/components/blocks/filter-card"
 import type { PmControlledData, PmControlledSurface, ControlledIssueRecord } from "./controlled-contracts"
 import type { ProjectCollectionRecord } from "./project-collection-contracts"
 
@@ -122,6 +123,8 @@ export type MemberDirectoryInteraction = {
   selectedId: string | null
   detailOpen: boolean
   detailReadingPosition?: number
+  /** Shared FilterCard conditions; the host applies them to its own pipeline. */
+  conditions?: readonly FilterCondition[] | undefined
 }
 export type MemberDirectoryViewProps = PmControlledSurface & {
   variant: "member1" | "member2" | "member3"
@@ -142,6 +145,8 @@ export type MemberDirectoryViewProps = PmControlledSurface & {
     suggestedContacts?: { items: readonly ControlledSuggestedContact[]; data: PmControlledData } | null
     totalMemberCount?: number | null
     sortOptions?: readonly MemberDirectorySort[]
+    /** Unfiltered team choices for the shared filter card; omitted when teams are unavailable. */
+    teamOptions?: readonly { id: string; name: string }[] | undefined
     copyReceipt?: ControlledContactCopyReceipt | null
     data: PmControlledData
     sourceDescription?: string
@@ -202,6 +207,10 @@ export type TeamCollectionInteraction = {
   workloadStateFilter?: "all" | "open" | "done"
   presenceFilter?: "all" | ControlledPresence
   focusFilter?: string | null
+  /** Shared FilterCard conditions; when present they drive the team pipeline. */
+  conditions?: readonly FilterCondition[] | undefined
+  /** Team membership filter; kept separate from the legacy URL-seeded teamId. */
+  memberFilter?: string | null
 }
 export type TeamCollectionViewProps = PmControlledSurface & {
   variant: "team1" | "team2" | "team3"
@@ -291,6 +300,8 @@ export type NotificationInboxInteraction = {
   showStatusIcon: boolean
   listScroll: number
   detailScroll: Readonly<Record<string, number>>
+  /** Shared FilterCard conditions; the host applies them to its own pipeline. */
+  conditions?: readonly FilterCondition[] | undefined
 }
 export type NotificationInboxViewProps = PmControlledSurface & {
   variant: "inbox3" | "inbox4"

@@ -33,7 +33,7 @@
   height: 48px;
   min-height: 48px;
 }
-.shell[data-header-placement="main"][data-sidebar-collapsed="true"] .sidebar {
+.shell[data-header-placement="main"][data-sidebar-collapsed="true"]:not([data-sidebar-rail]) .sidebar {
   display: none;
 }
 .title {
@@ -114,6 +114,8 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
+  --background: var(--surface);
+  background: var(--surface);
 }
 .toolbar {
   display: flex;
@@ -178,12 +180,13 @@
   left: -4px;
   width: 8px;
   z-index: 1;
+  background: transparent;
   cursor: col-resize;
   touch-action: none;
 }
-.resizeHandle:hover,
-.resizeHandle:focus-visible {
-  background: color-mix(in srgb, var(--primary) 25%, transparent);
+.resizeHandle::before {
+  left: 50%;
+  transform: translateX(-50%);
 }
 .resizeHandle:focus-visible {
   outline: 2px solid var(--ring);
@@ -277,15 +280,39 @@
 }
 
 .sidebarResize {
+  position: relative;
   display: none;
   flex-shrink: 0;
   width: 8px;
+  background: transparent;
   cursor: col-resize;
   touch-action: none;
 }
+.sidebarResize::before,
+.resizeHandle::before {
+  position: absolute;
+  inset-block: 0;
+  z-index: 1;
+  width: 1px;
+  content: "";
+  background: transparent;
+  pointer-events: none;
+  transition: background-color var(--motion-hover) var(--motion-ease-out);
+}
+.sidebarResize::before {
+  left: -1px;
+}
+.sidebarResize:hover::before,
+.sidebarResize:focus-visible::before,
+.resizeHandle:hover::before,
+.resizeHandle:focus-visible::before {
+  background: var(--accent);
+}
 .sidebarResize:hover,
 .sidebarResize:focus-visible {
-  background: color-mix(in srgb, var(--primary) 25%, transparent);
+  background: transparent;
+}
+.sidebarResize:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }

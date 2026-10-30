@@ -1,0 +1,1008 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/v2/adapter.ts",
+  "beforeSha256": "329e7537054566cbdf4e2aaac1db5fa781334bd6a23a076dba72fbcfe3acee22",
+  "afterSha256": "89a55f31b1472041c8711d738b3059034a6282711d3f9fd6ebd32260629cf4fd",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1,
+      "before": [],
+      "after": [
+        "import * as HostProcess from \"@t3tools/shared/HostProcess\";\n"
+      ]
+    },
+    {
+      "start": 33,
+      "before": [],
+      "after": [
+        "  type PlanId,\n",
+        "  type OrchestrationV2PlanStep,\n"
+      ]
+    },
+    {
+      "start": 39,
+      "before": [
+        "import type * as Cause from \"effect/Cause\";\n"
+      ],
+      "after": [
+        "import * as Cause from \"effect/Cause\";\n"
+      ]
+    },
+    {
+      "start": 47,
+      "before": [],
+      "after": [
+        "import * as Option from \"effect/Option\";\n"
+      ]
+    },
+    {
+      "start": 58,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n",
+        "import { buildRuntimeInstructions } from \"@t3tools/provider-core/server/runtimeInstructions\";\n",
+        "import { t3OrchestrationSystemPrompt } from \"@t3tools/provider-core/server/orchestrationInstructions\";\n"
+      ],
+      "after": [
+        "import * as ProviderRuntimeHost from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 129,
+      "before": [
+        "    supportsMcpTools: false,\n"
+      ],
+      "after": [
+        "    supportsMcpTools: true,\n"
+      ]
+    },
+    {
+      "start": 142,
+      "before": [
+        "    emitsPlanUpdated: false,\n",
+        "    emitsTodoList: false,\n"
+      ],
+      "after": [
+        "    emitsPlanUpdated: true,\n",
+        "    emitsTodoList: true,\n"
+      ]
+    },
+    {
+      "start": 200,
+      "before": [],
+      "after": [
+        "  readonly commandOutputs: Map<string, string>;\n"
+      ]
+    },
+    {
+      "start": 226,
+      "before": [],
+      "after": [
+        "  todoPlanId?: PlanId;\n"
+      ]
+    },
+    {
+      "start": 310,
+      "before": [
+        "    | { readonly name: string; readonly directory: string; readonly credential: string }\n"
+      ],
+      "after": [
+        "    | { readonly name: string; readonly directory: string; readonly executionId: string }\n"
+      ]
+    },
+    {
+      "start": 325,
+      "before": [],
+      "after": [
+        "\n",
+        "const decodeNativeTodos = Schema.decodeUnknownOption(Schema.Array(Schema.Struct({\n",
+        "  content: Schema.String,\n",
+        "  status: Schema.Literals([\"pending\", \"in_progress\", \"completed\", \"cancelled\"]),\n",
+        "  priority: Schema.optional(Schema.String),\n",
+        "})));\n"
+      ]
+    },
+    {
+      "start": 347,
+      "before": [
+        "/** OpenCode hides tools for names over 64 chars and rejects names over 100; hash long thread IDs. */\n",
+        "export const t3McpServerName = Effect.fn(\"t3McpServerName\")(function* (threadId: string) {\n",
+        "  const name = `t3-code-${threadId.replaceAll(/[^a-zA-Z0-9_-]/g, \"_\")}`;\n",
+        "  if (name.length <= 64) return name;\n",
+        "  const crypto = yield* Crypto.Crypto;\n",
+        "  const digest = yield* crypto\n",
+        "    .digest(\"SHA-256\", new TextEncoder().encode(threadId))\n",
+        "    .pipe(Effect.orDie);\n",
+        "  return `t3-code-${Hex.encode(digest).slice(0, 16)}`;\n",
+        "});\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 358,
+      "before": [
+        "// Last match wins: deny all threads' T3 servers, then allow only this thread's.\n"
+      ],
+      "after": [
+        "// Last match wins: another generation's host transport never grants this generation access.\n"
+      ]
+    },
+    {
+      "start": 360,
+      "before": [
+        "  mcpServerName === null\n",
+        "    ? []\n",
+        "    : [\n",
+        "        { action: \"t3-code-*\", resource: \"*\", effect: \"deny\" },\n",
+        "        { action: `${mcpServerName}_*`, resource: \"*\", effect: \"allow\" },\n",
+        "      ];\n"
+      ],
+      "after": [
+        "  [\n",
+        "    { action: \"pm_*\", resource: \"*\", effect: \"deny\" },\n",
+        "    ...(mcpServerName === null ? [] : [\n",
+        "      { action: `${mcpServerName}_*`, resource: \"*\", effect: \"allow\" as const },\n",
+        "    ]),\n",
+        "  ];\n"
+      ]
+    },
+    {
+      "start": 372,
+      "before": [],
+      "after": [
+        "  denyUngrant: boolean,\n"
+      ]
+    },
+    {
+      "start": 376,
+      "before": [],
+      "after": [
+        "        ...(denyUngrant ? [rule(\"*\", \"ask\")] : []),\n"
+      ]
+    },
+    {
+      "start": 384,
+      "before": [
+        "  ...mcpRules(mcpServerName),\n"
+      ],
+      "after": [
+        "  ...(denyUngrant ? [\n",
+        "    rule(\"shell\", \"ask\"), rule(\"edit\", \"ask\"), rule(\"external_directory\", \"ask\"),\n",
+        "    { action: \"read\", resource: \"*.env\", effect: \"ask\" as const },\n",
+        "    { action: \"read\", resource: \"*.env.*\", effect: \"ask\" as const },\n",
+        "    { action: \"read\", resource: \"*.env.example\", effect: \"allow\" as const },\n",
+        "    ...mcpRules(mcpServerName),\n",
+        "  ] : []),\n"
+      ]
+    },
+    {
+      "start": 415,
+      "before": [],
+      "after": [
+        "  if (form.metadata?.[\"kind\"] === \"authentication\" || form.metadata?.[\"kind\"] === \"secret\"\n",
+        "    || form.metadata?.[\"secret\"] === true || form.metadata?.[\"sensitive\"] === true) {\n",
+        "    return { unsupported: \"a native authentication or secret request\" };\n",
+        "  }\n"
+      ]
+    },
+    {
+      "start": 442,
+      "before": [],
+      "after": [
+        "  if (Object.keys(answers).some(key => !form.fields.some(field => field.key === key))) {\n",
+        "    throw new Error(\"The answer contains an unknown native question.\");\n",
+        "  }\n"
+      ]
+    },
+    {
+      "start": 443,
+      "before": [],
+      "after": [
+        "    if (field.type !== \"string\" && field.type !== \"multiselect\") throw new Error(\"This native field cannot be answered.\");\n"
+      ]
+    },
+    {
+      "start": 444,
+      "before": [
+        "    const values = (Array.isArray(raw) ? raw : [raw]).filter(\n",
+        "      (value): value is string => typeof value === \"string\" && value.trim().length > 0,\n",
+        "    );\n",
+        "    if (values.length > 0) {\n",
+        "      answer[field.key] = field.type === \"multiselect\" ? values : values.join(\", \");\n"
+      ],
+      "after": [
+        "    const values: unknown[] = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];\n",
+        "    if (!values.every((value): value is string => typeof value === \"string\" && value.trim().length > 0)\n",
+        "      || new Set(values).size !== values.length || (field.required === true && values.length === 0)) {\n",
+        "      throw new Error(\"The native answer is missing, duplicated or has an invalid value.\");\n",
+        "    }\n",
+        "    const options = field.options ?? [];\n",
+        "    if (field.custom !== true && options.length > 0 && values.some(value => !options.some(option => option.value === value))) {\n",
+        "      throw new Error(\"The answer contains a choice the native provider did not offer.\");\n",
+        "    }\n",
+        "    if (field.type === \"multiselect\") {\n",
+        "      if ((field.minItems !== undefined && values.length < field.minItems)\n",
+        "        || (field.maxItems !== undefined && values.length > field.maxItems)) throw new Error(\"The native answer violates the selection limits.\");\n",
+        "      answer[field.key] = values;\n",
+        "    } else {\n",
+        "      if (values.length > 1) throw new Error(\"The native question accepts one answer.\");\n",
+        "      const value = values[0];\n",
+        "      if (value === undefined) continue;\n",
+        "      if ((field.minLength !== undefined && value.length < field.minLength)\n",
+        "        || (field.maxLength !== undefined && value.length > field.maxLength)\n",
+        "        || (field.pattern !== undefined && !new RegExp(field.pattern).test(value))) {\n",
+        "        throw new Error(\"The native answer violates the string constraints.\");\n",
+        "      }\n",
+        "      answer[field.key] = value;\n"
+      ]
+    },
+    {
+      "start": 652,
+      "before": [
+        "  const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n"
+      ],
+      "after": [
+        "  const runtimeHost = yield* ProviderRuntimeHost.ProviderRuntimeHost;\n",
+        "  const homeDirectory = yield* HostProcess.HomeDirectory;\n"
+      ]
+    },
+    {
+      "start": 657,
+      "before": [
+        "  const mcpServerNameFor = (threadId: string) =>\n",
+        "    t3McpServerName(threadId).pipe(Effect.provideService(Crypto.Crypto, crypto));\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 689,
+      "before": [],
+      "after": [
+        "    const binding = yield* runtimeHost.read({ threadId: input.threadId, providerInstanceId: instanceId });\n",
+        "    if (binding && (binding.cwd !== directoryOf(input.runtimePolicy.cwd) || binding.mcpServers.length > 1)) {\n",
+        "      return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "        driver: OPENCODE_PROVIDER, detail: \"The host transport does not match this native operation.\",\n",
+        "      });\n",
+        "    }\n",
+        "    // Reuse only this operation's admitted owner, never a later binding for the same thread.\n",
+        "    const authorizeHostTools = binding?.mcpServers.length\n",
+        "      ? runtimeHost.authorize({ threadId: binding.threadId, providerInstanceId: binding.providerInstanceId,\n",
+        "          executionId: binding.executionId, action: \"tool\" }).pipe(Effect.mapError(cause =>\n",
+        "          new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver, detail: \"The generation-scoped PM tool authorization is no longer valid\", cause,\n",
+        "          })))\n",
+        "      : Effect.void;\n",
+        "    const operationName = `pm_${Hex.encode(yield* crypto.randomBytes(12).pipe(Effect.orDie))}`;\n"
+      ]
+    },
+    {
+      "start": 704,
+      "before": [
+        "    const events = yield* Queue.unbounded<ProviderAdapter.ProviderAdapterV2Event, Cause.Done>();\n"
+      ],
+      "after": [
+        "    const events = yield* Queue.unbounded<\n",
+        "      ProviderAdapter.ProviderAdapterV2Event,\n",
+        "      ProviderAdapter.ProviderAdapterV2Error | Cause.Done\n",
+        "    >();\n"
+      ]
+    },
+    {
+      "start": 964,
+      "before": [
+        "    const emitTool = Effect.fnUntraced(function* (\n"
+      ],
+      "after": [
+        "    const emitTool: (\n"
+      ]
+    },
+    {
+      "start": 970,
+      "before": [
+        "    ) {\n"
+      ],
+      "after": [
+        "    ) => Effect.Effect<void> = Effect.fnUntraced(function* (state, turn, id, status, result) {\n"
+      ]
+    },
+    {
+      "start": 978,
+      "before": [
+        "      yield* emit({\n",
+        "        type: \"turn_item.updated\",\n",
+        "        driver,\n",
+        "        turnItem: openCodeToolTurnItem(\n",
+        "          itemBase(state, turn, nativeId, status, startedAt, completedAt, updatedAt),\n",
+        "          {\n",
+        "            name: tool.name,\n",
+        "            input: tool.input,\n",
+        "            output: result?.output,\n",
+        "            completedMetadata: status === \"completed\" ? result?.metadata : undefined,\n",
+        "          },\n",
+        "        ),\n",
+        "      });\n"
+      ],
+      "after": [
+        "      const turnItem = openCodeToolTurnItem(\n",
+        "        itemBase(state, turn, nativeId, status, startedAt, completedAt, updatedAt),\n",
+        "        {\n",
+        "          name: tool.name,\n",
+        "          input: tool.input,\n",
+        "          output: result?.output,\n",
+        "          completedMetadata: status === \"completed\" ? result?.metadata : undefined,\n",
+        "        },\n",
+        "      );\n",
+        "      yield* emit({ type: \"turn_item.updated\", driver, turnItem });\n",
+        "      if (turnItem.type === \"command_execution\" && turnItem.output !== undefined) {\n",
+        "        const before = turn.commandOutputs.get(nativeId) ?? \"\";\n",
+        "        turn.commandOutputs.set(nativeId, turnItem.output);\n",
+        "        if (turnItem.output.startsWith(before) && turnItem.output.length > before.length) {\n",
+        "          yield* emit({\n",
+        "            type: \"command_output.delta\", driver, threadId: turn.input.threadId,\n",
+        "            itemId: turnItem.id, chunk: turnItem.output.slice(before.length),\n",
+        "          });\n",
+        "        }\n",
+        "      }\n",
+        "      if (tool.name !== \"todowrite\" || status !== \"completed\") return;\n",
+        "      const todos = decodeNativeTodos(tool.input[\"todos\"]);\n",
+        "      if (Option.isNone(todos)) return; // The full native tool row above preserves unrecognized input.\n",
+        "      if (turn.todoPlanId === undefined) turn.todoPlanId = yield* idAllocator.allocate.plan({\n",
+        "        threadId: turn.input.threadId, ...(turn.input.runId === null ? {} : { runId: turn.input.runId }), driver,\n",
+        "      }).pipe(Effect.catch(cause => {\n",
+        "        const failure = new ProviderAdapter.ProviderAdapterEventStreamError({\n",
+        "          driver, providerSessionId: input.providerSessionId, cause,\n",
+        "        });\n",
+        "        // Fail the original event channel, including allocation during terminal artifact flush.\n",
+        "        return Queue.fail(events, failure).pipe(Effect.andThen(Effect.die(failure)));\n",
+        "      }));\n",
+        "      const todoId = `${turn.scope}${turn.providerTurn.id}:todo`;\n",
+        "      const steps: OrchestrationV2PlanStep[] = todos.value.flatMap((todo, index) => todo.status === \"cancelled\" ? [] : [{\n",
+        "        id: `${todoId}:${index + 1}`, text: todo.content.trim() || `Todo ${index + 1}`,\n",
+        "        status: todo.status === \"completed\" ? \"completed\" : todo.status === \"in_progress\" ? \"running\" : \"pending\",\n",
+        "      }]);\n",
+        "      const completed = todos.value.length > 0 && steps.every(step => step.status === \"completed\");\n",
+        "      const todoStatus = completed ? \"completed\" : \"running\";\n",
+        "      const todoStarted = turn.providerTurn.startedAt ?? startedAt;\n",
+        "      const todoCompleted = completed ? updatedAt : null;\n",
+        "      yield* emitNode(state, turn, todoId, \"todo_list\", todoStatus, todoStarted, todoCompleted);\n",
+        "      const base = itemBase(state, turn, todoId, todoStatus, todoStarted, todoCompleted, updatedAt);\n",
+        "      yield* emit({ type: \"plan.updated\", driver, plan: {\n",
+        "        id: turn.todoPlanId, threadId: turn.input.threadId, runId: turn.input.runId, nodeId: base.nodeId,\n",
+        "        kind: \"todo_list\", status: completed ? \"completed\" : \"active\", steps,\n",
+        "      } });\n",
+        "      yield* emit({ type: \"turn_item.updated\", driver, turnItem: {\n",
+        "        ...base, type: \"todo_list\", title: \"Todo list\", nativeItemRef: ref(todoId, \"weak\"), planId: turn.todoPlanId, steps,\n",
+        "      } });\n"
+      ]
+    },
+    {
+      "start": 1108,
+      "before": [],
+      "after": [
+        "      commandOutputs: new Map(),\n"
+      ]
+    },
+    {
+      "start": 1502,
+      "before": [],
+      "after": [
+        "        ...(binding ? { hostExecution: { threadId: binding.threadId, executionId: binding.executionId } } : {}),\n"
+      ]
+    },
+    {
+      "start": 1681,
+      "before": [
+        "    // The orchestrator already recorded T3-owned answers; only forget them here.\n"
+      ],
+      "after": [
+        "    // Emit the native lifecycle for every consumer, including locally submitted answers.\n"
+      ]
+    },
+    {
+      "start": 1686,
+      "before": [
+        "      if (!(yield* forgetRequest(entry)) || entry.answering) return;\n"
+      ],
+      "after": [
+        "      if (!(yield* forgetRequest(entry))) return;\n"
+      ]
+    },
+    {
+      "start": 2136,
+      "before": [
+        "              code: type,\n"
+      ],
+      "after": [
+        "              code: status === undefined ? type : String(status),\n"
+      ]
+    },
+    {
+      "start": 2254,
+      "before": [],
+      "after": [
+        "    // Native IDs are immutable across duplicate SSE deliveries. Keep only identities, scoped to this operation.\n",
+        "    const receivedEventIds = new Set<string>();\n"
+      ]
+    },
+    {
+      "start": 2255,
+      "before": [],
+      "after": [
+        "      if (\"id\" in event) {\n",
+        "        if (receivedEventIds.has(event.id)) return;\n",
+        "        receivedEventIds.add(event.id);\n",
+        "      }\n"
+      ]
+    },
+    {
+      "start": 2365,
+      "before": [
+        "        const entry = [...pending.values()].find((candidate) => candidate.native.id === nativeId);\n",
+        "        if (entry === undefined || entry.answering) return;\n"
+      ],
+      "after": [
+        "        const entry = [...pending.values()].find((candidate) =>\n",
+        "          candidate.native.id === nativeId && candidate.sessionId === event.data.sessionID);\n",
+        "        if (entry === undefined) return;\n"
+      ]
+    },
+    {
+      "start": 2644,
+      "before": [
+        "        Effect.flatMap(() =>\n"
+      ],
+      "after": [
+        "        Effect.flatMap(exit => Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause) ? Effect.void :\n"
+      ]
+    },
+    {
+      "start": 2760,
+      "before": [
+        "        appThreadId === null ? null : yield* mcpServerNameFor(appThreadId),\n"
+      ],
+      "after": [
+        "        appThreadId === null || !binding?.mcpServers.length ? null : operationName,\n",
+        "        binding?.nativePermissions === \"deny-ungranted\",\n"
+      ]
+    },
+    {
+      "start": 2818,
+      "before": [
+        "      verb: \"roll back\" | \"fork\",\n"
+      ],
+      "after": [
+        "      verb: \"roll back\" | \"fork\" | \"resume\",\n"
+      ]
+    },
+    {
+      "start": 2828,
+      "before": [
+        "        (state === undefined || state.unsettled) &&\n"
+      ],
+      "after": [
+        "        (verb === \"resume\" || state === undefined || state.unsettled) &&\n"
+      ]
+    },
+    {
+      "start": 2908,
+      "before": [],
+      "after": [
+        "    const readHistory = (sessionId: string) => OpenCode2Client.paginate(\n",
+        "      { sessionID: Session.ID.make(sessionId), order: \"asc\" as const, limit: 100 },\n",
+        "      client.message.list,\n",
+        "    ).pipe(Stream.runCollect);\n",
+        "\n",
+        "    const completedNativeTurns = (history: ReadonlyArray<SessionMessage.Info>) => {\n",
+        "      const completed: Array<{ nativeId: string; before?: string }> = [];\n",
+        "      let pending: string | undefined;\n",
+        "      let latest: string | undefined;\n",
+        "      for (const message of history) {\n",
+        "        if (message.type === \"user\" || message.type === \"synthetic\") {\n",
+        "          const previous = completed.at(-1);\n",
+        "          if (previous && previous.before === undefined) previous.before = message.id;\n",
+        "          pending ??= message.id;\n",
+        "          latest = undefined;\n",
+        "        } else if (message.type === \"idle\") {\n",
+        "          // The native idle marker closes the whole execution, including any steered prompts.\n",
+        "          latest = pending && message.outcome === \"succeeded\" && message.error === undefined ? pending : undefined;\n",
+        "          if (latest) completed.push({ nativeId: latest });\n",
+        "          pending = undefined;\n",
+        "        }\n",
+        "      }\n",
+        "      return { completed, pending, latest };\n",
+        "    };\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 2912,
+      "before": [
+        "      const history = yield* OpenCode2Client.paginate(\n",
+        "        { sessionID: Session.ID.make(sessionId), order: \"asc\" as const, limit: 100 },\n",
+        "        client.message.list,\n",
+        "      ).pipe(Stream.runCollect);\n"
+      ],
+      "after": [
+        "      const history = yield* readHistory(sessionId);\n"
+      ]
+    },
+    {
+      "start": 2950,
+      "before": [],
+      "after": [
+        "      const nativeTurns = completedNativeTurns(history);\n",
+        "      const completedTurnRefs: ProviderAdapter.ProviderNativeCompletedTurnRef[] = nativeTurns.completed.map(\n",
+        "        ({ nativeId }) => ({ driver, nativeId, strength: \"strong\" }),\n",
+        "      );\n",
+        "      const latestCompletedTurnRef = completedTurnRefs.find(ref => ref.nativeId === nativeTurns.latest);\n"
+      ]
+    },
+    {
+      "start": 2961,
+      "before": [],
+      "after": [
+        "        ...(completedTurnRefs.length ? { nativeHistory: { nativeSessionId: sessionId, completedTurnRefs,\n",
+        "          ...(latestCompletedTurnRef ? { latestCompletedTurnRef } : {}) } } : {}),\n"
+      ]
+    },
+    {
+      "start": 2990,
+      "before": [],
+      "after": [
+        "    // Connection/thread caches can be invalidated without relinquishing ownership of injected servers.\n",
+        "    const ownedMcpServers = new Map<string, { readonly name: string; readonly directory: string }>();\n",
+        "    const mcpGate = Semaphore.makeUnsafe(1);\n"
+      ]
+    },
+    {
+      "start": 2993,
+      "before": [
+        "      ).pipe(Effect.timeout(\"5 seconds\"), Effect.ignore({ log: true }));\n"
+      ],
+      "after": [
+        "      ).pipe(\n",
+        "        Effect.catchTag(\"McpServerNotFoundError\", () => Effect.void),\n",
+        "        Effect.timeout(\"5 seconds\"),\n",
+        "        Effect.tap(() => Effect.sync(() => { ownedMcpServers.delete(mcp.directory); })),\n",
+        "      );\n"
+      ]
+    },
+    {
+      "start": 2995,
+      "before": [
+        "    yield* Effect.addFinalizer(() =>\n",
+        "      Effect.forEach(\n",
+        "        [...threads.values()].flatMap((state) => (state.mcp === undefined ? [] : [state.mcp])),\n",
+        "        removeMcp,\n",
+        "        { concurrency: 8, discard: true },\n",
+        "      ),\n",
+        "    );\n"
+      ],
+      "after": [
+        "    const cleanupMcp = Effect.suspend(() => Effect.forEach(\n",
+        "      [...ownedMcpServers.values()], removeMcp, { concurrency: 8, discard: true },\n",
+        "    ));\n",
+        "    yield* Effect.addFinalizer(() => cleanupMcp.pipe(mcpGate.withPermit, Effect.orDie));\n",
+        "    const recheckHostTools = authorizeHostTools.pipe(Effect.onError(() =>\n",
+        "      cleanupMcp.pipe(mcpGate.withPermit, Effect.orDie),\n",
+        "    ));\n"
+      ]
+    },
+    {
+      "start": 3008,
+      "before": [
+        "      const mcpSession = yield* mcpSessions.read(turnInput.threadId);\n"
+      ],
+      "after": [
+        "      const current = yield* runtimeHost.read({ threadId: input.threadId, providerInstanceId: instanceId });\n"
+      ]
+    },
+    {
+      "start": 3010,
+      "before": [
+        "      const name = yield* mcpServerNameFor(turnInput.threadId);\n",
+        "      // An external server may not reach T3's MCP endpoint, as with 1.x.\n",
+        "      const wanted =\n",
+        "        mcpSession === undefined || connection.external\n",
+        "          ? undefined\n",
+        "          : { name, directory, credential: mcpSession.authorizationHeader };\n",
+        "      if (\n",
+        "        state.mcp !== undefined &&\n",
+        "        (wanted === undefined ||\n",
+        "          state.mcp.directory !== wanted.directory ||\n",
+        "          state.mcp.credential !== wanted.credential)\n",
+        "      ) {\n"
+      ],
+      "after": [
+        "      if (binding && (current?.executionId !== binding.executionId || directory !== binding.cwd)) {\n",
+        "        return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "          driver, detail: \"The generation-scoped host transport is no longer active.\",\n",
+        "        });\n",
+        "      }\n",
+        "      const transport = binding?.mcpServers[0];\n",
+        "      const wanted = transport && binding ? { name: operationName, directory, executionId: binding.executionId } : undefined;\n",
+        "      if (state.mcp !== undefined && (wanted === undefined || state.mcp.directory !== wanted.directory\n",
+        "        || state.mcp.executionId !== wanted.executionId)) {\n"
+      ]
+    },
+    {
+      "start": 3025,
+      "before": [
+        "      // Idle Location eviction drops runtime MCP servers without clearing T3's cache.\n",
+        "      // Re-adding an unchanged config keeps its existing connection.\n",
+        "      let mcpAvailable = false;\n",
+        "      if (wanted !== undefined) {\n",
+        "        mcpAvailable = yield* client.mcp\n",
+        "          .add({\n",
+        "            server: name,\n",
+        "            location: { directory },\n",
+        "            config: new Mcp.RemoteConfig({\n",
+        "              type: \"remote\",\n",
+        "              url: mcpSession!.endpoint,\n",
+        "              headers: { Authorization: wanted.credential },\n",
+        "              oauth: false,\n",
+        "            }),\n",
+        "          })\n",
+        "          .pipe(\n",
+        "            Effect.timeout(INVENTORY_TIMEOUT),\n",
+        "            Effect.as(true),\n",
+        "            Effect.catchCause((cause) =>\n",
+        "              Effect.logWarning(\"Could not add T3 Code's MCP server to OpenCode.\", cause).pipe(\n",
+        "                Effect.as(false),\n",
+        "              ),\n",
+        "            ),\n",
+        "          );\n",
+        "        if (mcpAvailable) state.mcp = wanted;\n"
+      ],
+      "after": [
+        "      if (wanted && transport) {\n",
+        "        yield* authorizeHostTools;\n",
+        "        // Re-add after native Location eviction, but clean up only this random operation-owned name.\n",
+        "        state.mcp = wanted;\n",
+        "        ownedMcpServers.set(wanted.directory, wanted);\n",
+        "        yield* client.mcp.add({\n",
+        "          server: wanted.name, location: { directory },\n",
+        "          config: new Mcp.LocalConfig({\n",
+        "            type: \"local\", command: [transport.command, ...transport.args], cwd: directory, codemode: false,\n",
+        "          }),\n",
+        "        }).pipe(Effect.timeout(INVENTORY_TIMEOUT));\n",
+        "        const admitted = yield* client.mcp.list({ location: { directory } }).pipe(Effect.timeout(INVENTORY_TIMEOUT));\n",
+        "        if (!admitted.data.some(server => server.name === wanted.name && server.status.status === \"connected\")) {\n",
+        "          return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver, detail: \"The generation-scoped host transport is not connected.\",\n",
+        "          });\n",
+        "        }\n",
+        "        yield* authorizeHostTools;\n"
+      ]
+    },
+    {
+      "start": 3051,
+      "before": [
+        "      const instructions = [\n",
+        "        buildRuntimeInstructions({ harness: \"OpenCode\", model: turnInput.modelSelection.model }),\n",
+        "        t3OrchestrationSystemPrompt(mcpAvailable, mcpSession?.capabilities?.has(\"device\") === true),\n",
+        "      ]\n",
+        "        .filter((part) => part !== undefined && part.length > 0)\n",
+        "        .join(\"\\n\\n\");\n"
+      ],
+      "after": [
+        "      const instructions = [\"<runtime_info>You are running through the OpenCode harness.</runtime_info>\",\n",
+        "        binding?.instructionText].filter(Boolean).join(\"\\n\\n\");\n"
+      ]
+    },
+    {
+      "start": 3065,
+      "before": [
+        "    });\n"
+      ],
+      "after": [
+        "    }, effect => effect.pipe(\n",
+        "      Effect.onError(() => cleanupMcp.pipe(Effect.orDie)),\n",
+        "      mcpGate.withPermit,\n",
+        "    ));\n"
+      ]
+    },
+    {
+      "start": 3287,
+      "before": [],
+      "after": [
+        "        yield* recheckHostTools;\n"
+      ]
+    },
+    {
+      "start": 3302,
+      "before": [],
+      "after": [
+        "          yield* recheckHostTools;\n"
+      ]
+    },
+    {
+      "start": 3318,
+      "before": [],
+      "after": [
+        "      yield* recheckHostTools;\n"
+      ]
+    },
+    {
+      "start": 3435,
+      "before": [
+        "          if (threadInput.runtimePolicy !== undefined) {\n",
+        "            yield* readModelsOnce(threadInput.runtimePolicy.cwd);\n"
+      ],
+      "after": [
+        "          const expectedCwd = threadInput.runtimePolicy?.cwd ?? input.runtimePolicy.cwd ?? host.paths.cwd;\n",
+        "          const native = yield* client.session.get({ sessionID: Session.ID.make(sessionId) });\n",
+        "          if (native.id !== sessionId || native.location.directory !== expectedCwd) {\n",
+        "            return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "              driver, detail: \"The native OpenCode session belongs to another directory.\",\n",
+        "            });\n"
+      ]
+    },
+    {
+      "start": 3438,
+      "before": [
+        "          const native = yield* client.session.get({ sessionID: Session.ID.make(sessionId) });\n"
+      ],
+      "after": [
+        "          yield* ensureQuiet(sessionId, \"resume\");\n",
+        "          if (threadInput.runtimePolicy !== undefined) yield* readModelsOnce(expectedCwd);\n"
+      ]
+    },
+    {
+      "start": 3450,
+      "before": [
+        "          if (cwd != null && native.location.directory !== cwd) {\n",
+        "            yield* client.session.move({\n",
+        "              sessionID: Session.ID.make(sessionId),\n",
+        "              directory: AbsolutePath.make(cwd),\n",
+        "            });\n",
+        "          }\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3686,
+      "before": [],
+      "after": [
+        "          yield* recheckHostTools;\n"
+      ]
+    },
+    {
+      "start": 3777,
+      "before": [
+        "      unloadThread: Effect.fn(\"OpenCode2Adapter.unloadThread\")(function* ({ providerThread }) {\n",
+        "        const nativeId = providerThread.nativeThreadRef?.nativeId;\n",
+        "        const state = nativeId == null ? undefined : threads.get(nativeId);\n",
+        "        if (\n",
+        "          nativeId == null ||\n",
+        "          state === undefined ||\n",
+        "          state.active !== undefined ||\n",
+        "          hasBackground(state)\n",
+        "        ) {\n",
+        "          return;\n",
+        "        }\n",
+        "        threads.delete(nativeId);\n",
+        "        for (const [child, owner] of childOwners) {\n",
+        "          if (owner !== state) continue;\n",
+        "          childOwners.delete(child);\n",
+        "          threads.delete(child);\n",
+        "        }\n",
+        "        if (state.mcp !== undefined) yield* removeMcp(state.mcp);\n",
+        "      }),\n"
+      ],
+      "after": [
+        "      unloadThread: Effect.fn(\"OpenCode2Adapter.unloadThread\")(\n",
+        "        function* ({ providerThread }) {\n",
+        "          const nativeId = providerThread.nativeThreadRef?.nativeId;\n",
+        "          const state = nativeId == null ? undefined : threads.get(nativeId);\n",
+        "          if (\n",
+        "            nativeId == null ||\n",
+        "            state === undefined ||\n",
+        "            state.active !== undefined ||\n",
+        "            hasBackground(state)\n",
+        "          ) {\n",
+        "            return;\n",
+        "          }\n",
+        "          // Retain the thread and owned registration if native cleanup fails, so scope cleanup can retry.\n",
+        "          if (state.mcp !== undefined) yield* removeMcp(state.mcp);\n",
+        "          threads.delete(nativeId);\n",
+        "          for (const [child, owner] of childOwners) {\n",
+        "            if (owner !== state) continue;\n",
+        "            childOwners.delete(child);\n",
+        "            threads.delete(child);\n",
+        "          }\n",
+        "        },\n",
+        "        effect => effect.pipe(Effect.mapError(cause =>\n",
+        "          isProviderAdapterError(cause) ? cause : new ProviderAdapter.ProviderAdapterCloseSessionError({\n",
+        "            driver, providerSessionId: input.providerSessionId, cause,\n",
+        "          }),\n",
+        "        )),\n",
+        "      ),\n"
+      ]
+    },
+    {
+      "start": 3813,
+      "before": [],
+      "after": [
+        "          if (binding?.nativePermissions === \"deny-ungranted\" && native.type === \"permission\"\n",
+        "            && decision !== undefined && approves(decision)) {\n",
+        "            return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "              driver, detail: \"Native permissions require a separate host grant; information answers cannot approve them.\",\n",
+        "            });\n",
+        "          }\n",
+        "          const nativeAnswer = native.type === \"form\" && answers !== undefined && decision !== \"decline\" && decision !== \"cancel\"\n",
+        "            ? yield* Effect.try({ try: () => formAnswer(native.form, answers),\n",
+        "              catch: cause => new ProviderAdapter.ProviderAdapterProtocolError({ driver, detail: \"Invalid native question answer.\", cause }) })\n",
+        "            : undefined;\n"
+      ]
+    },
+    {
+      "start": 3843,
+      "before": [],
+      "after": [
+        "          const gone = () => lock.withPermit(settleRequest(entry, \"cancelled\"));\n"
+      ]
+    },
+    {
+      "start": 3852,
+      "before": [
+        "                  .pipe(Effect.catchTags(permissionGone)),\n"
+      ],
+      "after": [
+        "                  .pipe(Effect.catchTags({ PermissionNotFoundError: gone, SessionNotFoundError: gone })),\n"
+      ]
+    },
+    {
+      "start": 3855,
+      "before": [
+        "                (answers === undefined || decision === \"decline\" || decision === \"cancel\"\n"
+      ],
+      "after": [
+        "                (nativeAnswer === undefined\n"
+      ]
+    },
+    {
+      "start": 3863,
+      "before": [
+        "                      answer: formAnswer(native.form, answers),\n"
+      ],
+      "after": [
+        "                      answer: nativeAnswer,\n"
+      ]
+    },
+    {
+      "start": 3865,
+      "before": [
+        "                ).pipe(Effect.catchTags(formGone)),\n"
+      ],
+      "after": [
+        "                ).pipe(Effect.catchTags({\n",
+        "                  FormNotFoundError: gone, FormAlreadySettledError: gone, SessionNotFoundError: gone,\n",
+        "                })),\n"
+      ]
+    },
+    {
+      "start": 3867,
+      "before": [
+        "          yield* forgetRequest(entry);\n"
+      ],
+      "after": [
+        "          yield* lock.withPermit(settleRequest(entry, delivered &&\n",
+        "            (native.type === \"form\" ? nativeAnswer !== undefined : decision !== undefined && approves(decision))\n",
+        "              ? \"resolved\" : \"cancelled\"));\n"
+      ]
+    },
+    {
+      "start": 3957,
+      "before": [],
+      "after": [
+        "          if (forkInput.providerTurnId !== undefined && forkInput.nativeCompletedTurnRef !== undefined) {\n",
+        "            return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "              driver, detail: \"OpenCode fork requires one unambiguous boundary.\",\n",
+        "            });\n",
+        "          }\n"
+      ]
+    },
+    {
+      "start": 3967,
+      "before": [
+        "          const before =\n"
+      ],
+      "after": [
+        "          let before =\n"
+      ]
+    },
+    {
+      "start": 3976,
+      "before": [],
+      "after": [
+        "          if (forkInput.nativeCompletedTurnRef !== undefined) {\n",
+        "            const selected = forkInput.nativeCompletedTurnRef;\n",
+        "            const native = completedNativeTurns(yield* readHistory(sourceId)).completed.find(turn => turn.nativeId === selected.nativeId);\n",
+        "            if (selected.driver !== driver || selected.strength !== \"strong\" || native === undefined) {\n",
+        "              return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "                driver, detail: \"The native OpenCode fork boundary is not a completed message in this session.\",\n",
+        "              });\n",
+        "            }\n",
+        "            before = native.before ?? null;\n",
+        "          }\n"
+      ]
+    },
+    {
+      "start": 4030,
+      "before": [],
+      "after": [
+        "    yield* OpenCodeRuntime.bindOpenCodeSessionEvidence(runtime, {\n",
+        "      protocol: \"opencode-v2-http.sse\", version: connection.version,\n",
+        "      cwd: directoryOf(input.runtimePolicy.cwd), homeDirectory, external: connection.external,\n",
+        "      readLegacy: Effect.fnUntraced(function* ({ nativeSessionId, turnId, messageId, ensure }) {\n",
+        "        const native = yield* client.session.get({ sessionID: Session.ID.make(nativeSessionId) });\n",
+        "        const directory = directoryOf(ensure.runtimePolicy.cwd);\n",
+        "        if (native.id !== nativeSessionId || native.location.directory !== directory || directory !== session.cwd) {\n",
+        "          return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver, detail: \"The legacy native session identity or directory does not match.\",\n",
+        "          });\n",
+        "        }\n",
+        "        if (nativeSessionId in (yield* client.session.active())) {\n",
+        "          return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver, detail: \"The legacy native session is active in another client.\",\n",
+        "          });\n",
+        "        }\n",
+        "        const history = yield* readHistory(nativeSessionId);\n",
+        "        const nativeTurns = completedNativeTurns(history);\n",
+        "        const user = history.findLast(message => message.type === \"user\");\n",
+        "        const assistant = history.findLast(message => message.type === \"assistant\");\n",
+        "        if ((history.length > 0 && (!user || !assistant || assistant.type !== \"assistant\"\n",
+        "          || assistant.time.completed === undefined || assistant.error !== undefined\n",
+        "          || DateTime.toEpochMillis(assistant.time.created) < DateTime.toEpochMillis(user.time.created)))\n",
+        "          || nativeTurns.pending !== undefined\n",
+        "          || (turnId !== undefined && turnId !== nativeTurns.latest)\n",
+        "          || (messageId !== undefined && messageId !== user?.id && messageId !== assistant?.id)) {\n",
+        "          return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver, detail: \"The legacy native session has no matching stable completed boundary.\",\n",
+        "          });\n",
+        "        }\n",
+        "        const now = yield* DateTime.now;\n",
+        "        const providerThread: OrchestrationV2ProviderThread = {\n",
+        "          id: idAllocator.derive.providerThread({ driver, nativeThreadId: native.id }), driver,\n",
+        "          providerInstanceId: instanceId, providerSessionId: input.providerSessionId, appThreadId: ensure.threadId,\n",
+        "          ownerNodeId: null, nativeThreadRef: ref(native.id),\n",
+        "          nativeConversationHeadRef: user ? ref(user.id, \"weak\") : null, status: \"idle\",\n",
+        "          firstRunOrdinal: null, lastRunOrdinal: null, handoffIds: [], forkedFrom: null, createdAt: now, updatedAt: now,\n",
+        "        };\n",
+        "        const reported = withReportedModel(providerThread,\n",
+        "          native.model ?? (assistant?.type === \"assistant\" ? assistant.model : undefined));\n",
+        "        const snapshot = yield* snapshotOf({ ...reported, nativeMetadata: {\n",
+        "          ...reported.nativeMetadata, ...(assistant ? { forkHeadMessageId: assistant.id } : {}),\n",
+        "        } }, nativeSessionId);\n",
+        "        if (turnId !== undefined && !snapshot.nativeHistory?.completedTurnRefs.some(ref => ref.nativeId === turnId)) {\n",
+        "          return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver, detail: \"The native OpenCode history cannot prove the saved completed boundary.\",\n",
+        "          });\n",
+        "        }\n",
+        "        return snapshot;\n",
+        "      }),\n",
+        "      adoptBuffered: Effect.fnUntraced(function* ({ request, turn, isCurrent }) {\n",
+        "        const nativeId = turn.providerThread.nativeThreadRef?.nativeId;\n",
+        "        const state = nativeId == null ? undefined : threads.get(nativeId);\n",
+        "        if (!state || state.active || !request.messageId || request.providerThreadId !== state.providerThread.id\n",
+        "          || !state.wakes.some(wake => wake.messageId === request.messageId) || !(yield* isCurrent)) return false;\n",
+        "        yield* runWake(state, { ...turn, message: {\n",
+        "          messageId: request.messageId, text: \"\", attachments: [], createdBy: \"agent\", creationSource: \"provider\",\n",
+        "        } });\n",
+        "        return true;\n",
+        "      }),\n",
+        "    });\n"
+      ]
+    }
+  ]
+}

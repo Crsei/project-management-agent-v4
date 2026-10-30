@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexInstallation.ts",
+  "beforeSha256": "9a25f3a6440cb8685ff9971f290587e063166cd9a8ce48810c46e4dcd337a64b",
+  "afterSha256": "65a36c1adb70965624065c08a87c34aa01d39ff8d144577f69e29a79a348e17e",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 25,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 151,
+      "before": [],
+      "after": [
+        "  readonly managedDirectory?: string;\n"
+      ]
+    },
+    {
+      "start": 176,
+      "before": [
+        "  const managedDirectory = path.join(options.baseDir, \"tools\", \"codex\");\n"
+      ],
+      "after": [
+        "  const managedDirectory = options.managedDirectory ?? path.join(options.baseDir, \"tools\", \"codex\");\n"
+      ]
+    }
+  ]
+}

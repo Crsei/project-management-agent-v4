@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/AntigravityInstallation.ts",
+  "beforeSha256": "f4dc537fb1e3ea9e24e391b97b77ec10133dfacb133cf487b49354710a7c41f1",
+  "afterSha256": "389710529b4c613df9e4f6ee4ed7249e91082adb045d7c80b90c117fd997c0a3",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 5,
+      "before": [],
+      "after": [
+        "import { expandHomePath } from \"@t3tools/provider-core/server/pathExpansion\";\n"
+      ]
+    },
+    {
+      "start": 28,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 160,
+      "before": [],
+      "after": [
+        "  const cwd = yield* HostProcess.WorkingDirectory;\n",
+        "  const home = yield* HostProcess.HomeDirectory;\n"
+      ]
+    },
+    {
+      "start": 283,
+      "before": [
+        "      .map((directory) => path.resolve(directory, binary));\n"
+      ],
+      "after": [
+        "      .map((directory) => path.resolve(cwd, directory, binary));\n"
+      ]
+    },
+    {
+      "start": 290,
+      "before": [
+        "      const override = binaryPath?.trim();\n"
+      ],
+      "after": [
+        "      const override = binaryPath?.trim() ? expandHomePath(binaryPath.trim(), home) : undefined;\n"
+      ]
+    },
+    {
+      "start": 294,
+      "before": [
+        "            ? [path.resolve(override)]\n"
+      ],
+      "after": [
+        "            ? [path.resolve(cwd, override)]\n"
+      ]
+    },
+    {
+      "start": 805,
+      "before": [
+        "              const candidate = Option.getOrElse(resolved, () => path.resolve(binaryPath));\n"
+      ],
+      "after": [
+        "              const candidate = Option.getOrElse(resolved, () => path.resolve(cwd, expandHomePath(binaryPath, home)));\n"
+      ]
+    }
+  ]
+}

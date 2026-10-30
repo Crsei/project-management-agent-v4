@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { GripVertical } from "lucide-react"
+import { ArrowRightLeft, GripVertical } from "lucide-react"
 import { Button } from "../ui/button"
 import {
   Popover,
@@ -14,6 +14,7 @@ export type BoardProps<T> = GroupedListProps<T> & {
   queryKey: string
   manualOrder?: boolean
   allowAppend?: boolean
+  getGroupIcon?: (key: string) => ReactNode
   canMove?: (item: T, sourceGroup: string, targetGroup: string) => boolean
   onMove?: (intent: BoardMove) => void
   getItemRevision?: (item: T) => number
@@ -72,6 +73,7 @@ export function Board<T>({
   getItemId,
   getItemLabel,
   getItemRevision,
+  getGroupIcon,
   renderItem,
   collapsedGroupIds = [],
   onToggleGroup,
@@ -178,6 +180,7 @@ export function Board<T>({
                 <GroupHeader
                   group={group}
                   collapsed={collapsed}
+                  icon={getGroupIcon?.(group.key)}
                   onToggle={
                     onToggleGroup ? () => onToggleGroup(group.key) : undefined
                   }
@@ -305,14 +308,14 @@ export function Board<T>({
                                   render={
                                     <Button
                                       variant="ghost"
-                                      size="sm"
+                                      size="icon-sm"
                                       aria-label={t("workItems.moveNamed", {
                                         name: getItemLabel(item),
                                       })}
                                     />
                                   }
                                 >
-                                  {t("workItems.move")}
+                                  <ArrowRightLeft size={14} />
                                 </PopoverTrigger>
                                 <PopoverContent>
                                   <div className={styles.commands}>

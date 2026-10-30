@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLocation, useParams } from 'react-router';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
-import { ArrowLeft, ArrowUpRight, AlertTriangle, ChevronDown, Code2, FileText, Link, LoaderCircle, Save, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, AlertTriangle, Code2, FileText, Link, LoaderCircle, Save, X } from 'lucide-react';
 import type { FileRecord } from '@pm-schema';
 import type { GraphQuery } from '@pm-schema/graph';
 import { KnowledgeGraph } from '@pm-views';
@@ -16,8 +16,9 @@ import { TaskDetailWatch } from './TaskDetailRelated';
 import { DocumentContentEditor } from './DocumentContentEditor';
 import { applyBodyChanges, bodyEditorText, type BodyChange } from './document-body';
 import { PersonalMentionPicker } from '../service/PersonalMentionPicker';
-import { ProjectLocalLocation } from '../service/project-local-location';
 import { EntityAgentPanelAction } from '../agent/agent-entry';
+
+const HIDDEN_DETAIL_TABS: Readonly<Partial<Record<DetailTab, true>>> = { properties: true, relations: true, graph: true, business: true, context: true };
 
 export interface EntityDetailProps {
   controller: WorkspaceController;
@@ -37,19 +38,29 @@ export function EntityDetail({ controller: c, en, fullPage = false, onClose, onE
   const [discardVersion, setDiscardVersion] = useState(0);
   const task = c.selected?.entity.entity === 'work_item' && !c.unsupported;
   const isDocument = c.selected?.entity.entity === 'document' && !c.unsupported;
+  const latest = useRef(c);
+  latest.current = c;
   useEffect(() => {
     if (isDocument && location.hash || task && location.hash.startsWith('#comment-')) setDetail({ tab: 'content' });
   }, [isDocument, task, c.selectedId, location.hash, setDetail]);
+  // Document Markdown saves automatically after edits settle; explicit Save remains available as an immediate retry.
+  useEffect(() => {
+    if (!isDocument || !c.draft || c.draftInvalid || c.draftParseError || c.busy || c.error || !c.canEditSourceDraft) return;
+    const timer = window.setTimeout(() => {
+      const active = latest.current;
+      if (!active.draft || active.draftInvalid || active.draftParseError || active.busy || active.error || !active.canEditSourceDraft) return;
+      void active.save(true);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [isDocument, c.raw, c.draft, c.draftInvalid, c.draftParseError, c.busy, c.error, c.canEditSourceDraft, c.source?.revision]);
   const sourceReadonly = !c.canEditSourceDraft;
-  const tab = c.unsupported ? 'source' : detail.tab;
+  // Secondary object sections (advanced source, properties, relations, graph, business, context) are intentionally not exposed in the UI.
+  // Document source stays reachable only through draft-repair actions; source remains available for tasks and other entity kinds.
+  const hiddenTab = !!HIDDEN_DETAIL_TABS[detail.tab];
+  const tab: DetailTab = c.unsupported ? 'source' : hiddenTab ? 'content' : detail.tab;
   const tabs: { id: DetailTab; label: string }[] = [
     { id: 'content', label: en ? 'Content' : '内容' },
-    { id: 'source', label: isDocument ? (en ? 'Advanced source' : '高级源码') : (en ? 'Source' : '源码') },
-    { id: 'properties', label: en ? 'Properties' : '属性' },
-    { id: 'relations', label: en ? 'Relations' : '关联' },
-    { id: 'graph', label: en ? 'Graph' : '关系图' },
-    { id: 'business', label: en ? 'Business' : '业务' },
-    { id: 'context', label: en ? 'Context' : '上下文' },
+    ...(isDocument ? [] : [{ id: 'source' as const, label: en ? 'Source' : '源码' }]),
   ];
   const sourceEditor = c.unsupported ? <textarea data-testid="unsupported-source" className="unsupported-source" aria-label={en ? 'Read-only Markdown source' : '只读 Markdown 源码'} value={c.unsupported.raw} readOnly spellCheck={false} /> : <div data-testid="source-editor" className="source-editor">{task && c.entity?.project && <PersonalMentionPicker taskId={c.selectedId} projectId={c.entity.project} disabled={sourceReadonly} onInsert={token => {
     const raw = c.session.drafts.getSnapshot()[c.selectedId]?.raw ?? c.selected?.raw ?? '';
@@ -98,24 +109,16 @@ export function EntityDetail({ controller: c, en, fullPage = false, onClose, onE
           setDetail({ tab: next });
           document.getElementById(`entity-tab-${next}`)?.focus();
         }}>{tabs.slice(0, 2).map(item => <button type="button" key={item.id} id={`entity-tab-${item.id}`} role="tab" tabIndex={tab === item.id || !['content', 'source'].includes(tab) && item.id === 'content' ? 0 : -1} aria-selected={tab === item.id} aria-controls="entity-tab-panel" className={tab === item.id ? 'active' : ''} data-testid={item.id === 'source' ? 'source-tab' : 'preview-tab'} onClick={() => setDetail({ tab: item.id })}>{item.id === 'source' && <Code2 size={13} />}{item.id === 'content' ? (en ? 'Task' : '任务') : (en ? 'Source / live' : '源码 / 实时视图')}</button>)}</div>
-        <details className="task-advanced-menu" onKeyDown={event => {
-          if (event.key === 'Escape') { event.preventDefault(); event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); }
-        }}><summary>{tabs.find(item => item.id === tab && !['content', 'source'].includes(item.id))?.label || (en ? 'Advanced' : '高级')}<ChevronDown size={12} /></summary><div>{tabs.slice(2).map(item => <button type="button" key={item.id} id={`entity-tab-${item.id}`} aria-current={tab === item.id ? 'page' : undefined} className={tab === item.id ? 'active' : ''} data-testid={`${item.id}-tab`} onClick={event => {
-          setDetail({ tab: item.id });
-          const menu = event.currentTarget.closest('details');
-          if (menu) { menu.open = false; menu.querySelector('summary')?.focus(); }
-        }}>{item.label}</button>)}</div></details>
-      </div> : <div className="detail-tabs" role="tablist" aria-label={en ? 'Entity sections' : '对象分区'}>{tabs.map(item => <button key={item.id} id={`entity-tab-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls="entity-tab-panel" disabled={!!c.unsupported && item.id !== 'source'} className={tab === item.id ? 'active' : ''} data-testid={item.id === 'source' ? 'source-tab' : item.id === 'content' ? 'preview-tab' : `${item.id}-tab`} onClick={() => setDetail({ tab: item.id })}>{item.label}</button>)}</div>}
+      </div> : tabs.length > 1 && <div className="detail-tabs" role="tablist" aria-label={en ? 'Entity sections' : '对象分区'}>{tabs.map(item => <button key={item.id} id={`entity-tab-${item.id}`} role="tab" aria-selected={tab === item.id} aria-controls="entity-tab-panel" disabled={!!c.unsupported && item.id !== 'source'} className={tab === item.id ? 'active' : ''} data-testid={item.id === 'source' ? 'source-tab' : item.id === 'content' ? 'preview-tab' : `${item.id}-tab`} onClick={() => setDetail({ tab: item.id })}>{item.label}</button>)}</div>}
       <div className="detail-save-state"><span className="mono" title={c.source.path}>{c.source.path}</span><span role="status">{c.unsupported || sourceReadonly ? (en ? 'Read only' : '只读') : c.draftDiagnostics.some(issue => issue.severity === 'error') ? (en ? 'Invalid draft / input' : '草稿或输入无效') : c.draft ? (en ? 'Unsaved changes' : '未保存的更改') : (en ? 'Saved' : '已保存')}</span></div>
       {c.selected?.stale && !c.unsupported && <div className="inline-error">{c.selected.entity.entity === 'project' ? (en ? 'The project source is unavailable or needs repair. Check its registered storage and diagnostics; restore a missing mount or explicitly rebind the original directory rather than creating an empty replacement.' : '项目源码不可用或需要修复。请先核对登记存储与诊断；缺盘时恢复原挂载或显式找回原目录，不要创建空替代目录。') : (en ? 'Disk source needs repair. Edit source and save to restore sync; properties are locked.' : '磁盘源码需要修复。请编辑源码并保存以恢复同步；属性暂时锁定。')} {c.selected.error}<button className="text-button" onClick={() => setDetail({ tab: 'source' })}>{en ? 'Inspect source' : '检查源码'}</button></div>}
       {c.unsupported && <div className="inline-error">{en ? 'Read-only source' : '只读源码'} · {c.unsupported.schema || (en ? 'Unrecognized metadata' : '无法识别的元数据')}. {en ? 'This protocol cannot be edited or deleted here. Any previous local draft is retained.' : '当前不允许修改或删除此协议源码。之前的本地草稿仍予以保留。'}</div>}
       {task && c.draftParseError && <div className="inline-error" role="alert">{en ? 'The current Markdown draft is invalid. Task fields and description show the last saved valid document, not the invalid draft. Repair the source before saving.' : '当前 Markdown 草稿无效。任务字段与描述显示最后保存的有效文档，并非当前无效草稿；请修复源码后再保存。'} <button type="button" onClick={() => setDetail({ tab: 'source' })}>{en ? 'Repair source' : '修复源码'}</button></div>}
-      {isDocument && c.draftParseError && <div className="inline-error" role="alert">{en ? 'This draft is invalid and cannot be saved. Its raw Markdown is retained; repair the body or advanced source. Preview shows this draft, not a saved replacement.' : '当前草稿无效，暂不能保存。Markdown 原文已保留，请修复正文或高级源码；预览显示当前草稿，不会用已保存版本替换。'} <button type="button" onClick={() => setDetail({ tab: 'source' })}>{en ? 'Repair source' : '修复源码'}</button></div>}
+      {isDocument && c.draftParseError && <div className="inline-error" role="alert">{en ? 'This draft is invalid and cannot be saved. Its raw Markdown is retained; repair the body or Markdown source. Preview shows this draft, not a saved replacement.' : '当前草稿无效，暂不能保存。Markdown 原文已保留，请修复正文或 Markdown 源码；预览显示当前草稿，不会用已保存版本替换。'} <button type="button" onClick={() => setDetail({ tab: 'source' })}>{en ? 'Repair source' : '修复源码'}</button></div>}
       <Diagnostics diagnostics={c.unsupported?.diagnostics || c.selected?.diagnostics || []} />
       {c.ahead && <div className="conflict-banner"><AlertTriangle size={14} /><span>{en ? 'Disk changed. Your draft is safe.' : '磁盘内容已更改，草稿已保留。'}</span><button onClick={() => { c.setRebaseReviewed(false); c.setConflict({ id: c.selectedId, current: c.selected!, local: c.raw }); }}>{en ? 'Compare versions' : '比较版本'}</button></div>}
       <Diagnostics diagnostics={c.draftDiagnostics} />
-      <div className={`detail-content detail-content-${tab}`} id="entity-tab-panel" role="tabpanel" aria-labelledby={`entity-tab-${tab}`}>
-        {c.selected?.entity.entity === 'project' && <ProjectLocalLocation key={c.selected.id} projectId={c.selected.id} />}
+      <div className={`detail-content detail-content-${tab}`} id="entity-tab-panel" role={tabs.length > 1 ? 'tabpanel' : 'region'} aria-label={tabs.length === 1 ? tabs[0].label : undefined} aria-labelledby={tabs.length > 1 ? `entity-tab-${tab}` : undefined}>
         {isDocument && <div hidden={tab !== 'content'} className="document-editing-panel"><DocumentContentEditor key={`${c.selectedId}:${discardVersion}`} controller={c} en={en} onSource={() => setDetail({ tab: 'source' })} /></div>}
         {isDocument && <div hidden={tab !== 'source'} className="document-source-panel">{sourceEditor}</div>}
         {tab === 'source' && !isDocument && (task ? <div className="task-source-live"><section className="task-source-pane" aria-label={en ? 'Shared Markdown source' : '共享 Markdown 源码'}><div className="task-source-pane-heading"><Code2 size={13} /><span>{en ? 'Markdown source · shared draft' : 'Markdown 源码 · 共享草稿'}</span><button type="button" className="text-button" onClick={() => setDetail({ tab: 'content' })}>{en ? 'Task view' : '任务视图'}</button></div>{sourceEditor}</section><section className="task-live-pane" aria-label={en ? 'Live task preview' : '实时任务预览'}><div className="task-source-pane-heading"><span>{en ? 'Live task · unsaved until Save' : '实时任务 · 显式保存后生效'}</span></div>{taskSurface}</section></div> : sourceEditor)}

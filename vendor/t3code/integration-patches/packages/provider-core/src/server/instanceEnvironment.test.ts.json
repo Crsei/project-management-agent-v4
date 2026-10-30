@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "source": "packages/provider-core/src/server/instanceEnvironment.test.ts",
+  "beforeSha256": "00fd501359ce2ba202583294c5eec9b3f206a6f1bc8f930a451e1587dbe2949a",
+  "afterSha256": "41ba315483fa509310e7c62744eed81509cd7bbab69a58c1f1b4568dc875ef27",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 9,
+      "before": [],
+      "after": [
+        "  it.effect(\"keeps concurrent host environments isolated from the ambient process\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const [first, second] = yield* Effect.all([\n",
+        "        mergeProviderInstanceEnvironment(undefined).pipe(\n",
+        "          Effect.provideService(HostProcess.Environment, { PATH: \"/first/bin\" }),\n",
+        "        ),\n",
+        "        mergeProviderInstanceEnvironment([\n",
+        "          { name: \"PROVIDER_MODEL\", value: \"selected\", sensitive: false },\n",
+        "        ]).pipe(\n",
+        "          Effect.provideService(HostProcess.Environment, { PATH: \"/second/bin\" }),\n",
+        "        ),\n",
+        "      ], { concurrency: \"unbounded\" });\n",
+        "      // Compare only approved fields; a failure must not print ambient secrets.\n",
+        "      expect(first.PATH === \"/first/bin\").toBe(true);\n",
+        "      expect(Object.keys(first)).toEqual([\"PATH\"]);\n",
+        "      expect(second.PATH === \"/second/bin\").toBe(true);\n",
+        "      expect(second.PROVIDER_MODEL).toBe(\"selected\");\n",
+        "      expect(Object.keys(second).sort()).toEqual([\"PATH\", \"PROVIDER_MODEL\"]);\n",
+        "    }),\n",
+        "  );\n",
+        "\n"
+      ]
+    }
+  ]
+}

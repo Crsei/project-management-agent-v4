@@ -114,6 +114,9 @@
 .toolbarSpacer {
   flex: 1;
 }
+.filterPopover {
+  width: min(560px, calc(100vw - 24px));
+}
 .filterChips {
   display: flex;
   flex-wrap: wrap;

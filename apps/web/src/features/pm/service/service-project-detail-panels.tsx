@@ -1,22 +1,23 @@
 import { useState } from "react"
 import type { FileRecord } from "@pm-schema"
 import type { Entity, ProjectManagementClient } from "@contracts"
-import { Plus } from "lucide-react"
+import { MoreHorizontal, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MessageContent } from "@/components/blocks/message-content"
 import { WorkItemBoard } from "@/components/blocks/work-items-views"
-import { WorkItemRow } from "@/components/blocks/work-item"
+import { WorkItemRow, WorkItemStateGlyph } from "@/components/blocks/work-item"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import type { ControlledIssueCatalog, ControlledIssueRecord } from "@/views/pm/controlled-contracts"
 import reference from "@/views/pm/projects-views.module.css"
 import workspaceStyles from "@/views/pm/project-detail-2.module.css"
 import { usePmCommand, usePmService } from "./pm-service"
-import { allowed, Field, Form, makeCommand, objects, QueryNotice, required, string, useDraftState, useText, writable } from "./pm-ui"
+import { allowed, Field, Form, makeCommand, objects, QueryNotice, required, string, today, useDraftState, useText, writable } from "./pm-ui"
 import styles from "./service-project-detail.module.css"
 import { ProjectTaskEditingNotice, ProjectTaskInlineActions, ProjectTaskInlineField, type ProjectTaskEditing } from "./project-task-editing"
 
@@ -44,6 +45,7 @@ export function ProjectTaskBoard({ projectId, items: suppliedItems, catalog, onO
   const search = controlledSearch ?? localSearch
   const status = controlledStatus ?? ""
   const taskEditing = editing?.projectId === projectId ? editing : undefined
+  const todayValue = today()
   const items = taskEditing ? taskEditing.present(suppliedItems) : suppliedItems
   const filtered = items.filter(item => (showCompletedTasks || catalog.states.find(state => state.id === item.stateId)?.category !== "completed") && (!status || item.stateId === status) && `${item.identifier} ${item.title}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
   const groups = catalog.states.map(state => {
@@ -54,12 +56,12 @@ export function ProjectTaskBoard({ projectId, items: suppliedItems, catalog, onO
     {!hideToolbar && <div className={styles.panelToolbar}><Input className="max-w-xs" value={search} onChange={event => setLocalSearch(event.target.value)} aria-label={t("搜索项目任务", "Search project tasks")} placeholder={t("搜索任务…", "Search tasks…")} /><Button disabled={!canCreate || taskEditing?.locked} onClick={onCreate}><Plus size={14} />{t("新建任务", "Add issue")}</Button></div>}
     {taskEditing && <ProjectTaskEditingNotice editing={taskEditing} onOpen={onOpen} />}
     {filtered.length ? <ScrollArea className={reference.tasksViewport} label={t("项目任务分栏", "Project task lanes")} orientation="horizontal" data-pm-task-lanes>
-      <WorkItemBoard className={reference.tasksBoard} queryKey={`project:${projectId}:tasks`} items={filtered} groups={groups} manualOrder={false} allowAppend interaction={{ selectedIds, activeItemId: selectedIds.at(-1) ?? null, collapsedGroupIds: collapsed }} onSelectionChange={ids => setSelectedIds([...ids])} onToggleGroup={key => setCollapsed(previous => previous.includes(key) ? previous.filter(id => id !== key) : [...previous, key])} canMove={(item, _source, target) => taskEditing?.canMove(item.id, target) ?? false} onMove={taskEditing ? intent => { void taskEditing.move(intent).catch(() => {}) } : undefined} getPresentation={item => ({
-        catalog, visibleProperties: ["state", "priority", "assignees", "dueDate"], onOpen,
-        actions: taskEditing ? <details className="min-w-0 text-sm"><summary className="cursor-pointer">{t("行内编辑", "Edit inline")}</summary><div className="grid min-w-0 gap-2 py-2">{(["title", "status", "priority", "assignee", "x-pm-start", "due"] as const).map(field => <ProjectTaskInlineField key={field} editing={taskEditing} item={item} field={field} catalog={catalog} />)}<ProjectTaskInlineActions editing={taskEditing} item={item} /></div></details> : undefined,
+      <WorkItemBoard className={reference.tasksBoard} queryKey={`project:${projectId}:tasks`} items={filtered} groups={groups} manualOrder={false} allowAppend getGroupIcon={key => <WorkItemStateGlyph state={catalog.states.find(state => state.id === key)} />} interaction={{ selectedIds, activeItemId: selectedIds.at(-1) ?? null, collapsedGroupIds: collapsed }} onSelectionChange={ids => setSelectedIds([...ids])} onToggleGroup={key => setCollapsed(previous => previous.includes(key) ? previous.filter(id => id !== key) : [...previous, key])} canMove={(item, _source, target) => taskEditing?.canMove(item.id, target) ?? false} onMove={taskEditing ? intent => { void taskEditing.move(intent).catch(() => {}) } : undefined} getPresentation={item => ({
+        catalog, visibleProperties: ["state", "priority", "assignees", "dueDate"], today: todayValue, onOpen,
+        actions: taskEditing ? <Popover><PopoverTrigger render={<Button size="icon-sm" variant="ghost" aria-label={t("编辑任务", "Edit task")} />}><MoreHorizontal size={14} /></PopoverTrigger><PopoverContent align="end" className="grid w-64 min-w-0 gap-2">{(["title", "status", "priority", "assignee", "x-pm-start", "due"] as const).map(field => <ProjectTaskInlineField key={field} editing={taskEditing} item={item} field={field} catalog={catalog} />)}<ProjectTaskInlineActions editing={taskEditing} item={item} /></PopoverContent></Popover> : undefined,
       })} />
     </ScrollArea> : <p className={reference.muted}>{emptyFiltered ? t("没有匹配筛选的任务。", "No tasks match these filters.") : t("本项目没有任务。新建任务进入正式 Markdown 表单。", "This project has no tasks. Add an issue using the formal Markdown form.")}</p>}
-    <p className={reference.muted}>{taskEditing ? t("可拖动状态或展开卡片修改字段；以原生工作流和源 revision 保存。完整源码草稿、归档或诊断会锁定行内编辑。", "Drag between workflow states or expand a card to edit fields using its native source revision. Source drafts, archives, and diagnostics lock inline editing.") : t("点击任务打开完整编辑器；状态转换和字段校验仍由核心工作流负责。", "Open a task in the full editor; state transitions and field validation remain owned by the core workflow.")}</p>
+    <p className={reference.muted}>{taskEditing ? t("可拖动状态或打开卡片菜单修改字段；以原生工作流和源 revision 保存。完整源码草稿、归档或诊断会锁定行内编辑。", "Drag between workflow states or open the card menu to edit fields using its native source revision. Source drafts, archives, and diagnostics lock inline editing.") : t("点击任务打开完整编辑器；状态转换和字段校验仍由核心工作流负责。", "Open a task in the full editor; state transitions and field validation remain owned by the core workflow.")}</p>
   </div>
 }
 

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "source": "packages/provider-grok/src/server/driver.test.ts",
+  "beforeSha256": "e96a4bef90299dc56a2ee74eeed64418610b4e0b746aed42aab0f3f9c87f95b0",
+  "afterSha256": "3add44bb15d7943b1588a393b5f9764b68e22548e9a59b3cd8c56c18b433476d",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 20,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { layerAcpRuntimeHost } from \"../../../../apps/server/src/orchestration-v2/Adapters/AcpProviderRuntimeHost.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 25,
+      "before": [
+        "  Layer.provideMerge(McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "  Layer.provideMerge(layerAcpRuntimeHost),\n"
+      ]
+    }
+  ]
+}

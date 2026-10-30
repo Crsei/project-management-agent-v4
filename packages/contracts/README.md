@@ -51,12 +51,12 @@ Node 调用方可通过 `auth: { type: 'bearer', token: () => currentSessionToke
 ```ts
 let sessionCookie: string | undefined;
 const api = new ProjectManagementClient({
-  baseUrl: 'http://127.0.0.1:4193',
+  baseUrl: 'http://127.0.0.1:4194',
   auth: {
     type: 'cookie', credentials: 'same-origin',
     cookie: () => sessionCookie,
     onSetCookie: cookies => {
-      const session = cookies.find(cookie => cookie.startsWith('pm_v3_session='));
+      const session = cookies.find(cookie => cookie.startsWith('pm_v4_session='));
       if (session) sessionCookie = session.split(';', 1)[0];
     },
   },

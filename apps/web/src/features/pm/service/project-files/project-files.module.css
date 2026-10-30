@@ -80,6 +80,10 @@
   font-size: 12px;
 }
 
+.filterPanel {
+  width: min(92vw, 380px);
+}
+
 .spacer {
   flex: 1;
 }

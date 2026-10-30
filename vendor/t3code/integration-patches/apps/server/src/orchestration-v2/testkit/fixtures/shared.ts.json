@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/testkit/fixtures/shared.ts",
+  "beforeSha256": "d8be07070d922f877fd0dae3d4f4a3d0502d78258b5aa2d6ff6cfce94fd77794",
+  "afterSha256": "11daaeed1957652192d3f9bcdc1223444703efa9c586cd5b00ceddc8696002ab",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 26,
+      "before": [
+        "  OrchestratorV2ScenarioResult,\n",
+        "  OrchestratorV2ScenarioStep,\n",
+        "} from \"../OrchestratorScenario.ts\";\n"
+      ],
+      "after": [
+        "  OrchestrationV2Run, OrchestrationV2StoredEvent, OrchestrationV2DomainEvent,\n",
+        "  OrchestrationV2ThreadShellSnapshot, ProviderApprovalDecision, TurnItemId,\n",
+        "} from \"@t3tools/contracts\";\n",
+        "import type { TerminalOutputState } from \"@t3tools/shared/terminalOutput\";\n"
+      ]
+    },
+    {
+      "start": 30,
+      "before": [
+        "import type { RuntimePolicyV2Override } from \"../../RuntimePolicy.ts\";\n"
+      ],
+      "after": [
+        "\n",
+        "// Test-only source types. No Orchestrator, ProjectStore or runtime-policy service is imported.\n",
+        "type RuntimePolicyV2Override = {\n",
+        "  readonly cwd?: string;\n",
+        "  readonly approvalPolicy?: unknown;\n",
+        "  readonly sandboxPolicy?: unknown;\n",
+        "  readonly reasoningEffort?: string;\n",
+        "};\n",
+        "type OrchestratorV2ScenarioStep =\n",
+        "  | { readonly type: \"dispatch\"; readonly command: OrchestrationV2Command; readonly await?: boolean; readonly key?: string }\n",
+        "  | { readonly type: \"advance_clock\"; readonly duration: Duration.Input }\n",
+        "  | { readonly type: \"await\"; readonly key: string }\n",
+        "  | { readonly type: \"await_all\" }\n",
+        "  | { readonly type: \"await_thread_idle\" | \"await_no_background_work\"; readonly threadId: ThreadId }\n",
+        "  | { readonly type: \"await_run_steerable\"; readonly threadId: ThreadId; readonly runId: OrchestrationV2Run[\"id\"] }\n",
+        "  | { readonly type: \"await_run_status\" | \"finish_held_run\"; readonly threadId: ThreadId; readonly runId: OrchestrationV2Run[\"id\"]; readonly status: OrchestrationV2Run[\"status\"] }\n",
+        "  | { readonly type: \"await_run_turn_item\"; readonly threadId: ThreadId; readonly runId: OrchestrationV2Run[\"id\"]; readonly itemType: OrchestrationV2TurnItem[\"type\"] }\n",
+        "  | { readonly type: \"release_replay_gate_after_waiting\"; readonly label: string; readonly threadId: ThreadId; readonly runId: OrchestrationV2Run[\"id\"] }\n",
+        "  | { readonly type: \"release_replay_gate\"; readonly label: string }\n",
+        "  | { readonly type: \"capture_shell_snapshot\"; readonly key: string }\n",
+        "  | { readonly type: \"respond_to_next_runtime_request\"; readonly threadId: ThreadId; readonly commandId: CommandId; readonly decision?: ProviderApprovalDecision; readonly answers?: ProviderUserInputAnswers; readonly shellSnapshotKeyWhilePending?: string };\n",
+        "interface OrchestratorV2ScenarioResult {\n",
+        "  readonly storedEvents: ReadonlyArray<OrchestrationV2StoredEvent>;\n",
+        "  readonly domainEvents: ReadonlyArray<OrchestrationV2DomainEvent>;\n",
+        "  readonly projections: ReadonlyMap<ThreadId, OrchestrationV2ThreadProjection>;\n",
+        "  readonly shellSnapshot: OrchestrationV2ThreadShellSnapshot;\n",
+        "  readonly capturedShellSnapshots: ReadonlyMap<string, OrchestrationV2ThreadShellSnapshot>;\n",
+        "  readonly commandOutput?: ReadonlyMap<TurnItemId, { readonly chunks: number; readonly output: TerminalOutputState }>;\n",
+        "}\n"
+      ]
+    }
+  ]
+}

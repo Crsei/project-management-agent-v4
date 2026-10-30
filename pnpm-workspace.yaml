@@ -1,9 +1,47 @@
 packages:
-  - apps/*
+  - apps/desktop
+  - apps/server/agent
+  - apps/server/pm
+  - apps/web
+  - tools/marketing
   - packages/*
   - vendor/*
+  - vendor/t3code/packages/*
+  - vendor/t3code/apps/server
 allowBuilds:
   esbuild: true
   sharp: true
 patchedDependencies:
   '@muse-code/sdk@1.4.6': patches/@muse-code__sdk@1.4.6.patch
+  '@effect/vitest@4.0.5': vendor/t3code/patches/@effect__vitest@4.0.5.patch
+packageExtensions:
+  '@effect/vitest@4.0.5':
+    dependencies:
+      vite-plus: 1.4.0
+overrides:
+  '@effect/vitest@4.0.5>vitest': '-'
+  '@effect/platform-node@4.0.5>@effect/platform-node-shared': 4.0.5
+  '@opencode/protocol@2.0.28>effect': 4.0.5
+  '@opencode/schema@2.0.28>effect': 4.0.5
+catalog:
+  '@effect/openapi-generator': 4.0.5
+  '@effect/platform-node': 4.0.5
+  '@effect/vitest': 4.0.5
+  '@noble/curves': 1.9.1
+  '@noble/hashes': 1.8.0
+  '@types/node': 24.12.4
+  effect: 4.0.5
+  jose: 6.2.2
+  mdast-util-directive: 3.1.0
+  micromark-extension-directive: 4.0.0
+  micromark-util-character: 2.1.1
+  micromark-util-types: 2.0.3
+  rehype-raw: 7.0.0
+  rehype-sanitize: 6.0.0
+  remark-breaks: 4.0.0
+  remark-gfm: 4.0.1
+  remark-parse: 11.0.0
+  remark-rehype: 11.1.2
+  unified: 11.0.5
+  vite-plus: 1.4.0
+  yaml: ^2.9.0

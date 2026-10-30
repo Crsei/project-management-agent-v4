@@ -1,0 +1,546 @@
+{
+  "ledger_version": 1,
+  "slice": "T5",
+  "contract": "pm-provider-host/1",
+  "source_commit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "verification": "Implementation only. No build, lint, tests, formatter, smoke, install or native-provider command was executed by this slice.",
+  "copied_sources": [
+    {
+      "path": "vendor/t3code/apps/server/src/provider/DocumentText.ts",
+      "source_path": "apps/server/src/provider/DocumentText.ts",
+      "upstream_sha256": "e0edbd57af2d883b99fd2629608688710e26102d1354d3dd87d4d1faeb5fab71",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/Errors.ts",
+      "source_path": "apps/server/src/provider/Errors.ts",
+      "upstream_sha256": "d1770c9d9d1c26e076a32e096c96c5b27faed4009edbb0ebc63ae2d502bc2da6",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/EventNdjsonLogger.test.ts",
+      "source_path": "apps/server/src/provider/EventNdjsonLogger.test.ts",
+      "upstream_sha256": "76d53a2c1ad0ace775bdfd79b2807736660ac5c39bef49cc1eb12474c0f4dfbc",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/EventNdjsonLogger.ts",
+      "source_path": "apps/server/src/provider/EventNdjsonLogger.ts",
+      "upstream_sha256": "4f8be21f88dfd06d3705129c5b9e117ed34f99f11737bd1f2223750fa5b9340e",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ModelManifest.test.ts",
+      "source_path": "apps/server/src/provider/ModelManifest.test.ts",
+      "upstream_sha256": "21878e2dde69d7245e15898591cd92e2b6193d8ac40c54eb50d0e5ec6b543567",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ModelManifest.ts",
+      "source_path": "apps/server/src/provider/ModelManifest.ts",
+      "upstream_sha256": "ebc928bbe30b07ff65ffc956ca5cd2f3f933a8a966fd61e62033ac36798f02cb",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderAuthService.test.ts",
+      "source_path": "apps/server/src/provider/ProviderAuthService.test.ts",
+      "upstream_sha256": "353acd4f508468868afcbb9628e8ce714c68a0a3ef00807c9aaef917966aeb08",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderAuthService.ts",
+      "source_path": "apps/server/src/provider/ProviderAuthService.ts",
+      "upstream_sha256": "bc4dba7f8c00f6aae5b4f45b7cad37ebba5836321cc7644a0b94f3eed63b93fb",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderCredentialStore.test.ts",
+      "source_path": "apps/server/src/provider/ProviderCredentialStore.test.ts",
+      "upstream_sha256": "483bbd195927cce07919775c302dec9d3c45a47623d4e846e75d189b4de27e82",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderCredentialStore.ts",
+      "source_path": "apps/server/src/provider/ProviderCredentialStore.ts",
+      "upstream_sha256": "c8e1cc5ba916703f33ba6079fabe313cc1e54dbd4c0699dcffef20ee49ed8105",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderInstanceRegistry.test.ts",
+      "source_path": "apps/server/src/provider/ProviderInstanceRegistry.test.ts",
+      "upstream_sha256": "c98e34152ecfdbc53dba4b3e2fc96cee87a9e405c690d963f4b32fcbc688271e",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderInstanceRegistry.ts",
+      "source_path": "apps/server/src/provider/ProviderInstanceRegistry.ts",
+      "upstream_sha256": "101bebbc48ad5245b6caf61f016089d388815f7b5385aac7e7d9d2b65b9b8edb",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderInstanceRegistryMutator.ts",
+      "source_path": "apps/server/src/provider/ProviderInstanceRegistryMutator.ts",
+      "upstream_sha256": "e710e01faea929f6adc840b1b066ab319d1536f12b2fa5cae44f135e6623ab0d",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderOrchestrationAdapterInfrastructure.ts",
+      "source_path": "apps/server/src/provider/ProviderOrchestrationAdapterInfrastructure.ts",
+      "upstream_sha256": "ed997d68f399735e355bf4e86f0b7889e321ea7316c0c0bf60e8b1f6cff51afa",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderRegistry.test.ts",
+      "source_path": "apps/server/src/provider/ProviderRegistry.test.ts",
+      "upstream_sha256": "f8aac05d65741ab4396b592011dc7f2762a06bdba5b561a220634b9700addcb9",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderRegistry.ts",
+      "source_path": "apps/server/src/provider/ProviderRegistry.ts",
+      "upstream_sha256": "b834396a58680e0e27b5cd0326da2e9e38319c5490f69f3a56af2ce2229164fd",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderUsageLimitsIngestion.ts",
+      "source_path": "apps/server/src/provider/ProviderUsageLimitsIngestion.ts",
+      "upstream_sha256": "81dc451bb89999e094802ea4d50d5b5896ea239fd282435b24f5cecdcf97b713",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/TurnTokenUsage.test.ts",
+      "source_path": "apps/server/src/provider/TurnTokenUsage.test.ts",
+      "upstream_sha256": "dc721e899662d6777b76cbaf5cb571c000ec8aa94858525218085d24c8b190df",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/documentTextWorker.ts",
+      "source_path": "apps/server/src/provider/documentTextWorker.ts",
+      "upstream_sha256": "85c2ef47c0959cc5bcc3d928e92bd349328c01ec17432744e644d46619a7a74c",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/model-manifest.json",
+      "source_path": "apps/server/src/provider/model-manifest.json",
+      "upstream_sha256": "644d0d021fc42a14b8c8df7af588519e3deccb95e032d5a6ceaa244a847b8980",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerCompatibility.test.ts",
+      "source_path": "apps/server/src/provider/providerCompatibility.test.ts",
+      "upstream_sha256": "0c48d99ddaab41346a50cef65407d4d9cbfea7e8ed89344de52bc22ddae6e41d",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerCompatibility.ts",
+      "source_path": "apps/server/src/provider/providerCompatibility.ts",
+      "upstream_sha256": "0a2ac3477b1b361dbc6686a8a80d002eee677906159e46eb2104c1918861193f",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerInstallation.test.ts",
+      "source_path": "apps/server/src/provider/providerInstallation.test.ts",
+      "upstream_sha256": "a2e65f0bdd87a0e09cd946b20ece53899b123debc3002573f364679d7ca49912",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerInstallation.ts",
+      "source_path": "apps/server/src/provider/providerInstallation.ts",
+      "upstream_sha256": "829b0e0b697e47b3e4b88518decf47d7a04837536d8facda04ae2eebfefebe70",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerMaintenanceCommandCoordinator.ts",
+      "source_path": "apps/server/src/provider/providerMaintenanceCommandCoordinator.ts",
+      "upstream_sha256": "ff9b1bf40ab66ff1620e0155f28cd3b0fc719a78294165c9a7b3e8ecb58b5ef5",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerMaintenanceRunner.test.ts",
+      "source_path": "apps/server/src/provider/providerMaintenanceRunner.test.ts",
+      "upstream_sha256": "58e2b1c2a7605fe993cdef78672a99e5eab01e9e57d1136417f077074ebfc23d",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerMaintenanceRunner.ts",
+      "source_path": "apps/server/src/provider/providerMaintenanceRunner.ts",
+      "upstream_sha256": "de3d4d5a0accb98f6c2882970e94ffbc40ea4989546ac9efc7142e5294c91b08",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerStatusCache.test.ts",
+      "source_path": "apps/server/src/provider/providerStatusCache.test.ts",
+      "upstream_sha256": "8412b62f1dd4d6d0746761d2d916f8861ca73800bfa8f3d3455f406ee22f690d",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerStatusCache.ts",
+      "source_path": "apps/server/src/provider/providerStatusCache.ts",
+      "upstream_sha256": "49f1a3e157b2a63daa18dd1992a4ffa2ff004d0cfc33212bdafc489e71532455",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/resetCreditCoordinator.test.ts",
+      "source_path": "apps/server/src/provider/resetCreditCoordinator.test.ts",
+      "upstream_sha256": "0aef53020485543f9224ab38781cdc13e92ca9b56057c8eea878b6bb50ecf957",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/resetCreditCoordinator.ts",
+      "source_path": "apps/server/src/provider/resetCreditCoordinator.ts",
+      "upstream_sha256": "9fc804a6ee1634d8e442adbecc2ca4b522740b6d57adf781628220170ceb487c",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/testUtils/providerRegistryMock.ts",
+      "source_path": "apps/server/src/provider/testUtils/providerRegistryMock.ts",
+      "upstream_sha256": "bccd29ed824fd801ac470210a0c91b82d82e21fce358ae85e88eb0a42b46b3b1",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/unavailableProviderSnapshot.ts",
+      "source_path": "apps/server/src/provider/unavailableProviderSnapshot.ts",
+      "upstream_sha256": "0824ad096e0bef2630bbc05d1f03c5f553d56a8e2d52639c88ed68a9bea26c1c",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/userInputAttachments.test.ts",
+      "source_path": "apps/server/src/provider/userInputAttachments.test.ts",
+      "upstream_sha256": "ba052f27ef162ea9ae3a009b998dddf5d9a639e19583ff39e382d81a2c8c347c",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/userInputAttachments.ts",
+      "source_path": "apps/server/src/provider/userInputAttachments.ts",
+      "upstream_sha256": "8b206a6e16e406896ad2382b648fdd696eef5a760e07797a14b80435b6768fec",
+      "action": "copy-then-patch"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/testUtils/processProbe.ts",
+      "source_path": "apps/server/src/testUtils/processProbe.ts",
+      "upstream_sha256": "614dbe3fb50509b6044878b5b331e90f4871f144eed91e2dd9a50ad92c6dfda1",
+      "action": "copy-verbatim"
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/zipArchive.ts",
+      "source_path": "apps/server/src/zipArchive.ts",
+      "upstream_sha256": "470528f95dc9c34b90716a7d60fd3715cc980291fc8c735d2196a61f719aa657",
+      "action": "copy-verbatim"
+    }
+  ],
+  "patches": [
+    {
+      "id": "T5-H01",
+      "paths": [
+        "apps/server/agent/src/providers/t3code/host.ts",
+        "apps/server/agent/src/providers/t3code/upstream-services/server-config.ts",
+        "apps/server/agent/src/providers/t3code/upstream-services/server-settings.ts"
+      ],
+      "reason": "Original ProviderHost tag; application-private paths, real asynchronous snapshot write exclusion over every instances persist, buffered scoped settings subscriptions, explicit background policy. Concrete source-facing tag modules do not import PM instances/business runtime."
+    },
+    {
+      "id": "T5-H02",
+      "paths": [
+        "apps/server/agent/src/providers/t3code/host-runtime.ts"
+      ],
+      "reason": "Per-operation real scopes invoke the original makeProviderInstanceRegistry and original config decode; no hydration/default account injection or duplicate reconciliation. Bind Node platform/spawner plus HostProcess Environment/WorkingDirectory/user Home. Reject stale identities; close stale revision before replacement; cleanup failure blocks reuse; drain shutdown. Invalidation snapshots owned scopes before awaiting so late completion cannot close a replacement scope. Context identity excludes the same Claude SDK runtime-version environment marker as the existing native instance binding; all actual account/cwd/Home/env inputs remain bound."
+    },
+    {
+      "id": "T5-H03",
+      "paths": [
+        "apps/server/agent/src/providers/t3code/config-mapping.ts"
+      ],
+      "reason": "Only claude driver kind maps to claudeAgent; IDs remain unchanged. Preserve authoritative custom models/preferences/env sensitivity; driver configSchema remains authoritative. Context-relative explicit binary paths resolve once against trusted context.cwd without altering stored/provided config or inherited HOME/XDG. Unrepresentable historical IDs remain in the local store/UI and are excluded only from the schema-constrained upstream settings projection; selecting one still fails explicitly with 409 rather than blocking unrelated instances."
+    },
+    {
+      "id": "T5-H04",
+      "paths": [
+        "apps/server/agent/src/providers/t3code/credentials.ts",
+        "apps/server/agent/src/providers/t3code/upstream-services/server-secret-store.ts",
+        "apps/server/agent/src/providers/t3code/upstream-services/server-environment.ts",
+        "vendor/t3code/apps/server/src/provider/ProviderCredentialStore.ts",
+        "vendor/t3code/apps/server/src/provider/ProviderCredentialStore.test.ts"
+      ],
+      "reason": "App-private opaque credential backend; hashed names, 0700/0600, atomic rename/exclusive link publication, genuine get/create/getOrCreateRandom/remove and typed failures. Preserve source credential tuple hashing while binding equality includes application root. Stable private environment identity, not a PM actor. No external credential file import/read."
+    },
+    {
+      "id": "T5-H05",
+      "paths": [
+        "apps/server/agent/src/providers/t3code/management.ts",
+        "apps/server/agent/src/providers/auth.ts",
+        "apps/server/agent/src/providers/maintenance.ts",
+        "apps/server/agent/src/providers/checks.ts",
+        "apps/server/agent/src/providers/instances.ts"
+      ],
+      "reason": "Original auth controller/snapshot/maintenance to current Promise DTOs, local flow owner token, subscribed-before-start terminal/input handling, shared credential/native-home and installer lock reservations in existing auth table. Shared resource mutations invalidate peer revisions/observations. Preserve CAS, stale-result rejection, cancellation invalidation and externally ready unknown-auth status. Real injected install/remove hooks or explicit unsupported errors. Capabilities projector uses the same live source lease; no guessed resume/dialect."
+    },
+    {
+      "id": "T5-H06",
+      "paths": [
+        "vendor/t3code/apps/server/src/provider/providerMaintenanceRunner.ts",
+        "vendor/t3code/apps/server/src/provider/providerMaintenanceCommand.ts",
+        "vendor/t3code/apps/server/src/provider/providerMaintenanceRunner.test.ts",
+        "vendor/t3code/apps/server/src/provider/providerMaintenanceCommand.test.ts"
+      ],
+      "upstream_ranges": "providerMaintenanceRunner.ts:44-59,78-81,90-218",
+      "reason": "Parent-authorized extraction of original raw command/result/progress algorithm into standalone source module, removing runtime dependence on aggregate ProviderRegistry/ModelManifest/future family layers. Consumers and tests import the new module directly; no duplicate algorithm or transition re-export. Parent LSP references supplied for moved functions. Parent additionally checked the moved result type with LSP: seven references, all confined to the new module and direct runner consumers."
+    },
+    {
+      "id": "T5-H07",
+      "paths": [
+        "apps/server/agent/src/providers/t3code/upstream-services/attachments.ts",
+        "apps/server/agent/src/providers/t3code/upstream-services/document-text.ts",
+        "vendor/t3code/apps/server/src/provider/DocumentText.ts",
+        "vendor/t3code/apps/server/src/provider/userInputAttachments.ts",
+        "vendor/t3code/apps/server/src/provider/userInputAttachments.test.ts"
+      ],
+      "reason": "Registered attachment IDs/types/size and realpath containment; no cwd/Home/blob fallback. Reuse original DocumentText extraction/cache/serialization and worker algorithm, with required pure DocumentTextWorkerEntry reference; PM supplies dedicated worker and exact context.env. No original t3 bin. Missing/failed extraction is a real failure, including cached rejection. Source user-input attachment helper consumes original ProviderHost. Upstream document behavior tests rebased to provider-only host/config fixtures and real failure assertions; t3 ResourceCleanupService composition assertions are intentionally excluded (PM persistence/cleanup is not t3 orchestration)."
+    },
+    {
+      "id": "T5-H08",
+      "paths": [
+        "vendor/t3code/apps/server/src/provider/ModelManifest.ts",
+        "vendor/t3code/apps/server/src/provider/ProviderRegistry.ts",
+        "vendor/t3code/apps/server/src/provider/providerInstallation.ts",
+        "vendor/t3code/apps/server/src/provider/ModelManifest.test.ts",
+        "vendor/t3code/apps/server/src/provider/providerInstallation.test.ts",
+        "vendor/t3code/apps/server/src/provider/testUtils/providerRegistryMock.ts"
+      ],
+      "reason": "Exact concrete config/settings imports redirect only to pure PM boundary tags, never SQL/SourceControl/full config. Installation reads authoritative providerInstances directly, without original hydration/default account insertion. Test-only resources create actual scoped private paths and static immutable settings fixtures."
+    },
+    {
+      "id": "T5-H09",
+      "paths": [
+        "vendor/t3code/apps/server/src/provider/EventNdjsonLogger.ts"
+      ],
+      "reason": "Retain original event logging. Inline the original pure thread-segment helper and narrow optional attribution input shape instead of importing attachment store or reference-only resource telemetry business service."
+    },
+    {
+      "id": "T5-H10",
+      "paths": [
+        "vendor/t3code/apps/server/src/provider/ProviderAuthService.ts",
+        "vendor/t3code/apps/server/src/provider/ProviderAuthService.test.ts",
+        "apps/server/agent/src/providers/auth.ts",
+        "apps/server/agent/src/providers/t3code/management.ts",
+        "apps/server/agent/src/providers/t3code/management.test.ts",
+        "apps/server/agent/src/providers/t3code/host-runtime.ts",
+        "apps/server/agent/src/providers/t3code/host-runtime.test.ts"
+      ],
+      "reason": "Close the original ProviderAuthService without t3 ProjectionStore or ProviderSessionManager. A required pure ProviderAuthSessionInvalidation port takes the requesting identity, affected identity, captured original credential binding and an effectful live source ownership guard. The original service retains its semaphore, subscription, flow/owner routing, shared-binding collision checks, captured-controller semantics and affected-instance/revalidation/invalidation algorithms. No second auth runtime is introduced. Its tests provide an owned-session fixture through the port and retain drain, deduplication, replacement and failure behavior. The real PM implementation reuses the existing global auth/maintenance/read exclusion table, requires an admitted credential mutation with frozen current revision, revalidates binding before and after asynchronous guards, invalidates peer revisions with current CAS and drains actual owned host scopes. Rebound peers are skipped; stale self, missing PM authority, busy resources and cleanup failure block native credential mutation with a safe ProviderSetupError. Known stale aliases are retained only for exclusion until source re-resolution, never to authorize stale binding reuse. PM management calls this real port from original authenticate/logout stopSessions callbacks; it is not an unused adapter. Parent LSP checked makeProviderAuthService references (definition, two tests, layer) and found no other layer consumer.",
+      "source_api": {
+        "ProviderAuthSessionInvalidationRequest": "{ requestingInstanceId: ProviderInstanceId; instanceId: ProviderInstanceId; credentialBinding?: NonNullable<ProviderAuthController[\"credentialBinding\"]>; isCurrent: Effect<boolean, ProviderSetupError> }",
+        "ProviderAuthSessionInvalidation": "Required Context.Service with invalidateSessions(request): Effect<void, ProviderSetupError>",
+        "makeProviderAuthService": "Registry plus required ProviderAuthSessionInvalidation; no t3 business repositories"
+      },
+      "pm_api": {
+        "makePmProviderAuthSessionInvalidation(host)": "ProviderAuthSessionInvalidation[\"Service\"]",
+        "makePmProviderAuthSessionInvalidationLayer(host)": "Layer<ProviderAuthSessionInvalidation>",
+        "authorizeProviderAuthSessionInvalidation(requestingInstanceId, instanceId, capturedBinding)": "boolean; existing PM host-owned credential reservation required"
+      }
+    },
+    {
+      "id": "T5-H11",
+      "paths": [
+        "apps/server/agent/src/providers/t3code/config-mapping.ts",
+        "apps/server/agent/src/providers/t3code/management.ts",
+        "apps/server/agent/src/providers/t3code/management.test.ts",
+        "apps/server/agent/src/providers/t3code/credentials.test.ts",
+        "apps/server/agent/src/providers/t3code/host-runtime.test.ts",
+        "apps/server/agent/src/providers/t3code/host.test.ts",
+        "vendor/t3code/apps/server/src/provider/testUtils/providerHostFixtures.ts",
+        "vendor/t3code/apps/server/src/provider/testUtils/providerRegistryMock.ts",
+        "vendor/t3code/apps/server/src/provider/ModelManifest.test.ts",
+        "vendor/t3code/apps/server/src/provider/providerInstallation.test.ts",
+        "vendor/t3code/apps/server/src/provider/userInputAttachments.test.ts",
+        "vendor/t3code/apps/server/src/provider/providerCompatibility.test.ts",
+        "vendor/t3code/apps/server/src/provider/ProviderInstanceRegistry.test.ts",
+        "vendor/t3code/apps/server/src/provider/ProviderRegistry.test.ts"
+      ],
+      "reason": "Repair parent-observed first integration failures without rerunning them. Return explicit local driver literals rather than a source branded kind. Destructure select descriptor arrays before producing mutable DTO arrays, with independence regression. Compare credential bytes independent of Buffer/Uint8Array prototype. Move the existing provider-only config/settings fixture implementations into a pure fixture module and migrate every consumer directly (no re-export); this closes attachment tests without importing aggregate registry/model manifest. Parent LSP found five config-fixture and seven settings-fixture references before extraction. Map remaining provider tests to pure config, settings, secret-store and environment ports. Original instance registry tests use existing packaged TestProviderHost with actual configured paths/settings rather than reference-only BackgroundPolicy/ProviderHostLive/PortScanner; preserve real acquire/reconcile and native-probe assertions. Remove only the five source hydration-composition fragments after migrating their consumer behaviors to real PM boundary tests; remove the now-unused original settings mutation fixture instead of implementing disabled t3 settings writes.",
+      "consumer_behavior_migrations": [
+        {
+          "upstream_test": "re-probes when settings change the codex binaryPath",
+          "pm_path": "apps/server/agent/src/providers/t3code/host-runtime.test.ts",
+          "pm_test": "a binaryPath CAS makes management probe the new original registry configuration",
+          "pm_invariant": "Real local CAS, original instance registry and packaged OpenCode driver, and real management.check/snapshot.refresh. Record actual delegated refresh configuration, reject old context and probe the new explicit offline binary without stale observations."
+        },
+        {
+          "upstream_test": "includes unavailable instance snapshots in getProviders",
+          "pm_path": "apps/server/agent/src/providers/t3code/host-runtime.test.ts",
+          "pm_test": "an unavailable original registry entry is not an executable PM lease or a deleted account",
+          "pm_invariant": "Controlled typed driver creation failure runs through original registry unavailable handling. PM acquisition fails explicitly, closes the failed scope, preserves the current account/revision and does not fabricate executable/default accounts. Existing management DTO regression also preserves unavailable->unknown installation/auth."
+        },
+        {
+          "upstream_test": "applies a settings change saved while the provider registry starts",
+          "pm_path": "apps/server/agent/src/providers/t3code/host-runtime.test.ts",
+          "pm_test": "a configuration saved while the original driver starts rejects its old lease and admits the current revision",
+          "pm_invariant": "Delay actual source driver creation, save through the real PM CAS backend, reject the lost initialization result, then acquire the new authoritative configuration using the original registry. No copied watcher or t3 hydration."
+        },
+        {
+          "upstream_test": "does not apply a queued settings change older than the registry seed",
+          "pm_path": "apps/server/agent/src/providers/t3code/host-runtime.test.ts",
+          "pm_test": "an older queued settings event cannot replace a newer PM lease or authorize its old revision",
+          "pm_invariant": "Real subscription buffers an older committed snapshot before a newer lease is built. Consuming it cannot roll back current authority; replayed old context fails while the new source lease remains current."
+        },
+        {
+          "upstream_test": "retains the newer registry seed when a queued stale change cannot read current settings",
+          "pm_path": "apps/server/agent/src/providers/t3code/host.test.ts",
+          "pm_test": "a failed current settings read preserves the valid seed and never publishes an empty replacement",
+          "pm_invariant": "Controlled private metadata-file I/O failure during a real CAS notification. Current read fails closed, the valid immutable seed is retained, the failed projection publishes no empty/stale replacement, and the next valid CAS snapshot is delivered. No t3 seed/default writer is enabled."
+        }
+      ],
+      "excluded_reference_sources": [
+        "apps/server/src/provider/AgentContextBudget.test.ts",
+        "apps/server/src/provider/ProviderInstanceRegistryHydration.test.ts",
+        "apps/server/src/provider/agentContextBudget.json"
+      ]
+    }
+  ],
+  "assembly": {
+    "host.ts": [
+      "makePmProviderHostLayer(context, services)",
+      "makePmProviderHostServices(context)",
+      "makePmProviderUpstreamServicesLayer(context)",
+      "makePmServerConfig(context)",
+      "makePmServerConfigLayer(context)",
+      "makePmServerSettings()"
+    ],
+    "host-runtime.ts": [
+      "makePmProviderHostService({drivers, driverLayer})",
+      "makePmProviderPlatformLayer(context)"
+    ],
+    "management.ts": [
+      "makePmProviderManagement(host, {installations?, capabilities?})",
+      "PmProviderInstallationMethods",
+      "PmProviderCapabilitiesProjector",
+      "makePmProviderAuthSessionInvalidation(host): ProviderAuthSessionInvalidation[\"Service\"]",
+      "makePmProviderAuthSessionInvalidationLayer(host): Layer<ProviderAuthSessionInvalidation>"
+    ],
+    "required_parent_wiring": [
+      "One application host singleton and one T6 runtime-host value; pass the same runtime host into original family driver layers and execution factory.",
+      "Provide makePmProviderPlatformLayer, original ProviderHost layer plus needed pure concrete service tags, and actual original family infrastructure; no whole t3 server or SQL.",
+      "Supply family real install/remove hooks and same-lease capability projectors during each facade cutover; facade.validateConfig must use original driver.configSchema.",
+      "Build dedicated document worker: source src/providers/t3code/document-text-worker.ts; production dist/providers/t3code/document-text-worker.mjs; args __document-text path .extension.",
+      "T6 owns the one live snapshot usage-limits subscription and revision-bound ingestion; T5 does not add a competing usage watcher.",
+      "Current PM authenticate/logout already invoke the real session invalidation implementation. If original ProviderAuthService.layer is assembled directly, provide makePmProviderAuthSessionInvalidationLayer with the same singleton host while retaining the PM account-mutation guard; there is no default/no-op port."
+    ]
+  },
+  "inactive_original_compositions": [
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderOrchestrationAdapterInfrastructure.ts",
+      "references": [
+        "../orchestration-v2/Adapters/ClaudeAdapterV2.ts",
+        "../orchestration-v2/Adapters/CodexAdapterV2.ts"
+      ],
+      "boundary": "Future family source slices provide these. Current single-OpenCode host closure does not import this aggregate."
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ModelManifest.ts",
+      "references": [
+        "./ClaudeModelManifest.ts"
+      ],
+      "boundary": "Future Claude family source closure. Not a dependency of the standalone raw maintenance command or host registry acquisition."
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/providerInstallation.ts",
+      "references": [
+        "./CodexInstallation.ts",
+        "./AntigravityInstallation.ts"
+      ],
+      "boundary": "Family-owned concrete installation services, not success no-ops. PM facade uses injected real family hooks."
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderInstanceRegistry.test.ts",
+      "references": [
+        "./Drivers/ClaudeDriver.ts",
+        "./Drivers/CodexDriver.ts",
+        "./CodexInstallation.ts",
+        "./CodexManagedTokenBroker.ts",
+        "./ModelManifest.ts -> ClaudeModelManifest.ts",
+        "./ProviderOrchestrationAdapterInfrastructure.ts -> future family adapters",
+        "family-owned native test fixtures"
+      ],
+      "boundary": "Genuine original registry/driver behavior tests retained; host ports mapped and reference-only business-host imports removed. Concrete family dependencies close in T9/T10, not fake services or copied t3 business services."
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/ProviderRegistry.test.ts",
+      "references": [
+        "./CodexProvider.ts",
+        "./ClaudeProvider.ts",
+        "./CodexInstallation.ts",
+        "./CodexManagedTokenBroker.ts",
+        "./ModelManifest.ts -> ClaudeModelManifest.ts"
+      ],
+      "boundary": "Remaining pure registry/cache/status behavior retained with narrow host fixtures; five hydration consumers migrated individually above. Native family source closure belongs to later family slices."
+    },
+    {
+      "path": "vendor/t3code/apps/server/src/provider/TurnTokenUsage.test.ts",
+      "references": [
+        "./ClaudeTurnTokenUsage.ts",
+        "./CodexTurnTokenUsage.ts"
+      ],
+      "boundary": "Pure original family normalization behavior retained; later T9/T10 source dependencies, not missing host ports."
+    }
+  ],
+  "unrun_verification": [
+    "Parent repeat Agent typecheck and local provider node:test suites after H11 fixes/new regressions; SolHost did not execute checks.",
+    "Parent source userInputAttachments.test.ts after pure fixture extraction; remaining source registry/compatibility/model/installation/token-usage suites require the explicitly recorded later family source closure.",
+    "Parent production bundle/document-worker and authorized native HTTP/SSE validation. Existing parent-passing auth/credentials/raw-maintenance checks were not rerun by this slice.",
+    "Removed business budget/hydration tests and budget JSON are reference-only, never counted as passing or hidden behind skip/exclude."
+  ],
+  "regressions_added_or_adapted": {
+    "apps/server/agent/src/providers/auth.test.ts": "Counted/idempotent read reservations, shared credential and installation exclusion, host mutation reentrancy, peer revision invalidation.",
+    "apps/server/agent/src/providers/checks.test.ts": "Externally ready unknown authentication remains unknown; losing a config CAS cannot publish observations.",
+    "apps/server/agent/src/providers/maintenance.test.ts": "Stale progress and late success fail and release exclusion after a winning configuration CAS.",
+    "apps/server/agent/src/providers/t3code/host.test.ts": "Real snapshot write exclusion, failure release, subscription-before-consumption buffering, registered attachment and symlink boundaries, HOME/XDG preservation. Controlled actual private metadata I/O failure proves failed current reads do not publish empty/stale replacement snapshots and recovery preserves the winning CAS.",
+    "apps/server/agent/src/providers/t3code/host-runtime.test.ts": "Concurrent bound platform isolation, sanitized spawn defaults, and actual original packaged OpenCode driver scope lifetime/shutdown using an intentionally absent offline CLI and test-owned native home. SDK runtime-version metadata follows the existing native binding exclusion without invalidating an otherwise current lease. Four explicitly mapped source registry consumer behaviors now exercise real PM CAS/leases, actual original registry/packaged OpenCode creation and delegated source snapshot.refresh, controlled creation failure/delay and queued stale settings.",
+    "apps/server/agent/src/providers/t3code/config-mapping.test.ts": "Original OpenCode config schema, relative executable normalization without context mutation, custom models, environment sensitivity, Claude kind-only mapping and invalid historical IDs.",
+    "apps/server/agent/src/providers/t3code/credentials.test.ts": "App-private opaque credentials, binding/root isolation, file modes, exclusive create/random winner and I/O failure propagation. Opaque bytes are compared semantically, not by Buffer/Uint8Array prototype.",
+    "apps/server/agent/src/providers/t3code/management.test.ts": "Native status/auth/model/update DTO distinctions and real auth interaction field projection. Real auth session port rejects missing PM mutation and busy readers, preserves peer CAS revisions, blocks native mutation on drain failure, skips rebound peers and rejects stale self; stale aliases still exclude active shared mutations without authorizing reuse. Select-option and prompt-injected arrays are mutable DTO copies independent of source readonly arrays.",
+    "vendor/t3code/apps/server/src/provider/providerMaintenanceCommand.test.ts": "Standalone original command helper progress parsing, real controlled Node child exit status and bounded output; no aggregate registry dependency.",
+    "vendor/t3code/apps/server/src/provider/ProviderAuthService.test.ts": "Required owned-session port fixture, no business repositories. Retain original routing, shared credentials, deduplication, active ownership/replacement and drain/failure tests; add callback failure prevention for start/logout/prompt and captured binding/live ownership guard coverage."
+  },
+  "not_migrated_upstream_references": [
+    {
+      "source_path": "apps/server/src/provider/AgentContextBudget.test.ts",
+      "upstream_sha256": "e8c76cf7c5a267dbe211ed671a9921980c821237f0f4d26b29514870e4b61b3b",
+      "reason": "Parent-approved scope correction: exact full t3 business-MCP/Claude/Codex text-byte snapshot depends on excluded orchestration, project, peer, device and SourceControl services. Not a PM provider behavior acceptance test; do not replace services with fake tags or repin bytes.",
+      "destination": null,
+      "validation_count": "Reference-only; not counted as passing. Parent owns manifest correction; newly copied destination removed."
+    },
+    {
+      "source_path": "apps/server/src/provider/ProviderInstanceRegistryHydration.test.ts",
+      "upstream_sha256": "f22ca8810c9bd0ca1405d5ea509224886cc2861f113194e5581ac043ac21e156",
+      "reason": "Parent-approved scope correction: tests reference-only machine/project setting merge, default-instance hydration and dev replay seeding. PM retains its existing instance backend and never enables this t3 startup/settings writer.",
+      "destination": null,
+      "validation_count": "Reference-only; not counted as passing. Parent owns manifest correction; newly copied destination removed."
+    },
+    {
+      "source_path": "apps/server/src/provider/agentContextBudget.json",
+      "upstream_sha256": "1e96bad26e15285f81cdbef51153ae5c31eeadc16bbb7a9a9f42e165976aa15a",
+      "reason": "Unused exact-byte resource of the removed full-business budget test; no remaining apps/packages consumer. Parent approved the same reference-only scope correction.",
+      "destination": null,
+      "validation_count": "Reference-only; not counted as passing. Parent owns manifest correction; newly copied destination removed."
+    }
+  ],
+  "parent_reported_validation_before_H11": {
+    "source": "Main integration report and artifact://165; not executed by SolHost",
+    "agent_tsc": "Two T5 errors: branded driver kind return and readonly promptInjectedValues DTO projection.",
+    "local_node_tests": {
+      "passed": 34,
+      "total": 36,
+      "reported_issue": "Credential byte equality assertions incorrectly require identical Buffer/Uint8Array containers."
+    },
+    "original_source_run": {
+      "passed_tests": 48,
+      "passed_suites": 6,
+      "import_failed_suites": 6
+    },
+    "explicitly_reported_passing": [
+      "ProviderAuthService",
+      "ProviderCredentialStore",
+      "providerMaintenanceCommand"
+    ],
+    "after_H11": "Unrun by this slice; no verification repeated."
+  }
+}

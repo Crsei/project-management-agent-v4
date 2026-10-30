@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/providerInstallation.ts",
+  "beforeSha256": "829b0e0b697e47b3e4b88518decf47d7a04837536d8facda04ae2eebfefebe70",
+  "afterSha256": "fcc6dbc03648fd8e57e76938b186da23c820df8a4bdaf8e6a658f25821961f30",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 15,
+      "before": [
+        "import * as ServerSettings from \"../serverSettings.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerSettings from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-settings.ts\"\n"
+      ]
+    },
+    {
+      "start": 17,
+      "before": [
+        "import { deriveProviderInstanceConfigMap } from \"./ProviderInstanceRegistryHydration.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 48,
+      "before": [
+        "    return deriveProviderInstanceConfigMap(current);\n"
+      ],
+      "after": [
+        "    return current.providerInstances;\n"
+      ]
+    }
+  ]
+}

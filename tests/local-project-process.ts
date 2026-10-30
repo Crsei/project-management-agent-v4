@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import { LocalBlobStore } from '../packages/infrastructure/src/blobs.ts';
 import { closeMailApp, MailFixtureScope } from './mail-fixture-lifecycle.ts';
 
@@ -47,7 +47,7 @@ async function initialize(): Promise<void> {
       blobStorageLocator: { provider: 'local', root },
       coreWorkspaceRoot: process.env.CORE_WORKSPACE_ROOT!,
       chatSpaceRoot: process.env.PM_CHAT_SPACE_ROOT!,
-      publicOrigin: 'http://127.0.0.1:4100',
+      publicOrigin: process.env.LOCAL_PROJECT_PUBLIC_ORIGIN ?? 'http://127.0.0.1:4100',
       cookieSecure: false,
       signal: scope.signal,
       localProjects: {

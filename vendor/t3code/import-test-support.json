@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "files": [
+    {
+      "source_path": "packages/client-runtime/src/work-log/itemDetail.ts",
+      "destination_path": "vendor/t3code/packages/client-runtime/src/work-log/itemDetail.ts",
+      "sha256": "82a6688b67dd3d3b4d7cbbed86a7d3362b606c3b9c98cbd52a8057ed6e7ac955",
+      "action": "copy-verbatim-test-only",
+      "reason": "Pi adapter behavior tests consume pure tool-output formatting. Source inspection confirms dependencies only on contracts, shared/toolOutput and Effect DateTime; no business, Source Control or persistent client state is activated. Preserve original output assertions."
+    }
+  ],
+  "dependencyAdjustments": [
+    {
+      "package": "micromark-util-types",
+      "upstream": "2.0.2",
+      "local": "2.0.3",
+      "reason": "The existing workspace Markdown dependencies resolve 2.0.3. Sharing their type augmentation identity avoids incompatible duplicated Construct/TokenTypeMap types without downgrading the existing application."
+    },
+    {
+      "package": "@effect/platform-node@4.0.5>@effect/platform-node-shared",
+      "local": "4.0.5",
+      "reason": "Pin the upstream transitive platform version; the unbounded range otherwise resolves 4.0.7 with an incompatible Effect peer requirement."
+    },
+    {
+      "package": "esbuild",
+      "local": "0.28.2",
+      "scope": "vendor test workspace devDependency",
+      "reason": "Supply the pinned Vite+ harness peer version locally without replacing the application's existing build tool."
+    }
+  ]
+}

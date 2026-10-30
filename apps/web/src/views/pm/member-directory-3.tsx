@@ -1,4 +1,4 @@
-import { ArrowDownUp, ChevronDown, CirclePlus, ListFilter, Mail, MoreHorizontal, Search, Shield, ShieldCheck, UserRoundPlus, X } from "lucide-react"
+import { ArrowDownUp, ChevronDown, CirclePlus, Mail, MoreHorizontal, Search, Shield, ShieldCheck, UserRoundPlus, X } from "lucide-react"
 import { DataTable, type DataTableColumn } from "@/components/blocks/data-table"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -10,6 +10,7 @@ import { ControlledFeedback } from "./controlled-presentation"
 import type { ControlledInvitation, ControlledMember, ControlledSuggestedContact, MemberDirectorySort, MemberDirectoryViewProps } from "./people-controlled-contracts"
 import { InvitationStatus, PeopleIdentity, PeopleRoleLabel } from "./people-views"
 import { PmPage } from "./presentation-page"
+import { MemberDirectoryFilter, memberDirectoryFilterFields } from "./member-directory-filters"
 import styles from "./member-list-3.module.css"
 
 export function MemberList3View(props: MemberDirectoryViewProps) {
@@ -155,18 +156,23 @@ export function MemberList3View(props: MemberDirectoryViewProps) {
           <InputGroupInput value={state.query} disabled={loading} aria-label={text("筛选成员", "Filter members")} placeholder={text("筛选…", "Filter...")} onChange={(event) => actions.setInteraction((previous) => ({ ...previous, query: event.target.value }))} />
           {state.query && <Button variant="ghost" size="icon" className={styles.clearSearch} disabled={loading} aria-label={text("清除搜索", "Clear search")} onClick={() => actions.setInteraction((previous) => ({ ...previous, query: "" }))}><X aria-hidden="true" size={14} /></Button>}
         </InputGroup>
-        <Select value={state.roleFilter === null ? "all" : String(state.roleFilter)} disabled={loading || !model.roles.length || capabilities.filterRole === false} onValueChange={(value) => {
-          if (value === "all" || model.roles.some((role) => String(role.value) === value)) actions.setInteraction((previous) => ({ ...previous, roleFilter: value === "all" ? null : Number(value) }))
-        }}>
-          <SelectTrigger className={styles.filterSelect} aria-label={text("团队角色", "Team roles")}><span className={styles.selectLabel}><ListFilter aria-hidden="true" size={16} /><SelectValue /></span><ChevronDown aria-hidden="true" size={14} /></SelectTrigger>
-          <SelectContent><SelectItem value="all">{text("全部团队角色", "All Team Roles")}</SelectItem>{model.roles.map((role) => <SelectItem key={role.value} value={String(role.value)}>{role.label}</SelectItem>)}</SelectContent>
-        </Select>
-        <Select value={state.securityFilter ?? "any"} disabled={loading || state.tab !== "members" || !capabilities.filterSecurity} onValueChange={(securityFilter) => {
-          if (securityFilter === "any" || securityFilter === "enrolled" || securityFilter === "missing") actions.setInteraction((previous) => ({ ...previous, securityFilter }))
-        }}>
-          <SelectTrigger className={styles.filterSelect} aria-label={text("2FA 状态", "2FA Status")} title={!capabilities.filterSecurity ? text("来源不支持安全状态筛选", "Security filtering is unavailable from this source") : undefined}><span className={styles.selectLabel}><ShieldCheck aria-hidden="true" size={16} /><SelectValue /></span><ChevronDown aria-hidden="true" size={14} /></SelectTrigger>
-          <SelectContent><SelectItem value="any">{text("2FA 状态", "2FA Status")}</SelectItem><SelectItem value="enrolled">{text("已启用", "Enabled")}</SelectItem><SelectItem value="missing">{text("未启用", "Disabled")}</SelectItem></SelectContent>
-        </Select>
+        <MemberDirectoryFilter
+          text={text}
+          label={text("筛选", "Filter")}
+          fields={memberDirectoryFilterFields(text, {
+            roles: model.roles,
+            roleAvailable: capabilities.filterRole !== false,
+            presenceAvailable: capabilities.filterPresence !== false,
+            securityAvailable: capabilities.filterSecurity === true,
+            teams: model.teamOptions,
+          })}
+          conditions={state.conditions ?? []}
+          onChange={(next) => actions.setInteraction((previous) => ({ ...previous, conditions: next }))}
+          disabled={loading}
+          variant="outline"
+          className={styles.filterSelect}
+          dataPm
+        />
         <Select value={state.sort} disabled={loading || !sortChoices.length} onValueChange={(value) => {
           const sort = sortChoices.find((choice) => choice === value)
           if (sort) actions.setInteraction((previous) => ({ ...previous, sort }))

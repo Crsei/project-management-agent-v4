@@ -54,7 +54,7 @@ export function PmAuthPageShell({ children, toolbar, split = true }: {
   )
 }
 
-export function PmLoginPage() {
+export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) {
   const service = usePmService()
   const { locale } = useI18n()
   const t = useText()
@@ -153,10 +153,12 @@ export function PmLoginPage() {
     }
   }
 
+  const Title = titleAs
+
   return (
     <section className={styles.authForm} aria-labelledby="pm-login-title">
       <div className={styles.symbol}><KeyRound size={20} aria-hidden="true" /></div>
-      <h1 id="pm-login-title" className={styles.title}>{t("欢迎回来", "Welcome back")}</h1>
+      <Title id="pm-login-title" className={styles.title}>{t("欢迎回来", "Welcome back")}</Title>
       <p className={styles.description}>{t("登录，继续与团队一起推进项目。", "Sign in to continue working with your team.")}</p>
       <form noValidate aria-labelledby="pm-login-title" onSubmit={(event) => { void submit(event) }}>
         <fieldset disabled={locked} className={styles.fields}>
@@ -183,12 +185,12 @@ export function PmLoginPage() {
       </form>
       <div className={styles.feedback}>
         {shownFailure != null && (
-          <Alert tone={needsSessionCheck ? "warning" : "error"}>
+          <Alert tone={needsSessionCheck ? "warning" : "error"} className={styles.feedbackAlert}>
             <p>{pmErrorMessage(shownFailure, locale === "en" ? "en" : "zh")}</p>
           </Alert>
         )}
         {(needsSessionCheck || phase === "checking") && (
-          <Alert tone="info">
+          <Alert tone="info" className={styles.feedbackAlert}>
             <p className={styles.feedbackTitle}>{t("暂时无法确认登录状态", "Your sign-in status is not confirmed")}</p>
             <p>{t("请先检查当前会话，避免重复提交登录。如果检查确认尚未登录，你可以重新输入密码。", "Check the current session before submitting again. If the check confirms you are signed out, you can enter your password again.")}</p>
             <Button type="button" variant="secondary" className={styles.recovery} loading={phase === "checking"} disabled={busy || service.loading} onClick={() => { void checkSession() }}>

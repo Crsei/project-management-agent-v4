@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "source": "packages/provider-core/src/server/managedProvider.ts",
+  "beforeSha256": "f6d7b9d889161ccb4ff3f8eab0295480b7e6feda41b4cf054320d02463694525",
+  "afterSha256": "5ddc5ec55d4a2da4e9b5ac631b68e5961d65e727e2cb3f52a31aeebb7edc7d5e",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 24,
+      "before": [],
+      "after": [
+        "}\n",
+        "\n",
+        "interface ProviderUsageProbe {\n",
+        "  readonly checkedAt: string;\n",
+        "  readonly limits: ServerProvider[\"usageLimits\"];\n",
+        "}\n",
+        "// A general status clock cannot distinguish cached quota success from retained\n",
+        "// last-good windows after failure. Keep the original pre-merge probe evidence.\n",
+        "const usageProbes = new WeakMap<ServerProvider, ProviderUsageProbe>();\n",
+        "\n",
+        "/** Evidence belongs only to this exact refresh result, not later enriched snapshots. */\n",
+        "export function readProviderUsageProbe(snapshot: ServerProvider): ProviderUsageProbe | undefined {\n",
+        "  return usageProbes.get(snapshot);\n"
+      ]
+    },
+    {
+      "start": 184,
+      "before": [],
+      "after": [
+        "    usageProbes.set(nextSnapshot, {\n",
+        "      checkedAt: probedSnapshot.checkedAt,\n",
+        "      limits: probedSnapshot.usageLimits,\n",
+        "    });\n"
+      ]
+    }
+  ]
+}

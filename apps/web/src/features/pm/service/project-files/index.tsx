@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router"
 import { ApiError, CommandOutcomeUnknown, type ArtifactVisibility, type Command, type CommandReceipt, type Entity } from "@contracts"
 import { z } from "zod"
-import { Check, Download, Eye, FolderOpen, LayoutGrid, Link2, List, MoreHorizontal, Search, SearchX, Upload, UploadCloud, X } from "lucide-react"
+import { Check, Download, Eye, FolderOpen, LayoutGrid, Link2, List, ListFilter, MoreHorizontal, Search, SearchX, Upload, UploadCloud, X } from "lucide-react"
 import { Avatar } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty } from "@/components/ui/empty"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { usePmCommand, usePmEntities, usePmService, useProjectDirectory } from "../pm-service"
@@ -18,7 +21,7 @@ import { FilePreviewDialog } from "./FilePreviewDialog"
 import { UploadDialog, type UploadInput } from "./UploadDialog"
 import { FileLifecycleOperations, type FileLifecycleAction } from "./LifecycleDialog"
 import { useFileHistory } from "./hooks"
-import { artifactKindFor, buildFileEntries, classifyFile, entryForFile, fileProjectWritable, filterAndSort, filterFileKinds, formatFileSize, formatRelativeTime, kindLabel, type FileEntry, type FileKind, type FileSort, type FileView } from "./model"
+import { allFileKinds, artifactKindFor, buildFileEntries, classifyFile, entryForFile, fileProjectWritable, fileUpdatedValues, filterAndSort, formatFileSize, formatRelativeTime, kindLabel, type FileEntry, type FileKind, type FileSort, type FileView } from "./model"
 import styles from "./project-files.module.css"
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
@@ -131,11 +134,12 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
   const recoveryKey = `pm-files-upload:${actor?.id ?? "anonymous"}:${workspace?.id ?? "none"}:${project.id}`
   const actionScope = `${actorEpoch}:${actor?.id ?? ""}:${workspace?.id ?? ""}:${workspace?.version ?? ""}`
   const [query, setQuery] = useDraftState(scope, "query", "")
-  const [kindFilter, setKindFilter] = useDraftState<FileKind | "all">(scope, "kind", "all")
+  const [filters, setFilters] = useDraftState<FilterCondition[]>(scope, "filters", [])
   const [sort, setSort] = useDraftState<FileSort>(scope, "sort", "newest")
   const [view, setView] = useDraftState<FileView>(scope, "view", "grid")
   const [queue, setQueue] = useDraftState<UploadQueueItem[]>(scope, "uploadQueue", () => restoreUpload(recoveryKey))
   const [notice, setNotice] = useState<string | null>(null)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [lifecycleAction, setLifecycleAction] = useState<(FileLifecycleAction & { scope: string }) | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -148,7 +152,27 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
   const staged = (uploads.data ?? []).filter(row => row.data.ownerId === actor?.id && !row.data.consumedAt && Date.parse(typeof row.data.expiresAt === "string" ? row.data.expiresAt : "") > Date.now())
   const entries = useMemo(() => buildFileEntries(artifacts.data, versions.data), [artifacts.data, versions.data])
   const identities = useMemo(() => new Map(directory.data?.projects.find(entry => entry.projectId === project.id)?.identities.map(identity => [identity.id, identity.name]) ?? []), [directory.data, project.id])
-  const filtered = useMemo(() => filterAndSort(entries, query, kindFilter, sort), [entries, query, kindFilter, sort])
+  const uploaderOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    for (const entry of entries) {
+      if (!entry.uploaderId || seen.has(entry.uploaderId)) continue
+      seen.set(entry.uploaderId, uploaderName(entry.uploaderId))
+    }
+    return [...seen].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+  }, [entries, identities, actor])
+  const updatedFilterLabels: Record<(typeof fileUpdatedValues)[number], string> = {
+    "24h": t("最近 24 小时", "Last 24 hours"),
+    "7d": t("最近 7 天", "Last 7 days"),
+    "30d": t("最近 30 天", "Last 30 days"),
+    older: t("30 天以前", "Over 30 days ago"),
+  }
+  const filterFields: FilterField[] = [
+    { id: "kind", label: t("类型", "Kind"), options: allFileKinds.map(kind => ({ value: kind, label: kindLabel(kind, en) })) },
+    { id: "uploader", label: t("上传者", "Uploader"), options: uploaderOptions },
+    { id: "updated", label: t("更新时间", "Updated"), options: fileUpdatedValues.map(value => ({ value, label: updatedFilterLabels[value] })) },
+  ]
+  const activeFilterCount = filters.filter(condition => condition.values.length > 0).length
+  const filtered = useMemo(() => filterAndSort(entries, query, filters, sort), [entries, query, filters, sort])
   const readError = versions.error ?? artifacts.error
   const hasSnapshot = !!versions.data
   const loading = !readError && ((versions.isPending && !versions.data) || (artifacts.isPending && !artifacts.data && !versions.data))
@@ -436,10 +460,27 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
       <select className={styles.select} value={visibility} onChange={event => setVisibility(event.target.value as ArtifactVisibility)} aria-label={t("文件可见性", "File visibility")}>
         <option value="visible">{t("可见文件", "Visible files")}</option><option value="hidden">{t("已隐藏", "Hidden")}</option><option value="all">{t("全部", "All")}</option>
       </select>
-      <select className={styles.select} value={kindFilter} onChange={event => setKindFilter(event.target.value as FileKind | "all")} aria-label={t("按类型筛选", "Filter by type")}>
-        <option value="all">{t("全部类型", "All types")}</option>
-        {filterFileKinds.map(kind => <option key={kind} value={kind}>{kindLabel(kind, en)}</option>)}
-      </select>
+      <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <PopoverTrigger render={<Button variant="outline" size="sm" data-pm-file-filter aria-label={t("筛选文件", "Filter files")} />}>
+          <ListFilter size={14} aria-hidden="true" />{t("筛选", "Filter")}
+          {activeFilterCount > 0 && <Badge size="sm" tone="info">{activeFilterCount}</Badge>}
+        </PopoverTrigger>
+        <PopoverContent align="end" className={styles.filterPanel} aria-label={t("文件筛选", "File filters")}>
+          <FilterCard
+            title={t("筛选文件", "Filter files")}
+            fields={filterFields}
+            conditions={filters}
+            onChange={setFilters}
+            emptyHint={t("尚未添加筛选条件，显示全部文件。", "No filters yet; all files are shown.")}
+            addLabel={t("添加条件", "Add condition")}
+            clearLabel={t("清除", "Clear")}
+            whereLabel={t("条件", "Where")}
+            andLabel={t("并且", "and")}
+            anyLabel={t("任意", "Any")}
+            removeLabel={t("移除条件", "Remove filter")}
+          />
+        </PopoverContent>
+      </Popover>
       <select className={styles.select} value={sort} onChange={event => setSort(event.target.value as FileSort)} aria-label={t("排序", "Sort")}>
         <option value="newest">{t("最新", "Newest")}</option>
         <option value="name">{t("名称", "Name")}</option>

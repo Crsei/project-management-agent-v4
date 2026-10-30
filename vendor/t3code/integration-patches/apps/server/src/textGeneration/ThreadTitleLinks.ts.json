@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "source": "apps/server/src/textGeneration/ThreadTitleLinks.ts",
+  "beforeSha256": "0f83837217ed91c2f344302726fceeb0c495f90b2957869b134d40c662386ea1",
+  "afterSha256": "aaca5ff0e683c30c265ced35d2f68fc9fa5f0de59697f106f554718cf22058d4",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 2,
+      "before": [
+        "import * as SourceControlProviderRegistry from \"../sourceControl/SourceControlProviderRegistry.ts\";\n"
+      ],
+      "after": [
+        "/** Inactive pure helper. PM title generation does not install a link resolver. */\n",
+        "export type ThreadTitleLinkResolver = (input: { cwd: string; url: URL }) =>\n",
+        "  Effect.Effect<{ readonly title: string; readonly body?: string | null }, unknown> | undefined;\n"
+      ]
+    },
+    {
+      "start": 11,
+      "before": [
+        "}) {\n",
+        "  const providers = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;\n",
+        "  const links = new Map<string, NonNullable<ReturnType<typeof providers.resolveLink>>>();\n"
+      ],
+      "after": [
+        "}, resolveLink: ThreadTitleLinkResolver) {\n",
+        "  const links = new Map<string, NonNullable<ReturnType<ThreadTitleLinkResolver>>>();\n"
+      ]
+    },
+    {
+      "start": 21,
+      "before": [
+        "    const lookup = providers.resolveLink({ cwd: input.cwd, url });\n"
+      ],
+      "after": [
+        "    const lookup = resolveLink({ cwd: input.cwd, url });\n"
+      ]
+    }
+  ]
+}

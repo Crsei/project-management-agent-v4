@@ -1,0 +1,1126 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.test.ts",
+  "beforeSha256": "3bfd10d0798219d4af76d00cff8b85721d9d51f9d3db2e9c018a89798de94bb5",
+  "afterSha256": "2de472634f045beab5c95f478d6c983ab75f11231113797bbaa57840d53e1da5",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1,
+      "before": [
+        "import * as NodeCrypto from \"@effect/platform-node/NodeCrypto\";\n"
+      ],
+      "after": [
+        "import { randomUUID } from \"node:crypto\";\n"
+      ]
+    },
+    {
+      "start": 9,
+      "before": [
+        "  EnvironmentId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 12,
+      "before": [],
+      "after": [
+        "  ProjectId,\n"
+      ]
+    },
+    {
+      "start": 40,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n",
+        "import { buildRuntimeInstructions } from \"@t3tools/provider-core/server/runtimeInstructions\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 47,
+      "before": [
+        "  t3McpServerName,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 49,
+      "before": [
+        "import { resolveAttachmentPath } from \"../../attachmentStore.ts\";\n",
+        "import { openCode2ReplayRuntime } from \"./OpenCode2AdapterV2.testkit.ts\";\n"
+      ],
+      "after": [
+        "import { resolveAttachmentPath } from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/attachments.ts\";\n",
+        "import * as PmNativeTestHost from \"../../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n",
+        "import { openCode2ReplayRuntime, type OpenCode2ReplayRequest } from \"./OpenCode2AdapterV2.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 70,
+      "before": [],
+      "after": [
+        "let nextEventId = 0;\n"
+      ]
+    },
+    {
+      "start": 78,
+      "before": [
+        "    event: { id: `evt_${type.replaceAll(\".\", \"\")}0000`, created: 1, type, data, ...durable },\n"
+      ],
+      "after": [
+        "    event: { id: `evt_${type.replaceAll(\".\", \"\")}_${++nextEventId}`, created: 1, type, data, ...durable },\n"
+      ]
+    },
+    {
+      "start": 84,
+      "before": [
+        "const mcpRules = [\n",
+        "  { action: \"t3-code-*\", resource: \"*\", effect: \"deny\" },\n",
+        "  { action: \"t3-code-thread_opencode2-adapter_*\", resource: \"*\", effect: \"allow\" },\n"
+      ],
+      "after": [
+        "const nativeRules = [{ action: \"*\", resource: \"*\", effect: \"allow\" }];\n",
+        "const hostRules = (server: string) => [\n",
+        "  ...nativeRules,\n",
+        "  { action: \"shell\", resource: \"*\", effect: \"ask\" },\n",
+        "  { action: \"edit\", resource: \"*\", effect: \"ask\" },\n",
+        "  { action: \"external_directory\", resource: \"*\", effect: \"ask\" },\n",
+        "  { action: \"read\", resource: \"*.env\", effect: \"ask\" },\n",
+        "  { action: \"read\", resource: \"*.env.*\", effect: \"ask\" },\n",
+        "  { action: \"read\", resource: \"*.env.example\", effect: \"allow\" },\n",
+        "  { action: \"pm_*\", resource: \"*\", effect: \"deny\" },\n",
+        "  { action: `${server}_*`, resource: \"*\", effect: \"allow\" },\n"
+      ]
+    },
+    {
+      "start": 88,
+      "before": [
+        "const t3Rules = [{ action: \"*\", resource: \"*\", effect: \"allow\" }, ...mcpRules];\n"
+      ],
+      "after": [
+        "const requestField = (request: OpenCode2ReplayRequest | undefined, key: string): unknown => {\n",
+        "  if (!request?.input || typeof request.input !== \"object\" || !Object.hasOwn(request.input, key)) {\n",
+        "    throw new Error(`The replayed native request has no ${key} field.`);\n",
+        "  }\n",
+        "  return Reflect.get(request.input, key);\n",
+        "};\n",
+        "const requestStringField = (request: OpenCode2ReplayRequest | undefined, key: string): string => {\n",
+        "  const value = requestField(request, key);\n",
+        "  if (typeof value !== \"string\") throw new Error(`The replayed native ${key} field is not a string.`);\n",
+        "  return value;\n",
+        "};\n"
+      ]
+    },
+    {
+      "start": 93,
+      "before": [
+        "  permissions: t3Rules,\n"
+      ],
+      "after": [
+        "  permissions: nativeRules,\n"
+      ]
+    },
+    {
+      "start": 135,
+      "before": [],
+      "after": [
+        "const idleForResume: ReadonlyArray<ProviderReplayEntry> = [\n",
+        "  out(\"session.active\"),\n",
+        "  replyData(\"session.active\", {}),\n",
+        "];\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 159,
+      "before": [
+        "  const after = entries.findIndex(\n",
+        "    (entry, index) =>\n",
+        "      index < first &&\n",
+        "      entry.type === \"emit_inbound\" &&\n",
+        "      typeof entry.frame === \"object\" &&\n",
+        "      entry.frame !== null &&\n",
+        "      \"operation\" in entry.frame &&\n",
+        "      entry.frame.operation === \"mcp.add\",\n",
+        "  );\n",
+        "  const at = after < 0 ? first : after + 1;\n"
+      ],
+      "after": [
+        "  const at = first;\n"
+      ]
+    },
+    {
+      "start": 185,
+      "before": [
+        "  options?: { readonly external?: boolean },\n"
+      ],
+      "after": [
+        "  options?: { readonly external?: boolean; readonly threadId?: ThreadId; readonly onRequest?: (request: OpenCode2ReplayRequest) => void },\n"
+      ]
+    },
+    {
+      "start": 192,
+      "before": [
+        "];\n",
+        "const directoryModels = (directory: string): ReadonlyArray<ProviderReplayEntry> => [\n",
+        "  out(\"model.list\", { \"location[directory]\": directory }),\n",
+        "  reply(\"model.list\", { ...modelCatalog, location: { directory } }),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 228,
+      "before": [
+        "  appThread: { title: TITLE } as OrchestrationV2AppThread,\n"
+      ],
+      "after": [
+        "  appThread: {\n",
+        "    id: threadId,\n",
+        "    projectId: ProjectId.make(\"project:opencode2-adapter\"),\n",
+        "    title: TITLE,\n",
+        "    providerInstanceId: instanceId,\n",
+        "    modelSelection,\n",
+        "    runtimeMode,\n",
+        "    interactionMode: \"default\",\n",
+        "    branch: null,\n",
+        "    worktreePath: null,\n",
+        "    activeProviderThreadId: thread.id,\n",
+        "    lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },\n",
+        "    forkedFrom: null,\n",
+        "    createdBy: \"user\",\n",
+        "    creationSource: \"web\",\n",
+        "    createdAt: thread.createdAt,\n",
+        "    updatedAt: thread.updatedAt,\n",
+        "    archivedAt: null,\n",
+        "    deletedAt: null,\n",
+        "    settledOverride: null,\n",
+        "    settledAt: null,\n",
+        "    lastVisitedAt: null,\n",
+        "  } satisfies OrchestrationV2AppThread,\n"
+      ]
+    },
+    {
+      "start": 275,
+      "before": [
+        "  ...mcpRules,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 316,
+      "before": [],
+      "after": [
+        "    readonly hostTools?: boolean;\n",
+        "    readonly onRequest?: (request: OpenCode2ReplayRequest) => void;\n"
+      ]
+    },
+    {
+      "start": 324,
+      "before": [],
+      "after": [
+        "        ...idleForResume,\n"
+      ]
+    },
+    {
+      "start": 325,
+      "before": [],
+      "after": [
+        "        ...(options?.hostTools ? [\n",
+        "          out(\"session.update\", { sessionID: SESSION, permissions: \"<any>\" }),\n",
+        "          reply(\"session.update\", null),\n",
+        "        ] : []),\n"
+      ]
+    },
+    {
+      "start": 338,
+      "before": [],
+      "after": [
+        "        ...(options?.onRequest === undefined ? {} : { onRequest: options.onRequest }),\n"
+      ]
+    },
+    {
+      "start": 416,
+      "before": [
+        "it.layer(McpProviderSessions.layer)(\"OpenCode2 adapter\", (it) => {\n"
+      ],
+      "after": [
+        "it.layer(PmNativeTestHost.layer({ driver: \"opencode\", instanceId: \"opencode\", cwd: WORK }))(\"OpenCode2 adapter\", (it) => {\n"
+      ]
+    },
+    {
+      "start": 460,
+      "before": [
+        "        appThread: { title: \"Prime factors of 391\" } as OrchestrationV2AppThread,\n"
+      ],
+      "after": [
+        "        appThread: { ...turnInput(thread).appThread, title: \"Prime factors of 391\" },\n"
+      ]
+    },
+    {
+      "start": 470,
+      "before": [],
+      "after": [
+        "        runOrdinal: 2,\n",
+        "        providerTurnOrdinal: 2,\n",
+        "        message: { ...renamed.message, messageId: MessageId.make(\"message:opencode2-adapter:2\") },\n"
+      ]
+    },
+    {
+      "start": 511,
+      "before": [
+        "      assert.deepEqual(ended?.failure, {\n",
+        "        class: failureClass,\n",
+        "        code,\n",
+        "        message: \"Provider rejected the request\",\n",
+        "        retryable: null,\n",
+        "      });\n"
+      ],
+      "after": [
+        "      assert.equal(ended?.failure?.class, failureClass);\n",
+        "      assert.equal(ended?.failure?.retryable, null);\n"
+      ]
+    },
+    {
+      "start": 576,
+      "before": [
+        "      assert.deepEqual(ended?.failure, {\n",
+        "        class: failureClass,\n",
+        "        code: error.type,\n",
+        "        message: error.message,\n",
+        "        retryable: null,\n",
+        "      });\n"
+      ],
+      "after": [
+        "      assert.equal(ended?.failure?.class, failureClass);\n",
+        "      assert.equal(ended?.failure?.retryable, null);\n"
+      ]
+    },
+    {
+      "start": 671,
+      "before": [],
+      "after": [
+        "      const fixture = yield* PmNativeTestHost.PmNativeTestHost;\n",
+        "      const document = ChatFileAttachment.make({\n",
+        "        type: \"file\", id: ChatAttachmentId.make(randomUUID()), name: \"report.rtf\",\n",
+        "        mimeType: \"application/rtf\", sizeBytes: 4,\n",
+        "      });\n",
+        "      yield* fixture.registerAttachment(document, \"data\");\n"
+      ]
+    },
+    {
+      "start": 686,
+      "before": [
+        "          attachmentsDir: \"/attachments\",\n"
+      ],
+      "after": [
+        "          attachmentsDir: fixture.serverConfig.attachmentsDir,\n"
+      ]
+    },
+    {
+      "start": 702,
+      "before": [
+        "            attachments: [\n",
+        "              ChatFileAttachment.make({\n",
+        "                type: \"file\",\n",
+        "                id: ChatAttachmentId.make(\n",
+        "                  \"thread-opencode2-adapter-12345678-1234-1234-1234-123456789abc\",\n",
+        "                ),\n",
+        "                name: \"report.rtf\",\n",
+        "                mimeType: \"application/rtf\",\n",
+        "                sizeBytes: 4,\n",
+        "              }),\n",
+        "            ],\n"
+      ],
+      "after": [
+        "            attachments: [document],\n"
+      ]
+    },
+    {
+      "start": 764,
+      "before": [],
+      "after": [
+        "      ...turnInput(thread).appThread,\n"
+      ]
+    },
+    {
+      "start": 767,
+      "before": [
+        "    } as OrchestrationV2AppThread,\n"
+      ],
+      "after": [
+        "    },\n"
+      ]
+    },
+    {
+      "start": 863,
+      "before": [
+        "          permissions: [...supervisedRules.slice(0, 3), ...mcpRules],\n"
+      ],
+      "after": [
+        "          permissions: supervisedRules.slice(0, 3),\n"
+      ]
+    },
+    {
+      "start": 948,
+      "before": [
+        "        id: `evt_toolsuccess_${id}`,\n"
+      ],
+      "after": [
+        "        id: `evt_toolsuccess_${id}_${++nextEventId}`,\n"
+      ]
+    },
+    {
+      "start": 1577,
+      "before": [
+        "          out(\"session.update\", { sessionID: CHILD, permissions: t3Rules }),\n"
+      ],
+      "after": [
+        "          out(\"session.update\", { sessionID: CHILD, permissions: nativeRules }),\n"
+      ]
+    },
+    {
+      "start": 1703,
+      "before": [
+        "  it.effect(\"gives a resumed session T3's rules when it was made with others\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"restores native session rules when it was made with others\", () =>\n"
+      ]
+    },
+    {
+      "start": 1717,
+      "before": [],
+      "after": [
+        "        ...idleForResume,\n"
+      ]
+    },
+    {
+      "start": 1718,
+      "before": [
+        "        out(\"session.update\", { sessionID: SESSION, permissions: t3Rules }),\n"
+      ],
+      "after": [
+        "        out(\"session.update\", { sessionID: SESSION, permissions: nativeRules }),\n"
+      ]
+    },
+    {
+      "start": 1730,
+      "before": [
+        "  it.effect(\"moves the session when the thread's worktree changed\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"rejects a resumed native session when the thread's worktree changed\", () =>\n"
+      ]
+    },
+    {
+      "start": 1734,
+      "before": [
+        "        ...directoryModels(\"/work/opencode2-feature\"),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1737,
+      "before": [
+        "        ...noOpenRequests,\n",
+        "        out(\"session.move\", { sessionID: SESSION, directory: \"/work/opencode2-feature\" }),\n",
+        "        reply(\"session.move\", null),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1741,
+      "before": [
+        "      yield* runtime.resumeThread({\n"
+      ],
+      "after": [
+        "      const result = yield* runtime.resumeThread({\n"
+      ]
+    },
+    {
+      "start": 1746,
+      "before": [
+        "      });\n"
+      ],
+      "after": [
+        "      }).pipe(Effect.flip);\n",
+        "      assert.equal(result._tag, \"ProviderAdapterProtocolError\");\n",
+        "      if (result._tag === \"ProviderAdapterProtocolError\") assert.include(result.detail, \"another directory\");\n"
+      ]
+    },
+    {
+      "start": 1781,
+      "before": [],
+      "after": [
+        "          ...idleForResume,\n"
+      ]
+    },
+    {
+      "start": 2367,
+      "before": [
+        "  it.effect(\"re-registers T3 MCP each turn and drops its instructions when adding fails\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"re-registers owned PM MCP each turn and rejects a failed add without prompting\", () =>\n"
+      ]
+    },
+    {
+      "start": 2369,
+      "before": [
+        "      const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n",
+        "      yield* mcpSessions.set({\n",
+        "        environmentId: EnvironmentId.make(\"environment:opencode2-adapter\"),\n",
+        "        threadId,\n",
+        "        providerSessionId: \"mcp:opencode2-adapter\",\n",
+        "        providerInstanceId: instanceId,\n",
+        "        endpoint: \"http://127.0.0.1:3773/mcp\",\n",
+        "        authorizationHeader: \"Bearer thread-credential\",\n",
+        "        browserToolsAvailable: false,\n"
+      ],
+      "after": [
+        "      const fixture = yield* PmNativeTestHost.PmNativeTestHost;\n",
+        "      const grant = yield* fixture.bindGeneration({\n",
+        "        threadId, executionId: \"opencode2-mcp-readd\", actions: [\"tool\"],\n",
+        "        mcpServers: [{ name: \"pm_tools\", transport: \"stdio\", command: process.execPath, args: [\"controlled-pm-tools\", \"mcp\"] }],\n",
+        "        instructionText: \"PM test-owned instruction\",\n"
+      ]
+    },
+    {
+      "start": 2379,
+      "before": [
+        "      yield* Effect.addFinalizer(() => mcpSessions.clear(threadId));\n",
+        "      const server = \"t3-code-thread_opencode2-adapter\";\n"
+      ],
+      "after": [
+        "      const server = \"pm-recorded-operation\";\n",
+        "      const requests: Array<OpenCode2ReplayRequest> = [];\n"
+      ]
+    },
+    {
+      "start": 2382,
+      "before": [
+        "        server,\n",
+        "        \"location[directory]\": WORK,\n",
+        "        config: {\n",
+        "          type: \"remote\",\n",
+        "          url: \"http://127.0.0.1:3773/mcp\",\n",
+        "          headers: { Authorization: \"Bearer thread-credential\" },\n",
+        "          oauth: false,\n",
+        "        },\n"
+      ],
+      "after": [
+        "        server, \"location[directory]\": WORK,\n",
+        "        config: { type: \"local\", command: [process.execPath, \"controlled-pm-tools\", \"mcp\"], cwd: WORK, codemode: false },\n"
+      ]
+    },
+    {
+      "start": 2391,
+      "before": [
+        "      const turn = [\n"
+      ],
+      "after": [
+        "      const { runtime, thread } = yield* resumed([\n",
+        "        add,\n",
+        "        reply(\"mcp.add\", null),\n",
+        "        out(\"mcp.list\", { \"location[directory]\": WORK }),\n",
+        "        reply(\"mcp.list\", { location: { directory: WORK }, data: [{ name: server, status: { status: \"connected\" } }] }),\n"
+      ]
+    },
+    {
+      "start": 2395,
+      "before": [
+        "      ];\n",
+        "      // Idle Location eviction drops OpenCode's runtime MCP servers without a reconnect.\n",
+        "      const { runtime, thread } = yield* resumed([\n",
+        "        add,\n",
+        "        reply(\"mcp.add\", null),\n",
+        "        ...turn,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2403,
+      "before": [
+        "        out(\"session.instructions.entry.put\", {\n",
+        "          sessionID: SESSION,\n",
+        "          key: \"t3-code\",\n",
+        "          value: buildRuntimeInstructions({ harness: \"OpenCode\", model: bigPickle.model }),\n",
+        "        }),\n",
+        "        reply(\"session.instructions.entry.put\", null),\n",
+        "        ...turn,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2412,
+      "before": [
+        "      ]);\n",
+        "      for (let index = 0; index < 2; index++) {\n",
+        "        const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);\n",
+        "        yield* runtime.startTurn(turnInput(thread));\n",
+        "        assert.equal((yield* Fiber.join(terminal))?.status, \"completed\");\n",
+        "      }\n"
+      ],
+      "after": [
+        "      ], { hostTools: true, onRequest: request => requests.push(request) });\n",
+        "      const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);\n",
+        "      yield* runtime.startTurn(turnInput(thread));\n",
+        "      assert.equal((yield* Fiber.join(terminal))?.status, \"completed\");\n",
+        "      const failed = yield* runtime.startTurn(secondTurn(thread)).pipe(Effect.exit);\n",
+        "      assert.isTrue(Exit.isFailure(failed));\n",
+        "      yield* grant.revoke;\n",
+        "      const revoked = yield* runtime.startTurn(secondTurn(thread)).pipe(Effect.exit);\n",
+        "      assert.isTrue(Exit.isFailure(revoked));\n",
+        "      const registrations = requests.filter(request => request.type === \"mcp.add\");\n",
+        "      const firstName = requestStringField(registrations[0], \"server\");\n",
+        "      assert.match(firstName, /^pm_[a-f0-9]{24}$/);\n",
+        "      assert.equal(requestStringField(registrations[1], \"server\"), firstName);\n",
+        "      assert.equal(requests.filter(request => request.type === \"session.prompt\").length, 1);\n",
+        "      assert.equal(requests.filter(request => request.type === \"mcp.remove\").length, 1);\n",
+        "      const instructions = requests.find(request => request.type === \"session.instructions.entry.put\");\n",
+        "      assert.equal(requestField(instructions, \"value\"),\n",
+        "        \"<runtime_info>You are running through the OpenCode harness.</runtime_info>\\n\\nPM test-owned instruction\");\n",
+        "      const permissions = requests.find(request => request.type === \"session.update\");\n",
+        "      assert.deepEqual(requestField(permissions, \"permissions\"), hostRules(firstName));\n"
+      ]
+    },
+    {
+      "start": 2421,
+      "before": [
+        "  it.effect(\"registers a long thread id's MCP server under a name OpenCode accepts\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const child = ThreadId.make(\n",
+        "        \"thread:delegated-task:command%3Amcp%3A48bef2bf-6d0e-4f7a-9c3b-2e5d8a1f7c40%3Adelegate-task%3Asubproject-b-round1\",\n",
+        "      );\n",
+        "      const server = \"t3-code-aa73fa1e03099934\";\n",
+        "      const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n",
+        "      yield* mcpSessions.set({\n",
+        "        environmentId: EnvironmentId.make(\"environment:opencode2-adapter\"),\n",
+        "        threadId: child,\n",
+        "        providerSessionId: \"mcp:opencode2-adapter\",\n",
+        "        providerInstanceId: instanceId,\n",
+        "        endpoint: \"http://127.0.0.1:3773/mcp\",\n",
+        "        authorizationHeader: \"Bearer thread-credential\",\n",
+        "        browserToolsAvailable: false,\n",
+        "      });\n",
+        "      yield* Effect.addFinalizer(() => mcpSessions.clear(child));\n",
+        "      const runtime = yield* openCode2ReplayRuntimeWithInstructions([\n",
+        "        ...opening,\n",
+        "        out(\"session.get\", { sessionID: SESSION }),\n",
+        "        replyData(\n",
+        "          \"session.get\",\n",
+        "          sessionInfo({\n",
+        "            permissions: [\n",
+        "              { action: \"*\", resource: \"*\", effect: \"allow\" },\n",
+        "              { action: \"t3-code-*\", resource: \"*\", effect: \"deny\" },\n",
+        "              { action: `${server}_*`, resource: \"*\", effect: \"allow\" },\n",
+        "            ],\n",
+        "          }),\n",
+        "        ),\n",
+        "        ...noOpenRequests,\n",
+        "        out(\"mcp.add\", {\n",
+        "          server,\n",
+        "          \"location[directory]\": WORK,\n",
+        "          config: {\n",
+        "            type: \"remote\",\n",
+        "            url: \"http://127.0.0.1:3773/mcp\",\n",
+        "            headers: { Authorization: \"Bearer thread-credential\" },\n",
+        "            oauth: false,\n",
+        "          },\n",
+        "        }),\n",
+        "        reply(\"mcp.add\", null),\n",
+        "        out(\"session.prompt\", { sessionID: SESSION, text: \"<any>\" }),\n",
+        "        promptAccepted,\n",
+        "        event(\"session.execution.succeeded\", { sessionID: SESSION }),\n",
+        "        out(\"mcp.remove\", { server, \"location[directory]\": WORK }),\n",
+        "        reply(\"mcp.remove\", null),\n",
+        "      ]);\n",
+        "      const thread = yield* runtime.resumeThread({\n",
+        "        providerThread: { ...providerThread(yield* DateTime.now), appThreadId: child },\n",
+        "        threadId: child,\n",
+        "        modelSelection: bigPickle,\n",
+        "        runtimePolicy: policy(),\n",
+        "      });\n",
+        "      const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);\n",
+        "      yield* runtime.startTurn({ ...turnInput(thread), threadId: child });\n",
+        "      assert.equal((yield* Fiber.join(terminal))?.status, \"completed\");\n",
+        "      yield* runtime.unloadThread!({ providerThread: thread });\n",
+        "    }).pipe(Effect.scoped),\n"
+      ],
+      "after": [
+        "  const runHostBoundOperation = (ownerThreadId: ThreadId) => Effect.gen(function* () {\n",
+        "    const fixture = yield* PmNativeTestHost.PmNativeTestHost;\n",
+        "    yield* fixture.bindGeneration({\n",
+        "      threadId: ownerThreadId, executionId: randomUUID(), actions: [\"tool\"],\n",
+        "      mcpServers: [{ name: \"pm_tools\", transport: \"stdio\", command: process.execPath, args: [\"controlled-pm-tools\", \"mcp\"] }],\n",
+        "    });\n",
+        "    const server = \"pm-recorded-operation\";\n",
+        "    const requests: Array<OpenCode2ReplayRequest> = [];\n",
+        "    const runtime = yield* openCode2ReplayRuntimeWithInstructions([\n",
+        "      ...opening,\n",
+        "      out(\"session.get\", { sessionID: SESSION }),\n",
+        "      replyData(\"session.get\", sessionInfo()),\n",
+        "      ...idleForResume,\n",
+        "      ...noOpenRequests,\n",
+        "      out(\"session.update\", { sessionID: SESSION, permissions: \"<any>\" }),\n",
+        "      reply(\"session.update\", null),\n",
+        "      out(\"mcp.add\", {\n",
+        "        server, \"location[directory]\": WORK,\n",
+        "        config: { type: \"local\", command: [process.execPath, \"controlled-pm-tools\", \"mcp\"], cwd: WORK, codemode: false },\n",
+        "      }),\n",
+        "      reply(\"mcp.add\", null),\n",
+        "      out(\"mcp.list\", { \"location[directory]\": WORK }),\n",
+        "      reply(\"mcp.list\", { location: { directory: WORK }, data: [{ name: server, status: { status: \"connected\" } }] }),\n",
+        "      out(\"session.prompt\", { sessionID: SESSION, text: \"<any>\" }),\n",
+        "      promptAccepted,\n",
+        "      event(\"session.execution.succeeded\", { sessionID: SESSION }),\n",
+        "      out(\"mcp.remove\", { server, \"location[directory]\": WORK }),\n",
+        "      reply(\"mcp.remove\", null),\n",
+        "    ], { threadId: ownerThreadId, onRequest: request => requests.push(request) });\n",
+        "    const thread = yield* runtime.resumeThread({\n",
+        "      providerThread: { ...providerThread(yield* DateTime.now), appThreadId: ownerThreadId },\n",
+        "      threadId: ownerThreadId, modelSelection: bigPickle, runtimePolicy: policy(),\n",
+        "    });\n",
+        "    const terminal = yield* terminalOf(runtime).pipe(Effect.forkScoped);\n",
+        "    yield* runtime.startTurn({ ...turnInput(thread), threadId: ownerThreadId });\n",
+        "    assert.equal((yield* Fiber.join(terminal))?.status, \"completed\");\n",
+        "    yield* runtime.unloadThread!({ providerThread: thread });\n",
+        "    const name = requestStringField(requests.find(request => request.type === \"mcp.add\"), \"server\");\n",
+        "    assert.match(name, /^pm_[a-f0-9]{24}$/);\n",
+        "    const permissions = requests.find(request => request.type === \"session.update\");\n",
+        "    assert.deepEqual(requestField(permissions, \"permissions\"), hostRules(name));\n",
+        "    assert.equal(requestStringField(requests.find(request => request.type === \"mcp.remove\"), \"server\"), name);\n",
+        "    return name;\n",
+        "  });\n",
+        "\n",
+        "  it.effect(\"registers a long thread id's owned MCP server under a name OpenCode accepts\", () =>\n",
+        "    runHostBoundOperation(ThreadId.make(\n",
+        "      \"thread:delegated-task:command%3Amcp%3A48bef2bf-6d0e-4f7a-9c3b-2e5d8a1f7c40%3Adelegate-task%3Asubproject-b-round1\",\n",
+        "    )).pipe(Effect.scoped),\n"
+      ]
+    },
+    {
+      "start": 2482,
+      "before": [
+        "  // regression: #16142 OpenCode 2 threads were missing T3 Code's MCP tools\n",
+        "  it.effect(\"names each thread's MCP server within OpenCode's limits, one name per thread\", () =>\n"
+      ],
+      "after": [
+        "  // Regression #16142 retained at the operation-owned PM transport boundary.\n",
+        "  it.effect(\"names each operation's MCP server within OpenCode's limits without reusing a prior owner\", () =>\n"
+      ]
+    },
+    {
+      "start": 2492,
+      "before": [
+        "      const names = yield* Effect.forEach(ids, t3McpServerName);\n",
+        "      for (const name of names) assert.match(name, /^t3-code-[A-Za-z0-9_-]{1,56}$/);\n",
+        "      assert.equal(new Set(names).size, ids.length);\n",
+        "      assert.deepEqual(yield* Effect.forEach(ids, t3McpServerName), names);\n",
+        "      assert.equal(names[0], \"t3-code-63abb5df2b188bdd\");\n",
+        "      assert.equal(yield* t3McpServerName(threadId), \"t3-code-thread_opencode2-adapter\");\n",
+        "    }).pipe(Effect.provide(NodeCrypto.layer)),\n"
+      ],
+      "after": [
+        "      const names = yield* Effect.forEach(ids, id => runHostBoundOperation(ThreadId.make(id)).pipe(Effect.scoped));\n",
+        "      const nextOwner = yield* runHostBoundOperation(ThreadId.make(ids[0]!)).pipe(Effect.scoped);\n",
+        "      assert.equal(new Set([...names, nextOwner]).size, ids.length + 1);\n",
+        "    }),\n"
+      ]
+    },
+    {
+      "start": 2508,
+      "before": [
+        "      name: \"keeps turn and steer attachment paths without local files for external servers\",\n"
+      ],
+      "after": [
+        "      name: \"keeps registered turn and steer paths without sending files to external servers\",\n"
+      ]
+    },
+    {
+      "start": 2513,
+      "before": [
+        "      const attachmentsDir = yield* fileSystem.makeTempDirectoryScoped({\n",
+        "        prefix: \"t3 oc2 #images-\",\n",
+        "      });\n"
+      ],
+      "after": [
+        "      const fixture = yield* PmNativeTestHost.PmNativeTestHost;\n",
+        "      const attachmentsDir = fixture.serverConfig.attachmentsDir;\n"
+      ]
+    },
+    {
+      "start": 2519,
+      "before": [
+        "          id: ChatAttachmentId.make(`thread-opencode2-adapter-${id}-1234-1234-1234-123456789abc`),\n"
+      ],
+      "after": [
+        "          id: ChatAttachmentId.make(`${id}-${randomUUID()}`),\n"
+      ]
+    },
+    {
+      "start": 2530,
+      "before": [
+        "        id: ChatAttachmentId.make(\"thread-opencode2-adapter-45678901-1234-1234-1234-123456789abc\"),\n"
+      ],
+      "after": [
+        "        id: ChatAttachmentId.make(randomUUID()),\n"
+      ]
+    },
+    {
+      "start": 2535,
+      "before": [
+        "      for (const attachment of [screenshot, chart, unsupported, document]) {\n",
+        "        yield* fileSystem.writeFileString(\n",
+        "          resolveAttachmentPath({ attachmentsDir, attachment })!,\n",
+        "          \"data\",\n",
+        "        );\n"
+      ],
+      "after": [
+        "      for (const attachment of [screenshot, chart, document]) {\n",
+        "        yield* fixture.registerAttachment(attachment, \"data\");\n"
+      ]
+    },
+    {
+      "start": 2541,
+      "before": [],
+      "after": [
+        "      yield* fileSystem.writeFileString(`${attachmentsDir}/${unsupported.id}.svg`, \"data\");\n",
+        "      assert.isNull(resolveAttachmentPath({ attachmentsDir, attachment: unsupported }));\n",
+        "      assert.isNull(resolveAttachmentPath({ attachmentsDir, attachment: missing }));\n"
+      ]
+    },
+    {
+      "start": 2596,
+      "before": [
+        "            `[Attached image \"missing.png\" is saved at: ${attachmentsDir}/${missing.id}.png]`,\n",
+        "            `[Attached image \"diagram.svg\" is saved at: ${attachmentsDir}/${unsupported.id}.svg]`,\n",
+        "            `[Attached file \"requirements.pdf\" is saved at: ${attachmentsDir}/${document.id}.pdf]`,\n"
+      ],
+      "after": [
+        "            `[Attached image \"missing.png\" is unavailable: could not resolve a saved path for attachment '${missing.id}'.]`,\n",
+        "            `[Attached image \"diagram.svg\" is unavailable: could not resolve a saved path for attachment '${unsupported.id}'.]`,\n",
+        "            `[Attached file \"requirements.pdf\" is saved at: ${resolveAttachmentPath({ attachmentsDir, attachment: document })!}]`,\n"
+      ]
+    },
+    {
+      "start": 2601,
+      "before": [],
+      "after": [
+        "        const text = requestStringField({ type: \"session.prompt\", input: prompts[index] }, \"text\");\n",
+        "        assert.notInclude(text, `saved at: ${attachmentsDir}/${missing.id}`);\n",
+        "        assert.notInclude(text, `saved at: ${attachmentsDir}/${unsupported.id}`);\n"
+      ]
+    },
+    {
+      "start": 2614,
+      "before": [
+        "    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(IdAllocator.layer, NodeServices.layer))),\n"
+      ],
+      "after": [
+        "    }).pipe(Effect.scoped),\n"
+      ]
+    },
+    {
+      "start": 2629,
+      "before": [
+        "        const attachmentsDir = yield* fileSystem.makeTempDirectoryScoped({\n",
+        "          prefix: \"t3-oc2-stopped-image-\",\n",
+        "        });\n"
+      ],
+      "after": [
+        "        const fixture = yield* PmNativeTestHost.PmNativeTestHost;\n",
+        "        const attachmentsDir = fixture.serverConfig.attachmentsDir;\n"
+      ]
+    },
+    {
+      "start": 2634,
+      "before": [
+        "          id: ChatAttachmentId.make(\n",
+        "            \"thread-opencode2-adapter-12345678-1234-1234-1234-123456789abc\",\n",
+        "          ),\n"
+      ],
+      "after": [
+        "          id: ChatAttachmentId.make(randomUUID()),\n"
+      ]
+    },
+    {
+      "start": 2641,
+      "before": [
+        "        const path = resolveAttachmentPath({ attachmentsDir, attachment: image })!;\n",
+        "        yield* fileSystem.writeFileString(path, \"data\");\n"
+      ],
+      "after": [
+        "        const path = yield* fixture.registerAttachment(image, \"data\");\n"
+      ]
+    },
+    {
+      "start": 2807,
+      "before": [],
+      "after": [
+        "      assert.deepEqual(snapshot.providerTurns, []);\n",
+        "      assert.equal(snapshot.providerThread.nativeConversationHeadRef?.strength, \"weak\");\n",
+        "      assert.deepEqual(snapshot.nativeHistory, {\n",
+        "        nativeSessionId: SESSION,\n",
+        "        completedTurnRefs: [{ driver: OPENCODE_PROVIDER, nativeId: history.data[0]!.id, strength: \"strong\" }],\n",
+        "        latestCompletedTurnRef: { driver: OPENCODE_PROVIDER, nativeId: history.data[0]!.id, strength: \"strong\" },\n",
+        "      });\n",
+        "    }).pipe(Effect.scoped),\n",
+        "  );\n",
+        "\n",
+        "  it.effect.each([\"unfinished\", \"failed\", \"interrupted\"] as const)(\n",
+        "    \"does not promote a historical completion to the native tip after an %s execution\",\n",
+        "    (outcome) => Effect.gen(function* () {\n",
+        "      const nativeHistory = {\n",
+        "        data: [\n",
+        "          history.data[0],\n",
+        "          { id: \"msg_steered\", type: \"user\", text: \"Also explain the factors.\", time: { created: 1790656585900 } },\n",
+        "          ...history.data.slice(1),\n",
+        "          { id: \"msg_later\", type: \"user\", text: \"Continue.\", time: { created: 1790656590800 } },\n",
+        "          { ...history.data[1], id: \"msg_later_answer\", time: { created: 1790656590801, completed: 1790656590802 } },\n",
+        "          ...(outcome === \"unfinished\" ? [] : [\n",
+        "            { id: \"msg_later_idle\", type: \"idle\", outcome, time: { created: 1790656590803 } },\n",
+        "          ]),\n",
+        "        ],\n",
+        "        cursor: {},\n",
+        "      };\n",
+        "      const runtime = yield* openCode2ReplayRuntime([\n",
+        "        ...opening,\n",
+        "        out(\"message.list\", { sessionID: SESSION, order: \"asc\", limit: \"100\" }),\n",
+        "        reply(\"message.list\", nativeHistory),\n",
+        "      ]);\n",
+        "      const snapshot = yield* runtime.readThreadSnapshot({ providerThread: providerThread(yield* DateTime.now) });\n",
+        "      assert.deepEqual(snapshot.providerTurns, []);\n",
+        "      assert.deepEqual(snapshot.nativeHistory, {\n",
+        "        nativeSessionId: SESSION,\n",
+        "        completedTurnRefs: [{ driver: OPENCODE_PROVIDER, nativeId: history.data[0]!.id, strength: \"strong\" }],\n",
+        "      });\n",
+        "    }).pipe(Effect.scoped),\n",
+        "  );\n",
+        "\n",
+        "  it.effect(\"revalidates a native-only fork boundary and reads the new target's completed history\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const FORK = \"ses_native_only_fork\";\n",
+        "      const targetHistory = {\n",
+        "        data: [\n",
+        "          { ...history.data[0], id: \"msg_fork_user\" },\n",
+        "          { ...history.data[1], id: \"msg_fork_answer\" },\n",
+        "          { ...history.data[2], id: \"msg_fork_idle\" },\n",
+        "        ],\n",
+        "        cursor: {},\n",
+        "      };\n",
+        "      const sourceHistory = {\n",
+        "        data: [\n",
+        "          ...history.data,\n",
+        "          { id: \"msg_later\", type: \"user\", text: \"Continue.\", time: { created: 1790656590800 } },\n",
+        "          { ...history.data[1], id: \"msg_later_answer\", time: { created: 1790656590801, completed: 1790656590802 } },\n",
+        "          { id: \"msg_later_idle\", type: \"idle\", outcome: \"succeeded\", time: { created: 1790656590803 } },\n",
+        "        ],\n",
+        "        cursor: {},\n",
+        "      };\n",
+        "      const { runtime, thread } = yield* resumed([\n",
+        "        out(\"message.list\", { sessionID: SESSION, order: \"asc\", limit: \"100\" }),\n",
+        "        reply(\"message.list\", sourceHistory),\n",
+        "        out(\"message.list\", { sessionID: SESSION, order: \"asc\", limit: \"100\" }),\n",
+        "        reply(\"message.list\", sourceHistory),\n",
+        "        out(\"session.fork\", { sessionID: SESSION, before: \"msg_later\" }),\n",
+        "        replyData(\"session.fork\", sessionInfo({ id: FORK })),\n",
+        "        out(\"message.list\", { sessionID: FORK, order: \"asc\", limit: \"100\" }),\n",
+        "        reply(\"message.list\", targetHistory),\n",
+        "      ]);\n",
+        "      const source = yield* runtime.readThreadSnapshot({ providerThread: thread });\n",
+        "      const selected = source.nativeHistory?.completedTurnRefs[0];\n",
+        "      if (!selected) throw new Error(\"The original native transcript did not prove its completed turn.\");\n",
+        "      const forked = yield* runtime.forkThread({\n",
+        "        sourceProviderThread: thread,\n",
+        "        nativeCompletedTurnRef: selected,\n",
+        "        targetThreadId: ThreadId.make(\"thread:opencode2-adapter:native-fork\"),\n",
+        "      });\n",
+        "      assert.equal(forked.nativeThreadRef?.nativeId, FORK);\n",
+        "      const target = yield* runtime.readThreadSnapshot({ providerThread: forked });\n",
+        "      assert.deepEqual(target.providerTurns, []);\n",
+        "      assert.deepEqual(target.nativeHistory, {\n",
+        "        nativeSessionId: FORK,\n",
+        "        completedTurnRefs: [{ driver: OPENCODE_PROVIDER, nativeId: \"msg_fork_user\", strength: \"strong\" }],\n",
+        "        latestCompletedTurnRef: { driver: OPENCODE_PROVIDER, nativeId: \"msg_fork_user\", strength: \"strong\" },\n",
+        "      });\n",
+        "    }).pipe(Effect.scoped),\n",
+        "  );\n",
+        "\n",
+        "  it.effect(\"rejects a claimed native fork boundary without its successful native idle marker\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const { runtime, thread } = yield* resumed([\n",
+        "        out(\"message.list\", { sessionID: SESSION, order: \"asc\", limit: \"100\" }),\n",
+        "        reply(\"message.list\", {\n",
+        "          data: [\n",
+        "            ...history.data,\n",
+        "            { id: \"msg_unfinished\", type: \"user\", text: \"Continue.\", time: { created: 1790656590800 } },\n",
+        "            { ...history.data[1], id: \"msg_unfinished_answer\", time: { created: 1790656590801, completed: 1790656590802 } },\n",
+        "          ],\n",
+        "          cursor: {},\n",
+        "        }),\n",
+        "      ]);\n",
+        "      const error = yield* runtime.forkThread({\n",
+        "        sourceProviderThread: thread,\n",
+        "        nativeCompletedTurnRef: { driver: OPENCODE_PROVIDER, nativeId: \"msg_unfinished\", strength: \"strong\" },\n",
+        "        targetThreadId: ThreadId.make(\"thread:opencode2-adapter:unproven-fork\"),\n",
+        "      }).pipe(Effect.flip);\n",
+        "      assert.equal(error._tag, \"ProviderAdapterProtocolError\");\n"
+      ]
+    },
+    {
+      "start": 2818,
+      "before": [],
+      "after": [
+        "        ...idleForResume,\n"
+      ]
+    },
+    {
+      "start": 3075,
+      "before": [
+        "      const failed = { ...retrying, class: \"usage_limit\" as const, retryable: null };\n"
+      ],
+      "after": [
+        "      const failed = { class: \"usage_limit\" as const, retryable: null };\n"
+      ]
+    },
+    {
+      "start": 3078,
+      "before": [
+        "      assert.deepEqual(\n",
+        "        rows.map(({ id, status, title, failure, retry }) => ({\n",
+        "          id,\n",
+        "          status,\n",
+        "          title,\n",
+        "          failure,\n",
+        "          retry,\n",
+        "        })),\n",
+        "        [\n",
+        "          {\n",
+        "            id: rows[0]!.id,\n",
+        "            status: \"running\",\n",
+        "            title: \"Provider retry\",\n",
+        "            failure: retrying,\n",
+        "            retry: firstRetry,\n",
+        "          },\n",
+        "          {\n",
+        "            id: rows[0]!.id,\n",
+        "            status: \"running\",\n",
+        "            title: \"Provider retry\",\n",
+        "            failure: retrying,\n",
+        "            retry: lastRetry,\n",
+        "          },\n",
+        "          {\n",
+        "            id: rows[0]!.id,\n",
+        "            status: \"failed\",\n",
+        "            title: \"Usage limit reached\",\n",
+        "            failure: failed,\n",
+        "            retry: lastRetry,\n",
+        "          },\n",
+        "        ],\n",
+        "      );\n"
+      ],
+      "after": [
+        "      assert.containSubset(rows[0], { status: \"running\", failure: { class: \"provider_error\", retryable: true }, retry: firstRetry });\n",
+        "      const finalRow = rows.at(-1)!;\n",
+        "      assert.containSubset(finalRow, { id: rows[0]!.id, status: \"failed\", failure: failed, retry: lastRetry });\n",
+        "      assert.isFalse(rows.some(row => row.status === \"completed\"), \"Starting another attempt must not report recovery.\");\n"
+      ]
+    },
+    {
+      "start": 3117,
+      "before": [
+        "        DateTime.toEpochMillis(rows[2]!.updatedAt) - DateTime.toEpochMillis(startedAt),\n"
+      ],
+      "after": [
+        "        DateTime.toEpochMillis(finalRow.updatedAt) - DateTime.toEpochMillis(startedAt),\n"
+      ]
+    },
+    {
+      "start": 3120,
+      "before": [
+        "      assert.deepInclude(seen.at(-1), {\n"
+      ],
+      "after": [
+        "      assert.containSubset(seen.at(-1), {\n"
+      ]
+    },
+    {
+      "start": 3147,
+      "before": [
+        "          permissions: t3Rules,\n"
+      ],
+      "after": [
+        "          permissions: nativeRules,\n"
+      ]
+    },
+    {
+      "start": 3365,
+      "before": [],
+      "after": [
+        "        ...idleForResume,\n"
+      ]
+    },
+    {
+      "start": 3439,
+      "before": [],
+      "after": [
+        "        ...idleForResume,\n"
+      ]
+    },
+    {
+      "start": 3779,
+      "before": [],
+      "after": [
+        "              out(\"session.active\"),\n",
+        "              reply(\"session.active\", { data: {} }),\n"
+      ]
+    },
+    {
+      "start": 3836,
+      "before": [
+        "        assert.isTrue(Exit.isSuccess(rollback));\n",
+        "        assert.deepEqual(\n",
+        "          Exit.isSuccess(rollback) ? rollback.value.providerTurns.map((turn) => turn.id) : [],\n",
+        "          [kept.id],\n",
+        "        );\n"
+      ],
+      "after": [
+        "        const restored = yield* rollback;\n",
+        "        assert.deepEqual(restored.providerTurns.map((turn) => turn.id), [kept.id]);\n"
+      ]
+    },
+    {
+      "start": 3874,
+      "before": [
+        "        out(\"session.update\", {\n",
+        "          sessionID: FORK,\n",
+        "          permissions: [\n",
+        "            { action: \"*\", resource: \"*\", effect: \"allow\" },\n",
+        "            { action: \"t3-code-*\", resource: \"*\", effect: \"deny\" },\n",
+        "            { action: \"t3-code-thread_opencode2-adapter_fork_*\", resource: \"*\", effect: \"allow\" },\n",
+        "          ],\n",
+        "        }),\n",
+        "        reply(\"session.update\", null),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3981,
+      "before": [
+        "        out(\"session.update\", { sessionID: FORK, permissions: \"<any>\" }),\n",
+        "        reply(\"session.update\", null),\n"
+      ],
+      "after": []
+    }
+  ]
+}

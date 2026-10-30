@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "source": "packages/provider-core/src/server/ProviderAdapter.ts",
+  "beforeSha256": "7adc5d8f10521254130449ee9c0d05cbcf1c2d4eddbf55aac7ab6db8946f93ea",
+  "afterSha256": "565c437216a3bb71777defd43cca0db42d8b97be216e586b2df99a96cc35ff29",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 453,
+      "before": [],
+      "after": [
+        "/** Native history can prove a completed boundary without inventing application graph nodes. */\n",
+        "export const ProviderNativeCompletedTurnRef = Schema.Struct({\n",
+        "  driver: ProviderDriverKind,\n",
+        "  nativeId: Schema.String,\n",
+        "  strength: Schema.Literal(\"strong\"),\n",
+        "});\n",
+        "export type ProviderNativeCompletedTurnRef = typeof ProviderNativeCompletedTurnRef.Type;\n",
+        "\n",
+        "export const ProviderNativeHistoryBoundary = Schema.Struct({\n",
+        "  nativeSessionId: Schema.String,\n",
+        "  completedTurnRefs: Schema.Array(ProviderNativeCompletedTurnRef),\n",
+        "  /** Explicit current completed native tip; array order alone never establishes a head. */\n",
+        "  latestCompletedTurnRef: Schema.optionalKey(ProviderNativeCompletedTurnRef),\n",
+        "});\n",
+        "export type ProviderNativeHistoryBoundary = typeof ProviderNativeHistoryBoundary.Type;\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 459,
+      "before": [],
+      "after": [
+        "  readonly nativeHistory?: ProviderNativeHistoryBoundary;\n"
+      ]
+    },
+    {
+      "start": 488,
+      "before": [],
+      "after": [
+        "  /** A proven native-only historical boundary; never substitute an application turn/node ID. */\n",
+        "  readonly nativeCompletedTurnRef?: ProviderNativeCompletedTurnRef;\n"
+      ]
+    }
+  ]
+}

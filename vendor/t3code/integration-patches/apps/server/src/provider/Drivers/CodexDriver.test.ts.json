@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/CodexDriver.test.ts",
+  "beforeSha256": "eef1d7d312dacd5b25299e9ab193fcd981016f7ba4a405299fe305c91a4bf6df",
+  "afterSha256": "5c3cf96dfa0e707f2134b6748c3cc589571fb35dba154850637547626d31a7e0",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 2,
+      "before": [
+        "import * as ServerSecretStore from \"../../auth/ServerSecretStore.ts\";\n",
+        "import * as ServerEnvironment from \"../../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerSecretStore from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-secret-store.ts\";\n",
+        "import * as ServerEnvironment from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-environment.ts\";\n"
+      ]
+    },
+    {
+      "start": 25,
+      "before": [
+        "import * as BackgroundPolicy from \"../../background/BackgroundPolicy.ts\";\n",
+        "import * as ServerConfig from \"../../config.ts\";\n",
+        "import * as ServerSettings from \"../../serverSettings.ts\";\n"
+      ],
+      "after": [
+        "import { layer as nativeTestHostLayer, runtimeHostLayer } from \"../../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n",
+        "import * as ServerConfig from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 30,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 42,
+      "before": [
+        "import * as ProviderHostLive from \"../ProviderHostLive.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 44,
+      "before": [
+        "const layerDeps = ServerConfig.layerTest(process.cwd(), {\n"
+      ],
+      "after": [
+        "const layerDeps = nativeTestHostLayer({ driver: \"codex\", cwd: process.cwd(), ...{\n"
+      ]
+    },
+    {
+      "start": 46,
+      "before": [
+        "}).pipe(\n"
+      ],
+      "after": [
+        "} }).pipe(\n"
+      ]
+    },
+    {
+      "start": 49,
+      "before": [
+        "  Layer.provideMerge(McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "  Layer.provideMerge(runtimeHostLayer),\n"
+      ]
+    },
+    {
+      "start": 72,
+      "before": [
+        "  Layer.provideMerge(ServerSettings.layerTest()),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 75,
+      "before": [
+        "  Layer.provideMerge(\n",
+        "    Layer.mock(BackgroundPolicy.BackgroundPolicy)({\n",
+        "      shouldRunScopeWork: () => Effect.succeed(false),\n",
+        "    }),\n",
+        "  ),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 94,
+      "before": [
+        "const layerTest = ProviderHostLive.layer.pipe(Layer.provideMerge(layerDeps));\n"
+      ],
+      "after": [
+        "const layerTest = layerDeps;\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "source": "apps/server/src/process/agentScope.ts",
+  "beforeSha256": "8440cb5599eac556ac0565b64017778d396f48a1332db4dbb6a0dbf8c6371258",
+  "afterSha256": "d1a37ca86b659557a9f1e586342f85ab3f86bd423c3357daf703de4dd519e5a0",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 17,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 20,
+      "before": [
+        "const AGENT_SLICE = \"app-t3code-agents.slice\";\n"
+      ],
+      "after": [
+        "// PM owns both branches; probing and memory limits must not affect another application's agents.\n",
+        "function applicationAgentSlice(stateDir: string): string {\n",
+        "  const hash = NodeCrypto.createHash(\"sha256\").update(stateDir).digest(\"hex\").slice(0, 12);\n",
+        "  return `app-pm-provider-${hash}.slice`;\n",
+        "}\n"
+      ]
+    },
+    {
+      "start": 23,
+      "before": [
+        "  const hash = NodeCrypto.createHash(\"sha256\").update(stateDir).digest(\"hex\").slice(0, 12);\n",
+        "  return `app-t3code-agents-${hash}.slice`;\n"
+      ],
+      "after": [
+        "  return `${applicationAgentSlice(stateDir).slice(0, -\".slice\".length)}-agents.slice`;\n"
+      ]
+    },
+    {
+      "start": 103,
+      "before": [],
+      "after": [
+        "  const agentSlice = applicationAgentSlice(stateDir);\n"
+      ]
+    },
+    {
+      "start": 164,
+      "before": [
+        "          `--slice=${AGENT_SLICE}`,\n"
+      ],
+      "after": [
+        "          `--slice=${agentSlice}`,\n"
+      ]
+    },
+    {
+      "start": 180,
+      "before": [
+        "        AGENT_SLICE,\n"
+      ],
+      "after": [
+        "        agentSlice,\n"
+      ]
+    },
+    {
+      "start": 190,
+      "before": [
+        "        slice: AGENT_SLICE,\n"
+      ],
+      "after": [
+        "        slice: agentSlice,\n"
+      ]
+    },
+    {
+      "start": 204,
+      "before": [],
+      "after": [
+        "  const issuedUnits = new Map<string, boolean>();\n"
+      ]
+    },
+    {
+      "start": 303,
+      "before": [
+        "    if (!unit.startsWith(\"t3code-\") || !unit.endsWith(\".scope\")) return;\n"
+      ],
+      "after": [
+        "    if (!issuedUnits.has(unit)) return;\n"
+      ]
+    },
+    {
+      "start": 326,
+      "before": [],
+      "after": [
+        "    if (stopped._tag === \"Some\" && stopped.value.code === 0) issuedUnits.delete(unit);\n"
+      ]
+    },
+    {
+      "start": 327,
+      "before": [],
+      "after": [
+        "\n",
+        "  // A retained PM context can outlive individual native sessions. Its finalizer\n",
+        "  // only reaps units it launched; persistent terminals and foreign units are not ours to drain.\n",
+        "  yield* Effect.addFinalizer(() =>\n",
+        "    Effect.forEach(issuedUnits, ([unit, survivesRestart]) => survivesRestart ? Effect.void : stop(unit), {\n",
+        "      discard: true,\n",
+        "    }),\n",
+        "  );\n"
+      ]
+    },
+    {
+      "start": 357,
+      "before": [
+        "        slice: survivesRestart === true ? AGENT_SLICE : ownedSlice,\n"
+      ],
+      "after": [
+        "        slice: survivesRestart === true ? agentSlice : ownedSlice,\n"
+      ]
+    },
+    {
+      "start": 369,
+      "before": [],
+      "after": [
+        "      issuedUnits.set(unit, survivesRestart === true);\n"
+      ]
+    }
+  ]
+}

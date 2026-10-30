@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "source": "packages/provider-acp/src/server/AcpSessionRuntime.ts",
+  "beforeSha256": "51e7cb31eb993f308186a28ea70f54ab5f6ea0be23b8c79bf722d054743e49f2",
+  "afterSha256": "cf7f48549e9579e83b8c568e56c5efcdab2cab2ab69f5be713d56133e32155ee",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 616,
+      "before": [],
+      "after": [
+        "    // Dirent fallback can lstat an unrelated PID after it exits; identity reads already handle disappearance.\n"
+      ]
+    },
+    {
+      "start": 617,
+      "before": [
+        "      NodeFS.readdirSync(\"/proc\", { withFileTypes: true }).flatMap((entry) => {\n",
+        "        if (!entry.isDirectory() || !/^[1-9][0-9]*$/.test(entry.name)) return [];\n",
+        "        const identity = readLinuxProcessIdentity(Number(entry.name));\n"
+      ],
+      "after": [
+        "      NodeFS.readdirSync(\"/proc\").flatMap((name) => {\n",
+        "        if (!/^[1-9][0-9]*$/.test(name)) return [];\n",
+        "        const identity = readLinuxProcessIdentity(Number(name));\n"
+      ]
+    },
+    {
+      "start": 1075,
+      "before": [],
+      "after": [
+        "  /** Actual wire generation from this client's initialize response shape, not protocolVersion. */\n",
+        "  readonly protocolGeneration?: 1 | 2;\n"
+      ]
+    },
+    {
+      "start": 1171,
+      "before": [
+        "     * does not list).\n"
+      ],
+      "after": [
+        "     * does not list). `force` writes even when the advertised current value\n",
+        "     * already matches, without bypassing version-aware request encoding.\n"
+      ]
+    },
+    {
+      "start": 1176,
+      "before": [
+        "      options?: { readonly allowUnlistedValue?: boolean },\n"
+      ],
+      "after": [
+        "      options?: { readonly allowUnlistedValue?: boolean; readonly force?: boolean },\n"
+      ]
+    },
+    {
+      "start": 1910,
+      "before": [],
+      "after": [
+        "      ...(current.protocolGeneration === undefined ? {} : { protocolGeneration: current.protocolGeneration }),\n"
+      ]
+    },
+    {
+      "start": 2003,
+      "before": [
+        "    options?: { readonly allowUnlistedValue?: boolean },\n"
+      ],
+      "after": [
+        "    options?: { readonly allowUnlistedValue?: boolean; readonly force?: boolean },\n"
+      ]
+    },
+    {
+      "start": 2011,
+      "before": [
+        "            if (existing && configOptionCurrentValueMatches(existing, value)) {\n"
+      ],
+      "after": [
+        "            if (!options?.force && existing && configOptionCurrentValueMatches(existing, value)) {\n"
+      ]
+    },
+    {
+      "start": 2105,
+      "before": [],
+      "after": [
+        "    const protocolGeneration = EffectAcpClient.readAcpProtocolGeneration(acp);\n",
+        "    if (protocolGeneration === undefined) return yield* new EffectAcpErrors.AcpTransportError({\n",
+        "      detail: \"The ACP client did not retain its negotiated wire generation.\",\n",
+        "      cause: undefined,\n",
+        "    });\n"
+      ]
+    },
+    {
+      "start": 2236,
+      "before": [],
+      "after": [
+        "      protocolGeneration,\n"
+      ]
+    }
+  ]
+}

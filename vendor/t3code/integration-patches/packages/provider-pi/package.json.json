@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "source": "packages/provider-pi/package.json",
+  "beforeSha256": "badec98b85791dbf9b0399861abdd872947125d17a39f53680427a79f3281a83",
+  "afterSha256": "6538e6913e2da9f46e8759512408a799bab4593ea038a8094b52f2dff6998e98",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 16,
+      "before": [],
+      "after": [
+        "    },\n",
+        "    \"./server/adapter\": {\n",
+        "      \"types\": \"./src/server/adapter.ts\",\n",
+        "      \"import\": \"./src/server/adapter.ts\"\n"
+      ]
+    }
+  ]
+}

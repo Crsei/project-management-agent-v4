@@ -31,7 +31,7 @@
 | [pm-data.ts](../../apps/web/src/features/pm/service/pm-data.ts)／[pm-service.tsx](../../apps/web/src/features/pm/service/pm-service.tsx) | 分页读取和缓存 key 目前只含 kind/projectId；新增 visibility 必须同时穿透分页、query key、hook 和刷新，不可只过滤浏览器可见行。 |
 | [既有 Files 交付](project-files-replication-plan.zh.md) 第12节／[backend.integration.test.ts](../../tests/backend.integration.test.ts) | 已有真实上传、两版本摘要、Evidence、权限及暂存／登记丢响应证据，测试含随机 schema、真实 HTTP、临时 Markdown/blob 根目录和 corrupt blob。只能复用模式，不能拿旧证据声称本包新功能通过。 |
 
-当前项目写守卫来自 [planning.ts](../../packages/domain/src/planning.ts) `assertProjectWritable`：仅未归档的 planning／active 项目可写。API 的 [coreAccessFor/projectMetadataWrites](../../apps/api/src/app.ts) 为部分 PM 附属写入重扫当前核心文件；新增命令需要登记在相同受控路径，不以旧浏览器项目快照判断可写。
+当前项目写守卫来自 [planning.ts](../../packages/domain/src/planning.ts) `assertProjectWritable`：仅未归档的 planning／active 项目可写。API 的 [coreAccessFor/projectMetadataWrites](../../apps/server/pm/src/app.ts) 为部分 PM 附属写入重扫当前核心文件；新增命令需要登记在相同受控路径，不以旧浏览器项目快照判断可写。
 
 ## 3. 本包选定默认与剩余产品政策
 

@@ -168,7 +168,7 @@ pnpm --filter @pm/web build-storybook
 
 `UpdateWorkItemMetadata` 的 `startDate` / `dueDate` 为可省略、可空的 `YYYY-MM-DD`：省略保持原值，`null` 清除，旧实体缺失值读取为 `null`。两者都存在时必须 `startDate <= dueDate`，截止日包含当天。后端校验真实日历日期；命令使用原 `commandId` 与聚合 `expectedVersions`，成功递增实体版本但不改变 `contentRevision`，不因排期变化使审核快照变为另一份工作内容。权威实现见 `packages/application/src/planning.ts`，生成客户端见 `packages/contracts/src/client.ts`。
 
-日历将 inclusive due 转为 FullCalendar exclusive end，保存时转回；所有服务任务为 all-day，单边日期仍保留另一边为空，无日期列为待排期。小时网格仅供定位，不允许保存虚构会议时间。日历、甘特、表格和详情读取同一元数据；冲突保留草稿，显式基于最新版本重设后才可再次保存。
+日历在截止日期以全天单日条目显示任务（无截止日期时放在开始日期），不按起止日期铺开；拖动条目只移动截止日期（仅有开始日期时移动开始日期），不提供拉伸修改区间。日历页不显示选中工作项下拉、未排期/日期异常列表与完成/取消分组抽屉；无日期任务在其他视图处理。内部仍将 inclusive due 转为 FullCalendar exclusive end，保存时转回；所有服务任务为 all-day，单边日期仍保留另一边为空。小时网格仅供定位，不允许保存虚构会议时间。日历、甘特、表格和详情读取同一元数据；冲突保留草稿，显式基于最新版本重设后才可再次保存。
 
 ### 接入证据与待完成门槛
 
@@ -362,6 +362,14 @@ pnpm --filter @pm/web build-storybook
 - `ServiceFrame` 移除 `activityBar`，并将 `mobileNavigation` 固定为开启；窄屏仍通过页头按钮打开工作区导航抽屉，`data-navigation-close` 行为不变。
 - 侧栏内容、链接顺序、折叠按钮和 `referenceLayout` 的 256px 宽度不变；错误页仍使用独立全窗口外壳。
 - 浏览器验证 1440×900：图标条不存在、侧栏存在、折叠/展开可用；390×844：抽屉可打开/关闭，`document.scrollWidth == clientWidth`。前端 ESLint 与隔离 Vite 构建通过。
+
+### 2026-10-30 更新：工作区小节去掉新建任务入口，折叠改为图标栏
+
+- 侧栏“工作区”标题旁不再渲染“+ 新建任务”；新建任务继续由各页面工具栏、看板列和命令菜单的既有入口进入，创建页与草稿恢复语义未变。
+- 折叠侧栏不再整栏消失：桌面（容器 ≥1024px）折叠后保留 `--workspace-sidebar-collapsed`（56px）图标栏，含工作区徽标、导航图标（首页、我的任务、重要、概览、全部项目、全部任务、日历、时间线、文档、视图、成员与团队、活动）、账户头像和服务连接状态；悬停标题与 `aria-label` 保留完整名称，当前项仍用 `aria-current="page"`。默认仍为完整侧栏。
+- 折叠入口：页头面板按钮；或向左拖动侧栏分隔条超过 100px 阈值自动吸附为图标栏，从图标栏右缘向右拖动恢复完整宽度（最小 200px）。
+- 展开后恢复 234/256px 完整侧栏；窄屏（非内联侧栏）按钮仍打开完整导航抽屉，图标栏只用于内联折叠状态。
+- 浏览器验证：项目列表页 1440×900 折叠显示图标栏、展开恢复完整侧栏且无“+ 新建任务”；820×800 打开抽屉为完整侧栏。`pnpm --filter @pm/web typecheck` 与 `lint` 通过。
 
 ## 20. Teams 1–3 正式后端接入
 

@@ -1,0 +1,420 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/ProviderInstanceRegistry.test.ts",
+  "beforeSha256": "c98e34152ecfdbc53dba4b3e2fc96cee87a9e405c690d963f4b32fcbc688271e",
+  "afterSha256": "56b406805279e2eeffe5638f904c76785cc5f05259aab45d70c5adf24d65166b",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [
+        "import * as ServerSecretStore from \"../auth/ServerSecretStore.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3,
+      "before": [
+        "import * as ServerEnvironment from \"../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 7,
+      "before": [
+        "import * as NodeServices from \"@effect/platform-node/NodeServices\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 9,
+      "before": [
+        "  EnvironmentId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 17,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 19,
+      "before": [
+        "import * as DateTime from \"effect/DateTime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 27,
+      "before": [
+        "import * as BackgroundPolicy from \"../background/BackgroundPolicy.ts\";\n",
+        "import * as ServerConfig from \"../config.ts\";\n",
+        "import * as ServerSettings from \"../serverSettings.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 34,
+      "before": [
+        "import * as ProviderEventLoggers from \"@t3tools/provider-core/server/ProviderEventLoggers\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 36,
+      "before": [
+        "import * as ProviderOrchestrationAdapterInfrastructure from \"./ProviderOrchestrationAdapterInfrastructure.ts\";\n",
+        "import * as PortScanner from \"../preview/PortScanner.ts\";\n",
+        "import * as ProviderHostLive from \"./ProviderHostLive.ts\";\n"
+      ],
+      "after": [
+        "import * as CodexAdapterV2 from \"../orchestration-v2/Adapters/CodexAdapterV2.ts\";\n",
+        "import * as ClaudeAdapterV2 from \"../orchestration-v2/Adapters/ClaudeAdapterV2.ts\";\n",
+        "import * as ProviderContinuationRequests from \"@t3tools/provider-core/server/ProviderContinuationRequests\";\n",
+        "import * as PmNativeTestHost from \"../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n",
+        "import * as AgentLifecycle from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/port-discovery.ts\";\n",
+        "import * as ProviderHost from \"@t3tools/provider-core/server/ProviderHost\";\n",
+        "import * as Stream from \"effect/Stream\";\n"
+      ]
+    },
+    {
+      "start": 52,
+      "before": [
+        "const TEST_EPOCH = DateTime.makeUnsafe(\"1970-01-01T00:00:00.000Z\");\n",
+        "\n",
+        "const layerBackgroundPolicyAlwaysRun = Layer.mock(BackgroundPolicy.BackgroundPolicy)({\n",
+        "  reportClientActivity: () => Effect.void,\n",
+        "  removeRpcClient: () => Effect.void,\n",
+        "  snapshot: Effect.succeed({\n",
+        "    hostPower: {\n",
+        "      source: \"unknown\",\n",
+        "      idle: \"unknown\",\n",
+        "      idleSeconds: null,\n",
+        "      locked: \"unknown\",\n",
+        "      suspended: false,\n",
+        "      onBattery: \"unknown\",\n",
+        "      lowPowerMode: \"unknown\",\n",
+        "      thermalState: \"unknown\",\n",
+        "      stale: true,\n",
+        "      updatedAt: TEST_EPOCH,\n",
+        "    },\n",
+        "    leases: [],\n",
+        "    activeForegroundLeaseCount: 0,\n",
+        "    activeScopeKeys: [],\n",
+        "    shouldRunOpportunisticWork: true,\n",
+        "    updatedAt: TEST_EPOCH,\n",
+        "  }),\n",
+        "  shouldRunScopeWork: () => Effect.succeed(true),\n",
+        "  shouldRunOpportunisticWork: Effect.succeed(true),\n",
+        "});\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 144,
+      "before": [],
+      "after": [
+        "    codexExecutablePath: codexPath,\n"
+      ]
+    },
+    {
+      "start": 151,
+      "before": [
+        "  const layerBaseDeps = ServerConfig.layerTest(process.cwd(), {\n",
+        "    prefix: \"provider-instance-registry-test\",\n",
+        "  }).pipe(\n",
+        "    Layer.provideMerge(\n",
+        "      Layer.mock(CodexManagedTokenBroker.CodexManagedTokenBroker)({\n",
+        "        endpoint: Effect.succeed(\"unused-private-pipe\"),\n",
+        "      }),\n",
+        "    ),\n",
+        "    Layer.provideMerge(NodeServices.layer),\n",
+        "    Layer.provideMerge(\n",
+        "      Layer.mock(CodexInstallation.CodexInstallation)({\n",
+        "        managedDirectory: \"unused-managed-installation\",\n",
+        "      }),\n",
+        "    ),\n",
+        "    Layer.provideMerge(Layer.mock(ServerSecretStore.ServerSecretStore)({})),\n",
+        "    Layer.provideMerge(\n",
+        "      Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {\n",
+        "        getEnvironmentId: Effect.succeed(\n",
+        "          EnvironmentId.make(\"00000000-0000-4000-8000-000000000001\"),\n",
+        "        ),\n",
+        "      }),\n",
+        "    ),\n",
+        "    Layer.provideMerge(layerBackgroundPolicyAlwaysRun),\n",
+        "    Layer.provideMerge(ServerSettings.layerTest()),\n",
+        "    Layer.provideMerge(layerTestHttpClient),\n",
+        "    Layer.provideMerge(ServerSettings.layerTest()),\n",
+        "    Layer.provideMerge(\n",
+        "      Layer.succeed(\n",
+        "        ProviderEventLoggers.ProviderEventLoggers,\n",
+        "        ProviderEventLoggers.NoOpProviderEventLoggers,\n",
+        "      ),\n",
+        "    ),\n",
+        "    Layer.provideMerge(ProviderLatestVersions.layer),\n",
+        "    Layer.provideMerge(McpProviderSessions.layer),\n",
+        "    Layer.provideMerge(ModelManifest.layerTest),\n",
+        "    Layer.provideMerge(ResetCreditCoordinator.layerTest),\n"
+      ],
+      "after": [
+        "  const layerBase = ModelManifest.layerTest.pipe(\n",
+        "    Layer.provideMerge(Layer.mergeAll(\n",
+        "      PmNativeTestHost.layer({ driver: \"codex\", prefix: \"pm-provider-instance-registry-source\" }),\n",
+        "      AgentLifecycle.layer,\n",
+        "      layerTestHttpClient,\n",
+        "    )),\n"
+      ]
+    },
+    {
+      "start": 188,
+      "before": [
+        "  const layerBase = ProviderHostLive.layer.pipe(Layer.provideMerge(layerBaseDeps));\n",
+        "  const layerTest = ProviderOrchestrationAdapterInfrastructure.layer.pipe(\n",
+        "    Layer.provide(PortScanner.layerTest),\n",
+        "    Layer.provideMerge(layerBase),\n"
+      ],
+      "after": [
+        "  const layerTest = Layer.mergeAll(\n",
+        "    CodexAdapterV2.layerAppServerClientFactory,\n",
+        "    ClaudeAdapterV2.layerQueryRunner,\n",
+        "    CodexInstallation.CodexInstallation.layer,\n",
+        "    CodexManagedTokenBroker.layer,\n",
+        "    ProviderLatestVersions.layer,\n",
+        "    ProviderContinuationRequests.layer,\n",
+        "    ResetCreditCoordinator.layer,\n",
+        "  ).pipe(Layer.provideMerge(layerBase));\n",
+        "\n",
+        "  it.live.skipIf(windowsHost)(\n",
+        "    \"isolates native accounts and replaces only the instance committed by PM settings CAS\",\n",
+        "    () => Effect.gen(function* () {\n",
+        "      const fs = yield* FileSystem.FileSystem;\n",
+        "      const path = yield* Path.Path;\n",
+        "      const fixture = yield* PmNativeTestHost.PmNativeTestHost;\n",
+        "      const executables = yield* makeTildeProviderFixtures();\n",
+        "      const makeAccount = (name: string, email: string) => Effect.gen(function* () {\n",
+        "        const scriptPath = path.join(fixture.root, name + \".json\");\n",
+        "        const homePath = path.join(fixture.root, name + \"-home\");\n",
+        "        yield* fs.makeDirectory(homePath);\n",
+        "        yield* fs.writeFileString(scriptPath, JSON.stringify({\n",
+        "          rootThreadId: name,\n",
+        "          notifications: [],\n",
+        "          account: { type: \"chatgpt\", email, planType: \"pro\" },\n",
+        "        }));\n",
+        "        return yield* PmNativeTestHost.makePmNativeTestHost({\n",
+        "          driver: \"codex\",\n",
+        "          instanceId: name,\n",
+        "          config: { binaryPath: executables.codexExecutablePath, homePath },\n",
+        "          environment: { T3_CODEX_COLLAB_SCRIPT: scriptPath },\n",
+        "        });\n",
+        "      });\n",
+        "      const first = yield* makeAccount(\"registry-first\", \"first@example.com\");\n",
+        "      const second = yield* makeAccount(\"registry-second\", \"second@example.com\");\n",
+        "      const firstId = ProviderInstanceId.make(first.context.instanceId);\n",
+        "      const secondId = ProviderInstanceId.make(second.context.instanceId);\n",
+        "      const { settings } = yield* ProviderHost.ProviderHost;\n",
+        "      const live = new Set<ProviderInstanceId>();\n",
+        "      const lifecycle: string[] = [];\n",
+        "      const trackedDriver: typeof CodexDriver = {\n",
+        "        ...CodexDriver,\n",
+        "        create: input => Effect.gen(function* () {\n",
+        "          expect(live.has(input.instanceId)).toBe(false);\n",
+        "          live.add(input.instanceId);\n",
+        "          lifecycle.push(\"open:\" + input.instanceId);\n",
+        "          yield* Effect.addFinalizer(() => Effect.sync(() => {\n",
+        "            live.delete(input.instanceId);\n",
+        "            lifecycle.push(\"close:\" + input.instanceId);\n",
+        "          }));\n",
+        "          return yield* CodexDriver.create(input);\n",
+        "        }),\n",
+        "      };\n",
+        "      const initial = (yield* settings.get).providerInstances;\n",
+        "      const configMap: ProviderInstanceConfigMap = {\n",
+        "        [firstId]: initial[firstId]!, [secondId]: initial[secondId]!,\n",
+        "      };\n",
+        "      const { registry, mutator } = yield* makeProviderInstanceRegistry({\n",
+        "        drivers: [trackedDriver], configMap,\n",
+        "      });\n",
+        "      const originalFirst = (yield* registry.getInstance(firstId))!;\n",
+        "      const originalSecond = (yield* registry.getInstance(secondId))!;\n",
+        "      expect(originalFirst.continuationIdentity).not.toEqual(originalSecond.continuationIdentity);\n",
+        "      const snapshots = yield* Effect.all([\n",
+        "        originalFirst.snapshot.refresh, originalSecond.snapshot.refresh,\n",
+        "      ], { concurrency: \"unbounded\" });\n",
+        "      expect(snapshots.map(snapshot => snapshot.auth.email)).toEqual([\n",
+        "        \"first@example.com\", \"second@example.com\",\n",
+        "      ]);\n",
+        "      expect(snapshots.every(snapshot => snapshot.status === \"ready\")).toBe(true);\n",
+        "      yield* mutator.reconcile(configMap);\n",
+        "      expect(yield* registry.getInstance(firstId)).toBe(originalFirst);\n",
+        "      expect(yield* registry.getInstance(secondId)).toBe(originalSecond);\n",
+        "\n",
+        "      const blocked = yield* settings.withSnapshot(() =>\n",
+        "        first.updateInstance({ label: \"must-not-commit\" }),\n",
+        "      ).pipe(Effect.result);\n",
+        "      expect(blocked).toMatchObject({ _tag: \"Failure\", failure: { code: \"settings_busy\" } });\n",
+        "      const changes = yield* settings.subscribe;\n",
+        "      const updatedScript = path.join(fixture.root, \"updated-account.json\");\n",
+        "      yield* fs.writeFileString(updatedScript, JSON.stringify({\n",
+        "        rootThreadId: \"updated-account\", notifications: [],\n",
+        "        account: { type: \"chatgpt\", email: \"updated@example.com\", planType: \"pro\" },\n",
+        "      }));\n",
+        "      const committed = yield* first.updateInstance({\n",
+        "        environment: Object.entries({\n",
+        "          ...first.context.instanceEnvironment,\n",
+        "          T3_CODEX_COLLAB_SCRIPT: updatedScript,\n",
+        "        }).map(([name, value]) => ({ name, value, sensitive: false })),\n",
+        "      });\n",
+        "      expect(committed.revision).toBeGreaterThan(first.context.revision);\n",
+        "      const stale = yield* first.updateInstance({ label: \"stale-writer\" }).pipe(Effect.result);\n",
+        "      expect(stale).toMatchObject({ _tag: \"Failure\", failure: { status: 409 } });\n",
+        "      const published = yield* changes.pipe(Stream.take(1), Stream.runCollect);\n",
+        "      expect(published).toHaveLength(1);\n",
+        "      const next = published[0]!.providerInstances;\n",
+        "      yield* mutator.reconcile({ [firstId]: next[firstId]!, [secondId]: next[secondId]! });\n",
+        "      const replacement = (yield* registry.getInstance(firstId))!;\n",
+        "      expect(replacement).not.toBe(originalFirst);\n",
+        "      expect(yield* registry.getInstance(secondId)).toBe(originalSecond);\n",
+        "      expect(lifecycle).toEqual([\n",
+        "        \"open:\" + firstId, \"open:\" + secondId, \"close:\" + firstId, \"open:\" + firstId,\n",
+        "      ]);\n",
+        "      expect((yield* replacement.snapshot.refresh).auth.email).toBe(\"updated@example.com\");\n",
+        "      expect((yield* originalSecond.snapshot.getSnapshot).auth.email).toBe(\"second@example.com\");\n",
+        "      expect((yield* originalFirst.snapshot.getSnapshot).auth.email).toBe(\"first@example.com\");\n",
+        "    }).pipe(Effect.scoped, Effect.provide(layerTest)),\n"
+      ]
+    },
+    {
+      "start": 215,
+      "before": [
+        "    }).pipe(Effect.provide(layerTest)),\n"
+      ],
+      "after": [
+        "    }).pipe(Effect.scoped, Effect.provide(layerTest)),\n"
+      ]
+    },
+    {
+      "start": 269,
+      "before": [
+        "    }).pipe(Effect.provide(layerTest)),\n"
+      ],
+      "after": [
+        "    }).pipe(Effect.scoped, Effect.provide(layerTest)),\n"
+      ]
+    },
+    {
+      "start": 302,
+      "before": [
+        "    }).pipe(Effect.provide(layerTest)),\n"
+      ],
+      "after": [
+        "    }).pipe(Effect.scoped, Effect.provide(layerTest)),\n"
+      ]
+    },
+    {
+      "start": 392,
+      "before": [
+        "        message: \"Claude Agent CLI failed while checking account status.\",\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 431,
+      "before": [
+        "        message: \"Claude Agent CLI failed while checking account status.\",\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 437,
+      "before": [
+        "    }).pipe(Effect.provide(layerTest)),\n"
+      ],
+      "after": [
+        "    }).pipe(Effect.scoped, Effect.provide(layerTest)),\n"
+      ]
+    },
+    {
+      "start": 506,
+      "before": [],
+      "after": [
+        "      Effect.scoped,\n"
+      ]
+    },
+    {
+      "start": 601,
+      "before": [
+        "        }).pipe(Effect.provide(layerTest)),\n"
+      ],
+      "after": [
+        "        }).pipe(Effect.scoped, Effect.provide(layerTest)),\n"
+      ]
+    },
+    {
+      "start": 604,
+      "before": [],
+      "after": [
+        "\n",
+        "  it.live(\"keeps decode and native Home failures unavailable without reporting them as signed out\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const path = yield* Path.Path;\n",
+        "      const fixture = yield* PmNativeTestHost.PmNativeTestHost;\n",
+        "      const healthyId = ProviderInstanceId.make(\"codex_healthy\");\n",
+        "      const invalidId = ProviderInstanceId.make(\"codex_invalid_config\");\n",
+        "      const failedId = ProviderInstanceId.make(\"codex_home_conflict\");\n",
+        "      const conflictingHome = path.join(fixture.root, \"conflicting-home\");\n",
+        "      const { registry } = yield* makeProviderInstanceRegistry({\n",
+        "        drivers: [CodexDriver],\n",
+        "        configMap: {\n",
+        "          [healthyId]: {\n",
+        "            driver: CodexDriver.driverKind, enabled: false, config: makeCodexConfig({}),\n",
+        "          },\n",
+        "          [invalidId]: {\n",
+        "            driver: CodexDriver.driverKind, enabled: true, config: { binaryPath: 123 },\n",
+        "          },\n",
+        "          [failedId]: {\n",
+        "            driver: CodexDriver.driverKind, enabled: true,\n",
+        "            config: makeCodexConfig({ homePath: conflictingHome, shadowHomePath: conflictingHome }),\n",
+        "          },\n",
+        "        },\n",
+        "      });\n",
+        "      expect((yield* registry.listInstances).map(instance => instance.instanceId)).toEqual([healthyId]);\n",
+        "      expect(yield* registry.getInstance(invalidId)).toBeUndefined();\n",
+        "      expect(yield* registry.getInstance(failedId)).toBeUndefined();\n",
+        "      const unavailable = yield* registry.listUnavailable;\n",
+        "      expect(unavailable.map(snapshot => snapshot.instanceId)).toEqual([invalidId, failedId]);\n",
+        "      for (const snapshot of unavailable) {\n",
+        "        expect(snapshot).toMatchObject({\n",
+        "          availability: \"unavailable\", auth: { status: \"unknown\" }, models: [],\n",
+        "        });\n",
+        "        expect(snapshot.unavailableReason).toBeTruthy();\n",
+        "      }\n",
+        "    }).pipe(Effect.scoped, Effect.provide(layerTest)),\n",
+        "  );\n"
+      ]
+    },
+    {
+      "start": 642,
+      "before": [
+        "      }).pipe(Effect.provide(layerTest)),\n"
+      ],
+      "after": [
+        "      }).pipe(Effect.scoped, Effect.provide(layerTest)),\n"
+      ]
+    }
+  ]
+}

@@ -3,16 +3,23 @@
   min-width: 0;
 }
 .header {
-  min-height: var(--row-height);
+  min-height: 40px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 12px;
+  gap: 7px;
+  padding: 4px 8px 4px 12px;
   background: var(--surface-raised);
 }
 .header h3 {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header > svg {
+  flex-shrink: 0;
 }
 .header > :last-child:is(button) {
   margin-left: auto;

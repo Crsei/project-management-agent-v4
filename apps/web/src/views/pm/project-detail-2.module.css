@@ -162,19 +162,7 @@
 .page .activityItem > p { margin: 6px 0 0; color: var(--muted-foreground); font-size: 14px; line-height: 20px; }
 
 .page [data-pm-task-lanes] { max-width: 100%; }
-.page [data-pm-task-lanes] [data-board-group] { width: 256px; background: transparent; border: 0; border-radius: 0; }
-.page [data-pm-task-lanes] [data-board-group] > header { padding: 0 4px 12px; }
-.page [data-pm-task-lanes] [data-work-item] { position: relative; display: grid; align-content: start; gap: 12px; min-height: 154px; padding: 10px; border-radius: 6px; font-size: 14px; }
 .page [data-pm-tasks-panel] { gap: 16px; }
-.page [data-pm-task-lanes] [data-work-item] > div:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 52px; }
-.page [data-pm-task-lanes] [data-work-item] > div:first-child > span:first-of-type { color: var(--muted-foreground); font-size: 11px; line-height: 16px; }
-.page [data-pm-task-lanes] [data-work-item] > div:first-child > button:not([role="checkbox"]) { flex: 0 0 100%; order: 3; height: auto; min-height: 0; padding: 0; color: var(--foreground); font-size: 14px; line-height: 20px; text-align: left; }
-.page [data-pm-task-lanes] [data-work-item] [role="checkbox"] { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; opacity: 0; }
-.page [data-pm-task-lanes] [data-work-item]:hover [role="checkbox"], .page [data-pm-task-lanes] [data-work-item]:focus-within [role="checkbox"], .page [data-pm-task-lanes] [data-work-item][data-selected] [role="checkbox"] { opacity: 1; }
-.page [data-pm-task-lanes] [data-layout="card"] { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 8px; }
-.page [data-pm-task-lanes] [data-property="priority"] { grid-row: 1; grid-column: 1 / -1; color: var(--muted-foreground); font-size: 12px; }
-.page [data-pm-task-lanes] [data-property="state"] { grid-row: 2; grid-column: 1; justify-self: start; padding: 2px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--muted); font-size: 11px; }
-.page [data-pm-task-lanes] [data-property="assignees"] { grid-row: 2; grid-column: 2; justify-self: end; font-size: 11px; }
 .page [data-pm-task-facts] { display: flex; flex-wrap: wrap; gap: 16px 24px; font-size: 12px; }
 .page [data-pm-task-facts] dt { color: var(--muted-foreground); }
 .page [data-pm-task-facts] dd { margin: 4px 0 0; }

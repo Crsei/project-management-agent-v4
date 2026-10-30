@@ -59,6 +59,8 @@ export type WorkspaceShellProps = {
   sidebarCollapsed?: boolean
   defaultSidebarCollapsed?: boolean
   onSidebarCollapsedChange?: (collapsed: boolean) => void
+  /** Optional icon rail rendered in place of `sidebar` while the inline sidebar is collapsed. */
+  collapsedSidebar?: ReactNode
   inspectorOpen?: boolean
   defaultInspectorOpen?: boolean
   onInspectorOpenChange?: (open: boolean) => void
@@ -113,6 +115,7 @@ export function WorkspaceShell({
   sidebarCollapsed: controlledSidebar,
   defaultSidebarCollapsed = false,
   onSidebarCollapsedChange,
+  collapsedSidebar,
   inspectorOpen: controlledInspector,
   defaultInspectorOpen = true,
   onInspectorOpenChange,
@@ -155,7 +158,21 @@ export function WorkspaceShell({
       Number.isFinite(requestedSidebarWidth) ? requestedSidebarWidth : 256,
     ),
   )
+  const collapseSnap = collapsedSidebar === undefined
+    ? null
+    : Math.max(64, Math.round(sidebarMin / 2))
   function resizeSidebar(width: number) {
+    if (collapseSnap !== null && sidebarCollapsed) {
+      if (width > collapseSnap) {
+        setSidebarCollapsed(false)
+        setSidebarWidth(Math.max(sidebarMin, Math.min(sidebarMax, width)))
+      }
+      return
+    }
+    if (collapseSnap !== null && width <= collapseSnap) {
+      setSidebarCollapsed(true)
+      return
+    }
     setSidebarWidth(Math.max(sidebarMin, Math.min(sidebarMax, width)))
   }
   const ref = useRef<HTMLDivElement>(null)
@@ -320,6 +337,7 @@ export function WorkspaceShell({
       data-layout-mode={layoutMode}
       data-header-placement={headerPlacement}
       data-sidebar-collapsed={sidebarCollapsed}
+      data-sidebar-rail={collapsedSidebar !== undefined || undefined}
       data-activity-bar={activityBar !== undefined || undefined}
       data-drawer-navigation={drawerNavigation || undefined}
       style={
@@ -344,16 +362,18 @@ export function WorkspaceShell({
             aria-label={t("workspaceShell.workspaceNavigation")}
             tabIndex={0}
           >
-            {sidebar}
+            {sidebarCollapsed && collapsedSidebar !== undefined
+              ? collapsedSidebar
+              : sidebar}
           </aside>
         )}
-        {sidebarResizable && sidebar !== undefined && !sidebarCollapsed && (
+        {sidebarResizable && sidebar !== undefined && (!sidebarCollapsed || collapseSnap !== null) && (
           <ResizableHandle
             unstyled
             label={t("commonComponents.resizeSidebar")}
             controls={sidebarId}
-            value={sidebarWidth}
-            min={sidebarMin}
+            value={sidebarCollapsed && collapseSnap !== null ? collapseSnap : sidebarWidth}
+            min={collapseSnap ?? sidebarMin}
             max={sidebarMax}
             onValueChange={resizeSidebar}
             className={styles.sidebarResize}

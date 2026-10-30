@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "source": "apps/server/src/textGeneration/ThreadTitleLinks.test.ts",
+  "beforeSha256": "30dc2024d8c5604b8e1aeb71944c382f31d9b94b6451b672da9e501dbaeff2aa",
+  "afterSha256": "a5554dffcf327cbd72ca31acb28d64508f5597cf3ba68a2dfddac8231473c50b",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 4,
+      "before": [
+        "import * as Layer from \"effect/Layer\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 7,
+      "before": [
+        "import * as SourceControlProviderRegistry from \"../sourceControl/SourceControlProviderRegistry.ts\";\n",
+        "\n",
+        "const layerRegistry = Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 23,
+      "before": [
+        "      }).pipe(\n",
+        "        Effect.provide(\n",
+        "          layerRegistry({\n",
+        "            resolveLink: ({ url, cwd }) =>\n",
+        "              url.host === \"forge.test\"\n",
+        "                ? Effect.sync(() => {\n",
+        "                    expect(cwd).toBe(\"/tmp/project\");\n",
+        "                    calls.push(url.href);\n",
+        "                    return { title: \"t\".repeat(400), body: \"b\".repeat(2_000) };\n",
+        "                  })\n",
+        "                : undefined,\n",
+        "          }),\n",
+        "        ),\n",
+        "      );\n"
+      ],
+      "after": [
+        "      }, ({ url, cwd }) => url.host === \"forge.test\"\n",
+        "        ? Effect.sync(() => {\n",
+        "          expect(cwd).toBe(\"/tmp/project\");\n",
+        "          calls.push(url.href);\n",
+        "          return { title: \"t\".repeat(400), body: \"b\".repeat(2_000) };\n",
+        "        }) : undefined);\n"
+      ]
+    },
+    {
+      "start": 51,
+      "before": [
+        "    expect(yield* resolveThreadTitleLinks({ cwd: \"/tmp\", message: \"Fix pairing\" })).toBeUndefined();\n",
+        "    expect(\n",
+        "      yield* resolveThreadTitleLinks({ cwd: \"/tmp\", message: \"https://forge.test/change/1\" }),\n",
+        "    ).toContain(\"unavailable\");\n",
+        "  }).pipe(\n",
+        "    Effect.provide(\n",
+        "      layerRegistry({\n",
+        "        resolveLink: () =>\n",
+        "          Effect.fail(\n",
+        "            new SourceControlProviderError({\n",
+        "              provider: SourceControlProviderKind.make(\"unknown\"),\n",
+        "              operation: \"resolveLink\",\n",
+        "              cwd: \"/tmp\",\n",
+        "              detail: \"Unavailable\",\n",
+        "            }),\n",
+        "          ),\n",
+        "      }),\n",
+        "    ),\n",
+        "  ),\n"
+      ],
+      "after": [
+        "    const resolveLink = () => Effect.fail(new SourceControlProviderError({\n",
+        "      provider: SourceControlProviderKind.make(\"unknown\"), operation: \"resolveLink\",\n",
+        "      cwd: \"/tmp\", detail: \"Unavailable\",\n",
+        "    }));\n",
+        "    expect(yield* resolveThreadTitleLinks({ cwd: \"/tmp\", message: \"Fix pairing\" }, resolveLink)).toBeUndefined();\n",
+        "    expect(yield* resolveThreadTitleLinks({ cwd: \"/tmp\", message: \"https://forge.test/change/1\" }, resolveLink)).toContain(\"unavailable\");\n",
+        "  }),\n"
+      ]
+    }
+  ]
+}

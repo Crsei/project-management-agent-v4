@@ -1,0 +1,19 @@
+{
+  "name": "@pm/t3code-vendor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vp test run --config vite.config.ts",
+    "typecheck": "pnpm --filter '@t3tools/*' --filter effect-acp --filter effect-codex-app-server -r typecheck"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.5",
+    "@types/node": "24.12.4",
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/shared": "workspace:*",
+    "esbuild": "0.28.2",
+    "effect": "4.0.5",
+    "vite-plus": "1.4.0"
+  }
+}

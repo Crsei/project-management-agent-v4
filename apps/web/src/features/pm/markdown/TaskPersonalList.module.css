@@ -3,7 +3,7 @@
   container: personal-task-list / inline-size;
   width: 100%;
   min-width: 0;
-  padding: 0 24px 24px 0;
+  padding: 0 0 24px;
   color: var(--foreground);
   background: var(--surface);
 }
@@ -21,11 +21,13 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  height: 32px;
+  height: 40px;
+  margin: 0 24px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
   font-weight: 500;
 }
 
@@ -37,16 +39,21 @@
 
 .group {
   min-width: 0;
-  margin-top: 10px;
+  margin: 12px 24px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module-value);
+  background: var(--surface);
+  box-shadow: var(--edge-shadow);
+  overflow: hidden;
 }
 
 .groupStrip {
   display: flex;
   align-items: center;
-  height: 36px;
+  height: 44px;
   min-width: 0;
   gap: 8px;
-  padding: 0 8px 0 22px;
+  padding: 0 12px 0 16px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -61,13 +68,14 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  height: 30px;
+  height: 32px;
   padding: 0;
   border: 0;
   border-radius: var(--control-radius);
   background: transparent;
   color: var(--foreground);
-  font-size: 12px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
   font-weight: 600;
   text-align: left;
   white-space: nowrap;
@@ -105,9 +113,10 @@
 
 .emptyGroup {
   margin: 0;
-  padding: 10px 26px;
+  padding: 12px 18px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
 }
 
 .groupToggle:focus-visible,
@@ -150,9 +159,10 @@
 }
 
 .row {
-  height: 40px;
+  height: 44px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
-  font-size: 13.5px;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
 }
 
 .row:hover {
@@ -187,7 +197,8 @@
   border-radius: var(--control-radius);
   background: transparent;
   color: var(--foreground);
-  font-size: 13.5px;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
   text-align: left;
 }
 
@@ -202,7 +213,7 @@
   max-width: 104px;
   overflow: hidden;
   color: var(--muted-foreground);
-  font: 11px/1.5 var(--font-mono, monospace);
+  font: var(--text-meta) / var(--text-meta--line-height) var(--font-mono, monospace);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -234,7 +245,8 @@
   align-items: center;
   min-width: 0;
   padding: 0 8px;
-  font-size: 12px;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
 }
 
 .cell > button {
@@ -257,14 +269,15 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  height: 34px;
+  height: 40px;
   min-width: 0;
-  padding: 0 10px 0 26px;
+  padding: 0 12px 0 18px;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
   background: transparent;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
   text-align: left;
 }
 
@@ -277,6 +290,10 @@
   .columns,
   .row {
     grid-template-columns: 30px minmax(0, 1fr) 40px;
+  }
+
+  .columns {
+    display: none;
   }
 
   .spacer,
@@ -348,7 +365,15 @@
 
 @media (max-width: 560px) {
   .list {
-    padding-inline: 12px;
+    padding: 0 0 24px;
+  }
+
+  .columns {
+    margin-inline: 12px;
+  }
+
+  .group {
+    margin: 12px 12px 0;
   }
 }
 

@@ -6,7 +6,7 @@ const count = z.number().int().nonnegative().safe();
 const amount = z.number().finite().nonnegative();
 const id = z.string().trim().min(1).max(512);
 export const USAGE_CONTRACT_VERSION = 6 as const;
-export const usageProviderKindSchema = z.enum(["codex", "claude", "grok", "cursor", "opencode", "antigravity", "pi", "muse", "acpRegistry"]);
+export const usageProviderKindSchema = z.enum(["codex", "claude", "grok", "fx", "cursor", "opencode", "antigravity", "pi", "muse", "acpRegistry"]);
 export type UsageProviderKind = z.infer<typeof usageProviderKindSchema>;
 export type UsageSpeed = "standard" | "fast" | "ultrafast";
 /** Input categories are disjoint. Reasoning is a subset of output, not extra tokens. */
@@ -21,6 +21,7 @@ export const usageBucketSchema = z.object({
   model: id, sourcePath: z.string().optional(), totals: usageTokenTotalsSchema, costUsd: amount, cacheSavingsUsd: amount,
   categoryCostUsd: usageCategoryCostSchema.optional(), fastCostUsd: amount.optional(), ultrafastCostUsd: amount.optional(), speedPremiumUsd: amount.optional(),
   costSource: usageCostSourceSchema, records: count, unpricedRecords: count, sessions: count,
+  providerReportedRecords: count.optional(),
 });
 export type UsageBucket = z.infer<typeof usageBucketSchema>;
 export const usageSourceFingerprintSchema = z.object({ hostId: z.string(), provider: usageProviderKindSchema, resolvedHomePath: z.string(), volumeId: z.string() });
@@ -68,7 +69,7 @@ export type ServerProviderUsageWindow = z.infer<typeof serverProviderUsageWindow
 export const serverProviderResetCreditsSchema = z.object({ availableCount: count, nextExpiresAt: z.string().optional(), nextCreditId: id.optional() });
 export type ServerProviderResetCredits = z.infer<typeof serverProviderResetCreditsSchema>;
 export const serverProviderUsageLimitsSchema = z.object({
-  checkedAt: z.string(), windows: z.array(serverProviderUsageWindowSchema), credentialFingerprint: z.string().optional(),
+  checkedAt: z.string(), lastProbeAt: z.string().optional(), windows: z.array(serverProviderUsageWindowSchema), credentialFingerprint: z.string().optional(),
   account: z.object({ id: z.string().optional(), email: z.string().optional(), plan: z.string().optional(), workspaceId: z.string().optional() }).optional(),
   resetCredits: serverProviderResetCreditsSchema.optional(), externalUsage: z.object({ label: z.string(), url: z.string() }).optional(),
   unavailable: z.object({ reason: z.enum(["unsupported", "probeFailed"]), message: z.string().optional() }).optional(),

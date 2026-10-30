@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/acp/AntigravitySessionFiles.ts",
+  "beforeSha256": "0ceb055dfc4599436c1543c4e4c040b5e95e02b4669fac71bb648eb49ba740a7",
+  "afterSha256": "099b4514236591c69e360ba4f476deed1a16448d81ab4a40f6e1a0b43aa966ac",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 4,
+      "before": [],
+      "after": [
+        "import * as AcpErrors from \"effect-acp/errors\";\n"
+      ]
+    },
+    {
+      "start": 8,
+      "before": [],
+      "after": [
+        ");\n",
+        "\n",
+        "/** Native-owned metadata only: no prompt, credential access or session creation. */\n",
+        "export const readAntigravitySessionMetadata = Effect.fn(\"readAntigravitySessionMetadata\")(\n",
+        "  function* (input: { readonly profileDirectory: string; readonly nativeSessionId: string }) {\n",
+        "    const fs = yield* FileSystem.FileSystem;\n",
+        "    const path = yield* Path.Path;\n",
+        "    if (!isNativeSessionId(input.nativeSessionId)) {\n",
+        "      return yield* AcpErrors.AcpRequestError.invalidParams(\"Antigravity native session ID is invalid.\");\n",
+        "    }\n",
+        "    const directory = path.join(input.profileDirectory, \"antigravity-acp\", \"conversations\");\n",
+        "    const canonical = yield* fs.realPath(directory);\n",
+        "    if (canonical !== path.resolve(directory)) {\n",
+        "      return yield* AcpErrors.AcpRequestError.invalidParams(\"Antigravity session metadata escaped its private profile.\");\n",
+        "    }\n",
+        "    const base = path.join(canonical, input.nativeSessionId);\n",
+        "    for (const suffix of [\".meta\", \".db\"]) {\n",
+        "      const file = `${base}${suffix}`;\n",
+        "      const info = yield* fs.stat(file);\n",
+        "      if (info.type !== \"File\" || (suffix === \".meta\" && Number(info.size) > 64 * 1024)\n",
+        "        || (yield* fs.realPath(file)) !== file) {\n",
+        "        return yield* AcpErrors.AcpRequestError.invalidParams(\"Antigravity native session metadata is invalid.\");\n",
+        "      }\n",
+        "    }\n",
+        "    const metadata = yield* fs.readFileString(`${base}.meta`).pipe(Effect.flatMap(decodeSessionMetadata));\n",
+        "    if (!path.isAbsolute(metadata.cwd) || metadata.cwd.includes(\"\\0\")) {\n",
+        "      return yield* AcpErrors.AcpRequestError.invalidParams(\"Antigravity native session directory is invalid.\");\n",
+        "    }\n",
+        "    return { cwd: metadata.cwd };\n",
+        "  },\n",
+        "  Effect.mapError(() => AcpErrors.AcpRequestError.invalidParams(\n",
+        "    \"The Antigravity session could not be verified in this account's private native history.\",\n",
+        "  )),\n"
+      ]
+    }
+  ]
+}

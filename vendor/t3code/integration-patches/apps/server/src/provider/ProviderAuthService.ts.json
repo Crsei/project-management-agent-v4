@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/ProviderAuthService.ts",
+  "beforeSha256": "bc4dba7f8c00f6aae5b4f45b7cad37ebba5836321cc7644a0b94f3eed63b93fb",
+  "afterSha256": "aaa8ff6676a7bce43bb5f40bbdf204f7de6b716e1a0dea10de4813c35576afc7",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 8,
+      "before": [
+        "  type ProviderSessionId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 17,
+      "before": [
+        "import * as ProviderSessionManager from \"../orchestration-v2/ProviderSessionManager.ts\";\n",
+        "import * as ProjectionStore from \"../orchestration-v2/ProjectionStore.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 27,
+      "before": [],
+      "after": [
+        "\n",
+        "/** Session ownership belongs to the embedding host, not to t3 orchestration repositories. */\n",
+        "export interface ProviderAuthSessionInvalidationRequest {\n",
+        "  readonly requestingInstanceId: ProviderInstanceId;\n",
+        "  readonly instanceId: ProviderInstanceId;\n",
+        "  readonly credentialBinding?: NonNullable<ProviderAuthController[\"credentialBinding\"]>;\n",
+        "  /** Recheck immediately before draining: an affected peer may have rebound while the host awaited cleanup. */\n",
+        "  readonly isCurrent: Effect.Effect<boolean, ProviderSetupError>;\n",
+        "}\n",
+        "export class ProviderAuthSessionInvalidation extends Context.Service<\n",
+        "  ProviderAuthSessionInvalidation,\n",
+        "  {\n",
+        "    readonly invalidateSessions: (\n",
+        "      input: ProviderAuthSessionInvalidationRequest,\n",
+        "    ) => Effect.Effect<void, ProviderSetupError>;\n",
+        "  }\n",
+        ">()(\"t3/provider/ProviderAuthSessionInvalidation\") {}\n"
+      ]
+    },
+    {
+      "start": 68,
+      "before": [
+        "  const projections = yield* ProjectionStore.ProjectionStoreV2;\n",
+        "  const providerSessions = yield* ProviderSessionManager.ProviderSessionManagerV2;\n"
+      ],
+      "after": [
+        "  const sessionInvalidation = yield* ProviderAuthSessionInvalidation;\n"
+      ]
+    },
+    {
+      "start": 108,
+      "before": [
+        "    const threadIds = yield* projections\n",
+        "      .getRecoveryThreadIds(\"runtime\")\n",
+        "      .pipe(\n",
+        "        Effect.mapError(() => failure(\"Could not read the provider's active sessions. Try again.\")),\n"
+      ],
+      "after": [
+        "    for (const affectedId of affectedIds) {\n",
+        "      const isCurrent = affectedId === instanceId\n",
+        "        ? Effect.succeed(true)\n",
+        "        : Effect.gen(function* () {\n",
+        "            const current = yield* registry.getInstance(affectedId);\n",
+        "            return binding !== undefined &&\n",
+        "              current?.auth?.credentialBinding?.key === binding.key &&\n",
+        "              current.auth.credentialBinding.owner === binding.owner;\n",
+        "          });\n",
+        "      if (!(yield* isCurrent)) continue;\n",
+        "      yield* sessionInvalidation.invalidateSessions({\n",
+        "        requestingInstanceId: instanceId,\n",
+        "        instanceId: affectedId,\n",
+        "        ...(binding ? { credentialBinding: binding } : {}),\n",
+        "        isCurrent,\n",
+        "      }).pipe(\n",
+        "        Effect.mapError(() => failure(\"Could not stop all sessions for this provider. Try again.\")),\n"
+      ]
+    },
+    {
+      "start": 113,
+      "before": [
+        "    const released = new Set<ProviderSessionId>();\n",
+        "    yield* Effect.forEach(\n",
+        "      threadIds,\n",
+        "      (threadId) =>\n",
+        "        projections.getThreadRecords(threadId, [\"providerSessions\"]).pipe(\n",
+        "          Effect.flatMap((projection) =>\n",
+        "            Effect.forEach(\n",
+        "              projection.providerSessions.filter(\n",
+        "                (session) =>\n",
+        "                  affectedIds.has(session.providerInstanceId) &&\n",
+        "                  session.status !== \"stopped\" &&\n",
+        "                  session.status !== \"error\" &&\n",
+        "                  !released.has(session.id),\n",
+        "              ),\n",
+        "              (session) =>\n",
+        "                Effect.gen(function* () {\n",
+        "                  if (session.providerInstanceId !== instanceId) {\n",
+        "                    const current = yield* registry.getInstance(session.providerInstanceId);\n",
+        "                    if (\n",
+        "                      !binding ||\n",
+        "                      current?.auth?.credentialBinding?.key !== binding.key ||\n",
+        "                      current.auth.credentialBinding.owner !== binding.owner\n",
+        "                    )\n",
+        "                      return;\n",
+        "                  }\n",
+        "                  yield* providerSessions\n",
+        "                    .release({\n",
+        "                      providerSessionId: session.id,\n",
+        "                      reason: \"manual_shutdown\",\n",
+        "                      detail: \"Provider sign-in changed.\",\n",
+        "                    })\n",
+        "                    .pipe(Effect.tap(() => Effect.sync(() => released.add(session.id))));\n",
+        "                }),\n",
+        "              { discard: true },\n",
+        "            ),\n",
+        "          ),\n",
+        "          Effect.mapError(() =>\n",
+        "            failure(\"Could not stop all sessions for this provider. Try again.\"),\n",
+        "          ),\n",
+        "        ),\n",
+        "      { discard: true },\n",
+        "    );\n"
+      ],
+      "after": [
+        "    }\n"
+      ]
+    }
+  ]
+}

@@ -32,6 +32,7 @@ const messages: Record<string, readonly [string, string]> = {
   unauthenticated: ["Your session has ended. Sign in again.", "登录已失效，请重新登录。"],
   permission_denied: ["You do not have permission for this action.", "你没有执行此操作的权限。"],
   not_found_or_forbidden: ["This resource does not exist or is not accessible.", "资源不存在或你没有访问权限。"],
+  origin_forbidden: ["This page's origin is not accepted. Open the service at its configured public address.", "服务不接受当前页面的来源，请使用配置的公共访问地址打开。"],
   version_conflict: ["This object changed elsewhere. Your draft is preserved; refresh and review it before submitting a new command.", "对象已被其他人修改。草稿已保留，请刷新并核对后重新提交。"],
   idempotency_conflict: ["This command ID belongs to a different request. Reconcile the original command first.", "此命令编号已用于其他请求，请先核对原命令。"],
   validation_failed: ["Check the required fields and their values.", "请检查必填项及输入值。"],

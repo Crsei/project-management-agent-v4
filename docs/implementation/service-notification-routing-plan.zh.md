@@ -27,8 +27,8 @@
 | [dashboard-personal.ts](../../packages/application/src/dashboard-personal.ts)、[dashboard-store.ts](../../packages/application/src/dashboard-store.ts)、[0009](../../packages/infrastructure/migrations/0009_dashboard_personal.sql) | `WatchTask` 保存 `dashboard_records(kind=task_watch, owner_id, project_id, data={taskId,watching})`；活跃关注有唯一索引。`UnwatchTask` 修改原记录并检查版本。Dashboard 只显示仍绑定当前项目且可见的关注。 | 唯一持续订阅存储已经存在；不能另造 subscriptions 表。已有多个已取消关注记录并不等于多个活跃订阅。 |
 | [task-comments.ts](../../packages/application/src/task-comments.ts)、[评论领域合同](../../packages/domain/src/task-comments.ts) | SQL 评论、不可变版本、作者 CAS、软删除／恢复；`domain.read` 读、`intent.propose` 写；原 commandId、审计和 outbox 在命令事务内。正文不进收据或 SSE。跨项目改变返回 `task_comment_project_changed`。 | 在同一评论事务中增加事实与本次提及；不另造评论正文副本、不扩大历史受众。现有 payload 只有 content 等字段，尚无提及协议。 |
 | [project-audit.ts](../../packages/application/src/project-audit.ts)、[安全字段投影](../../packages/domain/src/project-audit.ts) | 持久审计有原来源、commandId、目标和前后版本，按复合键去重；读取另要求 `audit.read`。白名单仍可能含标题、姓名引用或金额。 | 不把完整审计直接发给只需 `domain.read` 的通知用户，更不能直接转发外部。它是恢复模式参考，不是全部 Markdown 事件或提及源。 |
-| [core-journal.ts](../../apps/api/src/core-journal.ts)、[core-adapter.ts](../../apps/api/src/core-adapter.ts)、[app.ts](../../apps/api/src/app.ts)、[core-bridge.ts](../../packages/application/src/core-bridge.ts) | 核心命令用 `.pm/state/pm-command-journal.ndjson` 的 pending/completed 区分未知与已知结果；completed fsync 后再持久化 SQL 收据／审计。适配器捕获安全审计，不为每个核心保存产生当前活动事件。 | 新事实必须沿原命令身份进入 journal 与 SQL 恢复；不能只给 SQL 评论加事件就声称任务通知完整。 |
-| [core-routes.ts](../../apps/api/src/core-routes.ts) | 原生创建、源码／属性修改、归档／恢复／删除经过 `auditedMutation`；有 `http_pending/http_completed` 和创建 prepared 信息；原生结果不是 PM CommandReceipt。配置、保存视图和迁移另有路由。 | 需要接入实际写入点与原生恢复，不能把新通知 commandId 代替原生 key。现有 completed 前崩溃窗口不能被描述为已有完备提交证明。 |
+| [core-journal.ts](../../apps/server/pm/src/core-journal.ts)、[core-adapter.ts](../../apps/server/pm/src/core-adapter.ts)、[app.ts](../../apps/server/pm/src/app.ts)、[core-bridge.ts](../../packages/application/src/core-bridge.ts) | 核心命令用 `.pm/state/pm-command-journal.ndjson` 的 pending/completed 区分未知与已知结果；completed fsync 后再持久化 SQL 收据／审计。适配器捕获安全审计，不为每个核心保存产生当前活动事件。 | 新事实必须沿原命令身份进入 journal 与 SQL 恢复；不能只给 SQL 评论加事件就声称任务通知完整。 |
+| [core-routes.ts](../../apps/server/pm/src/core-routes.ts) | 原生创建、源码／属性修改、归档／恢复／删除经过 `auditedMutation`；有 `http_pending/http_completed` 和创建 prepared 信息；原生结果不是 PM CommandReceipt。配置、保存视图和迁移另有路由。 | 需要接入实际写入点与原生恢复，不能把新通知 commandId 代替原生 key。现有 completed 前崩溃窗口不能被描述为已有完备提交证明。 |
 | [pm-core/index.ts](../../packages/pm-core/index.ts)、[state.ts](../../packages/pm-core/state.ts)、[repository.ts](../../packages/pm-core/repository.ts) | 原文写入有文件 revision/CAS、原子替换和 fsync；创建／删除有耐久协议状态，普通更新没有同等业务完成收据。watcher 去抖后重新扫描，`onChange` 只给 change/error 与 reason，不提供不可变业务事件。 | 需要持久变更边界和观测基线；不能消费 `onChange`／SQLite cache 就承诺记录每个离线中间版本。 |
 | [pm-notification-hooks.ts](../../apps/web/src/features/pm/service/pm-notification-hooks.ts)、[service-notifications.tsx](../../apps/web/src/features/pm/service/service-notifications.tsx) | 旧活动 hook 已迁移；正式页读取定向通知并可切换历史活动状态。仍复用私有 Query、串行状态命令、IndexedDB 原请求核对和 CommandNotice。 | 没有第二套命令 journal／SSE；来源、有限历史及 pending/error 明确显示。 |
 | [通知路由回归](../../tests/notification-routing.integration.test.ts)、[评论回归](../../tests/task-comments.integration.test.ts)、[原生恢复回归](../../tests/core-creation.integration.test.ts) | 复用真实 PG／HTTP 夹具、事务故障、原命令恢复及文件先提交 SQL 后失败的模式。 | 测试源码不是本轮通过证据；旧活动回归已迁移到通知合同。 |
@@ -139,7 +139,7 @@ API 的独立 importer 与核心访问都可首次建立唯一 Workspace；缓�
 
 ### 6.1 核心事实进入 SQL 的执行顺序
 
-在 [CoreCommandJournal](../../apps/api/src/core-journal.ts) 扩展可选带版本 `facts/routingInputs`，兼容读取旧记录；旧记录不凭当前文件补造成历史新事实。在核心实际 mutation 点增加结果捕获接口，而不是在返回后的页面动作上补事件：
+在 [CoreCommandJournal](../../apps/server/pm/src/core-journal.ts) 扩展可选带版本 `facts/routingInputs`，兼容读取旧记录；旧记录不凭当前文件补造成历史新事实。在核心实际 mutation 点增加结果捕获接口，而不是在返回后的页面动作上补事件：
 
 1. 当前授权、revision、目标项目及提及验证通过；捕获本次安全事实输入及接收依据。创建使用最终分配 ID／prepared 回调，更新使用 guard 内真实 before 与候选 after，删除沿原耐久墓碑路径。
 2. 保存前准备记录绑定原操作身份、预分配 factId、预期前后 revision 与安全输入；准备记录本身**不是已经发生的事实**。复用原 `.pm/state` journal 的 fsync／目录持久化与严格 schema，不写正文到 PM journal。
@@ -160,7 +160,7 @@ Worker 当前没有 CoreWorkspacePool。拟新增应用用只读 core 检查端�
 
 ### 6.3 有界路由循环与恢复
 
-沿 [现有 Worker](../../apps/worker/src/main.ts) 新增**独立有界循环**，不阻塞 outbox/SSE 心跳或邀请 SMTP；不用 Redis／RabbitMQ 或通用 job 框架。API 的文件 journal 导入恢复也有独立有界循环，不能让 HTTP GET 顺手推进持久状态。
+沿 [现有 Worker](../../apps/server/worker/src/main.ts) 新增**独立有界循环**，不阻塞 outbox/SSE 心跳或邀请 SMTP；不用 Redis／RabbitMQ 或通用 job 框架。API 的文件 journal 导入恢复也有独立有界循环，不能让 HTTP GET 顺手推进持久状态。
 
 - 按既有 workspace 锁优先的统一锁顺序领取，再在该工作区内领取到期 pending 或过期 running job；新租约增加 epoch。一次事务只处理有限候选页（拟 100 人），批间释放锁，不长持文件 IO／网络请求。
 - 每页从冻结候选重查：用户未禁用、membership 未撤销、当前 `domain.read` 及项目范围、任务当前项目与源项目一致、评论绑定、原私有 audience、仅 watch 理由的当前 watch 状态；排除可信 actor；合并 watch+mention 原因。

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/acp/AntigravityAcpSupport.ts",
+  "beforeSha256": "5acd5459e4b8dc2aa2820ee0590b4390c5fec025552353d45a76f12c7446a0aa",
+  "afterSha256": "cd75922f3bbfd087c2cfec2160511b11fbbfd97784ce257944f1740cbf10615d",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 3,
+      "before": [],
+      "after": [
+        "  type ChatAttachment,\n"
+      ]
+    },
+    {
+      "start": 19,
+      "before": [
+        "import { resolveAttachmentPath } from \"../../attachmentStore.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 232,
+      "before": [],
+      "after": [
+        "  readonly resolveAttachmentPath: (attachment: ChatAttachment) => string | null;\n"
+      ]
+    },
+    {
+      "start": 269,
+      "before": [
+        "    const attachmentPath = resolveAttachmentPath({\n",
+        "      attachmentsDir: input.attachmentsDir,\n",
+        "      attachment,\n",
+        "    });\n"
+      ],
+      "after": [
+        "    const attachmentPath = input.resolveAttachmentPath(attachment);\n"
+      ]
+    }
+  ]
+}

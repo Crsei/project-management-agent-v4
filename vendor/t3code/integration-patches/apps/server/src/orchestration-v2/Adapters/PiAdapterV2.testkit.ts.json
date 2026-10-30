@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/PiAdapterV2.testkit.ts",
+  "beforeSha256": "827c6510df052cbad4f288b3044ce96b860e90c3e5397b3ba81c1f2d5fc5afab",
+  "afterSha256": "522926ac03b697aee044c0895173133e258066fe0d9f0451546ad42c9b720b8b",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [
+        "import * as NodeServices from \"@effect/platform-node/NodeServices\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3,
+      "before": [
+        "  ProviderInstanceId,\n",
+        "  type ProviderInstanceEnvironment,\n",
+        "  type ProviderReplayTranscript,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 10,
+      "before": [
+        "import * as Layer from \"effect/Layer\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 17,
+      "before": [
+        "import * as TestProviderHost from \"@t3tools/provider-testing/TestProviderHost\";\n",
+        "import * as IdAllocator from \"@t3tools/provider-core/server/IdAllocator\";\n",
+        "import { ProviderAdapterDriverCreateError } from \"@t3tools/provider-core/server/adapterDriver\";\n",
+        "import * as ProviderAdapterRegistry from \"../ProviderAdapterRegistry.ts\";\n",
+        "import type { OrchestratorV2ProviderReplayHarness } from \"../testkit/ProviderReplayHarness.ts\";\n",
+        "import { PI_PROVIDER, PiAdapterV2Driver } from \"@t3tools/provider-pi/server\";\n"
+      ],
+      "after": [
+        "import { PI_PROVIDER } from \"@t3tools/provider-pi/server\";\n"
+      ]
+    },
+    {
+      "start": 87,
+      "before": [
+        "\n",
+        "const PiOrchestratorReplayHarnessError = Schema.Union([\n",
+        "  PiReplayTranscriptDecodeError,\n",
+        "  ProviderAdapterDriverCreateError,\n",
+        "]);\n",
+        "type PiOrchestratorReplayHarnessError = typeof PiOrchestratorReplayHarnessError.Type;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 360,
+      "before": [
+        "export function layer<E, R>(input: {\n",
+        "  readonly scenario: string;\n",
+        "  readonly spawner: Layer.Layer<ChildProcessSpawner.ChildProcessSpawner, E, R>;\n",
+        "  readonly binaryPath: string;\n",
+        "  readonly launchArgs: string;\n",
+        "  readonly environment?: ProviderInstanceEnvironment;\n",
+        "}) {\n",
+        "  return ProviderAdapterRegistry.layerFromAdaptersEffect(\n",
+        "    PiAdapterV2Driver.create({\n",
+        "      instanceId: ProviderInstanceId.make(PI_PROVIDER),\n",
+        "      environment: input.environment ?? [],\n",
+        "      displayName: undefined,\n",
+        "      enabled: true,\n",
+        "      config: {\n",
+        "        ...PiAdapterV2Driver.defaultConfig(),\n",
+        "        binaryPath: input.binaryPath,\n",
+        "        launchArgs: input.launchArgs,\n",
+        "      },\n",
+        "    }).pipe(Effect.map((adapter) => [adapter])),\n",
+        "  ).pipe(\n",
+        "    Layer.provide(input.spawner),\n",
+        "    Layer.provide(\n",
+        "      Layer.mergeAll(\n",
+        "        TestProviderHost.layer().pipe(Layer.provide(NodeServices.layer)),\n",
+        "        NodeServices.layer,\n",
+        "        IdAllocator.layer,\n",
+        "      ),\n",
+        "    ),\n",
+        "  );\n",
+        "}\n",
+        "\n",
+        "function metadataString(transcript: PiRpcReplayTranscript, key: string): string {\n",
+        "  const value = transcript.metadata?.[key];\n",
+        "  return typeof value === \"string\" ? value : \"\";\n",
+        "}\n",
+        "\n",
+        "export const PiOrchestratorReplayHarness: OrchestratorV2ProviderReplayHarness<\n",
+        "  PiRpcReplayTranscript,\n",
+        "  PiOrchestratorReplayHarnessError\n",
+        "> = {\n",
+        "  driver: PI_PROVIDER,\n",
+        "  decodeTranscript: (transcript: ProviderReplayTranscript) =>\n",
+        "    decodePiRpcReplayTranscript(transcript).pipe(\n",
+        "      Effect.mapError(\n",
+        "        (cause) =>\n",
+        "          new PiReplayTranscriptDecodeError({\n",
+        "            driver: transcript.provider,\n",
+        "            protocol: transcript.protocol,\n",
+        "            scenario: transcript.scenario,\n",
+        "            cause,\n",
+        "          }),\n",
+        "      ),\n",
+        "    ),\n",
+        "  makeProviderAdapterRegistryLayer: (transcript) =>\n",
+        "    layer({\n",
+        "      scenario: transcript.scenario,\n",
+        "      binaryPath: \"pi\",\n",
+        "      launchArgs: metadataString(transcript, \"launchArgs\"),\n",
+        "      spawner: Layer.effect(\n",
+        "        ChildProcessSpawner.ChildProcessSpawner,\n",
+        "        Effect.gen(function* () {\n",
+        "          const controller = new PiReplayController(transcript);\n",
+        "          yield* Effect.addFinalizer(() => Effect.sync(() => controller.assertComplete()));\n",
+        "          return makePiReplaySpawner(controller);\n",
+        "        }),\n",
+        "      ),\n",
+        "    }),\n",
+        "};\n",
+        "\n"
+      ],
+      "after": []
+    }
+  ]
+}

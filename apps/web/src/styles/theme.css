@@ -59,9 +59,8 @@
   --spacing-control: var(--control-height);
   --spacing-control-lg: var(--control-height-lg);
   --spacing-row: var(--row-height);
-  --font-sans:
-    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Noto Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* 英文与数字走 Inter，中文字形回退到 MiSans；两者均为自托管文件 */
+  --font-sans: "Inter", "MiSans", sans-serif;
   --font-mono:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
@@ -146,7 +145,13 @@
   --motion-layout: 280ms;
   --motion-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
   --motion-ease-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
-  /* 材质：默认不透明；仅输入区与浮层使用一层阴影 */
+  /* 材质：默认不透明；实体表面只用一层边缘，输入区与浮层使用一层阴影 */
+  --edge-highlight: rgba(255, 255, 255, 0.9);
+  --edge-shade: rgba(20, 18, 16, 0.04);
+  --edge-shadow:
+    inset 0 1px 0 var(--edge-highlight),
+    inset 0 -1px 0 var(--edge-shade),
+    0 1px 2px rgba(20, 18, 16, 0.04);
   --shadow-composer: 0 1px 2px rgba(20, 18, 16, 0.06);
   /* Composer：输入区初始高度与内滚上限 */
   --composer-min-height: 68px;
@@ -219,6 +224,12 @@
   --status-waiting: var(--warning);
   --status-success: var(--success);
   --status-error: var(--destructive);
+  --edge-highlight: rgba(255, 255, 255, 0.08);
+  --edge-shade: rgba(0, 0, 0, 0.4);
+  --edge-shadow:
+    inset 0 1px 0 var(--edge-highlight),
+    inset 0 -1px 0 var(--edge-shade),
+    0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-floating:
     0 16px 40px rgba(0, 0, 0, 0.5),

@@ -22,20 +22,21 @@ async function configuration(file, required = false) {
 }
 const apiConfig = await configuration('.env');
 const agentConfig = await configuration('.env.agent');
-const apiPort = Number(apiConfig.PORT ?? 4193);
-const agentPort = Number(agentConfig.AGENT_WORKSPACE_API_PORT ?? 4323);
-const webPort = Number(apiConfig.PM_WEB_PORT ?? 3223);
-const agentWebPort = Number(agentConfig.AGENT_WEB_PORT ?? 4324);
+const apiPort = Number(apiConfig.PORT ?? 4194);
+const agentPort = Number(agentConfig.AGENT_WORKSPACE_API_PORT ?? 4325);
+const webPort = Number(apiConfig.PM_WEB_PORT ?? 3224);
+const devWebPort = Number(agentConfig.AGENT_WEB_PORT ?? 4326);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const agentUrl = `http://127.0.0.1:${agentPort}`;
 const publicOrigin = apiConfig.PUBLIC_ORIGIN ?? `http://127.0.0.1:${webPort}`;
 const definitions = {
-  worker: { cwd: root, entries: ['apps/worker/src/main.ts', 'dist/apps/worker/src/main.js'] },
-  api: { cwd: root, entries: ['apps/api/src/main.ts', 'dist/apps/api/src/main.js'], port: apiPort },
-  agent: { cwd: root, entries: ['apps/agent-server/src/index.ts', 'apps/agent-server/dist/index.mjs'], port: agentPort },
-  agentWeb: { cwd: path.join(root, 'apps/agent-web'), entries: ['apps/agent-web/node_modules/vite/bin/vite.js'], port: agentWebPort },
-  web: { cwd: path.join(root, 'apps/web'), entries: ['apps/web/node_modules/vite/bin/vite.js'], port: webPort },
+  worker: { cwd: root, entries: ['apps/server/worker/src/main.ts', 'dist/apps/server/worker/src/main.js'] },
+  api: { cwd: root, entries: ['apps/server/pm/src/main.ts', 'dist/apps/server/pm/src/main.js'], port: apiPort },
+  agent: { cwd: root, entries: ['apps/server/agent/src/index.ts', 'apps/server/agent/dist/index.mjs'], port: agentPort },
+  web: { cwd: path.join(root, 'apps/web'), entries: ['apps/web/node_modules/vite/bin/vite.js'], port: devWebPort },
+  gateway: { cwd: root, entries: ['apps/server/gateway.ts'], port: webPort },
 };
+const activeRoles = Object.keys(definitions).filter(role => development || role !== 'web');
 async function identity(pid) {
   try {
     const stat = await readFile(`/proc/${pid}/stat`, 'utf8');
@@ -73,39 +74,41 @@ async function probe(url) {
   catch { return { status: 'unreachable', ok: false }; }
 }
 if (action === 'start' || development) {
-  if (!apiConfig.DATABASE_URL) throw new Error('Run setup:local and configure the private v3 .env first');
+  if (!apiConfig.DATABASE_URL) throw new Error('Run setup:local and configure the private v4 .env first');
   const workerConfig = await configuration('.env.worker', true);
   if (!workerConfig.DATABASE_URL) throw new Error('Configure DATABASE_URL in the private .env.worker role file');
-  for (const [role, definition] of Object.entries(definitions)) {
+  for (const role of activeRoles) {
+    const definition = definitions[role];
     if (await owned(role)) {
-      if (records[role].development !== development) throw new Error(`Owned ${role} uses another mode; stop this v3 installation before switching modes`);
+      if (records[role].development !== development) throw new Error(`Owned ${role} uses another mode; stop this v4 installation before switching modes`);
     } else if (definition.port) await assertFreePort(definition.port);
     const entry = definition.entries[definition.entries.length === 1 || development ? 0 : 1];
     await readFile(path.join(root, entry));
-    if (!development && ['web', 'agentWeb'].includes(role)) await readFile(path.join(definition.cwd, 'dist/index.html'));
+    if (!development && role === 'gateway') await readFile(path.join(root, 'apps/web/dist/index.html'));
   }
   const pmEnvironment = { ...common, ...apiConfig, ...(process.env.PM_CHAT_SPACE_ROOT === undefined ? {} : { PM_CHAT_SPACE_ROOT: process.env.PM_CHAT_SPACE_ROOT }), HOST: '127.0.0.1', PORT: String(apiPort), PUBLIC_ORIGIN: publicOrigin };
-  const agentEnvironment = { ...common, ...agentConfig, HOST: '127.0.0.1', PORT: String(agentPort), PM_API_URL: apiUrl,
+  const agentEnvironment = { ...process.env, ...agentConfig, HOST: '127.0.0.1', PORT: String(agentPort), PM_API_URL: apiUrl,
     AGENT_WORKSPACE_DATA_DIR: agentConfig.AGENT_WORKSPACE_DATA_DIR ?? path.join(root, '.local/agent-data'), AGENT_WORKSPACE_API_ONLY: '1' };
-  const webEnvironment = { ...common, PM_API_URL: apiUrl, PM_WEB_PORT: String(webPort), PM_API_ORIGIN: publicOrigin,
-    AGENT_WORKSPACE_API_URL: agentUrl, AGENT_WORKSPACE_WEB_URL: `http://127.0.0.1:${agentWebPort}` };
-  const environments = { worker: { ...common, ...workerConfig }, api: pmEnvironment, agent: agentEnvironment,
-    agentWeb: { ...common, HOST: '127.0.0.1', AGENT_WEB_PORT: String(agentWebPort), AGENT_WORKSPACE_API_URL: agentUrl }, web: webEnvironment };
+  const environments = {
+    worker: { ...common, ...workerConfig }, api: pmEnvironment, agent: agentEnvironment,
+    web: { ...common, PM_API_URL: apiUrl, PM_WEB_PORT: String(devWebPort), PM_API_ORIGIN: publicOrigin, AGENT_WORKSPACE_API_URL: agentUrl, VITE_HMR_CLIENT_PORT: String(webPort) },
+    gateway: { ...common, PUBLIC_HOST: '127.0.0.1', PUBLIC_PORT: String(webPort), PM_URL: apiUrl, AGENT_URL: agentUrl,
+      ...(development ? { WEB_DEV_URL: `http://127.0.0.1:${devWebPort}` } : {}) },
+  };
   const started = [];
   let interrupted = false;
   const markInterrupted = () => { interrupted = true; };
   process.on('SIGINT', markInterrupted);
   process.on('SIGTERM', markInterrupted);
   try {
-    for (const [role, definition] of Object.entries(definitions)) {
-      if (interrupted) throw new Error('v3 startup interrupted');
+    for (const role of activeRoles) {
+      const definition = definitions[role];
+      if (interrupted) throw new Error('v4 startup interrupted');
       if (await owned(role)) { console.log(`${role}: existing owned process ${records[role].pid} preserved`); continue; }
       const entry = definition.entries[definition.entries.length === 1 || development ? 0 : 1];
       const args = role === 'agent' && development ? ['--conditions=development'] : [];
       args.push(path.join(root, entry));
-      if (role === 'web' || role === 'agentWeb') {
-        if (development) args.push('--configLoader', 'runner'); else args.push('preview');
-      }
+      if (role === 'web') args.push('--configLoader', 'runner');
       const log = await open(path.join(root, '.local/logs', `${role}.log`), 'a', 0o600);
       const child = spawn(process.execPath, args, { cwd: definition.cwd, env: environments[role], detached: true, stdio: ['ignore', log.fd, log.fd] });
       await new Promise((resolve, reject) => { child.once('spawn', resolve); child.once('error', reject); });
@@ -120,19 +123,19 @@ if (action === 'start' || development) {
     let ready = false;
     for (let attempt = 0; attempt < 120; attempt++) {
       if (interrupted) break;
-      if (!(await Promise.all(Object.keys(definitions).map(owned))).every(Boolean)) break;
+      if (!(await Promise.all(activeRoles.map(owned))).every(Boolean)) break;
       const probes = await Promise.all([`${apiUrl}/health/ready`, `${agentUrl}/api/access`, `${publicOrigin}/pm`, `${publicOrigin}/agent/workspace`].map(probe));
       if (probes.every(result => result.ok)) { ready = true; break; }
       await delay(500);
     }
-    if (!ready) throw new Error('v3 processes did not become ready; inspect .local/logs and run services:status');
-    console.log(JSON.stringify({ status: 'http-ready', origin: publicOrigin, providerExecution: 'not-verified', mode: development ? 'development' : 'built-preview' }));
+    if (!ready) throw new Error('v4 processes did not become ready; inspect .local/logs and run services:status');
+    console.log(JSON.stringify({ status: 'http-ready', origin: publicOrigin, providerExecution: 'not-verified', mode: development ? 'development' : 'built' }));
     if (development) {
-      console.log('Web HMR is enabled. Restart dev:v3 after backend source changes. Ctrl-C stops only processes started by this invocation.');
+      console.log('Web HMR is enabled. Restart dev:v4 after backend source changes. Ctrl-C stops only processes started by this invocation.');
       await new Promise(resolve => {
         if (interrupted) { resolve(); return; }
         const monitor = setInterval(async () => {
-          if (!(await Promise.all(Object.keys(definitions).map(owned))).every(Boolean)) { process.exitCode = 1; finish(); }
+          if (!(await Promise.all(activeRoles.map(owned))).every(Boolean)) { process.exitCode = 1; finish(); }
         }, 1000);
         function finish() { clearInterval(monitor); process.off('SIGINT', finish); process.off('SIGTERM', finish); resolve(); }
         process.on('SIGINT', finish); process.on('SIGTERM', finish);

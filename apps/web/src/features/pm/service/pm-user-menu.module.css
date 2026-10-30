@@ -18,6 +18,14 @@
   background: var(--surface-hover);
 }
 
+.collapsedTrigger {
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  justify-content: center;
+  padding: 0;
+}
+
 .trigger:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;

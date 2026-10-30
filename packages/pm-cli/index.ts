@@ -68,7 +68,7 @@ Existing views require --revision; new views must omit it. Config set replaces
 the configuration with CAS (--revision absent creates the first config).
 Migration preview never changes business files; inspect its diff/diagnostics
 before apply. Apply and restore both require matching revision and confirmation.
-PM_API_URL defaults to http://127.0.0.1:4193 and must point at this v3 PM API.
+PM_API_URL defaults to http://127.0.0.1:4194 and must point at this v4 PM API.
 Authentication (first match wins): PM_SESSION_TOKEN, PM_EMAIL + PM_PASSWORD,
 or .local/access.json (PM_ACCESS_FILE overrides). PM_WORKSPACE_ID selects the
 workspace; otherwise the CLI uses the single workspace the account can access.
@@ -247,7 +247,7 @@ async function authenticate(service: string): Promise<Record<string, string>> {
 async function connectionFor(): Promise<Connection> {
   if (connection) return connection;
   const pending = (async (): Promise<Connection> => {
-    const service = (process.env.PM_API_URL ?? 'http://127.0.0.1:4193').replace(/\/+$/, '').replace(/\/api$/, '');
+    const service = (process.env.PM_API_URL ?? 'http://127.0.0.1:4194').replace(/\/+$/, '').replace(/\/api$/, '');
     const url = new URL(service);
     if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash || url.username || url.password) throw new Error('PM_API_URL must be an HTTP(S) service URL without credentials, query, or fragment');
     const headers = await authenticate(service);

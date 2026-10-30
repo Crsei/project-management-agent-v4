@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexChatGptAuth.test.ts",
+  "beforeSha256": "0520862acc7a2cc1c138fb9c579d7ec3c9cd96853069f8a1cad1c38eaa922d25",
+  "afterSha256": "275e02c04c97fcbf42b94d6bc6e44aeb7ce4d18fc3a4a60e2caaf059c53f524e",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 4,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import { layer as nativeTestHostLayer } from \"../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 20,
+      "before": [
+        "import * as ServerSecretStore from \"../auth/ServerSecretStore.ts\";\n",
+        "import * as ServerEnvironment from \"../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerSecretStore from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-secret-store.ts\";\n",
+        "import * as ServerEnvironment from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-environment.ts\";\n"
+      ]
+    },
+    {
+      "start": 23,
+      "before": [
+        "import * as AnalyticsService from \"../telemetry/AnalyticsService.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 38,
+      "before": [
+        "  failAnalytics = false,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 213,
+      "before": [
+        "  const analyticsEvents: {\n",
+        "    event: string;\n",
+        "    properties: Readonly<Record<string, unknown>> | undefined;\n",
+        "  }[] = [];\n",
+        "  const analytics = AnalyticsService.AnalyticsService.of({\n",
+        "    record: (event, properties) =>\n",
+        "      failAnalytics\n",
+        "        ? Effect.die(\"analytics unavailable\")\n",
+        "        : Effect.sync(() => {\n",
+        "            analyticsEvents.push({ event, properties });\n",
+        "          }),\n",
+        "    flush: Effect.void,\n",
+        "    recordOwners: () => Effect.void,\n",
+        "  });\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 232,
+      "before": [
+        "    Effect.provideService(AnalyticsService.AnalyticsService, analytics),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 284,
+      "before": [
+        "    analyticsEvents,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 299,
+      "before": [
+        "      ).pipe(Stream.provideService(AnalyticsService.AnalyticsService, analytics)),\n"
+      ],
+      "after": [
+        "      ),\n"
+      ]
+    },
+    {
+      "start": 321,
+      "before": [
+        "        Effect.provideService(AnalyticsService.AnalyticsService, analytics),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1471,
+      "before": [
+        "      assert.deepStrictEqual(\n",
+        "        h.analyticsEvents.map(({ event }) => event),\n",
+        "        [\n",
+        "          \"chatgpt.auth.started\",\n",
+        "          \"chatgpt.auth.completed\",\n",
+        "          \"chatgpt.transfer.started\",\n",
+        "          \"chatgpt.transfer.completed\",\n",
+        "        ],\n",
+        "      );\n",
+        "      assert.isTrue(\n",
+        "        h.analyticsEvents.every(({ properties }) => properties?.flow === \"primary_handoff\"),\n",
+        "      );\n",
+        "      assert.strictEqual(h.analyticsEvents[1]?.properties?.outcome, \"succeeded\");\n",
+        "      assert.strictEqual(h.analyticsEvents[3]?.properties?.outcome, \"succeeded\");\n",
+        "      assert.notProperty(h.analyticsEvents[1]?.properties ?? {}, \"connectedAccountCount\");\n",
+        "      assert.strictEqual(h.analyticsEvents[1]?.properties?.intent, \"different_account\");\n",
+        "      assert.strictEqual(h.analyticsEvents[3]?.properties?.connectedAccountCount, 1);\n",
+        "      assert.strictEqual(h.analyticsEvents[3]?.properties?.savedConnectionCount, 1);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1610,
+      "before": [
+        "it.effect(\"telemetry failures do not fail a verified ChatGPT sign-in\", () =>\n",
+        "  provision(\n",
+        "    Effect.gen(function* () {\n",
+        "      const h = yield* makeHarnessFor(instanceId, new Map(), true);\n",
+        "      yield* h.signIn;\n",
+        "      const state = yield* h.phase(\"succeeded\");\n",
+        "      assert.strictEqual(state.phase, \"succeeded\");\n",
+        "      assert.isTrue(Option.isSome(yield* h.auth.read));\n",
+        "    }),\n",
+        "  ),\n",
+        ");\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1729,
+      "before": [
+        "    Effect.provide(ServerSecretStore.layer),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1763,
+      "before": [
+        "      ServerConfig.layerTest(process.cwd(), { prefix: \"t3-renewal-test-\" }).pipe(\n"
+      ],
+      "after": [
+        "      nativeTestHostLayer({ driver: \"codex\", cwd: process.cwd(), ...{ prefix: \"t3-renewal-test-\" } }).pipe(\n"
+      ]
+    }
+  ]
+}

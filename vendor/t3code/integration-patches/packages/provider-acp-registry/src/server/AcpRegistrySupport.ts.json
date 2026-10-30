@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "source": "packages/provider-acp-registry/src/server/AcpRegistrySupport.ts",
+  "beforeSha256": "8322eb0881500efdf79fcd7ce6d9a6bfaf6e06f85389490b071f35e00a2c20a0",
+  "afterSha256": "d3180eaea2b86eb8160962d6e31551bcf3bbb3c3c6492a491139e1934292efe8",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 185,
+      "before": [],
+      "after": [
+        "/** Decode app-owned preparation metadata with the same source schema as the official catalog. */\n",
+        "export const decodePreparedAcpRegistryAgent = Schema.decodeUnknownSync(AcpRegistryAgent);\n"
+      ]
+    },
+    {
+      "start": 229,
+      "before": [
+        "function resolveAcpRegistryPlatformTarget(\n"
+      ],
+      "after": [
+        "export function resolveAcpRegistryPlatformTarget(\n"
+      ]
+    },
+    {
+      "start": 245,
+      "before": [
+        "function resolveAcpRegistryPlatformTargetCandidates(\n"
+      ],
+      "after": [
+        "export function resolveAcpRegistryPlatformTargetCandidates(\n"
+      ]
+    }
+  ]
+}

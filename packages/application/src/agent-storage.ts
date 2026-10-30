@@ -24,7 +24,7 @@ function inspect(candidate: string): void {
 function deploymentRoot(config: AgentDirectoryConfiguration): string {
   const root = config.chatSpaceRoot;
   if (!path.isAbsolute(root) || root.includes('\0') || root !== path.resolve(root) || root === path.parse(root).root) forbidden('An absolute Chat Space root is required');
-  const homeDefault = path.join(homedir(), '.pmv3');
+  const homeDefault = path.join(homedir(), '.pmv4');
   if (['/proc', '/sys', '/dev', '/etc', '/boot', '/run', '/bin', '/sbin', '/lib', '/lib64', '/usr', '/root'].some(denied => contains(denied, root)) && root !== homeDefault) forbidden('System directories cannot be Chat Space roots');
   // Only the configured leaf may be absent. Never manufacture a missing home or mount.
   inspect(path.dirname(root));

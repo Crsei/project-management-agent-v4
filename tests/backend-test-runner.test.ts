@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const entry = fileURLToPath(new URL('../scripts/backend-tests.mjs', import.meta.url));
 const originalPatterns = [
-  'apps/api/tests/*.test.ts',
+  'apps/server/pm/tests/*.test.ts',
   'packages/application/tests/*.test.ts',
   'packages/contracts/tests/*.test.ts',
   'packages/domain/tests/*.test.ts',

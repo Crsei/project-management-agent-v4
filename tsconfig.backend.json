@@ -6,8 +6,8 @@
     "sourceMap": true
   },
   "include": [
-    "apps/api/src/**/*.ts",
-    "apps/worker/src/**/*.ts",
+    "apps/server/pm/src/**/*.ts",
+    "apps/server/worker/src/**/*.ts",
     "packages/domain/src/**/*.ts",
     "packages/application/src/**/*.ts",
     "packages/contracts/src/**/*.ts",

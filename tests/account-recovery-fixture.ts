@@ -3,7 +3,7 @@ import { randomBytes,randomUUID } from 'node:crypto';
 import { mkdtemp,rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import { acquireMailFixtureDatabase } from './mail-fixture-database.ts';
 import type { MailFixtureDatabase } from './mail-fixture-database.ts';
 import { closeMailApp, MailFixtureScope, mailFixtureInitTimeout, mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';

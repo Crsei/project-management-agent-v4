@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, it } from 'node:test';
 import type { Pool } from 'pg';
-import { createAgentChatTools, type AgentChatToolsOptions } from '../apps/api/src/agent-chat-tools.ts';
-import { CoreWorkspacePool, authorizeCoreScope, nativeCommandId } from '../apps/api/src/core-routes.ts';
-import { executeCoreCommand, isCoreCommand, isCoreEntityKind, listCoreEntities, readCoreEntity } from '../apps/api/src/core-adapter.ts';
-import { CoreCommandJournal } from '../apps/api/src/core-journal.ts';
+import Fastify from 'fastify';
+import { registerAgentToolRoutes } from '../apps/server/pm/src/agent-tool-routes.ts';
+import { createAgentChatTools, type AgentChatToolsOptions } from '../apps/server/pm/src/agent-chat-tools.ts';
+import { CoreWorkspacePool, authorizeCoreScope, nativeCommandId } from '../apps/server/pm/src/core-routes.ts';
+import { executeCoreCommand, isCoreCommand, isCoreEntityKind, listCoreEntities, readCoreEntity } from '../apps/server/pm/src/core-adapter.ts';
+import { CoreCommandJournal } from '../apps/server/pm/src/core-journal.ts';
 import { accessCommands, getMembership } from '../packages/application/src/access.ts';
 import { runCommand, requestHash } from '../packages/application/src/kernel.ts';
 import { readExternalReceipt, recordExternalReceipt } from '../packages/application/src/core-bridge.ts';
@@ -86,9 +88,9 @@ async function fixture() {
     };
     const tools = createAgentChatTools(options);
     function context(actor: Actor = owner, projects = [first.id], kind: 'workspace' | 'projects' = 'projects'): AgentChatToolContext {
-      return { actor, workspaceId: ws.id, threadId: randomUUID(), messageId: randomUUID(), toolCallId: randomUUID(), operationId: randomUUID(), grantId: randomUUID(), scope: { kind, projectIds: projects } };
+      return { actor, workspaceId: ws.id, threadId: randomUUID(), messageId: randomUUID(), operationId: randomUUID(), scope: { kind, projectIds: projects } };
     }
-    return { close, database, workspace, ws, owner, limited, first, second, task, peer, hidden, document, tools, options, context };
+    return { close, database, coreWorkspaces, workspace, ws, owner, limited, first, second, task, peer, hidden, document, tools, options, context };
   } catch (error) { await close(); throw error; }
 }
 
@@ -97,6 +99,73 @@ const taskEdit = (id: string, revision: string) => ({ id, revision, title: 'Ordi
 const denied = (error: unknown) => error instanceof DomainError && error.code === 'not_found_or_forbidden';
 
 describe('Agent tools use native PM services and real PostgreSQL authority', { skip: !databaseUrl, timeout: 600000 }, () => {
+  it('forward migration discards only old PM chat structures and retains business evidence', async t => {
+    const f = await fixture(); t.after(() => f.close());
+    const command = await f.tools.execute('pm_create_task', taskInput(f.first.id), f.context());
+    const comment = await f.tools.execute('pm_create_comment', { projectId: f.first.id, taskId: f.task.id, content: 'Retained receipt' }, f.context());
+    const client = await f.database.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DROP TABLE pm_agent_tool_operations');
+      for (const file of ['0032_agent_chat.sql', '0033_agent_chat_tools.sql']) {
+        await client.query(await readFile(new URL(`../packages/infrastructure/migrations/${file}`, import.meta.url), 'utf8'));
+      }
+      const thread = randomUUID(), message = randomUUID();
+      await client.query('INSERT INTO agent_chat_threads(id,workspace_id,actor_id,title) VALUES($1,$2,$3,$4)', [thread, f.ws.id, f.owner.id, 'Retired']);
+      await client.query("INSERT INTO agent_chat_messages(id,thread_id,role,content,status) VALUES($1,$2,'user','legacy','complete')", [message, thread]);
+      const before = await client.query('SELECT command_id FROM project_audit WHERE workspace_id=$1 AND command_id=$2', [f.ws.id, command.receipt!.commandId]);
+      assert.ok(before.rowCount);
+      const receipts = await client.query('SELECT command_id FROM command_receipts WHERE workspace_id=$1 AND command_id=$2', [f.ws.id, comment.receipt!.commandId]);
+      assert.equal(receipts.rowCount, 1);
+      await client.query(await readFile(new URL('../packages/infrastructure/migrations/0038_unified_agent_tools.sql', import.meta.url), 'utf8'));
+      const tables = await client.query<{ threads: string | null; messages: string | null; calls: string | null; operations: string | null }>("SELECT to_regclass(format('%I.agent_chat_threads',current_schema()))::text AS threads,to_regclass(format('%I.agent_chat_messages',current_schema()))::text AS messages,to_regclass(format('%I.agent_chat_tool_calls',current_schema()))::text AS calls,to_regclass(format('%I.pm_agent_tool_operations',current_schema()))::text AS operations");
+      assert.equal(tables.rows[0]?.threads, null); assert.equal(tables.rows[0]?.messages, null); assert.equal(tables.rows[0]?.calls, null); assert.ok(tables.rows[0]?.operations);
+      const after = await client.query('SELECT command_id FROM project_audit WHERE workspace_id=$1 AND command_id=$2', [f.ws.id, command.receipt!.commandId]);
+      assert.equal(after.rowCount, before.rowCount);
+      const retainedReceipts = await client.query('SELECT command_id FROM command_receipts WHERE workspace_id=$1 AND command_id=$2', [f.ws.id, comment.receipt!.commandId]);
+      assert.equal(retainedReceipts.rowCount, 1);
+    } finally { await client.query('ROLLBACK'); client.release(); }
+  });
+  it('serves authenticated registry and reconciles the original operation without replay', async t => {
+    const f = await fixture(); t.after(() => f.close());
+    const app = Fastify();
+    app.setErrorHandler((error, _request, reply) => error instanceof DomainError ? reply.code(error.status).send({ error: { code: error.code } }) : reply.code(500).send({ error: 'unexpected' }));
+    registerAgentToolRoutes(app, { database: () => f.database, actor: async request => request.headers['x-test-actor'] === 'limited' ? f.limited : f.owner, coreWorkspaces: f.coreWorkspaces, tools: f.tools });
+    t.after(() => app.close());
+    const base = `/api/v1/workspaces/${f.ws.id}/agent-tools`;
+    const listed = await app.inject({ method: 'GET', url: base });
+    assert.equal(listed.statusCode, 200);
+    assert.equal(listed.json().tools.length, 17);
+    assert.ok(listed.json().tools.every((tool: { inputSchema: unknown }) => tool.inputSchema));
+    const input = { operationId: randomUUID(), name: 'pm_create_task', arguments: taskInput(f.first.id), scope: { kind: 'projects', projectIds: [f.first.id] }, threadId: 'chat-thread', messageId: 'chat-message', generationId: 'chat-generation' };
+    const created = await app.inject({ method: 'POST', url: `${base}/call`, payload: input });
+    assert.equal(created.statusCode, 200);
+    assert.equal(created.json().status, 'succeeded');
+    const repeated = await app.inject({ method: 'POST', url: `${base}/call`, payload: input });
+    assert.deepEqual(repeated.json(), created.json());
+    const reconciled = await app.inject({ method: 'POST', url: `${base}/result`, payload: input });
+    assert.deepEqual(reconciled.json(), created.json());
+    assert.equal(f.workspace.items({ entity: 'work_item', q: input.arguments.title }).length, 1);
+    const conflict = await app.inject({ method: 'POST', url: `${base}/call`, payload: { ...input, arguments: { ...input.arguments, title: 'Different' } } });
+    assert.equal(conflict.statusCode, 409);
+    const forbidden = await app.inject({ method: 'POST', url: `${base}/call`, headers: { 'x-test-actor': 'limited' }, payload: { ...input, operationId: randomUUID(), scope: { kind: 'projects', projectIds: [f.second.id] } } });
+    assert.equal(forbidden.statusCode, 404);
+    const missing = await app.inject({ method: 'POST', url: `${base}/result`, payload: { ...input, operationId: randomUUID() } });
+    assert.equal(missing.statusCode, 404);
+    await f.database.query("UPDATE pm_agent_tool_operations SET status='unknown',result=NULL,finished_at=NULL WHERE operation_id=$1", [input.operationId]);
+    const recovered = await app.inject({ method: 'POST', url: `${base}/result`, payload: input });
+    assert.equal(recovered.json().status, 'succeeded');
+    assert.equal(recovered.json().result.receipt.operationId, input.operationId);
+    assert.equal(f.workspace.items({ entity: 'work_item', q: input.arguments.title }).length, 1);
+    const pending = { ...input, operationId: randomUUID(), arguments: { ...input.arguments, title: 'Unproven pending operation' } };
+    const pendingHash = requestHash({ ...pending, workspaceId: f.ws.id, actorId: f.owner.id });
+    await f.database.query("INSERT INTO pm_agent_tool_operations(operation_id,workspace_id,actor_id,request_hash,name,thread_id,message_id,generation_id,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'running')", [pending.operationId, f.ws.id, f.owner.id, pendingHash, pending.name, pending.threadId, pending.messageId, pending.generationId]);
+    const unknown = await app.inject({ method: 'POST', url: `${base}/result`, payload: pending });
+    assert.equal(unknown.json().status, 'unknown');
+    const noReplay = await app.inject({ method: 'POST', url: `${base}/call`, payload: pending });
+    assert.equal(noReplay.json().status, 'unknown');
+    assert.equal(f.workspace.items({ entity: 'work_item', q: pending.arguments.title }).length, 0);
+  });
   it('bounds and sources query/body pages, intersects explicit workspace grants and current membership', async t => {
     const f = await fixture(); t.after(() => f.close());
     const context = f.context(f.owner, [f.first.id], 'workspace');
@@ -199,7 +268,7 @@ describe('Agent tools use native PM services and real PostgreSQL authority', { s
     await f.workspace.patch(original.id, { title: 'Later human edit' }, original.revision);
     const recovered = await f.tools.recover('pm_save_document', input, context);
     assert.equal(recovered?.receipt?.commandId, committed.receipt?.commandId); assert.equal(recovered?.receipt?.revision, original.revision);
-    assert.notEqual(recovered?.sources[0]?.revision, original.revision);
+    assert.deepEqual(recovered?.items, []); assert.deepEqual(recovered?.sources, []);
     const stoppedRecovery = await f.tools.recover('pm_save_document', input, { ...context, signal: AbortSignal.abort() });
     assert.equal(stoppedRecovery?.receipt?.commandId, committed.receipt?.commandId, 'Cancellation prevents new dispatch but never erases a committed native receipt');
     const pendingContext = f.context(), current = f.workspace.get(f.task.id), args = taskEdit(current.id, current.revision);

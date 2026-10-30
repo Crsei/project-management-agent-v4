@@ -1,0 +1,988 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/AcpAdapterV2.test.ts",
+  "beforeSha256": "30a5afade73bd3941bce43d6351c7f794950e898eabae2a07c919e6ef4b23637",
+  "afterSha256": "9c9af5fae2ed1d0d0bc2e442fdc16d570b85725b9f0ad705551e9156c57084f6",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 16,
+      "before": [],
+      "after": [
+        "import { pmDocumentTextWorkerEntry } from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/document-text.ts\";\n",
+        "import { makePmNativeTestHost } from \"../../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 19,
+      "before": [
+        "  EnvironmentId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 33,
+      "before": [
+        "import { resolveSelfInvocation } from \"@t3tools/shared/nodeRuntime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 58,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { ProviderHost } from \"@t3tools/provider-core/server/ProviderHost\";\n",
+        "import * as ProviderRuntimeHost from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n",
+        "import { layerAcpRuntimeHost } from \"./AcpProviderRuntimeHost.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 83,
+      "before": [],
+      "after": [
+        "  readAcpSessionEvidence,\n"
+      ]
+    },
+    {
+      "start": 103,
+      "before": [
+        "  DocumentText.layer.pipe(Layer.provide(NodeServices.layer)),\n"
+      ],
+      "after": [
+        "  DocumentText.layer.pipe(Layer.provideMerge(Layer.succeed(DocumentText.DocumentTextWorkerEntry, pmDocumentTextWorkerEntry())), Layer.provide(NodeServices.layer)),\n"
+      ]
+    },
+    {
+      "start": 106,
+      "before": [
+        "  McpProviderSessions.layer,\n"
+      ],
+      "after": [
+        "  layerAcpRuntimeHost,\n"
+      ]
+    },
+    {
+      "start": 331,
+      "before": [
+        "  const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 338,
+      "before": [
+        "  yield* (yield* McpProviderSessions.McpProviderSessions).set({\n",
+        "    environmentId: EnvironmentId.make(\"environment-acp-instruction-compaction\"),\n",
+        "    threadId,\n",
+        "    providerSessionId: \"mcp-session-acp-instruction-compaction\",\n",
+        "    providerInstanceId: instanceId,\n",
+        "    endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "    authorizationHeader: \"Bearer instruction-compaction-token\",\n",
+        "    browserToolsAvailable: true,\n"
+      ],
+      "after": [
+        "  yield* (yield* ProviderRuntimeHost.ProviderRuntimeHost).bind({\n",
+        "    threadId, providerInstanceId: instanceId, executionId: \"instruction-compaction\",\n",
+        "    cwd: process.cwd(), mcpServers: [], nativePermissions: \"deny-ungranted\", instructionText: \"\",\n"
+      ]
+    },
+    {
+      "start": 366,
+      "before": [
+        "    selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 415,
+      "before": [
+        "  assert.include(text, \"## T3 Code browser\");\n",
+        "  assert.include(text, \"T3 Code orchestration\");\n"
+      ],
+      "after": [
+        "  assert.notInclude(text, \"## T3 Code browser\");\n",
+        "  assert.notInclude(text, \"T3 Code orchestration\");\n"
+      ]
+    },
+    {
+      "start": 431,
+      "before": [
+        "          selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 642,
+      "before": [
+        "  ])(\"Droid elicitation $scenario\", ({ schema, questions, answers, result, withAttachments }) =>\n"
+      ],
+      "after": [
+        "  ].flatMap((scenario) => [1, 2].map((protocolVersion) => ({ ...scenario, protocolVersion }))))(\"Droid elicitation $scenario with native-v1 shape and advertised version $protocolVersion\", ({ schema, questions, answers, result, withAttachments, protocolVersion }) =>\n"
+      ]
+    },
+    {
+      "start": 648,
+      "before": [
+        "      const expectedResult = typeof result === \"function\" ? result(directory) : result;\n"
+      ],
+      "after": [
+        "      const pm = withAttachments ? yield* makePmNativeTestHost({ driver: \"acpRegistry\", config: { agentId: \"factory-droid\" } }) : undefined;\n",
+        "      const attachmentsDir = pm?.serverConfig.attachmentsDir ?? directory;\n",
+        "      const expectedResult = typeof result === \"function\" ? result(attachmentsDir) : result;\n"
+      ]
+    },
+    {
+      "start": 650,
+      "before": [
+        "      if (withAttachments && answers !== undefined) {\n",
+        "        yield* fileSystem.writeFileString(path.join(directory, \"droid-shot.png\"), \"image\");\n",
+        "        yield* fileSystem.writeFileString(path.join(directory, \"droid-spec.txt\"), \"spec\");\n"
+      ],
+      "after": [
+        "      if (pm && answers !== undefined) {\n",
+        "        const image = { type: \"image\" as const, id: \"droid-shot\", name: \"shot.png\", mimeType: \"image/png\", sizeBytes: 5 };\n",
+        "        const file = { type: \"file\" as const, id: \"droid-spec\", name: \"spec.txt\", mimeType: \"text/plain\", sizeBytes: 4 };\n",
+        "        yield* pm.registerAttachment(image, \"image\", \"droid-shot.png\");\n",
+        "        yield* pm.registerAttachment(file, \"spec\", \"droid-spec.txt\");\n"
+      ]
+    },
+    {
+      "start": 655,
+      "before": [
+        "          attachmentsDir: directory,\n",
+        "          attachmentsByQuestionId: {\n",
+        "            question_1: [\n",
+        "              {\n",
+        "                type: \"image\",\n",
+        "                id: \"droid-shot\",\n",
+        "                name: \"shot.png\",\n",
+        "                mimeType: \"image/png\",\n",
+        "                sizeBytes: 5,\n",
+        "              },\n",
+        "              {\n",
+        "                type: \"file\",\n",
+        "                id: \"droid-spec\",\n",
+        "                name: \"spec.txt\",\n",
+        "                mimeType: \"text/plain\",\n",
+        "                sizeBytes: 4,\n",
+        "              },\n",
+        "            ],\n",
+        "          },\n",
+        "        });\n"
+      ],
+      "after": [
+        "          attachmentsDir,\n",
+        "          attachmentsByQuestionId: { question_1: [image, file] },\n",
+        "        }).pipe(Effect.provideService(ProviderHost, pm.services));\n"
+      ]
+    },
+    {
+      "start": 693,
+      "before": [
+        "                result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] },\n"
+      ],
+      "after": [
+        "                result: { protocolVersion, agentCapabilities: {}, authMethods: [] },\n"
+      ]
+    },
+    {
+      "start": 749,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 779,
+      "before": [],
+      "after": [
+        "      assert.equal(readAcpSessionEvidence(runtime)?.protocol, \"acp-v1.ndjson-jsonrpc\",\n",
+        "        \"The negotiated v1 response shape, not its numeric version field, owns this operation's dialect\");\n"
+      ]
+    },
+    {
+      "start": 826,
+      "before": [
+        "          selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 908,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 915,
+      "before": [
+        "      yield* (yield* McpProviderSessions.McpProviderSessions).set({\n",
+        "        environmentId: EnvironmentId.make(\"environment-acp-instruction-transitions\"),\n",
+        "        threadId,\n",
+        "        providerSessionId: \"mcp-session-acp-instruction-transitions\",\n",
+        "        providerInstanceId: instanceId,\n",
+        "        endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "        authorizationHeader: \"Bearer instruction-transition-token\",\n",
+        "        browserToolsAvailable: false,\n"
+      ],
+      "after": [
+        "      yield* (yield* ProviderRuntimeHost.ProviderRuntimeHost).bind({\n",
+        "        threadId, providerInstanceId: instanceId, executionId: \"instruction-transitions\",\n",
+        "        cwd: process.cwd(), mcpServers: [], nativePermissions: \"deny-ungranted\", instructionText: \"\",\n"
+      ]
+    },
+    {
+      "start": 935,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1006,
+      "before": [
+        "      assert.include(firstDefault.prompt, \"## T3 Code browser\");\n",
+        "      assert.include(firstDefault.prompt, \"T3 Code orchestration\");\n"
+      ],
+      "after": [
+        "      assert.notInclude(firstDefault.prompt, \"## T3 Code browser\");\n",
+        "      assert.notInclude(firstDefault.prompt, \"T3 Code orchestration\");\n"
+      ]
+    },
+    {
+      "start": 1104,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1181,
+      "before": [
+        "          selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1308,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1332,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1435,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1574,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1900,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2086,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2104,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2168,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2193,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2356,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2373,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2434,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2461,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2528,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2547,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2628,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2653,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2703,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2743,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2748,
+      "before": [
+        "      yield* (yield* McpProviderSessions.McpProviderSessions).set({\n",
+        "        environmentId: EnvironmentId.make(\"environment-acp-native-fork-source\"),\n",
+        "        threadId: sourceThreadId,\n",
+        "        providerSessionId: \"mcp-session-acp-native-fork-source\",\n",
+        "        providerInstanceId: instanceId,\n",
+        "        endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "        authorizationHeader: \"Bearer source-thread-token\",\n",
+        "        browserToolsAvailable: true,\n",
+        "      });\n",
+        "      yield* (yield* McpProviderSessions.McpProviderSessions).set({\n",
+        "        environmentId: EnvironmentId.make(\"environment-acp-native-fork\"),\n",
+        "        threadId: targetThreadId,\n",
+        "        providerSessionId: \"mcp-session-acp-native-fork\",\n",
+        "        providerInstanceId: instanceId,\n",
+        "        endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "        authorizationHeader: \"Bearer target-thread-token\",\n",
+        "        browserToolsAvailable: true,\n",
+        "      });\n"
+      ],
+      "after": [
+        "      yield* (yield* ProviderRuntimeHost.ProviderRuntimeHost).bind({\n",
+        "        threadId: sourceThreadId, providerInstanceId: instanceId, executionId: \"source-native-fork\",\n",
+        "        cwd: process.cwd(), nativePermissions: \"deny-ungranted\", instructionText: \"\",\n",
+        "        mcpServers: [{ name: \"pm_source\", transport: \"stdio\", command: process.execPath, args: [\"source-host-bridge\"] }],\n",
+        "      }, action => action === \"tool\" ? Effect.void : Effect.fail(new Error(\"Compaction was not granted.\")));\n",
+        "      yield* (yield* ProviderRuntimeHost.ProviderRuntimeHost).bind({\n",
+        "        threadId: targetThreadId, providerInstanceId: instanceId, executionId: \"target-native-fork\",\n",
+        "        cwd: process.cwd(), nativePermissions: \"deny-ungranted\", instructionText: \"\",\n",
+        "        mcpServers: [{ name: \"pm_target\", transport: \"stdio\", command: process.execPath, args: [\"target-host-bridge\"] }],\n",
+        "      }, action => action === \"tool\" ? Effect.void : Effect.fail(new Error(\"Compaction was not granted.\")));\n"
+      ]
+    },
+    {
+      "start": 2815,
+      "before": [
+        "        mcpServers: [\n",
+        "          {\n",
+        "            type: \"stdio\",\n",
+        "            name: \"t3-code\",\n",
+        "            command: process.execPath,\n",
+        "            args: [\n",
+        "              process.argv[1] === undefined ? \"t3\" : NodePath.resolve(process.argv[1]),\n",
+        "              \"acp-mcp-bridge\",\n",
+        "            ],\n",
+        "            env: [\n",
+        "              { name: \"ELECTRON_RUN_AS_NODE\", value: \"1\" },\n",
+        "              { name: \"T3_ACP_MCP_ENDPOINT\", value: \"http://127.0.0.1:43123/mcp\" },\n",
+        "              { name: \"T3_ACP_MCP_AUTHORIZATION\", value: \"Bearer target-thread-token\" },\n",
+        "            ],\n",
+        "          },\n",
+        "        ],\n"
+      ],
+      "after": [
+        "        mcpServers: [{ type: \"stdio\", name: \"pm_target\", command: process.execPath, args: [\"target-host-bridge\"], env: [] }],\n"
+      ]
+    },
+    {
+      "start": 2890,
+      "before": [
+        "      assert.equal(terminalOutput.output, \"Bearer target-thread-token\");\n"
+      ],
+      "after": [
+        "      assert.equal(terminalOutput.output, \"\", \"Generation-owned stdio transport must not inject t3 authorization into native terminals.\");\n"
+      ]
+    },
+    {
+      "start": 2901,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2927,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2991,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3027,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3122,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3128,
+      "before": [
+        "      yield* (yield* McpProviderSessions.McpProviderSessions).set({\n",
+        "        environmentId: EnvironmentId.make(\"environment-acp-rollback-session-target\"),\n",
+        "        threadId: rollbackThreadId,\n",
+        "        providerSessionId: \"mcp-session-acp-rollback-session-target\",\n",
+        "        providerInstanceId: instanceId,\n",
+        "        endpoint: \"http://127.0.0.1:43124/mcp\",\n",
+        "        authorizationHeader: \"Bearer rollback-target-token\",\n",
+        "        browserToolsAvailable: false,\n",
+        "      });\n"
+      ],
+      "after": [
+        "      yield* (yield* ProviderRuntimeHost.ProviderRuntimeHost).bind({\n",
+        "        threadId: rollbackThreadId, providerInstanceId: instanceId, executionId: \"rollback-native\",\n",
+        "        cwd: process.cwd(), nativePermissions: \"deny-ungranted\", instructionText: \"\",\n",
+        "        mcpServers: [{ name: \"pm_rollback\", transport: \"stdio\", command: process.execPath, args: [\"rollback-host-bridge\"] }],\n",
+        "      }, action => action === \"tool\" ? Effect.void : Effect.fail(new Error(\"Compaction was not granted.\")));\n"
+      ]
+    },
+    {
+      "start": 3153,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3225,
+      "before": [
+        "      assert.equal(\n",
+        "        runtimeInputs[1]?.processEnvironment?.T3_ACP_MCP_AUTHORIZATION,\n",
+        "        \"Bearer rollback-target-token\",\n",
+        "      );\n",
+        "      const replacementMcpServer = runtimeInputs[1]?.mcpServers[0];\n",
+        "      const replacementMcpEnvironment =\n",
+        "        replacementMcpServer !== undefined &&\n",
+        "        \"env\" in replacementMcpServer &&\n",
+        "        Array.isArray(replacementMcpServer.env)\n",
+        "          ? replacementMcpServer.env\n",
+        "          : undefined;\n",
+        "      assert.equal(\n",
+        "        replacementMcpEnvironment?.find((variable) => variable.name === \"T3_ACP_MCP_AUTHORIZATION\")\n",
+        "          ?.value,\n",
+        "        \"Bearer rollback-target-token\",\n",
+        "      );\n"
+      ],
+      "after": [
+        "      assert.equal(runtimeInputs[1]?.processEnvironment, undefined);\n",
+        "      assert.deepEqual(runtimeInputs[1]?.mcpServers, [{\n",
+        "        name: \"pm_rollback\", command: process.execPath, args: [\"rollback-host-bridge\"], env: [],\n",
+        "      }]);\n"
+      ]
+    },
+    {
+      "start": 3279,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3359,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3440,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3510,
+      "before": [
+        "          selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3612,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3693,
+      "before": [
+        "          selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3767,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3792,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3867,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3890,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4007,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4030,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4114,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4132,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4208,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4231,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4300,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4316,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4361,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4386,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4463,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4485,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4554,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4588,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4643,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4688,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4782,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4863,
+      "before": [
+        "            selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4993,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5049,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5192,
+      "before": [
+        "      yield* runtime.startTurn(continuationInput);\n"
+      ],
+      "after": [
+        "      const evidence = readAcpSessionEvidence(runtime);\n",
+        "      if (!evidence?.adoptBuffered) return yield* Effect.die(\"Original ACP runtime must expose its native buffer-only adoption.\");\n",
+        "      assert.equal(evidence.protocol, \"acp-v2.ndjson-jsonrpc\");\n",
+        "      const request = continuationRequests[0]!;\n",
+        "      const { message, ...continuationTurn } = continuationInput;\n",
+        "      assert.equal(message.createdBy, \"agent\");\n",
+        "      yield* pollProtocolMethods(protocolEvents);\n",
+        "      assert.isFalse(yield* evidence.adoptBuffered({ request, turn: continuationTurn, isCurrent: Effect.succeed(false) }));\n",
+        "      assert.isTrue(yield* evidence.adoptBuffered({ request, turn: continuationTurn, isCurrent: Effect.succeed(true) }));\n",
+        "      assert.isFalse(yield* evidence.adoptBuffered({ request, turn: continuationTurn, isCurrent: Effect.succeed(true) }));\n",
+        "      assert.notInclude(yield* pollProtocolMethods(protocolEvents), \"session/prompt\", \"native buffer adoption must never send another prompt\");\n"
+      ]
+    },
+    {
+      "start": 5236,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5294,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5530,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5588,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5689,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5711,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5765,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5801,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5902,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5937,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6025,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6068,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6229,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6288,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6436,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6523,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6798,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6834,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6949,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6972,
+      "before": [
+        "            selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6978,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 7166,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 7186,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 7249,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 7282,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 7358,
+      "before": [
+        "        const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 7404,
+      "before": [
+        "          selfInvocation,\n"
+      ],
+      "after": []
+    }
+  ]
+}

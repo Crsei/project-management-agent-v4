@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/ProviderRegistry.ts",
+  "beforeSha256": "b834396a58680e0e27b5cd0326da2e9e38319c5490f69f3a56af2ce2229164fd",
+  "afterSha256": "3b1df2740b9d70087a672b6aa64c84ce5a2fe1f552fb645a4c1049fe9d5da68a",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 27,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\"\n"
+      ]
+    }
+  ]
+}

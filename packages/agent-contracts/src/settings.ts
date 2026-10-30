@@ -1,9 +1,11 @@
 import { z } from "zod";
-import type { RemoteSettings } from "./chat.js";
+import { interactionModeSchema, providerOptionSelectionSchema, type RemoteSettings } from "./chat.ts";
 
 export const chatDefaultSelectionSchema = z.object({
   providerInstanceId: z.string().trim().min(1).max(256),
   model: z.string().trim().min(1).max(256),
+  modelOptions: z.array(providerOptionSelectionSchema).max(100).optional(),
+  interactionMode: interactionModeSchema.optional(),
 }).strict();
 export type ChatDefaultSelection = z.infer<typeof chatDefaultSelectionSchema>;
 export const chatDefaultsSchema = z.object({

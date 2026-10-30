@@ -17,3 +17,7 @@
   .boundaries { grid-template-columns: minmax(0, 1fr); }
   .queryContent { flex: initial; }
 }
+
+.filterPanel {
+  width: min(420px, calc(100vw - 24px));
+}

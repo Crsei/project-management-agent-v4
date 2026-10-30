@@ -1,4 +1,4 @@
-import { createAgentBackup, restoreAgentBackup, verifyAgentBackup } from "../apps/agent-server/src/maintenance/agent-backup.ts";
+import { createAgentBackup, restoreAgentBackup, verifyAgentBackup } from "../apps/server/agent/src/maintenance/agent-backup.ts";
 
 const usage = `Offline Agent maintenance (no HTTP exports; never stops processes)
   pnpm agent:backup create --source <data-dir> --bundle <new-private-dir> --secrets exclude|include --stopped

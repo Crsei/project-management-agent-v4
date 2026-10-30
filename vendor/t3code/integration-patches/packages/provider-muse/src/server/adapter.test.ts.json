@@ -1,0 +1,405 @@
+{
+  "version": 1,
+  "source": "packages/provider-muse/src/server/adapter.test.ts",
+  "beforeSha256": "5bd877d8ac6a7f71cce9f9cdfe9987b5de037e7fdb680b57da8c4acb27e48672",
+  "afterSha256": "86d65033cff05656662066afb02dc0aa1e4b51667300a2d403d23d197ac181aa",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 29,
+      "before": [],
+      "after": [
+        "import * as FileSystem from \"effect/FileSystem\";\n"
+      ]
+    },
+    {
+      "start": 36,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import * as RuntimeHost from \"./RuntimeHost.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 43,
+      "before": [],
+      "after": [
+        "import { readMuseSessionEvidence } from \"./sessionEvidence.ts\";\n"
+      ]
+    },
+    {
+      "start": 47,
+      "before": [
+        "  McpProviderSessions.layer,\n"
+      ],
+      "after": [
+        "  RuntimeHost.layer,\n"
+      ]
+    },
+    {
+      "start": 382,
+      "before": [],
+      "after": [
+        "  it.effect.each([MODEL, null])(\"uses native MSP metadata without inventing model $0 or PM turns\", nativeModel =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const fs = yield* FileSystem.FileSystem;\n",
+        "      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: \"muse-legacy-metadata-\" });\n",
+        "      const fake = yield* makeFakeMuse();\n",
+        "      fake.host.initializeResult.schema = { version: 1, fingerprint: `sha256:${\"a\".repeat(64)}` };\n",
+        "      const policy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({ cwd, runtimeMode: \"approval-required\", interactionMode: \"default\" });\n",
+        "      const adapter = yield* makeMuseAdapterV2({ instanceId: INSTANCE_ID, settings: museSettings,\n",
+        "        environment: { HOME: cwd }, createHost: async () => fake.host });\n",
+        "      const providerSessionId = ProviderSessionId.make(\"muse-legacy-operation\");\n",
+        "      const runtime = yield* adapter.openSession({ threadId: THREAD_ID, providerSessionId,\n",
+        "        modelSelection: modelSelection(), runtimePolicy: policy, initialNativeThreadId: \"saved-native-session\" });\n",
+        "      const evidence = readMuseSessionEvidence(runtime)!;\n",
+        "      assert.equal((yield* evidence.probe).protocol, `muse-msp:1:sha256:${\"a\".repeat(64)}`);\n",
+        "      assert.equal(fake.calls.length, 0);\n",
+        "      const metadata = { session: { sessionId: \"saved-native-session\", workspaceRoot: cwd,\n",
+        "        status: \"notLoaded\", activeTurnId: null, modelId: nativeModel },\n",
+        "        lastTurn: { turnId: \"native-completed-turn\", terminal: \"completed\" } };\n",
+        "      fake.queueResponse(\"session/read\", metadata);\n",
+        "      const ensure = { threadId: THREAD_ID, providerSessionId, modelSelection: modelSelection(), runtimePolicy: policy };\n",
+        "      const snapshot = yield* evidence.readLegacy({ nativeSessionId: \"saved-native-session\", turnId: \"native-completed-turn\", ensure });\n",
+        "      assert.equal(snapshot.providerThread.nativeThreadRef?.nativeId, \"saved-native-session\");\n",
+        "      assert.deepEqual(snapshot.providerTurns, []);\n",
+        "      assert.deepEqual(snapshot.nativeHistory, { nativeSessionId: \"saved-native-session\",\n",
+        "        completedTurnRefs: [{ driver: MUSE_PROVIDER, nativeId: \"native-completed-turn\", strength: \"strong\" }] });\n",
+        "      assert.equal(snapshot.providerThread.nativeMetadata?.modelSelection?.model, nativeModel ?? undefined);\n",
+        "      assert.equal(fake.calls[0]?.method, \"session/read\");\n",
+        "      assert.isFalse(fake.calls.some(call => call.method === \"turn/start\" || call.method === \"session/start\"));\n",
+        "      const resumed = fake.calls.filter(call => call.method === \"session/resume\").length;\n",
+        "      for (const lastTurn of [null, { turnId: \"native-completed-turn\", terminal: \"failed\" },\n",
+        "        { turnId: \"native-completed-turn\", terminal: \"cancelled\" }, { turnId: \"\", terminal: \"completed\" }]) {\n",
+        "        fake.queueResponse(\"session/read\", { ...metadata, lastTurn });\n",
+        "        assert.equal((yield* evidence.readLegacy({ nativeSessionId: \"saved-native-session\", ensure }).pipe(Effect.result))._tag, \"Failure\");\n",
+        "      }\n",
+        "      fake.queueResponse(\"session/read\", { ...metadata, session: { ...metadata.session, workspaceRoot: \"/foreign-workspace\" } });\n",
+        "      assert.equal((yield* evidence.readLegacy({ nativeSessionId: \"saved-native-session\", ensure }).pipe(Effect.result))._tag, \"Failure\");\n",
+        "      assert.equal(fake.calls.filter(call => call.method === \"session/resume\").length, resumed);\n",
+        "      const reads = fake.calls.filter(call => call.method === \"session/read\").length;\n",
+        "      assert.equal((yield* evidence.readLegacy({ nativeSessionId: \"foreign-native-session\", ensure }).pipe(Effect.result))._tag, \"Failure\");\n",
+        "      assert.equal(fake.calls.filter(call => call.method === \"session/read\").length, reads);\n",
+        "    }).pipe(Effect.scoped, Effect.provide(testLayer)),\n",
+        "  );\n"
+      ]
+    },
+    {
+      "start": 384,
+      "before": [
+        "      yield* (yield* McpProviderSessions.McpProviderSessions).set({\n",
+        "        environmentId: EnvironmentId.make(\"test-environment\"),\n",
+        "        threadId: THREAD_ID,\n",
+        "        providerSessionId: \"test-session\",\n",
+        "        providerInstanceId: INSTANCE_ID,\n",
+        "        endpoint: \"http://127.0.0.1:43210/mcp\",\n",
+        "        authorizationHeader: \"Bearer thread-scoped-test-token\",\n",
+        "        browserToolsAvailable: true,\n",
+        "      });\n"
+      ],
+      "after": [
+        "      yield* (yield* RuntimeHost.ProviderRuntimeHost).bind({\n",
+        "        threadId: THREAD_ID, providerInstanceId: INSTANCE_ID, executionId: \"test-session\",\n",
+        "        cwd: \"/workspace\", nativePermissions: \"deny-ungranted\", instructionText: \"\",\n",
+        "        mcpServers: [{ name: \"pm_tools\", transport: \"stdio\", command: \"pm-cli\", args: [\"mcp\"] }],\n",
+        "      }, () => Effect.void);\n"
+      ]
+    },
+    {
+      "start": 400,
+      "before": [
+        "            \"t3-code\": {\n",
+        "              transport: \"streamableHttp\",\n",
+        "              mode: \"optional\",\n",
+        "              url: \"http://127.0.0.1:43210/mcp\",\n",
+        "              headers: { Authorization: \"Bearer thread-scoped-test-token\" },\n"
+      ],
+      "after": [
+        "            pm_tools: {\n",
+        "              transport: \"stdio\", mode: \"required\", command: \"pm-cli\", args: [\"mcp\"],\n"
+      ]
+    },
+    {
+      "start": 440,
+      "before": [
+        "      yield* (yield* McpProviderSessions.McpProviderSessions).set({\n",
+        "        environmentId: EnvironmentId.make(\"test-environment\"),\n",
+        "        threadId: THREAD_ID,\n",
+        "        providerSessionId: \"test-session\",\n",
+        "        providerInstanceId: INSTANCE_ID,\n",
+        "        endpoint: \"http://127.0.0.1:43210/mcp\",\n",
+        "        authorizationHeader: \"Bearer thread-scoped-test-token\",\n",
+        "        browserToolsAvailable: false,\n",
+        "      });\n"
+      ],
+      "after": [
+        "      yield* (yield* RuntimeHost.ProviderRuntimeHost).bind({\n",
+        "        threadId: THREAD_ID, providerInstanceId: INSTANCE_ID, executionId: \"test-session\",\n",
+        "        cwd: \"/workspace\", nativePermissions: \"deny-ungranted\", instructionText: \"\",\n",
+        "        mcpServers: [{ name: \"pm_tools\", transport: \"stdio\", command: \"pm-cli\", args: [\"mcp\"] }],\n",
+        "      }, () => Effect.void);\n"
+      ]
+    },
+    {
+      "start": 1107,
+      "before": [
+        "    \"hides a workflow child's automatic approval $when and retains completed history\",\n"
+      ],
+      "after": [
+        "    \"retains a workflow child's native approval $when without granting it\",\n"
+      ]
+    },
+    {
+      "start": 1117,
+      "before": [
+        "        const acknowledgement = pendingPromise<Record<string, unknown>>();\n",
+        "        fake.queueResponse(\"approval/decide\", acknowledgement.promise);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1120,
+      "before": [
+        "        const before = harness.allEvents.length;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1122,
+      "before": [],
+      "after": [
+        "        const asked = yield* harness.takeEvent(\"runtime_request.updated\");\n",
+        "        assert.strictEqual(asked.runtimeRequest.status, \"pending\");\n",
+        "        assert.isNull(asked.runtimeRequest.providerTurnId);\n",
+        "        assert.isFalse(fake.calls.some(call => call.method === \"approval/decide\"));\n",
+        "        const snapshot = yield* harness.runtime.readThreadSnapshot!({ providerThread: harness.providerThread });\n",
+        "        assert.deepStrictEqual(snapshot.runtimeRequests, [asked.runtimeRequest]);\n",
+        "        yield* harness.runtime.respondToRuntimeRequest({ requestId: asked.runtimeRequest.id, decision: \"decline\" });\n"
+      ]
+    },
+    {
+      "start": 1123,
+      "before": [
+        "        assert.strictEqual(decision.params.choiceId, \"once\");\n",
+        "        const snapshot = yield* harness.runtime.readThreadSnapshot!({\n",
+        "          providerThread: harness.providerThread,\n",
+        "        });\n",
+        "        assert.deepStrictEqual(snapshot.runtimeRequests, []);\n",
+        "        assert.deepStrictEqual(harness.allEvents.slice(before), []);\n",
+        "        if (!turnEnded) {\n",
+        "          const parent = {\n",
+        "            ...approval(nativeId),\n",
+        "            approvalId: \"parent-approval\",\n",
+        "            currentRequirementId: { approvalId: \"parent-approval\", sourceIndex: 0 },\n",
+        "          };\n",
+        "          yield* fake.emit(\"approval/requested\", parent);\n",
+        "          const shown = yield* harness.takeEvent(\"runtime_request.updated\");\n",
+        "          assert.strictEqual(shown.runtimeRequest.status, \"pending\");\n",
+        "          yield* harness.takeEvent(\"provider_session.updated\");\n",
+        "          yield* fake.emit(\"approval/resolved\", parent);\n",
+        "          // The child remains unacknowledged when the visible request stops blocking the turn.\n",
+        "          const session = yield* harness.takeEvent(\"provider_session.updated\");\n",
+        "          assert.strictEqual(session.providerSession.status, \"running\");\n",
+        "        }\n"
+      ],
+      "after": [
+        "        assert.strictEqual(decision.params.choiceId, \"deny\");\n"
+      ]
+    },
+    {
+      "start": 1145,
+      "before": [
+        "        const resolved = yield* harness.takeEvent(\"runtime_request.updated\");\n",
+        "        assert.strictEqual(resolved.runtimeRequest.status, \"resolved\");\n",
+        "        assert.strictEqual(resolved.runtimeRequest.decision, \"accept\");\n"
+      ],
+      "after": [
+        "        const resolved = yield* harness.takeEvent(\"runtime_request.updated\", event => event.runtimeRequest.status === \"resolved\");\n",
+        "        assert.strictEqual(resolved.runtimeRequest.decision, \"decline\");\n"
+      ]
+    },
+    {
+      "start": 1149,
+      "before": [
+        "        const node = yield* harness.takeEvent(\"node.updated\");\n",
+        "        const item = yield* harness.takeEvent(\"turn_item.updated\");\n",
+        "        assert.strictEqual(node.node.status, \"completed\");\n",
+        "        assert.strictEqual(item.turnItem.status, \"completed\");\n",
+        "        acknowledgement.resolve({});\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1157,
+      "before": [
+        "  it.effect(\"reveals only the current failed child approval and sends the user's decline\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"answers only the current native child requirement after an explicit decline\", () =>\n"
+      ]
+    },
+    {
+      "start": 1162,
+      "before": [
+        "      const outdated = pendingPromise<Record<string, unknown>>();\n",
+        "      const current = pendingPromise<Record<string, unknown>>();\n",
+        "      fake.queueResponse(\"approval/decide\", outdated.promise);\n",
+        "      fake.queueResponse(\"approval/decide\", current.promise);\n",
+        "      const child = {\n",
+        "        ...approval(\"child-run-1\"),\n",
+        "        subagentOrigin: {\n",
+        "          subagentId: \"a7\",\n",
+        "          childRunId: \"child-run-1\",\n",
+        "          childSessionId: \"child-session\",\n",
+        "        },\n",
+        "      };\n"
+      ],
+      "after": [
+        "      const child = { ...approval(\"child-run-1\"), subagentOrigin: { subagentId: \"a7\" } };\n"
+      ]
+    },
+    {
+      "start": 1175,
+      "before": [
+        "      yield* fake.takeCall(\"approval/decide\");\n",
+        "      yield* fake.emit(\"approval/updated\", {\n",
+        "        approvalId: child.approvalId,\n",
+        "        availableChoices: child.availableChoices,\n",
+        "        subject: child.subject,\n",
+        "        subagentOrigin: child.subagentOrigin,\n",
+        "        currentRequirementId: { approvalId: \"approval-1\", sourceIndex: 1 },\n",
+        "      });\n",
+        "      const second = yield* fake.takeCall(\"approval/decide\");\n",
+        "      assert.deepStrictEqual(second.params.requirementId, {\n",
+        "        approvalId: \"approval-1\",\n",
+        "        sourceIndex: 1,\n",
+        "      });\n",
+        "      outdated.reject(\n",
+        "        new MspError({\n",
+        "          code: -32053,\n",
+        "          message: \"Stale requirement\",\n",
+        "          data: { kind: \"approvalRequirementStale\" },\n",
+        "        }),\n",
+        "      );\n",
+        "      current.reject(\n",
+        "        new MspError({\n",
+        "          code: -32052,\n",
+        "          message: \"Choice rejected\",\n",
+        "          data: { kind: \"approvalChoiceInvalid\" },\n",
+        "        }),\n",
+        "      );\n",
+        "      const asked = yield* harness.takeEvent(\"runtime_request.updated\");\n",
+        "      assert.strictEqual(asked.runtimeRequest.status, \"pending\");\n",
+        "      const waiting = yield* harness.takeEvent(\"provider_session.updated\");\n",
+        "      assert.strictEqual(waiting.providerSession.status, \"waiting\");\n",
+        "      const snapshot = yield* harness.runtime.readThreadSnapshot!({\n",
+        "        providerThread: harness.providerThread,\n",
+        "      });\n",
+        "      assert.deepStrictEqual(snapshot.runtimeRequests, [asked.runtimeRequest]);\n",
+        "      assert.lengthOf(\n",
+        "        harness.allEvents.filter((event) => event.type === \"runtime_request.updated\"),\n",
+        "        1,\n",
+        "      );\n",
+        "      yield* harness.runtime.respondToRuntimeRequest({\n",
+        "        requestId: asked.runtimeRequest.id,\n",
+        "        decision: \"decline\",\n",
+        "      });\n",
+        "      const decline = yield* fake.takeCall(\"approval/decide\");\n",
+        "      assert.strictEqual(decline.params.choiceId, \"deny\");\n",
+        "      assert.deepStrictEqual(decline.params.requirementId, second.params.requirementId);\n"
+      ],
+      "after": [
+        "      yield* harness.takeEvent(\"runtime_request.updated\");\n",
+        "      const requirementId = { approvalId: child.approvalId, sourceIndex: 1 };\n",
+        "      yield* fake.emit(\"approval/updated\", { approvalId: child.approvalId,\n",
+        "        availableChoices: child.availableChoices, subject: child.subject,\n",
+        "        subagentOrigin: child.subagentOrigin, currentRequirementId: requirementId });\n",
+        "      const current = yield* harness.takeEvent(\"runtime_request.updated\");\n",
+        "      assert.strictEqual(current.runtimeRequest.status, \"pending\");\n",
+        "      assert.isFalse(fake.calls.some(call => call.method === \"approval/decide\"));\n",
+        "      const snapshot = yield* harness.runtime.readThreadSnapshot!({ providerThread: harness.providerThread });\n",
+        "      assert.lengthOf(snapshot.runtimeRequests.filter(request => request.status === \"pending\"), 1);\n",
+        "      yield* harness.runtime.respondToRuntimeRequest({ requestId: current.runtimeRequest.id, decision: \"decline\" });\n",
+        "      const decision = yield* fake.takeCall(\"approval/decide\");\n",
+        "      assert.strictEqual(decision.params.choiceId, \"deny\");\n",
+        "      assert.deepStrictEqual(decision.params.requirementId, requirementId);\n"
+      ]
+    },
+    {
+      "start": 1222,
+      "before": [
+        "      const resolved = yield* harness.takeEvent(\"runtime_request.updated\");\n"
+      ],
+      "after": [
+        "      const resolved = yield* harness.takeEvent(\"runtime_request.updated\", event => event.runtimeRequest.status === \"resolved\");\n"
+      ]
+    },
+    {
+      "start": 1227,
+      "before": [
+        "  it.effect(\"does not resurrect a settled child approval when its automatic answer fails\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"does not resurrect a settled native child approval after a late rejected answer\", () =>\n"
+      ]
+    },
+    {
+      "start": 1236,
+      "before": [],
+      "after": [
+        "      const asked = yield* harness.takeEvent(\"runtime_request.updated\");\n",
+        "      const responding = yield* harness.runtime.respondToRuntimeRequest({\n",
+        "        requestId: asked.runtimeRequest.id, decision: \"decline\",\n",
+        "      }).pipe(Effect.result, Effect.forkScoped);\n"
+      ]
+    },
+    {
+      "start": 1238,
+      "before": [
+        "      const resolved = yield* harness.takeEvent(\"runtime_request.updated\");\n",
+        "      assert.strictEqual(resolved.runtimeRequest.status, \"resolved\");\n",
+        "      acknowledgement.reject(\n",
+        "        new MspError({\n",
+        "          code: -32051,\n",
+        "          message: \"Already resolved\",\n",
+        "          data: { kind: \"approvalAlreadyResolved\" },\n",
+        "        }),\n",
+        "      );\n",
+        "      // A later rejected answer provides an observable milestone after the stale rejection.\n",
+        "      fake.queueResponse(\"approval/decide\", new Error(\"Choice rejected\"));\n",
+        "      yield* fake.emit(\"approval/requested\", {\n",
+        "        ...child,\n",
+        "        approvalId: \"approval-2\",\n",
+        "        currentRequirementId: { approvalId: \"approval-2\", sourceIndex: 0 },\n",
+        "      });\n",
+        "      const asked = yield* harness.takeEvent(\"runtime_request.updated\");\n",
+        "      assert.strictEqual(asked.runtimeRequest.nativeRequestRef?.nativeId, \"approval-2\");\n",
+        "      assert.deepStrictEqual(\n",
+        "        harness.allEvents.flatMap((event) =>\n",
+        "          event.type === \"runtime_request.updated\" ? [event.runtimeRequest.status] : [],\n",
+        "        ),\n",
+        "        [\"resolved\", \"pending\"],\n",
+        "      );\n"
+      ],
+      "after": [
+        "      const resolved = yield* harness.takeEvent(\"runtime_request.updated\", event => event.runtimeRequest.status === \"resolved\");\n",
+        "      assert.strictEqual(resolved.runtimeRequest.decision, \"decline\");\n",
+        "      acknowledgement.reject(new MspError({ code: -32051, message: \"Already resolved\", data: { kind: \"approvalAlreadyResolved\" } }));\n",
+        "      yield* Fiber.join(responding);\n",
+        "      assert.deepStrictEqual(harness.allEvents.flatMap(event =>\n",
+        "        event.type === \"runtime_request.updated\" ? [event.runtimeRequest.status] : []),\n",
+        "        [\"pending\", \"resolved\"]);\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/ClaudeHome.ts",
+  "beforeSha256": "0a87eea0f4a41bea0c712318d55f6bb7407ab49bca1fad44bbf748a148af1302",
+  "afterSha256": "2d38342b2665b6faa683376757223fa3f8d6e783de3ce04da55c7127dc7167a6",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 24,
+      "before": [
+        "    return path.resolve(inherited);\n"
+      ],
+      "after": [
+        "    return path.resolve(yield* HostProcess.WorkingDirectory, inherited);\n"
+      ]
+    },
+    {
+      "start": 33,
+      "before": [
+        "  const resolvedBaseEnv = baseEnv ?? process.env;\n"
+      ],
+      "after": [
+        "  const resolvedBaseEnv = baseEnv ?? (yield* HostProcess.Environment);\n",
+        "  const environment = {\n",
+        "    ...resolvedBaseEnv,\n",
+        "    ENABLE_CLAUDEAI_MCP_SERVERS: \"false\",\n",
+        "    CLAUDE_CODE_AUTO_CONNECT_IDE: \"0\",\n",
+        "    CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL: \"1\",\n",
+        "    FORCE_CODE_TERMINAL: undefined,\n",
+        "  };\n"
+      ]
+    },
+    {
+      "start": 35,
+      "before": [
+        "  if (homePath.length === 0) return resolvedBaseEnv;\n"
+      ],
+      "after": [
+        "  if (homePath.length === 0) return environment;\n"
+      ]
+    },
+    {
+      "start": 38,
+      "before": [
+        "    ...resolvedBaseEnv,\n"
+      ],
+      "after": [
+        "    ...environment,\n"
+      ]
+    }
+  ]
+}

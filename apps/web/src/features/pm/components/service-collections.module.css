@@ -14,10 +14,6 @@
 .editorTitle { flex-basis: 100%; overflow-wrap: anywhere; }
 .editor label { display: grid; gap: 6px; flex: 1; min-width: 155px; }
 .editor > p { flex-basis: 100%; }
-.unscheduled { display: grid; gap: 10px; border-top: 1px solid var(--border); padding-top: 16px; }
-.unscheduled h3 { font-weight: 600; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chips button { max-width: 100%; height: auto; min-height: var(--control-height); white-space: normal; text-align: start; overflow-wrap: anywhere; }
 .board { display: flex; align-items: stretch; gap: 12px; overflow-x: auto; min-height: 320px; padding: 3px 3px 16px; }
 .boardColumn { flex: 1 0 250px; min-width: 250px; max-width: 340px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-module-value); background: var(--surface-raised); }
 .boardColumn[data-over] { background: var(--selection); outline: 2px solid var(--ring); }

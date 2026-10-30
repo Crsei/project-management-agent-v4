@@ -1,0 +1,434 @@
+{
+  "version": 1,
+  "source": "packages/provider-cursor/src/server/adapter.ts",
+  "beforeSha256": "559adaedca766123fbb7c1bff8f651e047cf4ee0403a91a46ef36e504cc6046e",
+  "afterSha256": "15e07391a5934c39a6f7ca8724cf7625073fff31095953cb185ac6a3c54405a6",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [],
+      "after": [
+        "import * as NodePath from \"node:path\";\n"
+      ]
+    },
+    {
+      "start": 35,
+      "before": [],
+      "after": [
+        "import * as Exit from \"effect/Exit\";\n"
+      ]
+    },
+    {
+      "start": 45,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n",
+        "import * as McpProviderSession from \"@t3tools/provider-core/server/mcpSession\";\n"
+      ],
+      "after": [
+        "import { ProviderRuntimeHost, type ProviderRuntimeHostBinding } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n",
+        "import { bindCursorSessionEvidence } from \"./sessionEvidence.ts\";\n",
+        "import { readCursorNativeMetadata } from \"./CursorNativeMetadata.ts\";\n"
+      ]
+    },
+    {
+      "start": 54,
+      "before": [
+        "import { t3OrchestrationPrompt } from \"@t3tools/provider-core/server/orchestrationInstructions\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 202,
+      "before": [
+        "  session: McpProviderSession.McpProviderSessionConfig | undefined,\n"
+      ],
+      "after": [
+        "  session: ProviderRuntimeHostBinding | undefined,\n"
+      ]
+    },
+    {
+      "start": 207,
+      "before": [
+        "  return {\n",
+        "    \"t3-code\": {\n",
+        "      type: \"http\",\n",
+        "      url: session.endpoint,\n",
+        "      headers: {\n",
+        "        Authorization: session.authorizationHeader,\n",
+        "      },\n",
+        "    },\n",
+        "  };\n"
+      ],
+      "after": [
+        "  return Object.fromEntries(session.mcpServers.map(server => [server.name, {\n",
+        "    type: \"stdio\" as const, command: server.command, args: [...server.args],\n",
+        "  }]));\n"
+      ]
+    },
+    {
+      "start": 300,
+      "before": [
+        "  readonly mcpSession: McpProviderSession.McpProviderSessionConfig | undefined;\n"
+      ],
+      "after": [
+        "  readonly runtimeBinding: ProviderRuntimeHostBinding | undefined;\n"
+      ]
+    },
+    {
+      "start": 304,
+      "before": [
+        "  const mcpServers = cursorMcpServers(input.mcpSession);\n"
+      ],
+      "after": [
+        "  const mcpServers = cursorMcpServers(input.runtimeBinding);\n"
+      ]
+    },
+    {
+      "start": 310,
+      "before": [],
+      "after": [
+        "    // The SDK exposes no native permission callback. Unattended writes/commands are not admitted.\n",
+        "    tools: [\"read\", \"grep\", \"glob\", \"ls\", \"task\", \"mcp\"],\n"
+      ]
+    },
+    {
+      "start": 312,
+      "before": [
+        "      autoReview: policy.autoReview,\n"
+      ],
+      "after": [
+        "      autoReview: false,\n"
+      ]
+    },
+    {
+      "start": 318,
+      "before": [],
+      "after": [
+        "      subagentInherit: {},\n"
+      ]
+    },
+    {
+      "start": 880,
+      "before": [
+        "  const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n"
+      ],
+      "after": [
+        "  const runtimeHost = yield* ProviderRuntimeHost;\n"
+      ]
+    },
+    {
+      "start": 883,
+      "before": [],
+      "after": [
+        "  const userHome = adapterOptions.environment.HOME || adapterOptions.environment.USERPROFILE || (yield* HostProcess.HomeDirectory);\n"
+      ]
+    },
+    {
+      "start": 896,
+      "before": [],
+      "after": [
+        "        const operationBinding = yield* runtimeHost.read({ threadId: input.threadId, providerInstanceId: adapterOptions.instanceId });\n"
+      ]
+    },
+    {
+      "start": 906,
+      "before": [
+        "        // What the native conversation was told since it started or was last compacted.\n",
+        "        const told = yield* Ref.make<{\n",
+        "          readonly agent: string;\n",
+        "          readonly orchestration: boolean;\n",
+        "          readonly device: boolean;\n",
+        "        } | null>(null);\n"
+      ],
+      "after": [
+        "        const freshProbeAgent = yield* Ref.make<CursorLiveAgent | null>(null);\n"
+      ]
+    },
+    {
+      "start": 2146,
+      "before": [
+        "            yield* existing.session.close.pipe(Effect.ignore);\n"
+      ],
+      "after": [
+        "            yield* existing.session.close;\n"
+      ]
+    },
+    {
+      "start": 2149,
+      "before": [],
+      "after": [
+        "          const binding = operationBinding?.threadId === openInput.threadId ? operationBinding : undefined;\n",
+        "          if (binding?.mcpServers.length) yield* runtimeHost.authorize({\n",
+        "            threadId: openInput.threadId, providerInstanceId: adapterOptions.instanceId,\n",
+        "            executionId: binding.executionId, action: \"tool\",\n",
+        "          }).pipe(Effect.mapError(cause => new CursorAgentSdk.CursorAgentSdkRunnerError({ method: \"host.authorize\", cause })));\n"
+      ]
+    },
+    {
+      "start": 2155,
+      "before": [
+        "            mcpSession: yield* mcpSessions.read(openInput.threadId),\n"
+      ],
+      "after": [
+        "            runtimeBinding: binding,\n"
+      ]
+    },
+    {
+      "start": 2175,
+      "before": [],
+      "after": [
+        "              ...(binding ? { runtimeBinding: binding } : {}),\n"
+      ]
+    },
+    {
+      "start": 2188,
+      "before": [
+        "          mcpServers: Record<string, McpServerConfig> | undefined,\n",
+        "          hasDeviceTools: boolean,\n",
+        "          delivered: { readonly orchestration: boolean; readonly device: boolean },\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2210,
+      "before": [
+        "          const userText = t3OrchestrationPrompt({\n",
+        "            prompt: yield* providerMessageTextWithAttachmentPaths({\n",
+        "              text:\n",
+        "                cursorSkillNames === undefined\n",
+        "                  ? rawText\n",
+        "                  : rewriteCursorSkillMentions(rawText, cursorSkillNames),\n",
+        "              attachments: turnInput.message.attachments,\n",
+        "              resolveAttachmentPath: host.resolveAttachmentPath,\n",
+        "              resolveExtractedTextPath: host.resolveExtractedTextPath,\n",
+        "            }),\n",
+        "            hasT3Mcp: mcpServers !== undefined,\n",
+        "            hasDeviceTools,\n",
+        "            orchestrationDelivered: delivered.orchestration,\n",
+        "            deviceInstructionsDelivered: delivered.device,\n"
+      ],
+      "after": [
+        "          const userText = yield* providerMessageTextWithAttachmentPaths({\n",
+        "            text: cursorSkillNames === undefined ? rawText : rewriteCursorSkillMentions(rawText, cursorSkillNames),\n",
+        "            attachments: turnInput.message.attachments,\n",
+        "            resolveAttachmentPath: host.resolveAttachmentPath,\n",
+        "            resolveExtractedTextPath: host.resolveExtractedTextPath,\n"
+      ]
+    },
+    {
+      "start": 2287,
+      "before": [
+        "            const mcpSession = yield* mcpSessions.read(turnInput.threadId);\n",
+        "            const mcpServers = cursorMcpServers(mcpSession);\n",
+        "            const hasDeviceTools =\n",
+        "              mcpServers !== undefined && mcpSession?.capabilities?.has(\"device\") === true;\n",
+        "            const known = yield* Ref.get(told);\n",
+        "            // A conversation this process has not sent to was told on its first run.\n",
+        "            const delivered =\n",
+        "              known?.agent === agent.nativeThreadId\n",
+        "                ? known\n",
+        "                : { orchestration: turnInput.runOrdinal > 1, device: false };\n",
+        "            const message = yield* resolveUserMessage(\n",
+        "              turnInput,\n",
+        "              mcpServers,\n",
+        "              hasDeviceTools,\n",
+        "              delivered,\n",
+        "            );\n"
+      ],
+      "after": [
+        "            const message = yield* resolveUserMessage(turnInput);\n"
+      ]
+    },
+    {
+      "start": 2323,
+      "before": [
+        "            const compacted = message === \"/compress\";\n",
+        "            yield* Ref.set(told, {\n",
+        "              agent: agent.nativeThreadId,\n",
+        "              orchestration: !compacted && (delivered.orchestration || mcpServers !== undefined),\n",
+        "              device: !compacted && hasDeviceTools,\n",
+        "            });\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2483,
+      "before": [
+        "          const existing = yield* Ref.get(liveAgent);\n",
+        "          if (existing !== null) {\n",
+        "            yield* existing.session.close.pipe(Effect.ignore);\n",
+        "            yield* Ref.set(liveAgent, null);\n",
+        "          }\n",
+        "          yield* runner.assertComplete.pipe(\n",
+        "            Effect.catchCause((cause) =>\n",
+        "              Effect.logWarning(\"orchestration-v2.cursor-runner-incomplete\", {\n",
+        "                providerSessionId: input.providerSessionId,\n",
+        "                cause,\n",
+        "              }),\n",
+        "            ),\n",
+        "          );\n"
+      ],
+      "after": [
+        "          const existing = yield* Ref.getAndSet(liveAgent, null);\n",
+        "          const closed = yield* (existing === null ? Effect.void : existing.session.close).pipe(Effect.exit);\n",
+        "          const complete = yield* runner.assertComplete.pipe(Effect.exit);\n",
+        "          if (Exit.isFailure(closed)) return yield* Effect.failCause(closed.cause);\n",
+        "          if (Exit.isFailure(complete)) return yield* Effect.failCause(complete.cause);\n"
+      ]
+    },
+    {
+      "start": 2497,
+      "before": [
+        "        yield* Effect.addFinalizer(() => closeSession());\n"
+      ],
+      "after": [
+        "        yield* Effect.addFinalizer(() => closeSession().pipe(Effect.orDie));\n"
+      ]
+    },
+    {
+      "start": 2499,
+      "before": [],
+      "after": [
+        "        const readNativeMetadata = Effect.fnUntraced(function* (agent: CursorLiveAgent) {\n",
+        "          const read = readCursorNativeMetadata(agent.session);\n",
+        "          if (!read) return undefined;\n",
+        "          const metadata = yield* read;\n",
+        "          if (metadata.agentId !== agent.nativeThreadId || metadata.runtime !== \"local\" ||\n",
+        "            NodePath.resolve(metadata.cwd) !== NodePath.resolve(session.cwd) ||\n",
+        "            NodePath.resolve(metadata.homeDirectory) !== NodePath.resolve(userHome))\n",
+        "            return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "              driver: CURSOR_DRIVER_KIND, detail: \"Cursor SDK native identity, directory or Home mismatch.\" });\n",
+        "          return metadata;\n",
+        "        });\n"
+      ]
+    },
+    {
+      "start": 2511,
+      "before": [
+        "              const opened = yield* openAgent({\n",
+        "                operation: \"create\",\n",
+        "                threadId: threadInput.threadId,\n",
+        "                modelSelection: threadInput.modelSelection,\n",
+        "                runtimePolicy: threadInput.runtimePolicy,\n",
+        "              });\n"
+      ],
+      "after": [
+        "              const probed = yield* Ref.getAndSet(freshProbeAgent, null);\n",
+        "              const current = yield* Ref.get(liveAgent);\n",
+        "              const opened = (probed === current ? probed : null) ?? (yield* openAgent({\n",
+        "                operation: \"create\", threadId: threadInput.threadId,\n",
+        "                modelSelection: threadInput.modelSelection, runtimePolicy: threadInput.runtimePolicy,\n",
+        "              }));\n"
+      ]
+    },
+    {
+      "start": 2634,
+      "before": [],
+      "after": [
+        "              if (snapshotInput.providerThread.driver !== CURSOR_DRIVER_KIND ||\n",
+        "                snapshotInput.providerThread.providerInstanceId !== adapterOptions.instanceId ||\n",
+        "                snapshotInput.providerThread.nativeThreadRef?.driver !== CURSOR_DRIVER_KIND)\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "                  driver: CURSOR_DRIVER_KIND, detail: \"Cursor snapshot belongs to another provider instance.\" });\n"
+      ]
+    },
+    {
+      "start": 2642,
+      "before": [],
+      "after": [
+        "              if (agent.nativeThreadId !== requestedAgentId)\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "                  driver: CURSOR_DRIVER_KIND, detail: \"Cursor SDK resumed a different native session.\" });\n",
+        "              const metadata = yield* readNativeMetadata(agent);\n"
+      ]
+    },
+    {
+      "start": 2680,
+      "before": [],
+      "after": [
+        "                ...(metadata?.runs.some(run => run.status === \"finished\") &&\n",
+        "                  metadata.runs.every(run => [\"finished\", \"error\", \"cancelled\"].includes(run.status)) ? {\n",
+        "                  nativeHistory: { nativeSessionId: requestedAgentId,\n",
+        "                    completedTurnRefs: metadata.runs.filter(run => run.status === \"finished\").map(run => ({\n",
+        "                      driver: CURSOR_DRIVER_KIND, nativeId: run.id, strength: \"strong\" as const,\n",
+        "                    })) },\n",
+        "                } : {}),\n"
+      ]
+    },
+    {
+      "start": 2718,
+      "before": [],
+      "after": [
+        "        const nativeAgent = yield* Effect.cached(Effect.gen(function* () {\n",
+        "          const agent = yield* openAgent({\n",
+        "            operation: input.initialNativeThreadId ? \"resume\" : \"create\",\n",
+        "            ...(input.initialNativeThreadId ? { agentId: input.initialNativeThreadId } : {}),\n",
+        "            threadId: input.threadId, modelSelection: input.modelSelection, runtimePolicy: input.runtimePolicy,\n",
+        "          });\n",
+        "          if (!input.initialNativeThreadId) yield* Ref.set(freshProbeAgent, agent);\n",
+        "          return agent;\n",
+        "        }));\n",
+        "        const readNative = Effect.gen(function* () {\n",
+        "          const agent = yield* nativeAgent;\n",
+        "          const metadata = yield* readNativeMetadata(agent);\n",
+        "          if (!metadata) return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver: CURSOR_DRIVER_KIND, detail: \"Cursor SDK did not expose operation-owned native metadata.\" });\n",
+        "          if (metadata.runs.some(run => ![\"finished\", \"error\", \"cancelled\"].includes(run.status)))\n",
+        "            return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "              driver: CURSOR_DRIVER_KIND, detail: \"Cursor SDK native session is not at a stable boundary.\" });\n",
+        "          return { agent, metadata };\n",
+        "        });\n",
+        "        const unbindEvidence = bindCursorSessionEvidence(runtime, {\n",
+        "          probe: readNative.pipe(Effect.map(({ metadata }) => ({\n",
+        "            protocol: \"cursor-agent-sdk.local:sqlite\", cwd: metadata.cwd, homeDirectory: metadata.homeDirectory,\n",
+        "          }))),\n",
+        "          readLegacy: ({ nativeSessionId, turnId, messageId, ensure }) => Effect.gen(function* () {\n",
+        "            const { agent, metadata } = yield* readNative;\n",
+        "            if (metadata.agentId !== nativeSessionId || metadata.runs.some(run => ![\"finished\", \"error\", \"cancelled\"].includes(run.status)))\n",
+        "              return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver: CURSOR_DRIVER_KIND, detail: \"Cursor legacy identity is not at a stable boundary.\" });\n",
+        "            const completed = metadata.runs.filter(run => run.status === \"finished\");\n",
+        "            if (!completed.length || (turnId && !completed.some(run => run.id === turnId)))\n",
+        "              return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver: CURSOR_DRIVER_KIND, detail: \"Cursor legacy completed run was not found.\" });\n",
+        "            const messages = yield* agent.session.listMessages;\n",
+        "            if (messages.some(message => message.agent_id !== nativeSessionId) ||\n",
+        "              (messageId && messages.at(-1)?.uuid !== messageId))\n",
+        "              return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver: CURSOR_DRIVER_KIND, detail: \"Cursor legacy message boundary changed.\" });\n",
+        "            const now = yield* DateTime.now;\n",
+        "            const current = makeProviderThread({ idAllocator, providerInstanceId: adapterOptions.instanceId,\n",
+        "              appThreadId: ensure.threadId, providerSessionId: input.providerSessionId,\n",
+        "              nativeThreadId: nativeSessionId, now });\n",
+        "            const nativeModel = (turnId ? completed.find(run => run.id === turnId) : completed[0])?.model;\n",
+        "            const verified = { ...current, nativeConversationHeadRef: messages.at(-1)\n",
+        "              ? { driver: CURSOR_DRIVER_KIND, nativeId: messages.at(-1)!.uuid, strength: \"strong\" as const } : null,\n",
+        "              nativeMetadata: nativeModel ? { modelSelection: {\n",
+        "                instanceId: adapterOptions.instanceId, model: nativeModel } } : null };\n",
+        "            return { ...yield* runtime.readThreadSnapshot({ providerThread: verified }), providerThread: verified,\n",
+        "              nativeHistory: { nativeSessionId, completedTurnRefs: completed.map(run => ({\n",
+        "                driver: CURSOR_DRIVER_KIND, nativeId: run.id, strength: \"strong\" as const,\n",
+        "              })) } };\n",
+        "          }),\n",
+        "        });\n",
+        "        yield* Effect.addFinalizer(() => Effect.sync(unbindEvidence));\n"
+      ]
+    },
+    {
+      "start": 2740,
+      "before": [
+        "  | McpProviderSessions.McpProviderSessions\n"
+      ],
+      "after": [
+        "  | ProviderRuntimeHost\n"
+      ]
+    }
+  ]
+}

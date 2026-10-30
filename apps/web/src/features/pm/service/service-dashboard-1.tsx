@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import type { Entity } from "@contracts"
 import { Bell, CalendarDays, ChevronDown, FilePlus2, Flag, MoreHorizontal, RefreshCw, SlidersHorizontal, UserRoundCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -6,15 +6,15 @@ import { CountUp } from "@/components/ui/count-up"
 import { Avatar } from "@/components/ui/avatar"
 import { DataRegion } from "@/components/ui/data-region"
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs"
 import { DataTable, type DataTableSort } from "@/components/blocks/data-table"
 import { DashboardGrid, DashboardWidget } from "@/components/blocks/dashboard/dashboard"
-import { FilterToolbar } from "@/components/blocks/filter-toolbar"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { DashboardView } from "@/views/pm/dashboard"
 import { PmSearch } from "@/views/pm/presentation-page"
 import d1 from "@/views/pm/dashboard-1.module.css"
-import { issueRecord, queryData, QueryNotice, states, string, useDraftState, useText } from "./pm-ui"
+import { issueRecord, queryData, QueryNotice, string, useDraftState, useText } from "./pm-ui"
 import type { ServiceDashboardProps } from "./service-dashboard-contract"
 import { usePersonalDashboard } from "./pm-service"
 import { MeetingsPanel, ProfilePanel, WatchControls, WatchingPanel } from "./dashboard-personal"
@@ -29,40 +29,29 @@ function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className={d1.sectionTitle}>{children}</h2>
 }
 
-function Picker({ label, value, options, onChange, disabled = false }: { label: string; value: string; options: { value: string; label: string }[]; onChange?: (value: string) => void; disabled?: boolean }) {
-  return <Select value={value} items={options} disabled={disabled} onValueChange={next => { if (next !== null) onChange?.(next) }}>
-    <SelectTrigger className={d1.picker} aria-label={label}><SelectValue /><ChevronDown size={16} aria-hidden="true" /></SelectTrigger>
-    <SelectContent>{options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-  </Select>
-}
-
-function closeDisclosure(event: KeyboardEvent<HTMLDetailsElement>) {
-  if (event.key !== "Escape" || event.defaultPrevented) return
-  event.currentTarget.open = false
-  event.currentTarget.querySelector("summary")?.focus()
-  event.stopPropagation()
-}
-
 /** The personal layout shares Lab geometry, never its records or simulator. */
 export function ServiceDashboard1({ surface, issues, projects, milestones, members, actor, openEntity, openActivity }: ServiceDashboardProps) {
   const t = useText()
   const personalQuery = usePersonalDashboard()
   const [scope, setScope] = useDraftState<PersonalScope>("dashboard1", "scope", "overview")
-  const [statusFilter, setStatusFilter] = useDraftState("dashboard1", "status", "all")
+  const [filters, setFilters] = useDraftState<FilterCondition[]>("dashboard1", "filters", [])
   const [agendaTab, setAgendaTab] = useDraftState("dashboard1", "agenda", "tasks")
   const [sort, setSort] = useState<DataTableSort>(null)
-  const statusNames: Record<string, string> = {
-    draft: t("草稿", "Draft"), ready: t("待开始", "Ready"), in_progress: t("进行中", "In progress"),
-    in_review: t("审核中", "In review"), done: t("已完成", "Done"), cancelled: t("已取消", "Cancelled"),
+  const statusLabels: Record<string, [string, string]> = {
+    todo: ["待办", "To do"], in_progress: ["进行中", "In progress"], review: ["审核中", "In review"],
+    done: ["已完成", "Done"], canceled: ["已取消", "Canceled"], cancelled: ["已取消", "Cancelled"],
+    draft: ["草稿", "Draft"], ready: ["待开始", "Ready"], in_review: ["审核中", "In review"],
   }
+  const observedStatuses = [...new Set((issues.data ?? []).map(issue => string(issue.data.status)).filter(Boolean))]
+  const issueStatuses = observedStatuses.length ? observedStatuses : ["draft", "ready", "in_progress", "in_review", "done", "cancelled"]
+  const statusNames: Record<string, string> = Object.fromEntries(issueStatuses.map(id => [id, statusLabels[id] ? t(statusLabels[id][0], statusLabels[id][1]) : id]))
   const priorityNames: Record<string, string> = { low: t("低", "Low"), normal: t("普通", "Normal"), high: t("高", "High"), urgent: t("紧急", "Urgent") }
-  const statusGroups: StatusGroup[] = [
-    { id: "draft", label: statusNames.draft, states: ["draft"], color: "var(--text-secondary)" },
-    { id: "ready", label: statusNames.ready, states: ["ready"], color: "#0891a2" },
-    { id: "in_progress", label: statusNames.in_progress, states: ["in_progress"], color: "#b86a00" },
-    { id: "in_review", label: statusNames.in_review, states: ["in_review"], color: "#a325be" },
-    { id: "closed", label: t("完成 / 取消", "Done / cancelled"), states: ["done", "cancelled"], color: "#158558" },
-  ]
+  const statusColors: Record<string, string> = { todo: "var(--text-secondary)", in_progress: "var(--warning)", review: "var(--agent)", done: "var(--success)", canceled: "var(--text-secondary)", cancelled: "var(--text-secondary)", draft: "var(--text-secondary)", ready: "var(--info)", in_review: "var(--agent)" }
+  const statusCategoryOf = (entity: Entity) => {
+    const status = string(entity.data.status)
+    return status === "done" ? "completed" : status === "canceled" || status === "cancelled" ? "canceled" : "started"
+  }
+  const statusGroups: StatusGroup[] = issueStatuses.map(id => ({ id, label: statusNames[id], states: [id], color: statusColors[id] ?? "var(--text-secondary)" }))
   const actorId = actor?.id
   const created = actorId && issues.data ? issues.data.filter(issue => issue.createdBy === actorId) : undefined
   const assigned = actorId && issues.data ? issues.data.filter(issue => issue.data.assigneeId === actorId) : undefined
@@ -73,8 +62,33 @@ export function ServiceDashboard1({ surface, issues, projects, milestones, membe
   const projectNames = new Map((projects.data ?? []).map(project => [project.id, string(project.data.name) || project.id]))
   const memberNames = new Map((members.data ?? []).filter(member => !member.revokedAt).map(member => [member.userId, member.name]))
   const query = surface.interaction.query.trim().toLocaleLowerCase()
-  const matchingStates = statusGroups.find(group => group.id === statusFilter)?.states ?? [statusFilter]
-  const rows = (scoped ?? []).filter(issue => (statusFilter === "all" || matchingStates.includes(string(issue.data.status))) && (!query || [issue.id, string(issue.data.title), issue.projectId ? projectNames.get(issue.projectId) ?? issue.projectId : ""].some(value => value.toLocaleLowerCase().includes(query))))
+  const today = surface.readModel.today
+  const weekEnd = new Date(`${today}T00:00:00Z`)
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 7)
+  const weekEndDate = weekEnd.toISOString().slice(0, 10)
+  const dueBucket = (entity: Entity): string => {
+    const due = string(entity.data.dueDate) || string(entity.data.targetDate)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return "none"
+    if (due < today) return "overdue"
+    if (due === today) return "today"
+    return due <= weekEndDate ? "week" : "later"
+  }
+  const filterValue = (entity: Entity, field: string): string => {
+    if (field === "status") return string(entity.data.status)
+    if (field === "priority") return string(entity.data.priority)
+    if (field === "assignee") return string(entity.data.assigneeId) || "unassigned"
+    if (field === "project") return entity.projectId ?? "none"
+    if (field === "due") return dueBucket(entity)
+    return ""
+  }
+  const matchesFilter = (entity: Entity, condition: FilterCondition): boolean => {
+    if (!condition.values.length) return true
+    const hit = condition.values.includes(filterValue(entity, condition.field))
+    return condition.operator === "isNot" ? !hit : hit
+  }
+  const activeFilters = filters.filter(condition => condition.values.length).length
+  const activeStatuses = filters.filter(condition => condition.field === "status" && condition.operator === "is").flatMap(condition => condition.values)
+  const rows = (scoped ?? []).filter(issue => filters.every(condition => matchesFilter(issue, condition)) && (!query || [issue.id, string(issue.data.title), issue.projectId ? projectNames.get(issue.projectId) ?? issue.projectId : ""].some(value => value.toLocaleLowerCase().includes(query))))
   if (sort) {
     const sortValue = (entity: Entity): string => sort.columnId === "title" ? string(entity.data.title) : sort.columnId === "priority" ? string(entity.data.priority) : string(entity.data.dueDate)
     rows.sort((a, b) => sortValue(a).localeCompare(sortValue(b)) * (sort.direction === "asc" ? 1 : -1))
@@ -93,19 +107,38 @@ export function ServiceDashboard1({ surface, issues, projects, milestones, membe
     return id ? memberNames.get(id) ?? (id === actorId && actor ? actor.name : id) : t("未分配", "No owner")
   }
   const projectName = (entity: Entity) => entity.projectId ? projectNames.get(entity.projectId) ?? entity.projectId : t("未关联项目", "No project")
+  const assigneeIds = [...new Set((issues.data ?? []).map(issue => string(issue.data.assigneeId)).filter(Boolean))]
+  const assigneeOptions = [...new Set([...memberNames.keys(), ...assigneeIds])].map(id => ({ value: id, label: memberNames.get(id) ?? (id === actorId && actor ? actor.name : id) }))
+  const projectOptions = [...projectNames].map(([value, label]) => ({ value, label }))
+  const filterFields: FilterField[] = [
+    { id: "status", label: t("状态", "Status"), options: Object.entries(statusNames).map(([value, label]) => ({ value, label })) },
+    { id: "priority", label: t("优先级", "Priority"), options: Object.entries(priorityNames).map(([value, label]) => ({ value, label })) },
+    ...(assigneeOptions.length ? [{ id: "assignee", label: t("负责人", "Assignee"), options: [{ value: "unassigned", label: t("未分配", "Unassigned") }, ...assigneeOptions] }] : []),
+    ...(projectOptions.length ? [{ id: "project", label: t("项目", "Project"), options: [...projectOptions, { value: "none", label: t("未关联项目", "No project") }] }] : []),
+    { id: "due", label: t("截止日期", "Due date"), options: [
+      { value: "overdue", label: t("已逾期", "Overdue") },
+      { value: "today", label: t("今天到期", "Due today") },
+      { value: "week", label: t("未来 7 天", "Next 7 days") },
+      { value: "later", label: t("更晚", "Later") },
+      { value: "none", label: t("无到期日", "No due date") },
+    ] },
+  ]
   const statusBadge = (entity: Entity) => <span className={`${d1.statusBadge} ${styles.status}`} data-status={string(entity.data.status)}><span className={d1.dot} style={{ background: "currentColor" }} />{stateName(entity)}</span>
   const assignee = (entity: Entity) => <span className={`${d1.memberIdentity} ${styles.member}`}>
     {string(entity.data.assigneeId) && <Avatar name={assigneeName(entity)} size={24} />}<span>{assigneeName(entity)}</span>
   </span>
   const priority = (entity: Entity) => <span className={d1.priority}><Flag size={13} aria-hidden="true" />{priorityNames[string(entity.data.priority)] ?? (string(entity.data.priority) || unavailable)}</span>
-  const drill = (nextScope: PersonalScope, nextStatus = "all") => {
+  const drill = (nextScope: PersonalScope, nextStatus: string | string[] = "all") => {
     setScope(nextScope)
-    setStatusFilter(nextStatus)
+    const nextStates = Array.isArray(nextStatus) ? nextStatus : nextStatus === "all" ? [] : [nextStatus]
+    setFilters(previous => [...previous.filter(condition => condition.field !== "status"), ...(nextStates.length ? [{ field: "status", operator: "is" as const, values: nextStates }] : [])])
     surface.actions.setInteraction(previous => ({ ...previous, query: "" }))
   }
   const upcoming = (entities: Entity[] | undefined, field: "dueDate" | "targetDate"): AgendaEntry[] => (entities ?? []).flatMap(entity => {
     const date = string(entity.data[field])
-    return /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= surface.readModel.today && !["done", "cancelled", "achieved"].includes(string(entity.data.status)) ? [{ entity, date }] : []
+    const category = statusCategoryOf(entity)
+    const terminal = category === "completed" || category === "canceled"
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= surface.readModel.today && !terminal && filters.every(condition => matchesFilter(entity, condition)) ? [{ entity, date }] : []
   }).sort((a, b) => a.date.localeCompare(b.date) || a.entity.id.localeCompare(b.entity.id))
   const upcomingTasks = upcoming(personal, "dueDate")
   const upcomingMilestones = upcoming(milestones.data, "targetDate")
@@ -145,7 +178,7 @@ export function ServiceDashboard1({ surface, issues, projects, milestones, membe
       distribution: <section aria-label={t("我创建的任务状态", "Status of issues created by me")}>
         <SectionTitle>{t("任务状态", "Issue status")}</SectionTitle>
         <div className={`${d1.statusStats} ${styles.statusStats}`}>
-          {statusGroups.map(group => <Button key={group.id} variant="outline" className={d1.statusStat} disabled={!created} aria-pressed={scope === "reported" && statusFilter === group.id} onClick={() => drill("reported", group.id)}>
+          {statusGroups.map(group => <Button key={group.id} variant="outline" className={d1.statusStat} disabled={!created} aria-pressed={scope === "reported" && activeStatuses.length === group.states.length && group.states.every(state => activeStatuses.includes(state))} onClick={() => drill("reported", group.states)}>
             <span className={d1.statusLabel}><span className={d1.dot} style={{ background: group.color }} /><span>{group.label}</span></span>
             <strong className={d1.statNumber}><CountUp value={created ? created.filter(issue => group.states.includes(string(issue.data.status))).length : null} /></strong>
           </Button>)}
@@ -161,10 +194,29 @@ export function ServiceDashboard1({ surface, issues, projects, milestones, membe
       </DashboardGrid>,
       issues: <section aria-label={t("我的任务", "My issues")} data-dashboard-issues className={d1.issues}>
         <SectionTitle>{t("我的任务", "My issues")}</SectionTitle>
-        <details className={d1.issueFilters} onKeyDown={closeDisclosure}>
-          <summary title={t("筛选任务", "Filter issues")}><SlidersHorizontal size={14} aria-hidden="true" /><span className="sr-only">{t("筛选任务", "Filter issues")}</span></summary>
-          <div className={styles.filters}><FilterToolbar label={t("任务筛选", "Issue filters")} search={<PmSearch label={t("搜索任务", "Search issues")} value={surface.interaction.query} onChange={value => surface.actions.setInteraction(previous => ({ ...previous, query: value }))} />} filters={<Picker label={t("筛选状态", "Filter status")} value={statusFilter} options={[{ value: "all", label: t("所有状态", "All statuses") }, ...states.map(value => ({ value, label: statusNames[value] })), { value: "closed", label: t("完成 / 取消", "Done / cancelled") }]} onChange={setStatusFilter} />} summary={`${scopeLabels.find(tab => tab.value === scope)?.label} · ${issues.data && actorId ? rows.length : "—"} ${t("项", "issues")}`} actions={<Button variant="ghost" onClick={() => { drill("overview"); setSort(null) }}>{t("清除筛选", "Clear filters")}</Button>} /></div>
-        </details>
+        <div className={`${styles.filters} flex flex-wrap items-center gap-2`}>
+          <PmSearch label={t("搜索任务", "Search issues")} value={surface.interaction.query} onChange={value => surface.actions.setInteraction(previous => ({ ...previous, query: value }))} />
+          <span className={d1.caption}>{scopeLabels.find(tab => tab.value === scope)?.label} · {issues.data && actorId ? rows.length : "—"} {t("项", "issues")}{activeFilters ? ` · ${activeFilters} ${t("个筛选条件", "filters")}` : ""}</span>
+          <Popover>
+            <PopoverTrigger render={<Button variant="ghost" size="sm" aria-label={t("筛选任务", "Filter issues")} />}><SlidersHorizontal size={14} aria-hidden="true" />{t("筛选", "Filter")}{activeFilters > 0 && ` (${activeFilters})`}</PopoverTrigger>
+            <PopoverContent align="start" className="w-[min(460px,calc(100vw-2rem))] p-0">
+              <FilterCard
+                title={t("筛选任务", "Issue filters")}
+                fields={filterFields}
+                conditions={filters}
+                onChange={setFilters}
+                emptyHint={t("尚未添加筛选条件，显示当前范围内的全部任务。", "No filter conditions yet; every issue in scope is shown.")}
+                addLabel={t("添加条件", "Add filter")}
+                clearLabel={t("清除", "Clear")}
+                whereLabel={t("条件", "Where")}
+                andLabel={t("且", "and")}
+                anyLabel={t("任一", "Any")}
+                removeLabel={t("移除条件", "Remove filter")}
+              />
+            </PopoverContent>
+          </Popover>
+          <Button variant="ghost" size="sm" onClick={() => { setFilters([]); setScope("overview"); setSort(null); surface.actions.setInteraction(previous => ({ ...previous, query: "" })) }}>{t("清除筛选", "Clear filters")}</Button>
+        </div>
         {!actorId && <p className={d1.caption}>{t("当前身份信息不可用，无法确定个人任务。", "Actor identity is unavailable; personal tasks cannot be determined.")}</p>}
         {actorId && <DataRegion {...tableData} hasContent={rows.length > 0}>
           <DataTable className={d1.issueTable} rows={rows} getRowId={issue => issue.id} getRowLabel={issue => title(issue)} caption={t("当前筛选的个人任务", "Personal issues in the current filter")} sort={sort} onSortChange={setSort} columnConfig={{ widths: { title: 388, status: 144, priority: 128, assignee: 176, project: 224, due: 160, actions: 160 } }} columns={[
@@ -186,7 +238,7 @@ export function ServiceDashboard1({ surface, issues, projects, milestones, membe
         </DataRegion>}
       </section>,
       rail: <aside className={`${d1.aside} ${styles.rail}`} aria-label={t("个人信息与日程", "Profile and agenda")}>
-        <div className={`${d1.cover} ${styles.cover}`} aria-hidden="true" />
+        <div className={d1.cover} aria-hidden="true" />
         <ProfilePanel />
         <Tabs value={agendaTab} onValueChange={value => setAgendaTab(String(value))}>
           <TabsList className={d1.agendaTabs}><TabsTab value="tasks">{t("到期任务", "Due tasks")}</TabsTab><TabsTab value="milestones">{t("里程碑", "Milestones")}</TabsTab><TabsTab value="meetings">{t("会议", "Meetings")}</TabsTab></TabsList>

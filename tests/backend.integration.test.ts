@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { after, before, describe, it as runCase, type TestContext } from 'node:test';
 import type { Pool } from 'pg';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import { publishOutboxBatch } from '../packages/application/src/outbox.ts';
 import type { Membership } from '../packages/application/src/access.ts';
 import type { Actor, Command, CommandReceipt, Entity } from '../packages/domain/src/core.ts';

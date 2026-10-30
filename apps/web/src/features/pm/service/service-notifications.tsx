@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useLocation, useNavigate, useParams } from "react-router"
+import { Link, useLocation, useNavigate, useParams } from "react-router"
 import { NotificationInboxView } from "@/views/pm/notification-inbox"
 import type { ControlledNotification, NotificationInboxInteraction } from "@/views/pm/people-controlled-contracts"
 import { useNotificationInbox, useNotificationStateCommands } from "./pm-notification-hooks"
@@ -18,6 +18,7 @@ const defaultInteraction: NotificationInboxInteraction = {
   showStatusIcon: true,
   listScroll: 0,
   detailScroll: {},
+  conditions: [],
 }
 
 
@@ -26,6 +27,8 @@ export function ServiceNotifications({ variant }: { variant: "inbox3" | "inbox4"
   const navigate = useNavigate()
   const location = useLocation()
   const t = useText()
+  const activityParams = new URLSearchParams(location.search)
+  activityParams.delete("section")
   const [origin, setOrigin] = useState<NotificationOrigin>("routed")
   const query = useNotificationInbox(origin)
   const stateCommands = useNotificationStateCommands()
@@ -56,7 +59,7 @@ export function ServiceNotifications({ variant }: { variant: "inbox3" | "inbox4"
         variant={variant}
         interactive
         securityNotice={securityNotice}
-        feedback={<><nav aria-label={t("通知来源", "Notification source")} className="flex flex-wrap gap-2"><button type="button" aria-pressed={origin === "routed"} onClick={() => { setOrigin("routed"); setInteraction(defaultInteraction) }}>{t("定向通知", "Routed notifications")}</button><button type="button" aria-pressed={origin === "legacy_activity"} onClick={() => { setOrigin("legacy_activity"); setInteraction(defaultInteraction) }}>{t("历史活动状态", "Legacy activity state")}</button></nav><CommandNotice /></>}
+        feedback={<><nav aria-label={t("通知导航与来源", "Notification navigation and source")} className="flex flex-wrap items-center gap-2"><Link to={`${location.pathname}${activityParams.size ? `?${activityParams}` : ""}`} className="mr-2 rounded-control px-2 py-1 text-xs text-muted-foreground hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring">{t("← 返回动态", "← Back to Activity")}</Link><button type="button" aria-pressed={origin === "routed"} onClick={() => { setOrigin("routed"); setInteraction(defaultInteraction) }}>{t("定向通知", "Routed notifications")}</button><button type="button" aria-pressed={origin === "legacy_activity"} onClick={() => { setOrigin("legacy_activity"); setInteraction(defaultInteraction) }}>{t("历史活动状态", "Legacy activity state")}</button></nav><CommandNotice /></>}
         readModel={{
           notifications,
           data: queryData(query, notifications.length),

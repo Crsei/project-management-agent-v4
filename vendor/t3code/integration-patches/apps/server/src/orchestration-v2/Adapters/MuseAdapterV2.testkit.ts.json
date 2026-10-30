@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/MuseAdapterV2.testkit.ts",
+  "beforeSha256": "a30dcd8444410235ba49e36e0e59155835a9926b2b9d770cf2ceb18215faf626",
+  "afterSha256": "1a4e2ba9393497eaeab201d9af34c0eea8b55ab99fa67831bdb40ec2438a88a5",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 3,
+      "before": [
+        "  ProviderDriverKind,\n",
+        "  ProviderInstanceId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 9,
+      "before": [
+        "import { MuseSettings } from \"@t3tools/provider-muse/settings\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 12,
+      "before": [
+        "import * as Layer from \"effect/Layer\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 15,
+      "before": [
+        "import * as TestProviderHost from \"@t3tools/provider-testing/TestProviderHost\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 23,
+      "before": [
+        "import * as IdAllocator from \"@t3tools/provider-core/server/IdAllocator\";\n",
+        "import * as ProviderAdapterRegistry from \"../ProviderAdapterRegistry.ts\";\n",
+        "import * as ProviderContinuationRequests from \"@t3tools/provider-core/server/ProviderContinuationRequests\";\n",
+        "import type { OrchestratorV2ProviderReplayHarness } from \"../testkit/ProviderReplayHarness.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 28,
+      "before": [
+        "import { makeMuseAdapterV2 } from \"@t3tools/provider-muse/server\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 408,
+      "before": [
+        "const DEFAULT_MUSE_SETTINGS = Schema.decodeSync(MuseSettings)({ enabled: true });\n",
+        "\n",
+        "export function layer(input: {\n",
+        "  readonly scenario: string;\n",
+        "  readonly createHost: NonNullable<Parameters<typeof makeMuseAdapterV2>[0][\"createHost\"]>;\n",
+        "  readonly environment?: NodeJS.ProcessEnv;\n",
+        "}) {\n",
+        "  return ProviderAdapterRegistry.layerFromAdaptersEffect(\n",
+        "    Effect.gen(function* () {\n",
+        "      return [\n",
+        "        yield* makeMuseAdapterV2({\n",
+        "          instanceId: ProviderInstanceId.make(MUSE_PROVIDER_KIND),\n",
+        "          settings: DEFAULT_MUSE_SETTINGS,\n",
+        "          environment: input.environment ?? {},\n",
+        "          createHost: input.createHost,\n",
+        "          continuationRequests: yield* ProviderContinuationRequests.ProviderContinuationRequests,\n",
+        "        }),\n",
+        "      ];\n",
+        "    }),\n",
+        "  ).pipe(\n",
+        "    Layer.provide(\n",
+        "      Layer.mergeAll(\n",
+        "        TestProviderHost.layer().pipe(Layer.provide(NodeServices.layer)),\n",
+        "        NodeServices.layer,\n",
+        "        IdAllocator.layer,\n",
+        "      ),\n",
+        "    ),\n",
+        "  );\n",
+        "}\n",
+        "\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 463,
+      "before": [
+        "export const MuseOrchestratorReplayHarness: OrchestratorV2ProviderReplayHarness<\n",
+        "  MuseReplayTranscript,\n",
+        "  MuseReplayTranscriptDecodeError\n",
+        "> = {\n",
+        "  driver: ProviderDriverKind.make(MUSE_PROVIDER_KIND),\n",
+        "  decodeTranscript: (transcript: ProviderReplayTranscript) =>\n",
+        "    decodeMuseReplayTranscript(transcript).pipe(\n",
+        "      Effect.mapError(\n",
+        "        (cause) => new MuseReplayTranscriptDecodeError({ scenario: transcript.scenario, cause }),\n",
+        "      ),\n",
+        "    ),\n",
+        "  makeProviderAdapterRegistryLayer: (transcript) =>\n",
+        "    Layer.unwrap(\n",
+        "      Effect.gen(function* () {\n",
+        "        const controller = new MuseReplayController(transcript);\n",
+        "        yield* Effect.addFinalizer(() => Effect.sync(() => controller.assertComplete()));\n",
+        "        return layer({\n",
+        "          scenario: transcript.scenario,\n",
+        "          createHost: makeReplayCreateHost(controller),\n",
+        "        });\n",
+        "      }),\n",
+        "    ),\n",
+        "};\n"
+      ],
+      "after": []
+    }
+  ]
+}

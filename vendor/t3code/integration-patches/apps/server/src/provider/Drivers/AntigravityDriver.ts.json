@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/AntigravityDriver.ts",
+  "beforeSha256": "b299470b25e0d0b52e0302deb86e1b05dba40cc826721572296188af405fe003",
+  "afterSha256": "aecb843e6e271044a4d15bb01223439eac1359fc5bb99d49fefc686987ad8f1f",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { ProviderRuntimeHost } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 3,
+      "before": [
+        "import { resolveSelfInvocation } from \"@t3tools/shared/nodeRuntime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 48,
+      "before": [],
+      "after": [
+        "  readAntigravitySessionMetadata,\n"
+      ]
+    },
+    {
+      "start": 70,
+      "before": [],
+      "after": [
+        "// Driver instances can differ by cwd while sharing one private native profile.\n",
+        "// Sweep once per process/profile, and await the same sweep before any launch.\n",
+        "const profileSweeps = new Map<string, Effect.Effect<void>>();\n",
+        "const instanceInstallations = new WeakMap<ProviderInstance, AntigravityInstallation.AntigravityInstallation[\"Service\"]>();\n",
+        "\n",
+        "/** Return only the original install controller owned by this live source instance. */\n",
+        "export const readAntigravityInstallation = (instance: ProviderInstance) => instanceInstallations.get(instance);\n"
+      ]
+    },
+    {
+      "start": 79,
+      "before": [
+        "  | McpProviderSessions.McpProviderSessions\n"
+      ],
+      "after": [
+        "  | ProviderRuntimeHost\n"
+      ]
+    },
+    {
+      "start": 108,
+      "before": [
+        "    const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 146,
+      "before": [
+        "    for (const directory of [\n",
+        "      directories.runtimeTemp,\n",
+        "      path.join(profileDirectory, \"antigravity-acp\", \"tmp\"),\n",
+        "    ]) {\n",
+        "      yield* removeAntigravityRuntimeTempDirs(directory).pipe(\n",
+        "        Effect.provideService(FileSystem.FileSystem, fileSystem),\n"
+      ],
+      "after": [
+        "    let sweep = profileSweeps.get(profileDirectory);\n",
+        "    if (!sweep) {\n",
+        "      sweep = yield* Effect.cached(\n",
+        "        Effect.forEach(\n",
+        "          new Set([directories.runtimeTemp, path.join(profileDirectory, \"antigravity-acp\", \"tmp\")]),\n",
+        "          directory => removeAntigravityRuntimeTempDirs(directory),\n",
+        "          { discard: true },\n",
+        "        ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem), Effect.uninterruptible),\n"
+      ]
+    },
+    {
+      "start": 153,
+      "before": [],
+      "after": [
+        "      profileSweeps.set(profileDirectory, sweep);\n"
+      ]
+    },
+    {
+      "start": 154,
+      "before": [],
+      "after": [
+        "    yield* sweep;\n"
+      ]
+    },
+    {
+      "start": 413,
+      "before": [
+        "      selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 418,
+      "before": [],
+      "after": [
+        "      readLegacySessionMetadata: nativeSessionId => readAntigravitySessionMetadata({\n",
+        "        profileDirectory, nativeSessionId,\n",
+        "      }).pipe(\n",
+        "        Effect.provideService(FileSystem.FileSystem, fileSystem),\n",
+        "        Effect.provideService(Path.Path, path),\n",
+        "      ),\n"
+      ]
+    },
+    {
+      "start": 493,
+      "before": [
+        "    return {\n"
+      ],
+      "after": [
+        "    const instance = {\n"
+      ]
+    },
+    {
+      "start": 520,
+      "before": [
+        "      auth: authFlow.controller,\n"
+      ],
+      "after": [
+        "      auth: {\n",
+        "        ...authFlow.controller,\n",
+        "        credentialBinding: { owner: \"provider\", key: profileDirectory },\n",
+        "        start: (owner, stopSessions, methodId) =>\n",
+        "          methodId !== undefined && methodId !== auth.authMethod\n",
+        "            ? Effect.fail(new ProviderSetupError({\n",
+        "                instanceId, operation: \"start\",\n",
+        "                detail: \"Select the Antigravity sign-in method in provider settings before connecting.\",\n",
+        "              }))\n",
+        "            : authFlow.controller.start(owner, stopSessions),\n",
+        "        subscribe: owner => authFlow.controller.subscribe(owner).pipe(Stream.map(state => ({\n",
+        "          ...state,\n",
+        "          methods: [{\n",
+        "            id: auth.authMethod,\n",
+        "            name: antigravityAuthLabel(auth.authMethod),\n",
+        "            description: null,\n",
+        "            type: antigravityAuthUsesBrowser(auth.authMethod) ? \"agent\" as const : \"terminal\" as const,\n",
+        "          }],\n",
+        "        }))),\n",
+        "      },\n"
+      ]
+    },
+    {
+      "start": 523,
+      "before": [],
+      "after": [
+        "    instanceInstallations.set(instance, installation);\n",
+        "    yield* Effect.addFinalizer(() => Effect.sync(() => { instanceInstallations.delete(instance); }));\n",
+        "    return instance;\n"
+      ]
+    }
+  ]
+}

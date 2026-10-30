@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/CodexHomeLayout.test.ts",
+  "beforeSha256": "05201bbb9f43d0ee9304f23661fd0dba8bea0e87761edc62c84d1d66ed503520",
+  "afterSha256": "f88fc205354e7cfd0bcc746a4baeb18d0e6eb4bb3dbede9278447ca6f5c0545d",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 6,
+      "before": [],
+      "after": [
+        "import * as HostProcess from \"@t3tools/shared/HostProcess\";\n"
+      ]
+    },
+    {
+      "start": 62,
+      "before": [],
+      "after": [
+        "      }),\n",
+        "    );\n",
+        "    it.effect(\"inherits CODEX_HOME relative to the bound native working directory without changing the user Home\", () =>\n",
+        "      Effect.gen(function* () {\n",
+        "        const path = yield* Path.Path;\n",
+        "        const cwd = yield* makeTempDir(\"codex-bound-home-\");\n",
+        "        const layout = yield* resolveCodexHomeLayout(decodeCodexSettings({})).pipe(\n",
+        "          Effect.provideService(HostProcess.Environment, { CODEX_HOME: \"relative-native-home\" }),\n",
+        "          Effect.provideService(HostProcess.HomeDirectory, path.join(cwd, \"user-home\")),\n",
+        "          Effect.provideService(HostProcess.WorkingDirectory, cwd),\n",
+        "        );\n",
+        "        expect(layout.sharedHomePath).toBe(path.join(cwd, \"relative-native-home\"));\n",
+        "        expect(layout.effectiveHomePath).toBe(layout.sharedHomePath);\n",
+        "        expect(layout.continuationKey).toBe(`codex:home:${layout.sharedHomePath}`);\n"
+      ]
+    }
+  ]
+}

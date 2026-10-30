@@ -3,9 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ReadableStream } from 'node:stream/web';
 import { createServer } from 'node:http';
-import { buildApp } from '../../../apps/api/src/app.ts';
+import { buildApp } from '../../../apps/server/pm/src/app.ts';
 import { ApiError, CommandOutcomeUnknown, ProjectManagementClient, type Command } from '../src/client.ts';
-import type { AgentChatStreamEvent } from '../src/agent-chat.ts';
 
 const commandId = '00000000-0000-4000-8000-000000000001';
 const workspaceId = '00000000-0000-4000-8000-000000000002';
@@ -62,13 +61,13 @@ test('authentication is explicit and token providers refresh per request', async
   let token = 'first';
   const bearer = new ProjectManagementClient({ baseUrl: 'https://example.test', auth: { type: 'bearer', token: () => token }, fetch });
   await bearer.getMe(); token = 'second'; await bearer.getMe();
-  const cookie = new ProjectManagementClient({ baseUrl: 'https://example.test', auth: { type: 'cookie', credentials: 'same-origin', cookie: () => 'pm_v3_session=explicit' }, fetch });
+  const cookie = new ProjectManagementClient({ baseUrl: 'https://example.test', auth: { type: 'cookie', credentials: 'same-origin', cookie: () => 'pm_v4_session=explicit' }, fetch });
   await cookie.getMe();
   assert.deepEqual(seen, [
     { credentials: 'omit', bearer: null, cookie: null },
     { credentials: 'omit', bearer: 'Bearer first', cookie: null },
     { credentials: 'omit', bearer: 'Bearer second', cookie: null },
-    { credentials: 'same-origin', bearer: null, cookie: 'pm_v3_session=explicit' },
+    { credentials: 'same-origin', bearer: null, cookie: 'pm_v4_session=explicit' },
   ]);
   assert.throws(() => new ProjectManagementClient({ baseUrl: 'https://user:password@example.test', auth: { type: 'none' } }), /without embedded credentials/);
 });
@@ -91,70 +90,6 @@ test('SSE handles fragmented UTF-8 and CRLF, checkpoint IDs and stream_error wit
   assert.equal(calls, 1);
 });
 
-test('agent chat SSE reassembles fragmented UTF-8 and CRLF frames and validates the done message', async () => {
-  const threadId = '00000000-0000-4000-8000-000000000003';
-  const assistant = { id: '00000000-0000-4000-8000-000000000004', threadId, role: 'assistant', content: 'Hello 世界', status: 'complete', errorCode: null, model: 'test-model', createdAt: '2026-10-25T00:00:00.000Z', updatedAt: '2026-10-25T00:00:01.000Z' };
-  const streaming = { ...assistant, content: '', status: 'streaming' };
-  const user = { ...assistant, id: '00000000-0000-4000-8000-000000000005', role: 'user', content: 'hi', status: 'complete', model: null };
-  const wire = [
-    `event: user\ndata: ${JSON.stringify({ message: user })}\n\n`,
-    `event: assistant\ndata: ${JSON.stringify({ message: streaming })}\n\n`,
-    `event: delta\ndata: {"messageId":"${assistant.id}","delta":"Hello "}\n\n`,
-    `event: delta\ndata: {"messageId":"${assistant.id}","delta":"世界"}\n\n`,
-    `event: done\ndata: ${JSON.stringify({ message: assistant })}\n\n`,
-  ].join('').replaceAll('\n', '\r\n');
-  const bytes = new TextEncoder().encode(wire);
-  const api = client(async (url, init) => {
-    assert.equal(new URL(String(url)).pathname, `/api/v1/workspaces/${workspaceId}/agent/threads/${threadId}/messages`);
-    assert.equal(init?.method, 'POST');
-    assert.deepEqual(JSON.parse(String(init?.body)), { messageId: '00000000-0000-4000-8000-000000000006', content: 'hi' });
-    const body = new ReadableStream<Uint8Array>({ start(controller) {
-      for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
-      controller.close();
-    } });
-    return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
-  });
-  const events = [];
-  for await (const event of api.streamAgentMessage(workspaceId, threadId, { messageId: '00000000-0000-4000-8000-000000000006', content: 'hi' })) events.push(event);
-  assert.deepEqual(events.map(event => event.type), ['user', 'assistant', 'delta', 'delta', 'done']);
-  assert.equal(events[2]?.type === 'delta' ? events[2].delta : '', 'Hello ');
-  assert.equal(events[3]?.type === 'delta' ? events[3].delta : '', '世界');
-  assert.deepEqual(events[4]?.type === 'done' ? events[4].message : null, assistant);
-});
-
-for (const wire of ['', 'event: delta\ndata: {"messageId":"message","delta":"partial"}\n\n']) {
-  test(`agent chat rejects EOF ${wire ? 'after a delta' : 'without events'}`, async () => {
-    const response = new Response(wire, { headers: { 'Content-Type': 'text/event-stream' } });
-    const api = client(async () => response);
-    const events: AgentChatStreamEvent[] = [];
-    await assert.rejects(async () => {
-      for await (const event of api.streamAgentMessage(workspaceId, commandId, { messageId: commandId, content: 'hi' })) events.push(event);
-    }, error => error instanceof ApiError && error.status === 502 && error.code === 'agent_stream_incomplete');
-    assert.deepEqual(events.map(event => event.type), wire ? ['delta'] : []);
-    assert.equal(response.body!.locked, false);
-  });
-}
-
-for (const type of ['done', 'cancelled', 'error'] as const) {
-  test(`agent chat ${type} terminates and releases an open transport`, { timeout: 2_000 }, async () => {
-    const message = { id: commandId, threadId: commandId, role: 'assistant', content: 'reply', status: type === 'done' ? 'complete' : 'cancelled', errorCode: null, model: null, createdAt: '2026-10-25T00:00:00.000Z', updatedAt: '2026-10-25T00:00:01.000Z' };
-    const payload = type === 'error' ? { code: 'provider_error', message: 'Provider failed', messageId: commandId } : { message };
-    let cancelled = false;
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(`event: ${type}\r\ndata: ${JSON.stringify(payload)}\r\n\r\nevent: delta\ndata: {"messageId":"message","delta":"ignored"}\n\n`));
-        // Keep the transport open: only the terminal event can finish iteration.
-      },
-      cancel() { cancelled = true; },
-    });
-    const api = client(async () => new Response(body, { headers: { 'Content-Type': 'text/event-stream' } }));
-    const events = [];
-    for await (const event of api.streamAgentMessage(workspaceId, commandId, { messageId: commandId, content: 'hi' })) events.push(event);
-    assert.deepEqual(events, [{ type, ...payload }]);
-    assert.equal(cancelled, true);
-    assert.equal(body.locked, false);
-  });
-}
 
 
 test('an established SSE stream that becomes silent aborts without replaying its last checkpoint', { timeout: 90_000 }, async t => {
@@ -209,32 +144,3 @@ test('the Node client reads a real bootstrap HTTP server without mistaking readi
   assert.equal((await api.getCapabilities()).execution.enabled, false);
 });
 
-test('malformed structured Chat events cannot become trusted capability or tool state', async () => {
-  for (const [event, payload] of [
-    ['capabilities', { messageId: commandId, access: { enabled: true, mode: 'full_access' } }],
-    ['tool', { messageId: commandId, toolCall: { id: 'claimed', status: 'succeeded', result: 'Model says saved' } }],
-    ['context', { messageId: commandId, sources: [{ kind: 'project', entityId: 'PRJ-1' }] }],
-  ] as const) {
-    const api = client(async () => new Response(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`, { headers: { 'content-type': 'text/event-stream' } }));
-    await assert.rejects(async () => {
-      for await (const _frame of api.streamAgentMessage(workspaceId, commandId, { messageId: commandId, content: 'Read the project' })) { /* Reject untrusted metadata. */ }
-    }, error => error instanceof ApiError && error.code === 'invalid_event_stream');
-  }
-});
-
-test('a valid tool update is not a Chat terminal and an EOF remains unknown', async () => {
-  const toolCall = { id: 'call_read', operationId: commandId, name: 'pm_read', arguments: { id: 'TASK-1' }, status: 'running',
-    startedAt: '2026-10-25T00:00:00.000Z', finishedAt: null, grantId: commandId, onBehalfOf: workspaceId, approvalPolicy: 'auto_approve', result: null, error: null };
-  const api = client(async () => new Response(`event: tool\ndata: ${JSON.stringify({ messageId: commandId, toolCall })}\n\n`, { headers: { 'content-type': 'text/event-stream' } }));
-  const stream = api.streamAgentMessage(workspaceId, commandId, { messageId: commandId, content: 'Read' });
-  const first = await stream.next();
-  assert.equal(first.value?.type, 'tool');
-  await assert.rejects(stream.next(), error => error instanceof ApiError && error.code === 'agent_stream_incomplete');
-});
-
-test('lost access-update responses are never automatically repeated', async () => {
-  let attempts = 0;
-  const api = client(async () => { attempts++; throw new TypeError('Response lost after authorization commit'); });
-  await assert.rejects(api.setAgentThreadAccess(workspaceId, commandId, { enabled: false, expectedRevision: 2 }), TypeError);
-  assert.equal(attempts, 1);
-});

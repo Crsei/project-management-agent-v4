@@ -1,53 +1,6 @@
-@font-face {
-  font-family: "Dashboard Inter";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("/fonts/inter-latin-variable.woff2") format("woff2");
-}
 .page {
-  --background: #fff;
-  --surface: #fff;
-  --surface-raised: #f5f5f5;
-  --surface-hover: #f5f5f5;
-  --surface-pressed: #e5e5e5;
-  --foreground: #0a0a0a;
-  --text-secondary: #737373;
-  --text-muted: #737373;
-  --muted: var(--surface-raised);
-  --muted-foreground: var(--text-secondary);
-  --primary: #171717;
-  --primary-foreground: #fafafa;
-  --border: #e5e5e5;
-  --border-hover: #d4d4d4;
-  --selection: #f5f5f5;
-  --chart-1: #171717;
-  --chart-grid: #f0f0f0;
-  --chart-reference: #a3a3a3;
-  --control-radius: 6px;
-  --radius-popover-value: 8px;
-  --radius-module-value: 8px;
-  --radius-panel-value: 8px;
   color: var(--foreground);
-  font-family: "Dashboard Inter", var(--font-sans);
-}
-:global(.dark) .page {
-  --background: #0a0a0a;
-  --surface: #161616;
-  --surface-raised: #171717;
-  --surface-hover: #262626;
-  --surface-pressed: #404040;
-  --foreground: #fafafa;
-  --text-secondary: #a3a3a3;
-  --text-muted: #a3a3a3;
-  --primary: #fafafa;
-  --primary-foreground: #171717;
-  --border: #262626;
-  --border-hover: #404040;
-  --selection: #262626;
-  --chart-1: #fafafa;
-  --chart-grid: #262626;
-  --chart-reference: #737373;
+  font-family: var(--font-sans);
 }
 .shell {
   border: 0;
@@ -145,9 +98,9 @@
   min-width: 11rem;
 }
 .sectionTitle {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  line-height: 1.25rem;
+  font-size: var(--text-section);
+  font-weight: 500;
+  line-height: var(--text-section--line-height);
   margin-bottom: 0.75rem;
 }
 .statCard {
@@ -174,7 +127,8 @@
   color: var(--text-secondary);
 }
 .statHint {
-  font-size: 0.6875rem;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
   color: var(--text-secondary);
 }
 .meta {
@@ -236,6 +190,7 @@
   justify-content: flex-start;
   gap: 8px;
   border: 1px solid var(--border);
+  border-radius: var(--radius-module-value);
   padding: 16px;
   text-align: left;
   white-space: normal;

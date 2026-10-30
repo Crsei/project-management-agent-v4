@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/CodexDriver.ts",
+  "beforeSha256": "2582b6be1b025bccd64d660ff9c85e12ed14a318098be77380b0cbf986821d19",
+  "afterSha256": "6a797767e202e4b64c517ea12aa96f2b60fc91806eeac41da873172b7f48d287",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 9,
+      "before": [
+        "import type * as CodexUsageHistory from \"../../usage/CodexUsageHistory.ts\";\n"
+      ],
+      "after": [
+        "import type * as CodexUsageHistory from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/usage-history.ts\";\n"
+      ]
+    },
+    {
+      "start": 13,
+      "before": [
+        "import * as ServerConfig from \"../../config.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 56,
+      "before": [
+        "import * as ServerSecretStore from \"../../auth/ServerSecretStore.ts\";\n",
+        "import * as ServerEnvironment from \"../../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerSecretStore from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-secret-store.ts\";\n",
+        "import * as ServerEnvironment from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-environment.ts\";\n"
+      ]
+    },
+    {
+      "start": 98,
+      "before": [],
+      "after": [
+        "const instanceInstallations = new WeakMap<ProviderInstance, CodexInstallation.CodexInstallation[\"Service\"]>();\n",
+        "/** Maintenance must use the installer whose leases protect this original instance's live native processes. */\n",
+        "export const readCodexInstanceInstallation = (instance: ProviderInstance) => instanceInstallations.get(instance);\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 119,
+      "before": [
+        "    if (config.setupMode === \"managed\")\n",
+        "      return yield* makeManagedCodexProvider({\n",
+        "        instanceId,\n",
+        "        displayName,\n",
+        "        accentColor,\n",
+        "        environment,\n",
+        "        enabled,\n",
+        "        config,\n",
+        "      });\n"
+      ],
+      "after": [
+        "    const installation = yield* CodexInstallation.CodexInstallation;\n",
+        "    if (config.setupMode === \"managed\") {\n",
+        "      const instance = yield* makeManagedCodexProvider({\n",
+        "        instanceId, displayName, accentColor, environment, enabled, config,\n",
+        "      }).pipe(\n",
+        "        Effect.mapError(cause => cause instanceof ProviderDriverError ? cause : new ProviderDriverError({\n",
+        "          driver: DRIVER_KIND,\n",
+        "          instanceId,\n",
+        "          detail: cause.message,\n",
+        "          cause,\n",
+        "        })),\n",
+        "      );\n",
+        "      instanceInstallations.set(instance, installation);\n",
+        "      return instance;\n",
+        "    }\n"
+      ]
+    },
+    {
+      "start": 131,
+      "before": [],
+      "after": [
+        "    const workingDirectory = yield* HostProcess.WorkingDirectory;\n"
+      ]
+    },
+    {
+      "start": 295,
+      "before": [
+        "              cwd: process.cwd(),\n"
+      ],
+      "after": [
+        "              cwd: workingDirectory,\n"
+      ]
+    },
+    {
+      "start": 341,
+      "before": [
+        "    return {\n"
+      ],
+      "after": [
+        "    const instance = {\n"
+      ]
+    },
+    {
+      "start": 354,
+      "before": [],
+      "after": [
+        "    instanceInstallations.set(instance, installation);\n",
+        "    return instance;\n"
+      ]
+    }
+  ]
+}

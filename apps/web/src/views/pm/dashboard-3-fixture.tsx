@@ -1,13 +1,16 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Activity, ArrowRight, Bell, CircleCheck, Clock3, FileText, FolderKanban, Monitor, MoreHorizontal, RefreshCw, Zap } from "lucide-react"
+import { Activity, ArrowRight, Bell, CircleCheck, Clock3, FileText, Filter, FolderKanban, Monitor, MoreHorizontal, RefreshCw, Zap } from "lucide-react"
 import { Area, Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { DataTable } from "@/components/blocks/data-table"
 import { StatisticalChart } from "@/components/blocks/charts/statistical-chart"
 import { useI18n } from "@/lib/i18n-provider"
+import { issueCatalog } from "./issue-domain"
 import { PmMemberIdentity, usePmScenarioState } from "./shared"
 import { pmClock, type PmPageProps } from "./model"
 import { usePmDomainState, usePmNavigation } from "./domain-session"
@@ -26,6 +29,30 @@ import { DashboardNavigation } from "./dashboard-navigation"
 import type { IssueDrilldown } from "./issues-controller"
 import d3 from "./dashboard-3.module.css"
 
+type IssueFilterTarget = {
+  stateId: string
+  priorityId: string
+  assigneeIds: readonly string[]
+  projectId: string
+  dueDate: string | null
+}
+function issueDueBucket(date: string | null, today: string, weekEnd: string) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "none"
+  if (date < today) return "overdue"
+  if (date === today) return "today"
+  return date <= weekEnd ? "week" : "later"
+}
+function matchesIssueFilter(issue: IssueFilterTarget, condition: FilterCondition, today: string, weekEnd: string) {
+  if (!condition.values.length) return true
+  let hit = false
+  if (condition.field === "status") hit = condition.values.includes(issue.stateId)
+  else if (condition.field === "priority") hit = condition.values.includes(issue.priorityId)
+  else if (condition.field === "assignee") hit = issue.assigneeIds.length ? issue.assigneeIds.some((id) => condition.values.includes(id)) : condition.values.includes("unassigned")
+  else if (condition.field === "project") hit = condition.values.includes(issue.projectId)
+  else if (condition.field === "due") hit = condition.values.includes(issueDueBucket(issue.dueDate, today, weekEnd))
+  return condition.operator === "isNot" ? !hit : hit
+}
+
 /** The portfolio showcase owns its finance, presence and sample history. Nothing
  * in this adapter is loaded by the production dashboard read model. */
 export function PortfolioDashboardFixture({ scenario }: PmPageProps) {
@@ -41,6 +68,7 @@ export function PortfolioDashboardFixture({ scenario }: PmPageProps) {
   const [currency, setCurrency] = usePmScenarioState("pm-dashboard-3-currency", () => "USD")
   const [query, setQuery] = usePmScenarioState("pm-dashboard-3-query", () => "")
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [conditions, setConditions] = usePmScenarioState<FilterCondition[]>("pm-dashboard-3-issue-filters", () => [])
   const [, setIssueDrilldown] = usePmDomainState<IssueDrilldown | null>("issue-list-1:drilldown", () => null)
   const [listScroll, setListScroll] = usePmScenarioState<Record<string, number>>("pm-dashboard-3-list-scroll", () => ({}))
   const milestonesRef = useRef<HTMLUListElement>(null)
@@ -58,7 +86,25 @@ export function PortfolioDashboardFixture({ scenario }: PmPageProps) {
   }
   const normalizedQuery = query.trim().toLocaleLowerCase(locale)
   const scopedProjects = projects.filter(project => (state.projectId === "all" || project.id === state.projectId) && (!normalizedQuery || `${project.identifier} ${project.title[locale]}`.toLocaleLowerCase(locale).includes(normalizedQuery)))
-  const scopedIssues = issueDomain.items.filter(issue => scopedProjects.some(project => project.id === issue.projectId))
+  const issueFilterToday = pmClock.slice(0, 10)
+  const issueFilterWeekEnd = new Date(Date.parse(`${issueFilterToday}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10)
+  const scopedIssues = issueDomain.items.filter(issue => scopedProjects.some(project => project.id === issue.projectId) && conditions.every(condition => matchesIssueFilter(issue, condition, issueFilterToday, issueFilterWeekEnd)))
+  const activeFilterCount = conditions.filter(condition => condition.values.length > 0).length
+  const issueFilterCatalog = issueCatalog(locale)
+  const issueProjectOptions = projects.map(project => ({ value: project.id, label: `${project.identifier} ${project.title[locale]}` }))
+  const filterFields: FilterField[] = [
+    { id: "status", label: text("状态", "Status"), options: issueFilterCatalog.states.map(status => ({ value: status.id, label: status.label })) },
+    { id: "priority", label: text("优先级", "Priority"), options: issueFilterCatalog.priorities.map(priority => ({ value: priority.id, label: priority.label })) },
+    { id: "assignee", label: text("负责人", "Assignee"), options: [...issueFilterCatalog.assignees.map(assignee => ({ value: assignee.id, label: assignee.label })), { value: "unassigned", label: text("未分配", "Unassigned") }] },
+    ...(issueProjectOptions.length ? [{ id: "project", label: text("项目", "Project"), options: issueProjectOptions }] : []),
+    { id: "due", label: text("截止日期", "Due date"), options: [
+      { value: "overdue", label: text("已逾期", "Overdue") },
+      { value: "today", label: text("今天到期", "Due today") },
+      { value: "week", label: text("未来 7 天", "Next 7 days") },
+      { value: "later", label: text("更晚", "Later") },
+      { value: "none", label: text("无到期日", "No due date") },
+    ] },
+  ]
   const budgetRows = dashboard3BudgetRows(scopedProjects)
   const summaries = currencySummaries(scopedProjects.map(project => project.id))
   const summary = summaries.find(row => row.currency === currency) ?? summaries[0]
@@ -147,7 +193,7 @@ export function PortfolioDashboardFixture({ scenario }: PmPageProps) {
   return <DashboardView {...surface}
     readModel={{ ...surface.readModel, title: text("指挥中心", "Command Center") }}
     navigation={<DashboardNavigation query={query} onQueryChange={setQuery} onPeople={() => navigate("member-list-1")} onActivity={() => navigate("inbox-1")} members={members.map(row => ({ id: row.member.id, name: row.member.name }))} disabled={scenario === "loading"} />}
-    headerActions={<div className={d3.pageActions}>{scenario === "readonly" && <Badge>{text("只读", "Read only")}</Badge>}<span className={d3.snapshot}><Clock3 size={14} aria-hidden="true" />{text("本地快照", "Local snapshot")}</span><Button variant="ghost" size="icon" className={d3.refresh} disabled={scenario === "loading" || surface.readModel.data.refreshing} aria-label={text("刷新仪表盘", "Refresh dashboard")} onClick={surface.actions.refresh}><RefreshCw size={16} aria-hidden="true" /></Button></div>}
+    headerActions={<div className={d3.pageActions}><Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}><Filter size={14} aria-hidden="true" />{text("筛选", "Filter")}{activeFilterCount > 0 && <Badge size="sm" tone="neutral">{activeFilterCount}</Badge>}</PopoverTrigger><PopoverContent className="w-[min(460px,calc(100vw-2rem))] p-0" align="end" aria-label={text("任务筛选", "Issue filters")}><FilterCard title={text("任务筛选", "Issue filters")} fields={filterFields} conditions={conditions} onChange={setConditions} emptyHint={text("尚未添加筛选条件，显示当前范围内的全部任务。", "No filter conditions yet; every issue in scope is shown.")} addLabel={text("添加条件", "Add condition")} clearLabel={text("清除条件", "Clear conditions")} whereLabel={text("条件", "Where")} andLabel={text("并且", "and")} anyLabel={text("任意", "Any")} removeLabel={text("移除条件", "Remove filter")}/></PopoverContent></Popover>{scenario === "readonly" && <Badge>{text("只读", "Read only")}</Badge>}<span className={d3.snapshot}><Clock3 size={14} aria-hidden="true" />{text("本地快照", "Local snapshot")}</span><Button variant="ghost" size="icon" className={d3.refresh} disabled={scenario === "loading" || surface.readModel.data.refreshing} aria-label={text("刷新仪表盘", "Refresh dashboard")} onClick={surface.actions.refresh}><RefreshCw size={16} aria-hidden="true" /></Button></div>}
     toolbar={null}
     createDialog={details}
     regions={{

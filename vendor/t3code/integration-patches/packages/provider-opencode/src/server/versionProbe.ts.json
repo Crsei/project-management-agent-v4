@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/versionProbe.ts",
+  "beforeSha256": "fa06e93d2685cb02f07cc94a8a397b53f9237941c11c75d245e979124ac7676f",
+  "afterSha256": "970219d061687027fe7d30666fc9decec7aba35d0cb0b539960645a7f90aeb5e",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 46,
+      "before": [
+        "): ProbedOpenCode | \"unauthorized\" | undefined {\n",
+        "  if (response.status === 401) return \"unauthorized\";\n"
+      ],
+      "after": [
+        "): ProbedOpenCode | { readonly status: number } | undefined {\n",
+        "  if (response.status >= 400 && response.status !== 404) return { status: response.status };\n"
+      ]
+    },
+    {
+      "start": 144,
+      "before": [
+        "    if (result === \"unauthorized\") {\n"
+      ],
+      "after": [
+        "    if (result && \"status\" in result) {\n"
+      ]
+    },
+    {
+      "start": 147,
+      "before": [
+        "        detail: \"401 Unauthorized: the OpenCode server rejected the password.\",\n"
+      ],
+      "after": [
+        "        detail: result.status === 401 ? \"401 Unauthorized: the OpenCode server rejected the password.\"\n",
+        "          : result.status === 403 ? \"403 Forbidden: the OpenCode server rejected authentication.\"\n",
+        "          : `The OpenCode server returned HTTP ${result.status}.`,\n",
+        "        httpStatus: result.status,\n"
+      ]
+    }
+  ]
+}

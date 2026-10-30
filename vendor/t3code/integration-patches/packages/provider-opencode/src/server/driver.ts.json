@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/driver.ts",
+  "beforeSha256": "788563b3ef14ac6cf4c076e0e45d1d2fdf266c712adbd7e280de484adbacee47",
+  "afterSha256": "041db278dac9f3f320f163e1e9c6f76c3efe696568f29d184a0b60b762ed1890",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 20,
+      "before": [],
+      "after": [
+        "import { ProviderAdapterOpenSessionError } from \"@t3tools/provider-core/server/ProviderAdapter\";\n"
+      ]
+    },
+    {
+      "start": 118,
+      "before": [
+        "      Effect.flatMap(pick(input.probe.get), (adapter) => adapter.openSession(session)),\n"
+      ],
+      "after": [
+        "      input.probe.get.pipe(\n",
+        "        Effect.mapError(cause => new ProviderAdapterOpenSessionError({\n",
+        "          driver: DRIVER_KIND, providerSessionId: session.providerSessionId, cause,\n",
+        "        })),\n",
+        "        Effect.flatMap(probed =>\n",
+        "          (probed.generation === \"v2\" ? input.v2 : input.v1).openSession(session)),\n",
+        "      ),\n"
+      ]
+    }
+  ]
+}

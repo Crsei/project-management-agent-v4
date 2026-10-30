@@ -1,0 +1,246 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/providerMaintenanceRunner.ts",
+  "beforeSha256": "de3d4d5a0accb98f6c2882970e94ffbc40ea4989546ac9efc7142e5294c91b08",
+  "afterSha256": "294c4085f6779ee059aefd89036ff1439fc2557d003333c6f3953c60dd32998a",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 9,
+      "before": [
+        "import { resolveSpawnCommand } from \"@t3tools/shared/shell\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 12,
+      "before": [
+        "import * as Data from \"effect/Data\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 14,
+      "before": [
+        "import * as Duration from \"effect/Duration\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 17,
+      "before": [
+        "import * as Option from \"effect/Option\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 19,
+      "before": [
+        "import * as Schedule from \"effect/Schedule\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 21,
+      "before": [
+        "import * as Stream from \"effect/Stream\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 23,
+      "before": [
+        "import { ChildProcess, ChildProcessSpawner } from \"effect/process\";\n",
+        "import * as NodeUtil from \"node:util\";\n"
+      ],
+      "after": [
+        "import { ChildProcessSpawner } from \"effect/process\";\n"
+      ]
+    },
+    {
+      "start": 40,
+      "before": [
+        "import { collectUint8StreamText } from \"@t3tools/provider-core/server/collectStreamText\";\n"
+      ],
+      "after": [
+        "import { runProviderMaintenanceCommandWithSpawner, toProgressLine, UPDATE_OUTPUT_MAX_BYTES, type ProviderMaintenanceCommandResult } from \"./providerMaintenanceCommand.ts\";\n"
+      ]
+    },
+    {
+      "start": 43,
+      "before": [
+        "const UPDATE_TIMEOUT_MS = 5 * 60_000;\n",
+        "const UPDATE_OUTPUT_MAX_BYTES = 10_000;\n",
+        "// Sample installer output because every progress update resends the provider list to all clients.\n",
+        "const UPDATE_PROGRESS_INTERVAL = Duration.seconds(1);\n",
+        "const UPDATE_PROGRESS_MAX_LENGTH = 200;\n",
+        "// An installer may write for minutes without a line ending; only its tail matters.\n",
+        "const UPDATE_PARTIAL_LINE_MAX_LENGTH = 4_096;\n",
+        "\n",
+        "export interface ProviderMaintenanceCommandResult {\n",
+        "  readonly stdout: string;\n",
+        "  readonly stderr: string;\n",
+        "  readonly exitCode: number | null;\n",
+        "  readonly timedOut: boolean;\n",
+        "  readonly stdoutTruncated: boolean;\n",
+        "  readonly stderrTruncated: boolean;\n",
+        "}\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 77,
+      "before": [
+        "class ProviderMaintenanceCommandError extends Data.TaggedError(\"ProviderMaintenanceCommandError\")<{\n",
+        "  readonly message: string;\n",
+        "  readonly cause?: unknown;\n",
+        "}> {}\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 89,
+      "before": [
+        "const runProviderMaintenanceCommandWithSpawner = Effect.fn(\"ProviderMaintenanceRunner.runCommand\")(\n",
+        "  function* (input: {\n",
+        "    readonly spawner: ChildProcessSpawner.ChildProcessSpawner[\"Service\"];\n",
+        "    readonly command: string;\n",
+        "    readonly args: ReadonlyArray<string>;\n",
+        "    readonly env?: NodeJS.ProcessEnv;\n",
+        "    readonly onProgress?: (line: string) => Effect.Effect<void>;\n",
+        "  }) {\n",
+        "    const collectCommandResult = Effect.fn(\"ProviderMaintenanceRunner.collectCommandResult\")(\n",
+        "      function* () {\n",
+        "        // Windows batch shims require shell dispatch through resolveSpawnCommand.\n",
+        "        const resolved = yield* resolveSpawnCommand(input.command, input.args);\n",
+        "        const child = yield* input.spawner\n",
+        "          .spawn(\n",
+        "            ChildProcess.make(resolved.command, resolved.args, {\n",
+        "              shell: resolved.shell,\n",
+        "              ...(input.env ? { env: input.env, extendEnv: true } : {}),\n",
+        "            }),\n",
+        "          )\n",
+        "          .pipe(\n",
+        "            Effect.mapError(\n",
+        "              (cause) =>\n",
+        "                new ProviderMaintenanceCommandError({\n",
+        "                  message: `Failed to run update command ${input.command}: ${cause.message}`,\n",
+        "                  cause,\n",
+        "                }),\n",
+        "            ),\n",
+        "          );\n",
+        "        yield* Effect.addFinalizer(() => child.kill().pipe(Effect.ignore));\n",
+        "\n",
+        "        const pendingProgress = yield* Ref.make<string | null>(null);\n",
+        "        const onProgress = input.onProgress;\n",
+        "        if (onProgress) {\n",
+        "          yield* Ref.getAndSet(pendingProgress, null).pipe(\n",
+        "            Effect.flatMap((line) => (line === null ? Effect.void : onProgress(line))),\n",
+        "            Effect.repeat(Schedule.spaced(UPDATE_PROGRESS_INTERVAL)),\n",
+        "            Effect.forkScoped,\n",
+        "          );\n",
+        "        }\n",
+        "        const trackProgress = <E>(stream: Stream.Stream<Uint8Array, E>) => {\n",
+        "          if (!onProgress) {\n",
+        "            return stream;\n",
+        "          }\n",
+        "          const decoder = new TextDecoder();\n",
+        "          let partialLine = \"\";\n",
+        "          return stream.pipe(\n",
+        "            Stream.tap((chunk) => {\n",
+        "              const split = splitOutputLines(partialLine, decoder.decode(chunk, { stream: true }));\n",
+        "              partialLine = split.partialLine;\n",
+        "              const line =\n",
+        "                toProgressLine(split.partialLine) ??\n",
+        "                split.lines.map(toProgressLine).findLast((value) => value !== null);\n",
+        "              return line ? Ref.set(pendingProgress, line) : Effect.void;\n",
+        "            }),\n",
+        "          );\n",
+        "        };\n",
+        "\n",
+        "        const [stdout, stderr, exitCode] = yield* Effect.all(\n",
+        "          [\n",
+        "            collectUint8StreamText({\n",
+        "              stream: trackProgress(child.stdout),\n",
+        "              maxBytes: UPDATE_OUTPUT_MAX_BYTES,\n",
+        "            }),\n",
+        "            collectUint8StreamText({\n",
+        "              stream: trackProgress(child.stderr),\n",
+        "              maxBytes: UPDATE_OUTPUT_MAX_BYTES,\n",
+        "            }),\n",
+        "            child.exitCode,\n",
+        "          ],\n",
+        "          { concurrency: \"unbounded\" },\n",
+        "        ).pipe(\n",
+        "          Effect.mapError(\n",
+        "            (cause) =>\n",
+        "              new ProviderMaintenanceCommandError({\n",
+        "                message: cause instanceof Error ? cause.message : \"Update command failed to run.\",\n",
+        "                cause,\n",
+        "              }),\n",
+        "          ),\n",
+        "        );\n",
+        "\n",
+        "        return {\n",
+        "          stdout: stdout.text,\n",
+        "          stderr: stderr.text,\n",
+        "          exitCode: Number(exitCode),\n",
+        "          timedOut: false,\n",
+        "          stdoutTruncated: stdout.truncated,\n",
+        "          stderrTruncated: stderr.truncated,\n",
+        "        } satisfies ProviderMaintenanceCommandResult;\n",
+        "      },\n",
+        "    );\n",
+        "\n",
+        "    return yield* collectCommandResult().pipe(\n",
+        "      Effect.scoped,\n",
+        "      Effect.timeoutOption(Duration.millis(UPDATE_TIMEOUT_MS)),\n",
+        "      Effect.map((result) =>\n",
+        "        Option.match(result, {\n",
+        "          onSome: (value) => value,\n",
+        "          onNone: () =>\n",
+        "            ({\n",
+        "              stdout: \"\",\n",
+        "              stderr: \"\",\n",
+        "              exitCode: null,\n",
+        "              timedOut: true,\n",
+        "              stdoutTruncated: false,\n",
+        "              stderrTruncated: false,\n",
+        "            }) satisfies ProviderMaintenanceCommandResult,\n",
+        "        }),\n",
+        "      ),\n",
+        "    );\n",
+        "  },\n",
+        ");\n",
+        "\n",
+        "export function splitOutputLines(\n",
+        "  partialLine: string,\n",
+        "  text: string,\n",
+        "): { readonly lines: ReadonlyArray<string>; readonly partialLine: string } {\n",
+        "  const parts = (partialLine + text).split(/\\r\\n|\\r|\\n/);\n",
+        "  return { partialLine: (parts.pop() ?? \"\").slice(-UPDATE_PARTIAL_LINE_MAX_LENGTH), lines: parts };\n",
+        "}\n",
+        "\n",
+        "export function toProgressLine(line: string): string | null {\n",
+        "  const text = NodeUtil.stripVTControlCharacters(line).replace(/\\s+/g, \" \").trim();\n",
+        "  if (text.length === 0) {\n",
+        "    return null;\n",
+        "  }\n",
+        "  return text.length <= UPDATE_PROGRESS_MAX_LENGTH\n",
+        "    ? text\n",
+        "    : `${text.slice(0, UPDATE_PROGRESS_MAX_LENGTH - 1)}…`;\n",
+        "}\n"
+      ],
+      "after": []
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "source": "apps/server/src/claudeHistoryWorker.ts",
+  "beforeSha256": "4fc2f75c1b98192479c27e77b85a84ff15204087082a1b513413e327df66aed6",
+  "afterSha256": "f909f59a8cfb160bcd3a43f41675b98edb1d3e2e37bb7e90aef53945886bf551",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [
+        "import { forkSession, getSessionMessages } from \"@anthropic-ai/claude-agent-sdk\";\n"
+      ],
+      "after": [
+        "import { forkSession, getSessionInfo, getSessionMessages, getSubagentMessages } from \"@anthropic-ai/claude-agent-sdk\";\n"
+      ]
+    },
+    {
+      "start": 10,
+      "before": [],
+      "after": [
+        "      agentId: Schema.optionalKey(Schema.String),\n"
+      ]
+    },
+    {
+      "start": 22,
+      "before": [
+        "    method === \"getSessionMessages\"\n",
+        "      ? await getSessionMessages(sessionId, options)\n"
+      ],
+      "after": [
+        "    method === \"readSession\"\n",
+        "      ? await Promise.all([getSessionInfo(sessionId, options), getSessionMessages(sessionId, options)]).then(([info, messages]) => ({\n",
+        "          sessionId: info?.sessionId,\n",
+        "          cwd: info?.cwd,\n",
+        "          // Only native identities and stable completion markers cross this metadata boundary.\n",
+        "          messages: messages.map((entry) => ({\n",
+        "            type: entry.type, uuid: entry.uuid, sessionId: entry.session_id,\n",
+        "            parentToolUseId: entry.parent_tool_use_id,\n",
+        "            synthetic: typeof entry.message === \"object\" && entry.message !== null\n",
+        "              && Reflect.get(entry.message, \"model\") === \"<synthetic>\",\n",
+        "            stopReason: typeof entry.message === \"object\" && entry.message !== null\n",
+        "              ? Reflect.get(entry.message, \"stop_reason\") ?? null : null,\n",
+        "          })),\n",
+        "        }))\n",
+        "      : method === \"getSessionMessages\"\n",
+        "        ? await getSessionMessages(sessionId, options)\n",
+        "      : method === \"subagentLaunchToolUseId\"\n",
+        "        ? options.agentId === undefined\n",
+        "          ? (() => { throw new Error(\"Claude subagent id is required.\"); })()\n",
+        "          : await getSubagentMessages(sessionId, options.agentId, { ...options, limit: 1 })\n",
+        "              .then((messages) => messages[0]?.parent_tool_use_id ?? null)\n"
+      ]
+    }
+  ]
+}

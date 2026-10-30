@@ -9,8 +9,10 @@ import { useDisplayDateTime } from '@/features/workspace/preference-format';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { TaskPersonalList } from './TaskPersonalList';
 import { taskStateLabel } from './task-status-label';
+import type { TaskScope } from './task-collection-model';
 import type { WorkspaceController } from './controller';
 import type { ScheduleViewProps } from './workspace';
+import './task-list-scope.css';
 
 const priorityLabels: Record<string, string> = { urgent: '紧急', high: '高', medium: '中', low: '低' };
 
@@ -49,22 +51,26 @@ function TaskRow({ file, controller: c, en, workflow, dueLabel }: { file: FileRe
 }
 
 /** Every scope projects the same authorized files; layout never owns the task set. */
-export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarTarget, personal }: { controller: WorkspaceController; en: boolean; renderSchedule: (props: ScheduleViewProps) => ReactNode; toolbarTarget?: HTMLElement | null; personal?: { today: string | null; actorId: string | null } }) {
+export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarTarget, personal, scope }: { controller: WorkspaceController; en: boolean; renderSchedule: (props: ScheduleViewProps) => ReactNode; toolbarTarget?: HTMLElement | null; personal?: { today: string | null; actorId: string | null }; scope?: TaskScope }) {
   const showCompletedTasks = useWorkspaceStore(state => state.showCompletedTasks);
   const display = useDisplayDateTime();
   const collection = c.taskCollection;
   if (!collection) return null;
   if (c.scopePending) return <p className="task-scope-notice" role="status">{en ? 'Reading your personal task context…' : '正在读取个人任务上下文…'}</p>;
   if (c.scopeError) return null;
+  if (!collection.files.length) {
+    const important = scope === 'important';
+    return <div className="task-collection-content"><div className="task-empty-state" role="status"><Bookmark size={22} aria-hidden="true" /><strong>{important ? (en ? 'Nothing watched yet' : '暂无关注的任务') : (en ? 'No tasks in this scope' : '此范围暂无任务')}</strong><p>{important ? (en ? 'Use the watch action on any task to keep it here. Watching is private and does not change the task.' : '在任意任务中点击关注，即可把任务加入这里。关注仅本人可见，不会改变任务状态。') : (en ? 'Adjust the filters or create a task in an authorized project.' : '调整筛选条件，或在有权限的项目中新建任务。')}</p></div></div>;
+  }
   if (personal && c.prefs.layout === 'list') return <TaskPersonalList controller={c} en={en} today={personal.today} actorId={personal.actorId} />;
   const workflow = workflowFor('work_item', c.configuration);
   const board = c.prefs.layout === 'kanban';
   const timeline = c.prefs.layout === 'gantt';
   const scheduled = c.prefs.layout === 'calendar' || c.prefs.layout === 'gantt' || c.prefs.layout === 'graph';
-  // Lists group all/important tasks by workflow state; boards keep every task in its column, while schedules keep one open lane plus terminal drawers.
+  // Lists group all/important tasks by workflow state; boards keep every task in its column; gantt/graph keep one open lane plus terminal drawers; the calendar shows open tasks only.
   const boardFiles = showCompletedTasks ? collection.files : [...collection.open, ...collection.canceled];
   const grouped = board ? [{ id: 'open', files: boardFiles, due: undefined }] : scheduled ? [{ id: 'open', files: collection.open, due: undefined }] : collection.groups;
-  const terminalDrawers = scheduled;
+  const terminalDrawers = scheduled && c.prefs.layout !== 'calendar';
   function render(files: FileRecord[], terminal = false) {
     if (!terminal && (c.prefs.layout === 'calendar' || c.prefs.layout === 'gantt')) return renderSchedule({ files, layout: c.prefs.layout, contextFiles: c.files, configuration: c.configuration, projectId: c.projectId || c.prefs.project || undefined, toolbarTarget, onSelect: c.select, onPatch: c.patch, canEdit: c.canEdit, ...(c.canWrite && !c.writesBlocked && !c.configurationInvalid && !c.busy && (!personal || personal.actorId) ? { onCreate: (due: string) => c.openCreate(workflow?.initial, undefined, { due }) } : {}) });
     if (!terminal && c.prefs.layout !== 'list') return <PMView {...c.viewProps} files={files} />;

@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/CursorAdapterV2.testkit.ts",
+  "beforeSha256": "0f27b41124986564596cede6a544196f38de019c907883e0cb292dd0f2dc6ba5",
+  "afterSha256": "36f6c7cbb6c517f444a6cf5c474ccc8a982f85ac0818b50d142bd6de33f14e8c",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 2,
+      "before": [
+        "import * as NodeServices from \"@effect/platform-node/NodeServices\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 8,
+      "before": [
+        "  type ProviderReplayTranscript,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 13,
+      "before": [
+        "import * as FileSystem from \"effect/FileSystem\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 17,
+      "before": [
+        "import * as TestProviderHost from \"@t3tools/provider-testing/TestProviderHost\";\n",
+        "import * as IdAllocator from \"@t3tools/provider-core/server/IdAllocator\";\n",
+        "import { ProviderAdapterDriverCreateError } from \"@t3tools/provider-core/server/adapterDriver\";\n",
+        "import * as ProviderAdapterRegistry from \"../ProviderAdapterRegistry.ts\";\n",
+        "import type { OrchestratorV2ProviderReplayHarness } from \"../testkit/ProviderReplayHarness.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 24,
+      "before": [
+        "  CURSOR_DEFAULT_INSTANCE_ID,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 27,
+      "before": [
+        "  makeCursorAdapterV2,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 30,
+      "before": [
+        "import type { RuntimePolicyV2Override } from \"../RuntimePolicy.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 122,
+      "before": [
+        "\n",
+        "export const CursorOrchestratorReplayHarnessError = Schema.Union([\n",
+        "  CursorAgentSdkReplayError,\n",
+        "  ProviderAdapterDriverCreateError,\n",
+        "]);\n",
+        "export type CursorOrchestratorReplayHarnessError = typeof CursorOrchestratorReplayHarnessError.Type;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 510,
+      "before": [
+        "export function layer(\n",
+        "  transcript: CursorAgentSdkReplayTranscript,\n",
+        "  options?: {\n",
+        "    readonly runner?: CursorAgentSdk.CursorAgentSdkRunner[\"Service\"];\n",
+        "    readonly assertCompleteOnFinalize?: boolean;\n",
+        "  },\n",
+        ") {\n",
+        "  // Empty HOME prevents skill discovery from using the host's skills.\n",
+        "  const layerHostEnvironment = Layer.effect(\n",
+        "    HostProcess.Environment,\n",
+        "    Effect.gen(function* () {\n",
+        "      const fs = yield* FileSystem.FileSystem;\n",
+        "      const home = yield* fs.makeTempDirectoryScoped({ prefix: \"t3-cursor-replay-home-\" });\n",
+        "      return { HOME: home };\n",
+        "    }).pipe(Effect.orDie),\n",
+        "  ).pipe(Layer.provide(NodeServices.layer));\n",
+        "  return ProviderAdapterRegistry.layerFromAdaptersEffect(\n",
+        "    Effect.gen(function* () {\n",
+        "      const adapter = yield* makeCursorAdapterV2({\n",
+        "        instanceId: CURSOR_DEFAULT_INSTANCE_ID,\n",
+        "        environment: yield* HostProcess.Environment,\n",
+        "      });\n",
+        "      return [adapter];\n",
+        "    }),\n",
+        "  ).pipe(\n",
+        "    Layer.provide(\n",
+        "      Layer.mergeAll(\n",
+        "        layerCursorAgentSdkReplay(transcript, options),\n",
+        "        TestProviderHost.layer().pipe(Layer.provide(NodeServices.layer)),\n",
+        "        layerHostEnvironment,\n",
+        "        NodeServices.layer,\n",
+        "        IdAllocator.layer,\n",
+        "      ),\n",
+        "    ),\n",
+        "  );\n",
+        "}\n",
+        "\n",
+        "function metadataFromTranscript(transcript: ProviderReplayTranscript): {\n",
+        "  readonly provider?: string;\n",
+        "  readonly protocol?: string;\n",
+        "  readonly scenario?: string;\n",
+        "} {\n",
+        "  return {\n",
+        "    provider: transcript.provider,\n",
+        "    protocol: transcript.protocol,\n",
+        "    scenario: transcript.scenario,\n",
+        "  };\n",
+        "}\n",
+        "\n",
+        "export const CursorOrchestratorReplayHarness: OrchestratorV2ProviderReplayHarness<\n",
+        "  CursorAgentSdkReplayTranscript,\n",
+        "  CursorOrchestratorReplayHarnessError\n",
+        "> = {\n",
+        "  driver: CursorAgentSdk.CURSOR_PROVIDER,\n",
+        "  decodeTranscript: (transcript) =>\n",
+        "    decodeCursorAgentSdkReplayTranscript(transcript).pipe(\n",
+        "      Effect.mapError(\n",
+        "        (cause) =>\n",
+        "          new CursorReplayTranscriptDecodeError({\n",
+        "            ...metadataFromTranscript(transcript),\n",
+        "            cause,\n",
+        "          }),\n",
+        "      ),\n",
+        "    ),\n",
+        "  makeProviderAdapterRegistryLayer: (transcript) => layer(transcript),\n",
+        "};\n",
+        "\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 624,
+      "before": [
+        "  readonly override?: Pick<RuntimePolicyV2Override, \"approvalPolicy\" | \"sandboxPolicy\">;\n"
+      ],
+      "after": [
+        "  readonly override?: Pick<\n",
+        "    ProviderAdapter.ProviderAdapterV2RuntimePolicy,\n",
+        "    \"approvalPolicy\" | \"sandboxPolicy\"\n",
+        "  >;\n"
+      ]
+    },
+    {
+      "start": 659,
+      "before": [
+        "    RuntimePolicyV2Override,\n"
+      ],
+      "after": [
+        "    ProviderAdapter.ProviderAdapterV2RuntimePolicy,\n"
+      ]
+    },
+    {
+      "start": 711,
+      "before": [
+        "    mcpSession: undefined,\n"
+      ],
+      "after": [
+        "    runtimeBinding: undefined,\n"
+      ]
+    }
+  ]
+}

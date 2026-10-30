@@ -36,9 +36,9 @@ export function runtimeConfig(env: NodeJS.ProcessEnv = process.env) {
   return {
     databaseUrl: env.DATABASE_URL,
     coreWorkspaceRoot: localProjects.coreRoot,
-    chatSpaceRoot: env.PM_CHAT_SPACE_ROOT ?? path.join(homedir(), '.pmv3'),
+    chatSpaceRoot: env.PM_CHAT_SPACE_ROOT ?? path.join(homedir(), '.pmv4'),
     localProjects,
-    publicOrigin: env.PUBLIC_ORIGIN ?? `http://${env.HOST ?? '127.0.0.1'}:${env.PORT ?? '4100'}`,
+    publicOrigin: env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:3224',
     cookieSecure: env.COOKIE_SECURE === 'true',
     workerIntervalMs: positiveInteger(env.WORKER_INTERVAL_MS, 500, 60_000, 'WORKER_INTERVAL_MS'),
     eventRetentionDays: positiveInteger(env.EVENT_RETENTION_DAYS, 7, 3650, 'EVENT_RETENTION_DAYS'),

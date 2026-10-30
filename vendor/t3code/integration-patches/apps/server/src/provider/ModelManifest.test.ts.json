@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/ModelManifest.test.ts",
+  "beforeSha256": "21878e2dde69d7245e15898591cd92e2b6193d8ac40c54eb50d0e5ec6b543567",
+  "afterSha256": "d63dc013bdb896a0d93205b6d3210db775c32c397e68cd162f50324731fdee37",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 11,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n",
+        "import * as ServerSettings from \"../serverSettings.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\"\n"
+      ]
+    },
+    {
+      "start": 14,
+      "before": [],
+      "after": [
+        "import { makeTestServerConfigLayer, makeTestServerSettingsLayer } from \"./testUtils/providerHostFixtures.ts\";\n"
+      ]
+    },
+    {
+      "start": 258,
+      "before": [
+        "  readonly settings?: Parameters<typeof ServerSettings.layerTest>[0];\n"
+      ],
+      "after": [
+        "  readonly settings?: Parameters<typeof makeTestServerSettingsLayer>[0];\n"
+      ]
+    },
+    {
+      "start": 260,
+      "before": [
+        "  ServerConfig.layerTest(process.cwd(), { prefix: input.prefix }).pipe(\n"
+      ],
+      "after": [
+        "  makeTestServerConfigLayer(process.cwd(), { prefix: input.prefix }).pipe(\n"
+      ]
+    },
+    {
+      "start": 262,
+      "before": [
+        "    Layer.provideMerge(ServerSettings.layerTest(input.settings ?? {})),\n"
+      ],
+      "after": [
+        "    Layer.provideMerge(makeTestServerSettingsLayer(input.settings ?? {})),\n"
+      ]
+    }
+  ]
+}

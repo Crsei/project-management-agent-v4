@@ -1,0 +1,227 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/ProviderAuthService.test.ts",
+  "beforeSha256": "353acd4f508468868afcbb9628e8ce714c68a0a3ef00807c9aaef917966aeb08",
+  "afterSha256": "20f1bce396ff61d25c5a704c72e78bff35babd577fc6e2cfabbd331c5b869370",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 22,
+      "before": [
+        "import * as ProjectionStore from \"../orchestration-v2/ProjectionStore.ts\";\n",
+        "import * as ProviderSessionManager from \"../orchestration-v2/ProviderSessionManager.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 77,
+      "before": [],
+      "after": [
+        "type TestThread = Pick<OrchestrationV2ThreadShell, \"id\" | \"providerInstanceId\" | \"activeProviderThreadId\">;\n"
+      ]
+    },
+    {
+      "start": 81,
+      "before": [
+        "): OrchestrationV2ThreadShell {\n"
+      ],
+      "after": [
+        "): TestThread {\n"
+      ]
+    },
+    {
+      "start": 91,
+      "before": [
+        "  return shell as unknown as OrchestrationV2ThreadShell;\n"
+      ],
+      "after": [
+        "  return shell;\n"
+      ]
+    },
+    {
+      "start": 123,
+      "before": [
+        "    threads?: ReadonlyArray<OrchestrationV2ThreadShell>;\n"
+      ],
+      "after": [
+        "    threads?: ReadonlyArray<TestThread>;\n"
+      ]
+    },
+    {
+      "start": 146,
+      "before": [],
+      "after": [
+        "  const invalidations: ProviderAuthService.ProviderAuthSessionInvalidationRequest[] = [];\n"
+      ]
+    },
+    {
+      "start": 252,
+      "before": [
+        "        Layer.mock(ProjectionStore.ProjectionStoreV2)({\n",
+        "          getRecoveryThreadIds: () =>\n"
+      ],
+      "after": [
+        "        Layer.succeed(ProviderAuthService.ProviderAuthSessionInvalidation, {\n",
+        "          invalidateSessions: request =>\n"
+      ]
+    },
+    {
+      "start": 255,
+      "before": [],
+      "after": [
+        "              invalidations.push(request);\n",
+        "              const { requestingInstanceId, instanceId: targetId, isCurrent } = request;\n"
+      ]
+    },
+    {
+      "start": 259,
+      "before": [
+        "              return yield* input.shellError\n",
+        "                ? Effect.fail(\n",
+        "                    new ProjectionStore.ProjectionStoreReadError({\n",
+        "                      threadId: ThreadId.make(\"shell\"),\n",
+        "                      cause: new Error(\"private database diagnostics\"),\n",
+        "                    }),\n",
+        "                  )\n",
+        "                : Effect.succeed(threads.map((thread) => thread.id));\n",
+        "            }),\n",
+        "          getThreadRecords: (threadId) =>\n",
+        "            Effect.sync(() => {\n",
+        "              actions.push(`sessions:${threadId}`);\n",
+        "              return {\n",
+        "                providerSessions: sessions.get(threadId) ?? [],\n",
+        "              } as never;\n",
+        "            }),\n",
+        "        }),\n",
+        "        Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({\n",
+        "          release: ({ providerSessionId, reason }) =>\n",
+        "            Effect.gen(function* () {\n",
+        "              assert.isTrue(gateClosed);\n",
+        "              actions.push(`stop:${providerSessionId}`);\n",
+        "              yield* input.beforeStop ?? Effect.void;\n",
+        "              if (input.stopError) {\n",
+        "                return yield* new ProviderSessionManager.ProviderSessionReleaseError({\n",
+        "                  providerSessionId,\n",
+        "                  reason,\n",
+        "                  cause: new Error(\"private process diagnostics\"),\n",
+        "                });\n",
+        "              }\n",
+        "              released.push(providerSessionId);\n",
+        "              for (const [threadId, list] of sessions) {\n",
+        "                const remaining = list.filter((session) => session.id !== providerSessionId);\n",
+        "                if (remaining.length === 0) sessions.delete(threadId);\n",
+        "                else sessions.set(threadId, remaining);\n"
+      ],
+      "after": [
+        "              if (input.shellError) return yield* new ProviderSetupError({\n",
+        "                instanceId: requestingInstanceId,\n",
+        "                operation: \"stopSessions\",\n",
+        "                detail: \"private database diagnostics\",\n",
+        "              });\n",
+        "              // The fixture owns its live sessions, independently of each thread's current selection.\n",
+        "              const stopped = new Set<ProviderSessionId>();\n",
+        "              for (const thread of threads) {\n",
+        "                actions.push(`sessions:${thread.id}`);\n",
+        "                for (const session of sessions.get(thread.id) ?? []) {\n",
+        "                  if (session.providerInstanceId !== targetId || session.status === \"stopped\"\n",
+        "                    || session.status === \"error\" || stopped.has(session.id) || !(yield* isCurrent)) continue;\n",
+        "                  actions.push(`stop:${session.id}`);\n",
+        "                  yield* input.beforeStop ?? Effect.void;\n",
+        "                  if (!(yield* isCurrent)) continue;\n",
+        "                  if (input.stopError) return yield* new ProviderSetupError({\n",
+        "                    instanceId: requestingInstanceId,\n",
+        "                    operation: \"stopSessions\",\n",
+        "                    detail: \"private process diagnostics\",\n",
+        "                  });\n",
+        "                  released.push(session.id);\n",
+        "                  stopped.add(session.id);\n",
+        "                  for (const [threadId, list] of sessions) {\n",
+        "                    const remaining = list.filter(current => current.id !== session.id);\n",
+        "                    if (remaining.length === 0) sessions.delete(threadId);\n",
+        "                    else sessions.set(threadId, remaining);\n",
+        "                  }\n",
+        "                }\n"
+      ]
+    },
+    {
+      "start": 304,
+      "before": [],
+      "after": [
+        "    invalidations,\n"
+      ]
+    },
+    {
+      "start": 374,
+      "before": [
+        "          Layer.mock(ProjectionStore.ProjectionStoreV2)({}),\n",
+        "          Layer.mock(ProviderSessionManager.ProviderSessionManagerV2)({}),\n"
+      ],
+      "after": [
+        "          Layer.succeed(ProviderAuthService.ProviderAuthSessionInvalidation, {\n",
+        "            invalidateSessions: ({ requestingInstanceId }) => Effect.fail(new ProviderSetupError({\n",
+        "              instanceId: requestingInstanceId, operation: \"stopSessions\",\n",
+        "              detail: \"Subscription routing must not invalidate provider sessions.\",\n",
+        "            })),\n",
+        "          }),\n"
+      ]
+    },
+    {
+      "start": 859,
+      "before": [],
+      "after": [
+        "\n",
+        "it.effect.each([\"start\", \"logout\", \"prompt\"] as const)(\n",
+        "  \"a failing session-owner port prevents native credential mutation during %s\",\n",
+        "  action => Effect.gen(function* () {\n",
+        "    const harness = yield* makeHarness({\n",
+        "      sharedCredentials: true, stopError: true,\n",
+        "      ...sessionThreads([makeSession(\"owned-live-session\")]),\n",
+        "    });\n",
+        "    const error = yield* (action === \"start\"\n",
+        "      ? harness.service.start({ instanceId }, owner).pipe(Effect.flip)\n",
+        "      : action === \"logout\"\n",
+        "        ? harness.service.logout({ instanceId }).pipe(Effect.flip)\n",
+        "        : harness.service.tryHandlePromptCommand({\n",
+        "            instanceId,\n",
+        "            text: \"/logout\",\n",
+        "            hasAttachments: false,\n",
+        "          }).pipe(Effect.flip));\n",
+        "    assert.instanceOf(error, ProviderSetupError);\n",
+        "    assert.strictEqual(error.operation, \"stopSessions\");\n",
+        "    assert.notInclude(error.detail, \"private process diagnostics\");\n",
+        "    assert.notInclude(harness.actions, \"start-sign-in\");\n",
+        "    assert.notInclude(harness.actions, \"native-logout\");\n",
+        "    assert.notInclude(harness.actions, \"invalidate-shared\");\n",
+        "    assert.deepStrictEqual(harness.released, []);\n",
+        "  }),\n",
+        ");\n",
+        "\n",
+        "it.effect(\"the session-owner port receives the captured binding and a live peer-ownership guard\", () =>\n",
+        "  Effect.gen(function* () {\n",
+        "    const harness = yield* makeHarness({ sharedCredentials: true });\n",
+        "    yield* harness.service.logout({ instanceId });\n",
+        "    assert.deepStrictEqual(harness.invalidations.map(request => request.instanceId), [instanceId, otherInstanceId]);\n",
+        "    const peer = harness.invalidations.find(request => request.instanceId === otherInstanceId)!;\n",
+        "    assert.strictEqual(peer.requestingInstanceId, instanceId);\n",
+        "    assert.deepStrictEqual(peer.credentialBinding, { owner: \"provider\", key: \"shared\" });\n",
+        "    assert.isTrue(yield* peer.isCurrent);\n",
+        "    harness.replaceInstance(makeInstance({\n",
+        "      instanceId: otherInstanceId, enabled: true,\n",
+        "      auth: { ...harness.auth, credentialBinding: { owner: \"provider\", key: \"new-account\" } },\n",
+        "    }));\n",
+        "    assert.isFalse(yield* peer.isCurrent);\n",
+        "  }),\n",
+        ");\n"
+      ]
+    }
+  ]
+}

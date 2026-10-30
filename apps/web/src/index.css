@@ -1,15 +1,30 @@
 @import "tailwindcss";
+@import "./styles/fonts.css";
 @import "./styles/theme.css";
+@import "./features/agent/styles/globals.css";
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   * {
     @apply border-border;
   }
+  html {
+    /* 只使用已注册的 400/500/600 字重，缺少的字重回退到最接近的已加载字重 */
+    font-synthesis: none;
+  }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-size: 14px;
+    font-weight: 500;
     line-height: 20px;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
   }
   /* 键盘焦点是独立状态：2px 可见环 + 陶土色，与 hover/选中区分 */
   :focus-visible {

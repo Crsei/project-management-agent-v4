@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/driver.test.ts",
+  "beforeSha256": "a7d0a52e79811731cec2845d4499828378d59f450ca218e083c4603ac9790a9f",
+  "afterSha256": "03879bb9051c5c095f45683c7e59c59100e8b9b58468b0c82566844299a22b8e",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 24,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { openCodeTestRuntimeHostLayer } from \"./runtimeHost.fixture.ts\";\n"
+      ]
+    },
+    {
+      "start": 52,
+      "before": [
+        "  McpProviderSessions.layer,\n"
+      ],
+      "after": [
+        "  openCodeTestRuntimeHostLayer,\n"
+      ]
+    },
+    {
+      "start": 222,
+      "before": [
+        "        assert.strictEqual(ready?.auth.status, \"authenticated\");\n"
+      ],
+      "after": [
+        "        assert.strictEqual(ready?.auth.status, \"unknown\", \"Catalog recovery does not establish a vendor identity\");\n"
+      ]
+    },
+    {
+      "start": 347,
+      "before": [
+        "  McpProviderSessions.layer,\n"
+      ],
+      "after": [
+        "  openCodeTestRuntimeHostLayer,\n"
+      ]
+    }
+  ]
+}

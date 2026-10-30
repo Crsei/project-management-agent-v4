@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/codexUsage.ts",
+  "beforeSha256": "443d19e77c9a2f453afa410b55fb6c8f164375cb91329f6ee36685c1d0c32fcf",
+  "afterSha256": "58ba2a4776845a1f6928ae67b62b0a38a561da90869875078609d4b62e1c5035",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 15,
+      "before": [
+        "import * as CodexUsageHistory from \"../../usage/CodexUsageHistory.ts\";\n"
+      ],
+      "after": [
+        "import * as CodexUsageHistory from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/usage-history.ts\";\n"
+      ]
+    },
+    {
+      "start": 78,
+      "before": [],
+      "after": [
+        "  unrecognizedServiceTier: Schema.mutableKey(Schema.Boolean),\n"
+      ]
+    },
+    {
+      "start": 95,
+      "before": [],
+      "after": [
+        "    unrecognizedServiceTier: false,\n"
+      ]
+    },
+    {
+      "start": 169,
+      "before": [
+        "    if (typeof settings === \"object\" && settings !== null) {\n",
+        "      state.speed = codexSpeed((settings as Record<string, unknown>)[\"service_tier\"]);\n",
+        "    }\n"
+      ],
+      "after": [
+        "    const tier = typeof settings === \"object\" && settings !== null\n",
+        "      ? (settings as Record<string, unknown>)[\"service_tier\"] : undefined;\n",
+        "    state.speed = codexSpeed(tier);\n",
+        "    state.unrecognizedServiceTier = tier !== undefined && tier !== null &&\n",
+        "      tier !== \"default\" && tier !== \"standard\" && tier !== \"priority\" &&\n",
+        "      tier !== \"fast\" && tier !== \"ultrafast\";\n"
+      ]
+    },
+    {
+      "start": 287,
+      "before": [],
+      "after": [
+        "    ...(state.unrecognizedServiceTier ? { unrecognizedServiceTier: true as const } : {}),\n"
+      ]
+    },
+    {
+      "start": 345,
+      "before": [],
+      "after": [
+        "      if (record.unrecognizedServiceTier) continue;\n"
+      ]
+    }
+  ]
+}

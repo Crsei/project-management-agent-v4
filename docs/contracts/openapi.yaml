@@ -5,7 +5,7 @@ info:
   title: Project Management API
   version: 0.1.0
   description: "Phase-one modular backend. Supersedes the historical bootstrap.openapi.yaml contract. Server-side sessions
-    accept either pm_v3_session cookie or Authorization: Bearer; an Authorization header takes precedence. Origin must
+    accept either pm_v4_session cookie or Authorization: Bearer; an Authorization header takes precedence. Origin must
     match configured PUBLIC_ORIGIN, cross-site writes are rejected, and this server does not enable cross-origin browser
     CORS. Disabled execution is not represented as available commands."
 servers:
@@ -4395,6 +4395,907 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/document-sources:
+    get:
+      operationId: listDocumentSources
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: "Read-only external Markdown source, independent of Agent cwd and native PM documents. Requires current
+        domain.read plus exact scope; project-only members cannot read workspace sources. Host paths require existing
+        unrestricted access.manage, configuration/preview additionally planning.edit. Only existing trusted readable
+        directories are accepted; no writes to source bytes or mkdir. One root per scope; CAS starts at revision 0,
+        every save/unlink increments and persists the revision. Null path clears only the mapping. A configured source
+        may return path:null to ordinary readers without being unconfigured. Linux descriptor-relative traversal rejects
+        symlinks in every component, hard links, special files, private application directories and other registered
+        scope overlaps on every request. Recursion includes all ordinary case-insensitive .md files without PM
+        frontmatter. Limits: 100000 visited entries, depth 128, 1000 detailed issues plus an issue_limit marker; every
+        exclusion/failure is reported with scanComplete:false. Content is bounded to the existing 4 MiB limit, never
+        silently truncated. Cursor binds workspace/project, source revision and a fresh disk metadata fingerprint:
+        refresh on any invalid cursor. Responses are private/no-store. SQL configuration is included in the existing
+        stopped database backup; external source bytes remain external and are not copied or relocated by
+        backup/restore."
+      responses:
+        "200":
+          description: Current authorized source or read-only disk content. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        projectId:
+                          anyOf:
+                            - type: string
+                              pattern: ^PRJ-\d+$
+                            - type: "null"
+                        name:
+                          type: string
+                        path:
+                          type:
+                            - string
+                            - "null"
+                        revision:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        status:
+                          type: string
+                          enum:
+                            - unconfigured
+                            - available
+                            - unavailable
+                        canManage:
+                          type: boolean
+                        reason:
+                          type: string
+                      required:
+                        - projectId
+                        - name
+                        - path
+                        - revision
+                        - status
+                        - canManage
+                      additionalProperties: false
+                required:
+                  - sources
+                additionalProperties: false
+        "400":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/document-sources/preview:
+    post:
+      operationId: previewDocumentSource
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: "Read-only external Markdown source, independent of Agent cwd and native PM documents. Requires current
+        domain.read plus exact scope; project-only members cannot read workspace sources. Host paths require existing
+        unrestricted access.manage, configuration/preview additionally planning.edit. Only existing trusted readable
+        directories are accepted; no writes to source bytes or mkdir. One root per scope; CAS starts at revision 0,
+        every save/unlink increments and persists the revision. Null path clears only the mapping. A configured source
+        may return path:null to ordinary readers without being unconfigured. Linux descriptor-relative traversal rejects
+        symlinks in every component, hard links, special files, private application directories and other registered
+        scope overlaps on every request. Recursion includes all ordinary case-insensitive .md files without PM
+        frontmatter. Limits: 100000 visited entries, depth 128, 1000 detailed issues plus an issue_limit marker; every
+        exclusion/failure is reported with scanComplete:false. Content is bounded to the existing 4 MiB limit, never
+        silently truncated. Cursor binds workspace/project, source revision and a fresh disk metadata fingerprint:
+        refresh on any invalid cursor. Responses are private/no-store. SQL configuration is included in the existing
+        stopped database backup; external source bytes remain external and are not copied or relocated by
+        backup/restore."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                projectId:
+                  anyOf:
+                    - type: string
+                      pattern: ^PRJ-\d+$
+                    - type: "null"
+                path:
+                  type: string
+                  minLength: 1
+                  maxLength: 4096
+              required:
+                - projectId
+                - path
+              additionalProperties: false
+      responses:
+        "200":
+          description: Current authorized source or read-only disk content. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  readable:
+                    type: boolean
+                    const: true
+                required:
+                  - path
+                  - readable
+                additionalProperties: false
+        "400":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/document-sources/{scopeKey}:
+    put:
+      operationId: saveDocumentSource
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: scopeKey
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^(workspace|PRJ-[0-9]+)$
+      description: "Read-only external Markdown source, independent of Agent cwd and native PM documents. Requires current
+        domain.read plus exact scope; project-only members cannot read workspace sources. Host paths require existing
+        unrestricted access.manage, configuration/preview additionally planning.edit. Only existing trusted readable
+        directories are accepted; no writes to source bytes or mkdir. One root per scope; CAS starts at revision 0,
+        every save/unlink increments and persists the revision. Null path clears only the mapping. A configured source
+        may return path:null to ordinary readers without being unconfigured. Linux descriptor-relative traversal rejects
+        symlinks in every component, hard links, special files, private application directories and other registered
+        scope overlaps on every request. Recursion includes all ordinary case-insensitive .md files without PM
+        frontmatter. Limits: 100000 visited entries, depth 128, 1000 detailed issues plus an issue_limit marker; every
+        exclusion/failure is reported with scanComplete:false. Content is bounded to the existing 4 MiB limit, never
+        silently truncated. Cursor binds workspace/project, source revision and a fresh disk metadata fingerprint:
+        refresh on any invalid cursor. Responses are private/no-store. SQL configuration is included in the existing
+        stopped database backup; external source bytes remain external and are not copied or relocated by
+        backup/restore."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                path:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                      maxLength: 4096
+                    - type: "null"
+                expectedRevision:
+                  type: integer
+                  minimum: 0
+                  maximum: 2147483646
+              required:
+                - path
+                - expectedRevision
+              additionalProperties: false
+      responses:
+        "200":
+          description: Current authorized source or read-only disk content. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  source:
+                    type: object
+                    properties:
+                      projectId:
+                        anyOf:
+                          - type: string
+                            pattern: ^PRJ-\d+$
+                          - type: "null"
+                      name:
+                        type: string
+                      path:
+                        type:
+                          - string
+                          - "null"
+                      revision:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                      status:
+                        type: string
+                        enum:
+                          - unconfigured
+                          - available
+                          - unavailable
+                      canManage:
+                        type: boolean
+                      reason:
+                        type: string
+                    required:
+                      - projectId
+                      - name
+                      - path
+                      - revision
+                      - status
+                      - canManage
+                    additionalProperties: false
+                required:
+                  - source
+                additionalProperties: false
+        "400":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/document-sources/{scopeKey}/files:
+    get:
+      operationId: listDocumentSourceFiles
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: scopeKey
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^(workspace|PRJ-[0-9]+)$
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            maxLength: 2048
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 200
+      description: "Read-only external Markdown source, independent of Agent cwd and native PM documents. Requires current
+        domain.read plus exact scope; project-only members cannot read workspace sources. Host paths require existing
+        unrestricted access.manage, configuration/preview additionally planning.edit. Only existing trusted readable
+        directories are accepted; no writes to source bytes or mkdir. One root per scope; CAS starts at revision 0,
+        every save/unlink increments and persists the revision. Null path clears only the mapping. A configured source
+        may return path:null to ordinary readers without being unconfigured. Linux descriptor-relative traversal rejects
+        symlinks in every component, hard links, special files, private application directories and other registered
+        scope overlaps on every request. Recursion includes all ordinary case-insensitive .md files without PM
+        frontmatter. Limits: 100000 visited entries, depth 128, 1000 detailed issues plus an issue_limit marker; every
+        exclusion/failure is reported with scanComplete:false. Content is bounded to the existing 4 MiB limit, never
+        silently truncated. Cursor binds workspace/project, source revision and a fresh disk metadata fingerprint:
+        refresh on any invalid cursor. Responses are private/no-store. SQL configuration is included in the existing
+        stopped database backup; external source bytes remain external and are not copied or relocated by
+        backup/restore."
+      responses:
+        "200":
+          description: Current authorized source or read-only disk content. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        name:
+                          type: string
+                        size:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        modifiedAt:
+                          type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                      required:
+                        - path
+                        - name
+                        - size
+                        - modifiedAt
+                      additionalProperties: false
+                  nextCursor:
+                    type:
+                      - string
+                      - "null"
+                  scanComplete:
+                    type: boolean
+                  issues:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        code:
+                          type: string
+                      required:
+                        - path
+                        - code
+                      additionalProperties: false
+                  sourceRevision:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - entries
+                  - nextCursor
+                  - scanComplete
+                  - issues
+                  - sourceRevision
+                additionalProperties: false
+        "400":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/document-sources/{scopeKey}/content:
+    get:
+      operationId: readDocumentSourceContent
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: scopeKey
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^(workspace|PRJ-[0-9]+)$
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 4096
+          description: Encoded POSIX relative Markdown path, never an absolute root.
+      description: "Read-only external Markdown source, independent of Agent cwd and native PM documents. Requires current
+        domain.read plus exact scope; project-only members cannot read workspace sources. Host paths require existing
+        unrestricted access.manage, configuration/preview additionally planning.edit. Only existing trusted readable
+        directories are accepted; no writes to source bytes or mkdir. One root per scope; CAS starts at revision 0,
+        every save/unlink increments and persists the revision. Null path clears only the mapping. A configured source
+        may return path:null to ordinary readers without being unconfigured. Linux descriptor-relative traversal rejects
+        symlinks in every component, hard links, special files, private application directories and other registered
+        scope overlaps on every request. Recursion includes all ordinary case-insensitive .md files without PM
+        frontmatter. Limits: 100000 visited entries, depth 128, 1000 detailed issues plus an issue_limit marker; every
+        exclusion/failure is reported with scanComplete:false. Content is bounded to the existing 4 MiB limit, never
+        silently truncated. Cursor binds workspace/project, source revision and a fresh disk metadata fingerprint:
+        refresh on any invalid cursor. Responses are private/no-store. SQL configuration is included in the existing
+        stopped database backup; external source bytes remain external and are not copied or relocated by
+        backup/restore."
+      responses:
+        "200":
+          description: Current authorized source or read-only disk content. Private, no-store.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                  content:
+                    type: string
+                  size:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  modifiedAt:
+                    type: string
+                    format: date-time
+                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                  sourceRevision:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - path
+                  - content
+                  - size
+                  - modifiedAt
+                  - sourceRevision
+                additionalProperties: false
+        "400":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: "Existing PM error envelope. document_source_revision_conflict (409) has details.currentRevision: preserve
+            input and GET before retrying. document_source_cursor_invalid (409) requires restarting pagination.
+            document_source_overlap (409) rejects any known other-scope root overlap, including workspace parents
+            containing project roots. document_source_unavailable (409) has details.reason and never falls
+            back/recreates. document_source_path_forbidden (403) rejects unsafe paths, links and special files. Missing
+            content is document_source_file_not_found (404); document_source_file_too_large (413) has details.maxBytes;
+            invalid UTF-8 is document_source_encoding_invalid (422)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/workspaces/{workspaceId}/automations/capabilities:
     get:
       operationId: getAutomationCapabilities
@@ -6564,138 +7465,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Capabilities"
-  /api/v1/workspaces/{workspaceId}/agent/status:
+  /api/v1/workspaces/{workspaceId}/agent-tools:
     get:
-      summary: Read whether the server has an OpenAI-compatible chat model configured; this is not a live provider probe
-      security:
-        - sessionCookie: []
-        - bearerAuth: []
-      parameters:
-        - name: workspaceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgentChatStatus"
-        "400":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-      operationId: getAgentChatStatus
-      description: Requires current domain.read. The API key is server-only and never returned. enabled only means
-        configuration exists; a provider failure is reported when a message is sent. reasoning lists the distinct
-        documented effort options for this exact provider/model. Unknown compatible providers/models and retired aliases
-        advertise only auto, supported=false; auto always omits the provider override.
-  /api/v1/workspaces/{workspaceId}/agent/threads:
-    get:
-      summary: List the current actor’s private agent conversations
-      security:
-        - sessionCookie: []
-        - bearerAuth: []
-      parameters:
-        - name: workspaceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgentChatThreadList"
-        "400":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-      operationId: listAgentThreads
-    post:
-      summary: Create or idempotently return one private agent conversation
+      summary: List the registered PM tools for the authenticated actor
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -6714,10 +7486,12 @@ paths:
               schema:
                 type: object
                 properties:
-                  thread:
-                    $ref: "#/components/schemas/AgentChatThread"
+                  tools:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PmToolDefinition"
                 required:
-                  - thread
+                  - tools
                 additionalProperties: false
         "400":
           description: Request rejected before a successful response. See error.code; authorization is checked against current
@@ -6761,40 +7535,15 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-      operationId: createAgentThread
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                id:
-                  type: string
-                  format: uuid
-                title:
-                  type: string
-                  minLength: 1
-                  maxLength: 200
-              required:
-                - id
-              additionalProperties: false
-      description: Reusing an existing id owned by the same actor returns the existing thread. An id owned by another actor is
-        rejected without disclosure.
-  /api/v1/workspaces/{workspaceId}/agent/threads/{threadId}:
-    get:
-      summary: Read one private agent conversation and its persisted messages
+      operationId: listPmAgentTools
+  /api/v1/workspaces/{workspaceId}/agent-tools/call:
+    post:
+      summary: Execute an idempotent PM tool operation
       security:
         - sessionCookie: []
         - bearerAuth: []
       parameters:
         - name: workspaceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: threadId
           in: path
           required: true
           schema:
@@ -6806,7 +7555,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AgentChatThreadDetail"
+                $ref: "#/components/schemas/PmToolCallRecord"
         "400":
           description: Request rejected before a successful response. See error.code; authorization is checked against current
             membership.
@@ -6849,9 +7598,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-      operationId: getAgentThread
-    delete:
-      summary: Delete one private agent conversation and its messages
+      operationId: callPmAgentTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PmToolRequest"
+      description: Current PM identity and scope are checked; a reused operationId with different input is rejected.
+  /api/v1/workspaces/{workspaceId}/agent-tools/result:
+    post:
+      summary: Reconcile the original PM tool outcome without redispatch
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -6862,12 +7619,81 @@ paths:
           schema:
             type: string
             format: uuid
-        - name: threadId
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PmToolCallRecord"
+        "400":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      operationId: reconcilePmAgentTool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PmToolRequest"
+  /api/v1/workspaces/{workspaceId}/agent-tools/core-files:
+    get:
+      summary: Read authorized managed PM core files for change observation
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
           in: path
           required: true
           schema:
             type: string
             format: uuid
+        - name: projectId
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Z][A-Z0-9]*-\d+$
       responses:
         "200":
           description: Success
@@ -6876,333 +7702,35 @@ paths:
               schema:
                 type: object
                 properties:
-                  deleted:
-                    const: true
-                required:
-                  - deleted
-                additionalProperties: false
-        "400":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-      operationId: deleteAgentThread
-      description: Stops an in-flight reply owned by this API process before deleting the thread. Model side effects outside
-        this service cannot be undone.
-  /api/v1/workspaces/{workspaceId}/agent/threads/{threadId}/access:
-    get:
-      summary: Read current private-chat authorization and effective tool capabilities
-      security:
-        - sessionCookie: []
-        - bearerAuth: []
-      parameters:
-        - name: workspaceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: threadId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgentChatAccess"
-        "400":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-      operationId: getAgentThreadAccess
-    put:
-      summary: Explicitly enable or revoke scoped Full access using the current revision
-      security:
-        - sessionCookie: []
-        - bearerAuth: []
-      parameters:
-        - name: workspaceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: threadId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgentChatAccess"
-        "400":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-      operationId: setAgentThreadAccess
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AgentChatAccessInput"
-      description: Initial access is disabled. Enabling freezes the selected authorized project IDs and tool version for a
-        finite grant. Allowed tools are auto-approved within that scope only. A disabled input may save scope without
-        enabling tools. Revocation prevents new dispatch, not rollback of committed effects. A stale expectedRevision is
-        rejected; after a lost response read access before retrying.
-  /api/v1/workspaces/{workspaceId}/agent/threads/{threadId}/messages:
-    post:
-      operationId: streamAgentChatMessage
-      summary: Persist a user message and stream one untrusted model reply over SSE
-      security:
-        - sessionCookie: []
-        - bearerAuth: []
-      parameters:
-        - name: workspaceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: threadId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                messageId:
-                  type: string
-                  format: uuid
-                content:
-                  type: string
-                  minLength: 1
-                  maxLength: 16000
-                reasoningEffort:
-                  $ref: "#/components/schemas/AgentChatReasoningEffort"
-                  default: auto
-              required:
-                - messageId
-                - content
-              additionalProperties: false
-      description: "SSE events: user, assistant, delta, capabilities, context, tool, done, cancelled, error. capabilities
-        carries {messageId,access}, context {messageId,sources}, tool {messageId,toolCall}; assistant snapshots retain
-        actual tool calls and sources, never raw model thinking. reasoningEffort applies to every model round of this
-        message only; auto omits the override. A non-auto value not advertised by status is rejected with 400
-        agent_reasoning_unsupported before either message is persisted. The client messageId is idempotent within the
-        thread. Only one reply may stream per thread. Closing the reader does not cancel generation; POST cancel is
-        explicit. EOF without done/cancelled/error leaves the result unknown; reconcile via GET thread, never blindly
-        resend. Model text is not a business fact; only scoped, server-authorized native tools can write PM data."
-      responses:
-        "200":
-          description: SSE. user/assistant/done/cancelled carry {message}; delta carries {messageId,delta}; error carries
-            {messageId,code,message}.
-          content:
-            text/event-stream:
-              schema:
-                type: string
-        "400":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: Request rejected before a successful response. See error.code; authorization is checked against current
-            membership.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /api/v1/workspaces/{workspaceId}/agent/threads/{threadId}/cancel:
-    post:
-      summary: Explicitly cancel the current reply; partial text is retained
-      security:
-        - sessionCookie: []
-        - bearerAuth: []
-      parameters:
-        - name: workspaceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: threadId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  cancelled:
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        path:
+                          type: string
+                        projectId:
+                          type: string
+                          pattern: ^[A-Z][A-Z0-9]*-\d+$
+                        entityId:
+                          anyOf:
+                            - type: string
+                            - type: "null"
+                        content:
+                          type: string
+                      required:
+                        - path
+                        - projectId
+                        - entityId
+                        - content
+                      additionalProperties: false
+                  complete:
                     type: boolean
+                  error:
+                    type: string
                 required:
-                  - cancelled
+                  - files
+                  - complete
                 additionalProperties: false
         "400":
           description: Request rejected before a successful response. See error.code; authorization is checked against current
@@ -7246,24 +7774,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-      operationId: cancelAgentThread
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                messageId:
-                  type: string
-                  format: uuid
-              required: []
-              additionalProperties: false
-      description: Cancellation is explicit. The server aborts the provider request and waits for the generation handler to
-        persist both partial text and terminal status. cancelled=true confirms persisted cancellation; false means no
-        matching active reply or another terminal outcome won the race. Persistence failure returns 503. Clients must
-        reconcile unknown outcomes via GET thread and must not infer cancellation from a disconnected reader. External
-        provider usage already incurred is not reversible.
+      operationId: listPmAgentCoreFiles
+      description: Incomplete scans include an error and cannot establish file deletions.
   /openapi.json:
     get:
       operationId: getOpenApi
@@ -7318,7 +7830,7 @@ paths:
                 additionalProperties: false
           headers:
             Set-Cookie:
-              description: pm_v3_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.
+              description: pm_v4_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.
               schema:
                 type: string
         "400":
@@ -7358,7 +7870,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/v1/auth/logout:
     post:
-      summary: Revoke the current session and clear pm_v3_session
+      summary: Revoke the current session and clear pm_v4_session
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -13339,756 +13851,6 @@ components:
         - items
         - nextCursor
       additionalProperties: false
-    AgentChatAccess:
-      type: object
-      properties:
-        workspaceId:
-          type: string
-          format: uuid
-          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        threadId:
-          type: string
-          format: uuid
-          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        revision:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
-        grantId:
-          anyOf:
-            - type: string
-              format: uuid
-              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-            - type: "null"
-        mode:
-          type: string
-          const: full_access
-        approvalPolicy:
-          type: string
-          const: auto_approve
-        enabled:
-          type: boolean
-        scope:
-          type: object
-          properties:
-            kind:
-              type: string
-              enum:
-                - projects
-                - workspace
-            projectIds:
-              maxItems: 1000
-              type: array
-              items:
-                type: string
-                pattern: ^[A-Z][A-Z0-9]*-\d+$
-          required:
-            - kind
-            - projectIds
-          additionalProperties: false
-        expiresAt:
-          anyOf:
-            - type: string
-              format: date-time
-              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-            - type: "null"
-        revokedAt:
-          anyOf:
-            - type: string
-              format: date-time
-              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-            - type: "null"
-        toolsVersion:
-          type: integer
-          exclusiveMinimum: 0
-          maximum: 9007199254740991
-        toolSupport:
-          type: string
-          enum:
-            - unverified
-            - verified
-        tools:
-          type: array
-          items:
-            type: object
-            properties:
-              name:
-                type: string
-                minLength: 1
-                maxLength: 200
-              description:
-                type: string
-              write:
-                type: boolean
-              available:
-                type: boolean
-              allowed:
-                type: boolean
-              denyReason:
-                type:
-                  - string
-                  - "null"
-            required:
-              - name
-              - description
-              - write
-              - available
-              - allowed
-              - denyReason
-            additionalProperties: false
-        limits:
-          type: object
-          properties:
-            maxToolCalls:
-              type: integer
-              exclusiveMinimum: 0
-              maximum: 9007199254740991
-            maxRounds:
-              type: integer
-              exclusiveMinimum: 0
-              maximum: 9007199254740991
-            maxOutputChars:
-              type: integer
-              exclusiveMinimum: 0
-              maximum: 9007199254740991
-          required:
-            - maxToolCalls
-            - maxRounds
-            - maxOutputChars
-          additionalProperties: false
-      required:
-        - workspaceId
-        - threadId
-        - revision
-        - grantId
-        - mode
-        - approvalPolicy
-        - enabled
-        - scope
-        - expiresAt
-        - revokedAt
-        - toolsVersion
-        - toolSupport
-        - tools
-        - limits
-      additionalProperties: false
-    AgentChatAccessInput:
-      oneOf:
-        - type: object
-          properties:
-            enabled:
-              type: boolean
-              const: true
-            expectedRevision:
-              type: integer
-              minimum: 0
-              maximum: 9007199254740991
-            scope:
-              type: object
-              properties:
-                kind:
-                  type: string
-                  enum:
-                    - projects
-                    - workspace
-                projectIds:
-                  maxItems: 1000
-                  type: array
-                  items:
-                    type: string
-                    pattern: ^[A-Z][A-Z0-9]*-\d+$
-              required:
-                - kind
-                - projectIds
-              additionalProperties: false
-          required:
-            - enabled
-            - expectedRevision
-            - scope
-          additionalProperties: false
-        - type: object
-          properties:
-            enabled:
-              type: boolean
-              const: false
-            expectedRevision:
-              type: integer
-              minimum: 0
-              maximum: 9007199254740991
-            scope:
-              type: object
-              properties:
-                kind:
-                  type: string
-                  enum:
-                    - projects
-                    - workspace
-                projectIds:
-                  maxItems: 1000
-                  type: array
-                  items:
-                    type: string
-                    pattern: ^[A-Z][A-Z0-9]*-\d+$
-              required:
-                - kind
-                - projectIds
-              additionalProperties: false
-          required:
-            - enabled
-            - expectedRevision
-          additionalProperties: false
-    AgentChatContextSource:
-      type: object
-      properties:
-        kind:
-          type: string
-          enum:
-            - project
-            - task
-            - document
-            - comment
-            - relation
-        workspaceId:
-          type: string
-          format: uuid
-          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        projectId:
-          type:
-            - string
-            - "null"
-        entityId:
-          type: string
-          minLength: 1
-          maxLength: 200
-        title:
-          type: string
-        revision:
-          type: string
-        truncated:
-          type: boolean
-      required:
-        - kind
-        - workspaceId
-        - projectId
-        - entityId
-        - title
-        - revision
-        - truncated
-      additionalProperties: false
-    AgentChatToolCall:
-      type: object
-      properties:
-        id:
-          type: string
-          minLength: 1
-          maxLength: 200
-        operationId:
-          type: string
-          format: uuid
-          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        name:
-          type: string
-          minLength: 1
-          maxLength: 200
-        arguments:
-          type: object
-          propertyNames:
-            type: string
-          additionalProperties: {}
-        status:
-          type: string
-          enum:
-            - running
-            - succeeded
-            - failed
-            - unknown
-        startedAt:
-          type: string
-          format: date-time
-          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-        finishedAt:
-          anyOf:
-            - type: string
-              format: date-time
-              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-            - type: "null"
-        grantId:
-          type: string
-          format: uuid
-          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        onBehalfOf:
-          type: string
-          format: uuid
-          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        approvalPolicy:
-          type: string
-          const: auto_approve
-        result:
-          anyOf:
-            - anyOf:
-                - type: object
-                  properties:
-                    kind:
-                      type: string
-                      enum:
-                        - project
-                        - task
-                        - document
-                        - query
-                    items:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          projectId:
-                            type:
-                              - string
-                              - "null"
-                          entity:
-                            type: string
-                            enum:
-                              - project
-                              - work_item
-                              - document
-                          title:
-                            type: string
-                          revision:
-                            type: string
-                          version:
-                            type: integer
-                            minimum: 0
-                            maximum: 9007199254740991
-                          status:
-                            type:
-                              - string
-                              - "null"
-                          body:
-                            type: string
-                          bodyOffset:
-                            type: integer
-                            minimum: 0
-                            maximum: 9007199254740991
-                          nextBodyOffset:
-                            anyOf:
-                              - type: integer
-                                minimum: 0
-                                maximum: 9007199254740991
-                              - type: "null"
-                          fields:
-                            type: object
-                            properties:
-                              goal:
-                                type:
-                                  - string
-                                  - "null"
-                              assigneeId:
-                                type:
-                                  - string
-                                  - "null"
-                              priority:
-                                type:
-                                  - string
-                                  - "null"
-                              startDate:
-                                type:
-                                  - string
-                                  - "null"
-                              dueDate:
-                                type:
-                                  - string
-                                  - "null"
-                              labels:
-                                type: array
-                                items:
-                                  type: string
-                            additionalProperties: false
-                        required:
-                          - id
-                          - projectId
-                          - entity
-                          - title
-                          - revision
-                          - version
-                          - status
-                        additionalProperties: false
-                    nextCursor:
-                      type:
-                        - string
-                        - "null"
-                    truncated:
-                      type: boolean
-                    sources:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          kind:
-                            type: string
-                            enum:
-                              - project
-                              - task
-                              - document
-                              - comment
-                              - relation
-                          workspaceId:
-                            type: string
-                            format: uuid
-                            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-                          projectId:
-                            type:
-                              - string
-                              - "null"
-                          entityId:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          title:
-                            type: string
-                          revision:
-                            type: string
-                          truncated:
-                            type: boolean
-                        required:
-                          - kind
-                          - workspaceId
-                          - projectId
-                          - entityId
-                          - title
-                          - revision
-                          - truncated
-                        additionalProperties: false
-                    receipt:
-                      type: object
-                      properties:
-                        kind:
-                          type: string
-                          enum:
-                            - command
-                            - core
-                        operationId:
-                          type: string
-                          minLength: 1
-                          maxLength: 200
-                        commandId:
-                          type: string
-                          minLength: 1
-                          maxLength: 200
-                        action:
-                          type: string
-                          minLength: 1
-                          maxLength: 200
-                        targetId:
-                          type:
-                            - string
-                            - "null"
-                        revision:
-                          type:
-                            - string
-                            - "null"
-                      required:
-                        - kind
-                        - operationId
-                        - commandId
-                        - action
-                        - targetId
-                        - revision
-                      additionalProperties: false
-                  required:
-                    - kind
-                    - items
-                    - nextCursor
-                    - truncated
-                    - sources
-                  additionalProperties: false
-                - type: object
-                  properties:
-                    kind:
-                      type: string
-                      const: comment
-                    items:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          taskId:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          projectId:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          content:
-                            type:
-                              - string
-                              - "null"
-                          version:
-                            type: integer
-                            exclusiveMinimum: 0
-                            maximum: 9007199254740991
-                          deletedAt:
-                            anyOf:
-                              - type: string
-                                format: date-time
-                                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-                              - type: "null"
-                        required:
-                          - id
-                          - taskId
-                          - projectId
-                          - content
-                          - version
-                          - deletedAt
-                        additionalProperties: false
-                    nextCursor:
-                      type:
-                        - string
-                        - "null"
-                    truncated:
-                      type: boolean
-                    sources:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          kind:
-                            type: string
-                            enum:
-                              - project
-                              - task
-                              - document
-                              - comment
-                              - relation
-                          workspaceId:
-                            type: string
-                            format: uuid
-                            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-                          projectId:
-                            type:
-                              - string
-                              - "null"
-                          entityId:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          title:
-                            type: string
-                          revision:
-                            type: string
-                          truncated:
-                            type: boolean
-                        required:
-                          - kind
-                          - workspaceId
-                          - projectId
-                          - entityId
-                          - title
-                          - revision
-                          - truncated
-                        additionalProperties: false
-                    receipt:
-                      type: object
-                      properties:
-                        kind:
-                          type: string
-                          enum:
-                            - command
-                            - core
-                        operationId:
-                          type: string
-                          minLength: 1
-                          maxLength: 200
-                        commandId:
-                          type: string
-                          minLength: 1
-                          maxLength: 200
-                        action:
-                          type: string
-                          minLength: 1
-                          maxLength: 200
-                        targetId:
-                          type:
-                            - string
-                            - "null"
-                        revision:
-                          type:
-                            - string
-                            - "null"
-                      required:
-                        - kind
-                        - operationId
-                        - commandId
-                        - action
-                        - targetId
-                        - revision
-                      additionalProperties: false
-                  required:
-                    - kind
-                    - items
-                    - nextCursor
-                    - truncated
-                    - sources
-                  additionalProperties: false
-                - type: object
-                  properties:
-                    kind:
-                      type: string
-                      const: relation
-                    items:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          sourceId:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          targetId:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          relation:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          sourceRevision:
-                            type: string
-                          targetRevision:
-                            type: string
-                        required:
-                          - sourceId
-                          - targetId
-                          - relation
-                          - sourceRevision
-                          - targetRevision
-                        additionalProperties: false
-                    nextCursor:
-                      type:
-                        - string
-                        - "null"
-                    truncated:
-                      type: boolean
-                    sources:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          kind:
-                            type: string
-                            enum:
-                              - project
-                              - task
-                              - document
-                              - comment
-                              - relation
-                          workspaceId:
-                            type: string
-                            format: uuid
-                            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-                          projectId:
-                            type:
-                              - string
-                              - "null"
-                          entityId:
-                            type: string
-                            minLength: 1
-                            maxLength: 200
-                          title:
-                            type: string
-                          revision:
-                            type: string
-                          truncated:
-                            type: boolean
-                        required:
-                          - kind
-                          - workspaceId
-                          - projectId
-                          - entityId
-                          - title
-                          - revision
-                          - truncated
-                        additionalProperties: false
-                    receipt:
-                      type: object
-                      properties:
-                        kind:
-                          type: string
-                          enum:
-                            - command
-                            - core
-                        operationId:
-                          type: string
-                          minLength: 1
-                          maxLength: 200
-                        commandId:
-                          type: string
-                          minLength: 1
-                          maxLength: 200
-                        action:
-                          type: string
-                          minLength: 1
-                          maxLength: 200
-                        targetId:
-                          type:
-                            - string
-                            - "null"
-                        revision:
-                          type:
-                            - string
-                            - "null"
-                      required:
-                        - kind
-                        - operationId
-                        - commandId
-                        - action
-                        - targetId
-                        - revision
-                      additionalProperties: false
-                  required:
-                    - kind
-                    - items
-                    - nextCursor
-                    - truncated
-                    - sources
-                  additionalProperties: false
-            - type: "null"
-        error:
-          anyOf:
-            - type: object
-              properties:
-                code:
-                  type: string
-                  minLength: 1
-                  maxLength: 200
-                message:
-                  type: string
-              required:
-                - code
-                - message
-              additionalProperties: false
-            - type: "null"
-      required:
-        - id
-        - operationId
-        - name
-        - arguments
-        - status
-        - startedAt
-        - finishedAt
-        - grantId
-        - onBehalfOf
-        - approvalPolicy
-        - result
-        - error
-      additionalProperties: false
     AgentChatToolResult:
       anyOf:
         - type: object
@@ -14524,761 +14286,139 @@ components:
             - truncated
             - sources
           additionalProperties: false
-    AgentChatMessage:
+    PmToolScope:
       type: object
       properties:
-        id:
-          type: string
-          format: uuid
-          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        threadId:
-          type: string
-          format: uuid
-          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        role:
-          type: string
+        kind:
           enum:
-            - user
-            - assistant
-        content:
-          type: string
-        status:
-          type: string
-          enum:
-            - complete
-            - streaming
-            - cancelled
-            - error
-            - interrupted
-        errorCode:
-          type:
-            - string
-            - "null"
-        model:
-          type:
-            - string
-            - "null"
-        createdAt:
-          type: string
-          format: date-time
-          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-        updatedAt:
-          type: string
-          format: date-time
-          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-        toolCalls:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-                minLength: 1
-                maxLength: 200
-              operationId:
-                type: string
-                format: uuid
-                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-              name:
-                type: string
-                minLength: 1
-                maxLength: 200
-              arguments:
-                type: object
-                propertyNames:
-                  type: string
-                additionalProperties: {}
-              status:
-                type: string
-                enum:
-                  - running
-                  - succeeded
-                  - failed
-                  - unknown
-              startedAt:
-                type: string
-                format: date-time
-                pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-              finishedAt:
-                anyOf:
-                  - type: string
-                    format: date-time
-                    pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-                  - type: "null"
-              grantId:
-                type: string
-                format: uuid
-                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-              onBehalfOf:
-                type: string
-                format: uuid
-                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-              approvalPolicy:
-                type: string
-                const: auto_approve
-              result:
-                anyOf:
-                  - anyOf:
-                      - type: object
-                        properties:
-                          kind:
-                            type: string
-                            enum:
-                              - project
-                              - task
-                              - document
-                              - query
-                          items:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                id:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                projectId:
-                                  type:
-                                    - string
-                                    - "null"
-                                entity:
-                                  type: string
-                                  enum:
-                                    - project
-                                    - work_item
-                                    - document
-                                title:
-                                  type: string
-                                revision:
-                                  type: string
-                                version:
-                                  type: integer
-                                  minimum: 0
-                                  maximum: 9007199254740991
-                                status:
-                                  type:
-                                    - string
-                                    - "null"
-                                body:
-                                  type: string
-                                bodyOffset:
-                                  type: integer
-                                  minimum: 0
-                                  maximum: 9007199254740991
-                                nextBodyOffset:
-                                  anyOf:
-                                    - type: integer
-                                      minimum: 0
-                                      maximum: 9007199254740991
-                                    - type: "null"
-                                fields:
-                                  type: object
-                                  properties:
-                                    goal:
-                                      type:
-                                        - string
-                                        - "null"
-                                    assigneeId:
-                                      type:
-                                        - string
-                                        - "null"
-                                    priority:
-                                      type:
-                                        - string
-                                        - "null"
-                                    startDate:
-                                      type:
-                                        - string
-                                        - "null"
-                                    dueDate:
-                                      type:
-                                        - string
-                                        - "null"
-                                    labels:
-                                      type: array
-                                      items:
-                                        type: string
-                                  additionalProperties: false
-                              required:
-                                - id
-                                - projectId
-                                - entity
-                                - title
-                                - revision
-                                - version
-                                - status
-                              additionalProperties: false
-                          nextCursor:
-                            type:
-                              - string
-                              - "null"
-                          truncated:
-                            type: boolean
-                          sources:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                kind:
-                                  type: string
-                                  enum:
-                                    - project
-                                    - task
-                                    - document
-                                    - comment
-                                    - relation
-                                workspaceId:
-                                  type: string
-                                  format: uuid
-                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-                                projectId:
-                                  type:
-                                    - string
-                                    - "null"
-                                entityId:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                title:
-                                  type: string
-                                revision:
-                                  type: string
-                                truncated:
-                                  type: boolean
-                              required:
-                                - kind
-                                - workspaceId
-                                - projectId
-                                - entityId
-                                - title
-                                - revision
-                                - truncated
-                              additionalProperties: false
-                          receipt:
-                            type: object
-                            properties:
-                              kind:
-                                type: string
-                                enum:
-                                  - command
-                                  - core
-                              operationId:
-                                type: string
-                                minLength: 1
-                                maxLength: 200
-                              commandId:
-                                type: string
-                                minLength: 1
-                                maxLength: 200
-                              action:
-                                type: string
-                                minLength: 1
-                                maxLength: 200
-                              targetId:
-                                type:
-                                  - string
-                                  - "null"
-                              revision:
-                                type:
-                                  - string
-                                  - "null"
-                            required:
-                              - kind
-                              - operationId
-                              - commandId
-                              - action
-                              - targetId
-                              - revision
-                            additionalProperties: false
-                        required:
-                          - kind
-                          - items
-                          - nextCursor
-                          - truncated
-                          - sources
-                        additionalProperties: false
-                      - type: object
-                        properties:
-                          kind:
-                            type: string
-                            const: comment
-                          items:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                id:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                taskId:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                projectId:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                content:
-                                  type:
-                                    - string
-                                    - "null"
-                                version:
-                                  type: integer
-                                  exclusiveMinimum: 0
-                                  maximum: 9007199254740991
-                                deletedAt:
-                                  anyOf:
-                                    - type: string
-                                      format: date-time
-                                      pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-                                    - type: "null"
-                              required:
-                                - id
-                                - taskId
-                                - projectId
-                                - content
-                                - version
-                                - deletedAt
-                              additionalProperties: false
-                          nextCursor:
-                            type:
-                              - string
-                              - "null"
-                          truncated:
-                            type: boolean
-                          sources:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                kind:
-                                  type: string
-                                  enum:
-                                    - project
-                                    - task
-                                    - document
-                                    - comment
-                                    - relation
-                                workspaceId:
-                                  type: string
-                                  format: uuid
-                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-                                projectId:
-                                  type:
-                                    - string
-                                    - "null"
-                                entityId:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                title:
-                                  type: string
-                                revision:
-                                  type: string
-                                truncated:
-                                  type: boolean
-                              required:
-                                - kind
-                                - workspaceId
-                                - projectId
-                                - entityId
-                                - title
-                                - revision
-                                - truncated
-                              additionalProperties: false
-                          receipt:
-                            type: object
-                            properties:
-                              kind:
-                                type: string
-                                enum:
-                                  - command
-                                  - core
-                              operationId:
-                                type: string
-                                minLength: 1
-                                maxLength: 200
-                              commandId:
-                                type: string
-                                minLength: 1
-                                maxLength: 200
-                              action:
-                                type: string
-                                minLength: 1
-                                maxLength: 200
-                              targetId:
-                                type:
-                                  - string
-                                  - "null"
-                              revision:
-                                type:
-                                  - string
-                                  - "null"
-                            required:
-                              - kind
-                              - operationId
-                              - commandId
-                              - action
-                              - targetId
-                              - revision
-                            additionalProperties: false
-                        required:
-                          - kind
-                          - items
-                          - nextCursor
-                          - truncated
-                          - sources
-                        additionalProperties: false
-                      - type: object
-                        properties:
-                          kind:
-                            type: string
-                            const: relation
-                          items:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                sourceId:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                targetId:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                relation:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                sourceRevision:
-                                  type: string
-                                targetRevision:
-                                  type: string
-                              required:
-                                - sourceId
-                                - targetId
-                                - relation
-                                - sourceRevision
-                                - targetRevision
-                              additionalProperties: false
-                          nextCursor:
-                            type:
-                              - string
-                              - "null"
-                          truncated:
-                            type: boolean
-                          sources:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                kind:
-                                  type: string
-                                  enum:
-                                    - project
-                                    - task
-                                    - document
-                                    - comment
-                                    - relation
-                                workspaceId:
-                                  type: string
-                                  format: uuid
-                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-                                projectId:
-                                  type:
-                                    - string
-                                    - "null"
-                                entityId:
-                                  type: string
-                                  minLength: 1
-                                  maxLength: 200
-                                title:
-                                  type: string
-                                revision:
-                                  type: string
-                                truncated:
-                                  type: boolean
-                              required:
-                                - kind
-                                - workspaceId
-                                - projectId
-                                - entityId
-                                - title
-                                - revision
-                                - truncated
-                              additionalProperties: false
-                          receipt:
-                            type: object
-                            properties:
-                              kind:
-                                type: string
-                                enum:
-                                  - command
-                                  - core
-                              operationId:
-                                type: string
-                                minLength: 1
-                                maxLength: 200
-                              commandId:
-                                type: string
-                                minLength: 1
-                                maxLength: 200
-                              action:
-                                type: string
-                                minLength: 1
-                                maxLength: 200
-                              targetId:
-                                type:
-                                  - string
-                                  - "null"
-                              revision:
-                                type:
-                                  - string
-                                  - "null"
-                            required:
-                              - kind
-                              - operationId
-                              - commandId
-                              - action
-                              - targetId
-                              - revision
-                            additionalProperties: false
-                        required:
-                          - kind
-                          - items
-                          - nextCursor
-                          - truncated
-                          - sources
-                        additionalProperties: false
-                  - type: "null"
-              error:
-                anyOf:
-                  - type: object
-                    properties:
-                      code:
-                        type: string
-                        minLength: 1
-                        maxLength: 200
-                      message:
-                        type: string
-                    required:
-                      - code
-                      - message
-                    additionalProperties: false
-                  - type: "null"
-            required:
-              - id
-              - operationId
-              - name
-              - arguments
-              - status
-              - startedAt
-              - finishedAt
-              - grantId
-              - onBehalfOf
-              - approvalPolicy
-              - result
-              - error
-            additionalProperties: false
-        contextSources:
-          type: array
-          items:
-            type: object
-            properties:
-              kind:
-                type: string
-                enum:
-                  - project
-                  - task
-                  - document
-                  - comment
-                  - relation
-              workspaceId:
-                type: string
-                format: uuid
-                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-              projectId:
-                type:
-                  - string
-                  - "null"
-              entityId:
-                type: string
-                minLength: 1
-                maxLength: 200
-              title:
-                type: string
-              revision:
-                type: string
-              truncated:
-                type: boolean
-            required:
-              - kind
-              - workspaceId
-              - projectId
-              - entityId
-              - title
-              - revision
-              - truncated
-            additionalProperties: false
-      required:
-        - id
-        - threadId
-        - role
-        - content
-        - status
-        - errorCode
-        - model
-        - createdAt
-        - updatedAt
-      additionalProperties: false
-    AgentChatReasoningEffort:
-      type: string
-      enum:
-        - auto
-        - none
-        - minimal
-        - low
-        - medium
-        - high
-        - xhigh
-        - max
-    AgentChatReasoning:
-      type: object
-      properties:
-        supported:
-          type: boolean
-        efforts:
+            - workspace
+            - projects
+        projectIds:
           type: array
           items:
             type: string
-            enum:
-              - auto
-              - none
-              - minimal
-              - low
-              - medium
-              - high
-              - xhigh
-              - max
-        defaultEffort:
-          type: string
-          const: auto
+            pattern: ^[A-Z][A-Z0-9]*-\d+$
       required:
-        - supported
-        - efforts
-        - defaultEffort
+        - kind
+        - projectIds
       additionalProperties: false
-    AgentChatMessageStatus:
-      type: string
-      enum:
-        - complete
-        - streaming
-        - cancelled
-        - error
-        - interrupted
-    AgentChatThread:
+    PmToolRequest:
       type: object
       properties:
-        id:
+        operationId:
           type: string
           format: uuid
-        title:
+        name:
           type: string
+        arguments: {}
+        scope:
+          $ref: "#/components/schemas/PmToolScope"
+        threadId:
+          type: string
+        messageId:
+          type: string
+        generationId:
+          type: string
+      required:
+        - operationId
+        - name
+        - arguments
+        - scope
+        - threadId
+        - messageId
+        - generationId
+      additionalProperties: false
+    PmToolCallRecord:
+      type: object
+      properties:
+        operationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          enum:
+            - running
+            - succeeded
+            - failed
+            - unknown
+        result:
+          anyOf:
+            - $ref: "#/components/schemas/AgentChatToolResult"
+            - type: "null"
+        error:
+          anyOf:
+            - type: object
+              properties:
+                code:
+                  type: string
+                message:
+                  type: string
+              required:
+                - code
+                - message
+              additionalProperties: false
+            - type: "null"
+        threadId:
+          type: string
+        messageId:
+          type: string
+        generationId:
+          type: string
+        workspaceId:
+          type: string
+          format: uuid
         createdAt:
           type: string
           format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-        lastMessageAt:
+        finishedAt:
           anyOf:
             - type: string
               format: date-time
             - type: "null"
-        messageCount:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
       required:
-        - id
-        - title
+        - operationId
+        - name
+        - status
+        - result
+        - error
+        - threadId
+        - messageId
+        - generationId
+        - workspaceId
         - createdAt
-        - updatedAt
-        - lastMessageAt
-        - messageCount
+        - finishedAt
       additionalProperties: false
-    AgentChatThreadList:
+    PmToolDefinition:
       type: object
       properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/AgentChatThread"
-      required:
-        - items
-      additionalProperties: false
-    AgentChatThreadDetail:
-      type: object
-      properties:
-        thread:
-          $ref: "#/components/schemas/AgentChatThread"
-        messages:
-          type: array
-          items:
-            $ref: "#/components/schemas/AgentChatMessage"
-      required:
-        - thread
-        - messages
-      additionalProperties: false
-    AgentChatStatus:
-      type: object
-      properties:
-        enabled:
+        name:
+          type: string
+        description:
+          type: string
+        write:
           type: boolean
-        provider:
-          const: openai-compatible
-        model:
+        capabilities:
+          type: array
+          items:
+            type: string
+        available:
+          type: boolean
+        denyReason:
           anyOf:
             - type: string
             - type: "null"
-        reasoning:
-          $ref: "#/components/schemas/AgentChatReasoning"
+        inputSchema:
+          type: object
+          additionalProperties: true
       required:
-        - enabled
-        - provider
-        - model
-        - reasoning
-      additionalProperties: false
-    AgentChatStreamError:
-      type: object
-      properties:
-        messageId:
-          anyOf:
-            - type: string
-              format: uuid
-            - type: "null"
-        code:
-          type: string
-        message:
-          type: string
-      required:
-        - messageId
-        - code
-        - message
-      additionalProperties: false
-    AgentChatStreamDelta:
-      type: object
-      properties:
-        messageId:
-          type: string
-          format: uuid
-        delta:
-          type: string
-      required:
-        - messageId
-        - delta
+        - name
+        - description
+        - write
+        - capabilities
+        - available
+        - denyReason
+        - inputSchema
       additionalProperties: false
     SelfProfile:
       type: object
@@ -25553,7 +24693,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: pm_v3_session
+      name: pm_v4_session
     bearerAuth:
       type: http
       scheme: bearer

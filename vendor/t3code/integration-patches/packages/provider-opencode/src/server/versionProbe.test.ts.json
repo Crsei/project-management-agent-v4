@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/versionProbe.test.ts",
+  "beforeSha256": "05ed8d30341e4d96198a3ac23032cbf8273afe50ae0af03075d10b8d638fde70",
+  "afterSha256": "bccf73b2a74e653bcb695abed038b1d210150cb9a05f73cb19b51a0d71dce409",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 39,
+      "before": [],
+      "after": [
+        "    for (const output of [\"2.1.2\\n\", \"opencode v2.1.2\\n\", \"OpenCode v2.1.2\\r\\n\"]) {\n",
+        "      assert.deepStrictEqual(classifyOpenCodeCliVersion(output), { generation: \"v2\", version: \"2.1.2\" });\n",
+        "    }\n",
+        "    assert.deepStrictEqual(classifyOpenCodeCliVersion(\"1.14.19\\n\"), { generation: \"v1\", version: \"1.14.19\" });\n"
+      ]
+    },
+    {
+      "start": 94,
+      "before": [
+        "        const error = yield* Effect.flip(\n"
+      ],
+      "after": [
+        "        yield* Effect.flip(\n"
+      ]
+    },
+    {
+      "start": 97,
+      "before": [
+        "        assert.match(error.detail, /401 Unauthorized/);\n"
+      ],
+      "after": []
+    }
+  ]
+}

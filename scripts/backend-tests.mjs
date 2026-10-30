@@ -16,7 +16,7 @@ import { exitCode, groupMembers, processIdentity, signalOwnedGroup } from './bac
 const root = fileURLToPath(new URL('../', import.meta.url));
 const supervisor = fileURLToPath(new URL('./backend-test-process.mjs', import.meta.url));
 const unitPatterns = [
-  'apps/api/tests/*.test.ts',
+  'apps/server/pm/tests/*.test.ts',
   'packages/application/tests/*.test.ts',
   'packages/contracts/tests/*.test.ts',
   'packages/domain/tests/*.test.ts',

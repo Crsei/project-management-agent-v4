@@ -16,6 +16,7 @@ import { directoryMemberRecord, memberRoleValues } from "./pm-member-model"
 import { TeamEditorDialog, type TeamEditorSelection } from "./pm-team-editors"
 import { directoryTeams, teamProjectRecord, teamRecord, workloadProjection } from "./pm-team-model"
 import { TeamMemberTaskActions, TeamTaskEstimateEditor } from "./team-task-actions"
+import { teamFilterConditions, teamMatchesConditions, withSingleTeamFields } from "@/views/pm/team-filter"
 
 export function ServiceTeams({ variant }: { variant: "team1" | "team3" }) {
   return <ServiceGuard><TeamsSurface key={variant} variant={variant} /></ServiceGuard>
@@ -78,9 +79,16 @@ function TeamsSurface({ variant }: { variant: "team1" | "team3" }) {
   const sourceErrors = necessary.flatMap(data => data.error ? [data.error.message] : [])
   const data: PmControlledData = sourceErrors.length ? { state: "error", error: { category: "request", message: sourceErrors.join(" · "), reason: t("仅保留当前仍获授权的快照。写操作已暂停。", "Only snapshots still authorized are retained. Writes are paused.") }, onRetry: refresh } : necessary.some(data => data.state === "loading") ? { state: "loading", onRetry: refresh } : { state: "success", refreshing: necessary.some(data => data.refreshing), onRetry: refresh }
   const needle = interaction.query.trim().toLocaleLowerCase()
-  const visibleTeams = teams.filter(team => (!interaction.teamId || team.id === interaction.teamId) && (!interaction.focusFilter || team.focus === interaction.focusFilter) && (!interaction.presenceFilter || interaction.presenceFilter === "all" || team.members.some(entry => allMembers.find(member => member.userId === entry.userId)?.presence === interaction.presenceFilter)) && [team.name, team.identifier ?? "", team.description, team.focus ?? "", ...team.members.map(entry => allMembers.find(member => member.userId === entry.userId)?.name ?? ""), ...team.projectIds.map(id => projects.find(project => project.id === id)?.title ?? "")].join(" ").toLocaleLowerCase().includes(needle)).sort((a, b) => interaction.sort === "activity" ? (b.activityAt ?? "").localeCompare(a.activityAt ?? "") : interaction.sort === "members" ? b.members.length - a.members.length : a.name.localeCompare(b.name) * (interaction.sort === "name-desc" ? -1 : 1))
-  const effectiveInteraction = variant === "team3" ? { ...interaction, teamId } : interaction
-  const workload = workloadQuery.data && membersQuery.data ? workloadProjection(workloadQuery.data, allMembers, { ...effectiveInteraction, memberId }) : null
+  const memberByUserId = new Map(allMembers.map(member => [member.userId, member]))
+  const conditions = teamFilterConditions(interaction)
+  const visibleTeams = teams.filter(team => teamMatchesConditions(team, conditions, memberByUserId) && [team.name, team.identifier ?? "", team.description, team.focus ?? "", ...team.members.map(entry => allMembers.find(member => member.userId === entry.userId)?.name ?? ""), ...team.projectIds.map(id => projects.find(project => project.id === id)?.title ?? "")].join(" ").toLocaleLowerCase().includes(needle)).sort((a, b) => interaction.sort === "activity" ? (b.activityAt ?? "").localeCompare(a.activityAt ?? "") : interaction.sort === "members" ? b.members.length - a.members.length : a.name.localeCompare(b.name) * (interaction.sort === "name-desc" ? -1 : 1))
+  const effectiveInteraction = variant === "team3" ? { ...interaction, teamId, memberFilter: interaction.memberFilter ?? memberId } : interaction
+  const workloadConditions = withSingleTeamFields(conditions, ["state", "team", "member"]).filter(condition => condition.field === "state" || condition.field === "team" || condition.field === "member")
+  const workload = workloadQuery.data && membersQuery.data ? workloadProjection(workloadQuery.data, allMembers, {
+    ...effectiveInteraction,
+    memberId: effectiveInteraction.memberFilter ?? memberId,
+    conditions: workloadConditions,
+  }) : null
   const canManage = variant === "team1" && allowed(workspace, "access.manage") && !!teamsQuery.data?.canManage
   const teamReadBlocked = !teamsQuery.data || !!teamsQuery.error
   const memberReadBlocked = !membersQuery.data || !!membersQuery.error
@@ -106,10 +114,12 @@ function TeamsSurface({ variant }: { variant: "team1" | "team3" }) {
   const changeInteraction: TeamCollectionViewProps["actions"]["setInteraction"] = next => {
     const updated = typeof next === "function" ? next(effectiveInteraction) : next
     setInteraction(updated)
-    if (variant === "team3" && updated.teamId !== teamId) {
+    if (variant === "team3" && (updated.teamId !== teamId || (updated.memberFilter ?? null) !== memberId)) {
       const params = new URLSearchParams(searchParams)
       if (updated.teamId) params.set("teamId", updated.teamId)
       else params.delete("teamId")
+      if (updated.memberFilter) params.set("memberId", updated.memberFilter)
+      else params.delete("memberId")
       setSearchParams(params)
     }
   }
@@ -117,6 +127,14 @@ function TeamsSurface({ variant }: { variant: "team1" | "team3" }) {
     const params = new URLSearchParams(searchParams)
     params.delete(key)
     setSearchParams(params)
+    setInteraction(previous => {
+      const field = key === "memberId" ? "member" : "team"
+      return {
+        ...previous,
+        ...(key === "memberId" ? { memberFilter: null } : { teamId: null }),
+        conditions: previous.conditions && previous.conditions.filter(condition => condition.field !== field),
+      }
+    })
   }
   const canWriteTeam = (id: string) => canManage && !teamReadBlocked && !locked && !!teamsQuery.data?.teams.some(team => team.id === id && !team.data.archivedAt)
   return <>

@@ -1,0 +1,299 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexChatGptAuth.ts",
+  "beforeSha256": "fafdb335a6386f04881e469600b9c7968c44a718b729230f361c029633c45c03",
+  "afterSha256": "930b81aeb2e003044c102bff8dbff9a434d9b647b0abe62b995d7e9d9639b53b",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 11,
+      "before": [
+        "import { hashTelemetryId } from \"@t3tools/shared/telemetryId\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 13,
+      "before": [
+        "import * as Cause from \"effect/Cause\";\n",
+        "import * as AnalyticsService from \"../telemetry/AnalyticsService.ts\";\n",
+        "import { openAiUserId } from \"../telemetry/Identify.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 29,
+      "before": [
+        "import * as ServerSecretStore from \"../auth/ServerSecretStore.ts\";\n",
+        "import * as ServerSettings from \"../serverSettings.ts\";\n",
+        "import * as ServerEnvironment from \"../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerSecretStore from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-secret-store.ts\";\n",
+        "import * as ServerEnvironment from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-environment.ts\";\n"
+      ]
+    },
+    {
+      "start": 33,
+      "before": [
+        "const isSetupError = Schema.is(ProviderSetupError);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 113,
+      "before": [
+        "  const analytics = yield* Effect.serviceOption(AnalyticsService.AnalyticsService);\n",
+        "  const settings = yield* Effect.serviceOption(ServerSettings.ServerSettingsService);\n",
+        "  const track = Effect.fn(\"CodexChatGptAuth.track\")(function* <A, E extends ProviderSetupError, R>(\n",
+        "    event: \"auth\" | \"transfer\",\n",
+        "    properties: Readonly<Record<string, string>>,\n",
+        "    task: Effect.Effect<A, E, R>,\n",
+        "    expiresAt?: number,\n",
+        "  ) {\n",
+        "    if (Option.isNone(analytics)) return yield* task;\n",
+        "    const record = (name: string, properties: Readonly<Record<string, unknown>>) =>\n",
+        "      analytics.value.record(name, properties).pipe(Effect.ignoreCause);\n",
+        "    const startedAt = yield* Clock.currentTimeMillis;\n",
+        "    yield* record(`chatgpt.${event}.started`, properties);\n",
+        "    return yield* task.pipe(\n",
+        "      Effect.onExit((result) =>\n",
+        "        Effect.gen(function* () {\n",
+        "          const endedAt = yield* Clock.currentTimeMillis;\n",
+        "          const error = Exit.isFailure(result)\n",
+        "            ? Cause.findErrorOption(result.cause)\n",
+        "            : Option.none();\n",
+        "          const counts =\n",
+        "            Exit.isSuccess(result) &&\n",
+        "            (event === \"transfer\" || options.telemetryFlow !== \"primary_handoff\")\n",
+        "              ? yield* accountCounts.pipe(Effect.catchCause(() => Effect.succeed({})))\n",
+        "              : {};\n",
+        "          yield* record(`chatgpt.${event}.completed`, {\n",
+        "            ...counts,\n",
+        "            ...properties,\n",
+        "            outcome: Exit.isSuccess(result)\n",
+        "              ? \"succeeded\"\n",
+        "              : Cause.hasInterruptsOnly(result.cause)\n",
+        "                ? expiresAt !== undefined && endedAt >= expiresAt\n",
+        "                  ? \"expired\"\n",
+        "                  : \"cancelled\"\n",
+        "                : \"failed\",\n",
+        "            durationMs: Math.max(0, endedAt - startedAt),\n",
+        "            ...(Option.isSome(error) && isSetupError(error.value)\n",
+        "              ? { failureStage: error.value.operation }\n",
+        "              : {}),\n",
+        "          });\n",
+        "        }),\n",
+        "      ),\n",
+        "    );\n",
+        "  });\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 172,
+      "before": [
+        "  const hostId = `urn:uuid:${yield* environment.getEnvironmentId}`;\n"
+      ],
+      "after": [
+        "  const hostStore = yield* ProviderCredentialStore.make(\"codex-chatgpt-host\", options.instanceId);\n",
+        "  const savedHost = yield* hostStore.get;\n",
+        "  const hostId = Option.isSome(savedHost)\n",
+        "    ? (yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({\n",
+        "        hostId: Schema.String.check(Schema.isPattern(/^urn:uuid:[0-9a-f-]{36}$/i)),\n",
+        "      })))(new TextDecoder().decode(savedHost.value)).pipe(Effect.mapError(cause =>\n",
+        "        new ProviderSetupError({ instanceId: options.instanceId, operation: \"read\", detail: \"The managed ChatGPT host identity is invalid.\", cause })))).hostId\n",
+        "    : `urn:uuid:${yield* environment.getEnvironmentId}`;\n"
+      ]
+    },
+    {
+      "start": 227,
+      "before": [
+        "    // The OpenAI account is the person, so it marks who owns this install.\n",
+        "    Effect.tap((credentials) => {\n",
+        "      const userId = Option.flatMap(credentials, (saved) =>\n",
+        "        Option.flatMap(Option.fromUndefinedOr(saved.idToken), openAiUserId),\n",
+        "      );\n",
+        "      return Option.isSome(userId) && Option.isSome(analytics)\n",
+        "        ? analytics.value.recordOwners(\n",
+        "            [{ source: \"openai\", ownerId: hashTelemetryId(userId.value) }],\n",
+        "            \"server\",\n",
+        "          )\n",
+        "        : Effect.void;\n",
+        "    }),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 278,
+      "before": [
+        "  );\n",
+        "  const accountCounts = Effect.gen(function* () {\n",
+        "    const instanceIds = new Set<string>([options.instanceId]);\n",
+        "    if (Option.isSome(settings)) {\n",
+        "      const current = yield* settings.value.getSettings;\n",
+        "      instanceIds.add(\"codex\");\n",
+        "      for (const [id, instance] of Object.entries(current.providerInstances)) {\n",
+        "        if (instance.driver === \"codex\") instanceIds.add(id);\n",
+        "      }\n",
+        "    }\n",
+        "    const accounts = new Set<string>();\n",
+        "    const connections = new Set<string>();\n",
+        "    const savedConnections = new Set<string>();\n",
+        "    let unidentifiedConnectedConnectionCount = 0;\n",
+        "    for (const id of instanceIds) {\n",
+        "      const registrations = yield* ProviderCredentialStore.make(\"codex-chatgpt-registration\", id);\n",
+        "      const registrationBytes = yield* registrations.get;\n",
+        "      if (Option.isSome(registrationBytes)) {\n",
+        "        const saved = yield* decodeRegistration(new TextDecoder().decode(registrationBytes.value));\n",
+        "        for (const profile of \"profiles\" in saved ? saved.profiles : [saved]) {\n",
+        "          savedConnections.add(profile.clientId);\n",
+        "        }\n",
+        "      }\n",
+        "      const credentials = yield* ProviderCredentialStore.make(\"codex-chatgpt\", id);\n",
+        "      const credentialBytes = yield* credentials.get;\n",
+        "      if (Option.isNone(credentialBytes)) continue;\n",
+        "      const saved = yield* decodeSessions(new TextDecoder().decode(credentialBytes.value));\n",
+        "      for (const session of \"sessions\" in saved ? saved.sessions : [saved]) {\n",
+        "        if (!session.scopes.includes(REQUIRED_SCOPE) || connections.has(session.clientId)) continue;\n",
+        "        connections.add(session.clientId);\n",
+        "        // Client-scoped subjects need verified email for local counting only; never export email or merge profiles.\n",
+        "        const email = session.email?.trim().toLowerCase();\n",
+        "        if (email) accounts.add(email);\n",
+        "        else unidentifiedConnectedConnectionCount++;\n",
+        "      }\n",
+        "    }\n",
+        "    return {\n",
+        "      accountCountScope: Option.isSome(settings) ? \"environment\" : \"provider_instance\",\n",
+        "      connectedAccountCount: accounts.size,\n",
+        "      connectedConnectionCount: connections.size,\n",
+        "      savedConnectionCount: savedConnections.size,\n",
+        "      unidentifiedConnectedConnectionCount,\n",
+        "    };\n",
+        "  }).pipe(\n",
+        "    Effect.provideService(ServerSecretStore.ServerSecretStore, secrets),\n",
+        "    Effect.provideService(Crypto.Crypto, crypto),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 801,
+      "before": [
+        "  const logout = Effect.gen(function* () {\n",
+        "    const credentials = Option.getOrUndefined(yield* read);\n"
+      ],
+      "after": [
+        "  const revokeConnection = (credentials: CodexChatGptCredentials | undefined) => Effect.gen(function* () {\n"
+      ]
+    },
+    {
+      "start": 831,
+      "before": [],
+      "after": [
+        "    return confirmed;\n",
+        "  });\n",
+        "  const logout = Effect.gen(function* () {\n",
+        "    const confirmed = yield* revokeConnection(Option.getOrUndefined(yield* read));\n"
+      ]
+    },
+    {
+      "start": 878,
+      "before": [
+        "        track(\n",
+        "          \"auth\",\n",
+        "          {\n",
+        "            flow: options.telemetryFlow ?? \"direct\",\n",
+        "            intent:\n",
+        "              options.telemetryFlow === \"primary_handoff\"\n",
+        "                ? options.reconnectProfile\n",
+        "                  ? \"saved_profile\"\n",
+        "                  : \"different_account\"\n",
+        "                : method === \"chatgpt-change-account\"\n",
+        "                  ? \"different_account\"\n",
+        "                  : method.startsWith(\"chatgpt-profile:\")\n",
+        "                    ? \"saved_profile\"\n",
+        "                    : \"default\",\n",
+        "            callbackMode: context.callbackMode ?? \"server\",\n",
+        "          },\n",
+        "          authenticate(method, context),\n",
+        "          context.expiresAt,\n",
+        "        ),\n"
+      ],
+      "after": [
+        "        authenticate(method, context),\n"
+      ]
+    },
+    {
+      "start": 986,
+      "before": [
+        "      track(\n",
+        "        \"transfer\",\n",
+        "        { flow: \"primary_handoff\" },\n",
+        "        validate.pipe(\n",
+        "          Effect.andThen(controller.adoptCredentials!(withSessionLock(saveImported), stopSessions)),\n",
+        "        ),\n"
+      ],
+      "after": [
+        "      validate.pipe(\n",
+        "        Effect.andThen(controller.adoptCredentials!(withSessionLock(saveImported), stopSessions)),\n"
+      ]
+    },
+    {
+      "start": 995,
+      "before": [],
+      "after": [
+        "  const profiles = Effect.gen(function* () {\n",
+        "    const registrations = yield* readRegistrations;\n",
+        "    const saved = yield* readSessions;\n",
+        "    return registrations.profiles.map(profile => ({\n",
+        "      id: profile.clientId, email: profile.email ?? null, active: profile.clientId === saved.activeClientId,\n",
+        "      connected: saved.sessions.some(session => session.clientId === profile.clientId && session.scopes.includes(REQUIRED_SCOPE)),\n",
+        "    }));\n",
+        "  }).pipe(withSessionLock, lock.withPermit);\n",
+        "  const selectProfile = (clientId: string, stopSessions: Effect.Effect<void, ProviderSetupError>) =>\n",
+        "    lock.withPermit(controller.adoptCredentials!(withSessionLock(Effect.gen(function* () {\n",
+        "      const saved = yield* readSessions;\n",
+        "      const profile = saved.sessions.find(session => session.clientId === clientId);\n",
+        "      if (!profile || !profile.scopes.includes(REQUIRED_SCOPE))\n",
+        "        return yield* failure(\"select\", \"Reconnect this ChatGPT profile before selecting it.\");\n",
+        "      yield* writeSessions({ ...saved, activeClientId: clientId });\n",
+        "    })), stopSessions));\n",
+        "  const removeProfile = (clientId: string, stopSessions: Effect.Effect<void, ProviderSetupError>) =>\n",
+        "    lock.withPermit(controller.adoptCredentials!(withSessionLock(Effect.gen(function* () {\n",
+        "      const saved = yield* readSessions;\n",
+        "      const registrations = yield* readRegistrations;\n",
+        "      if (!registrations.profiles.some(profile => profile.clientId === clientId))\n",
+        "        return yield* failure(\"remove\", \"Unknown ChatGPT profile.\");\n",
+        "      const profile = saved.sessions.find(session => session.clientId === clientId);\n",
+        "      if (!(yield* revokeConnection(profile)))\n",
+        "        return yield* failure(\"remove\", \"ChatGPT could not confirm revocation; the connection was not removed.\");\n",
+        "      yield* writeSessions({ activeClientId: saved.activeClientId === clientId ? null : saved.activeClientId,\n",
+        "        sessions: saved.sessions.filter(session => session.clientId !== clientId) });\n",
+        "      yield* encodeRegistration({ lastClientId: registrations.lastClientId === clientId ? null : registrations.lastClientId,\n",
+        "        profiles: registrations.profiles.filter(profile => profile.clientId !== clientId) }).pipe(\n",
+        "          Effect.flatMap(json => registrationStore.set(new TextEncoder().encode(json))),\n",
+        "          Effect.mapError(() => failure(\"remove\", \"Could not remove the ChatGPT registration.\")),\n",
+        "        );\n",
+        "    })), stopSessions));\n"
+      ]
+    },
+    {
+      "start": 1001,
+      "before": [],
+      "after": [
+        "    profiles,\n",
+        "    selectProfile,\n",
+        "    removeProfile,\n"
+      ]
+    }
+  ]
+}

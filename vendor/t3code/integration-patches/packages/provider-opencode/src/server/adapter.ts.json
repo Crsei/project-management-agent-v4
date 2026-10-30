@@ -1,0 +1,664 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/adapter.ts",
+  "beforeSha256": "1c347f923077aa12af6a0497a70ae68ff558f4d7ba9951680fd30da5bfaf0703",
+  "afterSha256": "cf4d5a7abccc5ece3e20bfdb71cbe86665437e1eed206f66b1829ba9d4cca996",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [],
+      "after": [
+        "import { randomBytes } from \"node:crypto\";\n"
+      ]
+    },
+    {
+      "start": 11,
+      "before": [],
+      "after": [
+        "import { parseSemver } from \"@t3tools/shared/semver\";\n"
+      ]
+    },
+    {
+      "start": 57,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import * as ProviderRuntimeHost from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 64,
+      "before": [
+        "import { t3OrchestrationSystemPrompt } from \"@t3tools/provider-core/server/orchestrationInstructions\";\n",
+        "import { buildRuntimeInstructions } from \"@t3tools/provider-core/server/runtimeInstructions\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 274,
+      "before": [],
+      "after": [
+        "  readonly commandItems: Map<string, Extract<OrchestrationV2TurnItem, { type: \"command_execution\" }>>;\n"
+      ]
+    },
+    {
+      "start": 413,
+      "before": [],
+      "after": [
+        "  answering?: boolean;\n"
+      ]
+    },
+    {
+      "start": 755,
+      "before": [],
+      "after": [
+        "  if (part.state.status === \"running\") {\n",
+        "    const output = recordValue(part.state.metadata, \"output\");\n",
+        "    if (typeof output === \"string\") return output;\n",
+        "  }\n"
+      ]
+    },
+    {
+      "start": 918,
+      "before": [
+        "  const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n"
+      ],
+      "after": [
+        "  const runtimeHost = yield* ProviderRuntimeHost.ProviderRuntimeHost;\n",
+        "  const homeDirectory = yield* HostProcess.HomeDirectory;\n"
+      ]
+    },
+    {
+      "start": 938,
+      "before": [],
+      "after": [
+        "          ...(options.settings.serverPassword ? { serverPassword: options.settings.serverPassword } : {}),\n"
+      ]
+    },
+    {
+      "start": 940,
+      "before": [],
+      "after": [
+        "        if (parseSemver(connection.version)?.major !== 1) {\n",
+        "          return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver: OPENCODE_PROVIDER, detail: \"The native server changed OpenCode protocol generations.\",\n",
+        "          });\n",
+        "        }\n"
+      ]
+    },
+    {
+      "start": 943,
+      "before": [
+        "          ...(connection.external && options.settings.serverPassword\n",
+        "            ? { serverPassword: options.settings.serverPassword }\n",
+        "            : {}),\n"
+      ],
+      "after": [
+        "          ...(connection.serverPassword ? { serverPassword: connection.serverPassword } : {}),\n"
+      ]
+    },
+    {
+      "start": 948,
+      "before": [
+        "        const mcpSession = yield* mcpSessions.read(input.threadId);\n",
+        "        const hasT3Mcp = mcpSession !== undefined && !connection.external;\n",
+        "        const orchestrationSystemPrompt = t3OrchestrationSystemPrompt(\n",
+        "          hasT3Mcp,\n",
+        "          mcpSession?.capabilities?.has(\"device\") === true,\n",
+        "        );\n",
+        "        if (hasT3Mcp) {\n",
+        "          yield* OpenCodeRuntime.runOpenCodeSdk(\"mcp.add\", () =>\n"
+      ],
+      "after": [
+        "        const binding = yield* runtimeHost.read({\n",
+        "          threadId: input.threadId, providerInstanceId: options.instanceId,\n",
+        "        });\n",
+        "        if (binding && binding.cwd !== cwd) {\n",
+        "          return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver: OPENCODE_PROVIDER, detail: \"The host transport belongs to another directory.\",\n",
+        "          });\n",
+        "        }\n",
+        "        const mcpServerName = binding?.mcpServers.length ? `pm_${randomBytes(12).toString(\"hex\")}` : undefined;\n",
+        "        if (binding && binding.mcpServers.length > 1) {\n",
+        "          return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "            driver: OPENCODE_PROVIDER, detail: \"OpenCode requires one generation-scoped host transport.\",\n",
+        "          });\n",
+        "        }\n",
+        "        // Reuse only this operation's admitted owner, never a later binding for the same thread.\n",
+        "        const authorizeHostTools = binding?.mcpServers.length\n",
+        "          ? runtimeHost.authorize({ threadId: binding.threadId, providerInstanceId: binding.providerInstanceId,\n",
+        "              executionId: binding.executionId, action: \"tool\" }).pipe(Effect.mapError(cause =>\n",
+        "              new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "                driver: OPENCODE_PROVIDER, detail: \"The generation-scoped PM tool authorization is no longer valid\", cause,\n",
+        "              })))\n",
+        "          : Effect.void;\n",
+        "        let hostTransportReady = false;\n",
+        "        let hostTransportOwned = false;\n",
+        "        const hostTransportGate = Semaphore.makeUnsafe(1);\n",
+        "        const disconnectHostTransport = Effect.gen(function* () {\n",
+        "          if (!hostTransportOwned || !mcpServerName) return;\n",
+        "          yield* OpenCodeRuntime.runOpenCodeSdk(\"mcp.disconnect\", signal =>\n",
+        "            client.mcp.disconnect({ name: mcpServerName }, { signal }),\n",
+        "          ).pipe(Effect.timeout(\"5 seconds\"));\n",
+        "          hostTransportOwned = false;\n",
+        "          hostTransportReady = false;\n",
+        "        });\n",
+        "        yield* Scope.addFinalizer(scope, disconnectHostTransport.pipe(hostTransportGate.withPermit, Effect.orDie));\n",
+        "        const recheckHostTools = authorizeHostTools.pipe(Effect.onError(() =>\n",
+        "          disconnectHostTransport.pipe(hostTransportGate.withPermit, Effect.orDie),\n",
+        "        ));\n",
+        "        const installHostTransport = Effect.gen(function* () {\n",
+        "          if (!mcpServerName || !binding) return;\n",
+        "          yield* authorizeHostTools;\n",
+        "          if (hostTransportReady) return;\n",
+        "          const transport = binding.mcpServers[0]!;\n",
+        "          hostTransportOwned = true;\n",
+        "          const admission = yield* OpenCodeRuntime.runOpenCodeSdk(\"mcp.add\", (signal) =>\n"
+      ]
+    },
+    {
+      "start": 957,
+      "before": [
+        "              name: \"t3-code\",\n",
+        "              config: {\n",
+        "                type: \"remote\",\n",
+        "                url: mcpSession.endpoint,\n",
+        "                headers: { Authorization: mcpSession.authorizationHeader },\n",
+        "                oauth: false,\n",
+        "              },\n",
+        "            }),\n"
+      ],
+      "after": [
+        "              name: mcpServerName,\n",
+        "              config: { type: \"local\", command: [transport.command, ...transport.args], enabled: true },\n",
+        "            }, { signal }),\n"
+      ]
+    },
+    {
+      "start": 966,
+      "before": [
+        "        }\n"
+      ],
+      "after": [
+        "          yield* authorizeHostTools;\n",
+        "          if (unwrapData(\"mcp.add\", admission)[mcpServerName]?.status !== \"connected\") {\n",
+        "            return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
+        "              driver: OPENCODE_PROVIDER, detail: \"The generation-scoped host transport is not connected.\",\n",
+        "            });\n",
+        "          }\n",
+        "          hostTransportReady = true;\n",
+        "        }).pipe(Effect.onError(() => disconnectHostTransport.pipe(Effect.orDie)), hostTransportGate.withPermit);\n",
+        "        const hostPermissions = (rules: PermissionRuleset): PermissionRuleset => !binding ? rules : [\n",
+        "          ...rules,\n",
+        "          { permission: \"pm_*\", pattern: \"*\", action: \"deny\" },\n",
+        "          ...(mcpServerName ? [{ permission: `${mcpServerName}_*`, pattern: \"*\", action: \"allow\" as const }] : []),\n",
+        "        ];\n",
+        "        const permissionRules = (policy: ProviderAdapter.ProviderAdapterV2RuntimePolicy) =>\n",
+        "          hostPermissions(openCodePermissionRules(policy));\n"
+      ]
+    },
+    {
+      "start": 1383,
+      "before": [
+        "            const childPermission = openCodeChildPermissionRules(\n"
+      ],
+      "after": [
+        "            const childPermission = hostPermissions(openCodeChildPermissionRules(\n"
+      ]
+    },
+    {
+      "start": 1386,
+      "before": [
+        "            );\n"
+      ],
+      "after": [
+        "            ));\n"
+      ]
+    },
+    {
+      "start": 1409,
+      "before": [
+        "              inheritedPermission: openCodePermissionRules(turn.runtimePolicy),\n"
+      ],
+      "after": [
+        "              inheritedPermission: permissionRules(turn.runtimePolicy),\n"
+      ]
+    },
+    {
+      "start": 1609,
+      "before": [],
+      "after": [
+        "          const previousCommand = turn.commandItems.get(part.id);\n",
+        "          if (turnItem.type === \"command_execution\") {\n",
+        "            if (previousCommand !== undefined && previousCommand.status === turnItem.status\n",
+        "              && previousCommand.input === turnItem.input && previousCommand.output === turnItem.output\n",
+        "              && previousCommand.exitCode === turnItem.exitCode && previousCommand.title === turnItem.title) return;\n",
+        "            turn.commandItems.set(part.id, turnItem);\n",
+        "          }\n"
+      ]
+    },
+    {
+      "start": 1635,
+      "before": [],
+      "after": [
+        "          if (turnItem.type === \"command_execution\" && turnItem.output !== undefined) {\n",
+        "            const before = previousCommand?.output ?? \"\";\n",
+        "            // Native snapshots are cumulative; corrections replace the item but are not append events.\n",
+        "            if (turnItem.output.startsWith(before) && turnItem.output.length > before.length) {\n",
+        "              yield* emitProviderEvent({\n",
+        "                type: \"command_output.delta\", driver: OPENCODE_PROVIDER, threadId: turn.threadId,\n",
+        "                itemId: turnItem.id, chunk: turnItem.output.slice(before.length),\n",
+        "              });\n",
+        "            }\n",
+        "          }\n"
+      ]
+    },
+    {
+      "start": 2233,
+      "before": [],
+      "after": [
+        "            commandItems: new Map(),\n"
+      ]
+    },
+    {
+      "start": 2645,
+      "before": [],
+      "after": [
+        "              const rawStatus = recordValue(event.properties.error?.data, \"statusCode\");\n",
+        "              const status = typeof rawStatus === \"number\" && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : undefined;\n"
+      ]
+    },
+    {
+      "start": 2661,
+      "before": [
+        "                        code: event.properties.error?.name ?? null,\n",
+        "                        class: \"provider_error\",\n"
+      ],
+      "after": [
+        "                        code: status === undefined ? event.properties.error?.name ?? null : String(status),\n",
+        "                        class: status === 429 ? \"usage_limit\" : \"provider_error\",\n"
+      ]
+    },
+    {
+      "start": 2680,
+      "before": [
+        "          client.event.subscribe(undefined, { signal: abortController.signal }),\n"
+      ],
+      "after": [
+        "          client.event.subscribe(undefined, {\n",
+        "            signal: abortController.signal,\n",
+        "            sseMaxRetryAttempts: 1,\n",
+        "            onSseError: cause => { throw cause; },\n",
+        "          }),\n"
+      ]
+    },
+    {
+      "start": 2686,
+      "before": [],
+      "after": [
+        "        // The SDK returns a lazy generator: only reading its first event establishes HTTP/SSE.\n",
+        "        const nativeIterator = subscription.stream[Symbol.asyncIterator]();\n",
+        "        const initialEvent = yield* sdkCall(\"event.subscribe.ready\", {}, () => nativeIterator.next()).pipe(\n",
+        "          Effect.timeout(\"10 seconds\"),\n",
+        "        );\n",
+        "        if (initialEvent.done) {\n",
+        "          return yield* new ProviderAdapter.ProviderAdapterEventStreamError({\n",
+        "            driver: OPENCODE_PROVIDER, providerSessionId: input.providerSessionId,\n",
+        "            cause: new Error(\"The native OpenCode subscription ended before its first event.\"),\n",
+        "          });\n",
+        "        }\n",
+        "        const firstEvent = initialEvent.value;\n",
+        "        const establishedStream: AsyncIterable<OpenCodeEvent> = {\n",
+        "          async *[Symbol.asyncIterator]() {\n",
+        "            yield firstEvent;\n",
+        "            yield* { [Symbol.asyncIterator]: () => nativeIterator };\n",
+        "          },\n",
+        "        };\n"
+      ]
+    },
+    {
+      "start": 2687,
+      "before": [
+        "          subscription.stream,\n"
+      ],
+      "after": [
+        "          establishedStream,\n"
+      ]
+    },
+    {
+      "start": 2721,
+      "before": [],
+      "after": [
+        "        // Abort before forkIn's consumer finalizer waits for a pending SDK iterator.next/return.\n",
+        "        yield* Scope.addFinalizer(scope, Effect.sync(() => abortController.abort()));\n"
+      ]
+    },
+    {
+      "start": 2817,
+      "before": [
+        "          const parentRules = openCodePermissionRules(policy);\n"
+      ],
+      "after": [
+        "          const parentRules = permissionRules(policy);\n"
+      ]
+    },
+    {
+      "start": 2824,
+      "before": [
+        "                : openCodeChildPermissionRules(policy, previous, target.inheritedPermission);\n"
+      ],
+      "after": [
+        "                : hostPermissions(openCodeChildPermissionRules(policy, previous, target.inheritedPermission));\n"
+      ]
+    },
+    {
+      "start": 2873,
+      "before": [],
+      "after": [
+        "          let reachedRevert = nativeSession.revert?.messageID === undefined;\n"
+      ]
+    },
+    {
+      "start": 2875,
+      "before": [
+        "            if (entry.info.id === nativeSession.revert?.messageID) break;\n"
+      ],
+      "after": [
+        "            if (entry.info.id === nativeSession.revert?.messageID) { reachedRevert = true; break; }\n"
+      ]
+    },
+    {
+      "start": 2916,
+      "before": [],
+      "after": [
+        "          // Native history proves message boundaries, not application turn/node identities.\n",
+        "          const lastAssistantByUser = new Map<string, Extract<OpenCodeMessage, { role: \"assistant\" }>>();\n",
+        "          for (const { info } of nativeMessages) {\n",
+        "            if (info.role === \"assistant\") lastAssistantByUser.set(info.parentID, info);\n",
+        "          }\n",
+        "          const completedTurnRefs: ProviderAdapter.ProviderNativeCompletedTurnRef[] = [];\n",
+        "          if (reachedRevert && nativeSession.id === sessionId && nativeSession.directory === cwd) {\n",
+        "            for (const { info } of nativeMessages) {\n",
+        "              if (info.role !== \"user\" || info.sessionID !== sessionId || !Number.isFinite(info.time.created)) continue;\n",
+        "              const assistant = lastAssistantByUser.get(info.id);\n",
+        "              if (!assistant || assistant.sessionID !== sessionId || assistant.path.cwd !== cwd\n",
+        "                || assistant.error !== undefined || !assistant.finish || assistant.finish === \"tool-calls\"\n",
+        "                || assistant.finish === \"error\" || assistant.finish === \"unknown\" || !Number.isFinite(assistant.time.created)\n",
+        "                || typeof assistant.time.completed !== \"number\" || !Number.isFinite(assistant.time.completed)\n",
+        "                || assistant.time.created < info.time.created || assistant.time.completed < assistant.time.created) continue;\n",
+        "              completedTurnRefs.push({ driver: OPENCODE_PROVIDER, nativeId: info.id, strength: \"strong\" });\n",
+        "            }\n",
+        "          }\n",
+        "          const latestCompletedTurnRef = completedTurnRefs.find(ref => ref.nativeId === lastUser);\n"
+      ]
+    },
+    {
+      "start": 2929,
+      "before": [],
+      "after": [
+        "            ...(completedTurnRefs.length ? { nativeHistory: { nativeSessionId: sessionId, completedTurnRefs,\n",
+        "              ...(latestCompletedTurnRef ? { latestCompletedTurnRef } : {}) } } : {}),\n"
+      ]
+    },
+    {
+      "start": 2954,
+      "before": [],
+      "after": [
+        "          yield* recheckHostTools;\n"
+      ]
+    },
+    {
+      "start": 3036,
+      "before": [
+        "              const permission = openCodePermissionRules(threadInput.runtimePolicy);\n"
+      ],
+      "after": [
+        "              const permission = permissionRules(threadInput.runtimePolicy);\n"
+      ]
+    },
+    {
+      "start": 3085,
+      "before": [],
+      "after": [
+        "              if (nativeSession.id !== sessionId || nativeSession.directory !== cwd) {\n",
+        "                return yield* protocolError(\"The native OpenCode session belongs to another directory.\");\n",
+        "              }\n",
+        "              const status = unwrapData(\"session.status\", yield* sdkCall(\"session.status\", {}, () => client.session.status()));\n",
+        "              if (status[sessionId]?.type === \"busy\" || status[sessionId]?.type === \"retry\") {\n",
+        "                return yield* protocolError(\"The native OpenCode session is already active in another client.\");\n",
+        "              }\n"
+      ]
+    },
+    {
+      "start": 3143,
+      "before": [],
+      "after": [
+        "              const liveBinding = yield* runtimeHost.read({ threadId: input.threadId, providerInstanceId: options.instanceId });\n",
+        "              if (binding && liveBinding?.executionId !== binding.executionId) {\n",
+        "                return yield* protocolError(\"The generation-scoped host transport is no longer active.\");\n",
+        "              }\n",
+        "              if (binding) {\n",
+        "                const statuses = unwrapData(\"session.status\", yield* sdkCall(\"session.status\", {}, () => client.session.status()));\n",
+        "                if (statuses[sessionId]?.type === \"busy\" || statuses[sessionId]?.type === \"retry\") {\n",
+        "                  return yield* protocolError(\"The native OpenCode session is already active in another client.\");\n",
+        "                }\n",
+        "              }\n",
+        "              yield* installHostTransport;\n"
+      ]
+    },
+    {
+      "start": 3196,
+      "before": [],
+      "after": [
+        "                commandItems: new Map(),\n"
+      ]
+    },
+    {
+      "start": 3228,
+      "before": [],
+      "after": [
+        "                yield* recheckHostTools;\n"
+      ]
+    },
+    {
+      "start": 3254,
+      "before": [
+        "              const systemPrompt = [\n",
+        "                orchestrationSystemPrompt,\n",
+        "                buildRuntimeInstructions({\n",
+        "                  harness: \"OpenCode\",\n",
+        "                  model: turnInput.modelSelection.model,\n",
+        "                }),\n",
+        "              ]\n",
+        "                .filter(Boolean)\n",
+        "                .join(\"\\n\\n\");\n"
+      ],
+      "after": [
+        "              const systemPrompt = [\"<runtime_info>You are running through the OpenCode harness.</runtime_info>\",\n",
+        "                binding?.instructionText].filter(Boolean).join(\"\\n\\n\");\n"
+      ]
+    },
+    {
+      "start": 3492,
+      "before": [
+        "              if (pending === undefined) {\n"
+      ],
+      "after": [
+        "              if (pending === undefined || pending.answering) {\n"
+      ]
+    },
+    {
+      "start": 3497,
+      "before": [],
+      "after": [
+        "              if (binding?.nativePermissions === \"deny-ungranted\" && pending.permission\n",
+        "                && requestInput.decision !== undefined && ![\"cancel\", \"decline\"].includes(requestInput.decision)) {\n",
+        "                return yield* protocolError(\"Native permissions require a separate host grant.\");\n",
+        "              }\n"
+      ]
+    },
+    {
+      "start": 3498,
+      "before": [],
+      "after": [
+        "                if (requestInput.decision === \"cancel\" || requestInput.decision === \"decline\") {\n",
+        "                  pending.answering = true;\n",
+        "                  yield* sdkCall(\"question.reject\", { requestID: pending.nativeRequestId }, (signal) =>\n",
+        "                    client.question.reject({ requestID: pending.nativeRequestId }, { signal }));\n",
+        "                  yield* resolveRuntimeRequest(pending.nativeRequestId, \"cancelled\");\n",
+        "                  return;\n",
+        "                }\n"
+      ]
+    },
+    {
+      "start": 3503,
+      "before": [
+        "                const answers = OpenCodeRuntime.toOpenCodeQuestionAnswers(\n",
+        "                  pending.question,\n",
+        "                  requestInput.answers,\n",
+        "                );\n"
+      ],
+      "after": [
+        "                const answers = yield* Effect.try({\n",
+        "                  try: () => OpenCodeRuntime.toOpenCodeQuestionAnswers(pending.question!, requestInput.answers!),\n",
+        "                  catch: () => protocolError(\"Invalid native question answer.\"),\n",
+        "                });\n",
+        "                pending.answering = true;\n"
+      ]
+    },
+    {
+      "start": 3519,
+      "before": [],
+      "after": [
+        "                yield* resolveRuntimeRequest(pending.nativeRequestId, \"resolved\");\n"
+      ]
+    },
+    {
+      "start": 3527,
+      "before": [],
+      "after": [
+        "              pending.answering = true;\n"
+      ]
+    },
+    {
+      "start": 3539,
+      "before": [],
+      "after": [
+        "              yield* resolveRuntimeRequest(pending.nativeRequestId, \"resolved\");\n"
+      ]
+    },
+    {
+      "start": 3616,
+      "before": [
+        "                    permission: openCodePermissionRules(input.runtimePolicy),\n"
+      ],
+      "after": [
+        "                    permission: permissionRules(input.runtimePolicy),\n"
+      ]
+    },
+    {
+      "start": 3659,
+      "before": [],
+      "after": [
+        "              if (forkInput.providerTurnId !== undefined && forkInput.nativeCompletedTurnRef !== undefined) {\n",
+        "                return yield* protocolError(\"OpenCode fork requires one unambiguous boundary.\");\n",
+        "              }\n"
+      ]
+    },
+    {
+      "start": 3669,
+      "before": [],
+      "after": [
+        "              }\n",
+        "              if (forkInput.nativeCompletedTurnRef !== undefined) {\n",
+        "                const selected = forkInput.nativeCompletedTurnRef;\n",
+        "                const statuses = unwrapData(\"session.status\", yield* sdkCall(\"session.status\", {}, () => client.session.status()));\n",
+        "                if (statuses[sourceSessionId]?.type === \"busy\" || statuses[sourceSessionId]?.type === \"retry\") {\n",
+        "                  return yield* protocolError(\"Cannot fork an active native OpenCode session.\");\n",
+        "                }\n",
+        "                const snapshot = yield* readSnapshot(forkInput.sourceProviderThread);\n",
+        "                if (selected.driver !== OPENCODE_PROVIDER || selected.strength !== \"strong\"\n",
+        "                  || !snapshot.nativeHistory?.completedTurnRefs.some(ref => ref.nativeId === selected.nativeId)) {\n",
+        "                  return yield* protocolError(\"The native OpenCode fork boundary is not a completed message in this session.\");\n",
+        "                }\n",
+        "                const selectedIndex = snapshot.providerPayload.findIndex(({ info }) => info.id === selected.nativeId);\n",
+        "                for (let index = selectedIndex + 1; index < snapshot.providerPayload.length; index++) {\n",
+        "                  const entry = snapshot.providerPayload[index];\n",
+        "                  if (entry?.info.role === \"user\") { boundaryMessageId = entry.info.id; break; }\n",
+        "                }\n"
+      ]
+    },
+    {
+      "start": 3718,
+      "before": [],
+      "after": [
+        "        yield* OpenCodeRuntime.bindOpenCodeSessionEvidence(runtimeSession, {\n",
+        "          protocol: \"opencode-v1-sdk.sse\", version: connection.version, cwd, homeDirectory,\n",
+        "          external: connection.external,\n",
+        "          readLegacy: Effect.fnUntraced(function* ({ nativeSessionId, turnId, messageId, ensure }) {\n",
+        "            const native = unwrapData(\"session.get\", yield* sdkCall(\"session.get\", { sessionID: nativeSessionId },\n",
+        "              () => client.session.get({ sessionID: nativeSessionId })));\n",
+        "            if (native.id !== nativeSessionId || native.directory !== cwd || ensure.runtimePolicy.cwd !== cwd) {\n",
+        "              return yield* protocolError(\"The legacy native session identity or directory does not match.\");\n",
+        "            }\n",
+        "            const status = unwrapData(\"session.status\", yield* sdkCall(\"session.status\", {}, () => client.session.status()));\n",
+        "            if (status[nativeSessionId]?.type === \"busy\" || status[nativeSessionId]?.type === \"retry\") {\n",
+        "              return yield* protocolError(\"The legacy native session is active in another client.\");\n",
+        "            }\n",
+        "            const history = unwrapData(\"session.messages\", yield* sdkCall(\"session.messages\", { sessionID: nativeSessionId },\n",
+        "              () => client.session.messages({ sessionID: nativeSessionId })));\n",
+        "            const revertIndex = native.revert?.messageID === undefined ? history.length\n",
+        "              : history.findIndex(entry => entry.info.id === native.revert!.messageID);\n",
+        "            if (revertIndex < 0) return yield* protocolError(\"The native revert boundary is missing.\");\n",
+        "            const visible = history.slice(0, revertIndex);\n",
+        "            const user = visible.map(entry => entry.info).findLast(\n",
+        "              (info): info is Extract<OpenCodeMessage, { role: \"user\" }> => info.role === \"user\");\n",
+        "            const assistant = visible.map(entry => entry.info).findLast(\n",
+        "              (info): info is Extract<OpenCodeMessage, { role: \"assistant\" }> => info.role === \"assistant\");\n",
+        "            if ((visible.length > 0 && (!user || !assistant\n",
+        "              || assistant.parentID !== user.id || !Number.isFinite(assistant.time.completed) || assistant.error !== undefined\n",
+        "              || !Number.isFinite(user.time.created) || assistant.path.cwd !== cwd))\n",
+        "              || (turnId !== undefined && turnId !== user?.id)\n",
+        "              || (messageId !== undefined && messageId !== user?.id && messageId !== assistant?.id)) {\n",
+        "              return yield* protocolError(\"The legacy native session has no matching stable completed boundary.\");\n",
+        "            }\n",
+        "            const providerThread = makeProviderThread({ idAllocator, providerInstanceId: options.instanceId,\n",
+        "              providerSessionId: input.providerSessionId, appThreadId: ensure.threadId, nativeSession: native,\n",
+        "              now: yield* DateTime.now });\n",
+        "            const snapshot = yield* readSnapshot(user ? { ...providerThread, nativeMetadata: {\n",
+        "              modelSelection: {\n",
+        "                instanceId: options.instanceId, model: `${user.model.providerID}/${user.model.modelID}`,\n",
+        "                options: user.model.variant ? [{ id: \"variant\", value: user.model.variant }] : [],\n",
+        "              },\n",
+        "              ...(assistant ? { forkHeadMessageId: assistant.id } : {}),\n",
+        "            } } : providerThread);\n",
+        "            if (turnId !== undefined && !snapshot.nativeHistory?.completedTurnRefs.some(ref => ref.nativeId === turnId)) {\n",
+        "              return yield* protocolError(\"The native OpenCode history cannot prove the saved completed boundary.\");\n",
+        "            }\n",
+        "            return snapshot;\n",
+        "          }),\n",
+        "        });\n"
+      ]
+    },
+    {
+      "start": 3738,
+      "before": [
+        "  | McpProviderSessions.McpProviderSessions\n"
+      ],
+      "after": [
+        "  | ProviderRuntimeHost.ProviderRuntimeHost\n"
+      ]
+    }
+  ]
+}

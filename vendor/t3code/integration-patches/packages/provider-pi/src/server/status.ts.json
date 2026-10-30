@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "packages/provider-pi/src/server/status.ts",
+  "beforeSha256": "815af73de3590e37a1628817692fe0a7419a4fce256edefcaa6dd01bade9641d",
+  "afterSha256": "3a4a5a1c4392552893e61523d0e502018d2c96ac0cdc8d559a15db9e10fc6bbc",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 139,
+      "before": [
+        "    mcpSession: undefined,\n"
+      ],
+      "after": [
+        "    runtimeBinding: undefined,\n"
+      ]
+    }
+  ]
+}

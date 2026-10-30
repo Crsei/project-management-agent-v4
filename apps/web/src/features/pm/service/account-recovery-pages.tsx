@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { Link } from 'react-router';
+import { CircleAlert, CircleCheck, Info, KeyRound, MailCheck, MonitorSmartphone, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Avatar } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Segmented, SegmentedItem } from '@/components/ui/segmented';
 import { useI18n } from '@/lib/i18n-provider';
 import { useText } from './pm-ui';
 import { usePmService } from './pm-service';
@@ -10,6 +14,31 @@ import { SettingsPassword, SettingsSessions, SecurityActionStatus } from './sett
 import { useAccountSecurity } from './settings/use-account-security';
 import { parseAccountRecoveryMarker, serializeAccountRecoveryMarker, type AccountRecoveryMarker } from './account-recovery-marker';
 import type { PasswordResetAction, RecoveryInspection } from '../../../../../../packages/contracts/src/account-recovery-schemas.ts';
+import styles from './account-pages.module.css';
+
+type NoticeTone = 'info' | 'warning' | 'error' | 'success';
+
+function AccountPageHeader({icon,eyebrow,title,description}:{icon:ReactNode;eyebrow:string;title:string;description:string}) {
+  return <header className={styles.pageHeader}>
+    <span className={styles.symbol} aria-hidden="true">{icon}</span>
+    <div className={styles.heading}>
+      <p className={styles.eyebrow}>{eyebrow}</p>
+      <h1 className={styles.title}>{title}</h1>
+      <p className={styles.description}>{description}</p>
+    </div>
+  </header>;
+}
+
+function StatusNotice({tone,title,children}:{tone:NoticeTone;title?:string;children:ReactNode}) {
+  const Icon = tone==='error' ? CircleAlert : tone==='warning' ? TriangleAlert : tone==='success' ? CircleCheck : Info;
+  return <div className={styles.notice} data-tone={tone} role={tone==='error' ? 'alert' : 'status'}>
+    <Icon className={styles.noticeIcon} aria-hidden="true"/>
+    <div className={styles.noticeBody}>
+      {title && <p className={styles.noticeTitle}>{title}</p>}
+      <div className={styles.noticeText}>{children}</div>
+    </div>
+  </div>;
+}
 
 function useFragmentToken(blocked: RefObject<boolean>) {
   // Pure initializer survives StrictMode's duplicate invocation. Clear URL before paint.
@@ -42,32 +71,88 @@ export function AccountSecurityPage() {
   const service=usePmService(), t=useText();
   const [tab,setTab]=useState<'password'|'sessions'>('password');
   return <PmAuthPageShell split={false}>
-    {!service.actor ? <PmLoginPage/> : <section className="w-full min-w-0 space-y-6">
-      <h1 className="text-2xl font-semibold">{t('本人账号安全','Account security')}</h1>
-      <p className="break-all text-sm">{service.actor.email} · {t('不需要工作区成员资格','No workspace membership required')}</p>
-      <nav className="flex flex-wrap gap-3"><Button variant="outline" onClick={()=>setTab('password')}>{t('密码与恢复邮箱','Password & recovery email')}</Button><Button variant="outline" onClick={()=>setTab('sessions')}>{t('会话管理','Sessions')}</Button><Link to="/pm" className="self-center text-sm underline">{t('返回工作区选择','Workspace chooser')}</Link></nav>
-      {tab==='password' ? <SettingsPassword key={`${service.actor.id}:${service.actorEpoch}:password`} mode="service"/> : <SettingsSessions key={`${service.actor.id}:${service.actorEpoch}:sessions`} mode="service"/>}
-    </section>}
+    <div className={styles.page}>
+      <AccountPageHeader
+        icon={<ShieldCheck size={20}/>}
+        eyebrow={t('账号','Account')}
+        title={t('本人账号安全','Account security')}
+        description={t('管理登录密码、可信恢复邮箱和本人会话。此入口不需要工作区成员资格。','Manage your sign-in password, trusted recovery email and personal sessions. No workspace membership is required.')}
+      />
+      {!service.actor ? <div className={styles.loginWrap}><PmLoginPage titleAs="h2"/></div> : <>
+        <section className={styles.identity} aria-label={t('当前账号','Current account')}>
+          <div className={styles.identityMain}>
+            <Avatar name={service.actor.name || service.actor.email} size={36}/>
+            <div className={styles.identityText}>
+              <p className={styles.identityName}>{service.actor.name || service.actor.email}</p>
+              <p className={styles.identityEmail}>{service.actor.email}</p>
+            </div>
+          </div>
+          <div className={styles.identityMeta}>
+            <Badge tone="neutral" size="sm">{t('不需要工作区成员资格','No workspace membership required')}</Badge>
+          </div>
+        </section>
+        <Segmented
+          value={tab}
+          onValueChange={(value)=>setTab(value==='sessions' ? 'sessions' : 'password')}
+          aria-label={t('账号安全分区','Account security sections')}
+          className={styles.segmented}
+        >
+          <SegmentedItem value="password" className={styles.segmentedItem}><KeyRound size={16} aria-hidden="true"/>{t('密码与恢复邮箱','Password & recovery email')}</SegmentedItem>
+          <SegmentedItem value="sessions" className={styles.segmentedItem}><MonitorSmartphone size={16} aria-hidden="true"/>{t('会话管理','Sessions')}</SegmentedItem>
+        </Segmented>
+        <section className={styles.panel}>
+          {tab==='password' ? <SettingsPassword key={`${service.actor.id}:${service.actorEpoch}:password`} mode="service"/> : <SettingsSessions key={`${service.actor.id}:${service.actorEpoch}:sessions`} mode="service"/>}
+        </section>
+      </>}
+      <nav className={styles.footerLinks} aria-label={t('相关入口','Related links')}>
+        <Link className={styles.link} to="/pm">{t('返回工作区选择','Workspace chooser')}</Link>
+        <Link className={styles.link} to="/pm/account/recovery">{t('通过可信邮箱找回密码','Recover password by email')}</Link>
+      </nav>
+    </div>
   </PmAuthPageShell>;
 }
 function Verification({token,blocked}:{token:string;blocked:RefObject<boolean>}) {
   const security=useAccountSecurity(),t=useText();
   const submittedToken=useRef<string|null>(null);
-  return <section className="space-y-5">
-    <p className="text-sm">{t('当前登录必须属于发起登记的同一账号；不要求同一浏览器。候选邮件持有权不能代替本人会话。','Sign in to the same account that began verification. Another browser is allowed; possession of this email does not replace account authentication.')}</p>
-    <SecurityActionStatus security={security}/>
-    {!token && <p role="alert">{t('缺少令牌。请重新打开原验证邮件；链接仅保留在本页内存，刷新不会自动重发。','Token missing. Reopen the original verification email. The token stays only in page memory; refreshing never resends mail.')}</p>}
-    <Button disabled={!token || !security.data || security.loading || security.busy || !!security.pending || security.storageError || security.outcome?.kind==='recovery_email_confirm' && security.outcome.status==='committed' && submittedToken.current===token} onClick={()=>{submittedToken.current=token;blocked.current=true;void security.confirmEmail(token).finally(()=>{blocked.current=false;});}}>{t('确认此恢复邮箱','Confirm this recovery email')}</Button>
-    <Link to="/pm/account/security" className="block text-sm underline">{t('返回账号安全','Account security')}</Link>
+  const disabled=!token || !security.data || security.loading || security.busy || !!security.pending || security.storageError || security.outcome?.kind==='recovery_email_confirm' && security.outcome.status==='committed' && submittedToken.current===token;
+  return <section className={styles.card} aria-labelledby="verify-recovery-email-title">
+    <header className={styles.cardHeader}>
+      <div className={styles.cardSymbol}><MailCheck size={16} aria-hidden="true"/></div>
+      <div className={styles.cardHeading}>
+        <h2 id="verify-recovery-email-title" className={styles.cardTitle}>{t('确认恢复邮箱','Confirm recovery email')}</h2>
+        <p className={styles.cardDescription}>{t('当前登录必须属于发起登记的同一账号；不要求同一浏览器。候选邮件持有权不能代替本人会话。','Sign in to the same account that began verification. Another browser is allowed; possession of this email does not replace account authentication.')}</p>
+      </div>
+    </header>
+    <div className={styles.cardBody}>
+      <SecurityActionStatus security={security}/>
+      {!token && <StatusNotice tone="warning">{t('缺少令牌。请重新打开原验证邮件；链接仅保留在本页内存，刷新不会自动重发。','Token missing. Reopen the original verification email. The token stays only in page memory; refreshing never resends mail.')}</StatusNotice>}
+      <div className={styles.actions}>
+        <Button loading={security.busy} disabled={disabled} onClick={()=>{submittedToken.current=token;blocked.current=true;void security.confirmEmail(token).finally(()=>{blocked.current=false;});}}>{t('确认此恢复邮箱','Confirm this recovery email')}</Button>
+      </div>
+    </div>
   </section>;
 }
 export function VerifyRecoveryEmailPage() {
   const service=usePmService(),t=useText(),busy=useRef(false);
   const [token]=useFragmentToken(busy);
-  return <PmAuthPageShell split={false}><section className="w-full min-w-0 space-y-5">
-    <h1 className="text-2xl font-semibold">{t('验证恢复邮箱','Verify recovery email')}</h1>
-    {service.actor ? <Verification key={`${service.actor.id}:${service.actorEpoch}`} token={token} blocked={busy}/> : <><p>{t('请在本页登录，验证链接仅暂存内存，不会写入登录跳转地址。刷新后从原邮件重开。','Sign in on this page. The link remains only in memory, never in a sign-in return URL. Reopen the original email after refreshing.')}</p><PmLoginPage/></>}
-  </section></PmAuthPageShell>;
+  return <PmAuthPageShell split={false}>
+    <div className={`${styles.page} ${styles.narrow}`}>
+      <AccountPageHeader
+        icon={<MailCheck size={20}/>}
+        eyebrow={t('账号','Account')}
+        title={t('验证恢复邮箱','Verify recovery email')}
+        description={t('打开验证邮件中的链接，确认可信恢复邮箱。链接只保留在当前页面内存。','Open the link in the verification email to confirm a trusted recovery email. The link stays only in this page’s memory.')}
+      />
+      {service.actor ? <Verification key={`${service.actor.id}:${service.actorEpoch}`} token={token} blocked={busy}/> : <>
+        <StatusNotice tone="info">{t('请在本页登录，验证链接仅暂存内存，不会写入登录跳转地址。刷新后从原邮件重开。','Sign in on this page. The link remains only in memory, never in a sign-in return URL. Reopen the original email after refreshing.')}</StatusNotice>
+        <div className={styles.loginWrap}><PmLoginPage titleAs="h2"/></div>
+      </>}
+      <nav className={styles.footerLinks} aria-label={t('相关入口','Related links')}>
+        <Link className={styles.link} to="/pm/account/security">{t('返回账号安全','Account security')}</Link>
+        <Link className={styles.link} to="/pm">{t('普通登录','Normal sign-in')}</Link>
+      </nav>
+    </div>
+  </PmAuthPageShell>;
 }
 export function PasswordRecoveryPage() {
   const service=usePmService(),busyRef=useRef(false);
@@ -117,26 +202,102 @@ export function PasswordRecoveryPage() {
     void run(async()=>settle(await client.complete(id,token,next),id));
   }
   const blocked=busy || request.failed || reset.failed;
-  return <PmAuthPageShell split={false}><section className="w-full min-w-0 space-y-5">
-    <h1 className="text-2xl font-semibold">{t('通过可信邮箱找回密码','Recover your password')}</h1>
-    <p className="text-sm text-muted-foreground">{t('仅已登记并独立验证的恢复邮箱有效；登录名或历史邀请不是验证证明。没有可信邮箱且无法登录时，请联系实例运维；本服务没有人工绕过接口。','Only independently verified recovery emails are eligible. A sign-in email or historical invitation is not proof. If you cannot sign in and have no recovery email, contact instance operations; no bypass endpoint exists.')}</p>
-    {(request.failed || reset.failed) && <p role="alert">{t('恢复记录损坏或存储不可用，已禁止新写入。请恢复存储权限后重新加载，不要清除尚未核对的原记录。','Recovery storage is corrupt or unavailable. New writes are blocked. Restore access and reload; do not erase an unreconciled marker.')}</p>}
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{message && <p role="status" className="text-sm">{message}</p>}
-    {request.marker?.kind==='recovery_request' && <div className="space-y-3 rounded border p-3"><p>{t('原匿名申请待核对；不会再发信。','Original request needs reconciliation; no resend.')}</p><Button disabled={busy} onClick={()=>{const marker=request.ref.current;if(marker?.kind!=='recovery_request')return;void run(async()=>{const found=await client.lookupRequest(marker.requestId);const result=found.request ? found : await client.recoverRequest(marker.requestId);if(!result.request || result.request.requestId!==marker.requestId)throw new Error('Unknown request');if(request.save(null))setMessage(result.request.status==='accepted' ? t('原申请已处理；不表示账号存在或邮件送达。','Original request accepted; this proves neither account existence nor delivery.') : t('原申请已围栏取消，可显式重新填写。','Original request fenced and cancelled; you may explicitly enter a new request.'));});}}>{t('核对或围栏原申请','Reconcile or fence original request')}</Button></div>}
-    {reset.marker?.kind==='password_reset' && <div className="space-y-3 rounded border p-3"><p>{t('原重置结果未知。密码已清空；请重开同一封邮件再核对。新邮件不能清除旧结果。','Reset outcome unknown. Password cleared. Reopen the same email to reconcile; a different email cannot clear this marker.')}</p><Button disabled={busy || !token} onClick={()=>{const marker=reset.ref.current;if(marker?.kind!=='password_reset')return;void run(async()=>{const found=await client.lookupAction(marker.actionId,token);const result=found.action ? found : await client.recoverAction(marker.actionId,token);if(!result.action)throw new Error('Unknown action');await settle(result.action,marker.actionId);});}}>{t('核对或围栏原重置','Reconcile or fence original reset')}</Button></div>}
-    {outcome && <p role="status">{outcome.status==='committed' ? t('密码已重置，全部旧会话已撤销。请普通登录。','Password reset; all previous sessions revoked. Sign in normally.') : outcome.status==='cancelled' ? t('原重置已取消并围栏，现在可显式重填新密码。','Original reset fenced and cancelled; explicitly enter a new password.') : t(`重置被拒绝：${outcome.errorCode}。密码没有改变。`,`Reset rejected: ${outcome.errorCode}. Password unchanged.`)}</p>}
-    {token && !reset.marker && outcome?.status!=='committed' ? <form onSubmit={submitReset} className="space-y-3">
-      <Button type="button" variant="outline" disabled={busy} onClick={()=>{void run(async()=>{setInspection(await client.inspect(token));});}}>{t('重新检查链接','Inspect link again')}</Button>
-      {inspection && <p className="text-sm">{t('链接到期：','Link expires: ')}{new Date(inspection.expiresAt).toLocaleString()}</p>}
-      <label className="grid gap-2 text-sm"><span>{t('新密码（12–256字符）','New password (12–256 characters)')}</span><Input type="password" autoComplete="new-password" minLength={12} maxLength={256} required value={password} disabled={blocked || !inspection} onChange={event=>setPassword(event.target.value)}/></label>
-      <label className="grid gap-2 text-sm"><span>{t('确认新密码','Confirm new password')}</span><Input type="password" autoComplete="new-password" minLength={12} maxLength={256} required value={confirmation} disabled={blocked || !inspection} onChange={event=>setConfirmation(event.target.value)}/></label>
-      <Button type="submit" disabled={blocked || !inspection || password!==confirmation || !password}>{t('重置密码并撤销全部会话','Reset password and revoke all sessions')}</Button>
-    </form> : !reset.marker && outcome?.status!=='committed' && <form onSubmit={submitRequest} className="space-y-3">
-      {enabled!==true && <p role="status">{enabled===false ? t('实例未配置邮件找回。普通登录不受影响。','Recovery issuance is not configured. Normal sign-in remains available.') : t('能力状态未知，不能发起邮件。','Capability status unknown; mail requests are blocked.')}</p>}
-      <label className="grid gap-2 text-sm"><span>{t('已验证的恢复邮箱（不是任意登录邮箱）','Verified recovery email (not any sign-in email)')}</span><Input type="email" required maxLength={254} autoComplete="email" value={email} disabled={blocked || !!request.marker || !enabled} onChange={event=>setEmail(event.target.value)}/></label>
-      <Button type="submit" disabled={blocked || !!request.marker || !enabled}>{t('申请一次找回邮件','Request one recovery email')}</Button>
-    </form>}
-    {!token && reset.marker && <p>{t('缺少原令牌。请打开原邮件链接，不能从服务器重新取出。','Original token missing. Reopen its email; the server cannot return it.')}</p>}
-    <Link to="/pm" className="block text-sm underline">{t('普通登录','Normal sign-in')}</Link><Link to="/pm/account/security" className="block text-sm underline">{t('本人账号安全','Account security')}</Link>
-  </section></PmAuthPageShell>;
+  const committed=outcome?.status==='committed';
+  const step=committed ? 3 : token ? inspection ? 3 : 2 : 1;
+  const steps=[t('申请邮件','Request email'),t('打开链接','Open link'),t('设置新密码','Set new password')];
+  const outcomeTone:NoticeTone = outcome?.status==='committed' ? 'success' : outcome?.status==='cancelled' ? 'warning' : 'error';
+  return <PmAuthPageShell split={false}>
+    <div className={`${styles.page} ${styles.narrow}`}>
+      <AccountPageHeader
+        icon={<KeyRound size={20}/>}
+        eyebrow={t('账号','Account')}
+        title={t('通过可信邮箱找回密码','Recover your password')}
+        description={t('仅已登记并独立验证的恢复邮箱有效；登录名或历史邀请不是验证证明。没有可信邮箱且无法登录时，请联系实例运维；本服务没有人工绕过接口。','Only independently verified recovery emails are eligible. A sign-in email or historical invitation is not proof. If you cannot sign in and have no recovery email, contact instance operations; no bypass endpoint exists.')}
+      />
+      <ol className={styles.steps} aria-label={t('找回步骤','Recovery steps')}>
+        {steps.map((label,index)=><li key={label} className={styles.step} data-active={step===index+1 || undefined} aria-current={step===index+1 ? 'step' : undefined}>
+          <span className={styles.stepIndex} aria-hidden="true">{index+1}</span>
+          <span className={styles.stepLabel}>{label}</span>
+        </li>)}
+      </ol>
+      <div className={styles.stack}>
+        {(request.failed || reset.failed) && <StatusNotice tone="warning">{t('恢复记录损坏或存储不可用，已禁止新写入。请恢复存储权限后重新加载，不要清除尚未核对的原记录。','Recovery storage is corrupt or unavailable. New writes are blocked. Restore access and reload; do not erase an unreconciled marker.')}</StatusNotice>}
+        {error && <StatusNotice tone="error">{error}</StatusNotice>}
+        {message && <StatusNotice tone="info">{message}</StatusNotice>}
+        {outcome && <StatusNotice tone={outcomeTone}>{committed ? t('密码已重置，全部旧会话已撤销。请普通登录。','Password reset; all previous sessions revoked. Sign in normally.') : outcome.status==='cancelled' ? t('原重置已取消并围栏，现在可显式重填新密码。','Original reset fenced and cancelled; explicitly enter a new password.') : t(`重置被拒绝：${outcome.errorCode}。密码没有改变。`,`Reset rejected: ${outcome.errorCode}. Password unchanged.`)}</StatusNotice>}
+        {request.marker?.kind==='recovery_request' && <section className={`${styles.card} ${styles.cardAttention}`} aria-labelledby="recovery-request-marker-title">
+          <header className={styles.cardHeader}>
+            <div className={styles.cardSymbol}><TriangleAlert size={16} aria-hidden="true"/></div>
+            <div className={styles.cardHeading}>
+              <h2 id="recovery-request-marker-title" className={styles.cardTitle}>{t('核对原申请','Reconcile the original request')}</h2>
+              <p className={styles.cardDescription}>{t('原匿名申请待核对；不会再发信。','Original request needs reconciliation; no resend.')}</p>
+            </div>
+          </header>
+          <div className={styles.cardBody}>
+            <div className={styles.actions}>
+              <Button variant="outline" loading={busy} disabled={busy} onClick={()=>{const marker=request.ref.current;if(marker?.kind!=='recovery_request')return;void run(async()=>{const found=await client.lookupRequest(marker.requestId);const result=found.request ? found : await client.recoverRequest(marker.requestId);if(!result.request || result.request.requestId!==marker.requestId)throw new Error('Unknown request');if(request.save(null))setMessage(result.request.status==='accepted' ? t('原申请已处理；不表示账号存在或邮件送达。','Original request accepted; this proves neither account existence nor delivery.') : t('原申请已围栏取消，可显式重新填写。','Original request fenced and cancelled; you may explicitly enter a new request.'));});}}>{t('核对或围栏原申请','Reconcile or fence original request')}</Button>
+            </div>
+          </div>
+        </section>}
+        {reset.marker?.kind==='password_reset' && <section className={`${styles.card} ${styles.cardAttention}`} aria-labelledby="recovery-reset-marker-title">
+          <header className={styles.cardHeader}>
+            <div className={styles.cardSymbol}><TriangleAlert size={16} aria-hidden="true"/></div>
+            <div className={styles.cardHeading}>
+              <h2 id="recovery-reset-marker-title" className={styles.cardTitle}>{t('核对原重置','Reconcile the original reset')}</h2>
+              <p className={styles.cardDescription}>{t('原重置结果未知。密码已清空；请重开同一封邮件再核对。新邮件不能清除旧结果。','Reset outcome unknown. Password cleared. Reopen the same email to reconcile; a different email cannot clear this marker.')}</p>
+            </div>
+          </header>
+          <div className={styles.cardBody}>
+            <div className={styles.actions}>
+              <Button variant="outline" loading={busy} disabled={busy || !token} onClick={()=>{const marker=reset.ref.current;if(marker?.kind!=='password_reset')return;void run(async()=>{const found=await client.lookupAction(marker.actionId,token);const result=found.action ? found : await client.recoverAction(marker.actionId,token);if(!result.action)throw new Error('Unknown action');await settle(result.action,marker.actionId);});}}>{t('核对或围栏原重置','Reconcile or fence original reset')}</Button>
+            </div>
+          </div>
+        </section>}
+        {token && !reset.marker && !committed ? <section className={styles.card} aria-labelledby="recovery-reset-title">
+          <header className={styles.cardHeader}>
+            <div className={styles.cardSymbol}><KeyRound size={16} aria-hidden="true"/></div>
+            <div className={styles.cardHeading}>
+              <h2 id="recovery-reset-title" className={styles.cardTitle}>{t('设置新密码','Set a new password')}</h2>
+              <p className={styles.cardDescription}>{t('链接只保留在当前页面内存。重置成功后，全部旧会话会被撤销。','The link stays only in this page’s memory. A successful reset revokes every previous session.')}</p>
+            </div>
+          </header>
+          <div className={styles.cardBody}>
+            <div className={styles.metaRow}>
+              <Button type="button" variant="outline" disabled={busy} onClick={()=>{void run(async()=>{setInspection(await client.inspect(token));});}}>{t('重新检查链接','Inspect link again')}</Button>
+              {inspection ? <p className={styles.meta}>{t('链接到期：','Link expires: ')}{new Date(inspection.expiresAt).toLocaleString(locale==='en' ? 'en-US' : 'zh-CN')}</p> : !error && !reset.marker && <p className={styles.meta} role="status">{t('正在核实链接…','Inspecting the link…')}</p>}
+            </div>
+            <form onSubmit={submitReset} className={styles.form}>
+              <label className={styles.field}><span className={styles.fieldLabel}>{t('新密码（12–256字符）','New password (12–256 characters)')}</span><Input type="password" autoComplete="new-password" minLength={12} maxLength={256} required value={password} disabled={blocked || !inspection} onChange={event=>setPassword(event.target.value)}/></label>
+              <label className={styles.field}><span className={styles.fieldLabel}>{t('确认新密码','Confirm new password')}</span><Input type="password" autoComplete="new-password" minLength={12} maxLength={256} required value={confirmation} disabled={blocked || !inspection} onChange={event=>setConfirmation(event.target.value)}/></label>
+              <Button type="submit" className={styles.submit} loading={busy} disabled={blocked || !inspection || password!==confirmation || !password}>{t('重置密码并撤销全部会话','Reset password and revoke all sessions')}</Button>
+            </form>
+          </div>
+        </section> : !reset.marker && !committed && <section className={styles.card} aria-labelledby="recovery-request-title">
+          <header className={styles.cardHeader}>
+            <div className={styles.cardSymbol}><MailCheck size={16} aria-hidden="true"/></div>
+            <div className={styles.cardHeading}>
+              <h2 id="recovery-request-title" className={styles.cardTitle}>{t('申请一封找回邮件','Request a recovery email')}</h2>
+              <p className={styles.cardDescription}>{t('使用已登记并独立验证的恢复邮箱。统一响应不会披露该地址是否存在或是否已发送。','Use an independently verified recovery email. The uniform response never reveals whether the address exists or whether mail was sent.')}</p>
+            </div>
+          </header>
+          <div className={styles.cardBody}>
+            {enabled!==true && <StatusNotice tone={enabled===false ? 'info' : 'warning'}>{enabled===false ? t('实例未配置邮件找回。普通登录不受影响。','Recovery issuance is not configured. Normal sign-in remains available.') : t('能力状态未知，不能发起邮件。','Capability status unknown; mail requests are blocked.')}</StatusNotice>}
+            <form onSubmit={submitRequest} className={styles.form}>
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>{t('已验证的恢复邮箱（不是任意登录邮箱）','Verified recovery email (not any sign-in email)')}</span>
+                <Input type="email" required maxLength={254} autoComplete="email" value={email} disabled={blocked || !!request.marker || !enabled} onChange={event=>setEmail(event.target.value)}/>
+                <span className={styles.fieldHint}>{t('登录名、历史邀请或普通联系邮箱不构成验证证明。','A sign-in name, historical invitation or ordinary contact email is not verification.')}</span>
+              </label>
+              <Button type="submit" className={styles.submit} loading={busy} disabled={blocked || !!request.marker || !enabled}>{t('申请一次找回邮件','Request one recovery email')}</Button>
+            </form>
+          </div>
+        </section>}
+        {!token && reset.marker && <StatusNotice tone="warning">{t('缺少原令牌。请打开原邮件链接，不能从服务器重新取出。','Original token missing. Reopen its email; the server cannot return it.')}</StatusNotice>}
+      </div>
+      <nav className={styles.footerLinks} aria-label={t('相关入口','Related links')}>
+        <Link className={styles.link} to="/pm">{t('普通登录','Normal sign-in')}</Link>
+        <Link className={styles.link} to="/pm/account/security">{t('本人账号安全','Account security')}</Link>
+      </nav>
+    </div>
+  </PmAuthPageShell>;
 }

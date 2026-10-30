@@ -5,7 +5,7 @@
 .markdown-preview .md-highlight-purple { background: #e9d5ff; }
 .markdown-preview .md-highlight-orange { background: #fed7aa; }
 .markdown-preview .md-highlight-red { background: #fecaca; }
-.markdown-preview .md-font-sans { font-family: ui-sans-serif, system-ui, sans-serif; }
+.markdown-preview .md-font-sans { font-family: var(--font-sans); }
 .markdown-preview .md-font-serif { font-family: ui-serif, Georgia, serif; }
 .markdown-preview .md-font-mono { font-family: var(--font-mono, ui-monospace, monospace); }
 .markdown-preview .md-size-small { font-size: .8em; }

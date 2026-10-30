@@ -1,0 +1,62 @@
+/* Usage visualizations adapted from t3code. Copyright (c) 2026 T3 Tools Inc. MIT; see LICENSE.t3code. */
+.usage-chart, .usage-share { min-width: 0; }
+.usage-chart-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.usage-chart-empty, .usage-chart-note { margin: 8px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.usage-chart-frame { display: grid; grid-template-columns: 56px minmax(0, 1fr); column-gap: 9px; row-gap: 7px; padding-top: 8px; }
+.usage-chart-scale { position: relative; grid-column: 1; grid-row: 1; color: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
+.usage-chart-scale > span { position: absolute; right: 0; max-width: 100%; transform: translateY(-50%); white-space: nowrap; }
+.usage-chart-plot { position: relative; grid-column: 2; grid-row: 1; min-width: 0; height: 224px; touch-action: pan-y; cursor: crosshair; }
+.usage-chart-plot > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.usage-chart-grid { stroke: var(--border); stroke-width: 1; }
+.usage-chart-crosshair { stroke: var(--muted-foreground); stroke-width: 1; stroke-dasharray: 3 3; opacity: .6; }
+.usage-chart-path-partial { opacity: .7; }
+.usage-chart-time-axis { position: relative; grid-column: 2; grid-row: 2; height: 24px; color: var(--muted-foreground); font-size: 10px; font-variant-numeric: tabular-nums; text-transform: uppercase; }
+.usage-chart-time-axis > span { position: absolute; white-space: nowrap; }
+.usage-chart-tooltip { position: absolute; z-index: 20; top: 10px; width: max-content; min-width: min(210px, 100%); max-width: min(360px, 100%); padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--popover, var(--background)); color: var(--foreground); box-shadow: 0 4px 18px #0002; pointer-events: none; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.usage-chart-tooltip-time { display: block; margin-bottom: 5px; color: var(--muted-foreground); font-weight: 400; }
+.usage-chart-tooltip ul { list-style: none; padding: 0; margin: 0; }
+.usage-chart-tooltip li, .usage-chart-tooltip-total { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 14px; }
+.usage-chart-tooltip li > span:first-child { display: inline-flex; align-items: center; gap: 5px; color: var(--muted-foreground); }
+.usage-chart-tooltip li > span:last-child, .usage-chart-tooltip-total > strong { text-align: right; font-variant-numeric: tabular-nums; }
+.usage-chart-tooltip-total { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.usage-chart-tooltip-total > strong { font-weight: 500; }
+.usage-provider-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; color: var(--foreground); vertical-align: middle; }
+.usage-provider-icon > .provider-glyph { width: 100%; height: 100%; color: inherit; }
+.usage-provider-icon > .provider-glyph > :is(svg, img) { display: block; width: 100%; height: 100%; object-fit: contain; }
+.usage-share {
+  --usage-share-input: color-mix(in oklab, var(--foreground) 60%, var(--background));
+  --usage-share-cache-read: color-mix(in oklab, var(--foreground) 34%, var(--background));
+  --usage-share-cache-write: color-mix(in oklab, var(--foreground) 45%, var(--background));
+  --usage-share-output: var(--foreground);
+  --usage-share-other: color-mix(in oklab, var(--foreground) 76%, var(--background));
+  --usage-share-standard: color-mix(in oklab, var(--foreground) 38%, var(--background));
+  --usage-share-fast: color-mix(in oklab, var(--foreground) 70%, var(--background));
+  --usage-share-ultrafast: color-mix(in oklab, var(--foreground) 90%, var(--background));
+  position: relative;
+}
+.usage-share-header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 10px; }
+.usage-share-heading { margin: 0; color: var(--foreground); font-size: 14px; line-height: 1.4; font-weight: 500; }
+.usage-share-aside { min-width: 0; color: var(--muted-foreground); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
+.usage-share-bar { display: flex; gap: 2px; height: 8px; }
+.usage-share .usage-share-segment { flex-basis: 0; flex-shrink: 1; min-width: 1px; min-height: 0; height: 8px; padding: 0; border: 0; border-radius: 1px; box-shadow: none; }
+.usage-share .usage-share-segment:first-child { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+.usage-share .usage-share-segment:last-child { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+.usage-share-legend { display: flex; flex-wrap: wrap; gap: 0 16px; list-style: none; padding: 0; margin: 7px 0 0; font-size: 12px; }
+.usage-share-legend li { min-width: 0; max-width: 100%; }
+.usage-share .usage-share-legend button { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; max-width: 100%; min-height: 28px; padding: 0; border: 0; border-radius: 2px; background: none; box-shadow: none; font: inherit; text-align: left; overflow-wrap: anywhere; }
+.usage-share-swatch { display: inline-block; width: 8px; height: 8px; flex: 0 0 8px; border-radius: 2px; }
+.usage-share-label { color: var(--muted-foreground); }
+.usage-share-value { color: var(--foreground); font-variant-numeric: tabular-nums; }
+.usage-share-detail { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; width: max-content; max-width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--popover, var(--background)); color: var(--foreground); box-shadow: 0 4px 12px #0002; font-size: 12px; line-height: 1.5; pointer-events: none; overflow-wrap: anywhere; }
+.usage-chart-plot:focus-visible, .usage-share :is(button, summary):focus-visible { outline: 2px solid var(--ring, #4778d5); outline-offset: 3px; }
+@media (max-width: 480px) {
+  .usage-chart-frame { grid-template-columns: 42px minmax(0, 1fr); column-gap: 7px; }
+  .usage-chart-scale { font-size: 10px; }
+  .usage-chart-time-axis { font-size: 9px; }
+  .usage-chart-time-axis > span:not(:first-child):not(:last-child) { display: none; }
+  .usage-chart-tooltip { padding: 8px; font-size: 11px; }
+  .usage-chart-tooltip li, .usage-chart-tooltip-total { flex-wrap: wrap; gap: 2px 8px; }
+  .usage-chart-tooltip li > span:last-child { flex: 1 1 auto; }
+  .usage-share-header { flex-wrap: wrap; }
+  .usage-share-legend { gap: 0 12px; }
+}

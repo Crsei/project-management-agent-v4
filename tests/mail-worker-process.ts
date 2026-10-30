@@ -73,7 +73,7 @@ export function startOwnedMailWorker(options: {
   env: NodeJS.ProcessEnv; signal?: AbortSignal; executable?: string; args?: string[];
 }): OwnedMailWorker {
   options.signal?.throwIfAborted();
-  const child = spawn(options.executable ?? process.execPath, options.args ?? ['apps/worker/src/main.ts'], {
+  const child = spawn(options.executable ?? process.execPath, options.args ?? ['apps/server/worker/src/main.ts'], {
     cwd: projectRoot, env: options.env, stdio: ['ignore', 'pipe', 'pipe'],
   });
   const diagnostics: string[] = [];

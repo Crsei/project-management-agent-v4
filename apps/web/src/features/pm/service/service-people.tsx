@@ -26,8 +26,8 @@ function PeopleWorkspace() {
     setParams(next)
   }
   return <section className={`${styles.page} flex h-full min-h-0 min-w-0 flex-col overflow-hidden`} aria-label={t("成员与团队", "Members and teams")} data-pm-people>
-    <header className="shrink-0 border-b bg-surface px-4 pt-4 md:px-6">
-      <h1 className="text-xl font-semibold">{t("成员与团队", "Members and teams")}</h1>
+    <header className="shrink-0 border-b bg-surface">
+      <h1>{t("成员与团队", "Members and teams")}</h1>
       <Tabs value={tab} onValueChange={changeTab}>
         <TabsList activateOnFocus={false} className="mt-3 max-w-full overflow-x-auto" aria-label={t("人员工作区", "People workspace")}>
           <TabsTab value="members">{t("成员", "Members")}</TabsTab>

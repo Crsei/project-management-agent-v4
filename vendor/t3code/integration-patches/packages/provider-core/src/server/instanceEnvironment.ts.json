@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "source": "packages/provider-core/src/server/instanceEnvironment.ts",
+  "beforeSha256": "10bee86b9a887f749769b12bbc08f98d7a0d67f1b14849f580032188c03347a7",
+  "afterSha256": "05727f3c8ca1df0b32d8e949a82ce14e8288eab43ea4f1fd569eb63cf8354b21",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 8,
+      "before": [
+        "  baseEnv: NodeJS.ProcessEnv = process.env,\n"
+      ],
+      "after": [
+        "  baseEnv?: NodeJS.ProcessEnv,\n"
+      ]
+    },
+    {
+      "start": 10,
+      "before": [],
+      "after": [
+        "  const inherited = baseEnv ?? (yield* HostProcess.Environment);\n"
+      ]
+    },
+    {
+      "start": 11,
+      "before": [
+        "    return baseEnv;\n"
+      ],
+      "after": [
+        "    return inherited;\n"
+      ]
+    },
+    {
+      "start": 15,
+      "before": [
+        "  const next: NodeJS.ProcessEnv = { ...baseEnv };\n"
+      ],
+      "after": [
+        "  const next: NodeJS.ProcessEnv = { ...inherited };\n"
+      ]
+    }
+  ]
+}

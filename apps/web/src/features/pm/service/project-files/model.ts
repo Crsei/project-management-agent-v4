@@ -1,4 +1,5 @@
 import type { Entity } from "../../../../../../../packages/contracts/src/client.ts"
+import type { FilterCondition } from "../../../../components/blocks/filter-card"
 
 export type FileKind = "fig" | "pdf" | "zip" | "img" | "sheet" | "doc" | "code" | "other"
 export type FileSort = "newest" | "name" | "type"
@@ -170,11 +171,45 @@ function newestFirstEntry(a: FileEntry, b: FileEntry): number {
   return (Date.parse(b.updatedAt ?? "") || 0) - (Date.parse(a.updatedAt ?? "") || 0)
 }
 
-export function filterAndSort(entries: readonly FileEntry[], query: string, kind: FileKind | "all", sort: FileSort): FileEntry[] {
+export const fileFilterFieldIds = ["kind", "uploader", "updated"] as const
+export type FileFilterFieldId = (typeof fileFilterFieldIds)[number]
+
+/** `updated` condition values are rolling windows; `older` means outside the 30-day window. */
+export const fileUpdatedValues = ["24h", "7d", "30d", "older"] as const
+export type FileUpdatedValue = (typeof fileUpdatedValues)[number]
+
+const updatedWindows: Record<Exclude<FileUpdatedValue, "older">, number> = {
+  "24h": 86_400_000,
+  "7d": 7 * 86_400_000,
+  "30d": 30 * 86_400_000,
+}
+
+export function matchesUpdatedWindow(value: string | null | undefined, option: string, now = Date.now()): boolean {
+  const time = value ? Date.parse(value) : Number.NaN
+  if (!Number.isFinite(time)) return false
+  const age = Math.max(0, now - time)
+  if (option === "older") return age > updatedWindows["30d"]
+  if (option === "24h" || option === "7d" || option === "30d") return age <= updatedWindows[option]
+  return false
+}
+
+function matchesCondition(entry: FileEntry, condition: FilterCondition, now: number): boolean {
+  if (!condition.values.length) return true
+  let matched: boolean
+  if (condition.field === "kind") matched = condition.values.includes(entry.kind)
+  else if (condition.field === "uploader") matched = condition.values.includes(entry.uploaderId)
+  else if (condition.field === "updated") matched = condition.values.some(value => matchesUpdatedWindow(entry.updatedAt, value, now))
+  else return true
+  return condition.operator === "isNot" ? !matched : matched
+}
+
+/** Conditions are ANDed, values inside a condition are ORed, and empty value lists are ignored. */
+export function filterAndSort(entries: readonly FileEntry[], query: string, conditions: readonly FilterCondition[], sort: FileSort, now = Date.now()): FileEntry[] {
   const needle = query.trim().toLocaleLowerCase()
+  const active = conditions.filter(condition => condition.values.length > 0)
   const filtered = entries.filter(entry =>
     (!needle || entry.name.toLocaleLowerCase().includes(needle)) &&
-    (kind === "all" || entry.kind === kind),
+    active.every(condition => matchesCondition(entry, condition, now)),
   )
   return [...filtered].sort((a, b) => {
     if (sort === "name") return a.name.localeCompare(b.name)

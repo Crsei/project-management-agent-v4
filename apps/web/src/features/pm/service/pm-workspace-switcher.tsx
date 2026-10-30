@@ -18,7 +18,7 @@ import styles from "./service-project-layout.module.css"
 import { WorkspaceIdentityBadge } from "./pm-workspace-identity-badge"
 
 
-export function PmWorkspaceSwitcher() {
+export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean } = {}) {
   const { workspace, workspaces, loading, error, refresh } = usePmService()
   const { workspaceSlug } = useParams<{ workspaceSlug?: string }>()
   const en = useI18n().locale === "en"
@@ -70,17 +70,17 @@ export function PmWorkspaceSwitcher() {
           ? `Workspace: ${name}. Current workspace type: ${currentProduct.title}. Switch workspace or workspace type`
           : `工作区：${name}。当前工作空间：${currentProduct.title}。切换工作区或工作空间`}
         aria-busy={pending}
-        className={`${styles.workspaceTrigger} flex w-full min-w-0 items-center gap-2 rounded-control px-3 py-1 text-left text-sm font-medium outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring`}
+        className={`${styles.workspaceTrigger} ${collapsed ? "justify-center px-0" : "px-3"} flex w-full min-w-0 items-center gap-2 rounded-control py-1 text-left text-sm font-medium outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring`}
       >
         <WorkspaceIdentityBadge icon={workspace?.icon} color={workspace?.color} />
-        <span className="min-w-0 flex-1">
+        {!collapsed && <span className="min-w-0 flex-1">
           <span className="block truncate" title={name}>{name}</span>
           <span className="flex min-w-0 items-center gap-1 text-[11px] font-normal text-muted-foreground">
             <CurrentProductIcon className="size-3 shrink-0" aria-hidden="true" />
             <span className="truncate" title={currentProduct.description}>{currentProduct.description}</span>
           </span>
-        </span>
-        {pending ? <LoaderCircle className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+        </span>}
+        {collapsed ? null : pending ? <LoaderCircle className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-1rem)] overflow-y-auto">
         {workspace && !visibleError && <>
@@ -154,7 +154,7 @@ export function PmWorkspaceSwitcher() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-    {pending && <p role="status" className="px-3 text-xs text-muted-foreground">{refreshing ? en ? "Refreshing workspaces…" : "正在刷新工作区…" : en ? "Loading workspaces…" : "正在加载工作区…"}</p>}
-    {visibleError && <p role="alert" className="px-3 text-xs leading-5 text-destructive [overflow-wrap:anywhere]">{pmErrorMessage(visibleError, en ? "en" : "zh")}</p>}
+    {!collapsed && pending && <p role="status" className="px-3 text-xs text-muted-foreground">{refreshing ? en ? "Refreshing workspaces…" : "正在刷新工作区…" : en ? "Loading workspaces…" : "正在加载工作区…"}</p>}
+    {!collapsed && visibleError && <p role="alert" className="px-3 text-xs leading-5 text-destructive [overflow-wrap:anywhere]">{pmErrorMessage(visibleError, en ? "en" : "zh")}</p>}
   </div>
 }

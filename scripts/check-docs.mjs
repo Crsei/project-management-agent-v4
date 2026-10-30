@@ -1,6 +1,10 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import GithubSlugger from 'github-slugger';
+import { toString } from 'mdast-util-to-string';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const excluded = new Set(['node_modules', '.git', '.ref', '.next', 'dist', '.local', 'coverage']);
@@ -13,6 +17,28 @@ async function markdownFiles(directory) {
     else if (entry.isFile() && entry.name.endsWith('.md')) result.push(target);
   }
   return result;
+}
+
+const markdownParser = unified().use(remarkParse);
+const anchorCache = new Map();
+async function documentAnchors(file) {
+  const cached = anchorCache.get(file);
+  if (cached) return cached;
+  const slugger = new GithubSlugger();
+  const anchors = new Set();
+  const pending = [markdownParser.parse(await readFile(file, 'utf8'))];
+  while (pending.length) {
+    const node = pending.pop();
+    if (node.type === 'heading') anchors.add(slugger.slug(toString(node, { includeHtml: false })));
+    if (node.type === 'html') {
+      for (const match of node.value.matchAll(/\s(?:id|name)\s*=\s*(["'])(.*?)\1/gi)) anchors.add(match[2]);
+    }
+    if (node.children) {
+      for (let index = node.children.length - 1; index >= 0; index--) pending.push(node.children[index]);
+    }
+  }
+  anchorCache.set(file, anchors);
+  return anchors;
 }
 
 const errors = [];
@@ -34,9 +60,8 @@ for (const file of files) {
     try {
       await stat(target);
       if (anchor) {
-        const linkedText = await readFile(target, 'utf8');
-        if (!linkedText.includes(`id="${anchor}"`)) {
-          errors.push(`${label}: unresolved explicit anchor ${href}`);
+        if (!(await documentAnchors(target)).has(decodeURIComponent(anchor))) {
+          errors.push(`${label}: unresolved anchor ${href}`);
         }
       }
     } catch {

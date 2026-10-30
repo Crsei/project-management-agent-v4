@@ -1,6 +1,6 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { BrowserRouter } from "react-router"
+import { createBrowserRouter, RouterProvider } from "react-router"
 import { PmErrorBoundary } from "@/components/blocks/error-boundary"
 import { AppProviders } from "@/providers/app-providers"
 import { AppRoutes } from "@/routes"
@@ -15,14 +15,11 @@ if (!container) {
 
 installPageExit()
 
+const router = createBrowserRouter([{
+  path: "*",
+  element: <AppProviders><PmErrorBoundary><AppRoutes /></PmErrorBoundary></AppProviders>,
+}])
+
 createRoot(container).render(
-  <StrictMode>
-    <BrowserRouter>
-      <AppProviders>
-        <PmErrorBoundary>
-          <AppRoutes />
-        </PmErrorBoundary>
-      </AppProviders>
-    </BrowserRouter>
-  </StrictMode>,
+  <StrictMode><RouterProvider router={router} /></StrictMode>,
 )

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { describe, it } from 'node:test';
 import { z } from 'zod';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import { publishOutboxBatch } from '../packages/application/src/outbox.ts';
 import type { Command, Entity } from '../packages/domain/src/core.ts';
 import type { TimeDashboard, TimeTimer, TimeWorklog } from '../packages/domain/src/dashboard-time.ts';

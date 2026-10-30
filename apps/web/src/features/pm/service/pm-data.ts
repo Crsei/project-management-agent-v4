@@ -13,7 +13,6 @@ export const pmKeys = {
   projectExtras: (instance: string, actorId: string, workspaceId: string) => ["pm", instance, actorId, workspaceId, "projects", "extras"] as const,
   projectDirectory: (instance: string, actorId: string, workspaceId: string) => ["pm", instance, actorId, workspaceId, "projects", "directory"] as const,
   projectAudit: (instance: string, actorId: string, workspaceId: string, projectId: string) => ["pm", instance, actorId, workspaceId, "projects", "audit", projectId] as const,
-  agentChat: (instance: string, actorId: string, workspaceId: string) => ["pm", instance, actorId, workspaceId, "agent-chat"] as const,
 }
 
 export async function refreshPmSnapshots(queryClient: QueryClient, queryKey: QueryKey, throwOnError = false) {

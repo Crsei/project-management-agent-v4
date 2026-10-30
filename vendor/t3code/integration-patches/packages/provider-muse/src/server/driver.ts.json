@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "source": "packages/provider-muse/src/server/driver.ts",
+  "beforeSha256": "94c331d9c2b0c21ffd4ee4babd31527999860e4aa97485cce19e9d9a25455e1d",
+  "afterSha256": "cee9b2eb3b94def627dfa959711189a98df03d7eb1941a628152cadfac00a6d1",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 12,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { ProviderRuntimeHost } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 48,
+      "before": [
+        "  | McpProviderSessions.McpProviderSessions\n"
+      ],
+      "after": [
+        "  | ProviderRuntimeHost\n"
+      ]
+    }
+  ]
+}

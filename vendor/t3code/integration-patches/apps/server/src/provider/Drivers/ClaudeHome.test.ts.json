@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/ClaudeHome.test.ts",
+  "beforeSha256": "1a4bc99bf6ca06fc5dfbdd0149728ed59ebc8fd10b2edee53ef1c96cb1f42b27",
+  "afterSha256": "362a2506cff3cb2670ef6ab41d55be48d7b63e15e9104b315b256ea01fa1473a",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 6,
+      "before": [],
+      "after": [
+        "import * as HostProcess from \"@t3tools/shared/HostProcess\";\n"
+      ]
+    },
+    {
+      "start": 49,
+      "before": [],
+      "after": [
+        "    it.effect(\"resolves inherited relative paths against bound cwd without shell expansion\", () =>\n",
+        "      Effect.gen(function* () {\n",
+        "        const path = yield* Path.Path;\n",
+        "        const cwd = path.resolve(\"/fixture/native-project\");\n",
+        "        const environment = { CLAUDE_CONFIG_DIR: \"~/literal-native-home\" };\n",
+        "        const resolved = yield* resolveClaudeHomePath({ homePath: \"\" }, environment).pipe(\n",
+        "          Effect.provideService(HostProcess.WorkingDirectory, cwd),\n",
+        "        );\n",
+        "        expect(resolved).toBe(path.resolve(cwd, \"~/literal-native-home\"));\n",
+        "        expect((yield* makeClaudeEnvironment({ homePath: \"\" }, environment)).CLAUDE_CONFIG_DIR)\n",
+        "          .toBe(\"~/literal-native-home\");\n",
+        "      }),\n",
+        "    );\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 57,
+      "before": [],
+      "after": [
+        "\n",
+        "    it.effect(\"uses only the bound native environment and never rewrites HOME/XDG to app state\", () =>\n",
+        "      Effect.gen(function* () {\n",
+        "        const bound = { HOME: \"/fixture/user\", XDG_CONFIG_HOME: \"/fixture/xdg\", CLAUDE_CONFIG_DIR: \"/fixture/claude\",\n",
+        "          ANTHROPIC_API_KEY: \"fixture-only-key\", ENABLE_CLAUDEAI_MCP_SERVERS: \"true\" };\n",
+        "        const environment = yield* makeClaudeEnvironment({ homePath: \"\" }).pipe(\n",
+        "          Effect.provideService(HostProcess.Environment, bound),\n",
+        "        );\n",
+        "        expect(environment.HOME).toBe(bound.HOME);\n",
+        "        expect(environment.XDG_CONFIG_HOME).toBe(bound.XDG_CONFIG_HOME);\n",
+        "        expect(environment.CLAUDE_CONFIG_DIR).toBe(bound.CLAUDE_CONFIG_DIR);\n",
+        "        expect(environment.ANTHROPIC_API_KEY).toBe(bound.ANTHROPIC_API_KEY);\n",
+        "        expect(environment.ENABLE_CLAUDEAI_MCP_SERVERS).toBe(\"false\");\n",
+        "        expect(environment.CLAUDE_CODE_AUTO_CONNECT_IDE).toBe(\"0\");\n",
+        "        expect(environment.PATH).toBeUndefined();\n",
+        "      }),\n",
+        "    );\n"
+      ]
+    }
+  ]
+}

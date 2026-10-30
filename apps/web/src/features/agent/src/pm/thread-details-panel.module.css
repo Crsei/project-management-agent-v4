@@ -1,0 +1,180 @@
+.root {
+  position: absolute;
+  z-index: 20;
+  top: 52px;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex: 0 0 320px;
+  flex-direction: column;
+  width: min(340px, calc(100% - 16px));
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--border);
+  background: var(--pm-surface, var(--surface));
+  box-shadow: -8px 0 24px rgb(0 0 0 / 12%);
+  color: var(--foreground);
+  font: inherit;
+}
+
+/* Keep the inspector accessible when both surfaces are open. */
+:global(.pm-agent-chat) > .root:has(~ :global(.pm-agent-inspector)) {
+  right: auto;
+  left: var(--workspace-sidebar-width, 240px);
+}
+
+:global(.pm-agent-chat[data-embedded="true"]) > .root:has(~ :global(.pm-agent-inspector)),
+:global(.pm-agent-sidebar[data-collapsed="true"]) ~ .root:has(~ :global(.pm-agent-inspector)) {
+  left: 0;
+}
+
+@media (min-width: 1401px) {
+  :global(.pm-agent-chat:not([data-embedded="true"])) > .root {
+    position: static;
+    width: 320px;
+    max-width: 35%;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .root {
+    top: 60px;
+  }
+}
+
+.header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header h2 {
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.close {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary, var(--muted-foreground));
+  cursor: pointer;
+}
+
+.close:hover {
+  background: var(--surface-hover, var(--muted));
+  color: var(--foreground);
+}
+
+.close:focus-visible,
+.action:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  scrollbar-width: thin;
+}
+
+.facts {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+}
+
+.facts > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.facts dt {
+  color: var(--text-secondary, var(--muted-foreground));
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.facts dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+  overflow-wrap: anywhere;
+}
+
+.facts code {
+  font-family: var(--font-ibm-plex-mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+
+.actions {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.action:not(:disabled):hover {
+  background: var(--surface-hover, var(--muted));
+}
+
+.action:disabled {
+  color: var(--text-secondary, var(--muted-foreground));
+  cursor: not-allowed;
+}
+
+.root .action svg,
+.root .close svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.actionLabel {
+  flex: 1;
+  min-width: 0;
+}
+
+.unavailable {
+  flex-shrink: 0;
+  font-size: 11px;
+}

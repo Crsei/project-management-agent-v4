@@ -1,0 +1,219 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/OpenCodeRuntime.ts",
+  "beforeSha256": "97abc4a5a7435aef2aaf995b009f55c22a912f0b669fe2dd5a7f56837d082944",
+  "afterSha256": "8d7c66278c659328927b5788e03245e160981d67b2cbaa97b6501962fba6035d",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 40,
+      "before": [],
+      "after": [
+        "import type {\n",
+        "  ProviderAdapterV2EnsureThreadInput,\n",
+        "  ProviderAdapterV2SessionRuntime,\n",
+        "  ProviderAdapterV2ThreadSnapshot,\n",
+        "  ProviderAdapterV2TurnInput,\n",
+        "} from \"@t3tools/provider-core/server/ProviderAdapter\";\n",
+        "import type { ProviderContinuationRequest } from \"@t3tools/provider-core/server/ProviderContinuationRequests\";\n"
+      ]
+    },
+    {
+      "start": 55,
+      "before": [
+        "  inheritedEnvironment: Readonly<Record<string, string | undefined>> = process.env,\n"
+      ],
+      "after": [
+        "  inheritedEnvironment: Readonly<Record<string, string | undefined>> = {},\n"
+      ]
+    },
+    {
+      "start": 70,
+      "before": [
+        "  inheritedEnvironment: Readonly<Record<string, string | undefined>> = process.env,\n"
+      ],
+      "after": [
+        "  inheritedEnvironment: Readonly<Record<string, string | undefined>> = {},\n"
+      ]
+    },
+    {
+      "start": 109,
+      "before": [
+        "}> {}\n"
+      ],
+      "after": [
+        "  readonly httpStatus?: number;\n",
+        "}> {\n",
+        "  get statusCode(): number | undefined {\n",
+        "    if (this.httpStatus !== undefined) return this.httpStatus;\n",
+        "    const queue: unknown[] = [this.cause];\n",
+        "    const seen = new Set<object>();\n",
+        "    for (let depth = 0; queue.length && depth < 32; depth++) {\n",
+        "      const current = queue.shift();\n",
+        "      if (current === null || typeof current !== \"object\" || seen.has(current)) continue;\n",
+        "      seen.add(current);\n",
+        "      const value = current as Record<string, unknown>;\n",
+        "      const response = value.response;\n",
+        "      const status = value.statusCode ?? value.status\n",
+        "        ?? (response !== null && typeof response === \"object\" && \"status\" in response ? response.status : undefined);\n",
+        "      if (typeof status === \"number\" && Number.isInteger(status) && status >= 400 && status <= 599) return status;\n",
+        "      if (value._tag === \"UnauthorizedError\") return 401;\n",
+        "      for (const key of [\"cause\", \"error\", \"data\"] as const) if (value[key] !== undefined) queue.push(value[key]);\n",
+        "    }\n",
+        "    return undefined;\n",
+        "  }\n",
+        "}\n"
+      ]
+    },
+    {
+      "start": 389,
+      "before": [],
+      "after": [
+        "  const keys = new Set(request.questions.flatMap((question, index) =>\n",
+        "    [openCodeQuestionId(index, question), question.header, question.question]));\n",
+        "  if (Object.keys(answers).some(key => !keys.has(key))) throw new Error(\"The answer contains an unknown native question.\");\n"
+      ]
+    },
+    {
+      "start": 390,
+      "before": [
+        "    const raw =\n",
+        "      answers[openCodeQuestionId(index, question)] ??\n",
+        "      answers[question.header] ??\n",
+        "      answers[question.question];\n",
+        "    if (Array.isArray(raw)) {\n",
+        "      return raw.filter((value): value is string => typeof value === \"string\");\n"
+      ],
+      "after": [
+        "    const candidates = [openCodeQuestionId(index, question), question.header, question.question];\n",
+        "    const supplied = [...new Set(candidates)].filter(key => Object.hasOwn(answers, key));\n",
+        "    if (supplied.length !== 1) throw new Error(\"Each native question requires one unambiguous answer.\");\n",
+        "    const raw = answers[supplied[0]!];\n",
+        "    const values: unknown[] = Array.isArray(raw) ? raw : [raw];\n",
+        "    if (!values.every((value): value is string => typeof value === \"string\" && value.trim().length > 0)\n",
+        "      || values.length === 0 || new Set(values).size !== values.length\n",
+        "      || (question.multiple !== true && values.length !== 1)) {\n",
+        "      throw new Error(\"The native answer is missing, duplicated or has an invalid shape.\");\n"
+      ]
+    },
+    {
+      "start": 397,
+      "before": [
+        "    if (typeof raw === \"string\") {\n",
+        "      return raw.trim().length > 0 ? [raw] : [];\n"
+      ],
+      "after": [
+        "    if (question.custom === false && values.some(value => !question.options.some(option => option.label === value))) {\n",
+        "      throw new Error(\"The answer contains a choice the native provider did not offer.\");\n"
+      ]
+    },
+    {
+      "start": 400,
+      "before": [
+        "    return [];\n"
+      ],
+      "after": [
+        "    return values;\n"
+      ]
+    },
+    {
+      "start": 420,
+      "before": [],
+      "after": [
+        "  const hostEnvironment = yield* HostProcess.Environment;\n"
+      ]
+    },
+    {
+      "start": 522,
+      "before": [
+        "    });\n"
+      ],
+      "after": [
+        "    }, hostEnvironment);\n"
+      ]
+    },
+    {
+      "start": 532,
+      "before": [],
+      "after": [
+        "          cwd: input.directory,\n"
+      ]
+    },
+    {
+      "start": 537,
+      "before": [
+        "            OPENCODE_CONFIG_CONTENT: resolveOpenCodeConfigContent(input.environment),\n"
+      ],
+      "after": [
+        "            OPENCODE_CONFIG_CONTENT: resolveOpenCodeConfigContent(input.environment, hostEnvironment),\n"
+      ]
+    },
+    {
+      "start": 679,
+      "before": [],
+      "after": [
+        "    const announced = URL.parse(url);\n",
+        "    const requestedHost = hostname.includes(\":\") && !hostname.startsWith(\"[\") ? `[${hostname}]` : hostname;\n",
+        "    const requested = URL.parse(`http://${requestedHost}:${port}`);\n",
+        "    if (!announced || !requested || announced.protocol !== \"http:\" || announced.hostname !== requested.hostname\n",
+        "      || Number(announced.port || \"80\") !== port || announced.pathname !== \"/\"\n",
+        "      || announced.username || announced.password || announced.search || announced.hash) {\n",
+        "      return yield* new OpenCodeRuntimeError({\n",
+        "        operation: \"startOpenCodeServerProcess\",\n",
+        "        detail: \"The owned OpenCode process announced a server outside its requested listening address.\",\n",
+        "      });\n",
+        "    }\n"
+      ]
+    },
+    {
+      "start": 837,
+      "before": [],
+      "after": [
+        "\n",
+        "/** Evidence belongs to an opened SDK runtime, never to an instance-level version cache. */\n",
+        "export interface OpenCodeSessionEvidence {\n",
+        "  readonly protocol: \"opencode-v1-sdk.sse\" | \"opencode-v2-http.sse\";\n",
+        "  readonly version: string;\n",
+        "  readonly cwd: string;\n",
+        "  readonly homeDirectory: string;\n",
+        "  readonly external: boolean;\n",
+        "  readonly readLegacy: (input: {\n",
+        "    readonly nativeSessionId: string;\n",
+        "    readonly turnId?: string;\n",
+        "    readonly messageId?: string;\n",
+        "    readonly ensure: ProviderAdapterV2EnsureThreadInput;\n",
+        "  }) => Effect.Effect<ProviderAdapterV2ThreadSnapshot, unknown>;\n",
+        "  readonly adoptBuffered?: (input: {\n",
+        "    readonly request: ProviderContinuationRequest;\n",
+        "    readonly turn: Omit<ProviderAdapterV2TurnInput, \"message\">;\n",
+        "    readonly isCurrent: Effect.Effect<boolean, unknown>;\n",
+        "  }) => Effect.Effect<boolean, unknown>;\n",
+        "}\n",
+        "\n",
+        "const sessionEvidence = new WeakMap<ProviderAdapterV2SessionRuntime, OpenCodeSessionEvidence>();\n",
+        "\n",
+        "export const readOpenCodeSessionEvidence = (runtime: ProviderAdapterV2SessionRuntime) =>\n",
+        "  sessionEvidence.get(runtime);\n",
+        "\n",
+        "/** Called only by the selected original v1/v2 adapter after its native connection is opened. */\n",
+        "export const bindOpenCodeSessionEvidence = (\n",
+        "  runtime: ProviderAdapterV2SessionRuntime,\n",
+        "  evidence: OpenCodeSessionEvidence,\n",
+        "): Effect.Effect<void, never, Scope.Scope> =>\n",
+        "  Effect.acquireRelease(\n",
+        "    Effect.sync(() => { sessionEvidence.set(runtime, evidence); }),\n",
+        "    () => Effect.sync(() => { sessionEvidence.delete(runtime); }),\n",
+        "  );\n"
+      ]
+    }
+  ]
+}

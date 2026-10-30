@@ -1,0 +1,449 @@
+{
+  "version": 1,
+  "source": "packages/provider-acp/src/server/mcpOverAcpBridge.ts",
+  "beforeSha256": "cbf0a931db245774f0c75b374e2bf127642e490063a222223b543dd61db2da57",
+  "afterSha256": "9ca9413359347f0fc84c27e91a6ee5ca4a0568beea4ac83ad84936afac70201e",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [
+        "// @effect-diagnostics preferSchemaOverJson:off\n"
+      ],
+      "after": [
+        "import { StdioClientTransport } from \"@modelcontextprotocol/sdk/client/stdio.js\";\n",
+        "import { JSONRPCMessageSchema, type JSONRPCMessage } from \"@modelcontextprotocol/sdk/types.js\";\n",
+        "import * as Cause from \"effect/Cause\";\n",
+        "import * as Exit from \"effect/Exit\";\n"
+      ]
+    },
+    {
+      "start": 3,
+      "before": [
+        "import * as Stream from \"effect/Stream\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5,
+      "before": [
+        "\n",
+        "import { responsePayloads } from \"@t3tools/shared/mcpResponsePayloads\";\n"
+      ],
+      "after": [
+        "import type { ProviderRuntimeHostBinding } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 10,
+      "before": [
+        "\n",
+        "interface JsonRpcEnvelope {\n",
+        "  readonly id?: unknown;\n",
+        "  readonly method?: unknown;\n",
+        "  readonly error?: unknown;\n",
+        "  readonly result?: unknown;\n",
+        "}\n",
+        "\n",
+        "interface Connection {\n",
+        "  readonly mutex: Semaphore.Semaphore;\n",
+        "  sessionId: string | null;\n",
+        "  protocolVersion: string | null;\n",
+        "  nextRequestId: number;\n",
+        "}\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 29,
+      "before": [],
+      "after": [
+        "const bridgeError = (cause: unknown): AcpMcpOverAcpError => cause instanceof AcpMcpOverAcpError\n",
+        "  ? cause : new AcpMcpOverAcpError(cause instanceof Error ? cause.message : String(cause), { cause });\n"
+      ]
+    },
+    {
+      "start": 30,
+      "before": [
+        "const bridgeError = (cause: unknown): AcpMcpOverAcpError =>\n",
+        "  cause instanceof AcpMcpOverAcpError\n",
+        "    ? cause\n",
+        "    : new AcpMcpOverAcpError(cause instanceof Error ? cause.message : String(cause), { cause });\n",
+        "\n",
+        "const asEnvelope = (value: unknown): JsonRpcEnvelope | null =>\n",
+        "  typeof value === \"object\" && value !== null && !Array.isArray(value)\n",
+        "    ? (value as JsonRpcEnvelope)\n",
+        "    : null;\n",
+        "\n",
+        "function protocolVersionOf(payload: unknown): string | null {\n",
+        "  const result = asEnvelope(payload)?.result;\n",
+        "  if (typeof result !== \"object\" || result === null || Array.isArray(result)) return null;\n",
+        "  const protocolVersion = (result as { readonly protocolVersion?: unknown }).protocolVersion;\n",
+        "  return typeof protocolVersion === \"string\" && protocolVersion.length > 0 ? protocolVersion : null;\n"
+      ],
+      "after": [
+        "export interface AcpMcpOverAcpBridgeOptions {\n",
+        "  readonly servers: ProviderRuntimeHostBinding[\"mcpServers\"];\n",
+        "  readonly cwd: string;\n",
+        "  readonly environment: NodeJS.ProcessEnv;\n",
+        "  readonly assertCurrent: Effect.Effect<void, Error>;\n",
+        "  readonly allocateConnectionId: Effect.Effect<string>;\n",
+        "}\n",
+        "export interface AcpMcpOverAcpBridge {\n",
+        "  readonly connect: (request: AcpSchema.ConnectMcpRequest) => Effect.Effect<AcpSchema.ConnectMcpResponse, AcpMcpOverAcpError>;\n",
+        "  readonly message: (request: AcpSchema.MessageMcpRequest) => Effect.Effect<AcpSchema.MessageMcpResponse, AcpMcpOverAcpError>;\n",
+        "  readonly notification: (request: AcpSchema.MessageMcpNotification) => Effect.Effect<void, AcpMcpOverAcpError>;\n",
+        "  readonly disconnect: (request: AcpSchema.DisconnectMcpRequest) => Effect.Effect<AcpSchema.DisconnectMcpResponse, AcpMcpOverAcpError>;\n",
+        "  readonly dispose: Effect.Effect<void>;\n",
+        "}\n",
+        "interface Connection {\n",
+        "  readonly transport: StdioClientTransport;\n",
+        "  readonly pending: Map<string | number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>;\n",
+        "  nextRequestId: number;\n"
+      ]
+    },
+    {
+      "start": 47,
+      "before": [
+        "function errorMessage(error: unknown): string {\n",
+        "  if (typeof error !== \"object\" || error === null || Array.isArray(error)) {\n",
+        "    return \"The MCP server returned an error.\";\n",
+        "  }\n",
+        "  const message = (error as { readonly message?: unknown }).message;\n",
+        "  return typeof message === \"string\" && message.length > 0\n",
+        "    ? message\n",
+        "    : \"The MCP server returned an error.\";\n",
+        "}\n",
+        "\n",
+        "export interface AcpMcpOverAcpBridgeOptions {\n",
+        "  readonly endpoint: string;\n",
+        "  readonly authorization: string;\n",
+        "  readonly allocateConnectionId: Effect.Effect<string>;\n",
+        "  readonly fetchImplementation?: (url: string, init?: RequestInit) => Promise<Response>;\n",
+        "}\n",
+        "\n",
+        "export interface AcpMcpOverAcpBridge {\n",
+        "  readonly connect: (\n",
+        "    request: AcpSchema.ConnectMcpRequest,\n",
+        "  ) => Effect.Effect<AcpSchema.ConnectMcpResponse, AcpMcpOverAcpError>;\n",
+        "  readonly message: (\n",
+        "    request: AcpSchema.MessageMcpRequest,\n",
+        "  ) => Effect.Effect<AcpSchema.MessageMcpResponse, AcpMcpOverAcpError>;\n",
+        "  readonly notification: (\n",
+        "    request: AcpSchema.MessageMcpNotification,\n",
+        "  ) => Effect.Effect<void, AcpMcpOverAcpError>;\n",
+        "  readonly disconnect: (\n",
+        "    request: AcpSchema.DisconnectMcpRequest,\n",
+        "  ) => Effect.Effect<AcpSchema.DisconnectMcpResponse, AcpMcpOverAcpError>;\n",
+        "  readonly dispose: Effect.Effect<void>;\n",
+        "}\n",
+        "\n"
+      ],
+      "after": [
+        "/** Only the generation-owned PM stdio server is exposed, including ACP-native MCP transport. */\n"
+      ]
+    },
+    {
+      "start": 83,
+      "before": [
+        "  const fetchImplementation = options.fetchImplementation ?? fetch;\n",
+        "  const connections = yield* Effect.sync(() => new Map<string, Connection>());\n",
+        "\n",
+        "  const connectionFor = (connectionId: string): Effect.Effect<Connection, AcpMcpOverAcpError> =>\n",
+        "    Effect.suspend(() => {\n",
+        "      const connection = connections.get(connectionId);\n",
+        "      return connection === undefined\n",
+        "        ? Effect.fail(new AcpMcpOverAcpError(`Unknown MCP-over-ACP connection \"${connectionId}\".`))\n",
+        "        : Effect.succeed(connection);\n",
+        "    });\n",
+        "\n",
+        "  const send = (\n",
+        "    connection: Connection,\n",
+        "    message: unknown,\n",
+        "  ): Effect.Effect<ReadonlyArray<unknown>, AcpMcpOverAcpError> =>\n",
+        "    connection.mutex.withPermits(1)(\n",
+        "      Effect.gen(function* () {\n",
+        "        const body = JSON.stringify(message);\n",
+        "        if (Buffer.byteLength(body) > MAX_MESSAGE_BYTES) {\n",
+        "          return yield* Effect.fail(new AcpMcpOverAcpError(\"MCP-over-ACP message exceeds 8 MiB.\"));\n"
+      ],
+      "after": [
+        "  const connections = new Map<string, Connection>();\n",
+        "  const admission = yield* Semaphore.make(1);\n",
+        "  const connectionFor = (connectionId: string) => Effect.suspend(() => {\n",
+        "    const connection = connections.get(connectionId);\n",
+        "    return connection ? Effect.succeed(connection)\n",
+        "      : Effect.fail(new AcpMcpOverAcpError(\"Unknown generation-owned MCP-over-ACP connection.\"));\n",
+        "  });\n",
+        "  const send = (connection: Connection, message: JSONRPCMessage) => options.assertCurrent.pipe(\n",
+        "    Effect.andThen(Effect.tryPromise({ try: async () => {\n",
+        "      if (Buffer.byteLength(JSON.stringify(message)) > MAX_MESSAGE_BYTES)\n",
+        "        throw new AcpMcpOverAcpError(\"MCP-over-ACP message exceeds 8 MiB.\");\n",
+        "      await connection.transport.send(message);\n",
+        "    }, catch: bridgeError })), Effect.mapError(bridgeError),\n",
+        "  );\n",
+        "  const disconnect = Effect.fn(\"mcpOverAcpBridge.disconnect\")(function* (request: AcpSchema.DisconnectMcpRequest) {\n",
+        "    return yield* Effect.uninterruptible(Effect.gen(function* () {\n",
+        "      const connection = yield* connectionFor(request.connectionId);\n",
+        "      connections.delete(request.connectionId);\n",
+        "      yield* Effect.tryPromise({ try: () => connection.transport.close(), catch: bridgeError });\n",
+        "      return {};\n",
+        "    }));\n",
+        "  });\n",
+        "  return {\n",
+        "    connect: request => admission.withPermit(Effect.uninterruptibleMask(restore => Effect.gen(function* () {\n",
+        "      yield* restore(options.assertCurrent.pipe(Effect.mapError(bridgeError)));\n",
+        "      const server = options.servers.find(candidate => candidate.name === request.serverId);\n",
+        "      if (!server) return yield* Effect.fail(new AcpMcpOverAcpError(\"Unknown generation-owned ACP MCP server.\"));\n",
+        "      if (connections.size >= MAX_CONNECTIONS)\n",
+        "        return yield* Effect.fail(new AcpMcpOverAcpError(\"Too many MCP-over-ACP connections.\"));\n",
+        "      const env: Record<string, string> = {};\n",
+        "      for (const [key, value] of Object.entries(options.environment)) if (value !== undefined) env[key] = value;\n",
+        "      const transport = new StdioClientTransport({ command: server.command, args: [...server.args], cwd: options.cwd, env, stderr: \"ignore\" });\n",
+        "      const connection: Connection = { transport, pending: new Map(), nextRequestId: 0 };\n",
+        "      const rejectPending = (error: Error) => {\n",
+        "        for (const pending of connection.pending.values()) pending.reject(error);\n",
+        "        connection.pending.clear();\n",
+        "      };\n",
+        "      transport.onerror = error => rejectPending(bridgeError(error));\n",
+        "      transport.onclose = () => rejectPending(new AcpMcpOverAcpError(\"Generation-owned MCP transport closed.\"));\n",
+        "      transport.onmessage = message => {\n",
+        "        if (!(\"id\" in message) || message.id === undefined) return;\n",
+        "        if (\"method\" in message) {\n",
+        "          void transport.send({ jsonrpc: \"2.0\", id: message.id,\n",
+        "            error: { code: -32601, message: \"This host does not accept MCP server-initiated requests.\" } }).catch(error => rejectPending(bridgeError(error)));\n",
+        "          return;\n"
+      ]
+    },
+    {
+      "start": 104,
+      "before": [
+        "        const response = yield* Effect.tryPromise({\n",
+        "          try: (signal) =>\n",
+        "            fetchImplementation(options.endpoint, {\n",
+        "              method: \"POST\",\n",
+        "              signal,\n",
+        "              headers: {\n",
+        "                \"content-type\": \"application/json\",\n",
+        "                accept: \"application/json, text/event-stream\",\n",
+        "                authorization: options.authorization,\n",
+        "                ...(connection.sessionId === null\n",
+        "                  ? {}\n",
+        "                  : { \"mcp-session-id\": connection.sessionId }),\n",
+        "                ...(connection.protocolVersion === null\n",
+        "                  ? {}\n",
+        "                  : { \"mcp-protocol-version\": connection.protocolVersion }),\n",
+        "              },\n",
+        "              body,\n",
+        "            }),\n",
+        "          catch: bridgeError,\n",
+        "        });\n",
+        "        connection.sessionId = response.headers.get(\"mcp-session-id\") ?? connection.sessionId;\n",
+        "        if (!response.ok) {\n",
+        "          yield* Effect.promise(\n",
+        "            () => response.body?.cancel().catch(() => undefined) ?? Promise.resolve(),\n",
+        "          );\n",
+        "          return yield* Effect.fail(\n",
+        "            new AcpMcpOverAcpError(`T3 Code MCP endpoint responded with HTTP ${response.status}.`),\n",
+        "          );\n",
+        "        }\n",
+        "        const payloads = [...(yield* Stream.runCollect(responsePayloads(response, bridgeError)))];\n",
+        "        for (const payload of payloads) {\n",
+        "          connection.protocolVersion = protocolVersionOf(payload) ?? connection.protocolVersion;\n",
+        "        }\n",
+        "        return payloads;\n",
+        "      }).pipe(Effect.mapError(bridgeError)),\n",
+        "    );\n",
+        "\n",
+        "  const disconnect = Effect.fn(\"mcpOverAcpBridge.disconnect\")(function* (\n",
+        "    request: AcpSchema.DisconnectMcpRequest,\n",
+        "  ): Effect.fn.Return<AcpSchema.DisconnectMcpResponse, AcpMcpOverAcpError> {\n",
+        "    const connection = yield* connectionFor(request.connectionId);\n",
+        "    connections.delete(request.connectionId);\n",
+        "    const sessionId = connection.sessionId;\n",
+        "    if (sessionId !== null) {\n",
+        "      const response = yield* Effect.tryPromise({\n",
+        "        try: (signal) =>\n",
+        "          fetchImplementation(options.endpoint, {\n",
+        "            method: \"DELETE\",\n",
+        "            signal,\n",
+        "            headers: {\n",
+        "              authorization: options.authorization,\n",
+        "              \"mcp-session-id\": sessionId,\n",
+        "              ...(connection.protocolVersion === null\n",
+        "                ? {}\n",
+        "                : { \"mcp-protocol-version\": connection.protocolVersion }),\n",
+        "            },\n",
+        "          }),\n",
+        "        catch: bridgeError,\n",
+        "      });\n",
+        "      if (!response.ok && response.status !== 404) {\n",
+        "        return yield* Effect.fail(\n",
+        "          new AcpMcpOverAcpError(\n",
+        "            `T3 Code MCP endpoint rejected disconnect with HTTP ${response.status}.`,\n",
+        "          ),\n",
+        "        );\n",
+        "      }\n",
+        "      yield* Effect.promise(\n",
+        "        () => response.body?.cancel().catch(() => undefined) ?? Promise.resolve(),\n"
+      ],
+      "after": [
+        "        const pending = connection.pending.get(message.id);\n",
+        "        if (!pending) return;\n",
+        "        connection.pending.delete(message.id);\n",
+        "        if (\"error\" in message) pending.reject(new AcpMcpOverAcpError(message.error.message));\n",
+        "        else pending.resolve(message.result);\n",
+        "      };\n",
+        "      yield* restore(Effect.tryPromise({ try: () => transport.start(), catch: bridgeError })).pipe(\n",
+        "        Effect.onError(() => Effect.promise(() => transport.close())),\n"
+      ]
+    },
+    {
+      "start": 173,
+      "before": [
+        "    }\n",
+        "    return {};\n",
+        "  });\n",
+        "\n",
+        "  return {\n",
+        "    connect: Effect.fn(\"mcpOverAcpBridge.connect\")(function* (request) {\n",
+        "      if (request.serverId !== \"t3-code\") {\n",
+        "        return yield* Effect.fail(\n",
+        "          new AcpMcpOverAcpError(`Unknown ACP MCP server \"${request.serverId}\".`),\n",
+        "        );\n",
+        "      }\n",
+        "      if (connections.size >= MAX_CONNECTIONS) {\n",
+        "        return yield* Effect.fail(new AcpMcpOverAcpError(\"Too many MCP-over-ACP connections.\"));\n",
+        "      }\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 188,
+      "before": [
+        "      connections.set(connectionId, {\n",
+        "        mutex: yield* Semaphore.make(1),\n",
+        "        sessionId: null,\n",
+        "        protocolVersion: null,\n",
+        "        nextRequestId: 0,\n",
+        "      });\n"
+      ],
+      "after": [
+        "      connections.set(connectionId, connection);\n"
+      ]
+    },
+    {
+      "start": 195,
+      "before": [
+        "    }),\n",
+        "    message: Effect.fn(\"mcpOverAcpBridge.message\")(function* (request) {\n"
+      ],
+      "after": [
+        "    }))),\n",
+        "    message: request => Effect.gen(function* () {\n"
+      ]
+    },
+    {
+      "start": 199,
+      "before": [
+        "      const payloads = yield* send(connection, {\n",
+        "        jsonrpc: \"2.0\",\n",
+        "        id,\n",
+        "        method: request.method,\n",
+        "        ...(request.params == null ? {} : { params: request.params }),\n",
+        "      });\n",
+        "      const response = payloads.find((payload) => asEnvelope(payload)?.id === id);\n",
+        "      const envelope = asEnvelope(response);\n",
+        "      if (envelope === null) {\n",
+        "        return yield* Effect.fail(\n",
+        "          new AcpMcpOverAcpError(\"MCP server did not return a matching response.\"),\n",
+        "        );\n",
+        "      }\n",
+        "      if (envelope.error !== undefined) {\n",
+        "        return yield* Effect.fail(new AcpMcpOverAcpError(errorMessage(envelope.error)));\n",
+        "      }\n",
+        "      return (envelope.result ?? null) as AcpSchema.MessageMcpResponse;\n"
+      ],
+      "after": [
+        "      const response = yield* Effect.tryPromise({ try: signal => {\n",
+        "        const { promise, resolve, reject } = Promise.withResolvers<unknown>();\n",
+        "        const message = JSONRPCMessageSchema.parse({ jsonrpc: \"2.0\", id, method: request.method,\n",
+        "          ...(request.params == null ? {} : { params: request.params }) });\n",
+        "        const abort = () => {\n",
+        "          connection.pending.delete(id);\n",
+        "          void connection.transport.send({ jsonrpc: \"2.0\", method: \"notifications/cancelled\",\n",
+        "            params: { requestId: id, reason: \"ACP call interrupted\" } }).catch(() => {});\n",
+        "          reject(new AcpMcpOverAcpError(\"MCP-over-ACP request interrupted.\"));\n",
+        "        };\n",
+        "        signal.addEventListener(\"abort\", abort, { once: true });\n",
+        "        connection.pending.set(id, {\n",
+        "          resolve: value => { signal.removeEventListener(\"abort\", abort); resolve(value); },\n",
+        "          reject: error => { signal.removeEventListener(\"abort\", abort); reject(error); },\n",
+        "        });\n",
+        "        void Effect.runPromise(send(connection, message), { signal }).catch(error => {\n",
+        "          const pending = connection.pending.get(id); connection.pending.delete(id); pending?.reject(bridgeError(error));\n",
+        "        });\n",
+        "        return promise;\n",
+        "      }, catch: bridgeError });\n",
+        "      return response as AcpSchema.MessageMcpResponse;\n"
+      ]
+    },
+    {
+      "start": 217,
+      "before": [
+        "    notification: Effect.fn(\"mcpOverAcpBridge.notification\")(function* (request) {\n"
+      ],
+      "after": [
+        "    notification: request => Effect.gen(function* () {\n"
+      ]
+    },
+    {
+      "start": 219,
+      "before": [
+        "      yield* send(connection, {\n",
+        "        jsonrpc: \"2.0\",\n",
+        "        method: request.method,\n",
+        "        ...(request.params == null ? {} : { params: request.params }),\n",
+        "      });\n"
+      ],
+      "after": [
+        "      const message = yield* Effect.try({ try: () => JSONRPCMessageSchema.parse({ jsonrpc: \"2.0\", method: request.method,\n",
+        "        ...(request.params == null ? {} : { params: request.params }) }), catch: bridgeError });\n",
+        "      yield* send(connection, message);\n"
+      ]
+    },
+    {
+      "start": 226,
+      "before": [
+        "    dispose: Effect.suspend(() =>\n",
+        "      Effect.forEach(\n",
+        "        [...connections.keys()],\n",
+        "        (connectionId) => disconnect({ connectionId }).pipe(Effect.ignore),\n",
+        "        { discard: true },\n",
+        "      ),\n",
+        "    ),\n",
+        "  };\n"
+      ],
+      "after": [
+        "    dispose: Effect.uninterruptible(Effect.gen(function* () {\n",
+        "      let failures: Array<unknown> | undefined;\n",
+        "      for (const connectionId of connections.keys()) {\n",
+        "        const result = yield* Effect.exit(disconnect({ connectionId }));\n",
+        "        if (Exit.isFailure(result)) (failures ??= []).push(Cause.squash(result.cause));\n",
+        "      }\n",
+        "      if (failures) return yield* Effect.die(new AggregateError(failures, \"Generation-owned MCP transports failed to close.\"));\n",
+        "    })),\n",
+        "  } satisfies AcpMcpOverAcpBridge;\n"
+      ]
+    }
+  ]
+}

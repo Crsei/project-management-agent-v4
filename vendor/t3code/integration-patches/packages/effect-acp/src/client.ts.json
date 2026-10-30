@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "source": "packages/effect-acp/src/client.ts",
+  "beforeSha256": "82a6aa086933574d21bf0d90007b443423119182ecbf5929c5242214a198b7d1",
+  "afterSha256": "09be16f7628ea13d230c6ab2690d5bc6bddb2dab914f10c6c53c2165294d284a",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 228,
+      "before": [],
+      "after": [
+        "\n",
+        "const negotiatedGenerations = new WeakMap<AcpClient[\"Service\"], 1 | 2>();\n",
+        "\n",
+        "/** Evidence from this connection's decoded initialize response, never its version number. */\n",
+        "export function readAcpProtocolGeneration(client: AcpClient[\"Service\"]): 1 | 2 | undefined {\n",
+        "  return negotiatedGenerations.get(client);\n",
+        "}\n"
+      ]
+    },
+    {
+      "start": 1067,
+      "before": [
+        "  return AcpClient.of({\n"
+      ],
+      "after": [
+        "  const client: AcpClient[\"Service\"] = AcpClient.of({\n"
+      ]
+    },
+    {
+      "start": 1085,
+      "before": [],
+      "after": [
+        "              negotiatedGenerations.set(client, negotiatedProtocolGeneration);\n"
+      ]
+    },
+    {
+      "start": 1088,
+      "before": [],
+      "after": [
+        "            negotiatedGenerations.set(client, negotiatedProtocolGeneration);\n"
+      ]
+    },
+    {
+      "start": 1389,
+      "before": [],
+      "after": [
+        "  return client;\n"
+      ]
+    }
+  ]
+}

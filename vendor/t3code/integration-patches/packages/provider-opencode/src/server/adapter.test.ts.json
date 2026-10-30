@@ -1,0 +1,691 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/adapter.test.ts",
+  "beforeSha256": "7dfce2a76ad6a90440b69ae0ae34a84b8b0c9e94d9c36f327bcb1944e92cd37f",
+  "afterSha256": "c9fbd7daed623c555c0388c7bf6ff6f1da7151e24e9f006f2b437a51ce2e2469",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 2,
+      "before": [
+        "import type { OpencodeClient, ToolPart } from \"@opencode-ai/sdk/v2\";\n"
+      ],
+      "after": [
+        "import type { AssistantMessage, OpencodeClient, ToolPart, UserMessage } from \"@opencode-ai/sdk/v2\";\n"
+      ]
+    },
+    {
+      "start": 36,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { openCodeTestRuntimeHostLayer } from \"./runtimeHost.fixture.ts\";\n"
+      ]
+    },
+    {
+      "start": 65,
+      "before": [
+        "  const values: Array<{ value: unknown; handled: ReturnType<typeof promiseGate<void>> }> = [];\n"
+      ],
+      "after": [
+        "  const values: Array<{ value: unknown; handled: ReturnType<typeof promiseGate<void>> }> = [\n",
+        "    { value: { type: \"server.connected\", properties: {} }, handled: promiseGate<void>() },\n",
+        "  ];\n"
+      ]
+    },
+    {
+      "start": 69,
+      "before": [],
+      "after": [
+        "  const close = () => {\n",
+        "    closed = true;\n",
+        "    previousHandled?.resolve();\n",
+        "    for (const entry of values.splice(0)) entry.handled.resolve();\n",
+        "    for (const waiter of waiters.splice(0)) waiter({ done: true, value: undefined });\n",
+        "  };\n",
+        "  const stream = {\n",
+        "    [Symbol.asyncIterator]() {\n",
+        "      return {\n",
+        "        next: () => {\n",
+        "          previousHandled?.resolve();\n",
+        "          if (closed) return Promise.resolve({ done: true as const, value: undefined });\n",
+        "          const entry = values.shift();\n",
+        "          if (entry !== undefined) {\n",
+        "            previousHandled = entry.handled;\n",
+        "            return Promise.resolve({ done: false as const, value: entry.value });\n",
+        "          }\n",
+        "          const next = Promise.withResolvers<IteratorResult<unknown>>();\n",
+        "          waiters.push(next.resolve);\n",
+        "          return next.promise;\n",
+        "        },\n",
+        "        return: () => {\n",
+        "          close();\n",
+        "          return Promise.resolve({ done: true as const, value: undefined });\n",
+        "        },\n",
+        "      };\n",
+        "    },\n",
+        "  };\n"
+      ]
+    },
+    {
+      "start": 70,
+      "before": [
+        "    close() {\n",
+        "      closed = true;\n",
+        "      for (const waiter of waiters.splice(0)) waiter({ done: true, value: undefined });\n",
+        "    },\n"
+      ],
+      "after": [
+        "    close,\n"
+      ]
+    },
+    {
+      "start": 75,
+      "before": [],
+      "after": [
+        "      if (closed) return Promise.resolve();\n"
+      ]
+    },
+    {
+      "start": 83,
+      "before": [
+        "    stream: {\n",
+        "      [Symbol.asyncIterator]() {\n",
+        "        return {\n",
+        "          next: () => {\n",
+        "            previousHandled?.resolve();\n",
+        "            if (closed) return Promise.resolve({ done: true as const, value: undefined });\n",
+        "            const entry = values.shift();\n",
+        "            if (entry !== undefined) {\n",
+        "              previousHandled = entry.handled;\n",
+        "              return Promise.resolve({ done: false as const, value: entry.value });\n",
+        "            }\n",
+        "            return new Promise<IteratorResult<unknown>>((resolve) => waiters.push(resolve));\n",
+        "          },\n",
+        "        };\n",
+        "      },\n"
+      ],
+      "after": [
+        "    stream,\n",
+        "    subscribe: async (_input?: unknown, options?: { signal?: AbortSignal }) => {\n",
+        "      if (options?.signal?.aborted) close();\n",
+        "      else options?.signal?.addEventListener(\"abort\", close, { once: true });\n",
+        "      return { stream };\n"
+      ]
+    },
+    {
+      "start": 162,
+      "before": [
+        "      connectToOpenCodeServer: () => Effect.succeed({ url: \"http://test.invalid\", external: true }),\n"
+      ],
+      "after": [
+        "      connectToOpenCodeServer: () => Effect.succeed({ url: \"http://test.invalid\", external: true, version: \"1.18.32\", exitCode: null }),\n"
+      ]
+    },
+    {
+      "start": 242,
+      "before": [],
+      "after": [
+        "  it.effect(\"proves SDK legacy boundaries without inventing historical graph turns or prompting\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const nativeSessionId = \"ses_legacy_metadata\";\n",
+        "      const native = {\n",
+        "        id: nativeSessionId, directory: \"/workspace\", title: \"Existing native conversation\",\n",
+        "        time: { created: 1, updated: 3 },\n",
+        "      };\n",
+        "      const user: UserMessage = {\n",
+        "        id: \"msg_legacy_user\", sessionID: nativeSessionId, role: \"user\", time: { created: 1 },\n",
+        "        agent: \"build\", model: { providerID: \"native-api\", modelID: \"model/one\", variant: \"high\" },\n",
+        "      };\n",
+        "      const assistant: AssistantMessage = {\n",
+        "        id: \"msg_legacy_answer\", sessionID: nativeSessionId, role: \"assistant\", parentID: user.id,\n",
+        "        modelID: \"model/one\", providerID: \"native-api\", mode: \"build\", agent: \"build\",\n",
+        "        path: { cwd: \"/workspace\", root: \"/workspace\" }, time: { created: 2, completed: 3 },\n",
+        "        finish: \"stop\", cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },\n",
+        "      };\n",
+        "      let creates = 0;\n",
+        "      let prompts = 0;\n",
+        "      const harness = yield* makeOpenCodeRuntimeHarness(\"legacy-metadata\", nativeSessionId, {\n",
+        "        event: { subscribe: asyncEventStream().subscribe },\n",
+        "        session: {\n",
+        "          create: async () => { creates++; return { data: native }; },\n",
+        "          get: async () => ({ data: native }),\n",
+        "          status: async () => ({ data: {} }),\n",
+        "          messages: async () => ({ data: [{ info: user, parts: [] }, { info: assistant, parts: [] }] }),\n",
+        "          promptAsync: async () => { prompts++; return { data: true }; },\n",
+        "        },\n",
+        "      });\n",
+        "      const evidence = OpenCodeRuntime.readOpenCodeSessionEvidence(harness.runtime);\n",
+        "      assert.isDefined(evidence);\n",
+        "      if (evidence === undefined) throw new Error(\"Original native evidence missing\");\n",
+        "      const snapshot = yield* evidence.readLegacy({\n",
+        "        nativeSessionId, turnId: user.id, messageId: user.id,\n",
+        "        ensure: { threadId: harness.threadId, runtimePolicy: harness.policy,\n",
+        "          modelSelection: { instanceId: harness.runtime.instanceId, model: \"native-api/model/one\" } },\n",
+        "      });\n",
+        "      assert.equal(snapshot.providerThread.nativeThreadRef?.nativeId, nativeSessionId);\n",
+        "      assert.equal(snapshot.providerThread.nativeConversationHeadRef?.nativeId, user.id);\n",
+        "      assert.equal(snapshot.providerThread.nativeMetadata?.forkHeadMessageId, assistant.id);\n",
+        "      assert.deepStrictEqual(snapshot.providerThread.nativeMetadata?.modelSelection, {\n",
+        "        instanceId: harness.runtime.instanceId, model: \"native-api/model/one\",\n",
+        "        options: [{ id: \"variant\", value: \"high\" }],\n",
+        "      });\n",
+        "      assert.deepStrictEqual(snapshot.providerTurns, []);\n",
+        "      assert.deepStrictEqual(snapshot.nativeHistory, {\n",
+        "        nativeSessionId,\n",
+        "        completedTurnRefs: [{ driver: OPENCODE_PROVIDER, nativeId: user.id, strength: \"strong\" }],\n",
+        "        latestCompletedTurnRef: { driver: OPENCODE_PROVIDER, nativeId: user.id, strength: \"strong\" },\n",
+        "      });\n",
+        "      assert.equal(creates, 1, \"Metadata adoption must not call ensure/create again\");\n",
+        "      assert.equal(prompts, 0);\n",
+        "    }).pipe(\n",
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n",
+        "      Effect.scoped,\n",
+        "    ),\n",
+        "  );\n",
+        "\n",
+        "  it.effect.each([\"completed\", \"unfinished\", \"failed\", \"tool-calls\", \"error-finish\", \"reverted\", \"foreign-session\", \"foreign-cwd\"] as const)(\n",
+        "    \"keeps only SDK-proven native history with a %s final message\",\n",
+        "    (mode) => Effect.gen(function* () {\n",
+        "      const nativeSessionId = \"ses_native_history\";\n",
+        "      const firstUser: UserMessage = {\n",
+        "        id: \"msg_first_user\", sessionID: nativeSessionId, role: \"user\", time: { created: 1 },\n",
+        "        agent: \"build\", model: { providerID: \"native-api\", modelID: \"model/one\" },\n",
+        "      };\n",
+        "      const firstAssistant: AssistantMessage = {\n",
+        "        id: \"msg_first_answer\", sessionID: nativeSessionId, role: \"assistant\", parentID: firstUser.id,\n",
+        "        modelID: \"model/one\", providerID: \"native-api\", mode: \"build\", agent: \"build\",\n",
+        "        path: { cwd: \"/workspace\", root: \"/workspace\" }, time: { created: 2, completed: 3 },\n",
+        "        finish: \"stop\", cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },\n",
+        "      };\n",
+        "      const laterUser: UserMessage = { ...firstUser, id: \"msg_later_user\", time: { created: 4 } };\n",
+        "      const laterAssistant: AssistantMessage = {\n",
+        "        ...firstAssistant, id: \"msg_later_answer\", parentID: laterUser.id,\n",
+        "        sessionID: mode === \"foreign-session\" ? \"ses_other\" : nativeSessionId,\n",
+        "        path: { cwd: mode === \"foreign-cwd\" ? \"/another-directory\" : \"/workspace\", root: \"/workspace\" },\n",
+        "        time: { created: 5, ...(mode === \"unfinished\" ? {} : { completed: 6 }) },\n",
+        "        finish: mode === \"tool-calls\" ? \"tool-calls\" : mode === \"error-finish\" ? \"error\" : \"stop\",\n",
+        "        ...(mode === \"failed\" ? { error: { name: \"MessageAbortedError\" as const, data: { message: \"Interrupted\" } } } : {}),\n",
+        "      };\n",
+        "      const native = {\n",
+        "        id: nativeSessionId, directory: \"/workspace\", title: \"Native history\", time: { created: 1, updated: 6 },\n",
+        "        ...(mode === \"reverted\" ? { revert: { messageID: laterUser.id } } : {}),\n",
+        "      };\n",
+        "      const harness = yield* makeOpenCodeRuntimeHarness(`native-history-${mode}`, nativeSessionId, {\n",
+        "        event: { subscribe: asyncEventStream().subscribe },\n",
+        "        session: {\n",
+        "          create: async () => ({ data: native }),\n",
+        "          get: async () => ({ data: native }),\n",
+        "          messages: async () => ({ data: [\n",
+        "            { info: firstUser, parts: [] }, { info: firstAssistant, parts: [] },\n",
+        "            { info: laterUser, parts: [] }, { info: laterAssistant, parts: [] },\n",
+        "          ] }),\n",
+        "        },\n",
+        "      });\n",
+        "      const snapshot = yield* harness.runtime.readThreadSnapshot({ providerThread: harness.providerThread });\n",
+        "      const first = { driver: OPENCODE_PROVIDER, nativeId: firstUser.id, strength: \"strong\" as const };\n",
+        "      const later = { driver: OPENCODE_PROVIDER, nativeId: laterUser.id, strength: \"strong\" as const };\n",
+        "      assert.deepStrictEqual(snapshot.providerTurns, []);\n",
+        "      assert.equal(snapshot.providerThread.nativeConversationHeadRef?.strength, \"weak\");\n",
+        "      assert.deepStrictEqual(snapshot.nativeHistory, {\n",
+        "        nativeSessionId,\n",
+        "        completedTurnRefs: mode === \"completed\" ? [first, later] : [first],\n",
+        "        ...(mode === \"completed\" ? { latestCompletedTurnRef: later } : mode === \"reverted\" ? { latestCompletedTurnRef: first } : {}),\n",
+        "      });\n",
+        "    }).pipe(\n",
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n",
+        "      Effect.scoped,\n",
+        "    ),\n",
+        "  );\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 248,
+      "before": [
+        "        event: { subscribe: async () => ({ stream: asyncEventStream().stream }) },\n"
+      ],
+      "after": [
+        "        event: { subscribe: (input?: unknown, options?: { signal?: AbortSignal }) => asyncEventStream().subscribe(input, options) },\n"
+      ]
+    },
+    {
+      "start": 253,
+      "before": [],
+      "after": [
+        "              directory: \"/workspace\",\n"
+      ]
+    },
+    {
+      "start": 260,
+      "before": [],
+      "after": [
+        "              directory: \"/workspace\",\n"
+      ]
+    },
+    {
+      "start": 270,
+      "before": [],
+      "after": [
+        "          status: async () => ({ data: {} }),\n"
+      ]
+    },
+    {
+      "start": 293,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 317,
+      "before": [
+        "        event: { subscribe: async () => ({ stream: nativeEvents.stream }) },\n"
+      ],
+      "after": [
+        "        event: { subscribe: nativeEvents.subscribe },\n"
+      ]
+    },
+    {
+      "start": 319,
+      "before": [
+        "          create: async () => ({ data: { id: root, time: { created: 1, updated: 1 } } }),\n"
+      ],
+      "after": [
+        "          create: async () => ({ data: { id: root, directory: \"/workspace\", time: { created: 1, updated: 1 } } }),\n"
+      ]
+    },
+    {
+      "start": 323,
+      "before": [],
+      "after": [
+        "              directory: \"/workspace\",\n"
+      ]
+    },
+    {
+      "start": 339,
+      "before": [],
+      "after": [
+        "          status: async () => ({ data: {} }),\n"
+      ]
+    },
+    {
+      "start": 399,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 411,
+      "before": [
+        "          event: { subscribe: async () => ({ stream: nativeEvents.stream }) },\n"
+      ],
+      "after": [
+        "          event: { subscribe: nativeEvents.subscribe },\n"
+      ]
+    },
+    {
+      "start": 533,
+      "before": [
+        "        Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "        Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 543,
+      "before": [
+        "        event: { subscribe: async () => ({ stream: nativeEvents.stream }) },\n"
+      ],
+      "after": [
+        "        event: { subscribe: nativeEvents.subscribe },\n"
+      ]
+    },
+    {
+      "start": 607,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 613,
+      "before": [
+        "    \"preserves tool lifecycle, approval kinds, and late assistant text without cached tool payloads\",\n"
+      ],
+      "after": [
+        "    \"preserves tool lifecycle, cumulative command output, approval kinds, and late assistant text\",\n"
+      ]
+    },
+    {
+      "start": 646,
+      "before": [],
+      "after": [
+        "            metadata: { output: \"/re\" },\n",
+        "            time: { start: 1 },\n",
+        "          },\n",
+        "          {\n",
+        "            status: \"running\",\n",
+        "            input: { command: \"pwd\" },\n",
+        "            title: \"Working directory\",\n",
+        "            metadata: { output: \"/repo\" },\n"
+      ]
+    },
+    {
+      "start": 662,
+      "before": [],
+      "after": [
+        "          {\n",
+        "            status: \"completed\",\n",
+        "            input: { command: \"pwd\" },\n",
+        "            output: \"/corrected\\n\",\n",
+        "            title: \"Working directory\",\n",
+        "            metadata: {},\n",
+        "            time: { start: 1, end: 2 },\n",
+        "          },\n"
+      ]
+    },
+    {
+      "start": 663,
+      "before": [
+        "        for (const state of states) {\n"
+      ],
+      "after": [
+        "        for (const state of [...states, states.at(-1)!]) {\n"
+      ]
+    },
+    {
+      "start": 756,
+      "before": [
+        "          [\"pending\", \"running\", \"completed\", \"failed\"],\n"
+      ],
+      "after": [
+        "          [\"pending\", \"running\", \"running\", \"completed\", \"failed\", \"completed\"],\n"
+      ]
+    },
+    {
+      "start": 760,
+      "before": [
+        "          [\"pwd\", \"pwd\", \"pwd\", \"pwd\"],\n"
+      ],
+      "after": [
+        "          [\"pwd\", \"pwd\", \"pwd\", \"pwd\", \"pwd\", \"pwd\"],\n"
+      ]
+    },
+    {
+      "start": 762,
+      "before": [
+        "        assert.equal(commands[2]?.output, \"/repo\\n\");\n",
+        "        assert.equal(commands[3]?.output, \"Command failed\");\n"
+      ],
+      "after": [
+        "        assert.deepEqual(commands.map((item) => item.output),\n",
+        "          [undefined, \"/re\", \"/repo\", \"/repo\\n\", \"Command failed\", \"/corrected\\n\"]);\n",
+        "        const commandId = commands[0]!.id;\n",
+        "        const deltas = events.flatMap((event) => event.type === \"command_output.delta\"\n",
+        "          && event.itemId === commandId ? [event.chunk] : []);\n",
+        "        assert.deepEqual(deltas, [\"/re\", \"po\", \"\\n\"], \"Replay and non-prefix corrections are not append output\");\n",
+        "        assert.isBelow(\n",
+        "          events.findIndex((event) => event.type === \"turn_item.updated\" && event.turnItem.id === commandId),\n",
+        "          events.findIndex((event) => event.type === \"command_output.delta\" && event.itemId === commandId),\n",
+        "        );\n"
+      ]
+    },
+    {
+      "start": 774,
+      "before": [
+        "        Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "        Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 788,
+      "before": [
+        "        event: { subscribe: async () => ({ stream: nativeEvents.stream }) },\n"
+      ],
+      "after": [
+        "        event: { subscribe: nativeEvents.subscribe },\n"
+      ]
+    },
+    {
+      "start": 870,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1000,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1056,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1218,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1284,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1342,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1382,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1470,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1550,
+      "before": [
+        "            Effect.succeed({ url: \"http://test.invalid\", external: true }),\n"
+      ],
+      "after": [
+        "            Effect.succeed({ url: \"http://test.invalid\", external: true, version: \"1.18.32\", exitCode: null }),\n"
+      ]
+    },
+    {
+      "start": 1790,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1881,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 1938,
+      "before": [
+        "            Effect.succeed({ url: \"http://test.invalid\", external: true }),\n"
+      ],
+      "after": [
+        "            Effect.succeed({ url: \"http://test.invalid\", external: true, version: \"1.18.32\", exitCode: null }),\n"
+      ]
+    },
+    {
+      "start": 2049,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 2095,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 2124,
+      "before": [
+        "          event: { subscribe: async () => ({ stream: nativeEvents.stream }) },\n"
+      ],
+      "after": [
+        "          event: { subscribe: nativeEvents.subscribe },\n"
+      ]
+    },
+    {
+      "start": 2159,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 2220,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    },
+    {
+      "start": 2336,
+      "before": [
+        "    }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer))),\n"
+      ],
+      "after": [
+        "    }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer))),\n"
+      ]
+    },
+    {
+      "start": 2343,
+      "before": [],
+      "after": [
+        "      const nativeEvents = asyncEventStream();\n"
+      ]
+    },
+    {
+      "start": 2345,
+      "before": [
+        "          subscribe: async (_input?: unknown, options?: { readonly signal?: AbortSignal }) => ({\n",
+        "            stream: {\n",
+        "              [Symbol.asyncIterator]: () => ({\n",
+        "                next: () =>\n",
+        "                  new Promise<IteratorResult<never>>((resolve) => {\n",
+        "                    const done = () => resolve({ done: true, value: undefined });\n",
+        "                    if (options?.signal?.aborted) return done();\n",
+        "                    options?.signal?.addEventListener(\"abort\", done, { once: true });\n",
+        "                  }),\n",
+        "              }),\n",
+        "            },\n",
+        "          }),\n"
+      ],
+      "after": [
+        "          subscribe: async (_input?: unknown, options?: { readonly signal?: AbortSignal }) => {\n",
+        "            if (options?.signal?.aborted) nativeEvents.close();\n",
+        "            else options?.signal?.addEventListener(\"abort\", () => nativeEvents.close(), { once: true });\n",
+        "            return { stream: nativeEvents.stream };\n",
+        "          },\n"
+      ]
+    },
+    {
+      "start": 2372,
+      "before": [
+        "            version: \"test\",\n"
+      ],
+      "after": [
+        "            version: \"1.18.32\",\n"
+      ]
+    },
+    {
+      "start": 2436,
+      "before": [
+        "          McpProviderSessions.layer,\n"
+      ],
+      "after": [
+        "          openCodeTestRuntimeHostLayer,\n"
+      ]
+    },
+    {
+      "start": 2624,
+      "before": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, McpProviderSessions.layer)),\n"
+      ],
+      "after": [
+        "      Effect.provide(Layer.merge(IdAllocator.layer, openCodeTestRuntimeHostLayer)),\n"
+      ]
+    }
+  ]
+}

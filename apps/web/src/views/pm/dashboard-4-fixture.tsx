@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import type { CanvasNodeProps } from "@/components/ui/canvas-node"
 import { DataTable } from "@/components/blocks/data-table"
 import { WorkflowCanvas } from "@/components/blocks/workflow-canvas"
@@ -17,7 +18,8 @@ import { useFixtureDashboardSurface } from "./dashboard-fixture-surface"
 import { useDashboard4State, analyzeDependencies, dependencyCanvasIssues, dependencyDefinitions, dependencyDocument, riskCounts, type Dashboard4Risk } from "./dashboard-4-controller"
 import { dashboardMember, DependencyIssueList, healthBandColor, healthBandLabel, SectionTitle, usePmProjectDomain } from "./dashboards-views"
 import { usePmNavigation } from "./domain-session"
-import type { PmPageProps } from "./model"
+import { pmClock, type PmPageProps } from "./model"
+import { issueCatalog } from "./issue-domain"
 import { formatProjectDate } from "./project-list-1-fixtures"
 import { projectHealthBand, projectHealthBands, type ProjectHealthBand } from "./project-health"
 import { PmMemberIdentity, PmSearch, usePmScenarioState } from "./shared"
@@ -43,6 +45,29 @@ const nodeWidths: Readonly<Record<string, number>> = {
   "project-sla-203": 225,
 }
 const fitViewOptions = { padding: 0.16, maxZoom: 0.7 }
+type IssueFilterTarget = {
+  stateId: string
+  priorityId: string
+  assigneeIds: readonly string[]
+  projectId: string
+  dueDate: string | null
+}
+function issueDueBucket(date: string | null, today: string, weekEnd: string) {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return "none"
+  if (date < today) return "overdue"
+  if (date === today) return "today"
+  return date <= weekEnd ? "week" : "later"
+}
+function matchesIssueFilter(issue: IssueFilterTarget, condition: FilterCondition, today: string, weekEnd: string) {
+  if (!condition.values.length) return true
+  let hit = false
+  if (condition.field === "status") hit = condition.values.includes(issue.stateId)
+  else if (condition.field === "priority") hit = condition.values.includes(issue.priorityId)
+  else if (condition.field === "assignee") hit = issue.assigneeIds.length ? issue.assigneeIds.some((id) => condition.values.includes(id)) : condition.values.includes("unassigned")
+  else if (condition.field === "project") hit = condition.values.includes(issue.projectId)
+  else if (condition.field === "due") hit = condition.values.includes(issueDueBucket(issue.dueDate, today, weekEnd))
+  return condition.operator === "isNot" ? !hit : hit
+}
 
 export function DependencyDashboardFixture({ scenario }: PmPageProps) {
   const { locale } = useI18n()
@@ -54,6 +79,26 @@ export function DependencyDashboardFixture({ scenario }: PmPageProps) {
   const [fixturePeople] = usePeopleDomain(scenario)
   const [state, setState] = useDashboard4State()
   const [presentation, setPresentation] = usePmScenarioState("pm-dashboard-4-presentation", () => ({ query: "", showRail: true }))
+  const [conditions, setConditions] = usePmScenarioState<FilterCondition[]>("pm-dashboard-4-issue-filters", () => [])
+  const issueFilterToday = pmClock.slice(0, 10)
+  const issueFilterWeekEnd = new Date(Date.parse(`${issueFilterToday}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10)
+  const activeFilterCount = conditions.filter(condition => condition.values.length > 0).length
+  const filteredDomainIssues = useMemo(() => issueDomain.items.filter(issue => conditions.every(condition => matchesIssueFilter(issue, condition, issueFilterToday, issueFilterWeekEnd))), [issueDomain.items, conditions, issueFilterToday, issueFilterWeekEnd])
+  const issueFilterCatalog = issueCatalog(locale)
+  const issueProjectOptions = projects.map(project => ({ value: project.id, label: `${project.identifier} ${project.title[locale]}` }))
+  const filterFields: FilterField[] = [
+    { id: "status", label: text("状态", "Status"), options: issueFilterCatalog.states.map(status => ({ value: status.id, label: status.label })) },
+    { id: "priority", label: text("优先级", "Priority"), options: issueFilterCatalog.priorities.map(priority => ({ value: priority.id, label: priority.label })) },
+    { id: "assignee", label: text("负责人", "Assignee"), options: [...issueFilterCatalog.assignees.map(assignee => ({ value: assignee.id, label: assignee.label })), { value: "unassigned", label: text("未分配", "Unassigned") }] },
+    ...(issueProjectOptions.length ? [{ id: "project", label: text("项目", "Project"), options: issueProjectOptions }] : []),
+    { id: "due", label: text("截止日期", "Due date"), options: [
+      { value: "overdue", label: text("已逾期", "Overdue") },
+      { value: "today", label: text("今天到期", "Due today") },
+      { value: "week", label: text("未来 7 天", "Next 7 days") },
+      { value: "later", label: text("更晚", "Later") },
+      { value: "none", label: text("无到期日", "No due date") },
+    ] },
+  ]
   const analysis = useMemo(() => analyzeDependencies(projects), [projects])
   const dependencyProjects = useMemo(() => analysis.nodeIds.flatMap(id => {
     const project = projects.find(item => item.id === id)
@@ -62,11 +107,11 @@ export function DependencyDashboardFixture({ scenario }: PmPageProps) {
   const counts = riskCounts(dependencyProjects)
   const openIssues = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const issue of issueDomain.items) {
+    for (const issue of filteredDomainIssues) {
       counts.set(issue.projectId, (counts.get(issue.projectId) ?? 0) + (issue.stateId === "done" ? 0 : 1))
     }
     return counts
-  }, [issueDomain.items])
+  }, [filteredDomainIssues])
   const rows = useMemo(() => dependencyProjects.filter(project =>
     (state.risk === "all" || projectHealthBand(project.health) === state.risk) &&
     `${project.identifier} ${project.title[locale]}`.toLocaleLowerCase(locale).includes(presentation.query.trim().toLocaleLowerCase(locale)),
@@ -148,7 +193,7 @@ export function DependencyDashboardFixture({ scenario }: PmPageProps) {
     "off-track": counts["on-track"] + counts["at-risk"],
     unknown: counts["on-track"] + counts["at-risk"] + counts["off-track"],
   }
-  const surface = useFixtureDashboardSurface(scenario, "dashboard4", dependencyProjects, issueDomain.items.filter(issue => scope.has(issue.projectId)), fixturePeople, issueDomain.activity)
+  const surface = useFixtureDashboardSurface(scenario, "dashboard4", dependencyProjects, filteredDomainIssues.filter(issue => scope.has(issue.projectId)), fixturePeople, issueDomain.activity)
   const canvasProps = {
     document, definitions, readOnly: true, issues: canvasIssues, selection: state.selection,
     onSelectionChange: selectFromCanvas,
@@ -165,7 +210,12 @@ export function DependencyDashboardFixture({ scenario }: PmPageProps) {
       data: { ...surface.readModel.data, emptyDescription: text("当前本地场景没有项目。请选择其他场景查看示例。", "This local scene has no projects. Choose another scene to inspect the examples.") } }}
     headerActions={<div className={d4.actions}>
       {scenario === "readonly" && <Badge>{text("只读", "Read only")}</Badge>}
-      <Popover><PopoverTrigger render={<Button variant="outline" />}><Filter size={16} aria-hidden="true" />{text("筛选", "Filter")}</PopoverTrigger>
+      <Popover><PopoverTrigger render={<Button variant="outline" />}><Filter size={16} aria-hidden="true" />{text("筛选", "Filter")}{activeFilterCount > 0 && <Badge size="sm" tone="info">{activeFilterCount}</Badge>}</PopoverTrigger>
+        <PopoverContent className="w-[min(460px,calc(100vw-2rem))] p-0" aria-label={text("任务筛选", "Issue filters")}>
+          <FilterCard title={text("任务筛选", "Issue filters")} fields={filterFields} conditions={conditions} onChange={setConditions} emptyHint={text("尚未添加筛选条件，显示当前范围内的全部任务。", "No filter conditions yet; every issue in scope is shown.")} addLabel={text("添加条件", "Add condition")} clearLabel={text("清除条件", "Clear conditions")} whereLabel={text("条件", "Where")} andLabel={text("并且", "and")} anyLabel={text("任意", "Any")} removeLabel={text("移除条件", "Remove filter")}/>
+        </PopoverContent>
+      </Popover>
+      <Popover><PopoverTrigger render={<Button variant="outline" />}><AlertTriangle size={16} aria-hidden="true" />{text("风险", "Risk")}</PopoverTrigger>
         <PopoverContent className={d4.filter} aria-label={text("风险筛选", "Risk filter")}>
           {riskOptions.map(option => <Button key={option.id} variant="ghost" aria-pressed={state.risk === option.id} onClick={() => setState(previous => ({ ...previous, risk: option.id }))}>{option.label}<span>{option.count}</span></Button>)}
         </PopoverContent>

@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "source": "packages/provider-fx/src/server/acpSupport.test.ts",
+  "beforeSha256": "ab91e727cd9532408a469ae02ef3060bdb172efe9184ba3344172fd318ca000e",
+  "afterSha256": "2ecef9708d82b8797f2c82991cbec089da4cb913e3726934c8c4ad796fb3c2f5",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 5,
+      "before": [
+        "import { fxPermissionDisposition } from \"./acpSupport.ts\";\n"
+      ],
+      "after": [
+        "import { fxPermissionDisposition, withFxSessionMode } from \"./acpSupport.ts\";\n",
+        "import { fileURLToPath } from \"node:url\";\n",
+        "import * as Effect from \"effect/Effect\";\n",
+        "import * as Layer from \"effect/Layer\";\n",
+        "import * as NodeServices from \"@effect/platform-node/NodeServices\";\n",
+        "import * as AcpSessionRuntime from \"@t3tools/provider-acp/server/AcpSessionRuntime\";\n"
+      ]
+    },
+    {
+      "start": 33,
+      "before": [],
+      "after": [
+        "\n",
+        "it.effect(\"forces the first advertised FX mode through typed ACP v2 and avoids later redundant writes\", () =>\n",
+        "  Effect.scoped(Effect.gen(function* () {\n",
+        "    const runtime = withFxSessionMode(yield* AcpSessionRuntime.AcpSessionRuntime);\n",
+        "    yield* runtime.start();\n",
+        "    const state = () => runtime.request(\"pm-test/mode-state\", {});\n",
+        "    assert.deepEqual(yield* state(), { enforcedMode: \"auto\", writeCount: 0 });\n",
+        "    yield* runtime.setMode(\"ask\");\n",
+        "    assert.deepEqual(yield* state(), { enforcedMode: \"ask\", writeCount: 1 });\n",
+        "    yield* runtime.setMode(\"ask\");\n",
+        "    assert.deepEqual(yield* state(), { enforcedMode: \"ask\", writeCount: 1 });\n",
+        "    yield* runtime.setMode(\"auto\");\n",
+        "    assert.deepEqual(yield* state(), { enforcedMode: \"auto\", writeCount: 2 });\n",
+        "  })).pipe(Effect.provide(\n",
+        "    AcpSessionRuntime.layer({\n",
+        "      cwd: process.cwd(),\n",
+        "      clientInfo: { name: \"pm-mode-regression\", version: \"1\" },\n",
+        "      spawn: {\n",
+        "        command: process.execPath,\n",
+        "        args: [fileURLToPath(new URL(\"./testing/config-mode-peer.ts\", import.meta.url))],\n",
+        "        cwd: process.cwd(),\n",
+        "      },\n",
+        "    }).pipe(Layer.provide(NodeServices.layer)),\n",
+        "  )),\n",
+        ");\n"
+      ]
+    }
+  ]
+}

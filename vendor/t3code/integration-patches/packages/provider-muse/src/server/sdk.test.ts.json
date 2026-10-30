@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "source": "packages/provider-muse/src/server/sdk.test.ts",
+  "beforeSha256": "30ed531583db3ee65b76ebb4490151937a8d77aca0235e2310f801ffc6ace41b",
+  "afterSha256": "b3156aac0bbd9886274b45e96a0763f18db43add8376f0dda577162def90ac93",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 109,
+      "before": [],
+      "after": [
+        "\n",
+        "  it.effect(\"uses the bound native cwd only when launch options omit it\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      for (const explicit of [undefined, \"/explicit-native-workspace\"]) {\n",
+        "        const fake = mockSpawn();\n",
+        "        fake.startup.resolve(fake.ready);\n",
+        "        const host = yield* createMuseSdkHostEffect({\n",
+        "          binaryPath: \"/custom/muse\", launch: { command: \"/custom/muse\", args: [] },\n",
+        "          environment: { MUSE_HOME: \"./relative-native-home\" },\n",
+        "          ...(explicit === undefined ? {} : { cwd: explicit }),\n",
+        "        });\n",
+        "        expect(vi.mocked(spawnMspConnection).mock.lastCall?.[0]).toMatchObject({\n",
+        "          cwd: explicit ?? \"/bound-native-workspace\",\n",
+        "        });\n",
+        "        fake.shutdown.resolve({ code: 0, signal: null });\n",
+        "        yield* Effect.promise(() => host.close());\n",
+        "      }\n",
+        "    }).pipe(Effect.provideService(HostProcess.WorkingDirectory, \"/bound-native-workspace\")),\n",
+        "  );\n"
+      ]
+    }
+  ]
+}

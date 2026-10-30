@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { useLocation } from "react-router"
+import { useLocation, useNavigate } from "react-router"
+import { useQueryClient } from "@tanstack/react-query"
+import { pmKeys } from "../service/pm-data"
 import { usePmService } from "../service/pm-service"
 import { AgentPanel } from "./agent-panel"
 import styles from "./agent-panel.module.css"
@@ -29,11 +31,22 @@ const contextKey = (context: AgentPanelContext) => [context.workspaceId, context
 
 export function PmAgentProvider({ children }: { children: ReactNode }) {
   const { actor, actorEpoch, workspace } = usePmService()
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const id = (event as CustomEvent<{ workspaceId: string }>).detail?.workspaceId
+      if (actor && workspace && id === workspace.id) void queryClient.invalidateQueries({ queryKey: pmKeys.workspace(window.location.origin, actor.id, workspace.id) })
+    }
+    window.addEventListener("pm-tool-committed", refresh)
+    return () => window.removeEventListener("pm-tool-committed", refresh)
+  }, [actor, workspace, queryClient])
   return <ScopedPmAgentProvider key={`${actor?.id ?? "anonymous"}:${actorEpoch}:${workspace?.id ?? ""}:${workspace?.version ?? ""}`}>{children}</ScopedPmAgentProvider>
 }
 
 function ScopedPmAgentProvider({ children }: { children: ReactNode }) {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { workspace } = usePmService()
   const [context, setContext] = useState<AgentPanelContext | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
   const [threadId, setThreadId] = useState<string | null>(null)
@@ -50,6 +63,14 @@ function ScopedPmAgentProvider({ children }: { children: ReactNode }) {
     setContext(null)
     setThreadId(null)
   }, [location])
+  useEffect(() => {
+    const handoff = (location.state as { agentPanelReturn?: AgentPanelContext & { threadId?: string | null } } | null)?.agentPanelReturn
+    if (!handoff || !workspace || handoff.workspaceId !== workspace.id) return
+    setContext({ ...handoff, returnTo: pathOf(location) })
+    setThreadId(handoff.threadId ?? null)
+    setPanelOpen(true)
+    navigate(`${location.pathname}${location.search}${location.hash}`, { replace: true, state: null })
+  }, [location, navigate, workspace])
 
   const openPanel = useCallback((next: AgentPanelContext) => {
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null

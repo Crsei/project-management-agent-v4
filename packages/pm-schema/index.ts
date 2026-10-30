@@ -74,8 +74,10 @@ export interface ViewConfig {
   project?: string;
   layout: 'kanban' | 'table' | 'tree' | 'graph';
   group_by?: string;
+  /** Compact scalar filters; use `where` for multi-value and negated condition rows. */
   filter?: Record<string, unknown>;
   sort?: string;
+  /** Ordered query expression compiled from the condition rows. */
   where?: QueryExpression;
   order_by?: SortRule[];
   order?: string[];
@@ -191,6 +193,8 @@ export const fieldRegistry: FieldDefinition[] = [
   field('x-pm-estimate', 'number', 'Explicit finite nonnegative concurrent open-work estimate points, at most 1000000; absent means unknown.', { entities: ['work_item'] }),
   field('x-pm-start', 'date', 'Work item start calendar date YYYY-MM-DD, no later than due.', { entities: ['work_item'] }),
   field('x-pm-location', 'string', 'Optional trimmed location text, at most 1000 characters; null or blank input removes it.', { entities: ['work_item'] }),
+  field('x-pm-created-at', 'timestamp', 'Source creation timestamp; query-only metadata.', { editable: false }),
+  field('x-pm-updated-at', 'timestamp', 'Source update timestamp; query-only metadata.', { editable: false }),
   field('document_kind', 'enum:note|design|decision|specification', 'Document classification.', { entities: ['document'], default: 'note' }),
   field('cycle', 'identifier', 'Cycle in the same project.', { entities: ['work_item'] }),
   field('milestone', 'identifier', 'Milestone in the same project.', { entities: ['work_item', 'requirement'] }),

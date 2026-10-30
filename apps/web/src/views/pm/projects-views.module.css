@@ -500,52 +500,7 @@
   min-height: 240px;
 }
 .tasksBoard [data-board-group] {
-  width: 236px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-}
-.tasksBoard [data-board-group] > header {
-  padding: 0 4px 12px;
-  border: 0;
-  background: transparent;
-}
-.tasksBoard [data-board-group] > header > button {
-  font-size: 12px;
-  line-height: 16px;
-}
-.tasksBoard [data-board-group] > div {
-  padding: 0;
-}
-.tasksBoard [data-board-group] ul {
-  padding: 0;
-  gap: 10px;
-}
-.tasksBoard [data-work-item] {
-  min-height: 120px;
-  padding: 12px;
-}
-.tasksBoard [data-work-item] > div:first-child {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.tasksBoard [data-work-item] > div:first-child > button:last-of-type {
-  flex: 0 0 100%;
-  order: 3;
-  height: auto;
-  min-height: 0;
-  padding: 0;
-  text-align: left;
-  justify-content: flex-start;
-  white-space: normal;
-  font-size: 14px;
-  line-height: 20px;
-}
-.tasksBoard [data-layout="card"] {
-  gap: 6px;
-  flex-wrap: wrap;
+  width: 300px;
 }
 .taskEstimate {
   margin-left: auto;

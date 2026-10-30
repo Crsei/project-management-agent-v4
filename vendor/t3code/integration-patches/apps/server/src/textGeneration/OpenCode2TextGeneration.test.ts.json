@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "source": "apps/server/src/textGeneration/OpenCode2TextGeneration.test.ts",
+  "beforeSha256": "3afb54f752a8cf7dff98626f47dd4623819b714100233ddda825c3de9437e0fa",
+  "afterSha256": "5a450056b91b609a68365b61a9e75368700f5af645bc040029db8f6ab2df29a6",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1,
+      "before": [
+        "import * as NodeServices from \"@effect/platform-node/NodeServices\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4,
+      "before": [
+        "import * as Layer from \"effect/Layer\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6,
+      "before": [
+        "import * as TestProviderHost from \"@t3tools/provider-testing/TestProviderHost\";\n"
+      ],
+      "after": [
+        "import * as PmNativeTestHost from \"../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 12,
+      "before": [
+        "const layer = TestProviderHost.layer().pipe(Layer.provideMerge(NodeServices.layer));\n"
+      ],
+      "after": [
+        "const layer = PmNativeTestHost.layer({ driver: \"opencode\", instanceId: \"opencode\" });\n"
+      ]
+    }
+  ]
+}

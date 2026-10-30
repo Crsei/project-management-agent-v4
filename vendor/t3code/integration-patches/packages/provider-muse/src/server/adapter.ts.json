@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "source": "packages/provider-muse/src/server/adapter.ts",
+  "beforeSha256": "b51b0650203461b65c0d70aa06d0ef39b6293ed0f1d0a75fdd1d08e0f3536a39",
+  "afterSha256": "365ba3115490f3d2d294c65c00bf83f70be106360e88ba3a67e23b650830d494",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [],
+      "after": [
+        "import * as NodePath from \"node:path\";\n",
+        "import * as HostProcess from \"@t3tools/shared/HostProcess\";\n"
+      ]
+    },
+    {
+      "start": 40,
+      "before": [
+        "import * as McpProviderSession from \"@t3tools/provider-core/server/mcpSession\";\n",
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { ProviderRuntimeHost } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n",
+        "import { bindMuseSessionEvidence } from \"./sessionEvidence.ts\";\n"
+      ]
+    },
+    {
+      "start": 266,
+      "before": [
+        "  const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n"
+      ],
+      "after": [
+        "  const runtimeHost = yield* ProviderRuntimeHost;\n",
+        "  const userHome = yield* HostProcess.HomeDirectory;\n"
+      ]
+    },
+    {
+      "start": 291,
+      "before": [],
+      "after": [
+        "      const operationBinding = yield* runtimeHost.read({ threadId: input.threadId, providerInstanceId: options.instanceId });\n",
+        "      const authorizeTools = operationBinding ? runtimeHost.authorize({\n",
+        "        threadId: input.threadId, providerInstanceId: options.instanceId,\n",
+        "        executionId: operationBinding.executionId, action: \"tool\",\n",
+        "      }).pipe(Effect.mapError(cause => protocolError(\"The Muse PM transport is no longer authorized.\", cause))) : Effect.void;\n"
+      ]
+    },
+    {
+      "start": 1220,
+      "before": [
+        "        // Muse does not propagate allowAll to workflow children; T3 answers for them.\n",
+        "        const autoApprove = child && input.runtimePolicy.runtimeMode === \"full-access\";\n"
+      ],
+      "after": [
+        "        // Only the currently bound PM stdio server may enter transport; its business authorization stays in the host.\n",
+        "        const binding = operationBinding;\n",
+        "        const approval = native.type === \"approval\" ? native.value : undefined;\n",
+        "        const autoApprove = !!turn && !!approval && !child && approval.subject.kind === \"tool\" &&\n",
+        "          approval.protectedWrite !== true && approval.turnId === turn.nativeId &&\n",
+        "          /^(?:mcp__pm_tools__|pm_tools_)pm_[a-z_]+$/.test(approval.toolName ?? \"\") &&\n",
+        "          binding?.mcpServers.some(server => server.name === \"pm_tools\" && server.transport === \"stdio\") === true;\n",
+        "        if (autoApprove) yield* authorizeTools;\n"
+      ]
+    },
+    {
+      "start": 1359,
+      "before": [],
+      "after": [
+        "                ...(operationBinding ? { hostExecution: {\n",
+        "                  threadId: operationBinding.threadId, executionId: operationBinding.executionId,\n",
+        "                } } : {}),\n"
+      ]
+    },
+    {
+      "start": 1664,
+      "before": [
+        "        const mcpSession = yield* mcpSessions.read(input.threadId);\n",
+        "        const environment = McpProviderSession.withAgentDeviceEnvironment(\n",
+        "          options.environment,\n",
+        "          mcpSession,\n",
+        "        );\n"
+      ],
+      "after": [
+        "        const environment = options.environment;\n"
+      ]
+    },
+    {
+      "start": 1817,
+      "before": [
+        "          const mcpSession = yield* mcpSessions.read(args.threadId);\n",
+        "          if (mcpSession && !host.initializeResult.grantedCapabilities.includes(\"sessionMcp\"))\n"
+      ],
+      "after": [
+        "          const binding = operationBinding;\n",
+        "          if (binding?.mcpServers.length) yield* authorizeTools;\n",
+        "          if (binding?.mcpServers.length && !host.initializeResult.grantedCapabilities.includes(\"sessionMcp\"))\n"
+      ]
+    },
+    {
+      "start": 1822,
+      "before": [
+        "          const config = mcpSession\n",
+        "            ? {\n",
+        "                mcpServers: {\n",
+        "                  // Muse's required default fails runs if T3 tools are unreachable; make them optional.\n",
+        "                  \"t3-code\": {\n",
+        "                    transport: \"streamableHttp\",\n",
+        "                    mode: \"optional\",\n",
+        "                    url: mcpSession.endpoint,\n",
+        "                    headers: { Authorization: mcpSession.authorizationHeader },\n",
+        "                  },\n",
+        "                },\n",
+        "              }\n"
+      ],
+      "after": [
+        "          const config = binding?.mcpServers.length\n",
+        "            ? { mcpServers: Object.fromEntries(binding.mcpServers.map(server => [server.name, {\n",
+        "                transport: \"stdio\" as const, mode: \"required\" as const,\n",
+        "                command: server.command, args: [...server.args],\n",
+        "              }])) }\n"
+      ]
+    },
+    {
+      "start": 2373,
+      "before": [],
+      "after": [
+        "      const legacySchema = Schema.Struct({\n",
+        "        session: Schema.Struct({ sessionId: Schema.NonEmptyString, workspaceRoot: Schema.NullOr(Schema.NonEmptyString),\n",
+        "          status: Schema.String, activeTurnId: Schema.optional(Schema.NullOr(Schema.String)),\n",
+        "          modelId: Schema.optional(Schema.NullOr(Schema.String)) }),\n",
+        "        lastTurn: Schema.optional(Schema.Struct({ turnId: Schema.NonEmptyString, terminal: Schema.String })),\n",
+        "      });\n",
+        "      const unbindEvidence = bindMuseSessionEvidence(runtime, {\n",
+        "        probe: Effect.gen(function* () {\n",
+        "          const schema = host.initializeResult.schema;\n",
+        "          if (schema?.version !== 1 || !schema.fingerprint)\n",
+        "            return yield* protocolError(\"Muse did not confirm its native MSP envelope schema.\");\n",
+        "          return { protocol: `muse-msp:${schema.version}:${schema.fingerprint}`, cwd, homeDirectory: userHome };\n",
+        "        }),\n",
+        "        readLegacy: ({ nativeSessionId: requested, turnId, messageId, ensure }) => Effect.gen(function* () {\n",
+        "          if (requested !== (nativeSessionId ?? input.initialNativeThreadId))\n",
+        "            return yield* protocolError(\"Muse legacy metadata belongs to another native session.\");\n",
+        "          const metadata = yield* request(\"session/read\", { sessionId: requested, excludeItems: true }, false).pipe(\n",
+        "            Effect.flatMap(value => decode(legacySchema, value)));\n",
+        "          if (metadata.session.sessionId !== requested || metadata.session.workspaceRoot === null ||\n",
+        "            NodePath.resolve(metadata.session.workspaceRoot) !== NodePath.resolve(cwd) ||\n",
+        "            metadata.session.status === \"running\" || metadata.session.activeTurnId)\n",
+        "            return yield* protocolError(\"Muse legacy metadata did not confirm its directory, identity and idle boundary.\");\n",
+        "          const boundary = metadata.lastTurn;\n",
+        "          if (!boundary || boundary.terminal !== \"completed\" ||\n",
+        "            (turnId && boundary.turnId !== turnId) || (messageId && boundary.turnId !== messageId))\n",
+        "            return yield* protocolError(\"Muse legacy completed turn boundary is unavailable.\");\n",
+        "          const current = yield* register(ensure);\n",
+        "          const verified = { ...current, nativeConversationHeadRef: boundary ? nativeRef(boundary.turnId) : null,\n",
+        "            nativeMetadata: { ...current.nativeMetadata, modelSelection: metadata.session.modelId\n",
+        "              ? { instanceId: options.instanceId, model: metadata.session.modelId } : undefined } };\n",
+        "          thread = verified;\n",
+        "          return { ...yield* snapshot(verified), providerThread: verified,\n",
+        "            nativeHistory: { nativeSessionId: requested, completedTurnRefs: [{\n",
+        "              driver: MUSE_PROVIDER, nativeId: boundary.turnId, strength: \"strong\" as const,\n",
+        "            }] } };\n",
+        "        }),\n",
+        "      });\n",
+        "      yield* Effect.addFinalizer(() => Effect.sync(unbindEvidence));\n"
+      ]
+    }
+  ]
+}

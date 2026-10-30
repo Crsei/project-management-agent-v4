@@ -2,7 +2,6 @@ import { useId, useState } from "react"
 import type { Entity } from "@contracts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { NativeSelect } from "@/components/ui/native-select"
 import { useI18n } from "@/lib/i18n-provider"
 import styles from "./service-collections.module.css"
 
@@ -118,31 +117,4 @@ export function ScheduleEditor<T extends ScheduleItem>({ item, onSchedule, pendi
       {submitted && !changed && <p role="status" className={styles.hint}>{en ? "Saved dates confirmed by the server." : "服务端已确认保存日期。"}</p>}
     </form>
   )
-}
-
-export function ScheduleSelection<T extends ScheduleItem>({ items, selectedId, onSelect, onOpen }: {
-  items: T[]; selectedId: string; onSelect: (id: string) => void; onOpen: (item: T) => void
-}) {
-  const { locale } = useI18n()
-  const selected = items.find((item) => item.id === selectedId)
-  return <div className={styles.toolbar}>
-    <label className={styles.selector}>{locale === "en" ? "Selected work item" : "选中工作项"}
-      <NativeSelect value={selected?.id ?? ""} onChange={(event) => onSelect(event.target.value)}>
-        <option value="">{locale === "en" ? "Select an item to edit dates" : "选择工作项编辑日期"}</option>
-        {items.map((item) => <option key={item.id} value={item.id}>{itemTitle(item)}</option>)}
-      </NativeSelect>
-    </label>
-    <Button variant="outline" disabled={!selected} onClick={() => selected && onOpen(selected)}>{locale === "en" ? "Open details" : "打开详情"}</Button>
-  </div>
-}
-
-export function UnscheduledItems({ items, selectedId, onSelect }: {
-  items: ScheduleItem[]; selectedId: string; onSelect: (id: string) => void
-}) {
-  const { locale } = useI18n()
-  const unscheduled = items.filter((item) => !itemRange(item))
-  return <section className={styles.unscheduled} aria-label={locale === "en" ? "Unscheduled work items" : "未排期工作项"}>
-    <h3>{locale === "en" ? "Unscheduled / incomplete dates" : "未排期 / 日期异常"} <span className={styles.hint}>({unscheduled.length})</span></h3>
-    {unscheduled.length ? <div className={styles.chips}>{unscheduled.map((item) => <Button key={item.id} variant="outline" aria-pressed={selectedId === item.id} onClick={() => onSelect(item.id)}>{itemTitle(item)}</Button>)}</div> : <p className={styles.hint}>{locale === "en" ? "All items have a date." : "所有工作项均已设置日期。"}</p>}
-  </section>
 }

@@ -1,13 +1,16 @@
-import { ArrowDownAZ, Clock3, FolderKanban, Gauge, LayoutGrid, List, ListFilter, MoreHorizontal, Plus, Shield, SlidersHorizontal, Users } from "lucide-react"
+import { ArrowDownAZ, Clock3, FolderKanban, LayoutGrid, List, ListFilter, MoreHorizontal, Plus, SlidersHorizontal, Users } from "lucide-react"
 import { Avatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DataRegion } from "@/components/ui/data-region"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { useI18n } from "@/lib/i18n-provider"
 import { ControlledFeedback } from "./controlled-presentation"
 import type { ControlledTeam, TeamCollectionViewProps } from "./people-controlled-contracts"
 import { PmPage, PmSearch } from "./presentation-page"
+import { teamFilterConditions, teamMatchesConditions, withTeamFilterConditions } from "./team-filter"
 import styles from "./team-list-1.module.css"
 
 export function TeamList1Content(props: TeamCollectionViewProps) {
@@ -15,12 +18,24 @@ export function TeamList1Content(props: TeamCollectionViewProps) {
   const text = (zh: string, en: string) => locale === "en" ? en : zh
   const { readModel: model, interaction: state, capabilities, actions } = props
   const loading = model.data.state === "loading"
-  const hasContent = model.teams.length > 0
   const teamsAvailable = model.teamsAvailable !== false
-  const dataState = (model.data.state ?? "success") === "success" && !hasContent ? "empty" : model.data.state
   const membersByUserId = new Map(model.members.map((member) => [member.userId, member]))
   const dateFormat = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", timeZone: "UTC" })
-  const filtered = !!state.query || state.teamId !== null || !!state.focusFilter || state.sort !== "name" || (state.presenceFilter !== undefined && state.presenceFilter !== "all")
+  const conditions = teamFilterConditions(state)
+  /** Idempotent guard: hosts that project teams themselves (fixtures) still honor card conditions. */
+  const teams = model.teams.filter((team) => teamMatchesConditions(team, conditions, membersByUserId))
+  const hasContent = teams.length > 0
+  const dataState = (model.data.state ?? "success") === "success" && !hasContent ? "empty" : model.data.state
+  const filtered = !!state.query || conditions.some((condition) => condition.values.length > 0)
+  const emptyTitle = filtered ? text("没有匹配筛选的团队", "No teams match these filters") : undefined
+  const emptyDescription = filtered ? text("调整或清除筛选条件以查看团队。", "Adjust or clear the filters to see teams.") : undefined
+  const teamChoices = model.teamOptions ?? model.teams
+  const filterFields: FilterField[] = [
+    { id: "focus", label: text("工作方向", "Focus"), single: true, options: [...new Set(teamChoices.flatMap((team) => team.focus ? [team.focus] : []))].map((focus) => ({ value: focus, label: focus })) },
+    ...(capabilities.filterPresence ? [{ id: "presence", label: text("可用性", "Presence"), single: true, options: [{ value: "available", label: text("在线", "Available") }, { value: "away", label: text("离开", "Away") }, { value: "offline", label: text("离线", "Offline") }] }] : []),
+    { id: "team", label: text("团队", "Team"), single: true, options: teamChoices.map((team) => ({ value: team.id, label: team.name })) },
+    { id: "member", label: text("成员", "Member"), options: model.members.map((member) => ({ value: member.userId, label: member.name })) },
+  ]
   const openTab = (team: ControlledTeam, detailTab: "members" | "projects", trigger: HTMLElement) => {
     actions.setInteraction((previous) => ({ ...previous, detailTab }))
     actions.open(team, trigger)
@@ -72,44 +87,37 @@ export function TeamList1Content(props: TeamCollectionViewProps) {
     return date && !Number.isNaN(date.getTime()) ? <span className={styles.activity}><Clock3 size={12} aria-hidden="true" /><time dateTime={team.activityAt!}>{dateFormat.format(date)}</time></span> : <span className={styles.muted} title={text("活动日期未提供", "Activity date unavailable")}>—</span>
   }
   const controls = <div className={styles.toolbar} role="group" aria-label={text("团队工具栏", "Team toolbar")}>
+    <Popover>
+      <PopoverTrigger render={<Button id="pm-team-filter" variant="ghost" className={styles.filterButton} disabled={loading} aria-label={text("筛选团队", "Filter teams")} />}><ListFilter size={14} aria-hidden="true" />{text("筛选", "Filter")}{filtered && <span className={styles.filterDot} aria-label={text("已应用筛选", "Filters applied")} />}</PopoverTrigger>
+      <PopoverContent align="start" className="w-96 max-w-[calc(100vw-2rem)] p-0">
+        <FilterCard
+          title={text("筛选团队", "Filter teams")}
+          fields={filterFields}
+          conditions={conditions}
+          onChange={(next: FilterCondition[]) => actions.setInteraction((previous) => withTeamFilterConditions(previous, next))}
+          emptyHint={text("添加条件以缩小团队列表。", "Add a condition to narrow the team list.")}
+          addLabel={text("添加筛选", "Add filter")}
+          clearLabel={text("清除筛选", "Clear filters")}
+          whereLabel={text("条件", "Where")}
+          andLabel={text("且", "and")}
+          anyLabel={text("任意", "Any")}
+          removeLabel={text("移除条件", "Remove filter")}
+          disabled={loading}
+        />
+      </PopoverContent>
+    </Popover>
+    <PmSearch value={state.query} onChange={(query) => actions.setInteraction((previous) => ({ ...previous, query }))} label={text("搜索团队、成员或项目", "Search teams, members or projects")} />
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button id="pm-team-filter" variant="ghost" className={styles.filterButton} disabled={loading} aria-label={text("筛选团队", "Filter teams")} />}><ListFilter size={14} aria-hidden="true" />{text("筛选", "Filter")}{filtered && <span className={styles.filterDot} aria-label={text("已应用筛选", "Filters applied")} />}</DropdownMenuTrigger>
-      <DropdownMenuContent className={styles.filterMenu} align="start" sideOffset={4}>
-        <div className={styles.filterSearch} onKeyDown={(event) => event.stopPropagation()}><PmSearch value={state.query} onChange={(query) => actions.setInteraction((previous) => ({ ...previous, query }))} label={text("搜索团队、成员或项目", "Search teams, members or projects")} /></div>
-        <DropdownMenuSeparator className={styles.menuSeparator} />
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger><Gauge size={14} aria-hidden="true" />{text("工作方向", "Focus area")}</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={styles.optionMenu}><DropdownMenuRadioGroup value={state.focusFilter ?? ""} onValueChange={(focusFilter) => actions.setInteraction((previous) => ({ ...previous, focusFilter: focusFilter || null }))}><DropdownMenuRadioItem value="">{text("全部方向", "All focus areas")}</DropdownMenuRadioItem>{[...new Set((model.teamOptions ?? model.teams).flatMap(team => team.focus ? [team.focus] : []))].map(focus => <DropdownMenuRadioItem key={focus} value={focus}>{focus}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup></DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger disabled={!teamsAvailable}><Shield size={14} aria-hidden="true" />{text("团队标识", "Identifiers")}</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={styles.optionMenu}>
-            <DropdownMenuRadioGroup value={state.teamId ?? "all"} onValueChange={(value) => actions.setInteraction((previous) => ({ ...previous, teamId: value === "all" ? null : value }))}>
-              <DropdownMenuRadioItem value="all">{text("全部团队", "All teams")}</DropdownMenuRadioItem>
-              {(model.teamOptions ?? model.teams).map((team) => <DropdownMenuRadioItem key={team.id} value={team.id}>{team.name}</DropdownMenuRadioItem>)}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger><ArrowDownAZ size={14} aria-hidden="true" />{text("排序方式", "Sort by")}</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={styles.optionMenu}>
-            <DropdownMenuRadioGroup value={state.sort} onValueChange={(value) => {
-              if (value === "name" || value === "name-desc" || value === "members" || (value === "activity" && capabilities.sortActivity)) actions.setInteraction((previous) => ({ ...previous, sort: value }))
-            }}>
-              <DropdownMenuRadioItem value="name">{text("名称 A–Z", "Name A–Z")}</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="name-desc">{text("名称 Z–A", "Name Z–A")}</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="members">{text("成员数", "Member count")}</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="activity" disabled={!capabilities.sortActivity} title={!capabilities.sortActivity ? text("活动日期来源未提供", "Activity-date source unavailable") : undefined}>{text("最近活动", "Recent activity")}</DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        {capabilities.filterPresence && <DropdownMenuSub>
-          <DropdownMenuSubTrigger><Users size={14} aria-hidden="true" />{text("可用性", "Availability")}</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className={styles.optionMenu}><DropdownMenuRadioGroup value={state.presenceFilter ?? "all"} onValueChange={(presenceFilter) => {
-            if (presenceFilter === "all" || presenceFilter === "available" || presenceFilter === "away" || presenceFilter === "offline") actions.setInteraction((previous) => ({ ...previous, presenceFilter }))
-          }}>{(["all", "available", "away", "offline"] as const).map((value) => <DropdownMenuRadioItem key={value} value={value}>{value === "all" ? text("全部", "All") : value === "available" ? text("在线", "Available") : value === "away" ? text("离开", "Away") : text("离线", "Offline")}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup></DropdownMenuSubContent>
-        </DropdownMenuSub>}
-        {filtered && <><DropdownMenuSeparator className={styles.menuSeparator} /><DropdownMenuItem onClick={() => actions.setInteraction((previous) => ({ ...previous, query: "", teamId: null, focusFilter: null, sort: "name", presenceFilter: "all" }))}>{text("清除筛选", "Clear filters")}</DropdownMenuItem></>}
+      <DropdownMenuTrigger render={<Button id="pm-team-sort" variant="ghost" className={styles.filterButton} />}><ArrowDownAZ size={14} aria-hidden="true" />{text("排序", "Sort")}</DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={styles.optionMenu}>
+        <DropdownMenuRadioGroup value={state.sort} onValueChange={(value) => {
+          if (value === "name" || value === "name-desc" || value === "members" || (value === "activity" && capabilities.sortActivity)) actions.setInteraction((previous) => ({ ...previous, sort: value }))
+        }}>
+          <DropdownMenuRadioItem value="name">{text("名称 A–Z", "Name A–Z")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="name-desc">{text("名称 Z–A", "Name Z–A")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="members">{text("成员数", "Member count")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="activity" disabled={!capabilities.sortActivity} title={!capabilities.sortActivity ? text("活动日期来源未提供", "Activity-date source unavailable") : undefined}>{text("最近活动", "Recent activity")}</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
     <DropdownMenu>
@@ -122,7 +130,7 @@ export function TeamList1Content(props: TeamCollectionViewProps) {
           <DropdownMenuRadioItem value="cards"><LayoutGrid size={14} aria-hidden="true" />{text("团队卡片", "Team cards")}</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator className={styles.menuSeparator} />
-        <DropdownMenuItem disabled={loading || !hasContent} onClick={() => actions.setInteraction((previous) => ({ ...previous, selectedIds: [...previous.selectedIds, ...model.teams.filter((team) => !previous.selectedIds.includes(team.id)).map((team) => team.id)] }))}>{text("选择当前团队", "Select visible teams")}</DropdownMenuItem>
+        <DropdownMenuItem disabled={loading || !hasContent} onClick={() => actions.setInteraction((previous) => ({ ...previous, selectedIds: [...previous.selectedIds, ...teams.filter((team) => !previous.selectedIds.includes(team.id)).map((team) => team.id)] }))}>{text("选择当前团队", "Select visible teams")}</DropdownMenuItem>
         <DropdownMenuItem disabled={!state.selectedIds.length} onClick={() => actions.setInteraction((previous) => ({ ...previous, selectedIds: [] }))}>{text("清除选择", "Clear selection")}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -130,13 +138,13 @@ export function TeamList1Content(props: TeamCollectionViewProps) {
     {props.headerActions && <div className={styles.hostActions}>{props.headerActions}</div>}
   </div>
 
-  return <PmPage interactive={props.interactive} headerMode={props.embedded ? "hidden" : "default"} pageId="pm-team-list-1" className={styles.page} title={text("团队", "Teams")} titleSuffix={<span className={styles.count} title={!teamsAvailable ? text("团队来源未提供", "Team source unavailable") : undefined}>{teamsAvailable ? model.teams.length : "—"}</span>} actions={controls} readingPosition={props.readingPosition} onReadingPositionChange={props.onReadingPositionChange}>
+  return <PmPage interactive={props.interactive} headerMode={props.embedded ? "hidden" : "default"} pageId="pm-team-list-1" className={styles.page} title={text("团队", "Teams")} titleSuffix={<span className={styles.count} title={!teamsAvailable ? text("团队来源未提供", "Team source unavailable") : undefined}>{teamsAvailable ? teams.length : "—"}</span>} actions={controls} readingPosition={props.readingPosition} onReadingPositionChange={props.onReadingPositionChange}>
     <div className={styles.feedback}><ControlledFeedback surface={props} /></div>
       {state.display === "table" ? <div className={styles.tableViewport} role="region" aria-label={text("团队目录", "Team directory")} tabIndex={0}>
-        <div className={styles.directory} role="table" aria-label={text("团队目录；未提供的工作方向、响应目标、未完成工作计数和活动保持未知", "Team directory; unavailable focus, response targets, open-work counts and activity remain unknown")} aria-colcount={6} aria-rowcount={model.teams.length + 1} data-pm-team-table>
+        <div className={styles.directory} role="table" aria-label={text("团队目录；未提供的工作方向、响应目标、未完成工作计数和活动保持未知", "Team directory; unavailable focus, response targets, open-work counts and activity remain unknown")} aria-colcount={6} aria-rowcount={teams.length + 1} data-pm-team-table>
           <div role="rowgroup"><div className={styles.tableHead} role="row">{[text("团队", "Team"), text("工作方向", "Focus"), text("响应目标", "Response target"), text("维护者", "Maintainers"), text("未完成工作", "Open work"), text("最近活动", "Activity")].map((label) => <div key={label} role="columnheader">{label}</div>)}</div></div>
-          <DataRegion {...model.data} state={dataState} hasContent={hasContent} rowHeight={61}>
-          <div role="rowgroup">{model.teams.map((team) => <div key={team.id} role="row" className={styles.tableRow} data-team-id={team.id} data-selected={state.selectedIds.includes(team.id) || state.selectedId === team.id}>
+          <DataRegion {...model.data} state={dataState} hasContent={hasContent} rowHeight={61} emptyTitle={emptyTitle} emptyDescription={emptyDescription}>
+          <div role="rowgroup">{teams.map((team) => <div key={team.id} role="row" className={styles.tableRow} data-team-id={team.id} data-selected={state.selectedIds.includes(team.id) || state.selectedId === team.id}>
             <div role="cell" className={styles.identityCell}>
               <Button id={`pm-team-open-${team.id}`} variant="ghost" className={styles.teamButton} onClick={(event) => actions.open(team, event.currentTarget)}>{identity(team)}</Button>
               <span className={styles.rowSelection} data-checked={state.selectedIds.includes(team.id)}><Checkbox checked={state.selectedIds.includes(team.id)} aria-label={text(`选择 ${team.name}`, `Select ${team.name}`)} onCheckedChange={(checked) => selectTeam(team, checked === true)} /></span>
@@ -149,7 +157,7 @@ export function TeamList1Content(props: TeamCollectionViewProps) {
           </div>)}</div>
           </DataRegion>
         </div>
-      </div> : <DataRegion {...model.data} state={dataState} hasContent={hasContent}><ul className={styles.cards} aria-label={text("团队卡片", "Team cards")} data-pm-team-cards>{model.teams.map((team) => <li key={team.id} className={styles.card} data-team-id={team.id} data-selected={state.selectedIds.includes(team.id) || state.selectedId === team.id}>
+      </div> : <DataRegion {...model.data} state={dataState} hasContent={hasContent} emptyTitle={emptyTitle} emptyDescription={emptyDescription}><ul className={styles.cards} aria-label={text("团队卡片", "Team cards")} data-pm-team-cards>{teams.map((team) => <li key={team.id} className={styles.card} data-team-id={team.id} data-selected={state.selectedIds.includes(team.id) || state.selectedId === team.id}>
         <div className={styles.cardHeader}><Button id={`pm-team-open-${team.id}`} variant="ghost" className={styles.teamButton} onClick={(event) => actions.open(team, event.currentTarget)}>{identity(team)}</Button><Checkbox checked={state.selectedIds.includes(team.id)} aria-label={text(`选择 ${team.name}`, `Select ${team.name}`)} onCheckedChange={(checked) => selectTeam(team, checked === true)} />{teamActions(team)}</div>
         <p className={styles.cardDescription}>{team.description || text("未填写团队说明", "No team description")}</p>
         <div className={styles.cardFacts}><span className={styles.focus}>{team.focus ?? text("方向未知", "Focus unknown")}</span>{sla(team)}</div>

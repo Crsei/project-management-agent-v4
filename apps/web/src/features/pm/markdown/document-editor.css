@@ -10,7 +10,6 @@
 .document-content-editor button:focus-visible, .document-menu [role^="menuitem"]:focus-visible { outline: 2px solid var(--primary, #635bce); outline-offset: 2px; }
 .document-toolbar-divider { width: 1px; height: 21px; background: var(--border, #e3e7ee); margin: 0 3px; }
 .document-layout-controls { display: flex; align-items: center; margin-inline-start: auto; gap: 2px; }
-.document-format-toolbar > .document-source-button { font-size: 11px; min-width: auto; }
 .document-format-toolbar > .document-context-anchor { position: fixed; width: 1px; height: 1px; min-width: 0; min-height: 0; padding: 0; border: 0; pointer-events: none; opacity: 0; }
 .document-menu { min-width: 190px; max-width: min(320px, calc(100vw - 20px)); max-height: min(580px, var(--radix-dropdown-menu-content-available-height, 75dvh)); overflow-y: auto; overscroll-behavior: contain; font-size: 12px; }
 .document-menu [role^="menuitem"] { min-height: 34px; font-size: 12px; }
@@ -63,7 +62,6 @@
 @media (max-width: 700px) {
   .document-format-toolbar { padding: 7px; gap: 2px; }
   .document-format-toolbar > button, .document-layout-controls button { min-width: 34px; min-height: 40px; }
-  .document-format-toolbar > .document-source-button { min-height: 36px; }
   .document-layout-controls { margin-inline-start: 0; }
   .document-editing-workspace { height: auto; overflow: visible; }
   .document-layout-split .document-editing-workspace { flex-wrap: wrap; }

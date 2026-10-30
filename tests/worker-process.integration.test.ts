@@ -9,7 +9,7 @@ import { setTimeout } from 'node:timers/promises';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { Pool } from 'pg';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import { runCommand } from '../packages/application/src/kernel.ts';
 import { createRegistry } from '../packages/application/src/registry.ts';
 import type { CommandRegistry } from '../packages/application/src/ports.ts';
@@ -20,7 +20,7 @@ import { lockWorkspace } from '../packages/infrastructure/src/database.ts';
 import { createBoundLocalStorage } from './blob-fixture.ts';
 import { acquireMailFixtureDatabase } from './mail-fixture-database.ts';
 import { closeMailApp, MailFixtureScope, mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';
-import { assertV3WorkerTestDatabase, outboxWorkerEnvironment } from './worker-environment.ts';
+import { assertV4WorkerTestDatabase, outboxWorkerEnvironment } from './worker-environment.ts';
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
@@ -98,7 +98,7 @@ describe('INF-02: independent Worker processes publish and recover durable outbo
 
   function startWorker(signal: AbortSignal): Worker {
     signal.throwIfAborted();
-    const child = spawn(process.execPath, ['apps/worker/src/main.ts'], {
+    const child = spawn(process.execPath, ['apps/server/worker/src/main.ts'], {
       cwd: projectRoot, env: outboxWorkerEnvironment(scopedUrl, coreRoot), stdio: ['pipe', 'pipe', 'pipe'],
     });
     const completion = Promise.withResolvers<{ code: number | null; signal: NodeJS.Signals | null }>();
@@ -226,7 +226,7 @@ describe('INF-02: independent Worker processes publish and recover durable outbo
   }
 
   before(async t => {
-    assertV3WorkerTestDatabase(databaseUrl!);
+    assertV4WorkerTestDatabase(databaseUrl!);
     scope = new MailFixtureScope(t.signal, mailSchemaInitTimeout);
     await scope.initialize(async () => {
       const database = await acquireMailFixtureDatabase(scope);

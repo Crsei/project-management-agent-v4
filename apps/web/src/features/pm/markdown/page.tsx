@@ -13,6 +13,8 @@ import { TaskCreationSurface } from './TaskCreationSurface';
 import { safeWorkspaceReturn, taskScope } from './task-collection-model';
 import { useTaskScopeClock } from './task-scope-clock';
 import './markdown.css';
+import './document-scope.css';
+import './views-scope.css';
 
 export interface ServiceMarkdownProps {
   mode?: 'collection' | 'entity' | 'settings';
@@ -131,10 +133,10 @@ export function ServiceMarkdown({ mode = 'collection', entityKind = 'work_item',
         onCreateConsumed={() => { if (params.has('create') && !projectId) { const next = new URLSearchParams(params); next.delete('create'); setParams(next, { replace: true, state: location.state }); } }}
         onClose={() => { if (mode === 'entity') navigate(safeReturnTo, { replace: true, state: { collectionContext: state?.collectionContext } }); else select(''); }}
         onAgent={project => {
-          const next = new URLSearchParams();
+          const next = new URLSearchParams({ workspace: workspace.id });
           if (project) next.set('project', project);
           next.set('returnTo', `${location.pathname}${location.search}${location.hash}`);
-          navigate(`${root}/agent?${next}`);
+          navigate(`/agent/workspace?${next}`);
         }}
         onExpand={collectionContext => {
           if (!selectedId || selectedId.startsWith('source:')) return;

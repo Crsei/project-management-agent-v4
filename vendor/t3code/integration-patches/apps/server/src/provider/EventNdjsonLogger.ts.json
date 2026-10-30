@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/EventNdjsonLogger.ts",
+  "beforeSha256": "4f8be21f88dfd06d3705129c5b9e117ed34f99f11737bd1f2223750fa5b9340e",
+  "afterSha256": "026f6ca003790e0166277700d4a8ba4b32e0fe5d79acb7bbbc25c60053587d58",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 20,
+      "before": [
+        "import { toSafeThreadAttachmentSegment } from \"../attachmentStore.ts\";\n",
+        "import type * as ResourceAttribution from \"../resourceTelemetry/ResourceAttribution.ts\";\n"
+      ],
+      "after": [
+        "interface EventNdjsonResourceAttribution {\n",
+        "  readonly record: (input: {\n",
+        "    readonly component: \"provider-event-log\"; readonly operation: string;\n",
+        "    readonly logicalWriteBytes: number; readonly count: number; readonly durationMs: number;\n",
+        "  }) => Effect.Effect<void>;\n",
+        "}\n"
+      ]
+    },
+    {
+      "start": 74,
+      "before": [
+        "  readonly attribution?: ResourceAttribution.ResourceAttribution[\"Service\"];\n"
+      ],
+      "after": [
+        "  readonly attribution?: EventNdjsonResourceAttribution;\n"
+      ]
+    },
+    {
+      "start": 100,
+      "before": [
+        "  readonly attribution: ResourceAttribution.ResourceAttribution[\"Service\"] | undefined;\n"
+      ],
+      "after": [
+        "  readonly attribution: EventNdjsonResourceAttribution | undefined;\n"
+      ]
+    },
+    {
+      "start": 146,
+      "before": [
+        "  const normalized = typeof raw === \"string\" ? toSafeThreadAttachmentSegment(raw) : null;\n",
+        "  return normalized ?? GLOBAL_THREAD_SEGMENT;\n"
+      ],
+      "after": [
+        "  if (typeof raw !== \"string\") return GLOBAL_THREAD_SEGMENT;\n",
+        "  const segment = raw.trim().toLowerCase().replace(/[^a-z0-9_-]+/gi, \"-\")\n",
+        "    .replace(/-+/g, \"-\").replace(/^[-_]+|[-_]+$/g, \"\").slice(0, 80).replace(/[-_]+$/g, \"\");\n",
+        "  return !segment ? GLOBAL_THREAD_SEGMENT : segment === \"pending\" ? \"_pending\" : segment;\n"
+      ]
+    }
+  ]
+}

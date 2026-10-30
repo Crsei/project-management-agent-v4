@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/v2/OpenCode2Server.test.ts",
+  "beforeSha256": "89d57351645e9326054e76d4e2da8e4b80d6ff0591176a94fb6c8c550c01b616",
+  "afterSha256": "dfcb338bded50759c0cd27dd66fb7590352727a96a9d702f57f6f543030cea25",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 172,
+      "before": [
+        "server.listen(0, \"127.0.0.1\", () => {\n"
+      ],
+      "after": [
+        "const port = Number(process.argv.find((argument) => argument.startsWith(\"--port=\"))?.slice(\"--port=\".length));\n",
+        "if (!Number.isInteger(port) || port < 1) process.exit(92);\n",
+        "server.listen(port, \"127.0.0.1\", () => {\n"
+      ]
+    }
+  ]
+}

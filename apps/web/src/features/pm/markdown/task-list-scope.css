@@ -1,0 +1,36 @@
+/* 全部任务（scope=all，工作区默认列表）专用视觉层。
+   仅允许选择 [data-task-scope="all"][data-task-layout="list"]:not([data-task-project])。
+   不修改项目任务、我的任务或重要/关注页面。 */
+
+/* 页面标题：20/28 600，与概览/重要页一致 */
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-collection-heading { padding: 20px 24px 12px; }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-collection-heading h1 { font-size: var(--text-page); line-height: var(--text-page--line-height); font-weight: 600; letter-spacing: -.02em; }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-collection-heading .primary-button,
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-agent-entry { font-size: var(--text-control); line-height: var(--text-control--line-height); }
+
+/* 工具栏：控件 32px 高、13/20，桌面 24px 横向内边距 */
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-controls { padding: 8px 24px; }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-controls .task-search input,
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-controls > .task-toolbar-button { font-size: var(--text-control); line-height: var(--text-control--line-height); }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-chipsbar { font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
+
+/* 表格：列头 12/16，数据行最小 44px、正文 14/20、元数据 12/16 */
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-list-columns { padding: 8px 0; font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-native-list > .task-native-row { min-height: 44px; padding: 8px 0; }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-list-identity strong { font-size: var(--text-body); line-height: var(--text-body--line-height); }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-list-identity > .mono { font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-native-row > :is(.task-row-status, .task-row-assignee, .task-row-priority, .task-row-due, .task-row-project) { font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
+
+/* 状态分组：不透明实体边缘卡片；行保留 1px 横向分隔线，单元格不加外框 */
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-date-group { margin: 12px 24px 0; border: 1px solid var(--border); border-radius: var(--radius-module-value); background: var(--surface); box-shadow: var(--edge-shadow); overflow: hidden; }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-group-heading { min-height: 44px; padding: 10px 20px; }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-group-heading h2 { font-size: var(--text-section); line-height: var(--text-section--line-height); font-weight: 500; }
+.markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-group-heading h2 span { font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
+
+/* 窄屏：不产生横向溢出，卡片边距降为 12px */
+@media (max-width: 560px) {
+  .markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-collection-heading { padding: 16px 12px 8px; }
+  .markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-controls { padding: 0 12px 8px; }
+  .markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-date-group { margin-inline: 12px; }
+  .markdown-workbench .native-workbench[data-task-scope="all"][data-task-layout="list"]:not([data-task-project]) .task-mobile-metadata { font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
+}

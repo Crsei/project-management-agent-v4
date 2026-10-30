@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/providerMaintenanceRunner.test.ts",
+  "beforeSha256": "58e2b1c2a7605fe993cdef78672a99e5eab01e9e57d1136417f077074ebfc23d",
+  "afterSha256": "3d29d0cfc7ae692a54d2b1e48a71d8c69c5385a57f1248349e7b562f94a55388",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 25,
+      "before": [],
+      "after": [
+        "import * as ProviderMaintenanceCommand from \"./providerMaintenanceCommand.ts\";\n"
+      ]
+    },
+    {
+      "start": 383,
+      "before": [
+        "    assert.deepStrictEqual(ProviderMaintenanceRunner.splitOutputLines(\"Down\", \"loading\\r\\n 5\"), {\n"
+      ],
+      "after": [
+        "    assert.deepStrictEqual(ProviderMaintenanceCommand.splitOutputLines(\"Down\", \"loading\\r\\n 5\"), {\n"
+      ]
+    },
+    {
+      "start": 388,
+      "before": [
+        "      ProviderMaintenanceRunner.toProgressLine(\"\\u001b[1m==>\\u001b[0m  Pouring\"),\n"
+      ],
+      "after": [
+        "      ProviderMaintenanceCommand.toProgressLine(\"\\u001b[1m==>\\u001b[0m  Pouring\"),\n"
+      ]
+    },
+    {
+      "start": 391,
+      "before": [
+        "    assert.strictEqual(ProviderMaintenanceRunner.toProgressLine(\" \\t \"), null);\n"
+      ],
+      "after": [
+        "    assert.strictEqual(ProviderMaintenanceCommand.toProgressLine(\" \\t \"), null);\n"
+      ]
+    },
+    {
+      "start": 393,
+      "before": [
+        "      ProviderMaintenanceRunner.splitOutputLines(\"x\".repeat(5_000), \"y\").partialLine.length,\n"
+      ],
+      "after": [
+        "      ProviderMaintenanceCommand.splitOutputLines(\"x\".repeat(5_000), \"y\").partialLine.length,\n"
+      ]
+    },
+    {
+      "start": 396,
+      "before": [
+        "    assert.strictEqual(ProviderMaintenanceRunner.toProgressLine(\"x\".repeat(300))?.length, 200);\n"
+      ],
+      "after": [
+        "    assert.strictEqual(ProviderMaintenanceCommand.toProgressLine(\"x\".repeat(300))?.length, 200);\n"
+      ]
+    }
+  ]
+}

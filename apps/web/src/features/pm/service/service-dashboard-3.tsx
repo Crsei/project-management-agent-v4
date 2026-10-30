@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from "react"
 import type { Entity } from "@contracts"
-import { Activity, ArrowRight, Clock3, FileText, FolderKanban, MoreHorizontal, RefreshCw, Zap } from "lucide-react"
+import { Activity, ArrowRight, Clock3, FileText, Filter, FolderKanban, MoreHorizontal, RefreshCw, Zap } from "lucide-react"
 import { Avatar } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CountUp } from "@/components/ui/count-up"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DataTable } from "@/components/blocks/data-table"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { DashboardView } from "@/views/pm/dashboard"
 import { Choice, QueryNotice, string, useText, type QueryState } from "./pm-ui"
 import type { ServiceDashboardProps } from "./service-dashboard-contract"
@@ -18,6 +20,27 @@ import d3 from "@/views/pm/dashboard-3.module.css"
 import styles from "./service-dashboard-3.module.css"
 
 type ProjectTaskCounts = { total: number; completed: number }
+
+const dueBucket = (value: string, today: string): string => {
+  if (!value || !Number.isFinite(Date.parse(value))) return "none"
+  if (value < today) return "overdue"
+  return value <= new Date(Date.parse(today) + 6 * 86_400_000).toISOString().slice(0, 10) ? "week" : "later"
+}
+const issueFieldValues = (issue: Entity, field: string, today: string): string[] => {
+  switch (field) {
+    case "status": return [string(issue.data.status) || "unspecified"]
+    case "priority": return [string(issue.data.priority) || "unspecified"]
+    case "assignee": return [string(issue.data.assigneeId) || "unassigned"]
+    case "project": return issue.projectId ? [issue.projectId] : []
+    case "due": return [dueBucket(string(issue.data.dueDate), today)]
+    default: return []
+  }
+}
+const conditionMatches = (condition: FilterCondition, values: readonly string[]): boolean => {
+  if (!condition.values.length) return true
+  const hit = values.some(value => condition.values.includes(value))
+  return condition.operator === "is" ? hit : !hit
+}
 
 function SnapshotContent({ query, children }: { query: QueryState; children?: ReactNode }) {
   const t = useText()
@@ -33,6 +56,8 @@ export function ServiceDashboard3({ surface, projects, issues, milestones, membe
   const t = useText()
   const portfolio = usePortfolioDashboard()
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [conditions, setConditions] = useState<FilterCondition[]>([])
+  const today = surface.readModel.today
   const selectedId = surface.interaction.selectedProjectId
   const query = surface.interaction.query.trim().toLocaleLowerCase()
   const scopedProjects = projects.data?.filter(project => (!selectedId || project.id === selectedId) && (!query || `${project.id} ${string(project.data.name)}`.toLocaleLowerCase().includes(query)))
@@ -42,17 +67,33 @@ export function ServiceDashboard3({ surface, projects, issues, milestones, membe
   const scopedMilestones = scopeKnown ? milestones.data?.filter(milestone => inScope(milestone.projectId)) : undefined
   const current = scopedProjects?.[0]
   const activeMembers = members.data?.filter(member => !member.revokedAt)
+  const filteredIssues = scopeKnown ? issues.data?.filter(issue => inScope(issue.projectId) && conditions.every(condition => conditionMatches(condition, issueFieldValues(issue, condition.field, today)))) : undefined
+  const activeConditionCount = conditions.filter(condition => condition.values.length > 0).length
+  const issueStatuses = [...new Set((issues.data ?? []).map(issue => string(issue.data.status) || "unspecified"))].sort()
+  const issuePriorities = [...new Set((issues.data ?? []).map(issue => string(issue.data.priority) || "unspecified"))].sort()
+  const filterFields: FilterField[] = [
+    { id: "status", label: t("状态", "Status"), options: issueStatuses.map(value => ({ value, label: value === "unspecified" ? t("未提供状态", "State not provided") : value })) },
+    { id: "priority", label: t("优先级", "Priority"), options: issuePriorities.map(value => ({ value, label: value === "unspecified" ? t("未提供优先级", "Priority not provided") : value })) },
+    { id: "assignee", label: t("负责人", "Assignee"), options: [...(activeMembers ?? []).map(member => ({ value: member.userId, label: member.name })), { value: "unassigned", label: t("未分配", "Unassigned") }] },
+    { id: "project", label: t("项目", "Project"), options: (projects.data ?? []).map(project => ({ value: project.id, label: string(project.data.name) || project.id })) },
+    { id: "due", label: t("截止日期", "Due date"), options: [
+      { value: "overdue", label: t("已逾期", "Overdue") },
+      { value: "week", label: t("未来 7 天", "Next 7 days") },
+      { value: "later", label: t("7 天后", "Later than 7 days") },
+      { value: "none", label: t("未排期", "Unscheduled") },
+    ] },
+  ]
   const ownerId = current ? string(current.data.ownerId) : ""
   const owner = activeMembers?.find(member => member.userId === ownerId)
   const taskCounts = new Map<string, ProjectTaskCounts>()
-  for (const issue of issues.data ?? []) {
+  for (const issue of filteredIssues ?? []) {
     if (!issue.projectId) continue
     const counts = taskCounts.get(issue.projectId) ?? { total: 0, completed: 0 }
     counts.total += 1
     if (issue.data.status === "done") counts.completed += 1
     taskCounts.set(issue.projectId, counts)
   }
-  const currentCounts = current && issues.data ? taskCounts.get(current.id) ?? { total: 0, completed: 0 } : null
+  const currentCounts = current && filteredIssues ? taskCounts.get(current.id) ?? { total: 0, completed: 0 } : null
   const scheduledMilestones = scopedMilestones?.filter(milestone => string(milestone.data.targetDate)).sort((a, b) => string(a.data.targetDate).localeCompare(string(b.data.targetDate)))
   const entityById = new Map<string, Entity>()
   for (const snapshot of [projects.data, issues.data, milestones.data]) {
@@ -95,10 +136,23 @@ export function ServiceDashboard3({ surface, projects, issues, milestones, membe
             { id: "project", header: t("项目", "Project"), primary: true, cell: project => <Button variant="ghost" className={d3.rowLink} onClick={() => openEntity(project.id)}><span className={d3.rowTitle}>{string(project.data.name) || project.id}</span><span className={d3.identifier}>{project.id}</span></Button> },
             { id: "status", header: t("记录状态", "Recorded status"), cell: project => string(project.data.status) || notProvided },
             { id: "owner", header: t("负责人", "Owner"), cell: project => { const id = string(project.data.ownerId); return activeMembers?.find(member => member.userId === id)?.name || id || t("未记录", "Not recorded") } },
-            { id: "tasks", header: t("已完成 / 总任务", "Done / total tasks"), cell: project => issues.data ? `${taskCounts.get(project.id)?.completed ?? 0} / ${taskCounts.get(project.id)?.total ?? 0}` : "—" },
+            { id: "tasks", header: t("已完成 / 总任务", "Done / total tasks"), cell: project => filteredIssues ? `${taskCounts.get(project.id)?.completed ?? 0} / ${taskCounts.get(project.id)?.total ?? 0}` : "—" },
           ]} />
         </SnapshotContent>
         <SnapshotContent query={issues} />
+      </section>
+      <section className={d3.detailsCard}>
+        <h2>{t("任务明细", "Issue details")}</h2>
+        <SnapshotContent query={issues}>
+          {!scopeKnown ? <SnapshotContent query={projects} /> : <DataTable rows={filteredIssues ?? []} getRowId={issue => issue.id} getRowLabel={issue => string(issue.data.title) || issue.id} onActivateRow={issue => openEntity(issue.id)} caption={t("当前筛选条件下的授权任务快照", "Authorized issue snapshots under the current filter conditions")} data={{ state: filteredIssues?.length ? "success" : "empty", emptyTitle: t("无匹配任务", "No matching issues"), emptyDescription: t("调整或清除筛选条件。", "Adjust or clear the filter conditions.") }} columns={[
+            { id: "issue", header: t("任务", "Issue"), primary: true, cell: issue => <Button variant="ghost" className={d3.rowLink} onClick={() => openEntity(issue.id)}><span className={d3.rowTitle}>{string(issue.data.title) || issue.id}</span><span className={d3.identifier}>{issue.id}</span></Button> },
+            { id: "project", header: t("项目", "Project"), cell: issue => issue.projectId ? string(entityById.get(issue.projectId)?.data.name) || issue.projectId : notProvided },
+            { id: "status", header: t("状态", "Status"), cell: issue => string(issue.data.status) || notProvided },
+            { id: "priority", header: t("优先级", "Priority"), cell: issue => string(issue.data.priority) || notProvided },
+            { id: "assignee", header: t("负责人", "Assignee"), cell: issue => { const id = string(issue.data.assigneeId); return id ? activeMembers?.find(member => member.userId === id)?.name || id : t("未分配", "Unassigned") } },
+            { id: "due", header: t("截止日期", "Due date"), cell: issue => formatDate(string(issue.data.dueDate)) },
+          ]} />}
+        </SnapshotContent>
       </section>
       <section className={d3.detailsCard}>
         <h2>{t("里程碑目标日期", "Milestone target dates")}</h2>
@@ -117,6 +171,9 @@ export function ServiceDashboard3({ surface, projects, issues, milestones, membe
     variant="dashboard3"
     headerActions={<div className={d3.pageActions}>
       <span className={d3.snapshot}><Clock3 size={14} aria-hidden="true" />{t("服务快照", "Service snapshot")}</span>
+      <Popover><PopoverTrigger render={<Button variant="outline" size="sm" />}><Filter size={14} aria-hidden="true" />{t("筛选", "Filter")}{activeConditionCount > 0 && <Badge size="sm" tone="neutral">{activeConditionCount}</Badge>}</PopoverTrigger><PopoverContent className={`${styles.filterPanel} p-0`} align="end" aria-label={t("任务筛选", "Issue filters")}>
+        <FilterCard title={t("任务筛选", "Issue filters")} fields={filterFields} conditions={conditions} onChange={setConditions} emptyHint={t("添加条件以筛选任务。", "Add a condition to filter issues.")} addLabel={t("添加条件", "Add")} clearLabel={t("清除全部", "Clear")} whereLabel={t("其中", "Where")} andLabel={t("并且", "and")} anyLabel={t("任意", "Any")} removeLabel={t("移除条件", "Remove filter")} />
+      </PopoverContent></Popover>
       <Button variant="ghost" size="icon" className={d3.refresh} disabled={surface.readModel.data.refreshing} aria-label={t("刷新仪表盘", "Refresh dashboard")} onClick={surface.actions.refresh}><RefreshCw size={16} aria-hidden="true" /></Button>
     </div>}
     toolbar={null}

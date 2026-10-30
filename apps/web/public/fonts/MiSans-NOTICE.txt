@@ -1,0 +1,7 @@
+MiSans
+Copyright © 2020-2025 Beijing Xiaomi Mobile Software Co., Ltd. All Rights Reserved.
+
+Source: https://hyperos.mi.com/font/en/download/
+Embedded in this product under the MiSans font license published with the
+official download. Only MiSans Regular (400), Medium (500), and Semibold (600)
+are bundled.

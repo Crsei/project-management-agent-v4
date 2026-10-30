@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "source": "packages/provider-acp-registry/src/server/adapter.ts",
+  "beforeSha256": "60f5bbba7d6a9609087156d80b61fcf684b018409fae9e9168d385a8df2fc8e3",
+  "afterSha256": "02e7c39bd3db4134e78307e54f4899b824fdeabfe48d1673691b8dc8c6d86d33",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 20,
+      "before": [
+        "import { resolveSelfInvocation, type SelfInvocation } from \"@t3tools/shared/nodeRuntime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 32,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import * as ProviderRuntimeHost from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 71,
+      "before": [
+        "  readonly selfInvocation: SelfInvocation;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 281,
+      "before": [
+        "    selfInvocation: options.selfInvocation,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 305,
+      "before": [
+        "  | McpProviderSessions.McpProviderSessions\n"
+      ],
+      "after": [
+        "  | ProviderRuntimeHost.ProviderRuntimeHost\n"
+      ]
+    },
+    {
+      "start": 319,
+      "before": [
+        "      const selfInvocation = yield* resolveSelfInvocation();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 326,
+      "before": [
+        "        selfInvocation,\n"
+      ],
+      "after": []
+    }
+  ]
+}

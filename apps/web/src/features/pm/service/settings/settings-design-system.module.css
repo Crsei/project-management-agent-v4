@@ -1,0 +1,467 @@
+.gallery {
+  min-width: 0;
+  container-type: inline-size;
+}
+.themeBar,
+.wrap,
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.themeBar {
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.themeBar [role="radio"] {
+  gap: 6px;
+}
+.section {
+  min-width: 0;
+  margin-top: 36px;
+}
+.sectionHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.sectionHeading h3 {
+  font-size: var(--text-section);
+  line-height: var(--text-section--line-height);
+}
+.sectionHeading p,
+.caption,
+.receipt {
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+}
+.sectionHeading p {
+  max-width: 70ch;
+}
+.tokens {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: 10px;
+}
+.token {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+}
+.swatch {
+  height: 46px;
+  border-bottom: 1px solid var(--border);
+}
+.tokenLabel {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  font-size: var(--text-meta);
+}
+.tokenLabel code,
+.geometry code,
+.typeRow code {
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 400;
+}
+.row,
+.panel,
+.buttonRow,
+.sampleSidebar,
+.inputGrid,
+.exampleRows,
+.icons {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-popover-value);
+  background: var(--surface);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 12px;
+}
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-height);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  font-size: var(--text-control);
+}
+.panel {
+  padding: 14px;
+}
+.typeRow {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 170px;
+  align-items: baseline;
+  gap: 10px 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.typeRow:last-child {
+  border-bottom: 0;
+}
+.twoColumns,
+.dataColumns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.spaceRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 26px;
+  font-size: 11px;
+}
+.spaceRow code {
+  width: 104px;
+  color: var(--text-secondary);
+}
+.spaceRow > span:first-of-type {
+  flex-shrink: 0;
+  height: 8px;
+  border-radius: var(--radius-inline-value);
+  background: var(--accent);
+}
+.geometry {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: 18px 12px;
+}
+.geometry > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 105px;
+  text-align: center;
+}
+.radiusExample,
+.shadowExample {
+  display: block;
+  width: 48px;
+  height: 48px;
+  background: var(--surface-raised);
+}
+.radiusExample {
+  border: 1px solid var(--border-hover);
+}
+.shadowExample {
+  border-radius: var(--control-radius);
+  background: var(--surface);
+}
+.buttonRow {
+  margin-top: 8px;
+  padding: 12px;
+}
+.buttonRow h4 {
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  font-weight: 500;
+}
+.buttonStates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 112px), 1fr));
+  gap: 14px 10px;
+}
+.buttonStates > div {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Fixed specimens use the same semantic state colors as Button's actual states. */
+.stateButton[data-preview-state="hover"][data-preview-variant="primary"] {
+  background: color-mix(in srgb, var(--primary) 90%, transparent);
+}
+.stateButton[data-preview-state="active"][data-preview-variant="primary"] {
+  background: color-mix(in srgb, var(--primary) 80%, transparent);
+}
+.stateButton[data-preview-state="hover"][data-preview-variant="destructive"] {
+  background: color-mix(in srgb, var(--destructive) 90%, transparent);
+}
+.stateButton[data-preview-state="active"][data-preview-variant="destructive"] {
+  background: color-mix(in srgb, var(--destructive) 80%, transparent);
+}
+.stateButton[data-preview-state="hover"]:is([data-preview-variant="secondary"], [data-preview-variant="ghost"]) {
+  background: var(--surface-hover);
+}
+.stateButton[data-preview-state="active"]:is([data-preview-variant="secondary"], [data-preview-variant="ghost"]) {
+  background: var(--surface-pressed);
+}
+.stateButton[data-preview-state="focus"] {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.stateButton:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.receipt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+.inputGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 20px;
+  padding: 16px;
+}
+.inputGrid > * {
+  min-width: 0;
+}
+.fieldLabel,
+.choices legend {
+  display: block;
+  margin-bottom: 4px;
+  font-size: var(--text-control);
+  font-weight: 500;
+}
+.focusInput {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 20%, transparent);
+}
+.searchInput {
+  position: relative;
+}
+.searchInput > svg {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.searchInput input {
+  padding-left: 30px;
+}
+.choices {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+.richText {
+  margin-top: 16px;
+}
+.richText details {
+  margin-top: 8px;
+}
+.richText summary {
+  cursor: pointer;
+}
+.richText pre {
+  max-height: 160px;
+  overflow: auto;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: var(--control-radius);
+  background: var(--surface-raised);
+  font-size: var(--text-meta);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.navigation {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+.sampleSidebar {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  background: var(--surface-raised);
+}
+.navButton {
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 36px;
+  height: auto;
+  padding: 8px;
+}
+.navButton > span:first-of-type {
+  flex: 1;
+  text-align: left;
+  white-space: normal;
+}
+.stack {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+.stack .row {
+  margin-top: 0;
+}
+.tabs {
+  flex-wrap: wrap;
+}
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  padding-left: 8px;
+  font-size: var(--text-meta);
+}
+.dataColumns {
+  grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+  align-items: start;
+}
+.cardStage {
+  padding: 10px;
+  border-radius: var(--radius-module-value);
+  background: var(--surface-raised);
+}
+.progressExamples {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  align-items: start;
+  gap: 12px;
+}
+/* Local measurement values size the existing Progress indicator, not base tokens. */
+.progressSample > div > div {
+  width: var(--example-progress);
+  background: var(--example-progress-color);
+}
+.range {
+  width: 100%;
+  min-height: var(--control-height);
+  accent-color: var(--primary);
+}
+.exampleRows {
+  margin-top: 14px;
+  overflow: hidden;
+}
+.exampleRows :global([data-work-item]) > div {
+  min-width: 0;
+}
+.exampleRows :global([data-work-item]) button {
+  flex-shrink: 1;
+}
+.dialogForm {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  margin-top: 20px;
+}
+.dialogForm > div {
+  width: 100%;
+}
+.command {
+  margin-top: 16px;
+}
+.command [cmdk-input] {
+  width: 100%;
+  min-width: 0;
+  height: var(--control-height-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  padding: 0 12px;
+  font-size: var(--text-body);
+}
+.command [cmdk-list] {
+  max-height: 40dvh;
+  overflow: auto;
+  padding-top: 8px;
+}
+.command [cmdk-item],
+.command [cmdk-empty] {
+  border-radius: var(--control-radius);
+  padding: 10px 12px;
+  font-size: var(--text-control);
+}
+.command [cmdk-item] {
+  cursor: pointer;
+}
+.command [cmdk-item][data-selected="true"] {
+  background: var(--selection);
+}
+.toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: var(--layer-overlay);
+  width: min(430px, calc(100vw - 40px));
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-floating);
+}
+.toast .inline {
+  flex-wrap: nowrap;
+  align-items: start;
+}
+.toast svg {
+  flex-shrink: 0;
+}
+.toast .inline > span {
+  flex: 1;
+}
+.icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  justify-items: center;
+  gap: 6px;
+  padding: 14px;
+  color: var(--text-secondary);
+}
+@container (max-width: 740px) {
+  .twoColumns,
+  .dataColumns,
+  .navigation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .typeRow {
+    grid-template-columns: 90px minmax(0, 1fr);
+  }
+  .typeRow > code:last-child {
+    grid-column: 2;
+  }
+  .cardStage {
+    max-width: 340px;
+  }
+}
+@container (max-width: 400px) {
+  .typeRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .typeRow > code:last-child {
+    grid-column: auto;
+  }
+  .inputGrid,
+  .panel,
+  .row,
+  .buttonRow {
+    padding: 12px;
+  }
+  .wrap [role="radiogroup"] {
+    flex-wrap: wrap;
+  }
+}

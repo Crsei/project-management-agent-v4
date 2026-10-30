@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/providerInstallation.test.ts",
+  "beforeSha256": "a2e65f0bdd87a0e09cd946b20ece53899b123debc3002573f364679d7ca49912",
+  "afterSha256": "3169105ae62b78b7639f86f8fad5053630f57d6322d8e6f8b282d3061f03a620",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 14,
+      "before": [
+        "import * as ServerSettings from \"../serverSettings.ts\";\n"
+      ],
+      "after": [
+        "import { makeTestServerSettingsLayer } from \"./testUtils/providerHostFixtures.ts\";\n"
+      ]
+    },
+    {
+      "start": 58,
+      "before": [
+        "    settings?: Parameters<typeof ServerSettings.layerTest>[0];\n"
+      ],
+      "after": [
+        "    settings?: Parameters<typeof makeTestServerSettingsLayer>[0];\n"
+      ]
+    },
+    {
+      "start": 67,
+      "before": [
+        "        ServerSettings.layerTest(input.settings),\n"
+      ],
+      "after": [
+        "        makeTestServerSettingsLayer(input.settings),\n"
+      ]
+    }
+  ]
+}

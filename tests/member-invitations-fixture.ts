@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import type { Actor, Command, CommandReceipt } from '../packages/domain/src/core.ts';
 import type { MemberInvitationDto } from '../packages/domain/src/invitations.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';

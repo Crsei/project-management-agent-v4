@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { ProjectCollectionView, ProjectSelect } from "@/views/pm/project-collection"
 import type { ProjectCollectionRecord, ProjectCollectionViewInteraction, ProjectCollectionViewProps } from "@/views/pm/project-collection-contracts"
 import { ProjectSummaryIssues, type ProjectSummaryIssue } from "@/views/pm/project-list-4-surface"
@@ -51,6 +52,46 @@ function compareProjects(left: ProjectCollectionRecord, right: ProjectCollection
   return order ? order * (direction === "asc" ? 1 : -1) : left.identifier.localeCompare(right.identifier, undefined, { numeric: true })
 }
 
+const teamSizeFilters = ["three", "larger", "small", "medium", "large"] as const
+type TeamSizeFilter = ProjectCollectionViewInteraction["teamSize"]
+
+function isTeamSizeFilter(value: string): value is TeamSizeFilter {
+  return (teamSizeFilters as readonly string[]).includes(value)
+}
+
+function matchesTeamSize(project: ProjectCollectionRecord, filter: string) {
+  if (filter === "all") return true
+  if (project.teamSize === null) return false
+  switch (filter) {
+    case "three": return project.teamSize === 3
+    case "larger": return project.teamSize >= 4
+    case "small": return project.teamSize >= 1 && project.teamSize <= 5
+    case "medium": return project.teamSize >= 6 && project.teamSize <= 10
+    case "large": return project.teamSize >= 11
+    default: return false
+  }
+}
+
+/** Card conditions stay ANDed; values inside one condition are ORed and `isNot` negates. */
+function matchesProjectCondition(project: ProjectCollectionRecord, condition: FilterCondition, now: number) {
+  if (!condition.values.length) return true
+  const matched = condition.values.some(value => {
+    switch (condition.field) {
+      case "status": return project.status?.value === value
+      case "team": return matchesTeamSize(project, value)
+      case "completion": return matchesCompletion(project, value as CompletionFilter)
+      case "updated": {
+        const days = Number(value)
+        return days > 0 && !!project.updatedAt && Date.parse(project.updatedAt) >= now - days * 86400000
+      }
+      case "archive": return project.archived === (value === "archived")
+      case "starred": return project.starred === true
+      default: return false
+    }
+  })
+  return condition.operator === "isNot" ? !matched : matched
+}
+
 function matchesCompletion(project: ProjectCollectionRecord, filter: CompletionFilter) {
   if (filter === "all") return true
   if (filter === "unknown") return project.health === null
@@ -88,9 +129,15 @@ function ServiceProjectList() {
   const rows = variant === "table" || variant === "compact"
   const [interaction, setInteraction] = useState(initialInteraction)
   const [controls, setControls] = useState<RowControls>({ sortKey: "updated", sortDir: "desc", completion: "all", hidden: [] })
+  const [conditions, setConditions] = useState<FilterCondition[]>([])
   const archiveFromUrl = searchParams.get("archive")
   useEffect(() => {
-    setInteraction(previous => ({ ...previous, quickView: archiveFromUrl === "archived" ? "archived" : "all", archiveScope: archiveFromUrl === "archived" ? "archived" : "all" }))
+    const archived = archiveFromUrl === "archived"
+    setInteraction(previous => ({ ...previous, quickView: archived ? "archived" : "all", archiveScope: archived ? "archived" : "all" }))
+    setConditions(previous => {
+      const rest = previous.filter(condition => condition.field !== "archive")
+      return archived ? [...rest, { field: "archive", operator: "is", values: ["archived"] }] : rest
+    })
   }, [archiveFromUrl])
   const all = useMemo(() => {
     const extraById = new Map(extras.data?.projects.map(row => [row.projectId, row]))
@@ -131,6 +178,7 @@ function ServiceProjectList() {
     const sortKey = rows ? controls.sortKey : interaction.sort === "name" || interaction.sort === "name-desc" ? "name" : "updated"
     const sortDir = rows ? controls.sortDir : interaction.sort === "oldest" || interaction.sort === "name" ? "asc" : "desc"
     const teamSize = interaction.quickView === "three" || interaction.quickView === "larger" ? interaction.quickView : interaction.teamSize
+    const now = Date.now()
     return all.filter(project => {
       const text = `${project.identifier} ${project.title} ${project.description ?? ""} ${project.owner?.name ?? ""}`.toLocaleLowerCase()
       return (!query || text.includes(query))
@@ -139,10 +187,11 @@ function ServiceProjectList() {
         && (interaction.quickView !== "active" || project.status?.value === "active")
         && (cutoff === null || !!project.updatedAt && Date.parse(project.updatedAt) >= cutoff)
         && (!interaction.starredOnly || project.starred === true)
-        && (teamSize === "all" || project.teamSize !== null && (teamSize === "three" ? project.teamSize === 3 : teamSize === "larger" ? project.teamSize >= 4 : teamSize === "small" ? project.teamSize >= 1 && project.teamSize <= 5 : teamSize === "medium" ? project.teamSize >= 6 && project.teamSize <= 10 : project.teamSize >= 11))
+        && matchesTeamSize(project, teamSize)
         && (!rows || matchesCompletion(project, controls.completion))
+        && conditions.every(condition => matchesProjectCondition(project, condition, now))
     }).sort((a, b) => compareProjects(a, b, sortKey, sortDir))
-  }, [all, interaction, rows, controls.sortKey, controls.sortDir, controls.completion])
+  }, [all, interaction, rows, controls.sortKey, controls.sortDir, controls.completion, conditions])
   const selectedId = variant === "compact" ? searchParams.get("selected") ?? interaction.selectedId : interaction.selectedId
   const selected = all.find(project => project.id === selectedId) ?? visible[0] ?? null
   const selectedHidden = !!selected && !visible.some(project => project.id === selected.id)
@@ -162,6 +211,38 @@ function ServiceProjectList() {
   const clearFilters = () => {
     setInteraction(previous => ({ ...initialInteraction(), selectedId: previous.selectedId, sort: previous.sort }))
     setControls(previous => ({ ...previous, completion: "all" }))
+    setConditions([])
+    if (searchParams.has("archive")) {
+      const next = new URLSearchParams(searchParams)
+      next.delete("archive")
+      setSearchParams(next, { replace: true, state: location.state })
+    }
+  }
+  // The card is the single entry point for these filters; mirror them onto the
+  // legacy interaction fields so the shared view and quick views stay coherent.
+  const setFilterConditions = (next: FilterCondition[]) => {
+    setConditions(next)
+    const pick = (field: string) => [...next].reverse().find(condition => condition.field === field && condition.values.length > 0) ?? null
+    const positive = (field: string) => {
+      const condition = pick(field)
+      return condition && condition.operator === "is" ? condition.values[0] : null
+    }
+    const status = positive("status")
+    const teamSize = positive("team") ?? "all"
+    const updated = positive("updated")
+    const archive = positive("archive")
+    const starred = pick("starred")
+    const completion = positive("completion")
+    setInteraction(previous => ({
+      ...previous,
+      status: status ?? "all",
+      teamSize: isTeamSizeFilter(teamSize) ? teamSize : "all",
+      updatedWithin: updated === "14" ? 14 : updated === "7" ? 7 : 0,
+      archiveScope: archive === "current" || archive === "archived" ? archive : "all",
+      starredOnly: !!starred && starred.operator === "is",
+      quickView: "all",
+    }))
+    setControls(previous => ({ ...previous, completion: completion === "complete" || completion === "started" || completion === "not-started" || completion === "unknown" ? completion : "all" }))
   }
   const updateInteraction: ProjectCollectionViewProps["actions"]["setInteraction"] = change => {
     const next = typeof change === "function" ? change(variant === "compact" ? resolvedInteraction : interaction) : change
@@ -206,11 +287,12 @@ function ServiceProjectList() {
       dateContextLabel: "UTC",
     }}
     interaction={resolvedInteraction}
+    filters={{ conditions, onChange: setFilterConditions, onClear: clearFilters }}
     capabilities={{ create: canCreate, edit: canEdit, star: canStar, openFullDetails: true, filters: { archive: true, updated: true, status: true, starred: !!extras.data && !extras.error, teamSize: !!directory.data && !directory.error } }}
     actions={{ setInteraction: updateInteraction, create: createProject, edit: editProject, star, openFullDetails: openProject }}
     headerActions={<><Button variant={interaction.quickView === "archived" ? "secondary" : "outline"} size="sm" onClick={() => { const next = new URLSearchParams(searchParams); if (archiveFromUrl === "archived") next.delete("archive"); else next.set("archive", "archived"); setSearchParams(next) }}><Archive className="size-3.5" aria-hidden="true" />{t("已归档项目", "Archived projects")}</Button>{allowed(workspace, "access.manage") && <Button variant="outline" size="sm" onClick={() => navigate(`${root}/members?tab=teams`)}>{t("团队管理", "Team management")}</Button>}</>}
     renderProjectAction={project => <span className="inline-flex items-center gap-1"><ProjectAgentAction projectId={project.id} projectTitle={project.title} /><ProjectMenuButton projectId={project.id} /></span>}
-    toolbarActions={rows ? <ProjectRowsToolbar table={variant === "table"} interaction={interaction} setInteraction={setInteraction} controls={controls} setControls={setControls} sortKeys={sortKeys} statusOptions={statusOptions} clearFilters={clearFilters} canCreate={canCreate} onCreate={createProject} /> : undefined}
+    toolbarActions={rows ? <ProjectRowsToolbar table={variant === "table"} interaction={interaction} setInteraction={setInteraction} controls={controls} setControls={setControls} sortKeys={sortKeys} statusOptions={statusOptions} conditions={conditions} setConditions={setFilterConditions} clearFilters={clearFilters} canCreate={canCreate} onCreate={createProject} /> : undefined}
     summarySort={variant === "compact" ? <div className="flex items-center gap-1"><ProjectSortSelect controls={controls} sortKeys={sortKeys} onChange={sortKey => setControls(previous => ({ ...previous, sortKey, sortDir: sortKey === "name" || sortKey === "owner" ? "asc" : "desc" }))} /><SortDirection controls={controls} onToggle={() => setControls(previous => ({ ...previous, sortDir: previous.sortDir === "asc" ? "desc" : "asc" }))} /></div> : undefined}
     table={variant === "table" ? {
       hiddenColumns: controls.hidden,
@@ -248,7 +330,7 @@ function SortDirection({ controls, onToggle }: { controls: RowControls; onToggle
   return <Button variant="ghost" size="icon" aria-label={controls.sortDir === "asc" ? t("当前升序，切换为降序", "Ascending; switch to descending") : t("当前降序，切换为升序", "Descending; switch to ascending")} onClick={onToggle}>{controls.sortDir === "asc" ? <ArrowUp aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}</Button>
 }
 
-function ProjectRowsToolbar({ table, interaction, setInteraction, controls, setControls, sortKeys, statusOptions, clearFilters, canCreate, onCreate }: {
+function ProjectRowsToolbar({ table, interaction, setInteraction, controls, setControls, sortKeys, statusOptions, conditions, setConditions, clearFilters, canCreate, onCreate }: {
   table: boolean
   interaction: ProjectCollectionViewInteraction
   setInteraction: ProjectCollectionViewProps["actions"]["setInteraction"]
@@ -256,6 +338,8 @@ function ProjectRowsToolbar({ table, interaction, setInteraction, controls, setC
   setControls: (update: (previous: RowControls) => RowControls) => void
   sortKeys: readonly SortKey[]
   statusOptions: readonly { value: string; label: string }[]
+  conditions: readonly FilterCondition[]
+  setConditions: (conditions: FilterCondition[]) => void
   clearFilters: () => void
   canCreate: boolean
   onCreate: () => void
@@ -264,26 +348,55 @@ function ProjectRowsToolbar({ table, interaction, setInteraction, controls, setC
   const [filterOpen, setFilterOpen] = useState(false)
   const [displayOpen, setDisplayOpen] = useState(false)
   const labels: Record<Column, string> = { owner: t("负责人", "Owner"), health: t("健康度", "Health"), milestone: t("里程碑", "Milestone"), team: t("团队", "Team"), updated: t("更新于", "Updated") }
-  const activeFilters = Number(!!interaction.search) + Number(interaction.status !== "all") + Number(interaction.archiveScope !== "all") + Number(interaction.updatedWithin > 0) + Number(controls.completion !== "all") + Number(interaction.quickView !== "all") + Number(interaction.starredOnly) + Number(interaction.teamSize !== "all")
+  const fields: FilterField[] = [
+    { id: "status", label: t("业务状态", "Status"), single: true, options: statusOptions },
+    { id: "team", label: t("团队规模", "Team size"), single: true, options: [
+      { value: "small", label: t("1–5 人", "1–5 members") },
+      { value: "medium", label: t("6–10 人", "6–10 members") },
+      { value: "large", label: t("11 人以上", "11+ members") },
+    ] },
+    { id: "completion", label: t("任务完成率", "Completion"), single: true, options: [
+      { value: "complete", label: "100%" },
+      { value: "started", label: t("1–99%", "1–99%") },
+      { value: "not-started", label: "0%" },
+      { value: "unknown", label: t("暂无统计", "Unavailable") },
+    ] },
+    { id: "updated", label: t("最近更新", "Updated"), single: true, options: [
+      { value: "7", label: t("最近 7 天", "Last 7 days") },
+      { value: "14", label: t("最近 14 天", "Last 14 days") },
+    ] },
+    { id: "archive", label: t("归档范围", "Archive"), single: true, options: [
+      { value: "current", label: t("未归档", "Current") },
+      { value: "archived", label: t("已归档", "Archived") },
+    ] },
+    { id: "starred", label: t("收藏", "Starred"), single: true, options: [
+      { value: "starred", label: t("仅显示收藏", "Starred only") },
+    ] },
+  ]
+  const quickFiltered = interaction.quickView === "active" || interaction.quickView === "recent" || interaction.quickView === "three" || interaction.quickView === "larger"
+  const activeFilters = Number(!!interaction.search) + conditions.filter(condition => condition.values.length > 0).length + Number(quickFiltered)
   const update = <K extends keyof ProjectCollectionViewInteraction>(key: K, value: ProjectCollectionViewInteraction[K]) => setInteraction(previous => ({ ...previous, [key]: value, quickView: "all" }))
   return <div className={`${familyStyles.toolbarGroup} max-w-full`} data-pm-toolbar-actions>
     {!table && <PmSearch value={interaction.search} onChange={value => update("search", value)} label={t("搜索项目…", "Search projects...")} />}
     <Popover open={filterOpen} onOpenChange={setFilterOpen}>
       <PopoverTrigger render={<Button variant="outline" data-pm-filter-button />}><Filter aria-hidden="true" />{t("筛选", "Filter")}{activeFilters > 0 && <Badge size="sm" tone="info">{activeFilters}</Badge>}</PopoverTrigger>
-      <PopoverContent align="start" className={`${familyStyles.filterPopover} max-h-[min(80vh,640px)] max-w-[calc(100vw-2rem)] overflow-y-auto [&>div:first-child]:w-full`}>
-        {table && <PmSearch value={interaction.search} onChange={value => update("search", value)} label={t("搜索项目…", "Search projects...")} />}
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={interaction.starredOnly} onChange={event => update("starredOnly", event.target.checked)} />{t("仅显示收藏", "Starred only")}</label>
-        <ProjectSelect label={t("团队规模", "Team size")} value={interaction.teamSize} options={[{ value: "all", label: t("全部团队规模", "All team sizes") }, { value: "small", label: t("1–5 人", "1–5 members") }, { value: "medium", label: t("6–10 人", "6–10 members") }, { value: "large", label: t("11 人以上", "11+ members") }]} onChange={value => update("teamSize", value)} />
-        <div><p className={familyStyles.filterLabel}>{t("业务状态", "Business status")}</p><div className={familyStyles.filterOptions}>{[{ value: "all", label: t("全部状态", "All statuses") }, ...statusOptions].map(option => <button key={option.value} type="button" className={familyStyles.chipToggle} aria-pressed={interaction.status === option.value} onClick={() => update("status", option.value)}>{option.label}</button>)}</div></div>
-        <div><p className={familyStyles.filterLabel}>{t("任务完成率", "Task completion")}</p><div className={familyStyles.filterOptions}>{([
-          ["all", t("全部", "All")], ["complete", "100%"], ["started", t("1–99%", "1–99%")], ["not-started", "0%"], ["unknown", t("暂无统计", "Unavailable")],
-        ] satisfies [CompletionFilter, string][]).map(([completion, label]) => <button key={completion} type="button" className={familyStyles.chipToggle} aria-pressed={controls.completion === completion} onClick={() => setControls(previous => ({ ...previous, completion }))}>{label}</button>)}</div></div>
-        <div><p className={familyStyles.filterLabel}>{t("归档范围", "Archive scope")}</p><div className={familyStyles.filterOptions}>{([
-          ["all", t("全部", "All")], ["current", t("未归档", "Current")], ["archived", t("已归档", "Archived")],
-        ] satisfies [ProjectCollectionViewInteraction["archiveScope"], string][]).map(([scope, label]) => <button key={scope} type="button" className={familyStyles.chipToggle} aria-pressed={interaction.archiveScope === scope} onClick={() => update("archiveScope", scope)}>{label}</button>)}</div></div>
-        <div><p className={familyStyles.filterLabel}>{t("最近更新", "Updated")}</p><div className={familyStyles.filterOptions}>{([0, 7, 14] as const).map(days => <button key={days} type="button" className={familyStyles.chipToggle} aria-pressed={interaction.updatedWithin === days} onClick={() => update("updatedWithin", days)}>{days === 0 ? t("不限时间", "Any time") : t(`最近 ${days} 天`, `Last ${days} days`)}</button>)}</div></div>
-        <div className="flex items-center gap-1"><ProjectSortSelect controls={controls} sortKeys={sortKeys} onChange={sortKey => setControls(previous => ({ ...previous, sortKey, sortDir: sortKey === "name" || sortKey === "owner" ? "asc" : "desc" }))} /><SortDirection controls={controls} onToggle={() => setControls(previous => ({ ...previous, sortDir: previous.sortDir === "asc" ? "desc" : "asc" }))} /></div>
-        <Button variant="ghost" size="sm" onClick={clearFilters}>{t("清除筛选", "Clear filters")}</Button>
+      <PopoverContent align="start" className="w-[340px] max-w-[calc(100vw-2rem)] p-0">
+        {table && <div className="px-3 pt-3"><PmSearch value={interaction.search} onChange={value => update("search", value)} label={t("搜索项目…", "Search projects...")} /></div>}
+        <FilterCard
+          title={t("筛选项目", "Filter projects")}
+          fields={fields}
+          conditions={conditions}
+          onChange={setConditions}
+          emptyHint={t("尚未添加筛选条件。", "No conditions yet.")}
+          addLabel={t("添加条件", "Add condition")}
+          clearLabel={t("清除条件", "Clear conditions")}
+          whereLabel={t("条件", "Where")}
+          andLabel={t("并且", "and")}
+          anyLabel={t("任意", "Any")}
+          removeLabel={t("移除条件", "Remove condition")}
+        />
+        <div className="flex items-center gap-1 px-3 py-2"><ProjectSortSelect controls={controls} sortKeys={sortKeys} onChange={sortKey => setControls(previous => ({ ...previous, sortKey, sortDir: sortKey === "name" || sortKey === "owner" ? "asc" : "desc" }))} /><SortDirection controls={controls} onToggle={() => setControls(previous => ({ ...previous, sortDir: previous.sortDir === "asc" ? "desc" : "asc" }))} /></div>
+        <div className="px-3 pb-3"><Button variant="ghost" size="sm" onClick={clearFilters}>{t("清除筛选", "Clear filters")}</Button></div>
       </PopoverContent>
     </Popover>
     {table && <Popover open={displayOpen} onOpenChange={setDisplayOpen}>

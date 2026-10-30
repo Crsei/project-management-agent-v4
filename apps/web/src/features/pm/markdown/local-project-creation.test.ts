@@ -8,12 +8,14 @@ const record: FileRecord = { id: 'PRJ-001', path: 'project-roots/PRJ-001/core/pr
 
 test('refresh preserves the exact project directory, input and key and never releases an unknown initialization', () => {
   let draft = newCreationDraft('draft-one', defaultConfiguration, { entity: 'project' });
-  draft = editCreationDraft(draft, { values: { ...draft.values, title: 'Project', owner: 'owner', start: '2026-10-24', due: '2026-11-01' }, body: 'Original description', localDirectory: { mode: 'new', parentPath: '/authorized/projects', folderName: 'one' } });
+  draft = editCreationDraft(draft, { values: { ...draft.values, title: 'Project', owner: 'owner', start: '2026-10-24', due: '2026-11-01', 'x-pm-icon': 'rocket', 'x-pm-color': '#23918A' }, body: 'Original description', localDirectory: { mode: 'new', parentPath: '/authorized/projects', folderName: 'one' } });
   const request = creationRequest('project', draft.values, draft.body, defaultConfiguration);
   draft.attempt = { ...prepareCreationAttempt(request, 'original-key'), phase: 'sending', localDirectory: draft.localDirectory };
   const restored = decodeCreationDrafts(JSON.stringify({ 'draft-one': draft }))['draft-one']!;
   assert.equal(restored.attempt!.phase, 'unknown');
   assert.deepEqual(restored.attempt!.request, request);
+  assert.equal(restored.attempt!.request['x-pm-icon'], 'rocket');
+  assert.equal(restored.attempt!.request['x-pm-color'], '#23918A');
   assert.deepEqual(restored.attempt!.localDirectory, draft.localDirectory);
   for (const result of [{ status: 'not_found' as const }, { status: 'pending' as const, key: 'original-key', operation: 'initialize' as const, reason: 'storage_pending' as const }]) {
     const reconciled = applyLocalProjectResult(restored.attempt!, result);

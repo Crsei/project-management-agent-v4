@@ -1,5 +1,5 @@
 import { useRef, type CSSProperties } from "react"
-import { Activity, ArrowRight, CalendarDays, CheckCircle2, Circle, Clock3, Flag, ListPlus, MoreHorizontal, Plus, RefreshCw, StickyNote, Zap } from "lucide-react"
+import { Activity, ArrowRight, CalendarDays, CheckCircle2, Circle, Clock3, Flag, ListPlus, MoreHorizontal, Plus, RefreshCw, SlidersHorizontal, StickyNote, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar } from "@/components/ui/avatar"
@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogTrigger, D
 import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Textarea } from "@/components/ui/textarea"
-import { FilterToolbar } from "@/components/blocks/filter-toolbar"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { DataTable } from "@/components/blocks/data-table"
 import { TimelineRow } from "@/components/blocks/timeline"
 import { addScheduleDays, scheduleDayDifference } from "@/lib/schedule-date-utils"
@@ -37,6 +37,38 @@ const windowPresets: readonly {
     { days: 28, label: "4W" },
     { days: 56, label: "8W" },
 ];
+type IssueFilterTarget = {
+    stateId: string;
+    priorityId: string;
+    assigneeIds: readonly string[];
+    projectId: string;
+    dueDate: string | null;
+};
+function issueDueBucket(date: string | null, today: string, weekEnd: string) {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+        return "none";
+    if (date < today)
+        return "overdue";
+    if (date === today)
+        return "today";
+    return date <= weekEnd ? "week" : "later";
+}
+function matchesIssueFilter(issue: IssueFilterTarget, condition: FilterCondition, today: string, weekEnd: string) {
+    if (!condition.values.length)
+        return true;
+    let hit = false;
+    if (condition.field === "status")
+        hit = condition.values.includes(issue.stateId);
+    else if (condition.field === "priority")
+        hit = condition.values.includes(issue.priorityId);
+    else if (condition.field === "assignee")
+        hit = issue.assigneeIds.length ? issue.assigneeIds.some((id) => condition.values.includes(id)) : condition.values.includes("unassigned");
+    else if (condition.field === "project")
+        hit = condition.values.includes(issue.projectId);
+    else if (condition.field === "due")
+        hit = condition.values.includes(issueDueBucket(issue.dueDate, today, weekEnd));
+    return condition.operator === "isNot" ? !hit : hit;
+}
 export function OverviewDashboardFixture({ scenario }: PmPageProps) {
 const { locale } = useI18n();
 const en = locale === "en";
@@ -58,6 +90,7 @@ const [chartMonths, setChartMonths] = usePmScenarioState<1 | 3 | 6 | 12>("pm-das
 const [milestoneMonth, setMilestoneMonth] = usePmScenarioState<string | null>("pm-dashboard-2-milestone-month", () => null);
 const [completedNotes, setCompletedNotes] = usePmScenarioState<string[]>("pm-dashboard-2-completed-notes", () => []);
 const [issuesExpanded, setIssuesExpanded] = usePmScenarioState("pm-dashboard-2-issue-details", () => false);
+const [conditions, setConditions] = usePmScenarioState<FilterCondition[]>("pm-dashboard-2-issue-filters", () => []);
 const issueDetailsRef = useRef<HTMLDetailsElement>(null);
 const [details, setDetails] = usePmScenarioState<{
     projectId: string | null;
@@ -82,7 +115,10 @@ const window = dashboardWindow(state.windowDays);
 const normalizedProjectQuery = projectQuery.trim().toLocaleLowerCase(locale);
 const scopedProjects = projects.filter((project) => (state.scope === "all" || project.id === state.scope) && (!normalizedProjectQuery || `${project.identifier} ${project.title[locale]} ${project.title.en}`.toLocaleLowerCase(locale).includes(normalizedProjectQuery)));
 const missingScope = state.scope !== "all" && !projects.some((project) => project.id === state.scope);
-const scoped = missingScope ? [] : dashboard2ScopedIssues(state, issueDomain.items, locale).filter((issue) => scopedProjects.some((project) => project.id === issue.projectId));
+const issueFilterToday = pmClock.slice(0, 10);
+const issueFilterWeekEnd = new Date(Date.parse(`${issueFilterToday}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
+const scoped = missingScope ? [] : dashboard2ScopedIssues(state, issueDomain.items, locale).filter((issue) => scopedProjects.some((project) => project.id === issue.projectId) && conditions.every((condition) => matchesIssueFilter(issue, condition, issueFilterToday, issueFilterWeekEnd)));
+const activeFilterCount = conditions.filter((condition) => condition.values.length > 0).length;
 const scheduled = issuesScheduledIn(scoped, window);
 const unscheduled = scoped.filter((issue) => !issue.dueDate);
 const rows = dashboard2TableIssues(state, scoped, locale);
@@ -108,6 +144,20 @@ const selectedMilestones = milestoneBuckets.find((bucket) => bucket.id === miles
 const shortDate = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", timeZone: "UTC" });
 const localActivity = family.activity.filter((entry) => scopedProjects.some((project) => project.id === entry.projectId)).slice(-3).reverse();
 const catalog = issueCatalog(locale);
+const projectOptions = projects.map((project) => ({ value: project.id, label: `${project.identifier} ${project.title[locale]}` }));
+const filterFields: FilterField[] = [
+    { id: "status", label: text("状态", "Status"), options: catalog.states.map((status) => ({ value: status.id, label: status.label })) },
+    { id: "priority", label: text("优先级", "Priority"), options: catalog.priorities.map((priority) => ({ value: priority.id, label: priority.label })) },
+    { id: "assignee", label: text("负责人", "Assignee"), options: [...catalog.assignees.map((assignee) => ({ value: assignee.id, label: assignee.label })), { value: "unassigned", label: text("未分配", "Unassigned") }] },
+    ...(projectOptions.length ? [{ id: "project", label: text("项目", "Project"), options: projectOptions }] : []),
+    { id: "due", label: text("截止日期", "Due date"), options: [
+        { value: "overdue", label: text("已逾期", "Overdue") },
+        { value: "today", label: text("今天到期", "Due today") },
+        { value: "week", label: text("未来 7 天", "Next 7 days") },
+        { value: "later", label: text("更晚", "Later") },
+        { value: "none", label: text("无到期日", "No due date") },
+    ] },
+];
 const visibleProjects = view.allProjects
     ? scopedProjects
     : scopedProjects.slice(0, 2);
@@ -642,18 +692,23 @@ distribution: (<div className={d2.lowerGrid}>
 issues: (<details ref={issueDetailsRef} className={d2.issueDetails} open={issuesExpanded} onToggle={(event) => setIssuesExpanded(event.currentTarget.open)} data-pm-dashboard2="issues">
             <summary>{text("任务明细", "Issue details")}<span className={d2.caption}>{rows.length} {text("项", "issues")} · {statusLabel}</span></summary>
             <div className={d2.issueDetailsBody}>
-            <FilterToolbar label={text("任务筛选", "Issue filters")} search={<PmSearch label={text("搜索任务", "Search issues")} value={state.query} onChange={(query) => setState((previous) => ({ ...previous, query }))}/>} filters={<Picker label={text("筛选状态", "Filter status")} value={state.statusFilter} options={[
-            { value: "all", label: text("所有状态", "All statuses") },
-            { value: "open", label: text("未完成", "Still open") },
-            ...catalog.states.map((status) => ({
-                value: status.id,
-                label: status.label,
-            })),
-        ]} onChange={(statusFilter) => drilldown(statusFilter, state.tableMode)}/>} summary={`${state.tableMode === "unscheduled" ? text("无到期日", "Unscheduled") : text("窗口内到期", "Due in window")} · ${statusLabel} · ${rows.length} ${text("项", "issues")} · ${state.selectedIds.length} ${text("已选", "selected")}`} actions={<Button variant="ghost" onClick={() => drilldown("all")} disabled={state.statusFilter === "all" &&
-            !state.weekFilter &&
+            <div className="flex flex-wrap items-center gap-2 py-3">
+              <PmSearch label={text("搜索任务", "Search issues")} value={state.query} onChange={(query) => setState((previous) => ({ ...previous, query }))}/>
+              <Popover>
+                <PopoverTrigger render={<Button variant="ghost" size="sm" aria-label={text("筛选任务", "Filter issues")} />}>
+                  <SlidersHorizontal size={14} aria-hidden="true"/>{text("筛选", "Filter")}{activeFilterCount > 0 && ` (${activeFilterCount})`}
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[min(460px,calc(100vw-2rem))] p-0">
+                  <FilterCard title={text("任务筛选", "Issue filters")} fields={filterFields} conditions={conditions} onChange={setConditions} emptyHint={text("尚未添加筛选条件，显示当前范围内的全部任务。", "No filter conditions yet; every issue in scope is shown.")} addLabel={text("添加条件", "Add filter")} clearLabel={text("清除条件", "Clear conditions")} whereLabel={text("条件", "Where")} andLabel={text("且", "and")} anyLabel={text("任一", "Any")} removeLabel={text("移除条件", "Remove filter")}/>
+                </PopoverContent>
+              </Popover>
+              <span className={d2.caption}>{state.tableMode === "unscheduled" ? text("无到期日", "Unscheduled") : text("窗口内到期", "Due in window")} · {statusLabel} · {rows.length} {text("项", "issues")} · {state.selectedIds.length} {text("已选", "selected")}</span>
+              <Button variant="ghost" onClick={() => { setConditions([]); drilldown("all") }} disabled={state.statusFilter === "all" &&
+            !state.weekFilter && activeFilterCount === 0 &&
             state.tableMode === "scheduled"}>
                   {text("清除钻取", "Clear drilldown")}
-                </Button>}/>
+                </Button>
+            </div>
             <DataTable rows={missingScope ? [] : rows} getRowId={(issue) => issue.id} getRowLabel={(issue) => issue.identifier} caption={text("当前范围与窗口内的任务", "Issues in the current scope and window")} selectedIds={state.selectedIds} onSelectionChange={(selectedIds) => setState((previous) => ({ ...previous, selectedIds }))} sort={state.sort} onSortChange={(sort) => setState((previous) => ({ ...previous, sort }))} columns={[
         {
             id: "title",

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "source": "packages/provider-cursor/src/server/driver.test.ts",
+  "beforeSha256": "f3733593f5f2da16f73f8094c35f7a1029539973519166e48717cbddf4854257",
+  "afterSha256": "134d6807478907e1dfa7cd4e39f47aafbfc309f6f8121de9f2377442dc5a503c",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 35,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import * as RuntimeHost from \"./RuntimeHost.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 42,
+      "before": [
+        "  Layer.provideMerge(McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "  Layer.provideMerge(RuntimeHost.layer),\n"
+      ]
+    }
+  ]
+}

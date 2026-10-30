@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source": "packages/provider-core/src/server/ProviderContinuationRequests.ts",
+  "beforeSha256": "730887403b41917c2baaee0a2732a706415635911bb604e6059943b5ff87697c",
+  "afterSha256": "d2b64fb7502bd102c39388dc840db9de0afc1d7f1625251b3b4bb18c3b2de54c",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 19,
+      "before": [],
+      "after": [
+        "  /** Captured host owner of the originating native operation; not native wire data. */\n",
+        "  readonly hostExecution?: {\n",
+        "    readonly threadId: ThreadId;\n",
+        "    readonly executionId: string;\n",
+        "  };\n"
+      ]
+    }
+  ]
+}

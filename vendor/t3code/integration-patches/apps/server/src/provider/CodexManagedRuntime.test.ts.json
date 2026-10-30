@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexManagedRuntime.test.ts",
+  "beforeSha256": "8edd8a885fd36e3e6352824eb8b81244d2c25761a30c1f201309e4985d1db16e",
+  "afterSha256": "2e76a971260c7790abcd289fef81c4fc417a5d1fdd6fbc34ce93d29fe9cc3e68",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 17,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n",
+        "import * as ServerSecretStore from \"../auth/ServerSecretStore.ts\";\n",
+        "import * as ServerEnvironment from \"../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": [
+        "import { layer as nativeTestHostLayer } from \"../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n",
+        "import * as ServerSecretStore from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-secret-store.ts\";\n",
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n",
+        "import * as ServerEnvironment from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-environment.ts\";\n"
+      ]
+    },
+    {
+      "start": 43,
+      "before": [],
+      "after": [
+        "      const serverConfig = yield* ServerConfig.ServerConfig;\n"
+      ]
+    },
+    {
+      "start": 122,
+      "before": [
+        "            assert.include(effective.config.homePath, instanceId);\n",
+        "            assert.include(effective.config.homePath, \"userdata/providers/codex\");\n"
+      ],
+      "after": [
+        "            const relativeHome = path.relative(serverConfig.stateDir, effective.config.homePath);\n",
+        "            assert.notEqual(effective.config.homePath, sharedHome);\n",
+        "            assert.notEqual(relativeHome, \"\");\n",
+        "            assert.isFalse(path.isAbsolute(relativeHome));\n",
+        "            assert.isFalse(relativeHome === \"..\" || relativeHome.startsWith(`..${path.sep}`));\n"
+      ]
+    },
+    {
+      "start": 219,
+      "before": [
+        "          NodeURL.fileURLToPath(new URL(\"../bin.ts\", import.meta.url)),\n"
+      ],
+      "after": [
+        "          NodeURL.fileURLToPath(new URL(\"../../../../../../apps/server/agent/src/index.ts\", import.meta.url)),\n"
+      ]
+    },
+    {
+      "start": 271,
+      "before": [
+        "        ServerConfig.layerTest(process.cwd(), {\n"
+      ],
+      "after": [
+        "        nativeTestHostLayer({ driver: \"codex\", cwd: process.cwd(), ...{\n"
+      ]
+    },
+    {
+      "start": 273,
+      "before": [
+        "        }).pipe(Layer.provideMerge(NodeServices.layer)),\n"
+      ],
+      "after": [
+        "        } }).pipe(Layer.provideMerge(NodeServices.layer)),\n"
+      ]
+    }
+  ]
+}

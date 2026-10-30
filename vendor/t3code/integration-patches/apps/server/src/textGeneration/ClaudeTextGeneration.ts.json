@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "apps/server/src/textGeneration/ClaudeTextGeneration.ts",
+  "beforeSha256": "6bfd041d631bac060b1f7422fc4b6916b419434dcc184deb8c4d2637e9f6e20c",
+  "afterSha256": "9a1a8ac9014bbb0f8fc886b2900209d5e9232f1403faf6d44d8c2b8238ca433f",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 208,
+      "before": [
+        "          ...(investigate\n"
+      ],
+      "after": [
+        "          ...(investigate && operation !== \"generateThreadTitle\"\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "source": "packages/shared/src/nodeSqliteClient.ts",
+  "beforeSha256": "d12f88c7db0948f40b2a2f1b49c8b438f61947e5a6e6ff0e89dd2f94a5d8847a",
+  "afterSha256": "6fb11a5610c69c434a7c502fddcfd88b17204a9e9b8e1d54c4c774d6e6471b58",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 350,
+      "before": [
+        "    worker.on(\"error\", (cause) => stop(`Database reader failed: ${cause.message}`));\n"
+      ],
+      "after": [
+        "    worker.on(\"error\", (cause) => stop(`Database reader failed: ${cause instanceof Error ? cause.message : String(cause)}`));\n"
+      ]
+    },
+    {
+      "start": 752,
+      "before": [
+        "  worker.on(\"error\", (cause) => handBack(cause.message));\n"
+      ],
+      "after": [
+        "  worker.on(\"error\", (cause) => handBack(cause instanceof Error ? cause.message : String(cause)));\n"
+      ]
+    }
+  ]
+}

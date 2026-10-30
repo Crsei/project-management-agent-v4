@@ -156,7 +156,7 @@ function stopOwned(owned: OwnedProcess | undefined, expectedCrash = false): Prom
 }
 
 /** A real HTTP API and Worker, each owning a child PID and a disposable PostgreSQL schema. */
-export async function createLocalProjectFixture(options: { databaseUrl?: string; localProjectsEnabled?: boolean; chatSpaceRoot?: string; signal?: AbortSignal } = {}): Promise<LocalProjectFixture> {
+export async function createLocalProjectFixture(options: { databaseUrl?: string; localProjectsEnabled?: boolean; chatSpaceRoot?: string; publicOrigin?: string; signal?: AbortSignal } = {}): Promise<LocalProjectFixture> {
   const source = options.databaseUrl ?? process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!source) throw new Error('Local-project acceptance requires a real TEST_DATABASE_URL (or explicitly env-loaded DATABASE_URL); no scenarios are skipped');
   const scope = new MailFixtureScope(options.signal, 210_000);
@@ -202,7 +202,8 @@ export async function createLocalProjectFixture(options: { databaseUrl?: string;
     function environment(): NodeJS.ProcessEnv {
       return {
         DATABASE_URL: databaseUrl, CORE_WORKSPACE_ROOT: coreRoot, BLOB_ROOT: blobRoot, BLOB_STORAGE_PROVIDER: 'local',
-        PM_CHAT_SPACE_ROOT: options.chatSpaceRoot ?? join(root, '.pmv3'),
+        PM_CHAT_SPACE_ROOT: options.chatSpaceRoot ?? join(root, '.pmv4'),
+        LOCAL_PROJECT_PUBLIC_ORIGIN: options.publicOrigin ?? 'http://127.0.0.1:4100',
         LOCAL_PROJECTS_ENABLED: enabled ? 'true' : 'false', LOCAL_PROJECT_ALLOWED_ROOTS: JSON.stringify(parents),
         LOCAL_PROJECT_DEFAULT_PARENT: parents[0], LOCAL_PROJECT_FIXTURE_ROOT: root,
         WORKER_INTERVAL_MS: '25', EVENT_RETENTION_DAYS: '3650', CHOKIDAR_USEPOLLING: 'true',
@@ -281,7 +282,7 @@ export async function createLocalProjectFixture(options: { databaseUrl?: string;
       }),
       startWorker: () => run(async () => {
         if (worker && !worker.exited) return;
-        worker = await startOwned(['apps/worker/src/main.ts'], environment(), false, scope);
+        worker = await startOwned(['apps/server/worker/src/main.ts'], environment(), false, scope);
         await localProjectEventually(async () => {
           if (worker?.exited || worker?.failed) throw serviceFailure(worker);
           return (await pool.query("SELECT 1 FROM service_heartbeats WHERE role='worker' AND heartbeat_at > now()-interval '20 seconds'")).rowCount! > 0;

@@ -1,0 +1,212 @@
+{
+  "version": 1,
+  "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "hostContract": "pm-provider-host/1",
+  "owner": "T6",
+  "sourceCopies": [
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/ProviderTextDeltaCoalescer.ts",
+      "path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ProviderTextDeltaCoalescer.ts",
+      "upstreamSha256": "36f710cc52838bf8a1d57b09842fc3dd6801f03dc788258b4b75144d3b541abe",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/testkit/DeterministicRuntime.ts",
+      "path": "vendor/t3code/apps/server/src/orchestration-v2/testkit/DeterministicRuntime.ts",
+      "upstreamSha256": "00e467808f4c6beebac40417b1d7b30b4a3430339496e80cd84b9c281977a7b9",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/testkit/fixtures/shared.ts",
+      "path": "vendor/t3code/apps/server/src/orchestration-v2/testkit/fixtures/shared.ts",
+      "upstreamSha256": "d8be07070d922f877fd0dae3d4f4a3d0502d78258b5aa2d6ff6cfce94fd77794",
+      "action": "copy-then-patch"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/unknownField.ts",
+      "path": "vendor/t3code/apps/server/src/orchestration-v2/unknownField.ts",
+      "upstreamSha256": "22606913a8fb5f05c1cbbf1c33c97ea61c1bdc9c696fca79c94eaf4f4f705560",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/workflowAgentTranscript.test.ts",
+      "path": "vendor/t3code/apps/server/src/orchestration-v2/workflowAgentTranscript.test.ts",
+      "upstreamSha256": "86ed55ccb4fed80745037716d5ef21639667c307fbe086ce34294f969ec869c2",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/workflowAgentTranscript.ts",
+      "path": "vendor/t3code/apps/server/src/orchestration-v2/workflowAgentTranscript.ts",
+      "upstreamSha256": "20f70175abde5e869d9d9973788e66a96a846ef1a806a7a588b3544b8cff4574",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/workflowFileRead.ts",
+      "path": "vendor/t3code/apps/server/src/orchestration-v2/workflowFileRead.ts",
+      "upstreamSha256": "380c32140b1b56a4789b319c3f52dd95786f88327ee13a910a280d92addde1f1",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/TextGeneration.ts",
+      "path": "vendor/t3code/apps/server/src/textGeneration/TextGeneration.ts",
+      "upstreamSha256": "ccfeac11ef70b561ae6506835b34b9f4c4389b9e3b0e0de2296de7372c2add81",
+      "action": "copy-then-patch"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/TextGenerationPresets.ts",
+      "path": "vendor/t3code/apps/server/src/textGeneration/TextGenerationPresets.ts",
+      "upstreamSha256": "eebbaaa520eccf5e966767800f3bfd94176aa23bdf7b05ebb3597a6625260ce9",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/ThreadTitleLinks.test.ts",
+      "path": "vendor/t3code/apps/server/src/textGeneration/ThreadTitleLinks.test.ts",
+      "upstreamSha256": "30dc2024d8c5604b8e1aeb71944c382f31d9b94b6451b672da9e501dbaeff2aa",
+      "action": "copy-then-patch"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/ThreadTitleLinks.ts",
+      "path": "vendor/t3code/apps/server/src/textGeneration/ThreadTitleLinks.ts",
+      "upstreamSha256": "0f83837217ed91c2f344302726fceeb0c495f90b2957869b134d40c662386ea1",
+      "action": "copy-then-patch"
+    }
+  ],
+  "patches": [
+    {
+      "id": "PM-EXECUTION-TEXT-GENERATION",
+      "path": "apps/server/src/textGeneration/TextGeneration.ts",
+      "reason": "Retain the original text-generation operations and ProviderInstanceRegistry dispatch; remove the t3 business SourceControlProviderRegistry/ThreadTitleLinks dependency and automatic link lookup. Explicit linkedContext is passed through unchanged.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-EXECUTION-PURE-TITLE-LINKS",
+      "paths": [
+        "apps/server/src/textGeneration/ThreadTitleLinks.ts",
+        "apps/server/src/textGeneration/ThreadTitleLinks.test.ts"
+      ],
+      "reason": "Keep original parsing and formatting with an explicitly injected pure resolver. No default resolver, original SourceControl registry, production activation or automatic network lookup.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-EXECUTION-TESTKIT-TYPES",
+      "path": "apps/server/src/orchestration-v2/testkit/fixtures/shared.ts",
+      "reason": "Retain the original test fixture values and type shapes without importing reference-only Orchestrator, RuntimePolicy or CommandOutputRecorder business services.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-EXECUTION-ADAPTER-V2",
+      "paths": [
+        "../../apps/server/agent/src/providers/t3code/execution.ts",
+        "../../apps/server/agent/src/providers/t3code/runtime-host.ts",
+        "../../apps/server/agent/src/providers/t3code/events.ts",
+        "../../apps/server/agent/src/providers/t3code/continuation.ts",
+        "../../apps/server/agent/src/providers/t3code/usage.ts"
+      ],
+      "reason": "Consume T5 scoped leases and original AdapterV2 open/subscribe/ensure/resume/fork/start/interrupt. Bind only trusted PM stdio transport, default-deny native permissions, preserve root terminal identity, child output, original item identities, async questions, callback failure and cancellation cleanup.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-EXECUTION-LIVE-STRUCTURED-JOURNAL",
+      "paths": [
+        "../../apps/server/agent/src/durable/chat-runtime.ts",
+        "../../apps/server/agent/src/durable/chat-runtime.test.ts"
+      ],
+      "reason": "Original ACP emitTextSegment emits paired message.updated and full turn_item.updated snapshots while running. Publish filtered root item releases into the existing Chat text-delta journal immediately, not only after terminal. Retain paragraph/turn policy, unfinished paragraph buffering, append-only cumulative deduplication and child isolation; final flush preserves interrupted/cancelled partial text without duplicate replay. No original protocol or parent ACP/FX patch is changed.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-EXECUTION-EXISTING-PM-BOUNDARIES",
+      "paths": [
+        "../../apps/server/agent/src/providers/runtime.ts",
+        "../../apps/server/agent/src/providers/native.ts",
+        "../../apps/server/agent/src/durable/chat-runtime.ts",
+        "../../apps/server/agent/src/durable/native-output.ts"
+      ],
+      "reason": "Propagate trusted Chat identity including no-tool compaction; delegate native fork to original AdapterV2; retain existing record/SSE persistence, partial interrupted text and explicit native terminal outcomes. Plain NativeSessionRef, PM authority, revisions, approvals and receipts are unchanged.",
+      "status": "applied"
+    }
+  ],
+  "assembly": {
+    "factories": [
+      "makePmProviderRuntimeHost(): ProviderRuntimeHostService",
+      "makePmProviderExecutionService(host: PmProviderHostService, runtimeHost: ProviderRuntimeHostService): PmProviderExecutionService"
+    ],
+    "continuationService": "makePmProviderContinuationRequests(context) returns a scoped Effect of the original ProviderContinuationRequests service; provide it in the same driverLayer as the same runtimeHost. Shutdown after native workers and before the existing record store.",
+    "nativeForkBinding": "bindPmProviderExecutionService(service): () => void in providers/native.ts; parent lifecycle binds once and releases only after workers stop.",
+    "protocol": "registerPmProviderProtocolResolver(localDriver, resolver): () => void; resolver receives {context, lease, runtime} after original openSession and subscription for EVERY run/fork in that same lease. It returns Effect<{protocol, adoptLegacy?, adoptBuffered?, readFullItem?}, PmProviderBoundaryError>. Registration stores behavior only, never an instance dialect or credential snapshot. Parent lifecycle owns release.",
+    "driverRuntimeSequence": [
+      "acquire and assert T5 lease",
+      "validate existing source sidecar without protocol to retain legitimate technical owner only for no-tool calls",
+      "bind scoped PM runtime host",
+      "subscribe original managed snapshot changes and read existing snapshot; no refresh",
+      "original openSession, subscribe events, same-operation original protocol resolver",
+      "saved native reference: validate exact original schemas/protocol and direct original resume; no generic ensure",
+      "legacy native reference: family metadata-only adoptLegacy, original-schema/native-ID/stable-boundary validation, then direct original resume; no generic ensure",
+      "new session only: original ensureThread(forceNewNativeThread)",
+      "original startTurn or explicit original forkThread; no hidden prompt",
+      "consume only matching root terminal, hydrate required original full items, persist original-schema sidecar before onSession",
+      "interrupt and drain on cancellation or failure; await callbacks and scope/process finalizers before returning"
+    ]
+  },
+  "continuationStorage": {
+    "namespace": "provider:t3code:continuations",
+    "backend": "Existing PM records only; no t3DB, business Run, new Chat storage or global-home metadata scan.",
+    "contents": "Version/commit/protocol, exact instance/local-driver/revision/cwd/Home/continuation identity, owner/generation, original schema-encoded session/thread/turn identities. No messages, tools, transport URLs, environment or credentials.",
+    "technicalCalls": "No-tool engine calls do not fabricate Chat execution or PM scope. A valid saved sidecar retains its technical owner across operations, but cannot adopt an actual Chat owner or write Chat notifications.",
+    "nativeSessionRef": "Existing plain public NativeSessionRef remains unchanged."
+  },
+  "mandatoryFamilyIntegration": {
+    "protocol": "Every family must use the original actual operation probe/handshake, not driver-name guesses, absent-version defaults, stale installation metadata or a separately cached instance/revision value. OpenCode uses original runtimeProbe.get/selectOpenCodeRuntimeAdapter generation selection.",
+    "legacy": "All families declaring nativeResume must implement adoptLegacy({context,lease,runtime,source,ensure}) using original SDK/schema/native metadata APIs. Input cwd/Home is not evidence. Confirm actual native ID, actual bound Home/cwd/scope, protocol and stable native turn/assistant-message boundary without a prompt. Codex/Claude must read native metadata without calling their create-only ensureThread. ACP/OpenCode may choose source-native ensure/read only when its actual native ID is preserved. Verify ID again after resume. Missing hook is explicitly incomplete family integration, not final rejection of valid legacy sessions. Query/reconcile unknown side effects; never redispatch.",
+    "tools": "Family original native permission callbacks must consume the scoped runtimeHost, deny all ungranted native permissions and admit only the existing trusted PM transport. Remove t3 MCP and application instructions; preserve native environment/Home behavior and no-tool title generation. Information answers never become permission approvals.",
+    "fullPayload": "Original readThreadSnapshot messages must hydrate final withheld text/tool/command payloads. If the original snapshot withholds details, provide readFullItem({context,lease,runtime,thread,item}) via an original typed detail API. No truncated-as-full payload or invented success.",
+    "bufferedPiT12": "Implement adoptBuffered({context,lease,runtime,request,turn,isCurrent}) only as an original zero-prompt native drain/adopt helper with unique providerTurn identity in the same live generation. turn deliberately omits message. Original Pi adapter.ts line 2431 derives its providerTurn ID from providerThread+attemptId, while lines 2493-2505 still dispatch a prompt for user/server initiators even with pendingWake. Required source patch: a real buffered-only branch and unique native-turn correlation without replaying old root terminals. Generic empty-message startTurn is forbidden. Ended/expired generations receive a notification plus original clearIfCurrent, never reopen/retry/business scheduling.",
+    "secretQuestions": "Original OrchestrationV2UserInputQuestion lacks a secret marker. secret_request remains an explicit nonrespondable notification. Do not infer secret semantics from question text or invent a fake shared-schema field. If an original SDK secret field is lost, submit actual source callsite evidence for parent-approved minimal optional schema extension and persistence/display nonleak regressions.",
+    "errorEvidence": "Original structured cause code/status/reset/header evidence is flattened only for the existing PM classifier; raw native causes and headers are not exposed. Families preserve original typed failures rather than hand-parsing protocols."
+  },
+  "parentIntegration": [
+    "Parent-owned package metadata/build configuration/export surfaces for retained vendor apps/server helpers and test inclusion.",
+    "Parent-owned lifecycle/registry must use one host and the same runtimeHost, bind/release native fork service, provide scoped continuation requests and register/release real family resolvers.",
+    "Parent-owned family T7/T9-T13 patches implement the original host permission, protocol, legacy metadata and optional item-detail/buffered hooks; no original business orchestration is activated.",
+    "Migrate remaining old handcrafted-fork expectations in apps/server/agent/src/agents/cli-chat.test.ts and providers/drivers/codex-native.test.ts with their owning parent/family slice.",
+    "Parent-owned integration documentation and controlled real native-process/HTTP/SSE/persistence gate."
+  ],
+  "regressions": [
+    "Scoped binding ownership/isolation and no-tool scope denial.",
+    "Original-schema sidecar roundtrip, legacy adoption order and zero generic ensure on saved or legacy native references.",
+    "Matching root terminal, nonterminal children, interrupted native state, callback errors and pending asynchronous questions.",
+    "Authoritative cumulative output, message hydration, child text separation, command/full-payload deduplication, original question closure and default-denied approval.",
+    "Original nullable native references remain absent in local optional string fields; notification detail remains visible and structured numeric/string HTTP statuses preserve authentication, quota and payment evidence.",
+    "Existing-record late notification/SSE replay without reopening a settled generation; partial interrupted history and trusted compaction identity.",
+    "Structured native paragraphs reach the existing Chat stream before native terminal; unfinished tails remain buffered, child text stays separate, duplicate cumulative/legacy callbacks do not duplicate output, completion/cancellation persist and replay once, and explicit turn mode still waits for terminal.",
+    "Reported usage versus context/canonical usage, real snapshot usage-limit forwarding and no invented zero counters.",
+    "Bounded-stack native turn ordinal selection for large original histories."
+  ],
+  "verification": {
+    "executed": [],
+    "copyPrecondition": "The eleven source copies were checked against the frozen manifest SHA256 before writing. This is not a build/test/runtime verification.",
+    "notRun": [
+      "Builds",
+      "Typechecks",
+      "Lint",
+      "Tests",
+      "Formatters",
+      "Runtime smoke",
+      "Dependency installation"
+    ],
+    "parentCommands": [
+      "pnpm --filter @agent-workspace/server typecheck",
+      "pnpm --filter @agent-workspace/server test",
+      "pnpm typecheck:agent",
+      "Retained vendor tests via parent-owned vendor test configuration"
+    ],
+    "controlledSubprocessEntry": "vendor/t3code/packages/effect-acp/test/fixtures/acp-mock-peer.ts with the real ChildProcessSpawner setup in effect-acp/src/client.test.ts; provider-testing/src/fakeCli.ts provides test-only launch helpers. Integrate with the actual original V2 family adapter and real PM HTTP/SSE/persistence. Unit queue fixtures alone are not the native subprocess acceptance gate.",
+    "smokeRequirements": [
+      "Complete native root terminal and child-not-terminal ordering",
+      "Abrupt native event-stream closure",
+      "Cancellation waits for owned native process/scope exit",
+      "Callback failure interrupts and rejects without false completion",
+      "Real HTTP/SSE replay and persistence reopen preserve output and terminal state"
+    ]
+  }
+}

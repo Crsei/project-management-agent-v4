@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.testkit.ts",
+  "beforeSha256": "b1d830c1a2b8daaf12a8b6a9bca7dadc7da8cbcc7841890e198baab3037498c5",
+  "afterSha256": "aef1570dfee1db96e949eab5c166aa358772d7b238bf0b2d32080d5302c002ed",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 27,
+      "before": [],
+      "after": [
+        "import * as Queue from \"effect/Queue\";\n"
+      ]
+    },
+    {
+      "start": 30,
+      "before": [
+        "import * as ServerConfig from \"../../config.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 38,
+      "before": [
+        "import { ProviderAdapterDriverCreateError } from \"@t3tools/provider-core/server/adapterDriver\";\n",
+        "import * as ProviderAdapterRegistry from \"../ProviderAdapterRegistry.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 41,
+      "before": [
+        "import {\n",
+        "  makeReplayServerConfig,\n",
+        "  type OrchestratorV2ProviderReplayHarness,\n",
+        "} from \"../testkit/ProviderReplayHarness.ts\";\n"
+      ],
+      "after": [
+        "import type { ProviderContinuationRequest } from \"@t3tools/provider-core/server/ProviderContinuationRequests\";\n",
+        "import { makePmNativeTestHost } from \"../../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 168,
+      "before": [
+        "export const ClaudeOrchestratorReplayHarnessError = Schema.Union([\n",
+        "  ClaudeAgentSdkReplayError,\n",
+        "  ProviderAdapterDriverCreateError,\n",
+        "]);\n",
+        "export type ClaudeOrchestratorReplayHarnessError = typeof ClaudeOrchestratorReplayHarnessError.Type;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1010,
+      "before": [
+        "function layerClaudeProviderAdapterRegistryReplay(\n",
+        "  transcript: ClaudeAgentSdkReplayTranscript,\n",
+        "  options: {\n",
+        "    readonly replayGate?: ProviderReplayGate;\n",
+        "    readonly queryRunner?: ClaudeQueryRunner;\n",
+        "  } = {},\n",
+        ") {\n",
+        "  const layerServerConfig = Layer.effect(\n",
+        "    ServerConfig.ServerConfig,\n",
+        "    makeReplayServerConfig(transcript.scenario).pipe(Effect.orDie),\n",
+        "  ).pipe(Layer.provide(NodeServices.layer));\n",
+        "  return Layer.unwrap(\n",
+        "    writeReplayTaskOutputFiles(transcript).pipe(\n",
+        "      Effect.orDie,\n",
+        "      Effect.map((tmpRoot) =>\n",
+        "        ProviderAdapterRegistry.layerFromAdaptersEffect(\n",
+        "          ClaudeAdapterV2.createClaudeAdapterV2(\n",
+        "            {\n",
+        "              instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,\n",
+        "              displayName: undefined,\n",
+        "              environment: [{ name: \"CLAUDE_CODE_TMPDIR\", value: tmpRoot, sensitive: false }],\n",
+        "              enabled: true,\n",
+        "              config: DEFAULT_CLAUDE_SETTINGS,\n",
+        "            },\n",
+        "            {},\n",
+        "          ).pipe(Effect.map((adapter) => [adapter])),\n",
+        "        ),\n",
+        "      ),\n",
+        "      Effect.provide(NodeServices.layer),\n",
+        "    ),\n",
+        "  ).pipe(\n",
+        "    Layer.provide(\n",
+        "      Layer.mergeAll(\n",
+        "        layerClaudeAgentSdkReplay(transcript, options),\n",
+        "        IdAllocator.layer,\n",
+        "        NodeServices.layer,\n",
+        "        layerServerConfig,\n",
+        "      ),\n",
+        "    ),\n",
+        "  );\n",
+        "}\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2810,
+      "before": [
+        "export const ClaudeOrchestratorReplayHarness: OrchestratorV2ProviderReplayHarness<\n",
+        "  ClaudeAgentSdkReplayTranscript,\n",
+        "  ClaudeOrchestratorReplayHarnessError\n",
+        "> = {\n",
+        "  driver: ClaudeAdapterV2.CLAUDE_PROVIDER,\n",
+        "  decodeTranscript: (transcript) =>\n",
+        "    decodeClaudeAgentSdkReplayTranscript(transcript).pipe(\n",
+        "      Effect.mapError(\n",
+        "        (cause) =>\n",
+        "          new ClaudeReplayTranscriptDecodeError({\n",
+        "            ...metadataFromTranscript(transcript),\n",
+        "            cause,\n",
+        "          }),\n",
+        "      ),\n",
+        "    ),\n",
+        "  makeProviderAdapterRegistryLayer: (transcript, options) =>\n",
+        "    layerClaudeProviderAdapterRegistryReplay(transcript, options),\n",
+        "};\n",
+        "\n",
+        "export function makeClaudeRestartReplayHarness(transcript: ClaudeAgentSdkReplayTranscript) {\n",
+        "  const queryRunner = makeReplayQueryRunner(transcript);\n",
+        "  return {\n",
+        "    harness: {\n",
+        "      ...ClaudeOrchestratorReplayHarness,\n",
+        "      makeProviderAdapterRegistryLayer: (replayed) =>\n",
+        "        layerClaudeProviderAdapterRegistryReplay(replayed, { queryRunner }),\n",
+        "    } satisfies typeof ClaudeOrchestratorReplayHarness,\n",
+        "    assertComplete: replayQueryRunnerService(transcript, queryRunner).assertComplete,\n",
+        "  };\n",
+        "}\n"
+      ],
+      "after": [
+        "/** Original protocol replay, without the excluded t3 business adapter registry/orchestrator. */\n",
+        "export const makeClaudeNativeReplayAdapter = Effect.fn(\"makeClaudeNativeReplayAdapter\")(function* (\n",
+        "  input: ProviderReplayTranscript,\n",
+        "  options: { readonly replayGate?: ProviderReplayGate } = {},\n",
+        ") {\n",
+        "  const transcript = yield* decodeClaudeAgentSdkReplayTranscript(input).pipe(\n",
+        "    Effect.mapError((cause) => new ClaudeReplayTranscriptDecodeError({ ...metadataFromTranscript(input), cause })),\n",
+        "  );\n",
+        "  const fixture = yield* makePmNativeTestHost({\n",
+        "    driver: \"claude\", instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID, cwd: sanitizedReplayCwd(transcript.scenario),\n",
+        "  });\n",
+        "  return yield* Effect.gen(function* () {\n",
+        "    const temporary = yield* writeReplayTaskOutputFiles(transcript);\n",
+        "    const queryRunner = yield* ClaudeAdapterV2.ClaudeAgentSdkQueryRunner;\n",
+        "    const continuations = yield* Effect.acquireRelease(Queue.unbounded<ProviderContinuationRequest>(), Queue.shutdown);\n",
+        "    const adapter = yield* ClaudeAdapterV2.makeClaudeAdapterV2({\n",
+        "      instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID, settings: DEFAULT_CLAUDE_SETTINGS,\n",
+        "      environment: { ...fixture.context.env, CLAUDE_CODE_TMPDIR: temporary },\n",
+        "      attachmentsDir: fixture.serverConfig.attachmentsDir,\n",
+        "      fileSystem: yield* FileSystem.FileSystem, path: yield* Path.Path, crypto: yield* Crypto.Crypto,\n",
+        "      idAllocator: yield* IdAllocator.IdAllocatorV2, queryRunner,\n",
+        "      continuationRequests: { offer: (request) => Queue.offer(continuations, request).pipe(Effect.asVoid) },\n",
+        "    });\n",
+        "    return { adapter, fixture, continuations, assertComplete: queryRunner.assertComplete };\n",
+        "  }).pipe(Effect.provide(Layer.mergeAll(fixture.layer, layerClaudeAgentSdkReplay(transcript, options))));\n",
+        "});\n"
+      ]
+    }
+  ]
+}

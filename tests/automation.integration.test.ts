@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import type { Pool } from 'pg';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import { createAutomationService, runAutomationBatch } from '../packages/application/src/automation.ts';
 import { observeAutomation } from '../packages/application/src/automation-report.ts';
 import { recordHeartbeat } from '../packages/application/src/outbox.ts';
@@ -14,7 +14,7 @@ import { DomainError } from '../packages/domain/src/core.ts';
 import { createUser, createWorkspace, login } from '../packages/infrastructure/src/auth.ts';
 import { acquireMailFixtureDatabase, createMailFixtureDatabase, type MailFixtureDatabase } from './mail-fixture-database.ts';
 import { closeMailApp, MailFixtureScope, mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';
-import { assertV3WorkerTestDatabase } from './worker-environment.ts';
+import { assertV4WorkerTestDatabase } from './worker-environment.ts';
 import { readonlyCorePort } from '../packages/pm-core/readonly.ts';
 
 const source = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
@@ -74,7 +74,7 @@ async function sqlSnapshot(pool: Pool, schema: string) {
 describe('PostgreSQL automation ownership, reports, receipts and independent Worker', { skip: !source }, () => {
   before(async t => {
     assert.ok(source, 'TEST_DATABASE_URL is required for real PostgreSQL behavior tests');
-    assertV3WorkerTestDatabase(source);
+    assertV4WorkerTestDatabase(source);
     database = await createMailFixtureDatabase({ signal: t.signal });
   }, { timeout: mailSchemaInitTimeout });
   after(async () => { await database?.close(); }, { timeout: 30_000 });

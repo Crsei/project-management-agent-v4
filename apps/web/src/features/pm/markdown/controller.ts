@@ -14,11 +14,12 @@ import { usePmCommand, usePmService } from '../service/pm-service';
 import { allowed } from '../service/pm-ui';
 import { hasUncertainCreationDrafts, type CreationInitial } from './creation-model';
 import { collectTasks, taskScopes, type TaskCollection, type TaskScope, type TaskScopeCounts } from './task-collection-model';
+import { splitTaskFilterView, taskFilterWhere, type TaskFilterCondition } from './task-filter';
 import { patchTaskDraftRaw, toggleTaskChecklistRaw } from './task-detail-model';
 import { patchDocumentDraftRaw } from './document-body';
 
 export type CollectionLayout = ViewConfig['layout'] | 'list' | 'calendar' | 'gantt';
-export interface Preferences { entity: EntityKind | ''; layout: CollectionLayout; project: string; priority: string; status: string; sort: string; archived: ArchiveFilter; editorWidth: number; groupBy: 'status' | 'priority' }
+export interface Preferences { entity: EntityKind | ''; layout: CollectionLayout; project: string; priority: string; status: string; sort: string; sortDirection: 'asc' | 'desc'; archived: ArchiveFilter; editorWidth: number; groupBy: 'status' | 'priority'; conditions: TaskFilterCondition[] }
 export interface ControllerOptions {
   mode?: 'collection' | 'entity' | 'settings';
   en: boolean;
@@ -64,7 +65,7 @@ export interface WorkspaceController {
   activeView: SavedView | undefined; context: { id: string; markdown: string } | null; setContext: Dispatch<SetStateAction<{ id: string; markdown: string } | null>>;
   activity: string[]; canWrite: boolean;
   select: (id: string) => void; updateDraft: (raw: string) => void; acceptRecord: (file: FileRecord) => void; removeDraft: (id: string) => void;
-  save: () => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; patch: (id: string, changes: Record<string, unknown>) => Promise<void>;
+  save: (background?: boolean) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; patch: (id: string, changes: Record<string, unknown>) => Promise<void>;
   canEditSourceDraft: boolean; canEditTaskDraft: boolean; draftParseError: boolean;
   patchTaskDraft: (changes: Record<string, unknown>) => void; toggleTaskChecklist: (line: number) => void;
   patchDocumentDraft: (changes: Record<string, unknown>) => void;
@@ -75,7 +76,7 @@ export interface WorkspaceController {
   useView: (view: ViewConfig, saved?: SavedView) => void; acceptView: (view: SavedView) => void; clearView: () => void;
   loadContext: () => Promise<void>; refresh: () => Promise<void>;
 }
-const defaults: Preferences = { entity: 'work_item', layout: 'list', project: '', priority: '', status: '', sort: '', archived: 'exclude', editorWidth: 43, groupBy: 'status' };
+const defaults: Preferences = { entity: 'work_item', layout: 'list', project: '', priority: '', status: '', sort: '', sortDirection: 'asc', archived: 'exclude', editorWidth: 43, groupBy: 'status', conditions: [] };
 function message(error: unknown) { return error instanceof Error ? error.message : String(error); }
 function parseDraftSource(file: FileRecord | undefined, raw: string, configuration: ProtocolConfiguration): { entity?: Entity; diagnostics: Diagnostic[] } {
   try {
@@ -152,7 +153,14 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
   }, [accessError, blockedAccess, blockAccess]);
   const preferenceKey = session.storageKey(options.projectId ? `project:${options.projectId}:preferences` : 'preferences');
   const searchKey = session.storageKey(options.projectId ? `project:${options.projectId}:search` : 'search');
-  const [storedPrefs, setPrefs] = useState<Preferences>(() => ({ ...defaults, ...stored<Partial<Preferences>>(preferenceKey, {}), entity: options.entityKind, project: options.projectId || projectFilter || '', ...(options.layout ? { layout: options.layout } : {}) }));
+  const [storedPrefs, setPrefs] = useState<Preferences>(() => {
+    const restored = stored<Partial<Preferences>>(preferenceKey, {});
+    const conditions = Array.isArray(restored.conditions) ? restored.conditions : options.taskContext ? [
+      ...(restored.priority ? [{ field: 'priority' as const, operator: 'is' as const, values: [restored.priority] }] : []),
+      ...(restored.status ? [{ field: 'status' as const, operator: 'is' as const, values: [restored.status] }] : []),
+    ] : [];
+    return { ...defaults, ...restored, conditions, entity: options.entityKind, project: options.projectId || projectFilter || '', ...(options.layout ? { layout: options.layout } : {}) };
+  });
   // Route scope is an invariant, including when a saved view or restored context changes preferences.
   const taskCollectionMode = !!options.taskContext;
   const prefs = useMemo(() => ({ ...storedPrefs, sort: storedPrefs.sort || (options.taskContext?.scope === 'mine' && !options.projectId ? 'due' : 'id'), ...(options.projectId ? { project: options.projectId } : projectFilter !== null ? { project: projectFilter } : {}), ...(taskCollectionMode ? { entity: 'work_item' as const } : {}) }), [storedPrefs, options.projectId, projectFilter, taskCollectionMode, options.taskContext?.scope]);
@@ -172,6 +180,7 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
   const [busy, setBusy] = useState<string | null>(null);
   const [requestDiagnostics, setRequestDiagnostics] = useState<Diagnostic[]>([]);
   const rejectedTaskFieldsRef = useRef<Record<string, Record<string, Diagnostic[]>>>({});
+  const autosaving = useRef(false);
   const [rejectedTaskFields, setRejectedTaskFields] = useState(rejectedTaskFieldsRef.current);
   const [deleteTarget, setDeleteTarget] = useState<FileRecord | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
@@ -204,13 +213,28 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
   }, [draft, selected, selectedId, unsupported, parsed, files, raw, configuration, rejectedTaskFields]);
   const draftInvalid = writesBlocked || configurationInvalid || draftDiagnostics.some(issue => issue.severity === 'error');
   const stateFilter = options.state ? options.mapStatus?.(options.state, configuration, prefs.entity) || options.state : '';
+  const sortRules = useMemo<NonNullable<ViewConfig['order_by']>>(() => {
+    const rules = advancedView?.order_by ?? [];
+    if (!prefs.sort) return [...rules];
+    return [{ field: prefs.sort, direction: prefs.sortDirection }, ...rules.filter(rule => rule.field !== prefs.sort)];
+  }, [advancedView, prefs.sort, prefs.sortDirection]);
+  const conditionWhere = useMemo(
+    () => options.taskContext ? taskFilterWhere(prefs.conditions, { today: options.taskContext.today, configuration }) : undefined,
+    [options.taskContext, prefs.conditions, configuration],
+  );
+  const where = useMemo(
+    () => advancedView?.where && conditionWhere ? { all: [advancedView.where, conditionWhere] } : advancedView?.where ?? conditionWhere,
+    [advancedView?.where, conditionWhere],
+  );
   const config = useMemo<ViewConfig>(() => ({
     ...advancedView, entity: options.taskContext ? 'work_item' : prefs.entity || undefined, project: prefs.project || undefined,
     layout: ['list', 'calendar', 'gantt'].includes(prefs.layout) ? 'table' : prefs.layout as ViewConfig['layout'],
     ...(prefs.layout === 'list' ? { columns: prefs.entity === 'work_item' ? ['status', 'priority', 'assignee', 'due'] : prefs.entity === 'document' ? ['document_kind'] : prefs.entity ? ['status', 'due'] : ['entity'] } : {}),
     group_by: advancedView?.group_by || (prefs.entity === 'work_item' ? prefs.groupBy || 'status' : prefs.entity === 'document' ? 'document_kind' : 'status'),
-    filter: { ...advancedView?.filter, ...(prefs.priority ? { priority: prefs.priority } : {}), ...(prefs.status ? { status: prefs.status } : {}), ...(stateFilter ? { status: stateFilter } : {}) }, sort: prefs.sort,
-  }), [prefs, advancedView, stateFilter, options.taskContext]);
+    filter: { ...advancedView?.filter, ...(!options.taskContext && prefs.priority ? { priority: prefs.priority } : {}), ...(!options.taskContext && prefs.status ? { status: prefs.status } : {}), ...(stateFilter ? { status: stateFilter } : {}) }, sort: prefs.sort,
+    ...(sortRules.length ? { order_by: sortRules } : {}),
+    ...(where ? { where } : {}),
+  }), [prefs, advancedView, stateFilter, options.taskContext, sortRules, where]);
   const matchingResult = useMemo(() => {
     try {
       // Explicit embedded previews use projected; collection task counts and grouping use saved records.
@@ -337,8 +361,8 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
       } catch (fetchError) { reportError(fetchError); }
     }
   }
-  async function save() {
-    if (!selected || unsupported || busy || !options.canWrite || writesBlocked || accessError || query.isError || hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) || hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) || command.pending || command.unknownCommand) return;
+  async function save(background = false) {
+    if (!selected || unsupported || busy || autosaving.current || !options.canWrite || writesBlocked || accessError || query.isError || hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) || hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) || command.pending || command.unknownCommand) return;
     const current = client.getQueryData<WorkspaceSnapshot>(queryKey);
     const file = current?.files.find(file => file.id === selected.id);
     const savingDraft = session.drafts.getSnapshot()[selected.id];
@@ -347,11 +371,13 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     const parsed = parseDraftSource(file, savingDraft.raw, current.configuration);
     const diagnostics = [...(file.entity.entity === 'work_item' ? Object.values(rejectedTaskFieldsRef.current[file.id] || {}).flat() : []), ...parsed.diagnostics, ...(parsed.entity ? validateDraftSource(file, savingDraft.raw, parsed.entity, current.files, current.configuration) : [])];
     if (diagnostics.some(issue => issue.severity === 'error')) { setRequestDiagnostics(diagnostics); setError('Repair the Markdown draft before saving.'); return; }
-    setBusy(file.id); setError(''); setRequestDiagnostics([]);
+    autosaving.current = background;
+    if (!background) setBusy(file.id);
+    setError(''); setRequestDiagnostics([]);
     const saving = savingDraft.raw;
-    try { const saved = await api.save(file.id, saving, savingDraft.revision); acceptRecord(saved); setDrafts(old => { const next = { ...old }; if (next[file.id]?.raw === saving) delete next[file.id]; else if (next[file.id]) next[file.id] = { ...next[file.id], revision: saved.revision }; return next; }); setNotice(`${saved.id} saved to Markdown`); }
+    try { const saved = await api.save(file.id, saving, savingDraft.revision); acceptRecord(saved); setDrafts(old => { const next = { ...old }; if (next[file.id]?.raw === saving) delete next[file.id]; else if (next[file.id]) next[file.id] = { ...next[file.id], revision: saved.revision }; return next; }); if (!background) setNotice(`${saved.id} saved to Markdown`); }
     catch (e) { await handleError(e, file.id, saving); }
-    finally { setBusy(null); }
+    finally { autosaving.current = false; if (!background) setBusy(null); }
   }
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -485,7 +511,7 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     }
     setCreateStatus(status); setError(''); setRequestDiagnostics([]);
   }
-  const viewProps: ViewProps = { files: matching, allFiles: config.layout === 'graph' ? files : projected, config, configuration, archiveFilter: prefs.archived, selectedId, draftIds, graphSource, graphQuery, graphRefreshKey, en: options.en, canEdit, onSelect: select, onInspect: inspect, onOpenPage: id => { const file = files.find(candidate => candidate.id === id); if (file) options.onNavigateEntity(file); }, onPatch: patch, onCreate: options.canWrite ? openCreate : undefined, onMove: options.canWrite && activeView && !configurationInvalid && !busy && !writesBlocked && (!options.taskContext || options.taskContext.scope === 'all') ? moveItem : undefined };
+  const viewProps: ViewProps = { files: matching, allFiles: config.layout === 'graph' ? files : projected, config, configuration, archiveFilter: prefs.archived, selectedId, draftIds, graphSource, graphQuery, graphRefreshKey, en: options.en, canEdit, canLifecycle: canManageLifecycle, onLifecycle: (id, action) => { const file = files.find(candidate => candidate.id === id); if (file) void lifecycle(file, action); }, onRequestDelete: id => { const file = files.find(candidate => candidate.id === id); if (file) { setDeleteTarget(file); setDeleteConfirmation(''); setError(''); setRequestDiagnostics([]); } }, onSelect: select, onInspect: inspect, onOpenPage: id => { const file = files.find(candidate => candidate.id === id); if (file) options.onNavigateEntity(file); }, onPatch: patch, onCreate: options.canWrite ? openCreate : undefined, onMove: options.canWrite && activeView && !configurationInvalid && !busy && !writesBlocked && (!options.taskContext || options.taskContext.scope === 'all') ? moveItem : undefined };
   async function lifecycle(file: FileRecord, action: 'archive' | 'restore' | 'delete') {
     if (!canManageLifecycle(file.id)) return;
     setBusy(file.id); setError(''); setRequestDiagnostics([]);
@@ -509,7 +535,13 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     setCreationFeedback(included ? null : { id: file.id, message: feedback });
   }
   function useView(view: ViewConfig, saved?: SavedView) {
-    setAdvancedView(view); setActiveView(saved); setPrefs(old => ({ ...old, entity: options.taskContext ? 'work_item' : view.entity || '', layout: view.layout, project: options.projectId || view.project || '', priority: '', status: '', sort: view.sort || '', groupBy: view.group_by === 'priority' ? 'priority' : 'status' }));
+    const split = options.taskContext ? splitTaskFilterView(view) : { conditions: [] as TaskFilterCondition[] };
+    const residual: ViewConfig = { ...view };
+    if (options.taskContext) {
+      if (split.where) residual.where = split.where; else delete residual.where;
+      if (split.filter) residual.filter = split.filter; else delete residual.filter;
+    }
+    setAdvancedView(residual); setActiveView(saved); setPrefs(old => ({ ...old, entity: options.taskContext ? 'work_item' : view.entity || '', layout: view.layout, project: options.projectId || view.project || '', priority: '', status: '', conditions: split.conditions, sort: view.sort || view.order_by?.[0]?.field || '', sortDirection: view.order_by?.[0]?.direction || 'asc', groupBy: view.group_by === 'priority' ? 'priority' : 'status' }));
   }
   function acceptView(view: SavedView) {
     client.setQueryData<WorkspaceSnapshot>(queryKey, old => old ? { ...old, views: [...old.views.filter(item => item.id !== view.id), view] } : old);
@@ -556,7 +588,7 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     try { setContext(await api.context(selected.id)); }
     catch (error) { reportError(error); }
   }
-  function clearView() { setAdvancedView(null); setActiveView(undefined); setPrefs(old => ({ ...old, priority: '', status: '', sort: '' })); }
+  function clearView() { setAdvancedView(null); setActiveView(undefined); setPrefs(old => ({ ...old, priority: '', status: '', sort: '', sortDirection: 'asc', conditions: [] })); }
   async function refresh() { setBlockedAccess(null); await client.invalidateQueries({ queryKey }); }
   return {
     projectId: options.projectId,

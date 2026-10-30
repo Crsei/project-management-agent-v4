@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/CodexHomeLayout.ts",
+  "beforeSha256": "a946f1940ec378b8002a9dfa2365081acc01601d8e244523cd90d36d4a23c41b",
+  "afterSha256": "368866d4a36b65c688177aeaac73fc050871e4c9aa224a09b315b46d4fbf6b72",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 42,
+      "before": [
+        "function resolveHomePath(path: Path.Path, home: string, value: string | undefined): string {\n"
+      ],
+      "after": [
+        "function resolveHomePath(path: Path.Path, home: string, cwd: string, value: string | undefined): string {\n"
+      ]
+    },
+    {
+      "start": 45,
+      "before": [
+        "  return path.resolve(expanded);\n"
+      ],
+      "after": [
+        "  return path.resolve(cwd, expanded);\n"
+      ]
+    },
+    {
+      "start": 53,
+      "before": [
+        "  const sharedHomePath = resolveHomePath(path, home, config.homePath);\n"
+      ],
+      "after": [
+        "  const environment = yield* HostProcess.Environment;\n",
+        "  const cwd = yield* HostProcess.WorkingDirectory;\n"
+      ]
+    },
+    {
+      "start": 55,
+      "before": [],
+      "after": [
+        "  // An explicit overlay keeps the native user-home base; direct mode inherits CODEX_HOME.\n",
+        "  const inheritedHomePath = shadowHomePath.length === 0 ? environment.CODEX_HOME : undefined;\n",
+        "  const sharedHomePath = resolveHomePath(path, home, cwd, config.homePath || inheritedHomePath);\n"
+      ]
+    },
+    {
+      "start": 59,
+      "before": [
+        "      effectiveHomePath: config.homePath.trim().length > 0 ? sharedHomePath : undefined,\n"
+      ],
+      "after": [
+        "      effectiveHomePath: config.homePath.trim().length > 0 || inheritedHomePath ? sharedHomePath : undefined,\n"
+      ]
+    },
+    {
+      "start": 64,
+      "before": [
+        "  const effectiveHomePath = path.resolve(expandHomePath(shadowHomePath, home));\n"
+      ],
+      "after": [
+        "  const effectiveHomePath = path.resolve(cwd, expandHomePath(shadowHomePath, home));\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/AntigravityDriver.test.ts",
+  "beforeSha256": "d89655833bc7e54a72de5939a963d46e96f2fe2bd147deedaeece4a22ddd28bf",
+  "afterSha256": "4286da3620ba69c2b8861782cb24b2f31d7dea12ecf9f7a116c408e03214564e",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [
+        "import * as NodeServices from \"@effect/platform-node/NodeServices\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 16,
+      "before": [
+        "import * as BackgroundPolicy from \"../../background/BackgroundPolicy.ts\";\n",
+        "import * as ServerConfig from \"../../config.ts\";\n",
+        "import * as ServerSettings from \"../../serverSettings.ts\";\n"
+      ],
+      "after": [
+        "import * as ProviderHost from \"@t3tools/provider-core/server/ProviderHost\";\n",
+        "import * as PmNativeTestHost from \"../../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 24,
+      "before": [
+        "import * as ProviderEventLoggers from \"@t3tools/provider-core/server/ProviderEventLoggers\";\n",
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 27,
+      "before": [
+        "import * as IdAllocator from \"@t3tools/provider-core/server/IdAllocator\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 29,
+      "before": [
+        "import * as ProviderHostLive from \"../ProviderHostLive.ts\";\n",
+        "import * as ServerSecretStore from \"../../auth/ServerSecretStore.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 58,
+      "before": [
+        "  const config = yield* ServerConfig.ServerConfig;\n"
+      ],
+      "after": [
+        "  const config = (yield* ProviderHost.ProviderHost).paths;\n"
+      ]
+    },
+    {
+      "start": 68,
+      "before": [],
+      "after": [
+        "  const executableLog = path.join(root, \"executables.log\");\n"
+      ]
+    },
+    {
+      "start": 89,
+      "before": [],
+      "after": [
+        "        `printf '%s\\\\n' ${shellQuote(executablePath)} \"$@\" >> ${shellQuote(executableLog)}`,\n"
+      ]
+    },
+    {
+      "start": 112,
+      "before": [
+        "    command: string;\n",
+        "    args: ReadonlyArray<string>;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 163,
+      "before": [
+        "        command: command.command,\n",
+        "        args: command.args,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 235,
+      "before": [],
+      "after": [
+        "    readExecutions: fs.readFileString(executableLog).pipe(\n",
+        "      Effect.map(text => text.split(/\\r?\\n/u).filter(Boolean)),\n",
+        "    ),\n"
+      ]
+    },
+    {
+      "start": 239,
+      "before": [
+        "const layerDeps = ServerConfig.layerTest(process.cwd(), {\n",
+        "  prefix: \"t3-antigravity-driver-config-\",\n",
+        "}).pipe(\n",
+        "  Layer.provideMerge(NodeServices.layer),\n",
+        "  Layer.provideMerge(\n",
+        "    Layer.succeed(\n",
+        "      HttpClient.HttpClient,\n",
+        "      HttpClient.make(() => Effect.die(\"Unexpected quota request\")),\n",
+        "    ),\n",
+        "  ),\n",
+        "  Layer.provideMerge(ServerSettings.layerTest()),\n",
+        "  Layer.provideMerge(\n",
+        "    Layer.mock(BackgroundPolicy.BackgroundPolicy)({\n",
+        "      shouldRunScopeWork: () => Effect.succeed(false),\n",
+        "    }),\n",
+        "  ),\n",
+        "  Layer.provideMerge(\n",
+        "    Layer.succeed(\n",
+        "      ProviderEventLoggers.ProviderEventLoggers,\n",
+        "      ProviderEventLoggers.NoOpProviderEventLoggers,\n",
+        "    ),\n",
+        "  ),\n",
+        "  Layer.provideMerge(ModelManifest.layerTest),\n",
+        "  Layer.provideMerge(IdAllocator.layer),\n",
+        "  Layer.provideMerge(McpProviderSessions.layer),\n",
+        ");\n",
+        "const layerTest = ProviderHostLive.layer.pipe(\n",
+        "  Layer.provideMerge(ServerSecretStore.layer),\n",
+        "  Layer.provideMerge(layerDeps),\n"
+      ],
+      "after": [
+        "const layerTest = Layer.mergeAll(\n",
+        "  PmNativeTestHost.layer({ driver: \"antigravity\", prefix: \"pm-antigravity-driver-source\" }),\n",
+        "  Layer.succeed(HttpClient.HttpClient, HttpClient.make(() => Effect.die(\"Unexpected quota request\"))),\n",
+        "  ModelManifest.layerTest,\n"
+      ]
+    },
+    {
+      "start": 296,
+      "before": [
+        "        expect(nativeLaunches.map((launch) => launch.command)).toEqual([\n",
+        "          h.first.executablePath,\n",
+        "          h.second.executablePath,\n"
+      ],
+      "after": [
+        "        const nativeArgs = hostPlatform === \"linux\" ? [\"--uid=\"] : [];\n",
+        "        expect(yield* h.readExecutions).toEqual([\n",
+        "          h.first.executablePath, ...nativeArgs,\n",
+        "          h.second.executablePath, ...nativeArgs,\n"
+      ]
+    },
+    {
+      "start": 305,
+      "before": [
+        "          expect(launch.args).toEqual(hostPlatform === \"linux\" ? [\"--uid=\"] : []);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 378,
+      "before": [
+        "        const config = yield* ServerConfig.ServerConfig;\n"
+      ],
+      "after": [
+        "        const config = (yield* ProviderHost.ProviderHost).paths;\n"
+      ]
+    }
+  ]
+}

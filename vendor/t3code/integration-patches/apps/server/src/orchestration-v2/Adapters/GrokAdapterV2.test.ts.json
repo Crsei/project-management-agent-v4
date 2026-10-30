@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/GrokAdapterV2.test.ts",
+  "beforeSha256": "d4e1cbc5b9c1824b4044ea89a2cab945f1bdf6dc5e04dd3bbf3628c16ba9e643",
+  "afterSha256": "580cdc0a68ebd7fee9ef0de689262fd50767da50ef8c2ae70fe512abe7270608",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 16,
+      "before": [
+        "import { resolveSelfInvocation } from \"@t3tools/shared/nodeRuntime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 33,
+      "before": [
+        "import * as ProjectStore from \"../ProjectStore.ts\";\n",
+        "import { buildInitialGrokProviderSnapshot } from \"@t3tools/provider-grok/testing\";\n",
+        "import type { ProviderInstance } from \"@t3tools/provider-core/server/driver\";\n",
+        "import * as ProviderInstanceRegistry from \"../../provider/ProviderInstanceRegistry.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 38,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { layerAcpRuntimeHost } from \"./AcpProviderRuntimeHost.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 40,
+      "before": [
+        "import * as RuntimePolicy from \"../RuntimePolicy.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 239,
+      "before": [
+        "    McpProviderSessions.layer,\n"
+      ],
+      "after": [
+        "    layerAcpRuntimeHost,\n"
+      ]
+    },
+    {
+      "start": 262,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 300,
+      "before": [
+        "  it.effect(\"launches a thread stored as Auto-accept edits asking\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const snapshot = yield* buildInitialGrokProviderSnapshot(LAUNCH_TEST_GROK_SETTINGS);\n",
+        "      const instanceId = ProviderInstanceId.make(\"grok-launch-test\");\n",
+        "      const now = yield* DateTime.now;\n",
+        "      const threadId = ThreadId.make(\"grok-launch-test\");\n",
+        "      const modelSelection = { instanceId, model: \"grok-build\" } as const;\n",
+        "      const resolved = yield* Effect.gen(function* () {\n",
+        "        const runtimePolicy = yield* RuntimePolicy.RuntimePolicyV2;\n",
+        "        return yield* runtimePolicy.resolve({\n",
+        "          thread: {\n",
+        "            createdBy: \"user\",\n",
+        "            creationSource: \"web\",\n",
+        "            id: threadId,\n",
+        "            projectId: ProjectId.make(\"grok-launch-test\"),\n",
+        "            title: \"Grok launch test\",\n",
+        "            providerInstanceId: instanceId,\n",
+        "            modelSelection,\n",
+        "            runtimeMode: \"auto-accept-edits\",\n",
+        "            interactionMode: \"default\",\n",
+        "            branch: null,\n",
+        "            worktreePath: process.cwd(),\n",
+        "            activeProviderThreadId: null,\n",
+        "            lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },\n",
+        "            forkedFrom: null,\n",
+        "            createdAt: now,\n",
+        "            updatedAt: now,\n",
+        "            archivedAt: null,\n",
+        "            settledOverride: null,\n",
+        "            settledAt: null,\n",
+        "            lastVisitedAt: null,\n",
+        "            deletedAt: null,\n",
+        "          },\n",
+        "          modelSelection,\n",
+        "        });\n",
+        "      }).pipe(\n",
+        "        Effect.provide(\n",
+        "          RuntimePolicy.layerFromProjectStore.pipe(\n",
+        "            Layer.provide(\n",
+        "              Layer.mock(ProjectStore.ProjectStoreV2)({\n",
+        "                get: () => Effect.die(\"the thread has a worktree\"),\n",
+        "              }),\n",
+        "            ),\n",
+        "            Layer.provide(\n",
+        "              Layer.mock(ProviderInstanceRegistry.ProviderInstanceRegistry)({\n",
+        "                getInstance: () =>\n",
+        "                  Effect.succeed({\n",
+        "                    snapshot: { getSnapshot: Effect.succeed(snapshot) },\n",
+        "                  } as ProviderInstance),\n",
+        "              }),\n",
+        "            ),\n",
+        "          ),\n",
+        "        ),\n",
+        "      );\n",
+        "      assert.equal(resolved.runtimeMode, \"approval-required\");\n",
+        "      assert.deepEqual(yield* launchArgs(resolved), [\n",
+        "        [\"--permission-mode\", \"default\", \"agent\", \"stdio\"],\n",
+        "      ]);\n",
+        "    }),\n",
+        "  );\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 367,
+      "before": [
+        "    McpProviderSessions.layer,\n"
+      ],
+      "after": [
+        "    layerAcpRuntimeHost,\n"
+      ]
+    },
+    {
+      "start": 485,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    }
+  ]
+}

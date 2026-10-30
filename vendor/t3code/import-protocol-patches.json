@@ -1,0 +1,482 @@
+{
+  "ledger_version": 1,
+  "slice": "T4",
+  "source_manifest": "vendor/t3code/source-manifest.json",
+  "upstream_commit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "host_contract": "docs/implementation/t3code-provider-host-contract.zh.md",
+  "status": "source-import-and-owned-dependency-patches-applied",
+  "scope": {
+    "package_count": 11,
+    "source_file_count": 256,
+    "source_bytes": 6939766,
+    "unchanged_source_files": 252,
+    "patched_source_files": [
+      "vendor/t3code/packages/provider-acp-registry/package.json",
+      "vendor/t3code/packages/provider-acp/package.json",
+      "vendor/t3code/packages/provider-fx/package.json",
+      "vendor/t3code/packages/provider-grok/package.json"
+    ],
+    "behavior_tests_copied_verbatim": 77,
+    "test_support_files_copied_verbatim": 13,
+    "generated_protocol_files_copied_verbatim": 6,
+    "copy_rule": "Only T4 copy actions from the frozen manifest. Source SHA256 and byte lengths checked before any writes. Source files, tests, generators, committed generated resources and compiler configs copied verbatim; only P001/P002 package.json changes applied afterwards with edit.",
+    "mode_rule": "Pinned Git modes from each manifest entry: 100644 normally and 100755 for the two ACP registry shell fixtures. Source checkout group-write permissions are not a source-content patch.",
+    "no_algorithm_changes": true,
+    "upstream_source_modified": false,
+    "exports_changed": false
+  },
+  "packages": [
+    {
+      "path": "vendor/t3code/packages/effect-acp",
+      "name": "effect-acp",
+      "production": true,
+      "source_files": 23,
+      "source_bytes": 1227557,
+      "behavior_tests": 6,
+      "local_patches": []
+    },
+    {
+      "path": "vendor/t3code/packages/effect-codex-app-server",
+      "name": "effect-codex-app-server",
+      "production": true,
+      "source_files": 21,
+      "source_bytes": 2567319,
+      "behavior_tests": 5,
+      "local_patches": []
+    },
+    {
+      "path": "vendor/t3code/packages/provider-acp",
+      "name": "@t3tools/provider-acp",
+      "production": true,
+      "source_files": 18,
+      "source_bytes": 670758,
+      "behavior_tests": 7,
+      "local_patches": [
+        "P001"
+      ]
+    },
+    {
+      "path": "vendor/t3code/packages/provider-acp-registry",
+      "name": "@t3tools/provider-acp-registry",
+      "production": true,
+      "source_files": 24,
+      "source_bytes": 313085,
+      "behavior_tests": 5,
+      "local_patches": [
+        "P001"
+      ]
+    },
+    {
+      "path": "vendor/t3code/packages/provider-cursor",
+      "name": "@t3tools/provider-cursor",
+      "production": true,
+      "source_files": 39,
+      "source_bytes": 397231,
+      "behavior_tests": 14,
+      "local_patches": []
+    },
+    {
+      "path": "vendor/t3code/packages/provider-fx",
+      "name": "@t3tools/provider-fx",
+      "production": true,
+      "source_files": 14,
+      "source_bytes": 66573,
+      "behavior_tests": 3,
+      "local_patches": [
+        "P001"
+      ]
+    },
+    {
+      "path": "vendor/t3code/packages/provider-grok",
+      "name": "@t3tools/provider-grok",
+      "production": true,
+      "source_files": 21,
+      "source_bytes": 219038,
+      "behavior_tests": 5,
+      "local_patches": [
+        "P001",
+        "P002"
+      ]
+    },
+    {
+      "path": "vendor/t3code/packages/provider-muse",
+      "name": "@t3tools/provider-muse",
+      "production": true,
+      "source_files": 28,
+      "source_bytes": 298789,
+      "behavior_tests": 10,
+      "local_patches": []
+    },
+    {
+      "path": "vendor/t3code/packages/provider-opencode",
+      "name": "@t3tools/provider-opencode",
+      "production": true,
+      "source_files": 38,
+      "source_bytes": 720855,
+      "behavior_tests": 15,
+      "local_patches": []
+    },
+    {
+      "path": "vendor/t3code/packages/provider-pi",
+      "name": "@t3tools/provider-pi",
+      "production": true,
+      "source_files": 23,
+      "source_bytes": 439734,
+      "behavior_tests": 7,
+      "local_patches": []
+    },
+    {
+      "path": "vendor/t3code/packages/provider-testing",
+      "name": "@t3tools/provider-testing",
+      "production": false,
+      "source_files": 7,
+      "source_bytes": 18827,
+      "behavior_tests": 0,
+      "local_patches": []
+    }
+  ],
+  "applied_patches": [
+    {
+      "id": "P001",
+      "kind": "runtime-dependency-promotion",
+      "status": "applied",
+      "scope": "Owned package.json dependency sections only; no exports, protocol algorithms, schemas or test assertions changed.",
+      "changes": [
+        {
+          "path": "vendor/t3code/packages/provider-acp-registry/package.json",
+          "source_sha256": "dc27cfc3201df20a251fac7cd1cbe4ea4accbe67ea83d5ddf43251ed82c5f16c",
+          "operation": "move-dependency",
+          "from_section": "devDependencies",
+          "to_section": "dependencies",
+          "dependency": "effect-acp",
+          "value_unchanged": "workspace:*",
+          "evidence": [
+            {
+              "path": "packages/provider-acp-registry/src/server/adapter.ts",
+              "specifier": "effect-acp/errors"
+            }
+          ]
+        },
+        {
+          "path": "vendor/t3code/packages/provider-acp/package.json",
+          "source_sha256": "cefd3cbb8ea810355669a37ee1bc74c48d51ed50cbb7b2f7aee92d06c956955a",
+          "operation": "move-dependency",
+          "from_section": "devDependencies",
+          "to_section": "dependencies",
+          "dependency": "effect-acp",
+          "value_unchanged": "workspace:*",
+          "evidence": [
+            {
+              "path": "packages/provider-acp/src/server/AcpSessionRuntime.ts",
+              "specifier": "effect-acp/client"
+            },
+            {
+              "path": "packages/provider-acp/src/server/AcpSessionRuntime.ts",
+              "specifier": "effect-acp/errors"
+            },
+            {
+              "path": "packages/provider-acp/src/server/adapter.ts",
+              "specifier": "effect-acp/errors"
+            },
+            {
+              "path": "packages/provider-acp/src/server/clientTerminals.ts",
+              "specifier": "effect-acp/errors"
+            },
+            {
+              "path": "packages/provider-acp/src/server/runtimeModel.ts",
+              "specifier": "effect-acp/compat"
+            },
+            {
+              "path": "packages/provider-acp/src/server/runtimeModel.ts",
+              "specifier": "effect-acp/schema-v1"
+            }
+          ]
+        },
+        {
+          "path": "vendor/t3code/packages/provider-fx/package.json",
+          "source_sha256": "68d1d12ed1a851440552fb231f9879c5d1654ded3de51047f116b9a19635dff6",
+          "operation": "move-dependency",
+          "from_section": "devDependencies",
+          "to_section": "dependencies",
+          "dependency": "effect-acp",
+          "value_unchanged": "workspace:*",
+          "evidence": [
+            {
+              "path": "packages/provider-fx/src/server/acpSupport.ts",
+              "specifier": "effect-acp/errors"
+            }
+          ]
+        },
+        {
+          "path": "vendor/t3code/packages/provider-grok/package.json",
+          "source_sha256": "1ca8012e183c9d6baa3f64f6ca18e7fe9e0bc7a2226e471b702f5e430d489a32",
+          "operation": "move-dependency",
+          "from_section": "devDependencies",
+          "to_section": "dependencies",
+          "dependency": "effect-acp",
+          "value_unchanged": "workspace:*",
+          "evidence": [
+            {
+              "path": "packages/provider-grok/src/server/acpSupport.ts",
+              "specifier": "effect-acp/errors"
+            },
+            {
+              "path": "packages/provider-grok/src/server/adapter.ts",
+              "specifier": "effect-acp/errors"
+            },
+            {
+              "path": "packages/provider-grok/src/server/xaiAcpExtension.ts",
+              "specifier": "effect-acp/errors"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P002",
+      "kind": "runtime-dependency-promotion",
+      "status": "applied",
+      "scope": "Owned package.json dependency sections only; no exports, protocol algorithms, schemas or test assertions changed.",
+      "changes": [
+        {
+          "path": "vendor/t3code/packages/provider-grok/package.json",
+          "source_sha256": "1ca8012e183c9d6baa3f64f6ca18e7fe9e0bc7a2226e471b702f5e430d489a32",
+          "operation": "move-dependency",
+          "from_section": "devDependencies",
+          "to_section": "dependencies",
+          "dependency": "@effect/platform-node",
+          "value_unchanged": "catalog:",
+          "evidence": [
+            {
+              "path": "packages/provider-grok/src/server/acpSupport.ts",
+              "specifier": "@effect/platform-node/NodeServices"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "runtime_classification": {
+    "evidence": "Frozen manifest packages[].dependencies[].observed_uses and manifest_differences; not a post-import build or import scan.",
+    "additional_own_production_runtime_promotions": [],
+    "reason": "The only devDependencies with runtime:runtime uses in the ten production package inventories are the five P001/P002 promotions above. Test/generation-only platform-node and openapi-generator uses remain development dependencies. provider-testing is explicitly nonproduction."
+  },
+  "test_isolation": {
+    "provider_testing": "@t3tools/provider-testing remains a test-only workspace package; existing consumers keep it in devDependencies.",
+    "frozen_inventory_production_provider_testing_edges": 0,
+    "production_entrypoints": "Original client/settings/server exports are unchanged. No production imports or re-exports of provider-testing were added. Test-only ./testing exports and fixtures are preserved rather than activated by production entrypoints.",
+    "credential_policy": "Default providerEnv setup clears provider variables in test subprocess only. Parent alone authorizes real native validation using existing environment; no credential files inspected or imported."
+  },
+  "protocol_resources": [
+    {
+      "package": "packages/effect-acp",
+      "source_files": [
+        "packages/effect-acp/src/_generated/meta.gen.ts",
+        "packages/effect-acp/src/_generated/schema-v1.gen.ts",
+        "packages/effect-acp/src/_generated/schema.gen.ts"
+      ],
+      "generator": "packages/effect-acp/scripts/generate.ts",
+      "upstream_schema_releases": [
+        "schema-v2.0.0-alpha.3",
+        "schema-v1.21.0"
+      ],
+      "protocol_version": 2,
+      "ephemeral_downloads_not_in_pinned_tree": [
+        "src/_generated/upstream-schema.json",
+        "src/_generated/upstream-meta.json",
+        "src/_generated/upstream-schema-v1.json",
+        "src/_generated/upstream-meta-v1.json"
+      ],
+      "policy": "Copy committed generated TypeScript; do not run generation, download schemas or change release references during import."
+    },
+    {
+      "package": "packages/effect-codex-app-server",
+      "source_files": [
+        "packages/effect-codex-app-server/src/_generated/meta.gen.ts",
+        "packages/effect-codex-app-server/src/_generated/namespaces.gen.ts",
+        "packages/effect-codex-app-server/src/_generated/schema.gen.ts"
+      ],
+      "generator": "packages/effect-codex-app-server/scripts/generate.ts",
+      "upstream_protocol_ref": "687a119f0fcaace47e1f1abcc77cec6c813fd6da",
+      "upstream_protocol_path": "openai/codex/codex-rs/app-server-protocol",
+      "policy": "Copy committed schema/meta/namespaces TypeScript and generator provenance; no protocol regeneration or network fetch during import."
+    }
+  ],
+  "executable_fixtures": [
+    "vendor/t3code/packages/provider-acp-registry/src/server/testing/AcpRegistrySupport.npm.fixture.sh",
+    "vendor/t3code/packages/provider-acp-registry/src/server/testing/AcpRegistrySupport.uv.fixture.sh"
+  ],
+  "retained_test_boundary": {
+    "path": "vendor/t3code/packages/provider-pi/src/server/adapter.test.ts",
+    "copy_status": "verbatim",
+    "manifest_action": "copy-then-patch",
+    "source_sha256": "f8a0e9c55727d54ffbbf2a6398654bd0adbb1573da48b9489d1edb87f72e6610",
+    "upstream_import": "../../../client-runtime/src/work-log/itemDetail.ts",
+    "adaptation_owner": "T6 via parent integration",
+    "manifest_patch": "P015",
+    "disposition": "The excluded work-log client boundary is test-only. The import-only T4 assignment preserves the behavioral test unchanged; the frozen manifest assigns host/test composition adaptation to T6. Do not copy the excluded business-service closure or delete assertions to make the test resolve."
+  },
+  "required_parent_integration": {
+    "workspace": "Discover vendor/t3code/packages/* and resolve the ten production packages plus the test-only provider-testing package locally, with T3 contracts/shared/provider-core supplied by their owner. No source-checkout paths or symlinks.",
+    "catalog_entries": {
+      "@effect/openapi-generator": "4.0.5",
+      "@effect/platform-node": "4.0.5",
+      "@effect/vitest": "4.0.5",
+      "@noble/hashes": "1.8.0",
+      "@types/node": "24.12.4",
+      "effect": "4.0.5",
+      "vite-plus": "1.4.0",
+      "yaml": "^2.9.0"
+    },
+    "external_lock_entries": [
+      {
+        "name": "@cursor/sdk",
+        "upstream_declared": "1.0.38",
+        "upstream_resolved": "1.0.38(zod@4.6.5)"
+      },
+      {
+        "name": "@muse-code/sdk",
+        "upstream_declared": "1.4.6",
+        "upstream_resolved": "1.4.6(patch_hash=7b495b607fc5d76b444c7c4d58821e839726a30e6f3c53564f0d59f2d5b42101)(@types/node@24.12.4)"
+      },
+      {
+        "name": "@napi-rs/keyring",
+        "upstream_declared": "^1.3.0",
+        "upstream_resolved": "1.3.0"
+      },
+      {
+        "name": "@opencode-ai/sdk",
+        "upstream_declared": "^1.3.15",
+        "upstream_resolved": "1.15.13"
+      },
+      {
+        "name": "@opencode/client",
+        "upstream_declared": "2.0.28",
+        "upstream_resolved": "2.0.28(effect@4.0.5)"
+      },
+      {
+        "name": "@opencode/protocol",
+        "upstream_declared": "2.0.28",
+        "upstream_resolved": "2.0.28"
+      },
+      {
+        "name": "@opencode/schema",
+        "upstream_declared": "2.0.28",
+        "upstream_resolved": "2.0.28"
+      },
+      {
+        "name": "diff",
+        "upstream_declared": "8.0.3",
+        "upstream_resolved": "8.0.3"
+      }
+    ],
+    "lock_policy": "Preserve these upstream resolved versions in the parent-owned workspace lock; the imported upstream dependency ranges are intentionally unchanged.",
+    "test_harness": "Parent supplies vendor base tsconfig, isolated vite-plus runner and @effect/vitest 4.0.5 patch registration (P012/P013/P016). Preserve current PM root TypeScript and Web Vite.",
+    "muse_patch": "Reuse the existing root @muse-code/sdk 1.4.6 patch and registration (P017); no duplicate vendor SDK patch.",
+    "bundling": "Bundle imported TypeScript workspace exports or emit runnable JS with matching exports (P014); do not leave raw vendor TS imports external in a production Node bundle. Keep provider-testing, generation tools, examples and behavioral fixtures out of production entrypoints.",
+    "assets": "Retain the copied committed protocol generated TypeScript and original JSON fixtures. Cursor SDK webpack chunks/sqlite/native resources and @napi-rs/keyring native artifacts require disk-backed packaging; external SDK resources remain parent packaging responsibilities. No dependency installation or protocol generation was run.",
+    "host_boundaries": "Provider Host/environment, transport, authorization/revisions/approvals/receipts and current Chat persistence remain parent/T5/T6/family adaptation boundaries. Importing these packages does not register or launch providers.",
+    "test_boundary": "Integrate P015 for the retained Pi adapter work-log test import before running that suite; no full upstream business service is authorized."
+  },
+  "verification": {
+    "executed": [
+      "Source-copy preconditions only: all 256 source SHA256/byte lengths matched the frozen entries before writes; existing destinations and symlink sources were rejected; pinned executable bits retained.",
+      "Manifest-backed runtime classification review; no production provider-testing import edges in the frozen inventory."
+    ],
+    "not_executed": [
+      "Post-import content/closure audit and dependency resolution.",
+      "Dependency installation, builds, typechecks, lint, tests, formatters or runtime smoke executions.",
+      "Protocol regeneration, schema downloads, native provider programs or live provider/account validation."
+    ],
+    "parent_commands_unrun": [
+      {
+        "cwd": "vendor/t3code/packages/effect-acp",
+        "command": "pnpm test"
+      },
+      {
+        "cwd": "vendor/t3code/packages/effect-codex-app-server",
+        "command": "pnpm test"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-acp",
+        "command": "pnpm test"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-acp-registry",
+        "command": "pnpm test"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-cursor",
+        "command": "pnpm test"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-fx",
+        "command": "pnpm test"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-grok",
+        "command": "pnpm test"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-muse",
+        "command": "pnpm test"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-opencode",
+        "command": "pnpm test"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-pi",
+        "command": "pnpm test"
+      }
+    ],
+    "parent_typecheck_entrypoints_unrun": [
+      {
+        "cwd": "vendor/t3code/packages/effect-acp",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/effect-codex-app-server",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-acp",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-acp-registry",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-cursor",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-fx",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-grok",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-muse",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-opencode",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-pi",
+        "command": "pnpm typecheck"
+      },
+      {
+        "cwd": "vendor/t3code/packages/provider-testing",
+        "command": "pnpm typecheck"
+      }
+    ],
+    "barrier": "Main performs integrated verification after all source imports and shared parent integration land. Listed commands are entrypoints, not passing results."
+  },
+  "blockers": []
+}

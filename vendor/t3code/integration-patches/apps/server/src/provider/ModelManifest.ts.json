@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/ModelManifest.ts",
+  "beforeSha256": "ebc928bbe30b07ff65ffc956ca5cd2f3f933a8a966fd61e62033ac36798f02cb",
+  "afterSha256": "a0bdd0e146878a579d9dde5733f871f96bdd6dc324cd9e3e0d26de71fd11daa9",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 17,
+      "before": [
+        "import { ServerConfig } from \"../config.ts\";\n",
+        "import * as ServerSettings from \"../serverSettings.ts\";\n"
+      ],
+      "after": [
+        "import { ServerConfig } from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\"\n",
+        "import * as ServerSettings from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-settings.ts\"\n"
+      ]
+    }
+  ]
+}

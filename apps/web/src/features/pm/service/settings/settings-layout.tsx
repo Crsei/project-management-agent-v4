@@ -17,11 +17,13 @@ import { SettingsShortcuts } from "./settings-shortcuts"
 import { settingsGroups, settingsPages, workspaceSettingsPages, type SettingsPageSlug } from "./settings-catalog"
 import type { SettingsPageProps } from "./settings-shared"
 import { SettingsAgent } from "../../agent/agent-settings-overview"
+import { SettingsDesignSystem } from "./settings-design-system"
 
 const components: Record<SettingsPageSlug, ComponentType<SettingsPageProps>> = {
   general: SettingsGeneral,
   workspace: SettingsWorkspace,
   appearance: SettingsAppearance,
+  "design-system": SettingsDesignSystem,
   language: SettingsLanguage,
   datetime: SettingsDateTime,
   members: SettingsMembers,
@@ -62,7 +64,7 @@ function SettingsLayout({ mode }: SettingsPageProps) {
   const root = `${mode === "lab" ? "/lab/pm" : "/pm"}/${encodeURIComponent(workspaceSlug)}/settings`
   useEffect(() => { scroller.current?.scrollTo({ top: 0 }) }, [settingsPage])
   return <div ref={scroller} data-settings-mode={mode} data-pm-route-page className="relative min-h-0 min-w-0 flex-1 overflow-y-auto bg-surface">
-    <div className="mx-auto w-full max-w-[1440px] px-4 pb-12 pt-5 sm:px-6 lg:px-8">
+    <div className="w-full px-4 pb-12 pt-5 sm:px-6 lg:px-8">
       <nav aria-label={t("面包屑", "Breadcrumb")} className="mb-6 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <Link to={mode === "lab" ? "/lab/pm" : "/pm"} className="rounded-control hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{t("项目管理", "Project Management")}</Link>
         <ChevronRight aria-hidden="true" className="size-3" />
@@ -105,7 +107,7 @@ function SettingsLayout({ mode }: SettingsPageProps) {
             </nav>
           </div>
         </aside>
-        <main className="min-w-0" key={`${mode}:${workspaceSlug}:${settingsPage}`}>
+        <main className="w-full min-w-0 max-w-[1160px]" key={`${mode}:${workspaceSlug}:${settingsPage}`}>
           {Page ? <Page mode={mode} /> : <div role="alert" className="space-y-3"><h2 className="text-lg font-semibold">{t("设置页面不存在", "Settings page not found")}</h2><Link to={`${root}/general`} className="underline">{t("返回设置概览", "Return to settings overview")}</Link></div>}
         </main>
       </div>

@@ -10,7 +10,6 @@ import {
   ChartGantt,
   ChevronRight,
   FileText,
-  Bot,
   FolderKanban,
   Home,
   LayoutDashboard,
@@ -25,8 +24,6 @@ import {
   Star,
   Users,
   UsersRound,
-  Wifi,
-  WifiOff,
 } from "lucide-react"
 import { WorkspaceShell } from "@/components/blocks/workspace-shell"
 import {
@@ -44,7 +41,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { useI18n } from "@/lib/i18n-provider"
 import { useRouteEntrance } from "@/lib/use-route-entrance"
 import { useWorkspaceStore } from "@/providers/app-providers"
@@ -449,24 +445,6 @@ function AuthorizedProjectCrumb({ base, projectId, current }: { base: string; pr
   return <Link to={`${base}/projects/${encodeURIComponent(projectId)}`} className={shellStyles.projectCrumb} aria-current={current ? "page" : undefined} title={name}>{name}</Link>
 }
 
-function ConnectionDetails({ label, healthy, compact = false }: { label: string; healthy: boolean; compact?: boolean }) {
-  const service = usePmService()
-  const en = useI18n().locale === "en"
-  return <Popover>
-    <PopoverTrigger render={<button type="button" className={compact ? shellStyles.connectionCompact : shellStyles.connection} data-healthy={healthy} aria-label={`${en ? "Connection" : "连接"}: ${label}. ${en ? "View service details" : "查看服务详情"}`} title={label} />}>
-      {healthy ? <Wifi aria-hidden="true" /> : <WifiOff aria-hidden="true" />}
-      <span role={compact ? undefined : "status"}>{label}</span>
-    </PopoverTrigger>
-    <PopoverContent side={compact ? "bottom" : "top"} align={compact ? "end" : "start"} className={shellStyles.connectionDetails}>
-      <PopoverTitle className="font-medium">{en ? "Service status" : "服务状态"}</PopoverTitle>
-      <p>{en ? "Connection" : "连接"}: {label}</p>
-      {!healthy && <p>{en ? "Live updates are not connected. The last snapshot may be stale; unknown writes still need their original receipts checked." : "实时更新当前未连接，上次快照可能已过期；结果未知的写入仍须核对原收据。"}</p>}
-      {service.error && <p role="alert" className="text-destructive">{pmErrorMessage(service.error, en ? "en" : "zh")}</p>}
-      {service.capabilities?.execution.enabled === false && <p>{en ? "Agent execution is not enabled." : "Agent 执行未启用。"}</p>}
-    </PopoverContent>
-  </Popover>
-}
-
 function ServiceFrame({ children }: { children: ReactNode }) {
   const service = usePmService()
   const { workspace, actor, streamState } = service
@@ -507,6 +485,7 @@ function ServiceFrame({ children }: { children: ReactNode }) {
           ? projectDetailVariant
           : ""
   const [logoutError, setLogoutError] = useState("")
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const [retryFeedback, setRetryFeedback] = useState("")
   const online = useSyncExternalStore(onlineManager.subscribe, () => onlineManager.isOnline(), () => true)
@@ -597,6 +576,9 @@ function ServiceFrame({ children }: { children: ReactNode }) {
       ? "gantt"
       : ""
   const homeLabel = en ? "Home" : "首页"
+  const settingsLabel = en ? "Settings" : "设置"
+  const settingsRoot = `${base}/settings`
+  const settingsActive = pathname === settingsRoot || pathname.startsWith(`${settingsRoot}/`)
   const personalLinks = [
     ["mine", ListTodo, en ? "My Tasks" : "我的任务"],
     ["important", Star, en ? "Important / Watching" : "重要 / 我关注的"],
@@ -612,22 +594,7 @@ function ServiceFrame({ children }: { children: ReactNode }) {
     ["members?tab=members", Users, en ? "Members & teams" : "成员与团队", memberPage],
     ["notifications", Bell, en ? "Activity" : "活动", pathname === `${base}/notifications`],
   ] as const
-  const agentLinks = [
-    ["agent", Bot, en ? "Chat" : "对话", pathname === `${base}/agent`],
-  ] as const
   const navigationLinkClass = shellStyles.navigationLink
-  const connectionStates: Record<string, string> = {
-    "signed-out": en ? "Signed out" : "未登录",
-    idle: en ? "Idle" : "空闲",
-    disabled: en ? "Real-time updates unavailable" : "实时更新未启用",
-    connecting: en ? "Connecting" : "正在连接",
-    live: en ? "Live" : "已连接",
-    reconnecting: en ? "Reconnecting" : "正在重连",
-    resyncing: en ? "Resynchronizing" : "正在重新同步",
-    "permission-denied": en ? "Access denied" : "无访问权限",
-  }
-  const connectionLabel = online ? connectionStates[streamState] ?? streamState : en ? "Offline" : "离线"
-  const healthyConnection = online && streamState === "live"
   const currentProjectId = projectDetailMatch?.params.projectId ?? projectMatch?.params.projectId
   const pageLabel = pathname.endsWith("/issues/new")
     ? en ? "New task" : "新建任务"
@@ -639,19 +606,34 @@ function ServiceFrame({ children }: { children: ReactNode }) {
           : pathname.endsWith("/events") ? en ? "Calendar" : "日历" : null
         : issueCollection && personalScope
           ? personalLinks.find(([personal]) => personal === scope)?.[2]
-          : pathname.startsWith(`${base}/settings`)
-            ? en ? "Settings" : "设置"
+          : settingsActive
+            ? settingsLabel
             : pathname === `${base}/whiteboard`
               ? en ? "Personal whiteboard" : "个人白板"
-              : homePage ? homeLabel : [...links, ...agentLinks].find(([, , , active]) => active)?.[2] ?? (en ? "Workspace" : "工作区")
+              : homePage ? homeLabel : links.find(([, , , active]) => active)?.[2] ?? (en ? "Workspace" : "工作区")
   const controls = <div className={shellStyles.headerControls}>
     {actor && <div className={shellStyles.command}><PmCommandPalette /></div>}
-    {workspace && !healthyConnection && <ConnectionDetails label={connectionLabel} healthy={healthyConnection} compact />}
     {workspace && <ServiceHeaderMenu base={base} section={pageSection} activeView={pageVariant} />}
   </div>
   const menuScope = `${actor?.id ?? "anonymous"}:${workspace?.id ?? "none"}`
+  const railItems = [
+    { key: "home", to: `${base}/home`, icon: Home, label: homeLabel, active: homePage },
+    ...personalLinks.map(([personal, icon, label]) => ({ key: personal, to: `${base}/issues?scope=${personal}`, icon, label, active: issueCollection && scope === personal })),
+    ...links.map(([path, icon, label, active]) => ({ key: path, to: `${base}/${path}`, icon, label, active })),
+  ]
+  const sidebarRail = <nav data-pm-sidebar className={shellStyles.rail} aria-label={en ? "Workspace navigation" : "工作区导航"}>
+    <PmWorkspaceSwitcher collapsed />
+    <div className={shellStyles.railScroll}>
+      {workspace && railItems.map(({ key, to, icon: Icon, label, active }) => <Link key={key} to={to} data-navigation-close title={label} aria-label={label} aria-current={active ? "page" : undefined} className={shellStyles.railLink}><Icon className="size-4 shrink-0" aria-hidden="true" /></Link>)}
+    </div>
+    <div className={shellStyles.railFooter}>
+      {workspace && <Link to={`${settingsRoot}/general`} data-navigation-close title={settingsLabel} aria-label={settingsLabel} aria-current={settingsActive ? "page" : undefined} className={shellStyles.railLink}><SettingsIcon className="size-4 shrink-0" aria-hidden="true" /></Link>}
+      {actor && <PmUserMenu collapsed />}
+    </div>
+  </nav>
   return <ServiceProjectMenuProvider key={menuScope}><div className={`fixed inset-0 min-w-0 ${referenceLayout ? dashboardStyles.page : ""}`} data-pm-product data-pm-actor={actor?.id}>
     <WorkspaceShell layoutMode="adaptive" mobileNavigation headerPlacement="main" defaultSidebarWidth={252} sidebarMinWidth={200} sidebarMaxWidth={360} sidebarResizable inspectorOpen={false} bottomPanelOpen={false}
+      sidebarCollapsed={sidebarCollapsed} onSidebarCollapsedChange={setSidebarCollapsed} collapsedSidebar={sidebarRail}
       title={<nav className={shellStyles.breadcrumb} aria-label={en ? "Breadcrumb" : "面包屑导航"}>
         <Link to={base} className={shellStyles.workspaceCrumb} title={workspace?.name}>{workspace?.name ?? (en ? "Workspace" : "工作区")}</Link>
         <ChevronRight className={shellStyles.workspaceCrumbSeparator} aria-hidden="true" />
@@ -669,26 +651,20 @@ function ServiceFrame({ children }: { children: ReactNode }) {
               {personalLinks.map(([personal, Icon, label]) => <Link key={personal} to={`${base}/issues?scope=${personal}`} data-navigation-close aria-current={issueCollection && scope === personal ? "page" : undefined} className={navigationLinkClass}><Icon className="size-4 shrink-0" aria-hidden="true" /><span className="min-w-0 truncate" title={label}>{label}</span></Link>)}
             </section>
             <section aria-label={en ? "Workspace" : "工作区"}>
-              <div className={shellStyles.sectionHeader}>
-                <h2 className={shellStyles.sectionHeading}>{en ? "Workspace" : "工作区"}</h2>
-                <Link to={`${base}/issues/new`} data-navigation-close aria-current={pathname === `${base}/issues/new` ? "page" : undefined} className={shellStyles.newTask}>{en ? "+ New task" : "+ 新建任务"}</Link>
-              </div>
+              <h2 className={shellStyles.sectionHeading}>{en ? "Workspace" : "工作区"}</h2>
               {links.map(([path, Icon, label, active]) => <Link key={path} to={`${base}/${path}`} data-navigation-close aria-current={active ? "page" : undefined} className={navigationLinkClass}><Icon className="size-4 shrink-0" aria-hidden="true" /><span className="min-w-0 truncate" title={label}>{label}</span></Link>)}
             </section>
-            <details className={shellStyles.agentGroup} open={agentLinks.some(([, , , active]) => active) || undefined}>
-              <summary className={navigationLinkClass}><ChevronRight className={shellStyles.agentChevron} aria-hidden="true" /><span>Agent</span></summary>
-              {agentLinks.map(([path, Icon, label, active]) => <Link key={path} to={`${base}/${path}`} data-navigation-close aria-current={active ? "page" : undefined} className={navigationLinkClass}><Icon className="size-4 shrink-0" aria-hidden="true" /><span>{label}</span></Link>)}
-            </details>
             <ServiceProjectSidebar base={base} projectId={projectMatch?.params.projectId} />
           </>}
         </div>
         <div className={shellStyles.footer}>
+          {workspace && <Link to={`${settingsRoot}/general`} data-navigation-close aria-current={settingsActive ? "page" : undefined} className={navigationLinkClass}><SettingsIcon className="size-4 shrink-0" aria-hidden="true" /><span className="min-w-0 truncate" title={settingsLabel}>{settingsLabel}</span></Link>}
           {actor && <PmUserMenu />}
-          {workspace && <ConnectionDetails label={connectionLabel} healthy={healthyConnection} />}
         </div>
       </nav>} className={`h-full! ${shellStyles.shell}`}>
       <div key={`${actor?.id ?? "anonymous"}:${workspace?.id ?? "none"}`} ref={entranceRef} className="flex h-full min-h-0 min-w-0 flex-col" data-pm-route-surface>
         {!online && <p role="status" className="shrink-0 border-b border-warning bg-surface p-3 text-sm">{en ? "Offline. Showing the last snapshot, which may be stale. Reads resume when the network returns; unknown commands still require checking their original receipts." : "当前离线，显示的上次快照可能已过期。联网后恢复读取；结果未知的命令仍须查询原收据。"}</p>}
+        {workspace && online && (streamState === "reconnecting" || streamState === "resyncing") && <p role="status" className="shrink-0 border-b border-warning bg-surface p-3 text-sm">{en ? "Live updates were interrupted or need resynchronization; the last snapshot may be stale. Unknown writes still need their original receipts checked." : "实时更新中断或需要重新同步，上次快照可能已过期；结果未知的写入仍须核对原收据。"}</p>}
         {service.error && <p role="alert" className="shrink-0 border-b border-destructive bg-surface px-3 py-2 text-sm text-destructive">{pmErrorMessage(service.error, en ? "en" : "zh")}</p>}
         <PmCommandRecovery />
         <PmAgentProvider>{children}</PmAgentProvider>

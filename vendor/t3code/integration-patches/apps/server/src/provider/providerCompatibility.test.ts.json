@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/providerCompatibility.test.ts",
+  "beforeSha256": "0c48d99ddaab41346a50cef65407d4d9cbfea7e8ed89344de52bc22ddae6e41d",
+  "afterSha256": "02c98a2f4109f427cc86217435c2c590e8a99967fe2243b024d03c4bd5bd062e",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 10,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import { makeTestServerConfigLayer } from \"./testUtils/providerHostFixtures.ts\";\n"
+      ]
+    },
+    {
+      "start": 271,
+      "before": [
+        "      ServerConfig.layerTest(process.cwd(), { prefix: \"compatibility-registry-test\" }).pipe(\n"
+      ],
+      "after": [
+        "      makeTestServerConfigLayer(process.cwd(), { prefix: \"compatibility-registry-test\" }).pipe(\n"
+      ]
+    }
+  ]
+}

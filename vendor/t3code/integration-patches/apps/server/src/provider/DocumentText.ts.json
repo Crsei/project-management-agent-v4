@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/DocumentText.ts",
+  "beforeSha256": "e0edbd57af2d883b99fd2629608688710e26102d1354d3dd87d4d1faeb5fab71",
+  "afterSha256": "f4cf659fab6c5d3c3cab2624730392c40bb6ba5e358fca90710dd19b19a4be83",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 2,
+      "before": [
+        "import * as NodeURL from \"node:url\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 11,
+      "before": [],
+      "after": [
+        "export const DocumentTextWorkerEntry = Context.Reference<string>(\"t3/provider/DocumentTextWorkerEntry\", {\n",
+        "  defaultValue: () => { throw new Error(\"Document text worker entry must be supplied by the host.\"); },\n",
+        "});\n"
+      ]
+    },
+    {
+      "start": 32,
+      "before": [
+        "      Effect.orElseSucceed(() => undefined),\n"
+      ],
+      "after": [
+        "      Effect.orDie,\n"
+      ]
+    },
+    {
+      "start": 44,
+      "before": [
+        "const make = Effect.gen(function* () {\n"
+      ],
+      "after": [
+        "export const make = Effect.gen(function* () {\n"
+      ]
+    },
+    {
+      "start": 47,
+      "before": [
+        "  const isExecutable = yield* HostProcess.IsExecutable;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 51,
+      "before": [
+        "  const failed = new Map<string, number>();\n",
+        "  // In a bundle import.meta.url is bin.mjs; development and tests use this source module.\n",
+        "  const entry = NodeURL.fileURLToPath(\n",
+        "    new URL(import.meta.url.endsWith(\".ts\") ? \"../bin.ts\" : \"./bin.mjs\", import.meta.url),\n",
+        "  );\n"
+      ],
+      "after": [
+        "  const failed = new Map<string, { readonly until: number; readonly error: DocumentTextError }>();\n",
+        "  const entry = yield* DocumentTextWorkerEntry;\n"
+      ]
+    },
+    {
+      "start": 59,
+      "before": [
+        "    if ((failed.get(path) ?? 0) > clock.currentTimeMillisUnsafe()) return;\n"
+      ],
+      "after": [
+        "    const previousFailure = failed.get(path);\n",
+        "    if (previousFailure && previousFailure.until > clock.currentTimeMillisUnsafe()) return yield* Effect.fail(previousFailure.error);\n"
+      ]
+    },
+    {
+      "start": 67,
+      "before": [
+        "            [...(isExecutable ? [] : [entry]), \"__document-text\", path, `.${extension}`],\n"
+      ],
+      "after": [
+        "            [\"--max-old-space-size=192\", entry, \"__document-text\", path, `.${extension}`],\n"
+      ]
+    },
+    {
+      "start": 74,
+      "before": [
+        "              env: {\n",
+        "                ...environment,\n",
+        "                ELECTRON_RUN_AS_NODE: \"1\",\n",
+        "                NODE_OPTIONS: `${environment.NODE_OPTIONS ?? \"\"} --max-old-space-size=192`,\n",
+        "              },\n"
+      ],
+      "after": [
+        "              env: environment,\n"
+      ]
+    },
+    {
+      "start": 85,
+      "before": [
+        "      Effect.tapError(({ cause }) => {\n"
+      ],
+      "after": [
+        "      Effect.tapError((error) => {\n"
+      ]
+    },
+    {
+      "start": 87,
+      "before": [
+        "        failed.set(\n",
+        "          path,\n",
+        "          cause instanceof Error && \"code\" in cause && cause.code === 2\n",
+        "            ? Infinity\n",
+        "            : clock.currentTimeMillisUnsafe() + 1_000,\n",
+        "        );\n"
+      ],
+      "after": [
+        "        failed.set(path, { error, until: error.cause instanceof Error && \"code\" in error.cause && error.cause.code === 2\n",
+        "          ? Infinity : clock.currentTimeMillisUnsafe() + 1_000 });\n"
+      ]
+    },
+    {
+      "start": 114,
+      "before": [
+        "    Effect.orElseSucceed(() => undefined),\n"
+      ],
+      "after": [
+        "    Effect.orDie,\n"
+      ]
+    }
+  ]
+}

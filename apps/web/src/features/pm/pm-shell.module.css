@@ -26,6 +26,72 @@
   display: none;
 }
 
+.rail {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.railScroll {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.railScroll::-webkit-scrollbar {
+  display: none;
+}
+
+.railLink {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--control-radius);
+  color: var(--muted-foreground);
+  outline: none;
+}
+
+.railLink:hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+.railLink[aria-current="page"] {
+  background: var(--selection);
+  color: var(--foreground);
+}
+
+.railLink:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.railFooter {
+  display: flex;
+  width: 100%;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
 .navigationLink {
   display: flex;
   min-width: 0;
@@ -40,10 +106,7 @@
   outline: none;
 }
 
-.navigationLink:hover,
-.newTask:hover,
-.connection:hover,
-.connectionCompact:hover {
+.navigationLink:hover {
   background: var(--surface-hover);
   color: var(--foreground);
 }
@@ -54,38 +117,9 @@
 }
 
 .navigationLink:focus-visible,
-.newTask:focus-visible,
-.connection:focus-visible,
-.connectionCompact:focus-visible,
 .breadcrumb a:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
-}
-
-.agentGroup {
-  margin: 6px 0;
-}
-
-.agentGroup > summary {
-  cursor: pointer;
-  list-style: none;
-}
-
-.agentGroup > summary::-webkit-details-marker {
-  display: none;
-}
-
-.agentGroup > a {
-  padding-left: 30px;
-}
-
-.agentChevron {
-  width: 16px;
-  height: 16px;
-}
-
-.agentGroup[open] > summary .agentChevron {
-  transform: rotate(90deg);
 }
 
 .personalSection {
@@ -101,29 +135,6 @@
   font-size: 11px;
   line-height: 16px;
   font-weight: 500;
-}
-
-.sectionHeader {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-}
-
-.newTask {
-  display: flex;
-  min-height: 24px;
-  align-items: center;
-  padding: 0 6px;
-  border-radius: var(--control-radius);
-  color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 16px;
-}
-
-.newTask[aria-current="page"] {
-  color: var(--foreground);
 }
 
 .footer {
@@ -207,80 +218,14 @@
   background: var(--border);
 }
 
-.connection,
-.connectionCompact {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  border-radius: var(--control-radius);
-  color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 16px;
-  text-align: left;
-  outline: none;
-}
-
-.connection {
-  width: 100%;
-  min-height: 26px;
-  padding: 0 8px;
-}
-
-.connectionCompact {
-  min-height: 32px;
-  padding: 0 6px;
-}
-
-.connection > svg,
-.connectionCompact > svg {
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
-}
-
-.connection > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.connection[data-healthy="false"],
-.connectionCompact[data-healthy="false"] {
-  color: var(--foreground);
-}
-
-.connection[data-healthy="false"] > svg,
-.connectionCompact[data-healthy="false"] > svg {
-  color: var(--destructive);
-}
-
-.connectionDetails {
-  width: 300px;
-  padding: 12px;
-  font-size: 12px;
-  line-height: 20px;
-}
-
-.connectionDetails > * + * {
-  margin-top: 6px;
-}
-
 @media (max-width: 767px) {
-  .command kbd,
-  .connectionCompact > span {
+  .command kbd {
     display: none;
   }
 
   .command > button {
     min-width: 32px;
     padding: 0 8px;
-  }
-
-  .connectionCompact {
-    min-width: 32px;
-    justify-content: center;
   }
 }
 
@@ -293,15 +238,12 @@
 
 @media (pointer: coarse) {
   .navigationLink,
-  .newTask,
   .command > button,
-  .connectionCompact,
   .footer > button {
     min-height: 44px;
   }
 
-  .command > button,
-  .connectionCompact {
+  .command > button {
     min-width: 44px;
   }
 }

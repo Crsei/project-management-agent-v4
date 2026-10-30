@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "packages/provider-pi/src/server/textGeneration.ts",
+  "beforeSha256": "e21695085f5f53c8984baad9342ff311b7c023aec12bc5e7eb2aee49d299cbd6",
+  "afterSha256": "d477c7954ef5a4f3fd3836e43e4012487d2cbc4143d0e33254912128d62a8307",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 37,
+      "before": [
+        "        mcpSession: undefined,\n"
+      ],
+      "after": [
+        "        runtimeBinding: undefined,\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "source": "packages/provider-core/src/server/usage.ts",
+  "beforeSha256": "8a03d88793f3e30a2b738663e70d4ed92a8b30ec77f331c2bc396e492153ed70",
+  "afterSha256": "266a46f98c2f49c2ecc652106cb61db542e8f380b81d5b1a8e68eed3b57b7057",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 23,
+      "before": [],
+      "after": [
+        "  /** Explicit native tier is unknown; never recover it from a launch preference. */\n",
+        "  readonly unrecognizedServiceTier?: true;\n"
+      ]
+    }
+  ]
+}

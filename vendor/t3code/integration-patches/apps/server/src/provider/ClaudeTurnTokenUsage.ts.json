@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/ClaudeTurnTokenUsage.ts",
+  "beforeSha256": "82a8699fdecb17b273d73f4d2b0e2695b8efd2755e91d93e50792b27eb6abfb5",
+  "afterSha256": "9a4a9e0b30e27ff602b4c656a002da88cf71ae249bea19122f10681ab96e2d24",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 19,
+      "before": [
+        "  return earlierCounts.reduce<number>(\n",
+        "    (sum, count) => sum + (finiteNonNegativeInteger(count) ?? 0),\n",
+        "    known,\n",
+        "  );\n"
+      ],
+      "after": [
+        "  let total = known;\n",
+        "  for (const count of earlierCounts) {\n",
+        "    const value = finiteNonNegativeInteger(count);\n",
+        "    if (value === undefined) return undefined;\n",
+        "    total += value;\n",
+        "  }\n",
+        "  return total;\n"
+      ]
+    },
+    {
+      "start": 77,
+      "before": [
+        "  const cachedInputContribution = usage.cache_read_input_tokens == null ? 0 : cachedInputTokens;\n",
+        "  const cacheCreationContribution =\n",
+        "    usage.cache_creation_input_tokens == null ? 0 : cacheCreationTokens;\n"
+      ],
+      "after": [
+        "  const cachedInputContribution = cachedInputTokens;\n",
+        "  const cacheCreationContribution = cacheCreationTokens;\n"
+      ]
+    }
+  ]
+}

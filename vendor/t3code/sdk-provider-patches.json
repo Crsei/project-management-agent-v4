@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "owner": "T12",
+  "slice": "M4-Cursor-Muse-Pi",
+  "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "hostContract": "pm-provider-host/1",
+  "verification": "Implementation only. No tests, builds, lint, formatter, dependency installation, native smoke, authentication, account operation or service restart was executed by T12. Source SHA256 values below are the parent-frozen manifest evidence, not fresh checksum results.",
+  "sourceCopies": [
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/CursorAdapterV2.testkit.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/CursorAdapterV2.testkit.ts",
+      "upstreamSha256": "0f27b41124986564596cede6a544196f38de019c907883e0cb292dd0f2dc6ba5",
+      "action": "copy-then-patch",
+      "patch": "Original makeCursorAgentOptions fixture uses the host-only runtimeBinding input rather than obsolete source business MCP session input. Remove only the unconsumed application registry layer, CursorOrchestratorReplayHarness and its business driver-error union. Recording approval/sandbox picks now use the identical optional fields of the original ProviderAdapterV2RuntimePolicy instead of importing the t3 ProjectStore runtime-policy service.",
+      "role": "Test-only upstream replay fixture; never a production orchestration dependency."
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/MuseAdapterV2.testkit.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/MuseAdapterV2.testkit.ts",
+      "upstreamSha256": "a30dcd8444410235ba49e36e0e59155835a9926b2b9d770cf2ceb18215faf626",
+      "action": "copy-then-patch",
+      "patch": "Remove only the unconsumed application registry layer, its default application settings and MuseOrchestratorReplayHarness. Preserve the original MSP transcript schema, frame matching/controller, request-ID correlation, transport connection/replay host, recorder labels and canonical workspace materialization.",
+      "role": "Test-only upstream native replay support; no application registry or business orchestrator dependency."
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/PiAdapterV2.testkit.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/PiAdapterV2.testkit.ts",
+      "upstreamSha256": "827c6510df052cbad4f288b3044ce96b860e90c3e5397b3ba81c1f2d5fc5afab",
+      "action": "copy-then-patch",
+      "patch": "Remove only the unconsumed application registry layer, PiOrchestratorReplayHarness and its business driver-error union/launch-metadata wrapper helper. Preserve the original RPC transcript schema, frame matching/controller, process/request-ID correlation, replay spawner and live recording spawner.",
+      "role": "Test-only upstream native replay support; no application registry or business orchestrator dependency."
+    }
+  ],
+  "semanticReferences": [
+    "local://m4-SolSdkProviders-original-refs.md",
+    "local://m4-SolSdkProviders-local-refs.md",
+    "local://m4-pi-mcp-testkit-refs.md",
+    "local://m4-cursor-host-input-refs.md",
+    "local://m4-cursor-worker-input-refs.md",
+    "local://m4-native-history-contract-refs.md"
+  ],
+  "nativeReplayFixtureRepair": {
+    "consumerEvidence": "Main supplied LSP references before removal: each Cursor/Muse/Pi OrchestratorReplayHarness export had only its own declaration; each exported layer had only its declaration and its same-file harness call. Cursor harness error schema/type references were same-file only. Replay runner, recording and workspace helper references were also declaration/same-file only. No native consumer or behavior test was removed.",
+    "removedApplicationImports": [
+      "CursorAdapterV2.testkit.ts: ../ProviderAdapterRegistry.ts, ../testkit/ProviderReplayHarness.ts, ../RuntimePolicy.ts",
+      "MuseAdapterV2.testkit.ts: ../ProviderAdapterRegistry.ts, ../testkit/ProviderReplayHarness.ts",
+      "PiAdapterV2.testkit.ts: ../ProviderAdapterRegistry.ts, ../testkit/ProviderReplayHarness.ts"
+    ],
+    "nativeAlgorithms": "Original protocol decoding, matching, queued inbound ordering, correlation, replay completeness checks and recording helpers remain in the copied sources. Only unconsumed t3 application composition was removed; no replacement registry, business runtime, fabricated harness or compiler exclusion was introduced.",
+    "verification": "Parent-reported selected-server type diagnostics prompted this change. SolReplayTypes did not run typecheck, tests, lint, build, formatter, installation or native execution; Main owns integrated validation."
+  },
+  "integratedRepair": {
+    "parentEvidence": "Parent integrated typecheck failed; actual diagnostics are local://provider-m4-type-errors.txt. T12 did not rerun it or execute any other checks during repair.",
+    "cleanup": "Cursor worker cleanup exits have an explicit common unknown-error Exit type. Cleanup is memoized and interruption-safe; graceful-close failure cannot skip process-tree termination, exact AgentScope stop or actual exit observation. Synchronous spawn failure releases its original scope. The worker attempts SDK, MCP, SQLite and runtime disposal in ownership order even after earlier failure, and releases on owning IPC disconnect. Adapter scope finalizers preserve close/assertComplete failures as observable defects, not warning-only success. Callback invocation also captures synchronous throws. Pi mutable active-turn state retains the actual ActivePiTurn annotation instead of literal-false satisfies inference.",
+    "nativeHistoryContract": "Parent-owned provider-core ProviderAdapter.ts now defines ProviderNativeCompletedTurnRef and ProviderNativeHistoryBoundary. Original ThreadSnapshot optionally carries nativeHistory; ForkThreadInput optionally carries nativeCompletedTurnRef. Family/package implementations consume those typed fields, not opaque payload conventions. Original providerTurns retain their true projection: no invented NodeId, RunAttemptId, PM completion, ordinal or timestamp.",
+    "completionEvidence": "Cursor proves only actual finished SDK runs (error/cancelled are native terminal failures, not successes), rereads native metadata rather than caching proof, and exposes optional nativeHistory on its original snapshots with exact driver/instance/native session/cwd/Home validation. Only the probe-created Agent acquisition is cached. Muse requires actual lastTurn terminal=completed with nonempty identity and rejects an unbound native session before session/read or resume. Pi follows complete acyclic active ancestry and requires that user segment's latest persisted native assistant stopReason be stop/length; user entries, idle alone, missing markers, toolUse, error or aborted do not prove completion. Unknown native model selection remains absent; an unknown requested Cursor run never borrows a different completed run's model.",
+    "piForkAndRefresh": "Pi preserves the original providerTurnId path. A separate typed native-only boundary rejects conflicting/foreign input, validates the source native header, validates the actual cloned target header/Home/cwd/sessionFile/sessionId and idle state before reading its active ancestry, and revalidates the final target identity. It forks before the NEXT discarded native user entry (even a still-incomplete successor); no-next uses original CLI --fork. Requested target snapshots validate their own exact driver/instance/thread identity, persisted Home/cwd/header, actual RPC identity and surviving active branch, never relabel source history. Empty native entry IDs, cycles, missing ancestors and duplicates cannot prove a native turn. Fresh unpersisted empty sessions claim no native history.",
+    "cursorExactOptionalProperties": "Follow-on parent vendor type diagnostics are addressed at transport/resource boundaries without changing exported DTOs or weakening exactOptionalPropertyTypes: omit absent MCP arguments/descriptions, require the operation-owned SQLite store and explicit resume agent/cwd, normalize decoded optional run models by omission, and preserve the genuine finished discriminator in the partial-usage transport fixture. Parent owns consolidated verification; T12 ran no checks.",
+    "requiredParentConsumption": "Parent execution/continuation decode matching driver/nativeSessionId and nonempty genuine completed refs, persist optional nativeHistory only in the existing continuation sidecar with old-row readability, and require fresh matching target nativeHistory after a history-bearing Pi fork. Missing target proof must mismatch; source refs must never be reused as target proof or inserted into PM graph turns."
+  },
+  "productionAssembly": {
+    "files": [
+      "apps/server/agent/src/providers/drivers/cursor.ts",
+      "apps/server/agent/src/providers/drivers/muse.ts",
+      "apps/server/agent/src/providers/drivers/pi.ts",
+      "apps/server/agent/src/providers/t3code/families/cursor.ts",
+      "apps/server/agent/src/providers/t3code/families/muse.ts",
+      "apps/server/agent/src/providers/t3code/families/pi.ts"
+    ],
+    "exports": {
+      "cursor": ["cursorDriver", "makeCursorDriverLayer(context, runtimeHost)", "cursorProtocolResolver", "cursorCapabilities", "cursorInstallationMethods"],
+      "muse": ["museDriver", "makeMuseDriverLayer(context, runtimeHost)", "museProtocolResolver", "museCapabilities", "museInstallationMethods"],
+      "pi": ["piDriver", "makePiDriverLayer(context, runtimeHost)", "piProtocolResolver", "piCapabilities", "piInstallationMethods"]
+    },
+    "contract": "Concrete original driver layers share the execution application's exact RuntimeHost. Facades use only the pure application-access getter and delegate management/execution. Installation method sets are empty: do not synthesize unsupported install/remove operations; original Muse/Pi update remains management.update.",
+    "cursorHistoricalFields": "Inactive binaryPath/apiEndpoint values may remain in stored configuration; neither is an active Cursor SDK execution override. Explicit CURSOR_API_KEY stays secret environment input, separate from original native browser login credentials."
+  },
+  "packagePatches": [
+    {
+      "package": "provider-cursor",
+      "pathBase": "vendor/t3code/packages/provider-cursor/",
+      "adapted": ["src/server/adapter.ts", "src/server/driver.ts", "src/server/CursorAgentSdk.ts"],
+      "added": ["src/server/sessionEvidence.ts", "src/server/CursorHostPaths.ts", "src/server/CursorNativeMetadata.ts", "src/server/CursorHostTools.ts", "src/server/CursorSdkTransport.ts", "src/server/CursorSdkWorker.ts", "src/server/CursorSdkWorkerRunner.ts"],
+      "behavior": [
+        "Original SDK runner exclusively owns Agent create/resume/send/wait/cancel/messages/close. Isolated process IPC is a host environment/resource boundary, not a second Cursor runtime.",
+        "Original disk-backed SqliteLocalAgentStore uses workspaceRef equal to the exact bound cwd and stateRoot stateDirectory/.cursor/sdk/state, including message reads. Parent recovered both exact pre-cutover expressions from untouched dist/index.mjs.map sourcesContent; no credential/state file was inspected.",
+        "Resume reads original Agent.get/listRuns metadata before connecting PM tools or attaching the original runner; foreign workspace and unsettled native runs are rejected without sending a prompt. The operation port then reads actual local SDK metadata, persisted messages and completed native run IDs. Legacy head/turn identity is verified before constructing the original snapshot.",
+        "Only a fresh probe-created agent is consumed once by ensureThread; ordinary subsequent original ensure semantics remain independent.",
+        "Real MCP stdio pm_tools inventory is connected and its actual tool schemas/results are adapted to SDK custom tools. Each native invocation requires original root session identity plus reauthorization against the operation-captured executionId. Native children cannot borrow the root generation's PM authority.",
+        "SDK tools stay within the existing deny-ungranted PM host policy: read/grep/glob/ls/task/mcp, autoReview disabled, original SDK-native retries retained. No AI permission grants or source business/device/orchestrator instructions.",
+        "Typed IPC preserves native binary values, awaits actual delta callback acknowledgements, carries structural SDK errors only, and retains external SDK resource loading. EOF/callback/native failures fail the original operation rather than fabricating completion or usage.",
+        "Original close plus owned process-group/Windows taskkill cleanup, exact AgentScope unit stop and real child exit are attempted; cleanup failures remain observable. Only a spawn failure or actual exit resolves worker-exit ownership proof.",
+        "App-private legacy credential migration path is supplied separately through CursorHostPaths; no global credential import or current Chat persistence replacement. Original auth/status/catalog/controller behavior remains owned upstream."
+      ]
+    },
+    {
+      "package": "provider-muse",
+      "pathBase": "vendor/t3code/packages/provider-muse/",
+      "adapted": ["src/server/adapter.ts", "src/server/driver.ts", "src/server/sdk.ts"],
+      "added": ["src/server/sessionEvidence.ts"],
+      "behavior": [
+        "Original Muse SDK initialize/start/resume/turn/output/usage lifecycle remains exclusive. Protocol evidence comes from the actual negotiated schema version 1 and fingerprint, never a separately spawned version command.",
+        "Original read-only session/read verifies native session identity, stored workspace and idle completed boundary before original register/resume. Legacy adoption never calls session/start or turn/start.",
+        "Generation PM stdio configuration replaces source t3 business MCP/device environment. Exact bound PM root-tool admission is authorized live against the captured original executionId; native child and unrelated permissions remain visible native requests, not automatic grants.",
+        "Native continuation offers retain the captured original hostExecution identity and original dispatchIfCurrent CAS guard. The shared host decides whether that generation may dispatch.",
+        "SDK host effect preserves explicit cwd and otherwise uses provided HostProcess.WorkingDirectory. Standalone original consumers without that service retain native inheritance; PM-bound usage discovery receives the actual inventory context cwd instead of PM server cwd. No duplicate Muse Home/cache implementation."
+      ]
+    },
+    {
+      "package": "provider-pi",
+      "pathBase": "vendor/t3code/packages/provider-pi/",
+      "adapted": ["src/server/adapter.ts", "src/server/mcpInjection.ts", "src/server/mcpExtensionSource.ts", "src/server/textGeneration.ts", "src/server/status.ts"],
+      "added": ["src/server/sessionEvidence.ts", "src/server/PiHostResources.ts"],
+      "removed": ["src/server/mcpBridge.testkit.ts"],
+      "behavior": [
+        "Original Pi JSONL RPC/native lifecycle/launch arguments/model/status/auth/update/output/usage remain exclusive. Fresh protocol evidence is this connection's schema-validated get_state plus get_entries; it does not assume an empty native session header was persisted before its first prompt.",
+        "Legacy adoption validates a bounded original session header and exact native Home/session-directory/cwd/id before original switch_session. The switched native identity and successful active-branch history are verified by the enriched original snapshot reader before adoption. Verified registration cannot allocate a replacement session. PM-bound direct sidecar resume also validates the header before native resume.",
+        "Buffered continuation uses the original buffered event helper and shared original active-turn allocation, unique buffered turn correlation and source pending-wake guard. No generic startTurn(empty message), new prompt, new process or terminal-generation reopening.",
+        "Original permission/skill/OpenRouter-budget helper remains. Source business HTTP MCP/tool/orchestrator extension is removed; existing PM Pi extension receives only the generation-owned loopback transport. Exact registered PM extension provenance is required for transport admission; native commands otherwise stay deny-ungranted.",
+        "Required permission-hook readiness and extension errors fail explicitly. Captured RuntimeHost execution identity is authorized before admission; native buffered continuation offers carry that original hostExecution identity plus source CAS guards.",
+        "Native information questions stay information; explicit secret_request remains marked secret and nonrespondable by the shared host. No native completion becomes PM WorkItem completion."
+      ]
+    }
+  ],
+  "deterministicTestsPreparedNotRun": {
+    "cursor": ["vendor/t3code/packages/provider-cursor/src/server/adapter.test.ts", "vendor/t3code/packages/provider-cursor/src/server/driver.test.ts", "vendor/t3code/packages/provider-cursor/src/server/CursorSdkTransport.test.ts", "vendor/t3code/packages/provider-cursor/src/server/CursorSdkWorkerRunner.test.ts", "vendor/t3code/packages/provider-cursor/src/server/RuntimeHost.testkit.ts"],
+    "muse": ["vendor/t3code/packages/provider-muse/src/server/adapter.test.ts", "vendor/t3code/packages/provider-muse/src/server/sdk.test.ts", "vendor/t3code/packages/provider-muse/src/server/RuntimeHost.testkit.ts"],
+    "pi": ["vendor/t3code/packages/provider-pi/src/server/adapter.test.ts", "vendor/t3code/packages/provider-pi/src/server/mcpInjection.test.ts", "vendor/t3code/packages/provider-pi/src/server/mcpExtensionSource.test.ts", "vendor/t3code/packages/provider-pi/src/server/RuntimeHost.testkit.ts"],
+    "evidence": "Original protocol/output/model/native request suites remain. Added metadata-before-resume/no-prompt legacy cases with graph-free nativeHistory and unknown-model preservation; actual Cursor error/cancelled history, fresh proof and foreign Home/instance rejection; Muse missing/failed/cancelled/empty completion and foreign-session refusal. New mocked-process Cursor runner tests cover close/scope failure propagation, all host cleanup boundaries, memoized failed close, spawn failure, interrupted open, real native cancellation discriminators, synchronous/asynchronous consumer callback failures and disconnected IPC without worker-exit proof. Pi cases cover stop/length, user/idle/incomplete/error/aborted/toolUse refusal, latest-assistant semantics, complete ancestry validation, typed native-only latest/historical fork, incomplete next-discarded-entry semantics, abandoned-branch exclusion, target header/cwd/session identity, streaming refusal, unknown models and conflicting/foreign boundary refusal. Existing binary IPC/native approval/buffer/permission regressions remain. All are prepared, not executed. Native-only test bindings deny by default and require explicit scoped grants; local pi-tools.test.ts retains the real PM extension/HTTP boundary suite.",
+    "parentGate": "Run the integrated backend type/build/test gate and retained original provider suites after the phase barrier with parent-owned native test host and test-runner mappings; no claim that these suites have executed."
+  },
+  "removedLocalPaths": [
+    "apps/server/agent/src/providers/drivers/cursor-credentials.ts", "apps/server/agent/src/providers/drivers/cursor-native.test.ts", "apps/server/agent/src/providers/drivers/cursor-output.test.ts", "apps/server/agent/src/providers/drivers/cursor-output.ts", "apps/server/agent/src/providers/drivers/cursor-process-tree.ts", "apps/server/agent/src/providers/drivers/cursor-process.ts", "apps/server/agent/src/providers/drivers/cursor-protocol-fixture.ts", "apps/server/agent/src/providers/drivers/cursor-sdk-worker.ts", "apps/server/agent/src/providers/drivers/cursor-sdk.ts",
+    "apps/server/agent/src/providers/drivers/muse-maintenance.ts", "apps/server/agent/src/providers/drivers/muse-protocol.test.ts", "apps/server/agent/src/providers/drivers/muse-protocol.ts", "apps/server/agent/src/providers/drivers/muse-sdk.ts",
+    "apps/server/agent/src/providers/drivers/pi-config.ts", "apps/server/agent/src/providers/drivers/pi-permissions.ts", "apps/server/agent/src/providers/drivers/pi-protocol.test.ts", "apps/server/agent/src/providers/drivers/pi-protocol.ts", "apps/server/agent/src/providers/drivers/pi-rpc.ts"
+  ],
+  "parentIntegration": {
+    "registration": "Register all three concrete driver factories/resolvers/projectors in the parent-owned registry. Share the same RuntimeHost with execution. makePmProviderHostServices(context,runtimeHost) and makePmProviderContinuationRequests(context,runtimeHost) are required by each factory. Shared continuation host must retain generation provenance/CAS and reject revoked authorization.",
+    "dependencies": "Parent centrally pins @cursor/sdk exactly 1.0.38 (not a dev tag), original @muse-code/sdk, original native Pi launcher/launch arguments, @modelcontextprotocol/sdk 1.29.0 and zod 4.6.7; parent owns manifests/lockfiles and ./server/adapter exports. AgentScope must be the real host process-scope layer, not synthetic unit identifiers.",
+    "workers": "Build vendor/t3code/packages/provider-cursor/src/server/CursorSdkWorker.ts as root cursor-sdk-worker.mjs, matching source/new URL resolution. SDK and SQLite/native/dynamic chunks stay disk external with their native resources. Preserve Node process IPC with advanced serialization, exact cwd/env, current execArgv, and shared AgentScope ownership. Remove retired local cursor-sdk-worker build entry.",
+    "piResource": "Keep packages/pm-cli/pi-tools.ts in source mode and emitted ./pm-cli/pi-tools.mjs beside the production root module. Parent added that build entry and reported actual installed Pi 1.1.0 loader aliases @sinclair/typebox to typebox 1.3.27; do not replace the existing schema dependency merely by name. Parent validates actual source/emitted extension loading. Do not silently omit the extension.",
+    "sharedConsumers": "Parent migrates retired createMuseHost usage discovery to original MuseUsageHome with a platform bound to the exact inventory cwd/env/launcher. Original Cursor catalog IDs are exact: there is no retained local normalizeCursorModelId alias; cursorSdkModelSelection owns only auto-to-default and parameter translation.",
+    "usage": "Retain original usage readers and real optional usage only. Cursor usage service requires original CursorUsageAccounts; Muse requires original MuseUsageHome/Path; parent owns central usage inventory integration. No synthetic zero telemetry or new persistence repository.",
+    "persistence": "Existing Chat-native records/sidecars/receipts and PM approvals/revisions remain authoritative. Parent-owned optional typed nativeHistory in the existing continuation sidecar preserves genuine historical boundaries across migrated turns without graph nodes or a new repository. After Pi fork, persist only freshly validated target-session survivors. No new Chat persistence design or business orchestrator."
+  },
+  "nativeSmokePrerequisites": [
+    "Parent-only execution after integrated gates, with explicit provider settings and each provider's already authorized native environment. No credential-file inspection/import, account inference or cross-provider fallback.",
+    "Cursor: complete installed @cursor/sdk 1.0.38 external package including SQLite/native/dynamic resources; current platform supported by its native implementation; emitted worker and real process cleanup support. Exercise explicit API-key and separately original browser-login identities without promoting one into the other. Use an existing local legacy agent in the exact private stateRoot/workspaceRef, verify no-prompt adoption, real completion/output/usage or genuine 401/402/quota failure, callback cancellation/EOF and no orphan resources.",
+    "Muse: original launcher in the bound PATH/configured binaryPath and an already authorized actual native Muse Home. Actual SDK schema-1 initialize/fingerprint and supported native model are prerequisites, not fabricated account readiness. Exercise read-only stored-session metadata before resume, original questions/permissions/secret marker, continuation CAS, exact workspace and live-generation PM tools; verify native process release.",
+    "Pi: installed original CLI supporting JSONL RPC get_state/get_entries/switch_session, permission extension/session_start readiness and existing authorized native model settings. Bound PI_CODING_AGENT_DIR or original Home/session directory, PM extension resource and compatible schema dependency are required. Exercise native tool output and questions, zero-prompt legacy branch adoption, actual delayed buffered events within one still-live generation, stale/terminal refusal, explicit native failure and process cleanup."
+  ],
+  "implementationBlockers": []
+}

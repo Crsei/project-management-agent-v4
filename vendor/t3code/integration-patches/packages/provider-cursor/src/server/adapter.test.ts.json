@@ -1,0 +1,343 @@
+{
+  "version": 1,
+  "source": "packages/provider-cursor/src/server/adapter.test.ts",
+  "beforeSha256": "441acc4b1340e6fa0656c097c60e707f94594e78af20dbacaaf0157b6da0b6c5",
+  "afterSha256": "777c73071b7e2ed95593d3c79575212a4c47f03bb6a6979a56fbf73e42ecc00c",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 4,
+      "before": [
+        "  EnvironmentId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 16,
+      "before": [],
+      "after": [
+        "import * as Exit from \"effect/Exit\";\n"
+      ]
+    },
+    {
+      "start": 24,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import * as RuntimeHost from \"./RuntimeHost.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 36,
+      "before": [],
+      "after": [
+        "import { bindCursorNativeMetadata } from \"./CursorNativeMetadata.ts\";\n",
+        "import { readCursorSessionEvidence } from \"./sessionEvidence.ts\";\n"
+      ]
+    },
+    {
+      "start": 38,
+      "before": [],
+      "after": [
+        "  it.effect.each([{ nativeModel: \"composer-2.5\" }, { nativeModel: undefined }])(\"validates legacy SDK metadata with model $nativeModel without a prompt\", ({ nativeModel }) =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const fs = yield* FileSystem.FileSystem;\n",
+        "      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: \"cursor-legacy-metadata-\" });\n",
+        "      const instanceId = ProviderInstanceId.make(\"cursor\");\n",
+        "      const threadId = ThreadId.make(\"cursor-legacy-thread\");\n",
+        "      const providerSessionId = ProviderSessionId.make(\"cursor-legacy-session\");\n",
+        "      const modelSelection = { instanceId, model: \"composer-2.5\" };\n",
+        "      const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({ cwd, runtimeMode: \"approval-required\", interactionMode: \"default\" });\n",
+        "      let sends = 0;\n",
+        "      const opened: string[] = [];\n",
+        "      const sdkSession: CursorAgentSdk.CursorAgentSdkSession = {\n",
+        "        agentId: \"stored-local-agent\", listMessages: Effect.succeed([]), close: Effect.void,\n",
+        "        send: () => { sends++; return Effect.die(\"Metadata adoption must not send.\"); },\n",
+        "      };\n",
+        "      const metadata = {\n",
+        "        agentId: \"stored-local-agent\", runtime: \"local\" as const, cwd, homeDirectory: cwd,\n",
+        "        runs: [{ id: \"stored-error-run\", status: \"error\" }, { id: \"stored-cancelled-run\", status: \"cancelled\" },\n",
+        "          { id: \"stored-completed-run\", status: \"finished\", ...(nativeModel ? { model: nativeModel } : {}) }],\n",
+        "      };\n",
+        "      bindCursorNativeMetadata(sdkSession, Effect.sync(() => metadata));\n",
+        "      const adapter = yield* makeCursorAdapterV2({ instanceId, environment: { HOME: cwd } }).pipe(\n",
+        "        Effect.provideService(CursorAgentSdk.CursorAgentSdkRunner, { assertComplete: Effect.void,\n",
+        "          open: input => Effect.sync(() => { opened.push(input.operation); return sdkSession; }) }),\n",
+        "        Effect.provide(TestProviderHost.layer({ cwd })),\n",
+        "      );\n",
+        "      const runtime = yield* adapter.openSession({ threadId, providerSessionId, modelSelection, runtimePolicy, initialNativeThreadId: \"stored-local-agent\" });\n",
+        "      const evidence = readCursorSessionEvidence(runtime)!;\n",
+        "      assert.equal((yield* evidence.probe).cwd, cwd);\n",
+        "      const ensure = { threadId, providerSessionId, modelSelection, runtimePolicy };\n",
+        "      const snapshot = yield* evidence.readLegacy({ nativeSessionId: \"stored-local-agent\", turnId: \"stored-completed-run\", ensure });\n",
+        "      assert.equal(snapshot.providerThread.nativeThreadRef?.nativeId, \"stored-local-agent\");\n",
+        "      assert.deepEqual(snapshot.providerTurns, []);\n",
+        "      assert.deepEqual(snapshot.nativeHistory, { nativeSessionId: \"stored-local-agent\",\n",
+        "        completedTurnRefs: [{ driver: CursorAgentSdk.CURSOR_PROVIDER, nativeId: \"stored-completed-run\", strength: \"strong\" }] });\n",
+        "      assert.equal(snapshot.providerThread.nativeMetadata?.modelSelection?.model, nativeModel);\n",
+        "      assert.equal((yield* evidence.readLegacy({ nativeSessionId: \"foreign-agent\", ensure }).pipe(Effect.result))._tag, \"Failure\");\n",
+        "      assert.equal((yield* evidence.readLegacy({ nativeSessionId: \"stored-local-agent\", turnId: \"missing-run\", ensure }).pipe(Effect.result))._tag, \"Failure\");\n",
+        "      for (const turnId of [\"stored-error-run\", \"stored-cancelled-run\"]) {\n",
+        "        assert.equal((yield* evidence.readLegacy({ nativeSessionId: \"stored-local-agent\", turnId, ensure }).pipe(Effect.result))._tag, \"Failure\");\n",
+        "      }\n",
+        "      metadata.runs.unshift({ id: \"newer-completed-run\", status: \"finished\", model: \"different-native-model\" });\n",
+        "      const refreshed = yield* evidence.readLegacy({ nativeSessionId: \"stored-local-agent\", turnId: \"stored-completed-run\", ensure });\n",
+        "      assert.equal(refreshed.nativeHistory?.completedTurnRefs.length, 2);\n",
+        "      assert.equal(refreshed.providerThread.nativeMetadata?.modelSelection?.model, nativeModel);\n",
+        "      const direct = yield* runtime.readThreadSnapshot({ providerThread: refreshed.providerThread });\n",
+        "      assert.deepEqual(direct.nativeHistory, refreshed.nativeHistory);\n",
+        "      metadata.homeDirectory = \"/foreign-native-home\";\n",
+        "      assert.equal((yield* evidence.probe.pipe(Effect.result))._tag, \"Failure\");\n",
+        "      metadata.homeDirectory = cwd;\n",
+        "      metadata.cwd = \"/foreign-native-workspace\";\n",
+        "      assert.equal((yield* runtime.readThreadSnapshot({ providerThread: refreshed.providerThread }).pipe(Effect.result))._tag, \"Failure\");\n",
+        "      metadata.cwd = cwd;\n",
+        "      const beforeForeign = opened.length;\n",
+        "      assert.equal((yield* runtime.readThreadSnapshot({ providerThread: {\n",
+        "        ...refreshed.providerThread, providerInstanceId: ProviderInstanceId.make(\"foreign-instance\"),\n",
+        "      } }).pipe(Effect.result))._tag, \"Failure\");\n",
+        "      assert.equal(opened.length, beforeForeign);\n",
+        "      assert.deepEqual(opened, [\"resume\"]);\n",
+        "      assert.equal(sends, 0);\n",
+        "    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, IdAllocator.layer, RuntimeHost.layer))),\n",
+        "  );\n",
+        "  it.effect.each([\"close\", \"assertComplete\"] as const)(\"fails the owning scope on Cursor %s cleanup failure\", failing =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const calls: string[] = [];\n",
+        "      const error = new CursorAgentSdk.CursorAgentSdkRunnerError({ method: failing, cause: new Error(\"cleanup failed\") });\n",
+        "      const outcome = yield* Effect.gen(function* () {\n",
+        "        const adapter = yield* makeCursorAdapterV2({\n",
+        "          instanceId: ProviderInstanceId.make(\"cursor-cleanup\"), environment: {},\n",
+        "        }).pipe(Effect.provideService(CursorAgentSdk.CursorAgentSdkRunner, {\n",
+        "          assertComplete: Effect.sync(() => calls.push(\"assertComplete\")).pipe(\n",
+        "            Effect.andThen(failing === \"assertComplete\" ? Effect.fail(error) : Effect.void)),\n",
+        "          open: () => Effect.succeed({\n",
+        "            agentId: \"cleanup-agent\", listMessages: Effect.succeed([]),\n",
+        "            send: () => Effect.die(\"Cleanup must not send a prompt.\"),\n",
+        "            close: Effect.sync(() => calls.push(\"close\")).pipe(\n",
+        "              Effect.andThen(failing === \"close\" ? Effect.fail(error) : Effect.void)),\n",
+        "          }),\n",
+        "        }));\n",
+        "        const instanceId = ProviderInstanceId.make(\"cursor-cleanup\");\n",
+        "        const policy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({ cwd: \"/workspace\",\n",
+        "          runtimeMode: \"approval-required\", interactionMode: \"default\" });\n",
+        "        const runtime = yield* adapter.openSession({ threadId: ThreadId.make(\"cleanup-thread\"),\n",
+        "          providerSessionId: ProviderSessionId.make(\"cleanup-session\"),\n",
+        "          modelSelection: { instanceId, model: \"composer-2.5\" }, runtimePolicy: policy });\n",
+        "        yield* runtime.ensureThread({ threadId: ThreadId.make(\"cleanup-thread\"),\n",
+        "          modelSelection: { instanceId, model: \"composer-2.5\" }, runtimePolicy: policy });\n",
+        "      }).pipe(Effect.scoped, Effect.exit);\n",
+        "      assert.isTrue(Exit.isFailure(outcome));\n",
+        "      assert.deepEqual(calls, [\"close\", \"assertComplete\"]);\n",
+        "    }).pipe(Effect.provide(TestProviderHost.layer({ cwd: \"/workspace\" })),\n",
+        "      Effect.provide(Layer.mergeAll(NodeServices.layer, IdAllocator.layer, RuntimeHost.layer))),\n",
+        "  );\n"
+      ]
+    },
+    {
+      "start": 54,
+      "before": [
+        "        const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n",
+        "        yield* mcpSessions.set({\n",
+        "          environmentId: EnvironmentId.make(\"cursor-lifecycle-environment\"),\n",
+        "          threadId,\n",
+        "          providerSessionId: \"cursor-lifecycle-session\",\n",
+        "          providerInstanceId: instanceId,\n",
+        "          endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "          authorizationHeader: \"Bearer synthetic-cursor-token\",\n",
+        "          browserToolsAvailable: true,\n",
+        "        });\n"
+      ],
+      "after": [
+        "        const mcpSessions = yield* RuntimeHost.ProviderRuntimeHost;\n",
+        "        yield* mcpSessions.bind({ threadId, providerInstanceId: instanceId, executionId: \"cursor-lifecycle-session\",\n",
+        "          cwd: workspace, nativePermissions: \"deny-ungranted\", instructionText: \"\",\n",
+        "          mcpServers: [{ name: \"pm_tools\", transport: \"stdio\", command: \"pm-cli\", args: [\"mcp\"] }] }, () => Effect.void);\n"
+      ]
+    },
+    {
+      "start": 210,
+      "before": [
+        "          Layer.mergeAll(NodeServices.layer, IdAllocator.layer, McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(NodeServices.layer, IdAllocator.layer, RuntimeHost.layer),\n"
+      ]
+    },
+    {
+      "start": 434,
+      "before": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, RuntimeHost.layer),\n"
+      ]
+    },
+    {
+      "start": 583,
+      "before": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, RuntimeHost.layer),\n"
+      ]
+    },
+    {
+      "start": 588,
+      "before": [
+        "  it.effect(\"sends T3 instructions to each Cursor conversation that lacks them\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"never injects source business or device instructions, including after compaction\", () =>\n"
+      ]
+    },
+    {
+      "start": 595,
+      "before": [
+        "      const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n",
+        "      const setDeviceAccess = (device: boolean) =>\n",
+        "        mcpSessions.set({\n",
+        "          environmentId: EnvironmentId.make(\"cursor-device-environment\"),\n",
+        "          threadId,\n",
+        "          providerSessionId: \"cursor-device-session\",\n",
+        "          providerInstanceId: instanceId,\n",
+        "          endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "          authorizationHeader: \"Bearer synthetic-cursor-token\",\n",
+        "          browserToolsAvailable: true,\n",
+        "          capabilities: new Set(device ? [\"device\"] : []),\n",
+        "        });\n"
+      ],
+      "after": [
+        "      const mcpSessions = yield* RuntimeHost.ProviderRuntimeHost;\n",
+        "      const setDeviceAccess = (_device: boolean) => mcpSessions.bind({\n",
+        "        threadId, providerInstanceId: instanceId, executionId: \"cursor-device-session\",\n",
+        "        cwd: workspace, nativePermissions: \"deny-ungranted\", instructionText: \"\",\n",
+        "        mcpServers: [{ name: \"pm_tools\", transport: \"stdio\", command: \"pm-cli\", args: [\"mcp\"] }],\n",
+        "      }, () => Effect.void);\n"
+      ]
+    },
+    {
+      "start": 719,
+      "before": [
+        "      assert.deepEqual(yield* send(), told(false, true));\n"
+      ],
+      "after": [
+        "      assert.deepEqual(yield* send(), told(false, false));\n"
+      ]
+    },
+    {
+      "start": 724,
+      "before": [
+        "        told(true, true),\n",
+        "        \"compaction drops what the conversation was told\",\n"
+      ],
+      "after": [
+        "        told(false, false),\n",
+        "        \"compaction does not grant source orchestration or device tools\",\n"
+      ]
+    },
+    {
+      "start": 730,
+      "before": [
+        "      assert.deepEqual(yield* send(), told(false, true), \"device access turned on later\");\n"
+      ],
+      "after": [
+        "      assert.deepEqual(yield* send(), told(false, false), \"host binding cannot grant source device access\");\n"
+      ]
+    },
+    {
+      "start": 735,
+      "before": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, RuntimeHost.layer),\n"
+      ]
+    },
+    {
+      "start": 1137,
+      "before": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, RuntimeHost.layer),\n"
+      ]
+    },
+    {
+      "start": 1256,
+      "before": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, RuntimeHost.layer),\n"
+      ]
+    },
+    {
+      "start": 1407,
+      "before": [
+        "    const mcpSession = {\n",
+        "      environmentId: EnvironmentId.make(\"environment-cursor-mcp\"),\n",
+        "      threadId,\n",
+        "      providerSessionId: \"mcp-session-cursor\",\n",
+        "      providerInstanceId: ProviderInstanceId.make(\"cursor\"),\n",
+        "      endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "      authorizationHeader: \"Bearer secret-cursor-mcp-token\",\n",
+        "      browserToolsAvailable: true,\n"
+      ],
+      "after": [
+        "    const runtimeBinding = {\n",
+        "      threadId, providerInstanceId: ProviderInstanceId.make(\"cursor\"), executionId: \"cursor-generation\",\n",
+        "      cwd: \"/workspace\", nativePermissions: \"deny-ungranted\" as const, instructionText: \"\",\n",
+        "      mcpServers: [{ name: \"pm_tools\", transport: \"stdio\" as const, command: \"pm-cli\", args: [\"mcp\"] }],\n"
+      ]
+    },
+    {
+      "start": 1416,
+      "before": [
+        "\n",
+        "    assert.deepEqual(cursorMcpServers(mcpSession), {\n",
+        "      \"t3-code\": {\n",
+        "        type: \"http\",\n",
+        "        url: \"http://127.0.0.1:43123/mcp\",\n",
+        "        headers: {\n",
+        "          Authorization: \"Bearer secret-cursor-mcp-token\",\n",
+        "        },\n",
+        "      },\n"
+      ],
+      "after": [
+        "    assert.deepEqual(cursorMcpServers(runtimeBinding), {\n",
+        "      pm_tools: { type: \"stdio\", command: \"pm-cli\", args: [\"mcp\"] },\n"
+      ]
+    },
+    {
+      "start": 1439,
+      "before": [
+        "      mcpSession,\n"
+      ],
+      "after": [
+        "      runtimeBinding,\n"
+      ]
+    },
+    {
+      "start": 1442,
+      "before": [
+        "    assert.deepEqual(options.mcpServers, cursorMcpServers(mcpSession));\n"
+      ],
+      "after": [
+        "    assert.deepEqual(options.mcpServers, cursorMcpServers(runtimeBinding));\n",
+        "    assert.isFalse(options.local?.autoReview);\n",
+        "    assert.isTrue(options.local?.enableAgentRetries);\n"
+      ]
+    }
+  ]
+}

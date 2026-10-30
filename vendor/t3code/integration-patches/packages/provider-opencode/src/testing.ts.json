@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/testing.ts",
+  "beforeSha256": "bb006551131ec8b2ad99e0201a74ce3472724b55a82d9ec8914c3615b8b652ab",
+  "afterSha256": "61a7cb19922274f351514300aa7db0f9fb92ed73a8faebcc4e089659c850f9c0",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 5,
+      "before": [
+        "export { OPENCODE_2_STILL_STOPPING, t3McpServerName } from \"./server/v2/adapter.ts\";\n"
+      ],
+      "after": [
+        "export { OPENCODE_2_STILL_STOPPING } from \"./server/v2/adapter.ts\";\n"
+      ]
+    }
+  ]
+}

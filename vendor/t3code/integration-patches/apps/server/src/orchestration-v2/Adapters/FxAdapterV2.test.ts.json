@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/FxAdapterV2.test.ts",
+  "beforeSha256": "92d0e937748067bdf6ebf3e8f69e59527addfd1f6e0e072cf1e2ceeaf5e6bf69",
+  "afterSha256": "c6cfb1162f4b989ef9399e462f68c8379aac88885b10dab11b0731613e54be64",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 17,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import * as ProviderRuntimeHost from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n",
+        "import { layerAcpRuntimeHost } from \"./AcpProviderRuntimeHost.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 20,
+      "before": [
+        "import { resolveSelfInvocation } from \"@t3tools/shared/nodeRuntime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 39,
+      "before": [
+        "  McpProviderSessions.layer,\n"
+      ],
+      "after": [
+        "  layerAcpRuntimeHost,\n"
+      ]
+    },
+    {
+      "start": 176,
+      "before": [
+        "    selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    }
+  ]
+}

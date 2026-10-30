@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "source": "packages/provider-cursor/src/server/CursorAgentSdk.ts",
+  "beforeSha256": "42459d876bdf01e767aecafe5ae865d77e62da04374cb98f3797da85b2566f89",
+  "afterSha256": "c77dfe01652ed2057c237df9fc7e55d4f39dd13e4cbdc292298d0e1cc9434692",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 22,
+      "before": [],
+      "after": [
+        "import type { ProviderRuntimeHostBinding } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 70,
+      "before": [],
+      "after": [
+        "  readonly runtimeBinding?: ProviderRuntimeHostBinding;\n"
+      ]
+    },
+    {
+      "start": 568,
+      "before": [
+        "                Agent.messages.list(agent.agentId, {\n",
+        "                  runtime: \"local\",\n",
+        "                  ...(cwd === undefined ? {} : { cwd }),\n",
+        "                }),\n"
+      ],
+      "after": [
+        "                Agent.messages.list(agent.agentId, runOptions),\n"
+      ]
+    }
+  ]
+}

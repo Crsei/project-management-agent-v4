@@ -1,0 +1,2949 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts",
+  "beforeSha256": "6f0bd45c713fd0f12ead8ac992d87346e5af112660192623ada348d8d735dc73",
+  "afterSha256": "2dc7ad1e70c5eb092d26f06b7dcefc13a1aa7698fbffc8c4a87e8950c4d40629",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 33,
+      "before": [
+        "  EnvironmentId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 43,
+      "before": [
+        "  ProviderDriverKind,\n",
+        "  type ProviderReplayTranscript,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 53,
+      "before": [
+        "import * as Context from \"effect/Context\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 70,
+      "before": [
+        "import { Tool } from \"effect/ai\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 76,
+      "before": [
+        "import * as PortScanner from \"../../preview/PortScanner.ts\";\n",
+        "import { attachmentRelativePath } from \"../../attachmentStore.ts\";\n"
+      ],
+      "after": [
+        "import * as PortScanner from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/port-discovery.ts\";\n",
+        "import { claudeFixtureAttachmentPath, withClaudeFixtureAttachments } from \"./ClaudeAttachmentFixtures.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 79,
+      "before": [
+        "import * as ServerConfig from \"../../config.ts\";\n",
+        "import * as McpProviderSession from \"@t3tools/provider-core/server/mcpSession\";\n",
+        "import { T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH } from \"@t3tools/provider-core/server/orchestrationInstructions\";\n",
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n",
+        "import { PreviewControlsToolkit } from \"../../mcp/toolkits/previewControls/tools.ts\";\n",
+        "import { HtmlToolkit } from \"../../mcp/toolkits/html/tools.ts\";\n",
+        "import { EnvironmentToolkit } from \"../../mcp/toolkits/environment/tools.ts\";\n",
+        "import { ProjectToolkit } from \"../../mcp/toolkits/project/tools.ts\";\n",
+        "import { WorktreeToolkit } from \"../../mcp/toolkits/worktree/tools.ts\";\n",
+        "import { ThreadToolkit } from \"../../mcp/toolkits/thread/tools.ts\";\n",
+        "import { OrchestratorToolkit } from \"../../mcp/toolkits/orchestrator/tools.ts\";\n"
+      ],
+      "after": [
+        "import { PmNativeTestHost, makePmNativeTestHost, layer as layerPmNativeTestHost } from \"../../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n",
+        "\n",
+        "\n",
+        "\n",
+        "\n",
+        "\n",
+        "\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 97,
+      "before": [
+        "import { ClaudeOrchestratorReplayHarness } from \"./ClaudeAdapterV2.testkit.ts\";\n",
+        "import { provideDeterministicTestRuntime } from \"../testkit/DeterministicRuntime.ts\";\n",
+        "import { runOrchestratorV2Scenario } from \"../testkit/OrchestratorScenario.ts\";\n",
+        "import { layerProviderReplay } from \"../testkit/ProviderReplayHarness.ts\";\n",
+        "import {\n",
+        "  assertBaseProjection,\n",
+        "  assertSemanticProjectionIntegrity,\n",
+        "  CLAUDE_MODEL_SELECTION,\n",
+        "  materializeFixtureInput,\n",
+        "  projectionFor,\n",
+        "} from \"../testkit/fixtures/shared.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 113,
+      "before": [],
+      "after": [
+        "\n"
+      ]
+    },
+    {
+      "start": 121,
+      "before": [],
+      "after": [
+        "\n",
+        "// Each case owns a real PM host and one explicit compaction-only fixture generation.\n",
+        "// Reopened native runtimes in the same case retain that generation, rather than\n",
+        "// rebinding the same thread with a different authorization callback.\n",
+        "const pmRuntimeHostLayer = Layer.unwrap(Effect.gen(function* () {\n",
+        "  const fixture = yield* makePmNativeTestHost({\n",
+        "    driver: \"claude\",\n",
+        "    instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,\n",
+        "    cwd: \"/workspace\",\n",
+        "    prefix: \"pm-claude-source\",\n",
+        "  });\n",
+        "  yield* fixture.bindGeneration({\n",
+        "    threadId: ThreadId.make(\"thread-claude-wake\"),\n",
+        "    executionId: \"native-claude-unit-generation\",\n",
+        "    actions: [\"compaction\"],\n",
+        "  });\n",
+        "  return fixture.layer.pipe(Layer.merge(Layer.succeed(PmNativeTestHost, fixture)));\n",
+        "}));\n"
+      ]
+    },
+    {
+      "start": 238,
+      "before": [
+        "    [\"--permission-mode acceptEdits\", \"acceptEdits\"],\n",
+        "    [\"--dangerously-skip-permissions\", \"bypassPermissions\"],\n",
+        "    [\"--dangerously-skip-permissions --permission-mode plan\", \"plan\"],\n",
+        "  ])(\"folds %s into the SDK permission mode\", (launchArgs, expected) => {\n",
+        "    const options = ClaudeAdapterV2.makeClaudeQueryOptions({\n",
+        "      modelSelection: CLAUDE_TEST_MODEL_SELECTION,\n",
+        "      nativeThreadId: \"native-permission-override\",\n",
+        "      resume: false,\n",
+        "      cwd: \"/workspace\",\n",
+        "      permissionMode: \"default\",\n"
+      ],
+      "after": [
+        "    \"--permission-mode acceptEdits\",\n",
+        "    \"--dangerously-skip-permissions\",\n",
+        "    \"--dangerously-skip-permissions --permission-mode plan\",\n",
+        "  ])(\"rejects launch arguments that bypass the PM permission boundary: %s\", (launchArgs) => {\n",
+        "    assert.throws(() => ClaudeAdapterV2.makeClaudeQueryOptions({\n",
+        "      modelSelection: CLAUDE_TEST_MODEL_SELECTION, nativeThreadId: \"native-permission-override\",\n",
+        "      resume: false, cwd: \"/workspace\", permissionMode: \"default\",\n"
+      ]
+    },
+    {
+      "start": 249,
+      "before": [
+        "    });\n",
+        "    assert.equal(options.permissionMode, expected);\n",
+        "    assert.isUndefined(options.extraArgs?.[\"permission-mode\"]);\n",
+        "    assert.isUndefined(options.extraArgs?.[\"dangerously-skip-permissions\"]);\n"
+      ],
+      "after": [
+        "    }), /cannot override PM/);\n"
+      ]
+    },
+    {
+      "start": 462,
+      "before": [
+        "describe(\"ClaudeAdapterV2 MCP query overrides\", () => {\n",
+        "  const T3_MCP_SERVERS = {\n",
+        "    \"t3-code\": {\n",
+        "      type: \"http\",\n",
+        "      url: \"http://127.0.0.1:43123/mcp\",\n",
+        "      headers: {\n",
+        "        Authorization: \"Bearer secret-claude-token\",\n",
+        "      },\n",
+        "      timeout: ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_TIMEOUT_MS,\n",
+        "    },\n",
+        "  } as const;\n",
+        "\n",
+        "  const mcpSessionFor = (\n",
+        "    threadId: ThreadId,\n",
+        "    authorizationHeader = \"Bearer secret-claude-token\",\n",
+        "  ): McpProviderSession.McpProviderSessionConfig => ({\n",
+        "    environmentId: EnvironmentId.make(`environment-${threadId}`),\n",
+        "    threadId,\n",
+        "    providerSessionId: `mcp-session-${threadId}`,\n",
+        "    providerInstanceId: ProviderInstanceId.make(\"claudeAgent\"),\n",
+        "    endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "    authorizationHeader,\n",
+        "    browserToolsAvailable: true,\n",
+        "  });\n",
+        "\n",
+        "  it(\"pre-approves only read-only t3-code tools in a read-only sandbox\", () => {\n",
+        "    const threadId = ThreadId.make(\"thread-claude-mcp-read-only\");\n",
+        "    const mcpSession = mcpSessionFor(threadId);\n",
+        "    const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({\n",
+        "      mcpSession,\n",
+        "      readOnlySandbox: true,\n",
+        "      allowedTools: [...ClaudeAdapterV2.CLAUDE_READ_ONLY_ALLOWED_TOOLS],\n",
+        "    });\n",
+        "\n",
+        "    assert.deepEqual(overrides, {\n",
+        "      allowedTools: [\n",
+        "        ...ClaudeAdapterV2.CLAUDE_READ_ONLY_ALLOWED_TOOLS,\n",
+        "        ...ClaudeAdapterV2.CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS,\n",
+        "      ],\n",
+        "      mcpServers: T3_MCP_SERVERS,\n",
+        "    });\n",
+        "    assert.isFalse(overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD));\n",
+        "  });\n",
+        "\n",
+        "  it(\"invalidates live-query reuse when MCP credentials rotate\", () => {\n",
+        "    const threadId = ThreadId.make(\"thread-claude-mcp-credential-rotation\");\n",
+        "    const mcpSession = mcpSessionFor(threadId);\n",
+        "    const queryPolicy = ClaudeAdapterV2.claudeRuntimeQueryPolicyForRuntimePolicy(\n",
+        "      ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({\n",
+        "        runtimeMode: \"approval-required\",\n",
+        "        interactionMode: \"default\",\n",
+        "        cwd: \"/workspace\",\n",
+        "      }),\n",
+        "    );\n",
+        "    const initialKey = ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(\n",
+        "      queryPolicy,\n",
+        "      ClaudeAdapterV2.claudeMcpQueryOverrides({ mcpSession, readOnlySandbox: false }),\n",
+        "    );\n",
+        "\n",
+        "    const rotatedKey = ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(\n",
+        "      queryPolicy,\n",
+        "      ClaudeAdapterV2.claudeMcpQueryOverrides({\n",
+        "        mcpSession: mcpSessionFor(threadId, \"Bearer rotated-claude-token\"),\n",
+        "        readOnlySandbox: false,\n",
+        "      }),\n",
+        "    );\n",
+        "    assert.notEqual(rotatedKey, initialKey);\n",
+        "  });\n",
+        "\n",
+        "  it(\"matches the read-only allowlist to the orchestrator toolkit annotations\", () => {\n",
+        "    const readOnlyToolNames = [\n",
+        "      ...Object.values(OrchestratorToolkit.tools),\n",
+        "      ...Object.values(ThreadToolkit.tools),\n",
+        "      ...Object.values(WorktreeToolkit.tools),\n",
+        "      ...Object.values(ProjectToolkit.tools),\n",
+        "      ...Object.values(EnvironmentToolkit.tools),\n",
+        "      ...Object.values(PreviewControlsToolkit.tools),\n",
+        "      ...Object.values(HtmlToolkit.tools),\n",
+        "    ]\n",
+        "      .filter((tool) => Context.get(tool.annotations, Tool.Readonly))\n",
+        "      .map((tool) => `mcp__t3-code__${tool.name}`)\n",
+        "      .sort();\n",
+        "\n",
+        "    assert.deepEqual(\n",
+        "      [...ClaudeAdapterV2.CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS].sort(),\n",
+        "      readOnlyToolNames,\n",
+        "    );\n",
+        "  });\n",
+        "});\n"
+      ],
+      "after": [
+        "describe(\"ClaudeAdapterV2 PM transport query overrides\", () => { it(\"injects only bound stdio servers, without preapproving any tool\", () => { const binding = { providerInstanceId: ProviderInstanceId.make(\"claudeAgent\"), threadId: ThreadId.make(\"thread-claude-mcp\"), executionId: \"generation-fixture\", cwd: \"/workspace\", nativePermissions: \"deny-ungranted\" as const, instructionText: \"PM scope remains authoritative\", mcpServers: [{ name: \"pm_tools\", transport: \"stdio\" as const, command: \"pm-cli\", args: [\"fixture\", \"mcp\"] }] }; const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({ binding }); assert.deepEqual(overrides, { mcpServers: { pm_tools: { type: \"stdio\", command: \"pm-cli\", args: [\"fixture\", \"mcp\"] } } }); assert.deepEqual(ClaudeAdapterV2.claudeMcpQueryOverrides({ binding: undefined }), { mcpServers: {} }); const policy = { permissionMode: \"default\" as const, installPermissionCallback: true }; assert.notEqual(ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(policy, overrides), ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(policy, ClaudeAdapterV2.claudeMcpQueryOverrides({ binding: { ...binding, mcpServers: [{ ...binding.mcpServers[0]!, args: [\"rotated\", \"mcp\"] }] } }))); }); });\n"
+      ]
+    },
+    {
+      "start": 553,
+      "before": [
+        "  it(\"injects thread-scoped MCP configuration without logging the credential\", () => {\n",
+        "    const threadId = ThreadId.make(\"thread-claude-mcp\");\n",
+        "    const mcpSession = {\n",
+        "      environmentId: EnvironmentId.make(\"environment-claude-mcp\"),\n",
+        "      threadId,\n",
+        "      providerSessionId: \"mcp-session-claude\",\n",
+        "      providerInstanceId: ProviderInstanceId.make(\"claudeAgent\"),\n",
+        "      endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "      authorizationHeader: \"Bearer secret-claude-token\",\n",
+        "      browserToolsAvailable: true,\n",
+        "    };\n",
+        "\n",
+        "    const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({\n",
+        "      mcpSession,\n",
+        "      readOnlySandbox: false,\n",
+        "      allowedTools: [\"Read\"],\n",
+        "    });\n",
+        "    assert.deepEqual(overrides, {\n",
+        "      allowedTools: [\"Read\", \"mcp__t3-code__*\"],\n",
+        "      mcpServers: {\n",
+        "        \"t3-code\": {\n",
+        "          type: \"http\",\n",
+        "          url: \"http://127.0.0.1:43123/mcp\",\n",
+        "          headers: {\n",
+        "            Authorization: \"Bearer secret-claude-token\",\n",
+        "          },\n",
+        "          timeout: ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_TIMEOUT_MS,\n",
+        "        },\n",
+        "      },\n",
+        "    });\n",
+        "\n",
+        "    const options = ClaudeAdapterV2.makeClaudeQueryOptions({\n",
+        "      modelSelection: {\n",
+        "        instanceId: ProviderInstanceId.make(\"claudeAgent\"),\n",
+        "        model: \"claude-sonnet-4-6\",\n",
+        "      },\n",
+        "      nativeThreadId: \"native-thread-claude-mcp\",\n",
+        "      resume: false,\n",
+        "      cwd: \"/workspace\",\n",
+        "      allowedTools: overrides.allowedTools ?? [],\n",
+        "      mcpServers: overrides.mcpServers ?? {},\n",
+        "      environment: {},\n",
+        "    });\n",
+        "    assert.isObject(options.systemPrompt);\n",
+        "    const systemPrompt = options.systemPrompt as {\n",
+        "      readonly type: string;\n",
+        "      readonly preset: string;\n",
+        "      readonly append?: string;\n",
+        "    };\n",
+        "    assert.equal(systemPrompt.type, \"preset\");\n",
+        "    assert.equal(systemPrompt.preset, \"claude_code\");\n",
+        "    assert.include(systemPrompt.append ?? \"\", \"Use `delegate_task`\");\n",
+        "    assert.include(systemPrompt.append ?? \"\", \"call `t3_background_wait`\");\n",
+        "    assert.notInclude(systemPrompt.append ?? \"\", \"## T3 Code devices\");\n",
+        "    const logged = ClaudeAdapterV2.loggedClaudeQueryOptions(options);\n",
+        "    assert.equal(logged.hasMcpServers, true);\n",
+        "    assert.notInclude(JSON.stringify(logged), \"secret-claude-token\");\n",
+        "  });\n"
+      ],
+      "after": [
+        "  it(\"keeps host transport private and never installs t3 business instructions\", () => { const options = ClaudeAdapterV2.makeClaudeQueryOptions({ modelSelection: CLAUDE_TEST_MODEL_SELECTION, nativeThreadId: \"native-pm-transport\", resume: false, cwd: \"/workspace\", mcpServers: { pm_tools: { type: \"stdio\", command: \"pm-cli\", args: [\"private-transport-sentinel\", \"mcp\"] } }, instructionText: \"Use only authorized PM tools\" }); const logged = ClaudeAdapterV2.loggedClaudeQueryOptions(options); assert.equal(logged.hasMcpServers, true); assert.notInclude(JSON.stringify(logged), \"private-transport-sentinel\"); assert.isUndefined(options.allowedTools); assert.isUndefined(options.hooks); assert.deepEqual(options.sandbox, { enabled: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false }); });\n"
+      ]
+    },
+    {
+      "start": 621,
+      "before": [
+        "    assert.deepEqual(logged.settingKeys, [\"env\", \"showThinkingSummaries\"]);\n"
+      ],
+      "after": [
+        "    const settingKeys = logged.settingKeys;\n",
+        "    if (settingKeys === undefined) throw new Error(\"Expected logged Claude settings keys.\");\n",
+        "    assert.include(settingKeys, \"env\");\n"
+      ]
+    },
+    {
+      "start": 626,
+      "before": [
+        "describe(\"ClaudeAdapterV2 device instructions\", () => {\n",
+        "  const options = (input: { readonly mcp: boolean; readonly deviceToolsAvailable: boolean }) =>\n",
+        "    ClaudeAdapterV2.makeClaudeQueryOptions({\n",
+        "      modelSelection: {\n",
+        "        instanceId: ProviderInstanceId.make(\"claudeAgent\"),\n",
+        "        model: \"claude-opus-5-5\",\n",
+        "      },\n",
+        "      nativeThreadId: \"native-thread-claude-devices\",\n",
+        "      resume: false,\n",
+        "      cwd: \"/workspace\",\n",
+        "      ...(input.mcp\n",
+        "        ? { mcpServers: { \"t3-code\": { type: \"http\" as const, url: \"http://127.0.0.1/mcp\" } } }\n",
+        "        : {}),\n",
+        "      deviceToolsAvailable: input.deviceToolsAvailable,\n",
+        "      environment: {},\n",
+        "    });\n",
+        "  const append = (input: { readonly mcp: boolean; readonly deviceToolsAvailable: boolean }) =>\n",
+        "    (options(input).systemPrompt as { readonly append?: string }).append ?? \"\";\n",
+        "\n",
+        "  it(\"gives a session with device access the device block and the ToolSearch line to load it\", () => {\n",
+        "    const text = append({ mcp: true, deviceToolsAvailable: true });\n",
+        "    assert.include(text, T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH);\n",
+        "    assert.include(text, \"Use `delegate_task`\");\n",
+        "  });\n",
+        "\n",
+        "  it(\"leaves the device block out without device access or without T3 tools\", () => {\n",
+        "    assert.notInclude(append({ mcp: true, deviceToolsAvailable: false }), \"## T3 Code devices\");\n",
+        "    assert.notInclude(append({ mcp: false, deviceToolsAvailable: true }), \"## T3 Code devices\");\n",
+        "  });\n",
+        "\n",
+        "  it(\"gives native subagents the device block only in a session with device access\", async () => {\n",
+        "    // Subagents start from their task prompt, not the parent's system prompt.\n",
+        "    const subagentContext = (input: {\n",
+        "      readonly mcp: boolean;\n",
+        "      readonly deviceToolsAvailable: boolean;\n",
+        "    }) =>\n",
+        "      Promise.all(\n",
+        "        (options(input).hooks?.SubagentStart ?? []).flatMap((matcher) =>\n",
+        "          matcher.hooks.map((hook) =>\n",
+        "            hook(\n",
+        "              {\n",
+        "                hook_event_name: \"SubagentStart\",\n",
+        "                agent_id: \"agent-1\",\n",
+        "                agent_type: \"general-purpose\",\n",
+        "                session_id: \"native-thread-claude-devices\",\n",
+        "                transcript_path: \"/transcript.jsonl\",\n",
+        "                cwd: \"/workspace\",\n",
+        "              },\n",
+        "              undefined,\n",
+        "              { signal: new AbortController().signal },\n",
+        "            ),\n",
+        "          ),\n",
+        "        ),\n",
+        "      );\n",
+        "    assert.deepEqual(await subagentContext({ mcp: true, deviceToolsAvailable: true }), [\n",
+        "      {\n",
+        "        hookSpecificOutput: {\n",
+        "          hookEventName: \"SubagentStart\",\n",
+        "          additionalContext: T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,\n",
+        "        },\n",
+        "      },\n",
+        "    ]);\n",
+        "    assert.deepEqual(await subagentContext({ mcp: true, deviceToolsAvailable: false }), []);\n",
+        "    assert.deepEqual(await subagentContext({ mcp: false, deviceToolsAvailable: true }), []);\n",
+        "  });\n",
+        "});\n"
+      ],
+      "after": [
+        "describe(\"ClaudeAdapterV2 native permission boundary\", () => { it(\"never turns a caller's bypass request into a native permission grant\", () => { const options = ClaudeAdapterV2.makeClaudeQueryOptions({ modelSelection: CLAUDE_TEST_MODEL_SELECTION, nativeThreadId: \"native-permission-boundary\", resume: false, cwd: \"/workspace\", permissionMode: \"bypassPermissions\", allowDangerouslySkipPermissions: true, allowedTools: [\"Bash\"] }); assert.equal(options.permissionMode, \"default\"); assert.isUndefined(options.allowDangerouslySkipPermissions); assert.isUndefined(options.allowedTools); assert.isUndefined(options.hooks); assert.equal((options.settings as { disableAllHooks?: boolean }).disableAllHooks, true); }); });\n"
+      ]
+    },
+    {
+      "start": 890,
+      "before": [
+        "        assert.equal(openedOptions?.permissionMode, \"acceptEdits\");\n"
+      ],
+      "after": [
+        "        assert.equal(openedOptions?.permissionMode, \"default\");\n"
+      ]
+    },
+    {
+      "start": 928,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 936,
+      "before": [
+        "  const startTurnWithLaunchArgs = Effect.fnUntraced(function* (launchArgs: string, cwd: string) {\n"
+      ],
+      "after": [
+        "  const startTurnWithLaunchArgs = Effect.fnUntraced(function* (\n",
+        "    launchArgs: string,\n",
+        "    cwd: string,\n",
+        "    opened: Array<ClaudeAdapterV2.ClaudeAgentSdkQueryOptions> = [],\n",
+        "  ) {\n"
+      ]
+    },
+    {
+      "start": 938,
+      "before": [
+        "    const opened: Array<ClaudeAdapterV2.ClaudeAgentSdkQueryOptions> = [];\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1006,
+      "before": [
+        "  it.effect(\"sends append launch arguments to Claude after the T3 instructions\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"sends append launch arguments after the host instructions\", () =>\n"
+      ]
+    },
+    {
+      "start": 1014,
+      "before": [
+        "          '--append-system-prompt \"Inline sentinel\" --append-system-prompt-file rules.md --system-prompt Replacement',\n"
+      ],
+      "after": [
+        "          '--append-system-prompt \"Inline sentinel\" --append-system-prompt-file rules.md',\n"
+      ]
+    },
+    {
+      "start": 1025,
+      "before": [
+        "        assert.equal(opened[0]!.extraArgs?.[\"system-prompt\"], \"Replacement\");\n"
+      ],
+      "after": [
+        "        assert.isUndefined(opened[0]!.extraArgs?.[\"system-prompt\"]);\n"
+      ]
+    },
+    {
+      "start": 1028,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1034,
+      "before": [
+        "  // regression: #15073 the SDK replaced the --settings launch argument with T3's settings\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1036,
+      "before": [],
+      "after": [
+        "    \"--system-prompt Replacement\",\n"
+      ]
+    },
+    {
+      "start": 1038,
+      "before": [
+        "  ])(\"merges %s beneath T3's settings\", (launchArgs) =>\n"
+      ],
+      "after": [
+        "    \"--settings missing.json\",\n",
+        "    \"--settings '{not json}'\",\n",
+        "    `--settings '{\"env\":{\"ANTHROPIC_API_KEY\":\"secret-settings-key\"},'`,\n",
+        "  ])(\"rejects the PM session override before opening Claude: %s\", (launchArgs) =>\n"
+      ]
+    },
+    {
+      "start": 1043,
+      "before": [
+        "        yield* fileSystem.writeFileString(\n",
+        "          NodePath.join(cwd, \"user-settings.json\"),\n",
+        "          '{\"skillOverrides\":{\"lint\":\"off\"},\"showThinkingSummaries\":false}',\n",
+        "        );\n",
+        "        const { exit, opened } = yield* startTurnWithLaunchArgs(launchArgs, cwd);\n",
+        "        assert.isTrue(Exit.isSuccess(exit));\n",
+        "        assert.deepInclude(opened[0]!.settings, {\n",
+        "          skillOverrides: { lint: \"off\" },\n",
+        "          showThinkingSummaries: true,\n",
+        "        });\n",
+        "        assert.isUndefined(opened[0]!.extraArgs?.[\"settings\"]);\n"
+      ],
+      "after": [
+        "        const opened: Array<ClaudeAdapterV2.ClaudeAgentSdkQueryOptions> = [];\n",
+        "        const exit = yield* startTurnWithLaunchArgs(launchArgs, cwd, opened).pipe(Effect.exit);\n",
+        "        assert.isTrue(Exit.isFailure(exit));\n",
+        "        assert.lengthOf(opened, 0);\n"
+      ]
+    },
+    {
+      "start": 1056,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1064,
+      "before": [
+        "    [\n",
+        "      \"--append-system-prompt-file missing.md\",\n",
+        "      (cwd: string) =>\n",
+        "        new ClaudeAdapterV2.ClaudeAppendSystemPromptFileError({\n",
+        "          path: NodePath.join(cwd, \"missing.md\"),\n",
+        "        }).message,\n",
+        "    ],\n",
+        "    [\n",
+        "      \"--append-system-prompt-file\",\n",
+        "      () =>\n",
+        "        new ClaudeAdapterV2.ClaudeAppendSystemPromptMissingValueError({\n",
+        "          flag: \"--append-system-prompt-file\",\n",
+        "        }).message,\n",
+        "    ],\n",
+        "    [\n",
+        "      \"--append-system-prompt-file=\",\n",
+        "      () =>\n",
+        "        new ClaudeAdapterV2.ClaudeAppendSystemPromptMissingValueError({\n",
+        "          flag: \"--append-system-prompt-file\",\n",
+        "        }).message,\n",
+        "    ],\n",
+        "    [\n",
+        "      \"--append-system-prompt\",\n",
+        "      () =>\n",
+        "        new ClaudeAdapterV2.ClaudeAppendSystemPromptMissingValueError({\n",
+        "          flag: \"--append-system-prompt\",\n",
+        "        }).message,\n",
+        "    ],\n",
+        "    [\n",
+        "      \"--settings missing.json\",\n",
+        "      (cwd: string) =>\n",
+        "        new ClaudeAdapterV2.ClaudeSettingsLaunchArgError({\n",
+        "          path: NodePath.join(cwd, \"missing.json\"),\n",
+        "        }).message,\n",
+        "    ],\n",
+        "    [\"--settings '{not json}'\", () => new ClaudeAdapterV2.ClaudeSettingsLaunchArgError({}).message],\n",
+        "    // Without a closing brace this must not become a file path that echoes the secret.\n",
+        "    [\n",
+        "      `--settings '{\"env\":{\"ANTHROPIC_API_KEY\":\"secret-settings-key\"},'`,\n",
+        "      () => new ClaudeAdapterV2.ClaudeSettingsLaunchArgError({}).message,\n",
+        "    ],\n",
+        "  ] as const)(\"fails the turn before opening Claude for %s\", ([launchArgs, expectedMessage]) =>\n"
+      ],
+      "after": [
+        "    \"--append-system-prompt-file missing.md\",\n",
+        "    \"--append-system-prompt-file\",\n",
+        "    \"--append-system-prompt-file=\",\n",
+        "    \"--append-system-prompt\",\n",
+        "  ])(\"fails the turn before opening Claude for %s\", (launchArgs) =>\n"
+      ]
+    },
+    {
+      "start": 1113,
+      "before": [
+        "        if (!Exit.isFailure(exit)) return;\n",
+        "        assert.equal(\n",
+        "          makeProviderFailure({ cause: exit.cause, class: \"provider_error\" }).message,\n",
+        "          expectedMessage(cwd),\n",
+        "        );\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1120,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1161,
+      "before": [
+        "      ServerConfig.layerTest(process.cwd(), {\n",
+        "        prefix: \"t3-claude-binary-path-\",\n",
+        "      }),\n"
+      ],
+      "after": [
+        "      layerPmNativeTestHost({ driver: \"claude\", cwd: process.cwd(), prefix: \"t3-claude-binary-path-\" }),\n"
+      ]
+    },
+    {
+      "start": 1229,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1318,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1366,
+      "before": [],
+      "after": [
+        "        const fixture = yield* PmNativeTestHost;\n",
+        "        yield* fixture.bindGeneration({\n",
+        "          threadId,\n",
+        "          executionId: \"native-claude-resume-generation\",\n",
+        "          actions: [\"compaction\"],\n",
+        "        });\n"
+      ]
+    },
+    {
+      "start": 1524,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1609,
+      "before": [
+        "          const attachmentsDir = yield* fileSystem.makeTempDirectoryScoped({\n",
+        "            prefix: \"t3-claude-v2-attachments-\",\n",
+        "          });\n"
+      ],
+      "after": [
+        "          const attachmentsDir = (yield* PmNativeTestHost).serverConfig.attachmentsDir;\n"
+      ]
+    },
+    {
+      "start": 1680,
+      "before": [
+        "          const runtime = yield* adapter.openSession({\n"
+      ],
+      "after": [
+        "          const runtime = withClaudeFixtureAttachments(yield* adapter.openSession({\n"
+      ]
+    },
+    {
+      "start": 1685,
+      "before": [
+        "          });\n"
+      ],
+      "after": [
+        "          }), attachmentsDir);\n"
+      ]
+    },
+    {
+      "start": 1710,
+      "before": [
+        "            path.join(attachmentsDir, attachmentRelativePath(attachment)!),\n"
+      ],
+      "after": [
+        "            claudeFixtureAttachmentPath(attachmentsDir, attachment),\n"
+      ]
+    },
+    {
+      "start": 1717,
+      "before": [
+        "            path.join(attachmentsDir, attachmentRelativePath(document)!),\n"
+      ],
+      "after": [
+        "            claudeFixtureAttachmentPath(attachmentsDir, document),\n"
+      ]
+    },
+    {
+      "start": 1736,
+      "before": [
+        "            const documentPath = path.join(attachmentsDir, attachmentRelativePath(document)!);\n"
+      ],
+      "after": [
+        "            const documentPath = claudeFixtureAttachmentPath(attachmentsDir, document);\n"
+      ]
+    },
+    {
+      "start": 1793,
+      "before": [
+        "            const imagePath = path.join(attachmentsDir, attachmentRelativePath(attachment)!);\n",
+        "            // The on-disk length deliberately disagrees with sizeBytes.\n"
+      ],
+      "after": [
+        "            const imagePath = claudeFixtureAttachmentPath(attachmentsDir, attachment);\n",
+        "            // The upload metadata is registered from these actual bytes before delivery.\n"
+      ]
+    },
+    {
+      "start": 1797,
+      "before": [
+        "              const documentPath = path.join(attachmentsDir, attachmentRelativePath(document)!);\n"
+      ],
+      "after": [
+        "              const documentPath = claudeFixtureAttachmentPath(attachmentsDir, document);\n"
+      ]
+    },
+    {
+      "start": 1863,
+      "before": [
+        "                path.join(attachmentsDir, attachmentRelativePath(document)!),\n"
+      ],
+      "after": [
+        "                claudeFixtureAttachmentPath(attachmentsDir, document),\n"
+      ]
+    },
+    {
+      "start": 1892,
+      "before": [
+        "            const documentPath = path.join(attachmentsDir, attachmentRelativePath(document)!);\n"
+      ],
+      "after": [
+        "            const documentPath = claudeFixtureAttachmentPath(attachmentsDir, document);\n"
+      ]
+    },
+    {
+      "start": 1922,
+      "before": [
+        "              path.join(attachmentsDir, attachmentRelativePath(document)!),\n"
+      ],
+      "after": [
+        "              claudeFixtureAttachmentPath(attachmentsDir, document),\n"
+      ]
+    },
+    {
+      "start": 1929,
+      "before": [
+        "              path.join(attachmentsDir, attachmentRelativePath(document)!),\n"
+      ],
+      "after": [
+        "              claudeFixtureAttachmentPath(attachmentsDir, document),\n"
+      ]
+    },
+    {
+      "start": 1951,
+      "before": [
+        "          const expectedAttachmentPath = path.join(\n",
+        "            attachmentsDir,\n",
+        "            attachmentRelativePath(attachment)!,\n",
+        "          );\n",
+        "          const expectedDocumentPath = path.join(attachmentsDir, attachmentRelativePath(document)!);\n"
+      ],
+      "after": [
+        "          const expectedAttachmentPath = claudeFixtureAttachmentPath(attachmentsDir, attachment);\n",
+        "          const expectedDocumentPath = claudeFixtureAttachmentPath(attachmentsDir, document);\n"
+      ]
+    },
+    {
+      "start": 1988,
+      "before": [
+        "          const documentPath = path.join(attachmentsDir, attachmentRelativePath(document)!);\n"
+      ],
+      "after": [
+        "          const documentPath = claudeFixtureAttachmentPath(attachmentsDir, document);\n"
+      ]
+    },
+    {
+      "start": 2029,
+      "before": [
+        "                  path.join(attachmentsDir, attachmentRelativePath(second)!),\n"
+      ],
+      "after": [
+        "                  claudeFixtureAttachmentPath(attachmentsDir, second),\n"
+      ]
+    },
+    {
+      "start": 2131,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 2224,
+      "before": [
+        "                nativeId: \"assistant-message-cursor\",\n",
+        "                strength: \"weak\",\n"
+      ],
+      "after": [
+        "                nativeId: \"aaaaaaaa-0000-4000-8000-000000000002\",\n",
+        "                strength: \"strong\",\n"
+      ]
+    },
+    {
+      "start": 2242,
+      "before": [
+        "              upToMessageId: \"assistant-message-cursor\",\n"
+      ],
+      "after": [
+        "              upToMessageId: \"aaaaaaaa-0000-4000-8000-000000000002\",\n"
+      ]
+    },
+    {
+      "start": 2313,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 2397,
+      "before": [
+        "      Effect.provide(ClaudeAdapterV2.layerQueryRunner.pipe(Layer.provide(PortScanner.layerTest))),\n"
+      ],
+      "after": [
+        "      Effect.provide(ClaudeAdapterV2.layerQueryRunner.pipe(Layer.provide(PortScanner.layer))),\n"
+      ]
+    },
+    {
+      "start": 2518,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 2764,
+      "before": [
+        "      const attachmentsDir = yield* fileSystem.makeTempDirectoryScoped({\n",
+        "        prefix: \"t3-claude-v2-wake-\",\n",
+        "      });\n"
+      ],
+      "after": [
+        "      const attachmentsDir = (yield* PmNativeTestHost).serverConfig.attachmentsDir;\n"
+      ]
+    },
+    {
+      "start": 2796,
+      "before": [
+        "      const systemNoticeReceipts =\n",
+        "        yield* Queue.unbounded<\n",
+        "          Extract<ProviderAdapter.ProviderAdapterV2Event, { type: \"turn_item.updated\" }>\n",
+        "        >();\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2823,
+      "before": [
+        "          offer: (request) =>\n",
+        "            Effect.sync(() => {\n",
+        "              continuationRequests.push(request);\n"
+      ],
+      "after": [
+        "          offer: (request) => {\n",
+        "            const { hostExecution, ...nativeRequest } = request;\n",
+        "            return Effect.sync(() => {\n",
+        "              assert.deepEqual(hostExecution, { threadId: ThreadId.make(\"thread-claude-wake\"), executionId: \"native-claude-unit-generation\" });\n",
+        "              continuationRequests.push(nativeRequest);\n"
+      ]
+    },
+    {
+      "start": 2827,
+      "before": [
+        "              Effect.andThen(Queue.offer(continuationReceipts, request)),\n"
+      ],
+      "after": [
+        "              Effect.andThen(Queue.offer(continuationReceipts, nativeRequest)),\n"
+      ]
+    },
+    {
+      "start": 2829,
+      "before": [
+        "            ),\n"
+      ],
+      "after": [
+        "            );\n",
+        "          },\n"
+      ]
+    },
+    {
+      "start": 2911,
+      "before": [
+        "      const runtime = yield* adapter.openSession({\n"
+      ],
+      "after": [
+        "      const runtime = withClaudeFixtureAttachments(yield* adapter.openSession({\n"
+      ]
+    },
+    {
+      "start": 2916,
+      "before": [
+        "      });\n"
+      ],
+      "after": [
+        "      }), attachmentsDir);\n"
+      ]
+    },
+    {
+      "start": 2941,
+      "before": [
+        "            }\n",
+        "            if (event.type === \"turn_item.updated\" && event.turnItem.type === \"system_notice\") {\n",
+        "              yield* Queue.offer(systemNoticeReceipts, event);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2982,
+      "before": [
+        "        systemNoticeReceipts,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3024,
+      "before": [
+        "          path.join(harness.attachmentsDir, attachmentRelativePath(document)!),\n"
+      ],
+      "after": [
+        "          claudeFixtureAttachmentPath(harness.attachmentsDir, document),\n"
+      ]
+    },
+    {
+      "start": 3129,
+      "before": [
+        "          yield* fileSystem.copyFile(\n",
+        "            path.join(harness.attachmentsDir, attachmentRelativePath(document)!),\n",
+        "            path.join(next.attachmentsDir, attachmentRelativePath(document)!),\n",
+        "          );\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3162,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 3205,
+      "before": [
+        "              path.join(harness.attachmentsDir, attachmentRelativePath(document)!),\n"
+      ],
+      "after": [
+        "              claudeFixtureAttachmentPath(harness.attachmentsDir, document),\n"
+      ]
+    },
+    {
+      "start": 3341,
+      "before": [
+        "          path.join(resumed.attachmentsDir, attachmentRelativePath(document)!),\n"
+      ],
+      "after": [
+        "          claudeFixtureAttachmentPath(resumed.attachmentsDir, document),\n"
+      ]
+    },
+    {
+      "start": 3345,
+      "before": [
+        "          path.join(resumed.attachmentsDir, attachmentRelativePath(image)!),\n"
+      ],
+      "after": [
+        "          claudeFixtureAttachmentPath(resumed.attachmentsDir, image),\n"
+      ]
+    },
+    {
+      "start": 3393,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 3399,
+      "before": [
+        "    it.effect(\"resolves cached managed policy from the configured home through the real SDK\", () =>\n"
+      ],
+      "after": [
+        "    it.effect(\"keeps every native mode behind the PM deny-ungranted callback\", () =>\n"
+      ]
+    },
+    {
+      "start": 3401,
+      "before": [
+        "        const fileSystem = yield* FileSystem.FileSystem;\n",
+        "        const path = yield* Path.Path;\n",
+        "        const home = yield* fileSystem.makeTempDirectoryScoped({ prefix: \"t3-claude-remote-\" });\n",
+        "        const cwd = yield* fileSystem.makeTempDirectoryScoped({ prefix: \"t3-claude-remote-cwd-\" });\n",
+        "        const remoteFile = path.join(home, \"remote-settings.json\");\n",
+        "        const sdk = yield* Effect.promise(() =>\n",
+        "          vi.importActual<typeof ClaudeSdk>(\"@anthropic-ai/claude-agent-sdk\"),\n",
+        "        );\n",
+        "        vi.mocked(ClaudeSdk.resolveSettings).mockImplementation(sdk.resolveSettings);\n",
+        "        const openWith = (launchArgs: string) =>\n",
+        "          Effect.scoped(\n",
+        "            Effect.gen(function* () {\n",
+        "              const harness = yield* makeWakeHarnessWithOptions({\n",
+        "                settings: { ...DEFAULT_CLAUDE_SETTINGS, homePath: home, launchArgs },\n",
+        "              });\n",
+        "              yield* harness.runtime.startTurn(\n",
+        "                makeClaudeTestTurnInput({\n",
+        "                  threadId: harness.threadId,\n",
+        "                  providerThread: harness.providerThread,\n",
+        "                  now: yield* DateTime.now,\n",
+        "                  attemptId: RunAttemptId.make(\"attempt-cached-managed-policy\"),\n",
+        "                  text: \"Run git status.\",\n",
+        "                  attachments: [],\n",
+        "                  runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({\n",
+        "                    runtimeMode: \"full-access\",\n",
+        "                    interactionMode: \"default\",\n",
+        "                    cwd,\n",
+        "                  }),\n",
+        "                }),\n",
+        "              );\n",
+        "              return harness.getOpenedOptions()!;\n",
+        "            }),\n",
+        "          );\n",
+        "        const open = openWith(\"\");\n",
+        "        yield* fileSystem.writeFileString(\n",
+        "          remoteFile,\n",
+        "          JSON.stringify({\n",
+        "            permissions: { disableBypassPermissionsMode: \"disable\" },\n",
+        "            disableAutoMode: \"disable\",\n",
+        "            managedSourcesBehavior: \"merge\",\n",
+        "          }),\n",
+        "        );\n",
+        "        const restricted = yield* open;\n",
+        "        assert.equal(restricted.permissionMode, \"default\");\n",
+        "        assert.isUndefined(restricted.allowDangerouslySkipPermissions);\n",
+        "        yield* fileSystem.remove(remoteFile);\n",
+        "        assert.equal((yield* open).permissionMode, \"bypassPermissions\");\n",
+        "        const launchRestricted = yield* openWith(\n",
+        "          `--settings '{\"permissions\":{\"disableBypassPermissionsMode\":\"disable\"}}'`,\n",
+        "        );\n",
+        "        assert.equal(launchRestricted.permissionMode, \"auto\");\n",
+        "        assert.isUndefined(launchRestricted.allowDangerouslySkipPermissions);\n",
+        "        yield* fileSystem.writeFileString(remoteFile, \"{ invalid json\");\n",
+        "        assert.equal((yield* open).permissionMode, \"auto\");\n",
+        "        yield* fileSystem.remove(remoteFile);\n",
+        "        yield* fileSystem.makeDirectory(remoteFile);\n",
+        "        assert.equal((yield* open).permissionMode, \"auto\");\n",
+        "      }).pipe(\n",
+        "        Effect.provide(\n",
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n",
+        "        ),\n",
+        "      ),\n",
+        "    );\n",
+        "\n",
+        "    it.effect(\"asks before restricted Full access tools and follows policy across turns\", () =>\n",
+        "      Effect.gen(function* () {\n",
+        "        const resolveSettings = vi\n",
+        "          .mocked(ClaudeSdk.resolveSettings)\n",
+        "          .mockImplementation(async (options) => ({\n",
+        "            effective:\n",
+        "              options?.cwd === \"/unrestricted\"\n",
+        "                ? {}\n",
+        "                : {\n",
+        "                    permissions: {\n",
+        "                      disableBypassPermissionsMode: \"disable\",\n",
+        "                      ...(options?.cwd === \"/restricted-worktree\"\n",
+        "                        ? { disableAutoMode: \"disable\" as const }\n",
+        "                        : {}),\n",
+        "                    },\n",
+        "                  },\n",
+        "            provenance: {},\n",
+        "            sources: [],\n",
+        "          }));\n",
+        "        const harness = yield* makeWakeHarnessWithOptions({\n",
+        "          close: Queue.shutdown,\n",
+        "          freshQueueOnReopen: true,\n",
+        "          setPermissionMode: (mode) =>\n",
+        "            mode === \"bypassPermissions\"\n",
+        "              ? Effect.fail(\n",
+        "                  new ClaudeAdapterV2.ClaudeAgentSdkQueryRunnerError({\n",
+        "                    method: \"setPermissionMode\",\n",
+        "                    cause: new Error(\n",
+        "                      \"Cannot set permission mode to bypassPermissions because it is disabled by settings or configuration\",\n",
+        "                    ),\n",
+        "                  }),\n",
+        "                )\n",
+        "              : Effect.void,\n",
+        "        });\n",
+        "        const now = yield* DateTime.now;\n",
+        "        let ordinal = 0;\n",
+        "        const start = (cwd: string, runtimeMode: \"full-access\" | \"auto\" = \"full-access\") =>\n",
+        "          harness.runtime.startTurn(\n",
+        "            makeClaudeTestTurnInput({\n"
+      ],
+      "after": [
+        "        for (const runtimeMode of [\"full-access\", \"auto\", \"approval-required\"] as const) {\n",
+        "          yield* Effect.scoped(Effect.gen(function* () {\n",
+        "            const harness = yield* makeWakeHarnessWithOptions();\n",
+        "            yield* harness.runtime.startTurn(makeClaudeTestTurnInput({\n"
+      ]
+    },
+    {
+      "start": 3506,
+      "before": [
+        "              now,\n",
+        "              attemptId: RunAttemptId.make(`attempt-policy-${++ordinal}`),\n",
+        "              providerTurnOrdinal: ordinal,\n"
+      ],
+      "after": [
+        "              now: yield* DateTime.now,\n",
+        "              attemptId: RunAttemptId.make(`pm-policy-${runtimeMode}`),\n"
+      ]
+    },
+    {
+      "start": 3511,
+      "before": [
+        "              runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({\n",
+        "                runtimeMode,\n",
+        "                interactionMode: \"default\",\n",
+        "                cwd,\n",
+        "              }),\n",
+        "            }),\n",
+        "          );\n",
+        "        const finish = Effect.gen(function* () {\n",
+        "          yield* harness.offerAndWait(\n",
+        "            makeResultFrame({ uuid: `policy-result-${ordinal}`, result: \"Done.\" }),\n",
+        "          );\n",
+        "          yield* Queue.take(harness.terminalReceipts);\n",
+        "        });\n",
+        "        const notices = () =>\n",
+        "          harness.events.filter(\n",
+        "            (event) =>\n",
+        "              event.type === \"turn_item.updated\" && event.turnItem.type === \"system_notice\",\n",
+        "          );\n",
+        "\n",
+        "        yield* start(\"/restricted-worktree\", \"auto\");\n",
+        "        assert.equal(harness.getOpenedOptions()?.permissionMode, \"auto\");\n",
+        "        yield* finish;\n",
+        "        assert.equal(notices().length, 0);\n",
+        "        assert.equal(resolveSettings.mock.calls.length, 0);\n",
+        "\n",
+        "        yield* start(\"/restricted\");\n",
+        "        const openedOptions = harness.getOpenedOptions()!;\n",
+        "        const decision = yield* Effect.promise(() =>\n",
+        "          openedOptions.canUseTool!(\n",
+        "            \"Bash\",\n",
+        "            { command: \"git status\" },\n",
+        "            {\n",
+        "              signal: new AbortController().signal,\n",
+        "              toolUseID: \"policy-command\",\n",
+        "              requestId: \"request-policy-command\",\n",
+        "            },\n",
+        "          ),\n",
+        "        ).pipe(Effect.forkScoped);\n",
+        "        const first = yield* Effect.raceFirst(\n",
+        "          Queue.take(harness.runtimeRequestReceipts).pipe(\n",
+        "            Effect.map((event) => ({ type: \"request\", event }) as const),\n",
+        "          ),\n",
+        "          Fiber.join(decision).pipe(\n",
+        "            Effect.map((result) => ({ type: \"decision\", result }) as const),\n",
+        "          ),\n",
+        "        );\n",
+        "        assert.equal(\n",
+        "          first.type,\n",
+        "          \"request\",\n",
+        "          \"Full access must not auto-allow a policy-restricted command\",\n",
+        "        );\n",
+        "        if (first.type !== \"request\") return;\n",
+        "        assert.equal(first.event.runtimeRequest.kind, \"command\");\n",
+        "        yield* harness.runtime.respondToRuntimeRequest({\n",
+        "          requestId: first.event.runtimeRequest.id,\n",
+        "          decision: \"decline\",\n",
+        "        });\n",
+        "        assert.equal((yield* Fiber.join(decision))?.behavior, \"deny\");\n",
+        "        assert.equal(openedOptions.permissionMode, \"auto\");\n",
+        "        assert.isUndefined(openedOptions.allowDangerouslySkipPermissions);\n",
+        "\n",
+        "        yield* harness.offerAndWait(\n",
+        "          claudeSdkFrame({\n",
+        "            type: \"system\",\n",
+        "            subtype: \"status\",\n",
+        "            status: null,\n",
+        "            permissionMode: \"plan\",\n",
+        "            uuid: \"policy-enter-plan\",\n",
+        "            session_id: WAKE_NATIVE_SESSION,\n",
+        "          }),\n",
+        "        );\n",
+        "        yield* finish;\n",
+        "        assert.equal(notices().length, 1);\n",
+        "        yield* start(\"/restricted\");\n",
+        "        assert.strictEqual(harness.getOpenedOptions(), openedOptions);\n",
+        "        assert.deepEqual(harness.permissionModeChanges, [\"auto\"]);\n",
+        "        assert.equal(resolveSettings.mock.calls.length, 1);\n",
+        "        yield* finish;\n",
+        "\n",
+        "        yield* start(\"/restricted-worktree\");\n",
+        "        assert.equal(harness.getOpenedOptions()?.permissionMode, \"default\");\n",
+        "        assert.isUndefined(harness.getOpenedOptions()?.allowDangerouslySkipPermissions);\n",
+        "        assert.equal(resolveSettings.mock.calls.length, 2);\n",
+        "        yield* finish;\n",
+        "\n",
+        "        yield* start(\"/unrestricted\");\n",
+        "        assert.equal(harness.getOpenedOptions()?.permissionMode, \"bypassPermissions\");\n",
+        "        assert.equal(harness.getOpenedOptions()?.allowDangerouslySkipPermissions, true);\n",
+        "        // Forwarded asks (including ask rules and settings fallback) still need a decision\n",
+        "        // before queued init/status frames arrive.\n",
+        "        for (const { phase, frame } of [\n",
+        "          {\n",
+        "            phase: \"init\",\n",
+        "            frame: claudeSdkFrame({\n",
+        "              type: \"system\",\n",
+        "              subtype: \"init\",\n",
+        "              permissionMode: \"bypassPermissions\",\n",
+        "              uuid: \"policy-cli-init\",\n",
+        "              session_id: WAKE_NATIVE_SESSION,\n",
+        "            }),\n",
+        "          },\n",
+        "          {\n",
+        "            phase: \"status\",\n",
+        "            frame: claudeSdkFrame({\n",
+        "              type: \"system\",\n",
+        "              subtype: \"status\",\n",
+        "              status: null,\n",
+        "              permissionMode: \"default\",\n",
+        "              uuid: \"policy-cli-downgrade\",\n",
+        "              session_id: WAKE_NATIVE_SESSION,\n",
+        "            }),\n",
+        "          },\n",
+        "        ]) {\n",
+        "          const forwardedDecision = yield* Effect.promise(() =>\n",
+        "            harness.getOpenedOptions()!.canUseTool!(\n"
+      ],
+      "after": [
+        "              runtimePolicy: { ...CLAUDE_TEST_RUNTIME_POLICY, runtimeMode },\n",
+        "            }));\n",
+        "            const options = harness.getOpenedOptions();\n",
+        "            if (options === undefined) throw new Error(\"Expected a native Claude query.\");\n",
+        "            assert.equal(options.permissionMode, \"default\");\n",
+        "            assert.isUndefined(options.allowDangerouslySkipPermissions);\n",
+        "            assert.isUndefined(options.allowedTools);\n",
+        "            const canUseTool = options.canUseTool;\n",
+        "            if (canUseTool === undefined) throw new Error(\"Expected the PM permission callback.\");\n",
+        "            const decision = yield* Effect.promise(() => canUseTool(\n"
+      ]
+    },
+    {
+      "start": 3630,
+      "before": [
+        "                toolUseID: `forwarded-before-${phase}`,\n",
+        "                requestId: `request-forwarded-before-${phase}`,\n"
+      ],
+      "after": [
+        "                toolUseID: `pm-policy-${runtimeMode}`,\n",
+        "                requestId: `pm-policy-${runtimeMode}`,\n"
+      ]
+    },
+    {
+      "start": 3633,
+      "before": [
+        "            ),\n",
+        "          ).pipe(Effect.forkScoped);\n",
+        "          const forwardedFirst = yield* Effect.raceFirst(\n",
+        "            Queue.take(harness.runtimeRequestReceipts).pipe(\n",
+        "              Effect.map((event) => ({ type: \"request\", event }) as const),\n",
+        "            ),\n",
+        "            Fiber.join(forwardedDecision).pipe(\n",
+        "              Effect.map((result) => ({ type: \"decision\", result }) as const),\n",
+        "            ),\n",
+        "          );\n",
+        "          assert.equal(\n",
+        "            forwardedFirst.type,\n",
+        "            \"request\",\n",
+        "            `CLI-forwarded Bash must ask before the queued ${phase} frame reaches the adapter`,\n",
+        "          );\n",
+        "          if (forwardedFirst.type !== \"request\") return;\n",
+        "          assert.equal(forwardedFirst.event.runtimeRequest.kind, \"command\");\n",
+        "          yield* harness.runtime.respondToRuntimeRequest({\n",
+        "            requestId: forwardedFirst.event.runtimeRequest.id,\n",
+        "            decision: \"decline\",\n",
+        "          });\n",
+        "          assert.equal((yield* Fiber.join(forwardedDecision))?.behavior, \"deny\");\n",
+        "          yield* harness.offerAndWait(frame);\n"
+      ],
+      "after": [
+        "            )).pipe(Effect.forkScoped);\n",
+        "            const { runtimeRequest } = yield* Queue.take(harness.runtimeRequestReceipts);\n",
+        "            if (runtimeRequest === null) throw new Error(\"Expected a live PM permission request.\");\n",
+        "            yield* harness.runtime.respondToRuntimeRequest({\n",
+        "              requestId: runtimeRequest.id,\n",
+        "              decision: \"decline\",\n",
+        "            });\n",
+        "            const denied = yield* Fiber.join(decision);\n",
+        "            if (denied === null) throw new Error(\"Expected the native permission decision.\");\n",
+        "            assert.equal(denied.behavior, \"deny\");\n",
+        "          }));\n"
+      ]
+    },
+    {
+      "start": 3657,
+      "before": [
+        "        yield* finish;\n",
+        "        const unrestrictedOptions = harness.getOpenedOptions();\n",
+        "        yield* start(\"/unrestricted\");\n",
+        "        assert.strictEqual(harness.getOpenedOptions(), unrestrictedOptions);\n",
+        "        assert.deepEqual(\n",
+        "          harness.permissionModeChanges,\n",
+        "          [\"auto\"],\n",
+        "          \"A CLI policy downgrade must not be restored to bypass on the next turn\",\n",
+        "        );\n",
+        "        assert.equal(resolveSettings.mock.calls.length, 3);\n",
+        "        yield* harness.offerAndWait(\n",
+        "          claudeSdkFrame({\n",
+        "            type: \"system\",\n",
+        "            subtype: \"status\",\n",
+        "            status: null,\n",
+        "            permissionMode: \"plan\",\n",
+        "            uuid: \"policy-restricted-enter-plan\",\n",
+        "            session_id: WAKE_NATIVE_SESSION,\n",
+        "          }),\n",
+        "        );\n",
+        "        yield* finish;\n",
+        "        assert.equal(notices().length, 1);\n",
+        "\n",
+        "        for (const phase of [\"restore\", \"reuse\"]) {\n",
+        "          const started = yield* start(\"/unrestricted\").pipe(Effect.exit);\n",
+        "          assert.isTrue(\n",
+        "            Exit.isSuccess(started),\n",
+        "            `A rejected bypass restore must not fail the ${phase} turn`,\n",
+        "          );\n",
+        "          assert.strictEqual(harness.getOpenedOptions(), unrestrictedOptions);\n",
+        "          assert.deepEqual(harness.permissionModeChanges, [\"auto\", \"bypassPermissions\", \"default\"]);\n",
+        "          assert.equal(harness.offeredMessages.length, ordinal);\n",
+        "          const restoredDecision = yield* Effect.promise(() =>\n",
+        "            harness.getOpenedOptions()!.canUseTool!(\n",
+        "              \"Bash\",\n",
+        "              { command: \"git status\" },\n",
+        "              {\n",
+        "                signal: new AbortController().signal,\n",
+        "                toolUseID: `forwarded-after-plan-${phase}`,\n",
+        "                requestId: `request-after-plan-${phase}`,\n",
+        "              },\n",
+        "            ),\n",
+        "          ).pipe(Effect.forkScoped);\n",
+        "          const restoredFirst = yield* Effect.raceFirst(\n",
+        "            Queue.take(harness.runtimeRequestReceipts).pipe(\n",
+        "              Effect.map((event) => ({ type: \"request\", event }) as const),\n",
+        "            ),\n",
+        "            Fiber.join(restoredDecision).pipe(\n",
+        "              Effect.map((result) => ({ type: \"decision\", result }) as const),\n",
+        "            ),\n",
+        "          );\n",
+        "          assert.equal(restoredFirst.type, \"request\");\n",
+        "          if (restoredFirst.type !== \"request\") return;\n",
+        "          assert.equal(restoredFirst.event.runtimeRequest.kind, \"command\");\n",
+        "          yield* harness.runtime.respondToRuntimeRequest({\n",
+        "            requestId: restoredFirst.event.runtimeRequest.id,\n",
+        "            decision: \"decline\",\n",
+        "          });\n",
+        "          assert.equal((yield* Fiber.join(restoredDecision))?.behavior, \"deny\");\n",
+        "          yield* finish;\n",
+        "          assert.equal(harness.terminalEvents().at(-1)?.status, \"completed\");\n",
+        "        }\n",
+        "        assert.equal(notices().length, 1);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3721,
+      "before": [
+        "        Effect.provide(\n",
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n",
+        "        ),\n"
+      ],
+      "after": [
+        "        Effect.provide(Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer)),\n"
+      ]
+    },
+    {
+      "start": 3727,
+      "before": [],
+      "after": [
+        "    \n",
+        "\n"
+      ]
+    },
+    {
+      "start": 3728,
+      "before": [
+        "    it.effect(\n",
+        "      \"combines a normalized custom home with project policy without reading the ambient user tier\",\n",
+        "      () =>\n",
+        "        Effect.gen(function* () {\n",
+        "          const fileSystem = yield* FileSystem.FileSystem;\n",
+        "          const path = yield* Path.Path;\n",
+        "          const home = yield* fileSystem.makeTempDirectoryScoped({\n",
+        "            prefix: \"t3-claude-policy-home-\",\n",
+        "          });\n",
+        "          yield* fileSystem.makeDirectory(path.join(home, \"profile\"));\n",
+        "          yield* fileSystem.writeFileString(\n",
+        "            path.join(home, \"profile\", \"settings.json\"),\n",
+        "            `{\n",
+        "          // Claude accepts comments and trailing commas.\n",
+        "          \"permissions\": { \"disableBypassPermissionsMode\": \"disable\", },\n",
+        "        }`,\n",
+        "          );\n",
+        "          const resolveSettings = vi.mocked(ClaudeSdk.resolveSettings).mockResolvedValue({\n",
+        "            effective: { disableAutoMode: \"disable\" },\n",
+        "            provenance: {},\n",
+        "            sources: [{ source: \"project\", settings: { disableAutoMode: \"disable\" } }],\n",
+        "          });\n",
+        "          const harness = yield* makeWakeHarnessWithOptions({\n",
+        "            settings: { ...DEFAULT_CLAUDE_SETTINGS, homePath: \" ~/profile \" },\n",
+        "          }).pipe(Effect.provideService(HostProcess.HomeDirectory, home));\n",
+        "          yield* harness.runtime.startTurn(\n",
+        "            makeClaudeTestTurnInput({\n",
+        "              threadId: harness.threadId,\n",
+        "              providerThread: harness.providerThread,\n",
+        "              now: yield* DateTime.now,\n",
+        "              attemptId: RunAttemptId.make(\"attempt-custom-home\"),\n",
+        "              text: \"Run git status.\",\n",
+        "              attachments: [],\n",
+        "            }),\n",
+        "          );\n",
+        "          assert.equal(harness.getOpenedOptions()?.permissionMode, \"default\");\n",
+        "          assert.isUndefined(harness.getOpenedOptions()?.allowDangerouslySkipPermissions);\n",
+        "          assert.deepEqual(resolveSettings.mock.calls[0]?.[0]?.settingSources, [\n",
+        "            \"project\",\n",
+        "            \"local\",\n",
+        "          ]);\n",
+        "        }).pipe(\n",
+        "          Effect.provide(\n",
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n",
+        "          ),\n",
+        "        ),\n",
+        "    );\n"
+      ],
+      "after": [
+        "    \n"
+      ]
+    },
+    {
+      "start": 3777,
+      "before": [
+        "    it.effect(\n",
+        "      \"distinguishes missing custom settings from unreadable, malformed, or unresolved policy\",\n",
+        "      () =>\n",
+        "        Effect.gen(function* () {\n",
+        "          const fileSystem = yield* FileSystem.FileSystem;\n",
+        "          const path = yield* Path.Path;\n",
+        "          const home = yield* fileSystem.makeTempDirectoryScoped({\n",
+        "            prefix: \"t3-claude-policy-failure-\",\n",
+        "          });\n",
+        "          const settingsFile = path.join(home, \"settings.json\");\n",
+        "          const open = Effect.scoped(\n",
+        "            Effect.gen(function* () {\n",
+        "              const harness = yield* makeWakeHarnessWithOptions({\n",
+        "                settings: { ...DEFAULT_CLAUDE_SETTINGS, homePath: home },\n",
+        "              });\n",
+        "              yield* harness.runtime.startTurn(\n",
+        "                makeClaudeTestTurnInput({\n",
+        "                  threadId: harness.threadId,\n",
+        "                  providerThread: harness.providerThread,\n",
+        "                  now: yield* DateTime.now,\n",
+        "                  attemptId: RunAttemptId.make(\"attempt-settings-failure\"),\n",
+        "                  text: \"Run git status.\",\n",
+        "                  attachments: [],\n",
+        "                }),\n",
+        "              );\n",
+        "              return harness.getOpenedOptions()!;\n",
+        "            }),\n",
+        "          );\n",
+        "          assert.equal((yield* open).permissionMode, \"bypassPermissions\");\n",
+        "          yield* fileSystem.makeDirectory(settingsFile);\n",
+        "          const unreadable = yield* open;\n",
+        "          assert.equal(unreadable.permissionMode, \"auto\");\n",
+        "          assert.isUndefined(unreadable.allowDangerouslySkipPermissions);\n",
+        "          yield* fileSystem.remove(settingsFile, { recursive: true });\n",
+        "          yield* fileSystem.writeFileString(settingsFile, \"{ invalid json\");\n",
+        "          assert.equal((yield* open).permissionMode, \"auto\");\n",
+        "          yield* fileSystem.remove(settingsFile);\n",
+        "          const resolveSettings = vi\n",
+        "            .mocked(ClaudeSdk.resolveSettings)\n",
+        "            .mockClear()\n",
+        "            .mockRejectedValueOnce(new Error(\"Cannot resolve managed settings\"))\n",
+        "            .mockResolvedValue({ effective: {}, provenance: {}, sources: [] });\n",
+        "          const harness = yield* makeWakeHarnessWithOptions({\n",
+        "            settings: { ...DEFAULT_CLAUDE_SETTINGS, homePath: home },\n",
+        "            close: Queue.shutdown,\n",
+        "            freshQueueOnReopen: true,\n",
+        "          });\n",
+        "          for (const ordinal of [1, 2]) {\n",
+        "            yield* harness.runtime.startTurn(\n",
+        "              makeClaudeTestTurnInput({\n",
+        "                threadId: harness.threadId,\n",
+        "                providerThread: harness.providerThread,\n",
+        "                now: yield* DateTime.now,\n",
+        "                attemptId: RunAttemptId.make(`attempt-settings-recovery-${ordinal}`),\n",
+        "                providerTurnOrdinal: ordinal,\n",
+        "                text: \"Run git status.\",\n",
+        "                attachments: [],\n",
+        "              }),\n",
+        "            );\n",
+        "            const options = harness.getOpenedOptions()!;\n",
+        "            assert.equal(\n",
+        "              options.permissionMode,\n",
+        "              ordinal === 1 ? \"auto\" : \"bypassPermissions\",\n",
+        "              \"A transient resolver failure must only downgrade the failing turn\",\n",
+        "            );\n",
+        "            if (ordinal === 1) assert.isUndefined(options.allowDangerouslySkipPermissions);\n",
+        "            else assert.equal(options.allowDangerouslySkipPermissions, true);\n",
+        "            assert.equal(resolveSettings.mock.calls.length, ordinal);\n",
+        "            yield* harness.offerAndWait(\n",
+        "              makeResultFrame({ uuid: `settings-recovery-result-${ordinal}`, result: \"Done.\" }),\n",
+        "            );\n",
+        "            assert.equal((yield* Queue.take(harness.terminalReceipts)).status, \"completed\");\n",
+        "          }\n",
+        "          assert.equal(harness.offeredMessages.length, 2);\n",
+        "          assert.equal(\n",
+        "            resolveSettings.mock.calls[0]?.[0]?.cwd,\n",
+        "            resolveSettings.mock.calls[1]?.[0]?.cwd,\n",
+        "          );\n",
+        "        }).pipe(\n",
+        "          Effect.provide(\n",
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n",
+        "          ),\n",
+        "        ),\n",
+        "    );\n"
+      ],
+      "after": [
+        "    \n"
+      ]
+    },
+    {
+      "start": 3903,
+      "before": [
+        "        // --settings beats local, project, and user settings.\n",
+        "        assert.equal(\n",
+        "          yield* openedToolSearch(\n",
+        "            '{\"env\":{\"ENABLE_TOOL_SEARCH\":\"auto\"}}',\n",
+        "            CLAUDE_TEST_RUNTIME_POLICY.cwd,\n",
+        "            undefined,\n",
+        "            `--settings '{\"env\":{\"ENABLE_TOOL_SEARCH\":\"false\"}}'`,\n",
+        "          ),\n",
+        "          \"false\",\n",
+        "        );\n"
+      ],
+      "after": [
+        "        // Native settings files remain supported, but launchArgs cannot replace the host settings boundary.\n",
+        "        assert.equal((yield* openedToolSearch(\n",
+        "          '{\"env\":{\"ENABLE_TOOL_SEARCH\":\"auto\"}}', CLAUDE_TEST_RUNTIME_POLICY.cwd, undefined,\n",
+        "          `--settings '{\"env\":{\"ENABLE_TOOL_SEARCH\":\"false\"}}'`,\n",
+        "        ).pipe(Effect.exit))._tag, \"Failure\");\n"
+      ]
+    },
+    {
+      "start": 3958,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4060,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4077,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4132,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4161,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4213,
+      "before": [],
+      "after": [
+        "        yield* fs.writeFile(claudeFixtureAttachmentPath(harness.attachmentsDir, attachment), Buffer.alloc(attachment.sizeBytes));\n"
+      ]
+    },
+    {
+      "start": 4230,
+      "before": [
+        "        const attachmentNote = `\\n\\n[Attached file \"requirements.pdf\" is saved at: ${path.join(harness.attachmentsDir, attachmentRelativePath(attachment)!)}]`;\n"
+      ],
+      "after": [
+        "        const attachmentNote = `\\n\\n[Attached file \"requirements.pdf\" is saved at: ${claudeFixtureAttachmentPath(harness.attachmentsDir, attachment)}]`;\n"
+      ]
+    },
+    {
+      "start": 4238,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4355,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4440,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4564,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4637,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4743,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4761,
+      "before": [],
+      "after": [
+        "      const notices = () =>\n",
+        "        harness.events.flatMap((event) =>\n",
+        "          event.type === \"turn_item.updated\" &&\n",
+        "          event.turnItem.type === \"system_notice\" &&\n",
+        "          typeof event.turnItem.nativeItemRef?.nativeId === \"string\" &&\n",
+        "          event.turnItem.nativeItemRef.nativeId.startsWith(\"usage-limit:\")\n",
+        "            ? [event.turnItem]\n",
+        "            : [],\n",
+        "        );\n"
+      ]
+    },
+    {
+      "start": 4774,
+      "before": [
+        "      yield* Queue.offer(harness.sdkMessages, limit());\n",
+        "      const pause = (yield* Queue.take(harness.systemNoticeReceipts)).turnItem;\n",
+        "      assert.equal(pause.type, \"system_notice\");\n",
+        "      if (pause.type !== \"system_notice\") return;\n",
+        "      assert.equal(\n",
+        "        pause.message,\n",
+        "        \"Claude usage limit reached. This turn is paused until the 5-hour limit resets in 2h.\",\n",
+        "      );\n"
+      ],
+      "after": [
+        "      yield* harness.offerAndWait(limit());\n",
+        "      yield* harness.until(() => notices().length === 1);\n",
+        "      assert.equal(notices()[0]?.status, \"completed\");\n",
+        "      assert.include(notices()[0]?.nativeItemRef?.nativeId, \":five_hour:\");\n"
+      ]
+    },
+    {
+      "start": 4793,
+      "before": [
+        "      const notices = () =>\n",
+        "        harness.events.flatMap((event) =>\n",
+        "          event.type === \"turn_item.updated\" && event.turnItem.type === \"system_notice\"\n",
+        "            ? [event.turnItem]\n",
+        "            : [],\n",
+        "        );\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4813,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4868,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4959,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5009,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5052,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5161,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5216,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5285,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5348,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5434,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5530,
+      "before": [
+        "      yield* Queue.take(harness.systemNoticeReceipts);\n"
+      ],
+      "after": [
+        "      yield* harness.until(() => harness.events.some(event =>\n",
+        "        event.type === \"turn_item.updated\" &&\n",
+        "        event.turnItem.nativeItemRef?.nativeId === \"00000000-0000-4000-8000-000000000614\",\n",
+        "      ));\n"
+      ]
+    },
+    {
+      "start": 5596,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5660,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5739,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5797,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5865,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5961,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6038,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6100,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6155,
+      "before": [
+        "        event.type === \"turn_item.updated\" && event.turnItem.type === \"system_notice\"\n"
+      ],
+      "after": [
+        "        event.type === \"turn_item.updated\" && event.turnItem.type === \"system_notice\" &&\n",
+        "        event.turnItem.nativeItemRef?.nativeId === uuid\n"
+      ]
+    },
+    {
+      "start": 6163,
+      "before": [],
+      "after": [
+        "      assert.isFalse(harness.events.some((event) =>\n",
+        "        event.type === \"turn_item.updated\" &&\n",
+        "        event.turnItem.nativeItemRef?.nativeId === \"00000000-0000-4000-8000-000000000307\",\n",
+        "      ));\n"
+      ]
+    },
+    {
+      "start": 6172,
+      "before": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(NodeServices.layer, IdAllocator.layer, pmRuntimeHostLayer),\n"
+      ]
+    },
+    {
+      "start": 6249,
+      "before": [
+        "          Layer.mergeAll(NodeServices.layer, IdAllocator.layer, McpProviderSessions.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(NodeServices.layer, IdAllocator.layer, pmRuntimeHostLayer),\n"
+      ]
+    },
+    {
+      "start": 6258,
+      "before": [
+        "        // A later notice receipt confirms the event subscriber consumed preceding updates.\n",
+        "        yield* Queue.offer(\n",
+        "          harness.sdkMessages,\n"
+      ],
+      "after": [
+        "        // Wait for this exact checkpoint, not an earlier permission-boundary notice.\n",
+        "        yield* harness.offerAndWait(\n"
+      ]
+    },
+    {
+      "start": 6270,
+      "before": [
+        "        yield* Queue.take(harness.systemNoticeReceipts);\n"
+      ],
+      "after": [
+        "        yield* harness.until(() => harness.events.some((event) =>\n",
+        "          event.type === \"turn_item.updated\" && event.turnItem.nativeItemRef?.nativeId === uuid,\n",
+        "        ));\n"
+      ]
+    },
+    {
+      "start": 6317,
+      "before": [
+        "      assert.lengthOf(reported, 2);\n",
+        "      assert.equal(reported[1]?.id, running.id);\n",
+        "      assert.equal(reported[1]?.status, \"completed\");\n",
+        "      assert.isUndefined(reported[1]?.afterTokenCount);\n"
+      ],
+      "after": [
+        "      const reportedItem = reported.at(-1)!;\n",
+        "      assert.equal(reportedItem.id, running.id);\n",
+        "      assert.equal(reportedItem.status, \"completed\");\n",
+        "      assert.isUndefined(reportedItem.afterTokenCount);\n"
+      ]
+    },
+    {
+      "start": 6333,
+      "before": [
+        "      assert.lengthOf(afterBoundary, 3);\n",
+        "      const completed = afterBoundary[2]!;\n"
+      ],
+      "after": [
+        "      const completed = afterBoundary.at(-1)!;\n"
+      ]
+    },
+    {
+      "start": 6341,
+      "before": [
+        "      assert.deepEqual(completed.completedAt, reported[1]?.completedAt);\n"
+      ],
+      "after": [
+        "      assert.deepEqual(completed.completedAt, reportedItem.completedAt);\n"
+      ]
+    },
+    {
+      "start": 6362,
+      "before": [
+        "      assert.lengthOf(nextCompactions, 5);\n",
+        "      const boundaryOnly = nextCompactions[3]!;\n",
+        "      const nextRunning = nextCompactions[4]!;\n"
+      ],
+      "after": [
+        "      const boundaryOnly = nextCompactions.find(item =>\n",
+        "        item.nativeItemRef?.nativeId === \"00000000-0000-4000-8000-000000000217\",\n",
+        "      )!;\n",
+        "      const nextRunning = nextCompactions.at(-1)!;\n"
+      ]
+    },
+    {
+      "start": 6405,
+      "before": [
+        "        assert.lengthOf(stopped, 6 + index * 2);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6413,
+      "before": [
+        "        );\n",
+        "        assert.equal(\n",
+        "          settled.title,\n",
+        "          outcome.compact_result === \"failed\"\n",
+        "            ? \"Context compaction failed\"\n",
+        "            : \"Context compaction stopped\",\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6433,
+      "before": [
+        "        assert.lengthOf(retried, stopped.length + 1);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6450,
+      "before": [
+        "      assert.lengthOf(allCompactions, 10);\n",
+        "      assert.equal(allCompactions[9]?.id, retryRunning.id);\n",
+        "      assert.equal(allCompactions[9]?.ordinal, retryRunning.ordinal);\n",
+        "      assert.equal(allCompactions[9]?.status, \"completed\");\n",
+        "      assert.equal(allCompactions[9]?.beforeTokenCount, 3000);\n",
+        "      assert.equal(allCompactions[9]?.afterTokenCount, 600);\n"
+      ],
+      "after": [
+        "      const finalCompaction = allCompactions.at(-1)!;\n",
+        "      assert.equal(finalCompaction.id, retryRunning.id);\n",
+        "      assert.equal(finalCompaction.ordinal, retryRunning.ordinal);\n",
+        "      assert.equal(finalCompaction.status, \"completed\");\n",
+        "      assert.equal(finalCompaction.beforeTokenCount, 3000);\n",
+        "      assert.equal(finalCompaction.afterTokenCount, 600);\n"
+      ]
+    },
+    {
+      "start": 6476,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6550,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6556,
+      "before": [
+        "    \"renegotiates auto only when switching API models after fallback to default: %s\",\n"
+      ],
+      "after": [
+        "    \"keeps native permission authority unchanged across supported model changes: %s\",\n"
+      ]
+    },
+    {
+      "start": 6583,
+      "before": [
+        "        assert.equal(openedOptions?.permissionMode, \"auto\");\n"
+      ],
+      "after": [
+        "        assert.equal(openedOptions?.permissionMode, \"default\");\n"
+      ]
+    },
+    {
+      "start": 6597,
+      "before": [
+        "        if (nextModel === modelSelection.model) {\n",
+        "          assert.strictEqual(harness.getOpenedOptions(), openedOptions);\n",
+        "          assert.lengthOf(harness.processQueues, 1);\n",
+        "        } else {\n",
+        "          const resumedOptions = harness.getOpenedOptions();\n",
+        "          assert.notStrictEqual(resumedOptions, openedOptions);\n",
+        "          assert.equal(resumedOptions?.model, nextModel);\n",
+        "          assert.equal(resumedOptions?.resume, WAKE_NATIVE_SESSION);\n",
+        "          assert.isUndefined(resumedOptions?.sessionId);\n",
+        "          assert.equal(resumedOptions?.permissionMode, \"auto\");\n",
+        "          assert.lengthOf(harness.processQueues, 2);\n",
+        "        }\n"
+      ],
+      "after": [
+        "        assert.strictEqual(harness.getOpenedOptions(), openedOptions);\n",
+        "        assert.lengthOf(harness.processQueues, 1);\n"
+      ]
+    },
+    {
+      "start": 6611,
+      "before": [
+        "        assert.deepEqual(harness.liveSelectionChanges, []);\n"
+      ],
+      "after": [
+        "        if (nextModel === modelSelection.model) assert.deepEqual(harness.liveSelectionChanges, []);\n",
+        "        else assert.deepEqual(harness.liveSelectionChanges[0], { model: nextModel });\n"
+      ]
+    },
+    {
+      "start": 6615,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6857,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7018,
+      "before": [
+        "  it.effect(\"persists a todo_list from inline Claude task-tool frames\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"projects native task frames without entering the business orchestrator\", () =>\n"
+      ]
+    },
+    {
+      "start": 7020,
+      "before": [
+        "      let sequence = 700;\n",
+        "      const nextUuid = () => `00000000-0000-4000-8000-${String(++sequence).padStart(12, \"0\")}`;\n",
+        "      const prompt = \"Track a synthetic task.\";\n",
+        "      const transcript = yield* ClaudeOrchestratorReplayHarness.decodeTranscript({\n",
+        "        provider: \"claudeAgent\",\n",
+        "        protocol: \"claude-agent-sdk.query\",\n",
+        "        version: \"1\",\n",
+        "        scenario: \"claude_task_tools_inline\",\n",
+        "        metadata: { nativeSessionId: WAKE_NATIVE_SESSION },\n",
+        "        entries: [\n",
+        "          {\n",
+        "            type: \"expect_outbound\",\n",
+        "            frame: {\n",
+        "              type: \"query.open\",\n",
+        "              options: {\n",
+        "                model: \"claude-sonnet-4-6\",\n",
+        "                tools: { type: \"preset\", preset: \"claude_code\" },\n",
+        "                permissionMode: \"bypassPermissions\",\n",
+        "                allowDangerouslySkipPermissions: true,\n",
+        "                settings: { showThinkingSummaries: true },\n",
+        "                sessionId: WAKE_NATIVE_SESSION,\n",
+        "              },\n",
+        "            },\n",
+        "          },\n",
+        "          {\n",
+        "            type: \"expect_outbound\",\n",
+        "            frame: {\n",
+        "              type: \"prompt.offer\",\n",
+        "              message: {\n",
+        "                type: \"user\",\n",
+        "                message: { role: \"user\", content: prompt },\n",
+        "                parent_tool_use_id: null,\n",
+        "              },\n",
+        "            },\n",
+        "          },\n",
+        "          ...[\n",
+        "            ...taskToolFrames(createTask(\"1\", \"Inspect\"), nextUuid),\n",
+        "            ...taskToolFrames(updateTask({ taskId: \"1\", status: \"in_progress\" }), nextUuid),\n",
+        "            makeResultFrame({ uuid: nextUuid(), result: \"Task recorded.\" }),\n",
+        "          ].map((frame) => ({ type: \"emit_inbound\" as const, frame })),\n",
+        "        ],\n",
+        "      } satisfies ProviderReplayTranscript);\n",
+        "      const materialized = yield* materializeFixtureInput({\n",
+        "        scenario: transcript.scenario,\n",
+        "        fixtureInput: { steps: [{ type: \"message\", text: prompt }] },\n",
+        "        driver: ProviderDriverKind.make(\"claudeAgent\"),\n",
+        "        modelSelection: CLAUDE_MODEL_SELECTION,\n",
+        "      }).pipe(Effect.provide(IdAllocator.layer), provideDeterministicTestRuntime);\n",
+        "      const scenario = { name: transcript.scenario, transcript, ...materialized };\n",
+        "      yield* Effect.gen(function* () {\n",
+        "        const result = yield* runOrchestratorV2Scenario(scenario);\n",
+        "        assertBaseProjection({ result, transcript, runCount: 1, runStatuses: [\"completed\"] });\n",
+        "        const projection = projectionFor(result, transcript.scenario);\n",
+        "        assertSemanticProjectionIntegrity(projection);\n",
+        "        const plans = projection.plans.filter((plan) => plan.kind === \"todo_list\");\n",
+        "        assert.lengthOf(plans, 1);\n",
+        "        assert.deepEqual(\n",
+        "          plans[0]?.steps.map(({ id, text, status }) => ({ id, text, status })),\n",
+        "          [{ id: \"task-1\", text: \"Inspect\", status: \"running\" }],\n",
+        "        );\n",
+        "        assert.lengthOf(\n",
+        "          projection.turnItems.filter((item) => item.type === \"todo_list\"),\n",
+        "          1,\n",
+        "        );\n",
+        "      }).pipe(\n",
+        "        Effect.provide(layerProviderReplay(scenario, ClaudeOrchestratorReplayHarness)),\n",
+        "        provideDeterministicTestRuntime,\n",
+        "        Effect.scoped,\n",
+        "      );\n",
+        "    }),\n"
+      ],
+      "after": [
+        "      const harness = yield* makeTaskToolHarness;\n",
+        "      yield* harness.startTurn();\n",
+        "      yield* harness.call(createTask(\"1\", \"Inspect\"));\n",
+        "      yield* harness.call(updateTask({ taskId: \"1\", status: \"in_progress\" }));\n",
+        "      const terminal = yield* harness.finishTurn();\n",
+        "      assert.equal(terminal.status, \"completed\");\n",
+        "      const plans = harness.plans();\n",
+        "      assert.equal(new Set(plans.map((plan) => plan.id)).size, 1);\n",
+        "      assert.deepEqual(plans.at(-1)?.steps.map(({ id, text, status }) => ({ id, text, status })),\n",
+        "        [{ id: \"task-1\", text: \"Inspect\", status: \"running\" }]);\n",
+        "    }).pipe(Effect.provide(Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer))),\n"
+      ]
+    },
+    {
+      "start": 7130,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7161,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7216,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7242,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7284,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7331,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7361,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7377,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7454,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7506,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7570,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7660,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7786,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7922,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7996,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 8178,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 8435,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 8641,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 8728,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 8849,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 8924,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 8964,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9018,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9064,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9123,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9228,
+      "before": [
+        "            const pause = yield* Queue.take(harness.systemNoticeReceipts);\n",
+        "            assert.equal(pause.turnItem.type, \"system_notice\");\n",
+        "            if (pause.turnItem.type !== \"system_notice\") return;\n",
+        "            assert.include(pause.turnItem.message, \"This turn is paused until the 5-hour limit\");\n"
+      ],
+      "after": [
+        "            const pauses = harness.events.flatMap(event =>\n",
+        "              event.type === \"turn_item.updated\" &&\n",
+        "              event.turnItem.type === \"system_notice\" &&\n",
+        "              typeof event.turnItem.nativeItemRef?.nativeId === \"string\" &&\n",
+        "              event.turnItem.nativeItemRef.nativeId.startsWith(\"usage-limit:\")\n",
+        "                ? [event.turnItem] : [],\n",
+        "            );\n",
+        "            assert.lengthOf(pauses, 1);\n",
+        "            assert.equal(pauses[0]?.status, \"completed\");\n"
+      ]
+    },
+    {
+      "start": 9235,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9326,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9406,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9465,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9495,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9736,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 9895,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 10079,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 10205,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 10285,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 10446,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 10595,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 10762,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 10852,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 10938,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 11050,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 11164,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 11287,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 11389,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 11508,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 11594,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 11691,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 11948,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 12115,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 12294,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 12479,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 12587,
+      "before": [
+        "        const refused = yield* runtime\n"
+      ],
+      "after": [
+        "        yield* runtime\n"
+      ]
+    },
+    {
+      "start": 12602,
+      "before": [
+        "        assert.equal(\n",
+        "          makeProviderFailure({ cause: refused, class: \"provider_error\" }).message,\n",
+        "          new ClaudeAdapterV2.ClaudeAppendSystemPromptFileError({ path: appendFile }).message,\n",
+        "        );\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 12610,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 12739,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 13019,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 13103,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 13211,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 13466,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 13556,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 13784,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 13904,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14010,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14230,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14432,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14479,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14532,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14581,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14667,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14756,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14799,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14838,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 14887,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+      ]
+    }
+  ]
+}

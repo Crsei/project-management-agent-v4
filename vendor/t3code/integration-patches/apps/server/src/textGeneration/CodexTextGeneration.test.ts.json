@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "source": "apps/server/src/textGeneration/CodexTextGeneration.test.ts",
+  "beforeSha256": "867fee1825c59db17cf084b003c70dcb94a9a62f3127fd2ce3d85e4ea2896ffc",
+  "afterSha256": "a1e7634e5145eda1b344465607ed4af9e281e62c269f698a3020dbf8439acc02",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 16,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import { layer as nativeTestHostLayer, PmNativeTestHost } from \"../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 18,
+      "before": [
+        "import * as TextGeneration from \"./TextGeneration.ts\";\n"
+      ],
+      "after": [
+        "import type * as TextGeneration from \"./TextGeneration.ts\";\n"
+      ]
+    },
+    {
+      "start": 28,
+      "before": [
+        "const layerCodexTextGenerationTest = ServerConfig.ServerConfig.layerTest(process.cwd(), {\n"
+      ],
+      "after": [
+        "const layerCodexTextGenerationTest = nativeTestHostLayer({ driver: \"codex\", cwd: process.cwd(), ...{\n"
+      ]
+    },
+    {
+      "start": 30,
+      "before": [
+        "}).pipe(Layer.provideMerge(NodeServices.layer));\n"
+      ],
+      "after": [
+        "} }).pipe(Layer.provideMerge(NodeServices.layer));\n"
+      ]
+    },
+    {
+      "start": 282,
+      "before": [
+        "  it.effect(\"still generates when Codex cannot list its MCP servers\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"does not generate when Codex cannot prove its MCP servers are disabled\", () =>\n"
+      ]
+    },
+    {
+      "start": 292,
+      "before": [
+        "          const result = yield* textGeneration.generateBranchName({\n"
+      ],
+      "after": [
+        "          const failure = yield* textGeneration.generateBranchName({\n"
+      ]
+    },
+    {
+      "start": 296,
+      "before": [
+        "          });\n",
+        "          expect(result.branch).toBe(\"remove-default-shapes\");\n"
+      ],
+      "after": [
+        "          }).pipe(Effect.flip);\n",
+        "          expect(failure._tag).toBe(\"TextGenerationError\");\n"
+      ]
+    },
+    {
+      "start": 397,
+      "before": [
+        "          const path = yield* Path.Path;\n",
+        "          const { attachmentsDir } = yield* ServerConfig.ServerConfig;\n",
+        "          const attachmentId = \"thread-1-attachment\";\n",
+        "          const imagePath = path.join(attachmentsDir, `${attachmentId}.png`);\n",
+        "          yield* fs.makeDirectory(attachmentsDir, { recursive: true });\n",
+        "          yield* fs.writeFile(imagePath, Buffer.from(\"hello\"));\n"
+      ],
+      "after": [
+        "          const host = yield* PmNativeTestHost;\n",
+        "          const attachment = { type: \"image\" as const, id: \"thread-1-attachment\", name: \"bug.png\", mimeType: \"image/png\", sizeBytes: 5 };\n",
+        "          const imagePath = yield* host.registerAttachment(attachment, Buffer.from(\"hello\"));\n"
+      ]
+    },
+    {
+      "start": 409,
+      "before": [
+        "              attachments: [\n",
+        "                {\n",
+        "                  type: \"image\",\n",
+        "                  id: attachmentId,\n",
+        "                  name: \"bug.png\",\n",
+        "                  mimeType: \"image/png\",\n",
+        "                  sizeBytes: 5,\n",
+        "                },\n",
+        "              ],\n"
+      ],
+      "after": [
+        "              attachments: [attachment],\n"
+      ]
+    }
+  ]
+}

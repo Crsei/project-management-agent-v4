@@ -26,13 +26,6 @@
 .markdown-workbench .task-copy-status { padding: 6px 16px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px; }
 .markdown-workbench .task-detail-modes { display: flex; align-items: center; justify-content: space-between; min-width: 0; border-bottom: 1px solid var(--border); padding-right: 14px; flex-shrink: 0; }
 .markdown-workbench .task-detail-modes .detail-tabs { border: 0; min-width: 0; }
-.markdown-workbench .task-advanced-menu { position: relative; flex-shrink: 0; }
-.markdown-workbench .task-advanced-menu summary { display: flex; align-items: center; gap: 5px; padding: 5px 7px; border-radius: var(--control-radius); color: var(--muted-foreground); font-size: 11px; cursor: pointer; list-style: none; }
-.markdown-workbench .task-advanced-menu summary::-webkit-details-marker { display: none; }
-.markdown-workbench .task-advanced-menu summary:hover, .markdown-workbench .task-advanced-menu[open] summary { color: var(--foreground); background: var(--surface-hover); }
-.markdown-workbench .task-advanced-menu > div { position: absolute; top: calc(100% + 5px); right: 0; z-index: 12; display: grid; min-width: 155px; padding: 5px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-popover-value); box-shadow: var(--shadow-floating); }
-.markdown-workbench .task-advanced-menu button { border: 0; padding: 8px 10px; border-radius: var(--control-radius); text-align: left; background: transparent; color: var(--text-secondary); font-size: 12px; }
-.markdown-workbench .task-advanced-menu button:hover, .markdown-workbench .task-advanced-menu button.active { background: var(--selection); color: var(--foreground); }
 .markdown-workbench .task-entity-detail .detail-save-state { padding: 6px 16px; font-size: 10px; }
 .markdown-workbench .task-entity-detail .detail-content { min-width: 0; }
 .markdown-workbench .task-detail-surface { width: 100%; max-width: 920px; min-width: 0; margin-inline: auto; padding: 20px 24px 32px; overflow-wrap: anywhere; }
@@ -104,4 +97,4 @@
   .markdown-workbench .task-entity-detail .detail-actions { padding-inline: 12px; }
   .markdown-workbench .task-description > .markdown-preview { padding: 9px; }
 }
-.markdown-workbench :is(.task-advanced-menu, .task-advanced-properties) > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.markdown-workbench .task-advanced-properties > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

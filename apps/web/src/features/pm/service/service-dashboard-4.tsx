@@ -3,6 +3,7 @@ import { Handle, Position } from "@xyflow/react"
 import { AlertTriangle, ArrowUpRight, CalendarDays, ChevronDown, Download, Filter, FolderKanban, ListTodo, Network, SlidersHorizontal } from "lucide-react"
 import type { Entity } from "@contracts"
 import { DataTable } from "@/components/blocks/data-table"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { WorkflowCanvas } from "@/components/blocks/workflow-canvas"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -40,6 +41,35 @@ const stateGroup = (item: Entity): StateGroup => {
   const status = string(item.data.status)
   return status === "done" ? "done" : status === "in_progress" || status === "in_review" ? "working" : status === "draft" || status === "ready" ? "planned" : "other"
 }
+const dueBucket = (value: string, today: string): string => {
+  if (!value || !Number.isFinite(Date.parse(value))) return "none"
+  if (value < today) return "overdue"
+  return value <= new Date(Date.parse(today) + 6 * 86_400_000).toISOString().slice(0, 10) ? "week" : "later"
+}
+/** Unknown fields yield `null` so a mode that cannot evaluate a field leaves rows untouched. */
+const workItemValues = (item: Entity, field: string, today: string): string[] | null => {
+  switch (field) {
+    case "status": return [string(item.data.status) || "unspecified"]
+    case "priority": return [string(item.data.priority) || "unspecified"]
+    case "assignee": return [string(item.data.assigneeId) || "unassigned"]
+    case "project": return item.projectId ? [item.projectId] : []
+    case "due": return [dueBucket(string(item.data.dueDate), today)]
+    default: return null
+  }
+}
+const projectValues = (id: string, field: string, projectById: Map<string, Entity>, today: string): string[] | null => {
+  switch (field) {
+    case "status": return [string(projectById.get(id)?.data.status) || "unspecified"]
+    case "project": return [id]
+    case "due": return [dueBucket(string(projectById.get(id)?.data.dueDate), today)]
+    default: return null
+  }
+}
+const conditionMatches = (condition: FilterCondition, values: readonly string[] | null): boolean => {
+  if (!condition.values.length || values === null) return true
+  const hit = values.some(value => condition.values.includes(value))
+  return condition.operator === "is" ? hit : !hit
+}
 
 /** Project dependencies and task prerequisites remain separate authoritative graphs. */
 export function ServiceDashboard4({ surface, projects, issues, members, openEntity, openActivity, dependencyEditor }: ServiceDashboardProps) {
@@ -48,8 +78,8 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
   const text = useCallback((zh: string, english: string): string => en ? english : zh, [en])
   const planning = usePlanningDashboard()
   const [graphMode, setGraphMode] = useState<"projects" | "work_items">("projects")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [projectFilter, setProjectFilter] = useState("all")
+  const [conditions, setConditions] = useState<FilterCondition[]>([])
+  const today = surface.readModel.today
   const [showRail, setShowRail] = useState(true)
   const [selection, setSelection] = useState<CanvasSelection>({ nodeIds: [], edgeIds: [] })
   const [layout, setLayout] = useState<LayoutSnapshot | null>(null)
@@ -71,11 +101,10 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
   const setQuery = (value: string): void => surface.actions.setInteraction(previous => ({ ...previous, query: value }))
   const rows = useMemo(() => {
     const search = query.trim().toLocaleLowerCase(locale)
-    return items.filter(item => (statusFilter === "all" || string(item.data.status) === statusFilter || statusFilter === "unspecified" && !string(item.data.status)) &&
-      (projectFilter === "all" || item.projectId === projectFilter) &&
+    return items.filter(item => conditions.every(condition => conditionMatches(condition, workItemValues(item, condition.field, today))) &&
       `${item.id} ${itemTitle(item)} ${string(projectById.get(item.projectId!)?.data.name)}`.toLocaleLowerCase(locale).includes(search))
-  }, [items, statusFilter, projectFilter, query, locale, projectById])
-  const projectRows = planning.data?.projects.filter(project => (projectFilter === "all" || project.id === projectFilter) && (statusFilter === "all" || string(projectById.get(project.id)?.data.status) === statusFilter) && (!query.trim() || `${project.id} ${project.title}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale))))
+  }, [items, conditions, query, locale, projectById, today])
+  const projectRows = planning.data?.projects.filter(project => conditions.every(condition => conditionMatches(condition, projectValues(project.id, condition.field, projectById, today))) && (!query.trim() || `${project.id} ${project.title}`.toLocaleLowerCase(locale).includes(query.trim().toLocaleLowerCase(locale))))
   const visibleProjectIds = new Set(projectRows?.map(project => project.id))
   const selectedProjectId = surface.interaction.selectedProjectId
   const activeProjectId = selectedProjectId && visibleProjectIds.has(selectedProjectId) ? selectedProjectId : projectRows?.[0]?.id
@@ -141,6 +170,36 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
     }
     return labels[status] ?? status
   }, [text])
+  const priorityLabel = useCallback((priority: string): string => {
+    const labels: Record<string, string> = {
+      low: text("低", "Low"), normal: text("普通", "Normal"), high: text("高", "High"), urgent: text("紧急", "Urgent"), unspecified: text("未提供优先级", "Priority not provided"),
+    }
+    return labels[priority] ?? priority
+  }, [text])
+  const activeConditionCount = conditions.filter(condition => condition.values.length > 0).length
+  const filterFields = useMemo<FilterField[]>(() => {
+    const priorities = [...new Set(items.map(item => string(item.data.priority) || "unspecified"))].sort()
+    const assignees = [...(members.data ?? []).filter(member => !member.revokedAt).map(member => ({ value: member.userId, label: member.name })), { value: "unassigned", label: text("未分配", "Unassigned") }]
+    const fields: FilterField[] = [
+      { id: "status", label: text("状态", "State"), options: statusOptions.map(status => ({ value: status, label: statusLabel(status) })) },
+      ...(graphMode === "work_items" ? [
+        { id: "priority", label: text("优先级", "Priority"), options: priorities.map(priority => ({ value: priority, label: priorityLabel(priority) })) },
+        { id: "assignee", label: text("负责人", "Assignee"), options: assignees },
+      ] : []),
+      { id: "project", label: text("项目", "Project"), options: [...projectById.values()].map(project => ({ value: project.id, label: string(project.data.name) || project.id })) },
+      { id: "due", label: text("截止日期", "Due date"), options: [
+        { value: "overdue", label: text("已逾期", "Overdue") },
+        { value: "week", label: text("未来 7 天", "Next 7 days") },
+        { value: "later", label: text("7 天后", "Later than 7 days") },
+        { value: "none", label: text("未排期", "Unscheduled") },
+      ] },
+    ]
+    return fields
+  }, [graphMode, items, members.data, projectById, statusLabel, statusOptions, priorityLabel, text])
+  const switchGraphMode = (mode: "projects" | "work_items"): void => {
+    setGraphMode(mode)
+    setConditions(previous => previous.filter(condition => condition.field !== "status" && (mode === "work_items" || condition.field === "project" || condition.field === "due")))
+  }
   const renderNode = useCallback(({ node, definition, selected: isSelected }: CanvasNodeProps) => {
     const item = byId.get(node.id)
     if (!item) return null
@@ -158,14 +217,14 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
   function exportSnapshot(): void {
     if (graphMode === "projects" ? !planning.data : !available) return
     const snapshot = graphMode === "projects" ? {
-      source: "Authorized formal project dependencies; current search, project and state filters",
+      source: "Authorized formal project dependencies; current search and filter conditions",
       exportedAt: new Date().toISOString(),
       mayBeStale: !!planning.error || planning.isFetching,
       projects: projectRows?.map(project => ({ id: project.id, title: project.title, version: project.version })),
       dependencies: projectRows?.flatMap(project => project.dependsOn.filter(id => visibleProjectIds.has(id)).map(id => ({ prerequisiteProjectId: id, dependentProjectId: project.id }))),
       limitations: "Only project dependency endpoints in the authorized filtered snapshot are exported. Hidden identifiers and derived task critical paths are omitted.",
     } : {
-      source: "Authorized service work-item snapshots; current search, project and state filters",
+      source: "Authorized service work-item snapshots; current search and filter conditions",
       exportedAt: new Date().toISOString(),
       mayBeStale: !!projects.error || !!issues.error || projects.isFetching || issues.isFetching,
       workItems: rows.map(item => ({ id: item.id, title: itemTitle(item), status: string(item.data.status) || null, projectId: item.projectId, projectName: string(projectById.get(item.projectId!)?.data.name) || null, dueDate: string(item.data.dueDate) || null, version: item.version })),
@@ -191,11 +250,10 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
       data: { state: available ? "success" : "partial", partialDescription: text("各面板单独显示服务读取状态；未提供的数据不计为零。", "Each panel retains its service read state; unavailable data is not counted as zero.") },
     }}
     headerActions={<div className={d4.actions}>
-      <Button variant={graphMode === "projects" ? "secondary" : "outline"} aria-pressed={graphMode === "projects"} onClick={() => { setGraphMode("projects"); setStatusFilter("all") }}>{text("项目依赖", "Project dependencies")}</Button>
-      <Button variant={graphMode === "work_items" ? "secondary" : "outline"} aria-pressed={graphMode === "work_items"} onClick={() => { setGraphMode("work_items"); setStatusFilter("all") }}>{text("任务依赖", "Task prerequisites")}</Button>
-      <Popover><PopoverTrigger render={<Button variant="outline" />}><Filter size={16} aria-hidden="true" />{text("筛选", "Filter")}</PopoverTrigger><PopoverContent className={`${d4.filter} ${styles.filters}`} aria-label={text("工作项筛选", "Work-item filters")}>
-        <label>{text("状态", "State")}<select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="all">{text("全部状态", "All states")}</option>{statusOptions.map(status => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></label>
-        <label>{text("项目", "Project")}<select value={projectFilter} onChange={event => setProjectFilter(event.target.value)}><option value="all">{text("全部授权项目", "All authorized projects")}</option>{[...projectById.values()].map(project => <option key={project.id} value={project.id}>{string(project.data.name) || project.id}</option>)}</select></label>
+      <Button variant={graphMode === "projects" ? "secondary" : "outline"} aria-pressed={graphMode === "projects"} onClick={() => switchGraphMode("projects")}>{text("项目依赖", "Project dependencies")}</Button>
+      <Button variant={graphMode === "work_items" ? "secondary" : "outline"} aria-pressed={graphMode === "work_items"} onClick={() => switchGraphMode("work_items")}>{text("任务依赖", "Task prerequisites")}</Button>
+      <Popover><PopoverTrigger render={<Button variant="outline" />}><Filter size={16} aria-hidden="true" />{text("筛选", "Filter")}{activeConditionCount > 0 && <Badge size="sm" tone={graphMode === "work_items" ? "info" : "neutral"}>{activeConditionCount}</Badge>}</PopoverTrigger><PopoverContent className={`${styles.filterPanel} p-0`} aria-label={text("筛选条件", "Filters")}>
+        <FilterCard title={text("筛选条件", "Filters")} fields={filterFields} conditions={conditions} onChange={setConditions} emptyHint={text("添加条件以筛选记录。", "Add a condition to filter records.")} addLabel={text("添加条件", "Add")} clearLabel={text("清除全部", "Clear")} whereLabel={text("其中", "Where")} andLabel={text("并且", "and")} anyLabel={text("任意", "Any")} removeLabel={text("移除条件", "Remove filter")} />
       </PopoverContent></Popover>
       <Popover><PopoverTrigger render={<Button variant="outline" />}><SlidersHorizontal size={16} aria-hidden="true" />{text("视图选项", "View options")}<ChevronDown size={16} aria-hidden="true" /></PopoverTrigger><PopoverContent className={d4.viewOptions} aria-label={text("视图选项", "View options")}>
         <label><Checkbox checked={showRail} onCheckedChange={setShowRail} />{text("显示状态与依赖信息", "Show state and dependency details")}</label>
@@ -233,7 +291,7 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
         ]} />}
       </section> : <section className={d4.tableCard} aria-label={text("工作项与依赖", "Work items and dependencies")} data-pm-dashboard4="projects-table">
         <div className={d4.tableHeader}><h2>{text("授权工作项", "Authorized Work Items")} ({available ? rows.length : "—"})</h2><div className={d4.tableTools}><PmSearch value={query} onChange={setQuery} label={text("搜索工作项或项目…", "Search work items or projects…")} /><Button variant="outline" onClick={() => surface.actions.openIssues()}>{text("查看全部", "View all")}</Button></div></div>
-        {!available ? <div className={styles.tableNotice}>{readNotices}</div> : <DataTable rows={rows} getRowId={item => item.id} getRowLabel={itemTitle} caption={text("授权工作项；选择与依赖画布按真实工作项 ID 同步。", "Authorized work items; selection syncs with canvas nodes by work-item ID.")} selectedIds={currentSelection.nodeIds} onSelectionChange={nodeIds => setSelection({ nodeIds, edgeIds: [] })} activeRowId={selected?.id ?? null} onActivateRow={item => setSelection({ nodeIds: [item.id], edgeIds: [] })} data={{ state: rows.length ? "success" : "empty", emptyTitle: text("无匹配工作项", "No matching work items"), emptyDescription: text("调整搜索、项目或状态筛选。", "Adjust the search, project or state filters.") }} columns={[
+        {!available ? <div className={styles.tableNotice}>{readNotices}</div> : <DataTable rows={rows} getRowId={item => item.id} getRowLabel={itemTitle} caption={text("授权工作项；选择与依赖画布按真实工作项 ID 同步。", "Authorized work items; selection syncs with canvas nodes by work-item ID.")} selectedIds={currentSelection.nodeIds} onSelectionChange={nodeIds => setSelection({ nodeIds, edgeIds: [] })} activeRowId={selected?.id ?? null} onActivateRow={item => setSelection({ nodeIds: [item.id], edgeIds: [] })} data={{ state: rows.length ? "success" : "empty", emptyTitle: text("无匹配工作项", "No matching work items"), emptyDescription: text("调整搜索或筛选条件。", "Adjust the search or filter conditions.") }} columns={[
           { id: "item", header: text("工作项", "Work item"), primary: true, cell: item => <span className={d4.projectCell}><span className={d4.identifier} title={item.id}>{item.id}</span><span title={itemTitle(item)}>{itemTitle(item)}</span></span> },
           { id: "state", header: text("状态", "State"), cell: item => <Badge size="sm" tone={stateGroup(item) === "done" ? "success" : "neutral"} className={d4.bandLabel}><span className={d4.bandDot} style={{ background: stateColors[stateGroup(item)] }} aria-hidden="true" />{statusLabel(string(item.data.status) || "unspecified")}</Badge> },
           { id: "prerequisites", header: text("前置项", "Prerequisites"), cell: item => strings(item.data.prerequisiteIds).length },

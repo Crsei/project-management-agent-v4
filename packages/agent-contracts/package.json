@@ -7,10 +7,45 @@
   ],
   "type": "module",
   "exports": {
+    "./pm-tool-result": {
+      "types": "./dist/pm-tool-result.d.ts",
+      "development": "./src/pm-tool-result.ts",
+      "default": "./dist/pm-tool-result.js"
+    },
+    "./pm-tools": {
+      "types": "./dist/pm-tools.d.ts",
+      "development": "./src/pm-tools.ts",
+      "default": "./dist/pm-tools.js"
+    },
+    "./pm-core-changes": {
+      "types": "./dist/pm-core-changes.d.ts",
+      "development": "./src/pm-core-changes.ts",
+      "default": "./dist/pm-core-changes.js"
+    },
+    "./pm-references": {
+      "types": "./dist/pm-references.d.ts",
+      "development": "./src/pm-references.ts",
+      "default": "./dist/pm-references.js"
+    },
+    "./pm-capabilities": {
+      "types": "./dist/pm-capabilities.d.ts",
+      "development": "./src/pm-capabilities.ts",
+      "default": "./dist/pm-capabilities.js"
+    },
+    "./pm-changes": {
+      "types": "./dist/pm-changes.d.ts",
+      "development": "./src/pm-changes.ts",
+      "default": "./dist/pm-changes.js"
+    },
     "./usage": {
       "types": "./dist/usage.d.ts",
       "development": "./src/usage.ts",
       "default": "./dist/usage.js"
+    },
+    "./usage-limits": {
+      "types": "./dist/usage-limits.d.ts",
+      "development": "./src/usage-limits.ts",
+      "default": "./dist/usage-limits.js"
     },
     "./output": {
       "types": "./dist/output.d.ts",
@@ -68,6 +103,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/provider-core": "workspace:*",
     "zod": "^4.6.7"
   },
   "devDependencies": {

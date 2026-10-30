@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexManagedTokenBroker.ts",
+  "beforeSha256": "77b5957d484457712c0e08872d1a42493002e4af6a7cc59156f751795d78909c",
+  "afterSha256": "31b3ed6c78911ca2e6938c970d9822146e25f9d15e4559361bce6d6b86e06cdd",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 15,
+      "before": [
+        "import * as ServerEnvironment from \"../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerEnvironment from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-environment.ts\";\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,226 @@
+/* 文档页（Kind=document，默认列表/表格）专用视觉层。
+   仅允许选择 [data-entity-kind="document"]；视图页是 [data-entity-kind="all"]，不受影响。 */
+
+/* ---------- 页面标题 ---------- */
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading {
+  padding: 20px 24px 12px;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading h1 {
+  font-size: var(--text-page);
+  line-height: var(--text-page--line-height);
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading-actions {
+  gap: 8px;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading-actions .icon-button {
+  width: var(--control-height);
+  height: var(--control-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading-actions .primary-button {
+  min-height: var(--control-height);
+  padding-inline: 12px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+/* ---------- 筛选 / 搜索 / 视图切换工具栏 ---------- */
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar {
+  padding: 0 24px 12px;
+  gap: 8px;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar > select {
+  min-height: var(--control-height);
+  padding-block: 4px;
+  border-radius: var(--control-radius);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar > :is(.secondary-button, .text-button) {
+  min-height: var(--control-height);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-search {
+  min-height: var(--control-height);
+  padding-inline: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-search input {
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-search kbd {
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar {
+  padding: 6px 24px;
+  gap: 8px;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar .view-tabs button {
+  min-height: var(--control-height);
+  padding: 6px 12px;
+  border-radius: var(--control-radius);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar > select {
+  min-height: var(--control-height);
+  padding-block: 4px;
+  border-radius: var(--control-radius);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar > .icon-button {
+  width: var(--control-height);
+  height: var(--control-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar {
+  padding: 12px 24px;
+  gap: 12px;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar label {
+  gap: 4px;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar select {
+  min-height: var(--control-height);
+  padding-block: 5px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+/* ---------- 表格实体边缘卡片 ---------- */
+.markdown-workbench .native-workbench[data-entity-kind="document"] .pm-view .table-scroll {
+  min-width: 0;
+  margin: 8px 24px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module-value);
+  background: var(--surface);
+  box-shadow: var(--edge-shadow);
+  overflow: auto;
+}
+
+/* ---------- 表格排版 ---------- */
+.markdown-workbench .native-workbench[data-entity-kind="document"] .work-table {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .work-table th {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .work-table td {
+  height: 44px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .work-table .table-title .mono {
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .work-table .table-title strong {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: 500;
+}
+
+.markdown-workbench .native-workbench[data-entity-kind="document"] .work-table td .muted {
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+/* ---------- 底部统计 ---------- */
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-meta {
+  min-height: 32px;
+  padding: 6px 24px;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+/* ---------- 响应式：保持原有收窄间距，表格自身横向滚动 ---------- */
+@media (max-width: 900px) {
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading {
+    padding: 16px;
+  }
+
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar,
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar,
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar {
+    padding-inline: 16px;
+  }
+
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .pm-view .table-scroll {
+    margin: 8px 16px 16px;
+  }
+
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-meta {
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 560px) {
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading {
+    padding: 12px 12px 8px;
+    gap: 10px;
+  }
+
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading h1 {
+    font-size: 18px;
+    line-height: 26px;
+  }
+
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar,
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar,
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar {
+    padding-inline: 12px;
+  }
+
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar .view-tabs button {
+    padding-inline: 8px;
+  }
+
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .pm-view .table-scroll {
+    margin: 4px 12px 12px;
+  }
+
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-meta {
+    padding-inline: 12px;
+  }
+}

@@ -10,7 +10,7 @@
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .notice { font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .conflict { display: grid; gap: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
-.token { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 5px; }
+.token { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 5px; }
 .token svg { width: 14px; height: 14px; }
 @media (pointer: coarse) { .trigger { width: 36px; height: 36px; } }
 @media (max-width: 460px) { .columns { grid-template-columns: minmax(0, 1fr); } .dialog { padding: 18px; } }

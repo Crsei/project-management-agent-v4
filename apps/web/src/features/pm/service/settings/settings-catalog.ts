@@ -12,6 +12,7 @@ export const settingsPages = [
   { slug: "general", group: "general", zh: "设置概览", en: "Overview" },
   { slug: "workspace", group: "general", zh: "工作区资料", en: "Workspace identity" },
   { slug: "appearance", group: "general", zh: "外观", en: "Appearance" },
+  { slug: "design-system", group: "general", zh: "设计系统", en: "Design System" },
   { slug: "language", group: "general", zh: "语言与拼写", en: "Language & spelling" },
   { slug: "datetime", group: "general", zh: "日期与时间", en: "Date & time" },
   { slug: "members", group: "workspace", zh: "成员", en: "Members" },

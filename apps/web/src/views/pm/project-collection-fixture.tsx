@@ -17,6 +17,7 @@ import { ProjectSummaryIssues, type ProjectSummaryIssue } from "./project-list-4
 import styles from "./project-list-1.module.css"
 import { ChevronsUpDown, Filter, MoreHorizontal, Plus, SlidersHorizontal } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { type FilterCondition } from "@/components/blocks/filter-card"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -63,6 +64,7 @@ function FixtureProjectCards({ scenario, variant }: PmPageProps & { variant: "co
     (cached) => ({ ...createProjectCollectionInteraction(), ...(cached as ProjectCollectionInteraction) }),
   )
   const [readingPosition, setReadingPosition] = usePmScenarioState(`${pageId}:reading`, () => 0)
+  const [conditions, setConditions] = usePmScenarioState<FilterCondition[]>(`${pageId}:collection-filters`, () => [])
   const [retried, setRetried] = usePmScenarioState("read-recovered", () => false)
   const state = projectDialogState(interaction, writes, locale)
   const readonly = scenario === "readonly" || scenario === "loading"
@@ -75,6 +77,14 @@ function FixtureProjectCards({ scenario, variant }: PmPageProps & { variant: "co
     }
     return [project.id, record] as const
   })), [writes.projects, locale, completion, issueDomain.items])
+  const filteredProjects = visible.filter((project) => {
+    const record = projectRecords.get(project.id)
+    return !!record && conditions.every((condition) => matchesProjectCondition(record, condition, Date.parse(pmClock)))
+  })
+  const clearProjectFilters = () => {
+    setConditions([])
+    setState((previous) => ({ ...previous, quickView: browse ? "active" : "all", search: "", teamSize: "all", status: "all", starredOnly: false, updatedWithin: 0, archiveScope: defaultArchiveScope }))
+  }
   const selected = state.projects.find((project) => project.id === state.selectedId)
   const star = (id: string) => {
     const project = writes.projects.find((item) => item.id === id)
@@ -88,11 +98,12 @@ function FixtureProjectCards({ scenario, variant }: PmPageProps & { variant: "co
     readingPosition={readingPosition}
     onReadingPositionChange={setReadingPosition}
     interaction={state}
+    filters={{ conditions, onChange: setConditions, onClear: clearProjectFilters }}
     readModel={{
-      projects: scenario === "loading" ? [] : visible.map((project) => projectRecords.get(project.id)!),
+      projects: scenario === "loading" ? [] : filteredProjects.map((project) => projectRecords.get(project.id)!),
       selectedProject: selected && scenario !== "loading" ? projectRecords.get(selected.id)! : null,
       data: {
-        state: scenario === "loading" ? "loading" : scenario === "refresh-error" && !retried ? "error" : visible.length === 0 ? "empty" : "success",
+        state: scenario === "loading" ? "loading" : scenario === "refresh-error" && !retried ? "error" : filteredProjects.length === 0 ? "empty" : "success",
         loadingLabel: en ? "Loading local scene" : "正在加载本地场景",
         error: { category: "network", message: en ? "The simulated refresh failed." : "模拟刷新失败。", reason: en ? "Your existing data and edits are retained." : "已有数据和编辑已保留。" },
         onRetry: scenario === "refresh-error" ? () => setRetried(true) : undefined,
@@ -106,7 +117,7 @@ function FixtureProjectCards({ scenario, variant }: PmPageProps & { variant: "co
       unavailableTasksLabel: en ? "No related issues in this scene" : "本场景暂无关联任务",
       unavailableDateLabel: en ? "Not scheduled" : "未排期",
       referenceDate: pmClock.slice(0, 10), dateContextLabel: "UTC",
-      summaryLabel: scenario === "readonly" ? (en ? "Read only" : "只读") : visible.length > 0 && visible.every((project) => project.status === "active" && !project.archived) ? statusCopy.active[locale] : (en ? "All statuses" : "全部状态"),
+      summaryLabel: scenario === "readonly" ? (en ? "Read only" : "只读") : filteredProjects.length > 0 && filteredProjects.every((project) => project.status === "active" && !project.archived) ? statusCopy.active[locale] : (en ? "All statuses" : "全部状态"),
     }}
     capabilities={{ create: !readonly, edit: (id) => !readonly && writes.canWrite(id) && !hasDraft, star: (id) => !readonly && writes.canWrite(id), openFullDetails: true, filters: { archive: true, updated: true, status: true, starred: true, teamSize: true } }}
     actions={{
@@ -159,6 +170,42 @@ function restoreFixtureRows(cached: unknown): FixtureRowsState {
   return { ...fixtureRowsState(), ...(cached as Partial<FixtureRowsState>) }
 }
 
+function matchesTeamSize(teamSize: number | null, filter: string) {
+  if (teamSize === null) return false
+  switch (filter) {
+    case "small": return teamSize <= 5
+    case "medium": return teamSize >= 6 && teamSize <= 10
+    case "large": return teamSize > 10
+    default: return false
+  }
+}
+function matchesCompletion(record: ProjectCollectionRecord, filter: string) {
+  if (filter === "unknown") return record.health === null
+  if (record.health === null) return false
+  if (filter === "complete") return record.health === 100
+  if (filter === "not-started") return record.health === 0
+  return filter === "started" && record.health > 0 && record.health < 100
+}
+/** Card conditions stay ANDed; values inside one condition are ORed and `isNot` negates. */
+function matchesProjectCondition(record: ProjectCollectionRecord, condition: FilterCondition, now: number) {
+  if (!condition.values.length) return true
+  const matched = condition.values.some(value => {
+    switch (condition.field) {
+      case "status": return record.status?.value === value
+      case "team": return matchesTeamSize(record.teamSize, value)
+      case "completion": return matchesCompletion(record, value)
+      case "updated": {
+        const days = Number(value)
+        return days > 0 && !!record.updatedAt && Date.parse(record.updatedAt) >= now - days * 86400000
+      }
+      case "archive": return record.archived === (value === "archived")
+      case "starred": return record.starred === true
+      default: return false
+    }
+  })
+  return condition.operator === "isNot" ? !matched : matched
+}
+
 /** Original table/summary controllers project into the shared collection View. */
 function FixtureProjectRows({ scenario, variant }: PmPageProps & { variant: "table" | "compact" }) {
   const interactive = usePmControlsReady()
@@ -171,6 +218,7 @@ function FixtureProjectRows({ scenario, variant }: PmPageProps & { variant: "tab
   const writes = useProjectWrites(scenario, pageId)
   const [state, setState] = usePmScenarioState<FixtureRowsState>(table ? "list3-state" : "list4-state", () => ({ ...fixtureRowsState(), selectionEntity: entityId }), restoreFixtureRows)
   const [readingPosition, setReadingPosition] = usePmScenarioState(`${pageId}:reading`, () => 0)
+  const [conditions, setConditions] = usePmScenarioState<FilterCondition[]>(`${pageId}:collection-filters`, () => [])
   const [create, setCreate] = usePmScenarioState("project-collection-state", createProjectCollectionInteraction)
   const createOrigin = useRef<HTMLElement | null>(null)
   const data = useFixtureReadState(scenario, pageId)
@@ -190,14 +238,18 @@ function FixtureProjectRows({ scenario, variant }: PmPageProps & { variant: "tab
     if (record.taskCounts?.total === 0) record.taskCounts = null
     return [project.id, record] as const
   })), [projects, issues, family, locale])
+  const filteredProjects = visible.filter((project) => {
+    const record = records.get(project.id)
+    return !!record && conditions.every((condition) => matchesProjectCondition(record, condition, Date.parse(pmClock)))
+  })
   const setSort = (sortKey: ProjectSortKey) => setState((previous) => ({ ...previous, sortKey, sortDir: previous.sortKey === sortKey ? previous.sortDir === "asc" ? "desc" : "asc" : sortKey === "name" ? "asc" : "desc" }))
   const open = (id: string, slug: string) => {
     setState((previous) => ({ ...previous, selectedId: id, selectionEntity: entityId }))
     navigate(slug, id)
   }
   const interaction: ProjectCollectionViewInteraction = { ...createProjectCollectionInteraction(), quickView: "all", archiveScope: "all", search: state.search, sort: state.sortKey === "name" ? state.sortDir === "asc" ? "name" : "name-desc" : state.sortDir === "asc" ? "oldest" : "newest", selectedId: selected?.id ?? selectedId }
-  const selectedHidden = !!selectedId && !visible.some((project) => project.id === selectedId)
-  const clearFilters = () => setState((previous) => ({ ...previous, search: "", health: "all", team: "all" }))
+  const selectedHidden = !!selectedId && !filteredProjects.some((project) => project.id === selectedId)
+  const clearFilters = () => { setConditions([]); setState((previous) => ({ ...previous, search: "", health: "all", team: "all" })) }
   const dialog = projectDialogState(create, writes, locale)
   return <ProjectCollectionView
     interactive={interactive}
@@ -205,10 +257,11 @@ function FixtureProjectRows({ scenario, variant }: PmPageProps & { variant: "tab
     readingPosition={readingPosition}
     onReadingPositionChange={setReadingPosition}
     interaction={interaction}
+    filters={{ conditions, onChange: setConditions, onClear: clearFilters }}
     readModel={{
-      projects: scenario === "loading" ? [] : visible.map((project) => records.get(project.id)!), selectedProject: selected && scenario !== "loading" ? records.get(selected.id)! : null,
-      data: { ...data, state: data.state === "success" && visible.length === 0 ? "empty" : data.state },
-      defaultArchiveScope: "all", statusOptions: [],
+      projects: scenario === "loading" ? [] : filteredProjects.map((project) => records.get(project.id)!), selectedProject: selected && scenario !== "loading" ? records.get(selected.id)! : null,
+      data: { ...data, state: data.state === "success" && filteredProjects.length === 0 ? "empty" : data.state },
+      defaultArchiveScope: "all", statusOptions: (["active", "paused", "completed"] as const).map((value) => ({ value, label: statusCopy[value][locale] })),
       sourceDescription: readonly ? en ? "This scene is read-only; view controls keep working." : "当前场景为只读；视图控件仍可使用。" : en ? "Local collection · changes stay in memory" : "本地集合 · 修改仅保留在内存",
       emptyDescription: projects.length === 0 ? table ? en ? "This scene has no projects. Switch scenes to load fixtures." : "当前场景没有项目，切换场景可加载固定数据。" : en ? "This scene has no project summaries." : "当前场景没有项目摘要。" : table ? en ? "No projects match the current search and filters." : "没有项目符合当前搜索与筛选条件。" : en ? "No projects match your search." : "没有项目符合当前搜索条件。",
       unavailableHealthLabel: en ? "Unknown health" : "健康度未知", unavailableTasksLabel: en ? "No linked task snapshot" : "无关联任务快照", unavailableDateLabel: en ? "Date to be confirmed" : "日期待确认",

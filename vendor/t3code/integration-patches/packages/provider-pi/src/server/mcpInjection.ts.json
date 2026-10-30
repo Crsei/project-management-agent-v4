@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "source": "packages/provider-pi/src/server/mcpInjection.ts",
+  "beforeSha256": "8ee0367d17a2a1784e0d3867e0caf4ee9daeb228c0c749d147ac47bf98efc1e9",
+  "afterSha256": "5750a7424b309d0c7806b25f927742a71b85a7c844fb21437c104143ce8b5ca3",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 4,
+      "before": [
+        "import type { McpProviderSessionConfig } from \"@t3tools/provider-core/server/mcpSession\";\n"
+      ],
+      "after": [
+        "import type { ProviderRuntimeHostBinding } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 161,
+      "before": [
+        "function bearerTokenFromAuthorizationHeader(header: string): string {\n",
+        "  return header.startsWith(\"Bearer \") ? header.slice(\"Bearer \".length) : header;\n",
+        "}\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 242,
+      "before": [
+        "  readonly mcpSession: McpProviderSessionConfig | undefined;\n"
+      ],
+      "after": [
+        "  readonly runtimeBinding: ProviderRuntimeHostBinding | undefined;\n",
+        "  readonly pmToolsExtensionPath?: string;\n"
+      ]
+    },
+    {
+      "start": 254,
+      "before": [
+        "  const hasT3Mcp = hasT3Extension && input.mcpSession !== undefined;\n"
+      ],
+      "after": [
+        "  const servers = input.disableExtensions === true ? [] : input.runtimeBinding?.mcpServers ?? [];\n",
+        "  const pmServer = servers.find(server => server.name === \"pm_tools\");\n",
+        "  if (servers.length && (servers.length !== 1 || !pmServer || !input.pmToolsExtensionPath))\n",
+        "    throw new Error(\"Pi requires the host's generation-owned PM tools extension.\");\n",
+        "  const bridge = pmServer?.args.find(arg => /^http:\\/\\/127\\.0\\.0\\.1:\\d+$/.test(arg));\n",
+        "  if (pmServer && !bridge) throw new Error(\"Pi PM transport has no generation-owned loopback endpoint.\");\n"
+      ]
+    },
+    {
+      "start": 281,
+      "before": [],
+      "after": [
+        "  if (pmServer && input.pmToolsExtensionPath && !hasExplicitExtension(args, input.pmToolsExtensionPath))\n",
+        "    args.push(\"--extension\", input.pmToolsExtensionPath);\n"
+      ]
+    },
+    {
+      "start": 286,
+      "before": [],
+      "after": [
+        "  delete environment.AGENT_PM_TOOL_EXTENSION;\n",
+        "  delete environment.AGENT_PM_TOOL_BRIDGE;\n"
+      ]
+    },
+    {
+      "start": 300,
+      "before": [
+        "      ...(hasT3Mcp && input.mcpSession !== undefined\n",
+        "        ? {\n",
+        "            [T3_MCP_URL_ENV]: input.mcpSession.endpoint,\n",
+        "            [T3_MCP_BEARER_ENV]: bearerTokenFromAuthorizationHeader(\n",
+        "              input.mcpSession.authorizationHeader,\n",
+        "            ),\n",
+        "          }\n"
+      ],
+      "after": [
+        "      ...(pmServer && bridge && input.pmToolsExtensionPath\n",
+        "        ? { AGENT_PM_TOOL_EXTENSION: input.pmToolsExtensionPath, AGENT_PM_TOOL_BRIDGE: bridge }\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexProvider.ts",
+  "beforeSha256": "caf0ec1f08fae5c29f8ae1f1bda141d4873bd9ccd7d20eef72481b4fe209b429",
+  "afterSha256": "1b367d568e8c156138de4b8bc1b7672eb48a94d931081ebac547f7fcdc5fe530",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 703,
+      "before": [
+        "  const resolvedEnvironment = environment ?? process.env;\n"
+      ],
+      "after": [
+        "  const resolvedEnvironment = environment ?? (yield* HostProcess.Environment);\n"
+      ]
+    },
+    {
+      "start": 728,
+      "before": [
+        "    cwd: process.cwd(),\n"
+      ],
+      "after": [
+        "    cwd: yield* HostProcess.WorkingDirectory,\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "ledger_version": 1,
+  "slice": "M1-contracts-test-harness",
+  "source_manifest": "vendor/t3code/source-manifest.json",
+  "upstream_commit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "host_contract": "docs/implementation/t3code-provider-host-contract.zh.md",
+  "status": "patches-applied-parent-dependency-refresh-and-verification-required",
+  "scope": {
+    "upstream_source_modified": false,
+    "exports_changed": false,
+    "production_dependencies_changed": false,
+    "test_sources_changed": false,
+    "test_discovery_changed": false,
+    "test_registration_bypassed": false,
+    "toolchain_changed": false
+  },
+  "diagnosis": {
+    "parent_failure_evidence": "artifact://109",
+    "reported_failure": "All 13 contracts suites fail during registration, before test execution, with undefined config or no current suite. Other imported packages using the same inherited @effect/vitest patch reach their tests.",
+    "observed_dependency_graph": [
+      {
+        "importer": "vendor/t3code",
+        "effect_vitest": "4.0.5 with inherited patch 2731c9c3761c595f25ddc625a7d61ca376b389d5b3049ecb837c8940f21cfa02",
+        "vite_plus": "1.4.0",
+        "vitest": "5.0.5 bundled by vite-plus",
+        "node_types_peer": "24.12.4",
+        "esbuild_peer": "0.28.2"
+      },
+      {
+        "importer": "vendor/t3code/packages/contracts",
+        "effect_vitest": "4.0.5 with the same inherited patch",
+        "vite_plus": "1.4.0",
+        "vitest": "5.0.5 bundled by vite-plus",
+        "node_types_peer": "26.6.5",
+        "esbuild_peer": "0.28.2"
+      },
+      {
+        "importer": "vendor/t3code/packages/shared",
+        "effect_vitest": "4.0.5 with the same inherited patch",
+        "vite_plus": "1.4.0",
+        "vitest": "5.0.5 bundled by vite-plus",
+        "node_types_peer": "24.12.4",
+        "esbuild_peer": "0.28.2"
+      }
+    ],
+    "static_evidence": [
+      "The pre-refresh pnpm-lock.yaml importer and snapshot entries distinguish contracts' 26.6.5 peer context from the vendor runner/shared 24.12.4 peer context.",
+      "readlink/realpath of the installed @effect/vitest, vite-plus and transitive vitest packages confirms distinct physical module identities for contracts and the vendor runner; shared matches the runner.",
+      "The inherited patch makes @effect/vitest import and re-export vite-plus/test. That installed entrypoint re-exports vitest, which resolves within its own peer-specific package graph.",
+      "The installed Vite+ CLI resolves its bundled Vitest binary first, and its defineConfig integration documents the need for the runner and registration API to share physical module identity.",
+      "The frozen upstream lock provenance resolves contracts and the other imported packages with @types/node 24.12.4 and esbuild 0.28.2. The contracts source manifest does not itself declare @types/node."
+    ],
+    "root_cause": "[INFERENCE] The differing pnpm peer contexts split runner state from contracts' describe/it.effect registration state. Equal package versions and equal patch contents do not imply equal module identity.",
+    "not_a_test_failure_reproduction": true
+  },
+  "applied_patches": [
+    {
+      "id": "M1-HARNESS-001",
+      "kind": "test-dependency-peer-alignment",
+      "path": "vendor/t3code/packages/contracts/package.json",
+      "source_sha256": "3c18fc7a950c25db5c13e1d474b235e530afe85d12c6133ea9dfb1aa28afa754",
+      "change": "Add devDependencies.@types/node = catalog:, using the existing 24.12.4 catalog entry so contracts resolves the same Vite+/Vitest peer graph as the vendor runner.",
+      "unchanged": "Package exports, effect runtime dependency, upstream test script, @effect/vitest version/patch and vite-plus version are unchanged. esbuild is already 0.28.2 in both observed graphs, so no additional esbuild dependency or root build-tool override is introduced."
+    },
+    {
+      "id": "M1-HARNESS-002",
+      "kind": "isolated-harness-singleton-resolution",
+      "path": "vendor/t3code/vite.config.ts",
+      "source_sha256": "17c6d7cd1160d26eeb5bd2e6bba7efea13a2627bd1c944394d1cf2edafa37246",
+      "extends_manifest_patch": "P012",
+      "change": "Set resolve.dedupe to @effect/vitest and vite-plus so transformed test imports use the harness root's test helper and Vite+ instances rather than an importer-specific copy.",
+      "unchanged": "Keep vite-plus/test/config and defineConfig integration; do not alias bare vitest or its internals, inline or replace registration APIs, change module externalization, suppress exceptions, narrow discovery, skip suites, relax assertions, add retries, or change environment/timeouts/fake timers/setup files/allowOnly behavior."
+    }
+  ],
+  "parent_integration": {
+    "dependency_change": "Refresh pnpm-lock.yaml and the installed dependency graph after the implementation phase barrier so the contracts importer incorporates its new catalog-backed devDependency and shares the vendor runner's 24.12.4 peer context.",
+    "root_manifest_or_catalog_change_required": false,
+    "root_typescript_or_esbuild_change_required": false,
+    "source_manifest_and_shared_ledgers": "Parent-owned; register these two local deviations without altering the frozen upstream source records.",
+    "required_verification": [
+      "Confirm the refreshed contracts, shared and vendor-runner @effect/vitest/vite-plus/bundled-vitest module identities converge.",
+      "Run the full existing vendor suite through its Vite+ script with unchanged discovery and strict registration; confirm all 13 contracts suites execute tests rather than failing during collection.",
+      "Run integrated checks required by the import gate after all other slices land."
+    ]
+  },
+  "verification": {
+    "performed": "Read-only source, failure artifact, manifest, lockfile and installed package/symlink inspection only.",
+    "tests_run": false,
+    "builds_run": false,
+    "lint_run": false,
+    "formatters_run": false,
+    "runtime_smoke_run": false,
+    "dependencies_installed": false,
+    "passing_result_claimed": false
+  },
+  "runtime_boundaries": "No Provider Home/environment behavior, credentials, external services, PM authorization/revisions/approvals/receipts, Chat persistence or production module algorithms are changed. Chat persistence remains the current design under the frozen host contract."
+}

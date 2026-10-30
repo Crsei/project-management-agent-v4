@@ -1,0 +1,203 @@
+/* 工作区日历（默认月视图）日历实体层。
+   仅在 .native-workbench[data-task-layout="calendar"] 且非项目日历、非个人任务变体时生效。
+   solid-glass：容器只用 --edge-shadow 一层实体边缘，不使用玻璃模糊或大面积渐变。 */
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .root {
+  min-width: 0;
+  gap: 16px;
+}
+
+/* 日历工具条：上一/今天/下一 + 期间标题 + 月/周/日 */
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .navigation {
+  min-width: 0;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .navigation button {
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .navigation button[aria-pressed="true"] {
+  border-color: var(--border);
+  background: var(--selection);
+  color: var(--foreground);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .periodTitle {
+  flex: 1 1 160px;
+  min-width: 160px;
+  margin: 0;
+  color: var(--foreground);
+  font-size: var(--text-section);
+  line-height: var(--text-section--line-height);
+  font-weight: 500;
+}
+
+/* 新建截止日期行 */
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .createRow {
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .createRow > label {
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  color: var(--muted-foreground);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .createRow > label > input {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+/* 日历容器：12px 圆角 + 实体边缘；内部允许自身横向滚动 */
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module-value);
+  background: var(--surface);
+  box-shadow: var(--edge-shadow);
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: var(--surface);
+  --fc-neutral-bg-color: var(--surface-raised);
+  --fc-neutral-text-color: var(--muted-foreground);
+  --fc-today-bg-color: var(--selection);
+  --fc-event-bg-color: var(--surface-raised);
+  --fc-event-border-color: var(--border);
+  --fc-event-text-color: var(--foreground);
+  --fc-list-event-hover-bg-color: var(--surface-hover);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc) {
+  font-family: inherit;
+  color: var(--foreground);
+}
+
+/* 网格：表头与日期数字 12/16，今天用 --selection 轻底 */
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-col-header-cell) {
+  background: var(--surface-raised);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-col-header-cell-cushion) {
+  padding: 8px 10px;
+  color: var(--muted-foreground);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-col-header-cell.fc-day-today) {
+  background: var(--selection);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-col-header-cell.fc-day-today) :global(.fc-col-header-cell-cushion) {
+  color: var(--foreground);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-daygrid-day-frame) {
+  min-height: 96px;
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-daygrid-day-number) {
+  padding: 8px 10px;
+  color: var(--muted-foreground);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-daygrid-day.fc-day-today) {
+  background: var(--selection);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-daygrid-day.fc-day-today) :global(.fc-daygrid-day-number) {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+/* 事件：低饱和实体表面 + 左侧 --accent 细标记，12/16，保持可点击与对比度 */
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-event) {
+  cursor: pointer;
+  border-radius: var(--radius-inline-value);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-h-event) {
+  border: 1px solid var(--fc-event-border-color);
+  border-left: 2px solid var(--accent);
+  background: var(--fc-event-bg-color);
+  color: var(--fc-event-text-color);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-h-event:hover) {
+  background: var(--selection);
+  border-left-color: var(--accent);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-daygrid-event) {
+  margin: 1px 0 0;
+  padding: 1px 6px 1px 8px;
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-daygrid-event-dot) {
+  border-color: var(--accent);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-more-link) {
+  padding: 1px 6px;
+  border-radius: var(--radius-inline-value);
+  color: var(--muted-foreground);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-weight: 500;
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-more-link:hover) {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+:global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-daygrid-more-link) {
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  :global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .periodTitle {
+    flex-basis: 100%;
+  }
+
+  :global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-col-header-cell-cushion) {
+    padding: 6px 8px;
+  }
+
+  :global(.native-workbench)[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .frame :global(.fc-daygrid-day-number) {
+    padding: 6px 8px;
+  }
+}

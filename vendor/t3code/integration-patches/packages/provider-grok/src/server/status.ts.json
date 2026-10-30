@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "source": "packages/provider-grok/src/server/status.ts",
+  "beforeSha256": "557f6cc2bd997b6e9bf091c3b08fc4eab2ad501e55ac196dfebc128bafd5acf4",
+  "afterSha256": "56591fe72d0a9bff164abf34aef50987d00b4747ac08b5c8974360375be6c727",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 11,
+      "before": [],
+      "after": [
+        "import * as HostProcess from \"@t3tools/shared/HostProcess\";\n"
+      ]
+    },
+    {
+      "start": 375,
+      "before": [
+        ")(function* (grokSettings: GrokSettings, environment: NodeJS.ProcessEnv) {\n"
+      ],
+      "after": [
+        ")(function* (grokSettings: GrokSettings, environment: NodeJS.ProcessEnv, cwd?: string) {\n"
+      ]
+    },
+    {
+      "start": 379,
+      "before": [
+        "    cwd: process.cwd(),\n"
+      ],
+      "after": [
+        "    cwd: cwd ?? (yield* HostProcess.WorkingDirectory),\n"
+      ]
+    },
+    {
+      "start": 511,
+      "before": [
+        "  const acpExit = yield* discoverGrokMetadataViaAcpInitialize(grokSettings, probeEnvironment).pipe(\n"
+      ],
+      "after": [
+        "  const acpExit = yield* discoverGrokMetadataViaAcpInitialize(grokSettings, probeEnvironment, cwd).pipe(\n"
+      ]
+    }
+  ]
+}

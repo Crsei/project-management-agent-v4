@@ -2,13 +2,15 @@ import { ChevronDown, Circle, Copy, LayoutGrid, ListTodo, SlidersHorizontal, Use
 import { Avatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { DataRegion } from "@/components/ui/data-region"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { Tabs, TabsList, TabsTab } from "@/components/ui/tabs"
 import { useI18n } from "@/lib/i18n-provider"
 import { ControlledFeedback } from "./controlled-presentation"
 import type { ControlledIssueRecord } from "./controlled-contracts"
 import type { ControlledMember, PeopleContactKind, TeamCollectionViewProps } from "./people-controlled-contracts"
 import { PmPage, PmSearch } from "./presentation-page"
+import { withSingleTeamFields } from "./team-filter"
 import styles from "./team-list-3.module.css"
 
 export function TeamList3Content(props: TeamCollectionViewProps) {
@@ -26,7 +28,28 @@ export function TeamList3Content(props: TeamCollectionViewProps) {
   const presenceLabels = { available: text("在线", "Available"), away: text("离开", "Away"), offline: text("离线", "Offline") }
   const teams = model.teamOptions ?? model.teams
   const canNavigateMembers = !loading && !!actions.navigate && !!capabilities.navigate?.("members")
-  const activeFilters = Number((state.workloadStateFilter ?? "all") !== "all") + Number(!!state.teamId && !!capabilities.filterWorkloadTeam)
+  const filterConditions: FilterCondition[] = state.conditions
+    ? withSingleTeamFields(state.conditions, ["state", "team", "member"])
+    : [
+        ...(state.workloadStateFilter && state.workloadStateFilter !== "all" ? [{ field: "state", operator: "is" as const, values: [state.workloadStateFilter] }] : []),
+        ...(state.teamId && capabilities.filterWorkloadTeam ? [{ field: "team", operator: "is" as const, values: [state.teamId] }] : []),
+        ...(state.memberFilter ? [{ field: "member", operator: "is" as const, values: [state.memberFilter] }] : []),
+      ]
+  const activeFilters = filterConditions.filter((condition) => condition.values.length).length
+  const filterFields: FilterField[] = [
+    { id: "state", label: text("任务状态", "Task status"), single: true, options: [{ value: "open", label: text("未完成", "Open") }, { value: "done", label: text("已完成", "Done") }] },
+    ...(capabilities.filterWorkloadTeam ? [{ id: "team", label: text("团队", "Team"), single: true, options: teams.map((team) => ({ value: team.id, label: team.name })) }] : []),
+    { id: "member", label: text("成员", "Member"), single: true, options: model.members.map((member) => ({ value: member.userId, label: member.name })) },
+  ]
+  const applyFilters = (next: FilterCondition[]) => actions.setInteraction((previous) => {
+    const normalized = withSingleTeamFields(next, ["state", "team", "member"])
+    const pick = (field: string) => {
+      const condition = normalized.find((entry) => entry.field === field && entry.values.length)
+      return condition && condition.operator === "is" ? condition.values[0] ?? null : null
+    }
+    const stateValue = pick("state")
+    return { ...previous, conditions: normalized, workloadStateFilter: stateValue === "open" || stateValue === "done" ? stateValue : "all", teamId: pick("team"), memberFilter: pick("member") }
+  })
   const taskRow = (issue: ControlledIssueRecord, compact = false) => {
     const assignees = model.unavailableAssigneeTaskIds?.includes(issue.id) ? text("受派人当前不可用", "Assignee currently unavailable") : issue.assigneeIds.map((id) => model.members.find((member) => member.userId === id)?.name ?? text("受派人不可见", "Assignee unavailable")).join(", ")
     return <li key={issue.id} className={styles.taskWithActions}>
@@ -49,26 +72,25 @@ export function TeamList3Content(props: TeamCollectionViewProps) {
       {actions.copyContact && <Button variant="ghost" size="icon-sm" className={styles.copyButton} disabled={!canCopy} aria-label={text(`复制 ${member.name} (${member.membershipId}) 的${kind === "email" ? "邮箱" : "电话"}`, `Copy ${kind} for ${member.name} (${member.membershipId})`)} onClick={(event) => actions.copyContact?.(member, kind, event.currentTarget)}><Copy size={12} aria-hidden="true" /></Button>}
     </span>
   }
-  const filters = <DropdownMenu>
-    <DropdownMenuTrigger render={<Button id="pm-team3-filter" variant="outline" className={styles.filterButton} disabled={loading} />}><SlidersHorizontal size={16} aria-hidden="true" />{text("筛选", "Filter")}{activeFilters > 0 && <span className={styles.filterCount}>{activeFilters}</span>}</DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className={styles.filterMenu}>
-      <DropdownMenuGroup>
-        <DropdownMenuLabel>{text("任务状态", "Task status")}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={state.workloadStateFilter ?? "all"} onValueChange={(value) => { if (value === "all" || value === "open" || value === "done") actions.setInteraction((previous) => ({ ...previous, workloadStateFilter: value })) }}>
-          <DropdownMenuRadioItem value="all">{text("全部任务", "All tasks")}</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="open">{text("未完成", "Open")}</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="done">{text("已完成", "Done")}</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuGroup>
-      {capabilities.filterWorkloadTeam && <><DropdownMenuSeparator /><DropdownMenuGroup>
-        <DropdownMenuLabel>{text("团队", "Team")}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={state.teamId ?? "all"} onValueChange={(value) => actions.setInteraction((previous) => ({ ...previous, teamId: value === "all" ? null : value }))}>
-          <DropdownMenuRadioItem value="all">{text("全部团队", "All teams")}</DropdownMenuRadioItem>
-          {teams.map((team) => <DropdownMenuRadioItem key={team.id} value={team.id}><span className={styles.filterTeam} title={`${team.name} · ${team.id}`}>{team.name}</span></DropdownMenuRadioItem>)}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuGroup></>}
-    </DropdownMenuContent>
-  </DropdownMenu>
+  const filters = <Popover>
+    <PopoverTrigger render={<Button id="pm-team3-filter" variant="outline" className={styles.filterButton} disabled={loading} />}><SlidersHorizontal size={16} aria-hidden="true" />{text("筛选", "Filter")}{activeFilters > 0 && <span className={styles.filterCount}>{activeFilters}</span>}</PopoverTrigger>
+    <PopoverContent align="end" className="w-96 max-w-[calc(100vw-2rem)] p-0">
+      <FilterCard
+        title={text("筛选工作量", "Filter workload")}
+        fields={filterFields}
+        conditions={filterConditions}
+        onChange={applyFilters}
+        emptyHint={text("添加条件以缩小工作量视图。", "Add a condition to narrow the workload view.")}
+        addLabel={text("添加筛选", "Add filter")}
+        clearLabel={text("清除筛选", "Clear filters")}
+        whereLabel={text("条件", "Where")}
+        andLabel={text("且", "and")}
+        anyLabel={text("任意", "Any")}
+        removeLabel={text("移除条件", "Remove filter")}
+        disabled={loading}
+      />
+    </PopoverContent>
+  </Popover>
 
   return <PmPage interactive={props.interactive} headerMode={props.embedded ? "hidden" : "default"} pageId="pm-team-list-3" className={styles.page} title={text("团队任务", "Team Tasks")} eyebrow={<p className={styles.eyebrow}>{text("团队", "Teams")}</p>} readingPosition={props.readingPosition} onReadingPositionChange={props.onReadingPositionChange}
     actions={<div className={styles.headerActions}>{props.headerActions}{!props.embedded && <Button id="pm-team3-new-member" className={styles.newMember} disabled={!canNavigateMembers} title={canNavigateMembers ? undefined : text("邀请需要管理权限、可用邀请来源及 SMTP 配置", "Invitations require management access, an available invitation source and configured SMTP")} onClick={() => actions.navigate?.("members")}><UserPlus size={16} aria-hidden="true" />{text("邀请成员", "Invite member")}</Button>}</div>}

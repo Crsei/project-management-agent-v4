@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/v2/OpenCode2Client.test.ts",
+  "beforeSha256": "125fc3dee16b7e74342d16526507d52b30e3e39dd7ed947459a0b803c21650e5",
+  "afterSha256": "30c1575e17ff7225747ab56f87a238ef37b4d91cb7fca9e48987ee075de6600f",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 4,
+      "before": [],
+      "after": [
+        "import * as Stream from \"effect/Stream\";\n"
+      ]
+    },
+    {
+      "start": 47,
+      "before": [],
+      "after": [
+        "\n",
+        "it.effect(\"decodes UTF-8 and CRLF SSE split at every byte through the original typed client\", () =>\n",
+        "  Effect.gen(function* () {\n",
+        "    const event = { id: \"evt_fragmented\", type: \"session.text.delta\", created: 1793318400000,\n",
+        "      data: { sessionID: \"ses_fragmented\", assistantMessageID: \"msg_fragmented\", ordinal: 0, delta: \"計算=42\" } };\n",
+        "    const bytes = new TextEncoder().encode(`: heartbeat\\r\\n\\r\\ndata: ${JSON.stringify(event)}\\r\\n\\r\\n`);\n",
+        "    const http = HttpClient.make(request => Effect.succeed(HttpClientResponse.fromWeb(request,\n",
+        "      new Response(new ReadableStream<Uint8Array>({\n",
+        "        start(controller) {\n",
+        "          for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));\n",
+        "          controller.close();\n",
+        "        },\n",
+        "      }), { headers: { \"content-type\": \"text/event-stream\" } }),\n",
+        "    )));\n",
+        "    const api = yield* OpenCode2Client.make.pipe(Effect.provideService(HttpClient.HttpClient, http));\n",
+        "    const connection = yield* api.connect({ baseUrl: \"http://fixture.invalid\", password: \"\" });\n",
+        "    const events = yield* connection.events;\n",
+        "    assert.deepStrictEqual<unknown>(yield* Stream.runCollect(events), [event]);\n",
+        "  }),\n",
+        ");\n"
+      ]
+    }
+  ]
+}

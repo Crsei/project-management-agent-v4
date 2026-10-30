@@ -4,8 +4,8 @@
     "noEmit": true
   },
   "include": [
-    "apps/api/src/**/*.ts",
-    "apps/worker/src/**/*.ts",
+    "apps/server/pm/src/**/*.ts",
+    "apps/server/worker/src/**/*.ts",
     "packages/domain/src/**/*.ts",
     "packages/application/src/**/*.ts",
     "packages/contracts/src/**/*.ts",
@@ -13,7 +13,7 @@
     "packages/pm-schema/**/*.ts",
     "packages/pm-markdown/**/*.ts",
     "packages/pm-core/**/*.ts",
-    "apps/api/tests/**/*.ts",
+    "apps/server/pm/tests/**/*.ts",
     "packages/domain/tests/**/*.ts",
     "packages/application/tests/**/*.ts",
     "packages/contracts/tests/**/*.ts",

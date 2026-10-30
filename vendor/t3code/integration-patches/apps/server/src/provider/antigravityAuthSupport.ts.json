@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/antigravityAuthSupport.ts",
+  "beforeSha256": "ac46c412bace04d42ddac7545162fb5bc76b77d3182ed83397c3382140338580",
+  "afterSha256": "d1ca37c19121e0629696cfbd31b9ee3c21ee4e25cf84bec1c32d699bf54e3071",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 6,
+      "before": [],
+      "after": [
+        "import * as Context from \"effect/Context\";\n"
+      ]
+    },
+    {
+      "start": 176,
+      "before": [],
+      "after": [
+        "/** Host-owned private profile mapping; never imports or relocates native credentials. */\n",
+        "export class AntigravityProfileDirectories extends Context.Reference<{\n",
+        "  readonly instanceId: ProviderInstanceId;\n",
+        "  readonly directories: AntigravityInstanceDirectories;\n",
+        "} | undefined>(\"t3/provider/AntigravityProfileDirectories\", {\n",
+        "  defaultValue: () => undefined,\n",
+        "}) {}\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 180,
+      "before": [],
+      "after": [
+        "  const bound = yield* AntigravityProfileDirectories;\n",
+        "  if (bound?.instanceId === instanceId) return bound.directories;\n"
+      ]
+    },
+    {
+      "start": 285,
+      "before": [],
+      "after": [
+        "  const baseEnv = input.baseEnv ?? (yield* HostProcess.Environment);\n"
+      ]
+    },
+    {
+      "start": 289,
+      "before": [
+        "      input.baseEnv ?? process.env,\n"
+      ],
+      "after": [
+        "      baseEnv,\n"
+      ]
+    },
+    {
+      "start": 294,
+      "before": [
+        "    (yield* resolveNodeExecutable(\"Antigravity sign-in\", input.baseEnv).pipe(\n"
+      ],
+      "after": [
+        "    (yield* resolveNodeExecutable(\"Antigravity sign-in\", baseEnv).pipe(\n"
+      ]
+    },
+    {
+      "start": 327,
+      "before": [
+        "      (input.baseEnv ?? process.env).NIX_SSL_CERT_FILE,\n"
+      ],
+      "after": [
+        "      baseEnv.NIX_SSL_CERT_FILE,\n"
+      ]
+    },
+    {
+      "start": 352,
+      "before": [
+        "  const environment = antigravityEnvironment(profile, input.baseEnv ?? process.env, auth);\n"
+      ],
+      "after": [
+        "  const environment = antigravityEnvironment(profile, baseEnv, auth);\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/v2/OpenCode2Server.ts",
+  "beforeSha256": "437133433eaa589aa7ee17a6d0c6ef08c4b7879d5cb0236381b001da1a839d3d",
+  "afterSha256": "3172d08eb8ef01da3fc663ed0e4010a696d6c4ce2ad9a8c2e44526b6c2eeeb9a",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 13,
+      "before": [],
+      "after": [
+        "import { parseGenericCliVersion } from \"@t3tools/provider-core/server/snapshotProbe\";\n",
+        "import { parseSemver } from \"@t3tools/shared/semver\";\n"
+      ]
+    },
+    {
+      "start": 108,
+      "before": [
+        "    Effect.map((info) => info.version),\n"
+      ],
+      "after": [
+        "    Effect.flatMap(info => {\n",
+        "      const version = parseGenericCliVersion(info.version);\n",
+        "      return version && (parseSemver(version)?.major ?? 0) >= 2 ? Effect.succeed(version)\n",
+        "        : Effect.fail(new OpenCodeRuntime.OpenCodeRuntimeError({\n",
+        "          operation: \"server.info\", detail: \"The native server did not confirm the OpenCode 2 protocol generation.\",\n",
+        "        }));\n",
+        "    }),\n"
+      ]
+    }
+  ]
+}

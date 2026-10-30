@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "source": "apps/server/src/process/agentScope.test.ts",
+  "beforeSha256": "f28593a9494264b9f7a90d1d5cc40535610023c8361b4e77a76f42b0e8097726",
+  "afterSha256": "fb7cd7bab465cdb9bb1b8e6728b577d0812f6284de2c1707310f1931431db6a4",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 10,
+      "before": [],
+      "after": [
+        "import * as Exit from \"effect/Exit\";\n"
+      ]
+    },
+    {
+      "start": 13,
+      "before": [],
+      "after": [
+        "import * as Scope from \"effect/Scope\";\n"
+      ]
+    },
+    {
+      "start": 15,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n",
+        "import { makeTestServerConfigLayer } from \"../provider/testUtils/providerHostFixtures.ts\";\n"
+      ]
+    },
+    {
+      "start": 52,
+      "before": [],
+      "after": [
+        "    readonly closeNativeScope: Effect.Effect<void>;\n"
+      ]
+    },
+    {
+      "start": 57,
+      "before": [
+        "  }: { readonly oomPolicy?: boolean; readonly stopFails?: boolean } = {},\n"
+      ],
+      "after": [
+        "    platform = \"linux\",\n",
+        "    runtimeDir = \"/run/user/1\",\n",
+        "    managerAvailable = true,\n",
+        "  }: {\n",
+        "    readonly oomPolicy?: boolean;\n",
+        "    readonly stopFails?: boolean;\n",
+        "    readonly platform?: NodeJS.Platform;\n",
+        "    readonly runtimeDir?: string;\n",
+        "    readonly managerAvailable?: boolean;\n",
+        "  } = {},\n"
+      ]
+    },
+    {
+      "start": 81,
+      "before": [],
+      "after": [
+        "          if (!managerAvailable && args.includes(\"--scope\")) return output(\"\", 1);\n"
+      ]
+    },
+    {
+      "start": 104,
+      "before": [],
+      "after": [
+        "    const nativeScope = yield* Effect.acquireRelease(Scope.make(), scope => Scope.close(scope, Exit.void));\n"
+      ]
+    },
+    {
+      "start": 105,
+      "before": [],
+      "after": [
+        "      Effect.provideService(Scope.Scope, nativeScope),\n"
+      ]
+    },
+    {
+      "start": 106,
+      "before": [
+        "      Effect.provideService(HostProcess.Platform, \"linux\"),\n",
+        "      Effect.provideService(HostProcess.Environment, { PATH: bin, XDG_RUNTIME_DIR: \"/run/user/1\" }),\n"
+      ],
+      "after": [
+        "      Effect.provideService(HostProcess.Platform, platform),\n",
+        "      Effect.provideService(HostProcess.Environment, { PATH: bin, XDG_RUNTIME_DIR: runtimeDir }),\n"
+      ]
+    },
+    {
+      "start": 115,
+      "before": [
+        "    return yield* body({ scope, units, calls, stateDir, cgroupRoot }).pipe(\n"
+      ],
+      "after": [
+        "    return yield* body({ scope, units, calls, stateDir, cgroupRoot,\n",
+        "      closeNativeScope: Scope.close(nativeScope, Exit.void) }).pipe(\n"
+      ]
+    },
+    {
+      "start": 121,
+      "before": [
+        "      ServerConfig.layerTest(process.cwd(), { prefix: \"t3-agent-scope-\" }).pipe(\n"
+      ],
+      "after": [
+        "      makeTestServerConfigLayer(process.cwd(), { prefix: \"t3-agent-scope-\" }).pipe(\n"
+      ]
+    },
+    {
+      "start": 251,
+      "before": [],
+      "after": [
+        "        const foreignSlice = ownedAgentSlice(`${stateDir}-foreign-project`);\n",
+        "        units.set(foreignSlice, { activeState: \"active\", result: \"success\" });\n",
+        "        units.set(\"app-t3code-agents.slice\", { activeState: \"active\", result: \"success\" });\n"
+      ]
+    },
+    {
+      "start": 262,
+      "before": [
+        "        expect(sliceOf(terminal)).toBe(\"app-t3code-agents.slice\");\n"
+      ],
+      "after": [
+        "        expect(sliceOf(terminal)).toBe(ownedAgentSlice(stateDir).replace(/-agents\\.slice$/, \".slice\"));\n",
+        "        expect(sliceOf(terminal)).not.toBe(sliceOf(agent));\n",
+        "        expect(calls.filter(([, verb]) => verb === \"set-property\").map((args) => args[3]))\n",
+        "          .toEqual([sliceOf(terminal)]);\n",
+        "        expect(calls.some((args) => args.includes(foreignSlice) || args.includes(\"app-t3code-agents.slice\")))\n",
+        "          .toBe(false);\n"
+      ]
+    },
+    {
+      "start": 277,
+      "before": [],
+      "after": [
+        "        const foreignUnit = \"t3code-muse-foreign-project.scope\";\n",
+        "        exitedAgent(units, cgroupRoot, foreignUnit, { populated: true, oomKills: 0 });\n",
+        "        yield* scope.stop(foreignUnit);\n",
+        "        expect(calls.some((args) => args.includes(foreignUnit))).toBe(false);\n"
+      ]
+    },
+    {
+      "start": 286,
+      "before": [],
+      "after": [
+        "        yield* scope.stop(unit);\n",
+        "        expect(stopsOf(calls)).toEqual([[\"--user\", \"stop\", \"--no-block\", unit]]);\n"
+      ]
+    },
+    {
+      "start": 315,
+      "before": [
+        "            expect(stopsOf(calls)).toHaveLength(oomPolicy ? 0 : 2);\n"
+      ],
+      "after": [
+        "            expect(stopsOf(calls)).toHaveLength(oomPolicy ? 0 : 1);\n"
+      ]
+    },
+    {
+      "start": 345,
+      "before": [],
+      "after": [
+        "  it.effect(\"finalizes only issued nonpersistent units while retaining native OOM diagnosis\", () =>\n",
+        "    withFakeSystemd(({ scope, units, calls, cgroupRoot, closeNativeScope }) => Effect.gen(function* () {\n",
+        "      const agent = yield* scope.wrap({ command: \"agent\", args: [], name: \"t\", threadId: \"a\" });\n",
+        "      const shared = yield* scope.wrap({ command: \"agent\", args: [], name: \"shared\", shared: true });\n",
+        "      const terminal = yield* scope.wrap({ command: \"agent\", args: [], name: \"terminal\", survivesRestart: true });\n",
+        "      const oom = yield* scope.wrap({ command: \"agent\", args: [], name: \"oom\", threadId: \"oom\" });\n",
+        "      for (const launch of [agent, shared, terminal]) {\n",
+        "        exitedAgent(units, cgroupRoot, unitOf(launch), { populated: true, oomKills: 0 });\n",
+        "      }\n",
+        "      exitedAgent(units, cgroupRoot, unitOf(oom), { populated: true, oomKills: 1 });\n",
+        "      exitedAgent(units, cgroupRoot, \"t3code-foreign.scope\", { populated: true, oomKills: 0 });\n",
+        "      yield* closeNativeScope;\n",
+        "      expect(stopsOf(calls)).toEqual([\n",
+        "        [\"--user\", \"stop\", \"--no-block\", unitOf(agent)],\n",
+        "        [\"--user\", \"stop\", \"--no-block\", unitOf(shared)],\n",
+        "      ]);\n",
+        "      expect(calls.some((args) => args.includes(\"t3code-foreign.scope\"))).toBe(false);\n",
+        "    })),\n",
+        "  );\n",
+        "\n",
+        "  it.effect(\"does not claim a native unit when the Linux user manager is unavailable\", () =>\n",
+        "    withFakeSystemd(({ scope, calls }) => Effect.gen(function* () {\n",
+        "      const launch = yield* scope.wrap({ command: \"agent\", args: [\"hello\"], name: \"t\", threadId: \"a\" });\n",
+        "      expect(launch.command).toBe(\"/bin/sh\");\n",
+        "      expect(launch.unit).toBeUndefined();\n",
+        "      expect(launch.args).toContain(\"hello\");\n",
+        "      expect(launch.args.some((arg) => arg.startsWith(\"--unit=\"))).toBe(false);\n",
+        "      yield* scope.stop(\"t3code-foreign.scope\");\n",
+        "      expect(stopsOf(calls)).toEqual([]);\n",
+        "      expect(yield* scope.oomKilled(\"a\")).toBe(false);\n",
+        "    }), { managerAvailable: false }),\n",
+        "  );\n",
+        "\n",
+        "  it.effect(\"does not probe systemd without the bound runtime directory\", () =>\n",
+        "    withFakeSystemd(({ scope, calls }) => Effect.gen(function* () {\n",
+        "      const launch = yield* scope.wrap({ command: \"agent\", args: [], name: \"t\" });\n",
+        "      expect(launch.unit).toBeUndefined();\n",
+        "      expect(calls).toEqual([]);\n",
+        "    }), { runtimeDir: \"\" }),\n",
+        "  );\n",
+        "\n",
+        "  it.effect.each([\"darwin\", \"win32\"] as const)(\"leaves native wrapping unavailable on %s\", (platform) =>\n",
+        "    withFakeSystemd(({ scope, calls }) => Effect.gen(function* () {\n",
+        "      const launch = yield* scope.wrap({ command: \"agent\", args: [\"native\"], name: \"t\" });\n",
+        "      expect(launch).toEqual({ command: \"agent\", args: [\"native\"] });\n",
+        "      yield* scope.stop(\"t3code-foreign.scope\");\n",
+        "      expect(calls).toEqual([]);\n",
+        "    }), { platform }),\n",
+        "  );\n",
+        "\n"
+      ]
+    }
+  ]
+}

@@ -31,7 +31,7 @@ import styles from "./pm-user-menu.module.css"
  * card is first opened; after that its cached profile feeds both the card and
  * the trigger without another request.
  */
-export function PmUserMenu() {
+export function PmUserMenu({ collapsed = false }: { collapsed?: boolean } = {}) {
   const { actor, workspace, logout } = usePmService()
   const navigate = useNavigate()
   const { locale } = useI18n()
@@ -75,15 +75,15 @@ export function PmUserMenu() {
         render={
           <button
             type="button"
-            className={styles.trigger}
+            className={`${styles.trigger} ${collapsed ? styles.collapsedTrigger : ""}`}
             aria-label={t("账户菜单", "Account menu")}
             title={t("账户菜单", "Account menu")}
           />
         }
       >
         <Avatar name={displayName} src={avatarDataUrl} size={24} />
-        <span className={styles.name}>{displayName}</span>
-        <ChevronsUpDown className={styles.chevron} aria-hidden="true" />
+        {!collapsed && <span className={styles.name}>{displayName}</span>}
+        {!collapsed && <ChevronsUpDown className={styles.chevron} aria-hidden="true" />}
       </PopoverTrigger>
       <PopoverContent
         side="top"

@@ -1,0 +1,582 @@
+{
+  "version": 1,
+  "source": "packages/provider-pi/src/server/adapter.ts",
+  "beforeSha256": "f2f6fd8b71b1386f4850ee89f0ecb4be3370629a998e6b472136a8decd4c2220",
+  "afterSha256": "7eeaf4222053cdb51a79cf741adbd9ae1c749c0a0c633e52b1c234a1be8ebb32",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [],
+      "after": [
+        "import * as NodePath from \"node:path\";\n"
+      ]
+    },
+    {
+      "start": 42,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { ProviderRuntimeHost } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n",
+        "import { PiHostResources } from \"./PiHostResources.ts\";\n",
+        "import { bindPiSessionEvidence } from \"./sessionEvidence.ts\";\n"
+      ]
+    },
+    {
+      "start": 345,
+      "before": [
+        "  readonly turnInput: ProviderAdapter.ProviderAdapterV2TurnInput;\n"
+      ],
+      "after": [
+        "  readonly turnInput: Omit<ProviderAdapter.ProviderAdapterV2TurnInput, \"message\">;\n"
+      ]
+    },
+    {
+      "start": 418,
+      "before": [
+        "  const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n"
+      ],
+      "after": [
+        "  const runtimeHost = yield* ProviderRuntimeHost;\n",
+        "  const hostResources = yield* Effect.serviceOption(PiHostResources);\n",
+        "  const userHome = yield* HostProcess.HomeDirectory;\n"
+      ]
+    },
+    {
+      "start": 442,
+      "before": [
+        "      const mcpSession = yield* mcpSessions.read(input.threadId);\n"
+      ],
+      "after": [
+        "      const runtimeBinding = yield* runtimeHost.read({ threadId: input.threadId, providerInstanceId: options.instanceId });\n",
+        "      if (runtimeBinding?.mcpServers.length) yield* runtimeHost.authorize({\n",
+        "        threadId: input.threadId, providerInstanceId: options.instanceId,\n",
+        "        executionId: runtimeBinding.executionId, action: \"tool\",\n",
+        "      }).pipe(Effect.mapError(cause => new ProviderAdapter.ProviderAdapterOpenSessionError({\n",
+        "        driver: PI_PROVIDER, providerSessionId: input.providerSessionId, cause,\n",
+        "      })));\n"
+      ]
+    },
+    {
+      "start": 466,
+      "before": [
+        "        mcpSession,\n"
+      ],
+      "after": [
+        "        runtimeBinding,\n",
+        "        ...(Option.isSome(hostResources) ? { pmToolsExtensionPath: hostResources.value.pmToolsExtensionPath } : {}),\n"
+      ]
+    },
+    {
+      "start": 537,
+      "before": [],
+      "after": [
+        "      let permissionHookReady = false;\n"
+      ]
+    },
+    {
+      "start": 1617,
+      "before": [],
+      "after": [
+        "        if (event[\"type\"] === \"extension_ui_request\" && event[\"method\"] === \"notify\" &&\n",
+        "          event[\"message\"] === \"pm-pi-permission-hook-ready\") { permissionHookReady = true; return; }\n",
+        "        if (event[\"type\"] === \"extension_error\" &&\n",
+        "          (recordString(event, \"extensionPath\") === extensionPath ||\n",
+        "            (Option.isSome(hostResources) && recordString(event, \"extensionPath\") === hostResources.value.pmToolsExtensionPath))) {\n",
+        "          yield* connection.terminate;\n",
+        "          return yield* protocolError(\"The required Pi host extension failed to load.\");\n",
+        "        }\n"
+      ]
+    },
+    {
+      "start": 1658,
+      "before": [],
+      "after": [
+        "                  ...(runtimeBinding ? { hostExecution: {\n",
+        "                    threadId: runtimeBinding.threadId, executionId: runtimeBinding.executionId,\n",
+        "                  } } : {}),\n"
+      ]
+    },
+    {
+      "start": 2120,
+      "before": [],
+      "after": [
+        "        verifiedNativeSessionId?: string,\n"
+      ]
+    },
+    {
+      "start": 2142,
+      "before": [
+        "        const resumeId = existing?.nativeThreadRef?.nativeId;\n"
+      ],
+      "after": [
+        "        const resumeId = existing?.nativeThreadRef?.nativeId ?? verifiedNativeSessionId;\n"
+      ]
+    },
+    {
+      "start": 2155,
+      "before": [
+        "          const result = yield* lifecycleRequest(\n",
+        "            resumeId != null\n",
+        "              ? { type: \"switch_session\", sessionPath: resumeId }\n",
+        "              : { type: \"new_session\" },\n",
+        "          );\n",
+        "          if (recordField(result, \"cancelled\") === true) {\n",
+        "            return yield* protocolError(\"A Pi extension cancelled the session switch\");\n"
+      ],
+      "after": [
+        "          if (verifiedNativeSessionId === undefined) {\n",
+        "            const result = yield* lifecycleRequest(\n",
+        "              resumeId != null\n",
+        "                ? { type: \"switch_session\", sessionPath: resumeId }\n",
+        "                : { type: \"new_session\" },\n",
+        "            );\n",
+        "            if (recordField(result, \"cancelled\") === true) {\n",
+        "              return yield* protocolError(\"A Pi extension cancelled the session switch\");\n",
+        "            }\n"
+      ]
+    },
+    {
+      "start": 2193,
+      "before": [],
+      "after": [
+        "        if (verifiedNativeSessionId !== undefined && nativeId !== verifiedNativeSessionId)\n",
+        "          return yield* protocolError(\"Pi changed the verified legacy session during registration.\");\n"
+      ]
+    },
+    {
+      "start": 2326,
+      "before": [],
+      "after": [
+        "      // Both prompt turns and native buffered work use the original turn allocation/state helper.\n",
+        "      // The buffered path never constructs a message and never sends `prompt`.\n",
+        "      const makeActiveTurn = Effect.fnUntraced(function* (\n",
+        "        turnInput: Omit<ProviderAdapter.ProviderAdapterV2TurnInput, \"message\">,\n",
+        "        settings: { readonly buffered?: boolean; readonly commandOnly?: boolean; readonly compact?: boolean } = {},\n",
+        "      ) {\n",
+        "        const startedAt = yield* DateTime.now;\n",
+        "        const nativeId = `${turnInput.providerThread.id}:attempt:${turnInput.attemptId}${settings.buffered ? `:buffered:${turnInput.providerTurnOrdinal}` : \"\"}`;\n",
+        "        const providerTurn: OrchestrationV2ProviderTurn = {\n",
+        "          id: idAllocator.derive.providerTurn({ driver: PI_PROVIDER, nativeTurnId: nativeId }),\n",
+        "          providerThreadId: turnInput.providerThread.id, nodeId: turnInput.rootNodeId,\n",
+        "          runAttemptId: turnInput.attemptId, nativeTurnRef: providerRef(nativeId, \"weak\"),\n",
+        "          ordinal: turnInput.providerTurnOrdinal, status: \"running\", startedAt, completedAt: null,\n",
+        "        };\n",
+        "        const active: ActivePiTurn = {\n",
+        "          turnInput, providerTurn, startedAt, itemOrdinals: new Map(),\n",
+        "          nextItemOrdinal: turnInput.providerTurnOrdinal * 100 + 1, messageOrdinal: 0,\n",
+        "          streamItems: new Map(), toolArgs: new Map(), toolStartedAt: new Map(),\n",
+        "          interrupted: false, nativeAborted: false, sawAgentActivity: false,\n",
+        "          adoptedWake: settings.buffered === true, promptMayBeCommandOnly: settings.commandOnly === true,\n",
+        "          latestCompactionAfterTokens: null, lastLiveUsedTokens: null, settleProbeGeneration: 0,\n",
+        "          settleWhenIdle: false, sawCompaction: false, manualCompactInFlight: settings.compact === true,\n",
+        "          activeCompaction: null, activeProviderRetry: null, failure: null, rejectedPromptFailure: null,\n",
+        "        };\n",
+        "        return active;\n",
+        "      });\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 2361,
+      "before": [
+        "          registerThread({\n"
+      ],
+      "after": [
+        "          Effect.gen(function* () {\n",
+        "            const nativeId = threadInput.providerThread.nativeThreadRef?.nativeId;\n",
+        "            if (runtimeBinding && nativeId) yield* readHeader(nativeId);\n",
+        "            return yield* registerThread({\n"
+      ]
+    },
+    {
+      "start": 2367,
+      "before": [],
+      "after": [
+        "            });\n"
+      ]
+    },
+    {
+      "start": 2385,
+      "before": [],
+      "after": [
+        "            if (!permissionHookReady) return yield* protocolError(\"Pi did not activate its required permission hook; no prompt was sent.\");\n"
+      ]
+    },
+    {
+      "start": 2429,
+      "before": [
+        "            const startedAt = yield* DateTime.now;\n",
+        "            const syntheticNativeTurnId = `${state.providerThread.id}:attempt:${turnInput.attemptId}`;\n",
+        "            const providerTurn: OrchestrationV2ProviderTurn = {\n",
+        "              id: idAllocator.derive.providerTurn({\n",
+        "                driver: PI_PROVIDER,\n",
+        "                nativeTurnId: syntheticNativeTurnId,\n",
+        "              }),\n",
+        "              providerThreadId: turnInput.providerThread.id,\n",
+        "              nodeId: turnInput.rootNodeId,\n",
+        "              runAttemptId: turnInput.attemptId,\n",
+        "              nativeTurnRef: providerRef(syntheticNativeTurnId, \"weak\"),\n",
+        "              ordinal: turnInput.providerTurnOrdinal,\n",
+        "              status: \"running\",\n",
+        "              startedAt,\n",
+        "              completedAt: null,\n",
+        "            };\n",
+        "            const activeTurn: ActivePiTurn = {\n",
+        "              turnInput,\n",
+        "              providerTurn,\n",
+        "              startedAt,\n",
+        "              itemOrdinals: new Map(),\n",
+        "              nextItemOrdinal: turnInput.providerTurnOrdinal * 100 + 1,\n",
+        "              messageOrdinal: 0,\n",
+        "              streamItems: new Map(),\n",
+        "              toolArgs: new Map(),\n",
+        "              toolStartedAt: new Map(),\n",
+        "              interrupted: false,\n",
+        "              nativeAborted: false,\n",
+        "              sawAgentActivity: false,\n",
+        "              adoptedWake: false,\n",
+        "              promptMayBeCommandOnly:\n",
+        "                compactCommand !== null || (payload?.message.trimStart().startsWith(\"/\") ?? false),\n",
+        "              latestCompactionAfterTokens: null,\n",
+        "              lastLiveUsedTokens: null,\n",
+        "              settleProbeGeneration: 0,\n",
+        "              settleWhenIdle: false,\n",
+        "              sawCompaction: false,\n",
+        "              manualCompactInFlight: compactCommand !== null,\n",
+        "              activeCompaction: null,\n",
+        "              activeProviderRetry: null,\n",
+        "              failure: null,\n",
+        "              rejectedPromptFailure: null,\n",
+        "            };\n"
+      ],
+      "after": [
+        "            const activeTurn = yield* makeActiveTurn(turnInput, {\n",
+        "              commandOnly: compactCommand !== null || (payload?.message.trimStart().startsWith(\"/\") ?? false),\n",
+        "              compact: compactCommand !== null,\n",
+        "            });\n",
+        "            const providerTurn = activeTurn.providerTurn;\n"
+      ]
+    },
+    {
+      "start": 2749,
+      "before": [
+        "            if (state === null || wantedNativeId == null || boundNativeId !== wantedNativeId) {\n"
+      ],
+      "after": [
+        "            if (state === null || wantedNativeId == null || boundNativeId !== wantedNativeId ||\n",
+        "              snapshotInput.providerThread.driver !== PI_PROVIDER ||\n",
+        "              snapshotInput.providerThread.providerInstanceId !== options.instanceId ||\n",
+        "              snapshotInput.providerThread.nativeThreadRef?.driver !== PI_PROVIDER ||\n",
+        "              snapshotInput.providerThread.id !== state.providerThread.id ||\n",
+        "              snapshotInput.providerThread.appThreadId !== state.providerThread.appThreadId) {\n"
+      ]
+    },
+    {
+      "start": 2753,
+      "before": [],
+      "after": [
+        "            }\n",
+        "            let providerThread = state.providerThread;\n",
+        "            let nativeHistory: ProviderAdapter.ProviderNativeHistoryBoundary | undefined;\n",
+        "            // Empty native sessions need not have a persisted header yet; no history is claimed.\n",
+        "            if (yield* fileSystem.exists(wantedNativeId)) {\n",
+        "              const header = yield* readHeader(wantedNativeId);\n",
+        "              const native = yield* request({ type: \"get_state\" });\n",
+        "              if (recordString(native, \"sessionFile\") !== wantedNativeId ||\n",
+        "                recordString(native, \"sessionId\") !== header.id ||\n",
+        "                typeof recordField(native, \"isStreaming\") !== \"boolean\")\n",
+        "                return yield* protocolError(\"Pi snapshot did not confirm the requested native session.\");\n",
+        "              if (recordField(native, \"isStreaming\") === false && recordField(native, \"isCompacting\") !== true) {\n",
+        "                const listing = piSessionListing(yield* request({ type: \"get_entries\" }));\n",
+        "                const walk = listing ? walkPiBranch(listing.entries, listing.leafId, null, true) : null;\n",
+        "                if (!listing || !walk?.reachedStop)\n",
+        "                  return yield* protocolError(\"Pi snapshot returned an invalid native active branch.\");\n",
+        "                if (walk.completedTurnRefs?.length)\n",
+        "                  nativeHistory = { nativeSessionId: wantedNativeId, completedTurnRefs: walk.completedTurnRefs };\n",
+        "                const model = recordField(native, \"model\");\n",
+        "                const provider = recordString(model, \"provider\");\n",
+        "                const modelId = recordString(model, \"id\");\n",
+        "                providerThread = { ...providerThread,\n",
+        "                  nativeConversationHeadRef: listing.leafId ? providerRef(listing.leafId) : null,\n",
+        "                  nativeMetadata: { ...providerThread.nativeMetadata, modelSelection: provider && modelId\n",
+        "                    ? { instanceId: options.instanceId, model: `${provider}/${modelId}` } : undefined } };\n",
+        "                if (state.activeTurn === null) {\n",
+        "                  state.providerThread = providerThread;\n",
+        "                  lastKnownLeaf = listing.leafId;\n",
+        "                  leafCursorStale = false;\n",
+        "                }\n",
+        "              }\n"
+      ]
+    },
+    {
+      "start": 2791,
+      "before": [
+        "              providerThread: state.providerThread,\n"
+      ],
+      "after": [
+        "              providerThread,\n"
+      ]
+    },
+    {
+      "start": 2795,
+      "before": [],
+      "after": [
+        "              ...(nativeHistory ? { nativeHistory } : {}),\n"
+      ]
+    },
+    {
+      "start": 2945,
+      "before": [],
+      "after": [
+        "            if (source.driver !== PI_PROVIDER || source.providerInstanceId !== options.instanceId ||\n",
+        "              source.nativeThreadRef?.driver !== PI_PROVIDER)\n",
+        "              return yield* protocolError(\"Pi fork source belongs to another provider instance.\");\n",
+        "            const nativeTarget = forkInput.nativeCompletedTurnRef;\n",
+        "            if (nativeTarget && forkInput.providerTurnId !== undefined)\n",
+        "              return yield* protocolError(\"Pi fork cannot combine application and native-only turn boundaries.\");\n",
+        "            if (nativeTarget && (nativeTarget.driver !== PI_PROVIDER || nativeTarget.strength !== \"strong\" ||\n",
+        "              nativeTarget.nativeId.trim().length === 0))\n",
+        "              return yield* protocolError(\"Pi fork native boundary has an invalid driver or completed entry.\");\n",
+        "            if (nativeTarget) yield* readHeader(sourceFile);\n"
+      ]
+    },
+    {
+      "start": 2964,
+      "before": [
+        "              mcpSession: undefined,\n"
+      ],
+      "after": [
+        "              runtimeBinding: undefined,\n"
+      ]
+    },
+    {
+      "start": 2982,
+      "before": [
+        "                const beforeEntry =\n",
+        "                  boundary.type === \"nothing\"\n"
+      ],
+      "after": [
+        "                const beforeEntry = nativeTarget\n",
+        "                  ? yield* Effect.gen(function* () {\n",
+        "                      const native = yield* forkConnection.request({ type: \"get_state\" });\n",
+        "                      const file = recordString(native, \"sessionFile\");\n",
+        "                      if (!file || file === sourceFile) return yield* protocolError(\"Pi fork has no independent native session.\");\n",
+        "                      const header = yield* readHeader(file);\n",
+        "                      if (recordString(native, \"sessionId\") !== header.id ||\n",
+        "                        recordField(native, \"isStreaming\") !== false || recordField(native, \"isCompacting\") === true)\n",
+        "                        return yield* protocolError(\"Pi fork did not confirm its native identity and idle boundary.\");\n",
+        "                      const listing = piSessionListing(yield* forkConnection.request({ type: \"get_entries\" }));\n",
+        "                      const walk = listing ? walkPiBranch(listing.entries, listing.leafId, null, true) : null;\n",
+        "                      if (!walk?.reachedStop || !walk.completedTurnRefs?.some(ref => ref.nativeId === nativeTarget.nativeId))\n",
+        "                        return yield* protocolError(\"Pi fork native boundary is not a successful turn on the active branch.\");\n",
+        "                      const targetIndex = walk.userEntryIds.indexOf(nativeTarget.nativeId);\n",
+        "                      if (targetIndex < 0) return yield* protocolError(\"Pi fork native user boundary is unavailable.\");\n",
+        "                      if (targetIndex === 0) return null;\n",
+        "                      // RPC fork discards the selected user entry: retain the target by selecting its successor.\n",
+        "                      const nextUserEntry = walk.userEntryIds[targetIndex - 1];\n",
+        "                      if (nextUserEntry === undefined) return yield* protocolError(\"Pi fork successor boundary is unavailable.\");\n",
+        "                      return nextUserEntry;\n",
+        "                    })\n",
+        "                  : boundary.type === \"nothing\"\n"
+      ]
+    },
+    {
+      "start": 3003,
+      "before": [],
+      "after": [
+        "                }\n",
+        "                if (nativeTarget) {\n",
+        "                  const header = yield* readHeader(file);\n",
+        "                  if (recordString(state, \"sessionId\") !== header.id ||\n",
+        "                    recordField(state, \"isStreaming\") !== false || recordField(state, \"isCompacting\") === true)\n",
+        "                    return yield* protocolError(\"Pi fork target did not confirm its native identity and idle boundary.\");\n"
+      ]
+    },
+    {
+      "start": 3055,
+      "before": [],
+      "after": [
+        "      const headerSchema = Schema.Struct({ type: Schema.Literal(\"session\"),\n",
+        "        version: Schema.Int.check(Schema.isGreaterThan(0)), id: Schema.NonEmptyString, cwd: Schema.NonEmptyString });\n",
+        "      const readHeader = Effect.fnUntraced(function* (sessionFile: string) {\n",
+        "        const sessionDirIndex = resolvedLaunchArgs.args.indexOf(\"--session-dir\");\n",
+        "        const configuredDirectory = sessionDirIndex < 0 ? undefined : resolvedLaunchArgs.args[sessionDirIndex + 1];\n",
+        "        const directory = configuredDirectory\n",
+        "          ? NodePath.resolve(cwd, configuredDirectory.startsWith(\"~/\") ? NodePath.join(userHome, configuredDirectory.slice(2)) : configuredDirectory)\n",
+        "          : NodePath.resolve(cwd, options.environment.PI_CODING_AGENT_DIR ?? NodePath.join(userHome, \".pi\", \"agent\"), \"sessions\");\n",
+        "        const file = yield* fileSystem.realPath(sessionFile);\n",
+        "        const root = yield* fileSystem.realPath(directory);\n",
+        "        if (!file.startsWith(root + NodePath.sep)) return yield* protocolError(\"Pi session is outside the bound native Home.\");\n",
+        "        const text = yield* Effect.scoped(Effect.gen(function* () {\n",
+        "          const handle = yield* fileSystem.open(file, { flag: \"r\" });\n",
+        "          const decoder = new TextDecoder(\"utf-8\", { fatal: true });\n",
+        "          let bytesRead = 0;\n",
+        "          let header = \"\";\n",
+        "          while (bytesRead < 64 * 1024) {\n",
+        "            const chunk = yield* handle.readAlloc(Math.min(4096, 64 * 1024 - bytesRead));\n",
+        "            if (Option.isNone(chunk)) return header + decoder.decode();\n",
+        "            bytesRead += chunk.value.byteLength;\n",
+        "            const end = chunk.value.indexOf(10);\n",
+        "            header += decoder.decode(end < 0 ? chunk.value : chunk.value.subarray(0, end), { stream: end < 0 });\n",
+        "            if (end >= 0) return header;\n",
+        "          }\n",
+        "          return yield* protocolError(\"Pi native session header exceeds its metadata boundary.\");\n",
+        "        }));\n",
+        "        const header = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(headerSchema))(text);\n",
+        "        if (NodePath.resolve(header.cwd) !== NodePath.resolve(cwd)) return yield* protocolError(\"Pi native session belongs to another directory.\");\n",
+        "        return header;\n",
+        "      });\n",
+        "      const unbindEvidence = bindPiSessionEvidence(runtime, {\n",
+        "        probe: Effect.gen(function* () {\n",
+        "          const native = yield* request({ type: \"get_state\" });\n",
+        "          const file = recordString(native, \"sessionFile\");\n",
+        "          if (!file || typeof recordField(native, \"isStreaming\") !== \"boolean\")\n",
+        "            return yield* protocolError(\"Pi did not confirm the native RPC state schema.\");\n",
+        "          const listing = piSessionListing(yield* request({ type: \"get_entries\" }));\n",
+        "          if (!listing) return yield* protocolError(\"Pi did not confirm the native session-tree RPC schema.\");\n",
+        "          return { protocol: \"pi.rpc-jsonl:get_state+get_entries\", cwd, homeDirectory: userHome };\n",
+        "        }),\n",
+        "        readLegacy: ({ nativeSessionId, turnId, messageId, ensure }) => Effect.gen(function* () {\n",
+        "          const header = yield* readHeader(nativeSessionId);\n",
+        "          // The original lifecycle API switches only after native metadata has proved Home/cwd.\n",
+        "          const switched = yield* lifecycleRequest({ type: \"switch_session\", sessionPath: nativeSessionId });\n",
+        "          if (recordField(switched, \"cancelled\") === true) return yield* protocolError(\"Pi cancelled legacy session adoption.\");\n",
+        "          const native = yield* request({ type: \"get_state\" });\n",
+        "          if (recordString(native, \"sessionFile\") !== nativeSessionId || recordString(native, \"sessionId\") !== header.id ||\n",
+        "            recordField(native, \"isStreaming\") !== false || recordField(native, \"isCompacting\") === true)\n",
+        "            return yield* protocolError(\"Pi legacy session identity or stable boundary changed.\");\n",
+        "          const current = yield* registerThread(ensure, true, nativeSessionId);\n",
+        "          const snapshot = yield* runtime.readThreadSnapshot({ providerThread: current });\n",
+        "          const history = snapshot.nativeHistory;\n",
+        "          if (!history?.completedTurnRefs.length || history.nativeSessionId !== nativeSessionId ||\n",
+        "            (turnId && !history.completedTurnRefs.some(ref => ref.nativeId === turnId)) ||\n",
+        "            (messageId && snapshot.providerThread.nativeConversationHeadRef?.nativeId !== messageId))\n",
+        "            return yield* protocolError(\"Pi legacy turn has no proven successful native assistant boundary.\");\n",
+        "          return snapshot;\n",
+        "        }),\n",
+        "        adoptBuffered: ({ request: notification, turn, isCurrent }) => Effect.gen(function* () {\n",
+        "          if (notification.delivery !== \"adapter_buffered\" || notification.threadId !== input.threadId ||\n",
+        "            notification.providerThreadId !== turn.providerThread.id || notification.driver !== PI_PROVIDER) return false;\n",
+        "          const state = threadState;\n",
+        "          const wake = pendingWake;\n",
+        "          if (!(yield* isCurrent) || !state || !wake || wake.state !== state || state.activeTurn ||\n",
+        "            closed || stopRequested || rollbackBarrier || state.providerThread.id !== turn.providerThread.id) return false;\n",
+        "          const adopted = yield* makeActiveTurn(turn, { buffered: true });\n",
+        "          pendingWake = null;\n",
+        "          state.providerThread = turn.providerThread;\n",
+        "          state.activeTurn = adopted;\n",
+        "          yield* emit({ type: \"provider_turn.updated\", driver: PI_PROVIDER, threadId: turn.threadId, providerTurn: adopted.providerTurn });\n",
+        "          yield* updateProviderThread(state, { status: \"active\", firstRunOrdinal: state.providerThread.firstRunOrdinal ?? turn.runOrdinal, lastRunOrdinal: turn.runOrdinal });\n",
+        "          yield* updateProviderSession(\"running\", null);\n",
+        "          for (const event of wake.events) yield* handleSessionEvent(event);\n",
+        "          return true;\n",
+        "        }),\n",
+        "      });\n",
+        "      yield* Effect.addFinalizer(() => Effect.sync(unbindEvidence));\n"
+      ]
+    },
+    {
+      "start": 3063,
+      "before": [],
+      "after": [
+        "  readonly isAssistantMessage: boolean;\n",
+        "  readonly assistantStopReason: string | undefined;\n"
+      ]
+    },
+    {
+      "start": 3086,
+      "before": [
+        "    if (id === undefined || byId.has(id) || (parentId !== null && typeof parentId !== \"string\"))\n"
+      ],
+      "after": [
+        "    if (!id || byId.has(id) || (parentId !== null && (typeof parentId !== \"string\" || parentId.length === 0)))\n"
+      ]
+    },
+    {
+      "start": 3089,
+      "before": [],
+      "after": [
+        "    const message = recordField(entry, \"type\") === \"message\" ? recordField(entry, \"message\") : undefined;\n",
+        "    const role = recordString(message, \"role\");\n"
+      ]
+    },
+    {
+      "start": 3091,
+      "before": [
+        "      isUserMessage:\n",
+        "        recordField(entry, \"type\") === \"message\" &&\n",
+        "        recordString(recordField(entry, \"message\"), \"role\") === \"user\",\n"
+      ],
+      "after": [
+        "      isUserMessage: role === \"user\",\n",
+        "      isAssistantMessage: role === \"assistant\",\n",
+        "      assistantStopReason: role === \"assistant\" ? recordString(message, \"stopReason\") : undefined,\n"
+      ]
+    },
+    {
+      "start": 3107,
+      "before": [],
+      "after": [
+        "  collectNativeHistory = false,\n"
+      ]
+    },
+    {
+      "start": 3111,
+      "before": [],
+      "after": [
+        "  readonly completedTurnRefs: ReadonlyArray<ProviderAdapter.ProviderNativeCompletedTurnRef> | null;\n"
+      ]
+    },
+    {
+      "start": 3114,
+      "before": [],
+      "after": [
+        "  const completedTurnRefs: Array<ProviderAdapter.ProviderNativeCompletedTurnRef> | null = collectNativeHistory ? [] : null;\n",
+        "  let segmentCompleted: boolean | undefined;\n"
+      ]
+    },
+    {
+      "start": 3121,
+      "before": [],
+      "after": [
+        "    if (completedTurnRefs !== null) {\n",
+        "      if (entry.isAssistantMessage && segmentCompleted === undefined)\n",
+        "        segmentCompleted = entry.assistantStopReason === \"stop\" || entry.assistantStopReason === \"length\";\n",
+        "      if (entry.isUserMessage) {\n",
+        "        if (segmentCompleted) completedTurnRefs.push({ driver: PI_PROVIDER, nativeId: current, strength: \"strong\" });\n",
+        "        segmentCompleted = undefined;\n",
+        "      }\n",
+        "    }\n"
+      ]
+    },
+    {
+      "start": 3123,
+      "before": [
+        "  return { entryCount: visited.size, userEntryIds, reachedStop: current === stopAt };\n"
+      ],
+      "after": [
+        "  return { entryCount: visited.size, userEntryIds, reachedStop: current === stopAt, completedTurnRefs };\n"
+      ]
+    },
+    {
+      "start": 3307,
+      "before": [
+        "  | McpProviderSessions.McpProviderSessions\n"
+      ],
+      "after": [
+        "  | ProviderRuntimeHost\n"
+      ]
+    }
+  ]
+}

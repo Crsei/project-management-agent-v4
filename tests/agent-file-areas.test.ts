@@ -26,7 +26,7 @@ it('requires explicit two-level scope, strict LocalDirectory and a nonnegative c
 
 it('preflights default creation without writes and rejects missing parents, symlinks and traversal', t => {
   const root = mkdtempSync(path.join(tmpdir(), 'pm-chat-root-')); t.after(() => rmSync(root, { recursive: true, force: true }));
-  const config: AgentDirectoryConfiguration = { enabled: false, dataRoot: root, defaultParent: null, allowedRoots: [], backupRoot: root, coreRoot: root, chatSpaceRoot: path.join(root, '.pmv3') };
+  const config: AgentDirectoryConfiguration = { enabled: false, dataRoot: root, defaultParent: null, allowedRoots: [], backupRoot: root, coreRoot: root, chatSpaceRoot: path.join(root, '.pmv4') };
   const scope = { workspaceId: randomUUID(), projectId: null };
   const expected = path.join(config.chatSpaceRoot, 'workspaces', scope.workspaceId, 'workspace');
   assert.equal(defaultAgentDirectory(config, config.chatSpaceRoot, scope), expected);
@@ -35,14 +35,14 @@ it('preflights default creation without writes and rejects missing parents, syml
   assert.ok(lstatSync(expected).isDirectory());
   assert.throws(() => defaultAgentDirectory(config, config.chatSpaceRoot, { ...scope, projectId: '../escape' }, true));
   assert.throws(() => defaultAgentDirectory(config, config.chatSpaceRoot, { ...scope, workspaceId: '../escape' }, true));
-  const absent = { ...config, chatSpaceRoot: path.join(root, 'missing-mount', '.pmv3') };
+  const absent = { ...config, chatSpaceRoot: path.join(root, 'missing-mount', '.pmv4') };
   assert.throws(() => defaultAgentDirectory(absent, absent.chatSpaceRoot, scope, true), { code: 'ENOENT' });
   assert.throws(() => lstatSync(path.join(root, 'missing-mount')), { code: 'ENOENT' });
   const target = path.join(root, 'target'); mkdirSync(target);
   const link = path.join(root, 'linked'); symlinkSync(target, link, 'dir');
-  const unsafe = { ...config, chatSpaceRoot: path.join(link, '.pmv3') };
+  const unsafe = { ...config, chatSpaceRoot: path.join(link, '.pmv4') };
   assert.throws(() => defaultAgentDirectory(unsafe, unsafe.chatSpaceRoot, scope, true));
-  assert.throws(() => lstatSync(path.join(target, '.pmv3')), { code: 'ENOENT' });
+  assert.throws(() => lstatSync(path.join(target, '.pmv4')), { code: 'ENOENT' });
   assert.throws(() => defaultAgentDirectory({ ...config, chatSpaceRoot: '/etc/chat-space' }, '/etc/chat-space', scope, true));
 });
 
@@ -50,7 +50,7 @@ it('defaults Chat Space to the API user home without changing local project defa
   const root = mkdtempSync(path.join(tmpdir(), 'pm-chat-config-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const env = { LOCAL_PROJECT_CONFIG: path.join(root, 'absent.json') };
   const defaults = runtimeConfig(env);
-  assert.equal(defaults.chatSpaceRoot, path.join(homedir(), '.pmv3'));
+  assert.equal(defaults.chatSpaceRoot, path.join(homedir(), '.pmv4'));
   assert.equal(defaults.localProjects.defaultParent, null);
   assert.equal(runtimeConfig({ ...env, PM_CHAT_SPACE_ROOT: path.join(root, 'chat') }).chatSpaceRoot, path.join(root, 'chat'));
 });

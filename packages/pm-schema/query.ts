@@ -60,7 +60,7 @@ export const queryExpressionSchema = z.unknown().superRefine((value, context) =>
 }).transform((value): QueryExpression => value as QueryExpression);
 export const sortRuleSchema = z.object({ field: z.string().trim().min(1).max(128), direction: z.enum(['asc', 'desc']) }).strict();
 
-type ValueType = 'string' | 'number' | 'boolean' | 'date' | 'identifier';
+type ValueType = 'string' | 'number' | 'boolean' | 'date' | 'timestamp' | 'identifier';
 interface QueryField {
   name: string;
   type: ValueType;
@@ -94,7 +94,7 @@ function resolveField(name: string, kind: EntityKind | undefined, configuration:
     const declared = builtin!.type;
     array = declared.endsWith('[]');
     const base = array ? declared.slice(0, -2) : declared;
-    if (['number', 'boolean', 'date', 'identifier'].includes(base)) type = base as ValueType;
+    if (['number', 'boolean', 'date', 'timestamp', 'identifier'].includes(base)) type = base as ValueType;
     else if (base.startsWith('enum:')) options = base.slice(5).split('|');
     else if (base.startsWith('literal:')) options = [base.slice(8)];
     else if (base === 'entity-specific-enum') {
@@ -109,11 +109,16 @@ function validDate(value: string): boolean {
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
+function validTimestamp(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+    && Number.isFinite(Date.parse(value));
+}
 function checkScalar(field: QueryField, value: unknown): void {
   if (value === null || value === undefined) fail(`${field.name} requires a ${field.type} value`, field.name);
-  const type = field.type === 'date' || field.type === 'identifier' ? 'string' : field.type;
+  const type = field.type === 'date' || field.type === 'timestamp' || field.type === 'identifier' ? 'string' : field.type;
   if (typeof value !== type || !scalar(value)) fail(`${field.name} requires a ${field.type} value without coercion`, field.name);
   if (field.type === 'date' && !validDate(value as string)) fail(`${field.name} requires a valid YYYY-MM-DD date`, field.name);
+  if (field.type === 'timestamp' && !validTimestamp(value as string)) fail(`${field.name} requires a valid ISO timestamp`, field.name);
   if (field.type === 'identifier' && !identifier.test(value as string)) fail(`${field.name} requires a stable identifier`, field.name);
   if (field.options && !field.options.includes(value as string)) fail(`Unsupported value for ${field.name}: ${String(value)}`, field.name);
 }
@@ -141,11 +146,48 @@ function checkPredicate(expression: Extract<QueryExpression, { field: string }>,
     checkScalar(field, value);
     return;
   }
-  if (field.array || !['number', 'date'].includes(field.type)) fail(`${op} requires a numeric or date field`, field.name);
+  if (field.array || !['number', 'date', 'timestamp'].includes(field.type)) fail(`${op} requires a numeric or date field`, field.name);
   checkScalar(field, value);
 }
 function compactExpression(field: QueryField, value: unknown): Extract<QueryExpression, { field: string }> {
   return { field: field.name, op: field.array && !Array.isArray(value) && value !== null ? 'contains' : 'eq', value };
+}
+/** Ordered AND conditions; values in one condition are OR. */
+export type CompactFilterCondition = {
+  field: string;
+  operator: 'is' | 'isNot';
+  values: readonly unknown[];
+};
+/**
+ * Compile UI filter rows into the same bounded DSL used by `ViewConfig.where`.
+ * Scalar fields use `in`; array fields (e.g. labels) use `contains` per value.
+ * `isNot` is a negation, so missing values also match, matching the row semantics.
+ */
+export function filterConditionsExpression(
+  conditions: readonly CompactFilterCondition[],
+  options: { entity?: EntityKind; configuration?: ProtocolConfiguration } = {},
+): QueryExpression | undefined {
+  const configuration = options.configuration ?? defaultConfiguration;
+  const expressions: QueryExpression[] = [];
+  for (const condition of conditions) {
+    const values = condition.values.filter((value) => value !== undefined && value !== null && value !== '');
+    if (!values.length) continue;
+    const field = resolveField(condition.field, options.entity, configuration);
+    if (field.array) {
+      const any: QueryExpression = { any: values.map((value) => {
+        const expression = { field: field.name, op: 'contains' as const, value };
+        checkPredicate(expression, field);
+        return expression;
+      }) };
+      expressions.push(condition.operator === 'isNot' ? { not: any } : any);
+    } else {
+      const expression = { field: field.name, op: 'in' as const, value: values };
+      checkPredicate(expression, field);
+      expressions.push(condition.operator === 'isNot' ? { not: expression } : expression);
+    }
+  }
+  if (!expressions.length) return undefined;
+  return expressions.length === 1 ? expressions[0] : { all: expressions };
 }
 function checkGrouping(field: QueryField): void {
   if (!field.editable || field.array) fail(`Grouping requires a single editable scalar field: ${field.name}`, field.name);

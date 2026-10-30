@@ -1,0 +1,363 @@
+/* 视图页（全部对象，默认列表/表格）专用视觉层。
+   仅允许选择 [data-entity-kind="all"]，且仅在默认表格视图渲染时生效。
+   文档页 data-entity-kind="document"、任务页 data-entity-kind="work_item"
+   以及项目页均不匹配，因此不会互相影响。 */
+
+/* ---- 页头与工具条 ---------------------------------------------------- */
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-heading {
+  padding: 20px 24px 12px;
+  gap: 16px;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-heading h1 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: var(--text-page);
+  line-height: var(--text-page--line-height);
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-heading-actions {
+  gap: 8px;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-heading-actions :is(.primary-button, .secondary-button),
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-toolbar > .secondary-button {
+  min-height: var(--control-height);
+  padding: 6px 12px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-toolbar {
+  gap: 8px;
+  padding: 0 24px 12px;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-toolbar > select,
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-view-toolbar > select {
+  min-height: var(--control-height);
+  max-width: 180px;
+  padding: 5px 10px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-toolbar > .text-button {
+  min-height: var(--control-height);
+  padding: 5px 8px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-search {
+  min-height: var(--control-height);
+  min-width: 160px;
+  max-width: 320px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-search input {
+  height: calc(var(--control-height) - 2px);
+  padding: 0 2px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-search kbd {
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-view-toolbar {
+  min-height: 48px;
+  padding: 8px 24px;
+  gap: 8px;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .view-tabs {
+  gap: 2px;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .view-tabs button {
+  min-height: var(--control-height);
+  padding: 6px 10px;
+  gap: 6px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .filter-bar {
+  gap: 8px 12px;
+  padding: 12px 24px;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .filter-bar label {
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .filter-bar select {
+  min-height: var(--control-height);
+  padding: 5px 10px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+/* ---- 表格实体边缘卡片与排版 ------------------------------------------ */
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"] {
+  min-width: 0;
+  max-width: 100%;
+  padding: 12px 24px 24px;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .table-scroll {
+  max-width: 100%;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module-value);
+  background: var(--surface);
+  box-shadow: var(--edge-shadow);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .work-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--foreground);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .work-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 40px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .work-table td {
+  height: var(--row-height);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--foreground);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  vertical-align: middle;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .work-table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .work-table tr.selected td {
+  background: var(--selection);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .work-table td .muted {
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .work-table select {
+  min-height: 28px;
+  padding: 3px 6px;
+  border-color: transparent;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--foreground);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .table-title {
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  max-width: 420px;
+  padding: 0;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .table-title .mono {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .table-title strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]
+  .pm-view[data-testid="view-table"]
+  .draft-pill {
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+/* ---- 集合底部元数据 -------------------------------------------------- */
+
+.markdown-workbench
+  .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+  .collection-meta {
+  min-height: 36px;
+  padding: 8px 16px;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+/* ---- 窄屏：表格自身横向滚动，不产生页面级横向溢出 -------------------- */
+
+@media (max-width: 900px) {
+  .markdown-workbench
+    .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+    .collection-heading,
+  .markdown-workbench
+    .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+    .collection-toolbar,
+  .markdown-workbench
+    .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+    .collection-view-toolbar,
+  .markdown-workbench
+    .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+    .filter-bar {
+    padding-inline: 16px;
+  }
+
+  .markdown-workbench
+    .native-workbench[data-entity-kind="all"]
+    .pm-view[data-testid="view-table"] {
+    padding: 12px 16px 20px;
+  }
+}
+
+@media (max-width: 560px) {
+  .markdown-workbench
+    .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+    .collection-heading {
+    padding: 16px;
+  }
+
+  .markdown-workbench
+    .native-workbench[data-entity-kind="all"]
+    .pm-view[data-testid="view-table"] {
+    padding: 12px 12px 16px;
+  }
+
+  .markdown-workbench
+    .native-workbench[data-entity-kind="all"]:has(.pm-view[data-testid="view-table"])
+    .collection-search {
+    max-width: none;
+  }
+
+  .markdown-workbench
+    .native-workbench[data-entity-kind="all"]
+    .pm-view[data-testid="view-table"]
+    .work-table :is(th, td) {
+    padding-inline: 12px;
+  }
+}

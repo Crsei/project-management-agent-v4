@@ -10,23 +10,15 @@
 .workbench:global(.native-workbench) .heading {
   align-items: flex-start;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 24px 24px 12px;
+  gap: 16px;
+  padding: 20px 24px 12px;
 }
 
 .workbench:global(.native-workbench) .heading h1 {
-  font-size: 23px;
+  font-size: 20px;
   font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -.022em;
-  overflow-wrap: anywhere;
-}
-
-.workbench:global(.native-workbench) .heading .summary {
-  margin-top: 4px;
-  color: var(--muted-foreground);
-  font-size: 13.5px;
-  line-height: 20px;
+  line-height: 28px;
+  letter-spacing: -.02em;
   overflow-wrap: anywhere;
 }
 
@@ -63,15 +55,15 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-height: 26px;
-  padding: 0 9px;
+  min-height: 28px;
+  padding: 0 10px;
   border: 0;
   border-radius: var(--radius-inline-value);
   background: transparent;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--text-control);
   font-weight: 500;
-  line-height: 20px;
+  line-height: var(--text-control--line-height);
   white-space: nowrap;
 }
 
@@ -88,68 +80,6 @@
 .viewSwitch button:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
-}
-
-.workbench:global(.native-workbench) .toolbar {
-  min-width: 0;
-  min-height: 44px;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 8px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--background);
-}
-
-.workbench:global(.native-workbench) .toolbar > :global(.task-search) {
-  flex: 0 1 200px;
-  width: 200px;
-  min-width: 140px;
-  min-height: 28px;
-  gap: 7px;
-  padding: 0 8px;
-  background: var(--surface);
-}
-
-.workbench:global(.native-workbench) .toolbar :global(.task-search) input {
-  min-height: 26px;
-  padding-block: 3px;
-  font-size: 12.5px;
-}
-
-.workbench:global(.native-workbench) .toolbar :global(.task-search) kbd {
-  display: none;
-}
-
-.workbench:global(.native-workbench) .toolbar > :global(.task-toolbar-button) {
-  min-height: 28px;
-  padding-inline: 8px;
-  background: transparent;
-  font-size: 12px;
-}
-
-.workbench:global(.native-workbench) .toolbar > :global(.task-toolbar-button):hover {
-  background: var(--surface-hover);
-}
-
-.workbench:global(.native-workbench) .toolbar > :global(.task-toolbar-button.active) {
-  background: var(--selection);
-}
-
-.workbench:global(.native-workbench) .toolbar :global(.task-agent-entry) {
-  width: 28px;
-  min-height: 28px;
-  padding: 0;
-  border-color: transparent;
-  background: transparent;
-}
-
-.workbench:global(.native-workbench) .toolbar :global(.task-agent-entry):hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--surface-hover);
-}
-
-.workbench:global(.native-workbench) .toolbar :global(.task-agent-entry-label) {
-  display: none;
 }
 
 .workbench:global(.native-workbench) :global(.task-chipsbar),
@@ -178,9 +108,11 @@
 .workbench:global(.native-workbench) :global(.collection-meta) {
   flex-wrap: wrap;
   min-width: 0;
-  min-height: 26px;
-  padding: 4px 16px;
+  min-height: 32px;
+  padding: 6px 24px;
   background: var(--background);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
 }
 
 .workbench:global(.native-workbench) :global(.collection-meta) > span {

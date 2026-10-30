@@ -17,7 +17,7 @@ import { createUser, createWorkspace } from '../packages/infrastructure/src/auth
 import { acquireMailFixtureDatabase } from './mail-fixture-database.ts';
 import { MailFixtureScope, mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';
 import { startOwnedMailWorker } from './mail-worker-process.ts';
-import { assertV3WorkerTestDatabase, outboxWorkerEnvironment } from './worker-environment.ts';
+import { assertV4WorkerTestDatabase, outboxWorkerEnvironment } from './worker-environment.ts';
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 const execute = promisify(execFile);
@@ -32,7 +32,7 @@ describe('Controlled outbox recovery on PostgreSQL and the operator CLI', { skip
   let scope: MailFixtureScope;
 
   before(async t => {
-    assertV3WorkerTestDatabase(databaseUrl!);
+    assertV4WorkerTestDatabase(databaseUrl!);
     scope = new MailFixtureScope(t.signal, mailSchemaInitTimeout);
     await scope.initialize(async () => {
       const database = await acquireMailFixtureDatabase(scope);

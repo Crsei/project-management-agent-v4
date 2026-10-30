@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/testUtils/providerRegistryMock.ts",
+  "beforeSha256": "bccd29ed824fd801ac470210a0c91b82d82e21fce358ae85e88eb0a42b46b3b1",
+  "afterSha256": "6462b07a94997455742c66aec3c5827e7139706e8c12080485f335c74d566125",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 23,
+      "before": [],
+      "after": [
+        "\n"
+      ]
+    }
+  ]
+}

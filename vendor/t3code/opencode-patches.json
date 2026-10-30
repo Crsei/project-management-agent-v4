@@ -1,0 +1,246 @@
+{
+  "version": 1,
+  "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "hostContract": "pm-provider-host/1",
+  "owner": "T7",
+  "patches": [
+    {
+      "id": "PM-OPENCODE-FACADE-CUTOVER",
+      "paths": [
+        "../../apps/server/agent/src/providers/drivers/opencode.ts",
+        "../../apps/server/agent/src/providers/t3code/families/opencode.ts"
+      ],
+      "reason": "Replace the handwritten production driver with a DTO-only facade delegating to the application-owned original management/execution services. Assemble the original driver with real scoped PM Host, platform, server ledger, continuation requests and runtime host; optional raw logs remain disabled. Original schemas, catalogs/options, external authentication, in-generation maintenance and usage readers remain authoritative. No import-time process or runtime fallback.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-OWNED-LOCAL-MCP",
+      "paths": [
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts"
+      ],
+      "reason": "Replace t3 remote MCP/orchestration prompt dependencies with the current scoped ProviderRuntimeHost stdio transport in both original adapters, including external servers. Use a random operation-owned pm_ server name, exact host permission admission and original SDK disconnect/remove cleanup; do not stop an external server. Retain generic OpenCode harness instructions without t3 business/browser/device/PR tool instructions. Under deny-ungranted host binding, native permission approvals cannot be accepted through information answers; unbound source policy remains native.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-OPERATION-EVIDENCE",
+      "paths": [
+        "packages/provider-opencode/src/server/OpenCodeRuntime.ts",
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts",
+        "packages/provider-opencode/src/server/driver.ts",
+        "packages/provider-opencode/src/server/v2/OpenCode2Server.ts"
+      ],
+      "reason": "Attach scoped WeakMap evidence to each actual opened original runtime, distinguishing opencode-v1-sdk.sse from opencode-v2-http.sse using the selected native connection and confirmed generation. Failed version probes do not open a v1 fallback. The pure legacy metadata reader checks SDK/schema native session ID, actual native directory, active-state exclusion and completed native history boundaries before original resume; no prompt or create probe. Resume checks actual native activity even for locally registered state; v1 rechecks before turn admission and defers MCP add/cleanup registration until that guard passes, so busy continuations are not mutated or interrupted. Reject cwd changes instead of moving an existing native session. Preserve original v2 buffered-wake replay through its real runWake path without dispatching a new model prompt.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-BOUND-ENVIRONMENT",
+      "paths": [
+        "packages/provider-opencode/src/server/OpenCodeRuntime.ts",
+        "packages/provider-opencode/src/server/adapter.ts"
+      ],
+      "reason": "Resolve local config-content/password inheritance from the bound HostProcess environment, not ambient process.env. Spawn in the actual requested native cwd; pass configured/negotiated passwords to the original v1 SDK client. Preserve native Home/XDG variables, original process-group ownership/ledger and minimum version 1.14.19; do not install or upgrade any CLI.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-STRUCTURED-STATUS",
+      "paths": [
+        "packages/provider-opencode/src/server/OpenCodeRuntime.ts",
+        "packages/provider-opencode/src/server/versionProbe.ts",
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts",
+        "packages/provider-opencode/src/server/status.ts"
+      ],
+      "reason": "Preserve numeric native HTTP status in runtime errors/probes and terminal failure codes so PM distinguishes authentication, payment and resettable usage limits. Model catalog visibility retains native readiness but no longer fabricates authenticated identity or paid inference evidence; explicit authentication rejection stays unauthenticated.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-INFORMATION-BOUNDARY",
+      "paths": [
+        "packages/provider-opencode/src/server/OpenCodeRuntime.ts",
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts"
+      ],
+      "reason": "Use original question/form response APIs with native question identity and choice/cardinality/duplicate/string constraints checked before HTTP. Reject unknown answer keys; close native pending state after one answer; v1 cancellation invokes the SDK question reject API. Explicit authentication/secret form metadata is declined by the original unsupported-form path, never inferred from ordinary question wording.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-NATIVE-REPLAY-AND-TODOS",
+      "path": "packages/provider-opencode/src/server/v2/adapter.ts",
+      "reason": "Deduplicate actual decoded native event IDs at operation ingress before applying text deltas, usage, tool results or terminals. Buffered source replay still routes its captured events internally. Retain the prior consumer todo-list surface by schema-decoding successful native todowrite arguments and using original PlanId/node/item helpers; cancelled steps follow the original v1 mapping, while the complete native dynamic-tool row remains available. No PM business state is inferred from native todos.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-OWNED-LISTEN-ADDRESS",
+      "path": "packages/provider-opencode/src/server/OpenCodeRuntime.ts",
+      "reason": "Before any HTTP version probe, require an owned child's announced URL to match its requested HTTP hostname/port without credentials or path/query/fragment. A mismatched address fails inside the original attempt Scope, which terminates only the owned child; it never borrows or probes an unrelated listener.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-NATIVE-SUBSCRIPTION-AND-FAILURE-LIFETIME",
+      "paths": [
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts",
+        "packages/provider-opencode/src/server/versionProbe.ts"
+      ],
+      "reason": "The original v1 SDK returns a lazy SSE generator, so await its actual first native event before exposing the runtime and reuse that same iterator for consumption. Bound/rethrow native SSE startup failures rather than silently retrying without readiness; abort the SDK iterator before waiting for the scoped consumer finalizer. Propagate todo allocator failure through the original ProviderAdapterEventStreamError queue channel and map unload transport failures to ProviderAdapterCloseSessionError. Track owned v2 MCP registrations independently of thread/connection caches so reconnect/unload failures cannot orphan cleanup; only native McpServerNotFoundError proves idempotent absence. Scope interruption does not initiate a new v2 reconnect. Preserve original 401 Unauthorized wording while retaining numeric status evidence.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-LEGACY-NATIVE-TURN-EVIDENCE",
+      "paths": [
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts",
+        "packages/provider-opencode/src/server/adapter.test.ts"
+      ],
+      "reason": "Fresh original runtimes have no application providerTurns even when native history exists. Metadata-only adoption reads original SDK/schema transcripts and returns nativeHistory proof instead of inventing historical provider-turn/node/attempt identities. V1 requires the actual session/cwd, initiating user and its successful completed final assistant, excluding reverted or unfinished tails. V2 uses the original durable succeeded idle marker to close the complete native execution, including steers. Original weak graph/head refs remain weak. Report latestCompletedTurnRef only for the actual current completed native tip; retain older proof without promoting it after a failed/interrupted/unfinished initiation. Preserve reported native model/assistant-head evidence; no prompt, ensure/create probe, PM business Run, inferred token count or receipt is generated.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-CUMULATIVE-COMMAND-OUTPUT",
+      "paths": [
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts",
+        "packages/provider-opencode/src/server/adapter.test.ts"
+      ],
+      "reason": "Preserve actual v1 running tool metadata.output verbatim, including whitespace. Both original adapters now emit canonical command_output.delta after the corresponding typed command item; append only a newly observed cumulative prefix suffix. Per-turn native-item state keeps child/root command streams independent. Identical v1 command snapshots do not duplicate completion; non-prefix corrections replace the complete item without inventing append bytes. V2 uses the actual final command output and keeps its native non-streaming capability declaration. Shared PM event projection remains a faithful forwarder, without cross-family snapshot heuristics.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-PUBLIC-REQUEST-SETTLEMENT",
+      "paths": [
+        "packages/provider-opencode/src/server/v2/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.test.ts"
+      ],
+      "reason": "Original v2 assumed an orchestrator had already persisted locally submitted answers, so answering=true suppressed native replied events and HTTP delivery only forgot the request. Emit one authoritative runtime request, node and question-item closure for all consumers instead. A matching native session/id event or successful typed reply settles the request; replay is idempotent, cancellation stays cancelled, and native not-found/already-settled errors cannot fabricate a successful answer. Source tests cover HTTP-only acknowledgement, native closure before HTTP returns, cancellation, foreign-session reply rejection and stale answers.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-OPENCODE-REVOCABLE-TRANSPORT-DISPATCH",
+      "paths": [
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts"
+      ],
+      "implementationOwner": "SolGenerationAuth",
+      "reason": "Recheck tool authority against the original captured RuntimeHost execution binding before and after asynchronous MCP add/connect verification, after attachment/prompt preparation, and immediately before native prompt/command/compact/steer dispatch. Authorization errors retain their cause through ProviderAdapterProtocolError. V1 disconnects only its random operation-owned MCP registration idempotently; v2 serializes owned setup/cleanup and removes only its own registrations. PM-free native operations retain their source semantics.",
+      "status": "applied",
+      "verification": "Not run during implementation; the parent owns the converged gate."
+    },
+    {
+      "id": "PM-OPENCODE-RESTORED-NATIVE-TEST-CLOSURE",
+      "paths": [
+        "apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.test.ts",
+        "apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.testkit.ts",
+        "apps/server/src/orchestration-v2/Adapters/OpenCodeAdapterV2.testkit.ts",
+        "apps/server/src/provider/OpenCode2Client.events.test.ts",
+        "apps/server/src/textGeneration/OpenCode2TextGeneration.test.ts",
+        "apps/server/src/textGeneration/OpenCode2TextGeneration.fixture.ts"
+      ],
+      "reason": "Restore all six frozen copy-designated native source files. Retain original ordered replay matching, generated native message-ID correlation, async inbound ordering, replay gates, SSE streaming, terminal/failure/usage/subagent/steer/rollback/fork behavior, title-session cleanup and provider-error privacy. Replace only the source application host boundary with the shared actual PM native-test-host composition and real attachment registration. PM tool cases use explicit revocable generation grants, native local-stdio MCP admission, exact operation-name/rule/cleanup assertions and failure-before-prompt semantics. Native resume records the authoritative quiet-state query and rejects foreign-directory resume instead of moving an existing session. Missing/unsupported unregistered attachments retain the original unavailable-display notice rather than fabricated paths.",
+      "nativeReplayBoundary": "The existing controller also correlates the recorded PM operation-owned server name with the actual cryptographic native-operation name, requiring that same name on list admission, re-add and cleanup. The HTTP replay recognizes the actual GET /api/mcp endpoint and schema-shaped Location response; no canned business projections or alternate protocol are introduced.",
+      "referenceOnlyApplicationComposition": [
+        "OpenCodeAdapterV2.testkit.ts: original layerOpenCodeProviderAdapterRegistryReplay and ProviderReplayHarness type dependency",
+        "OpenCode2AdapterV2.testkit.ts: original layerRegistry and ProviderReplayHarness type dependency"
+      ],
+      "legacyExportDisposition": "OpenCodeOrchestratorReplayHarness, OpenCode2OrchestratorReplayHarness and the original error schemas remain named exports. Harness objects expose provider-native driver/decodeTranscript/makeAdapter instead of constructing a foreign business registry. makeOpenCodeReplayAdapter is the direct original SDK-adapter constructor.",
+      "excludedNativeTests": [],
+      "status": "applied",
+      "verification": "Implementation only. No tests, source/test types, build, lint, formatters, smoke, services, dependency installation or account calls were executed."
+    },
+    {
+      "id": "PM-OPENCODE-FINAL-NATIVE-BOUNDARY-CONVERGENCE",
+      "paths": [
+        "packages/provider-opencode/src/server/adapter.ts",
+        "packages/provider-opencode/src/server/adapter.test.ts",
+        "packages/provider-opencode/src/server/v2/adapter.ts",
+        "apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.test.ts",
+        "../../apps/server/agent/src/providers/drivers/opencode-local.test.ts",
+        "../../apps/server/agent/src/providers/drivers/opencode-native.test.ts",
+        "../../apps/server/agent/src/providers/drivers/opencode-protocol-fixture.ts"
+      ],
+      "implementationOwner": "SolOpenCodeFinal",
+      "reason": "Both original adapters expose completed native transcript boundaries separately from weak graph identities and revalidate nativeCompletedTurnRef against actual source history before computing the exclusive native fork boundary. Fresh target snapshots prove their own native session/history; controlled HTTP fixtures remap fork message IDs to catch source-proof relabelling. Consumer regressions keep create/resume/no-probe semantics and prove selected arithmetic history, target transcript reads and native-only target persistence. Local lifecycle regression now checks the retained owned process is alive after a turn, then actually stops the application and asserts owned exit while an unrelated external listener survives. Original v2 replay event helpers allocate one unique native event ID per constructed event, so the legitimate second terminal is not mistaken for a replay; production deduplication, exact title-before-prompt ordering, second-turn title caching, HTTP inbound delivery gates and test timeouts remain unchanged. Test turn inputs provide the full original app-thread projection rather than a partial title cast.",
+      "parentIntegration": "The parent owns the optional ProviderNativeHistoryBoundary.latestCompletedTurnRef contract, its exact membership/driver/session validation and pruning, generic post-completion weak-ref snapshot binding/history refresh, and persistence of only an explicitly reported latest native tip. No global weak-ref acceptance or array-order-based latest selection is allowed.",
+      "preservedOutOfScope": [
+        "packages/provider-opencode/src/server/usage.test.ts transaction fixture optimization",
+        "Shared execution/continuation/host, manifests, lockfile and integration documentation",
+        "Original native Home/environment, external server ownership, PM authorization/revisions/approvals/receipts and existing Chat persistence"
+      ],
+      "regressionCommands": [
+        "node --conditions=development --test --test-concurrency=1 apps/server/agent/src/providers/drivers/opencode-*.test.ts",
+        "pnpm --filter @pm/t3code-vendor test --maxWorkers=4 apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.test.ts -t 'renames the session before the first turn after the thread was renamed'",
+        "pnpm --filter @pm/t3code-vendor test --maxWorkers=4 packages/provider-opencode apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.test.ts",
+        "pnpm --filter @agent-workspace/server typecheck"
+      ],
+      "status": "applied",
+      "verification": "Implementation only. No tests, builds, typechecks, lint, formatters, dependency installation, services, runtime smoke or real-provider/account calls were executed by SolOpenCodeFinal. The parent runs these commands after shared integration and the phase barrier."
+    }
+  ],
+  "restoredNativeTestSources": [
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.test.ts",
+      "upstreamSha256": "3bfd10d0798219d4af76d00cff8b85721d9d51f9d3db2e9c018a89798de94bb5",
+      "disposition": "copied, then adapted at PM host/transport/attachment boundaries; native cases retained, distinct constructed event IDs and complete app-thread projections restored; native-only history/fork proofs added"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.testkit.ts",
+      "upstreamSha256": "235e406f53b9541d4c07df4606df4d19d6e6a3f1962850ce3e914b366b912cd5",
+      "disposition": "copied, then adapted to provider-native composition; original HTTP replay retained"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/OpenCodeAdapterV2.testkit.ts",
+      "upstreamSha256": "4288193f6754a551528fea0644f848a755c20658bc04e75e5fe22ee5c248bb4f",
+      "disposition": "copied, then adapted to provider-native composition; original SDK replay retained"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/OpenCode2Client.events.test.ts",
+      "upstreamSha256": "c343c649300d112f8a61085477036b57ba9dcbae5ca759ceabbeca2ce8eae801",
+      "disposition": "copied-verbatim; pure native SSE fallback regression"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/OpenCode2TextGeneration.test.ts",
+      "upstreamSha256": "3afb54f752a8cf7dff98626f47dd4623819b714100233ddda825c3de9437e0fa",
+      "disposition": "copied, then replaced TestProviderHost with the actual shared PM host"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/OpenCode2TextGeneration.fixture.ts",
+      "upstreamSha256": "7a74e046a41bd5c43886c8fb4356274b1af621009ec83ede4e50923e09211152",
+      "disposition": "copied-verbatim; original native title replay data with type-only dependency"
+    }
+  ],
+  "removedSupersededPaths": [
+    "../../apps/server/agent/src/providers/drivers/opencode-transport.ts",
+    "../../apps/server/agent/src/providers/drivers/opencode-output.ts",
+    "../../apps/server/agent/src/providers/drivers/opencode-questions.ts"
+  ],
+  "familyExports": [
+    "openCodeDriver",
+    "makeOpenCodeDriverLayer(context, runtimeHost)",
+    "openCodeProtocolResolver",
+    "openCodeCapabilities",
+    "openCodeInstallationMethods"
+  ],
+  "existingRuntimeExportPath": "@t3tools/provider-opencode/server/OpenCodeRuntime",
+  "nativeEvidenceExports": [
+    "OpenCodeSessionEvidence",
+    "readOpenCodeSessionEvidence(runtime)",
+    "bindOpenCodeSessionEvidence(runtime, evidence)"
+  ],
+  "assembly": {
+    "originalPackages": ["@t3tools/provider-opencode", "@t3tools/provider-core", "@t3tools/shared", "@t3tools/contracts"],
+    "frozenSourceDependencies": {
+      "effect": "4.0.5",
+      "@effect/platform-node": "4.0.5",
+      "@opencode-ai/sdk": "1.15.13 (source manifest resolution; declared ^1.3.15)",
+      "@opencode/client": "2.0.28",
+      "@opencode/protocol": "2.0.28",
+      "@opencode/schema": "2.0.28"
+    },
+    "parentOwned": ["application lifetime and protocols map", "shared registry and fork admission", "build/manifests/lockfile", "integration documentation and verification"],
+    "unsupportedInstallationMethods": ["prepare", "removeInstallation"],
+    "explicitUpdateOwnership": "The frozen original driver resolves updates for the configured local CLI package even when execution connects to serverUrl. This never grants external server shutdown, remote installation removal, or maintenance of that server's binary."
+  },
+  "dataContinuity": "Existing local binaryPath/serverUrl/serverPassword, instance/environment identity and current Chat persistence remain in place. No native database, credential or config conversion is performed. Only the existing provider:t3code:continuations sidecar is populated after metadata-only validation through the original SDK; incompatible native metadata fails explicitly.",
+  "verification": "Not run by T7: no builds, types, tests, lint, formatters, smoke, dependency installation or real provider calls. T7 owns original-family regression tests; T8 owns local consumer tests/fixtures; parent owns the integrated gate. Source repositories remain read-only."
+}

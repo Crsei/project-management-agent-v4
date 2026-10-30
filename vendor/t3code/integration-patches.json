@@ -1,0 +1,386 @@
+{
+  "version": 1,
+  "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "verification_scope": {
+    "M3": "Historical accepted parent evidence only: original OpenCode package 16 files/142 tests, shared consumers 99, actual native + HTTP/SSE/browser check/history, source/test types and isolated production build.",
+    "M4": "Parent accepted module/protocol gate: 297 retained-source files, 3512 tests passed and 2 skipped; 217 consumer tests passed with zero skips; source/test types and isolated production build passed. Real OpenCode, Codex and final unmodified Pi calls passed; Claude returned API 403 and remaining account/platform gaps remain explicit.",
+    "M5": "Parent accepted module/browser gate: 298 retained-source files, 3523 passed and 2 skipped; 15 original package and selected server/source/test types passed. PM builds, client17, metadata/readiness31, Composer4, host/usage103 and isolated Claude quota3 passed. Web lint/types/build, Agent lint and isolated production build passed. Actual OpenCode HTTP/SSE/full-page/PM-embedded calls completed in one native session; real OpenCode Go quota failed and displayed failure/unknown, not zero.",
+    "M6": "T18 authored deterministic input hashes, exact preimage/postimage patches, actual syntax import/export inventory, refusal-first offline sync and portable SDK/resource packaging. No M6 check, build, test, formatter, install, native execution, smoke or service operation was run by T18; parent acceptance remains open.",
+    "source_inventory": "Pinned source/hash/blob metadata is provenance evidence, not runtime/test/build acceptance. Removed reference-only business tests are not passes.",
+    "persistence": "Current Agent Chat persistence remains unchanged and has not undergone a unified redesign."
+  },
+  "patches": [
+    {
+      "id": "P012",
+      "path": "vite.config.ts",
+      "reason": "Use the pinned Provider test environment and setup without upstream task-cache, whole-app projects or frontend replacement.",
+      "status": "applied"
+    },
+    {
+      "id": "P013",
+      "path": "tsconfig.base.json",
+      "reason": "Preserve original strict compiler options with the existing PM compiler; omit the upstream editor language-service plugin.",
+      "status": "applied"
+    },
+    {
+      "id": "P016",
+      "path": "patches/@effect__vitest@4.0.5.patch",
+      "reason": "Verbatim upstream Effect test patch and scoped vite-plus dependency extension, isolated from the existing Web toolchain.",
+      "status": "applied"
+    },
+    {
+      "id": "P017",
+      "path": "../../patches/@muse-code__sdk@1.4.6.patch",
+      "reason": "Reuse the existing byte-identical SDK patch rather than registering a second patch.",
+      "status": "reused"
+    },
+    {
+      "id": "PM-OPENCODE-EFFECT-IDENTITY",
+      "paths": ["@opencode/protocol@2.0.28>effect", "@opencode/schema@2.0.28>effect"],
+      "reason": "Preserve pinned upstream overrides to Effect 4.0.5. Mixed 4.0.1/4.0.5 AST and DateTime identities break both typechecking and valid wire-data decoding.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-RUNTIME-HOST",
+      "path": "packages/provider-core/src/server/ProviderRuntimeHost.ts",
+      "exportsManifest": "packages/provider-core/package.json",
+      "reason": "Generic scoped host tool/policy port under pm-provider-host/1; keeps PM authority outside original protocols and prevents enabling the t3 application orchestrator. The M4 extension adds actual per-execution authorize rechecks and captured continuation provenance; M4 verification remains pending.",
+      "status": "added"
+    },
+    {
+      "id": "PM-BOUND-ENVIRONMENT",
+      "paths": ["packages/provider-core/src/server/instanceEnvironment.ts", "packages/provider-core/src/server/instanceEnvironment.test.ts"],
+      "reason": "Use the bound HostProcess.Environment, not the ambient process environment, when no explicit base is passed. Prevent cross-instance and reserved PM secret inheritance; retain explicit-base precedence.",
+      "verification": "Concurrent two-host regression failed before and passed after; all five focused tests passed. An emitted standalone program launched two real Node child processes and verified exact isolated environment keys with zero ambient variables inherited.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-SERVER-BUNDLE-WORKER",
+      "paths": ["apps/server/package.json", "apps/server/tsconfig.json", "../../apps/server/agent/scripts/build.mjs", "../../apps/server/agent/src/providers/t3code/document-text-worker.ts"],
+      "reason": "Expose the selected original server-module closure as an internal workspace package. Bundle vendored TypeScript and its ordinary dependencies, retain one external Effect identity and disk-backed SDK resources, and run original document extraction in a dedicated worker rather than the t3 application binary.",
+      "verification": "An isolated production build completed. Its emitted document worker extracted the exact RTF text, rejected an invalid archive with exit 2, and preserved an ENOENT failure with exit 1. Full application cutover and SDK-family packaging remain subject to later gates.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-TEST-BUSINESS-BOUNDARY",
+      "paths": ["source-manifest.json"],
+      "reason": "Correct two over-selected test entries and their unused budget JSON to reference-only: AgentContextBudget is an exact wording-byte snapshot of excluded t3 MCP business services; ProviderInstanceRegistryHydration tests the already excluded t3 project settings/default-account startup module. Neither is a PM Provider acceptance test. Keep source hashes, omit these copied artifacts, and do not claim them as passes.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-NODE-WORKER-ERROR",
+      "paths": ["packages/shared/src/nodeSqliteClient.ts"],
+      "reason": "Node 26 type definitions expose worker error events as unknown. Narrow actual Error values before reading message, preserving the original Error message and reporting non-Error failures explicitly.",
+      "verification": "Agent source/test typecheck passed; the original SQLite worker suite passed all 17 tests.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-CLEANUP-FAILURE-PRECEDENCE",
+      "paths": ["../../apps/server/agent/src/providers/t3code/credentials.ts", "../../apps/server/agent/src/providers/t3code/execution.ts"],
+      "reason": "Do not throw out of finally and mask a primary failure. Credential publication retains both publication and cleanup errors; execution defers its result until cleanup and preserves callback/native/cleanup failure precedence.",
+      "verification": "Agent source/test typecheck and 10 affected execution/credential tests passed; affected oxlint completed without warnings.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-FX-FORCED-MODE",
+      "paths": ["packages/provider-acp/src/server/AcpSessionRuntime.ts", "packages/provider-fx/src/server/acpSupport.ts", "packages/provider-fx/src/server/acpSupport.test.ts", "packages/provider-fx/src/server/testing/config-mode-peer.ts"],
+      "reason": "FX must force its first advertised mode through the typed ACP encoder. The original raw v1-shaped request omitted the required v2 type discriminator. Add an explicit force option without bypassing version conversion or changing later redundant-write suppression.",
+      "verification": "ACP/FX typechecks and 148 existing tests passed. Two focused FX tests passed, including a real typed ACP v2 child verifying independently enforced mode and write counts. The full original-driver HTTP/SSE smoke then passed calculation, history/replay, cancellation, denied native permission, callback failure rejection and all six owned process exits.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-NATIVE-READINESS-EVIDENCE",
+      "paths": ["../../apps/server/agent/src/providers/driver-adapter.ts", "../../apps/server/agent/src/providers/checks.ts", "../../apps/server/agent/src/providers/checks.test.ts", "../../apps/server/agent/src/providers/t3code/management.ts", "../../apps/server/agent/src/providers/t3code/management.test.ts"],
+      "reason": "Separate original native readiness from authentication identity. Unknown authentication alone is not success; explicit original ready/installed/available evidence can establish native availability without inventing authenticated identity. Explicit native not-ready is not overridden by an account label.",
+      "verification": "M5 parent: 31 metadata/readiness tests passed. Current ProviderInstance readiness is required and execution accepts only original nativeSessionReady:true for every family; historical connection-test records may omit the field but never establish current readiness. No authentication-derived fallback remains.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-SOURCE-APPLICATION-LIFECYCLE",
+      "paths": ["../../apps/server/agent/src/providers/t3code/application.ts", "../../apps/server/agent/src/providers/t3code/application-access.ts", "../../apps/server/agent/src/providers/t3code/production.ts", "../../apps/server/agent/src/runtime.ts", "../../apps/server/agent/src/providers/t3code/host-runtime.test.ts", "../../apps/server/agent/src/providers/drivers/opencode.ts", "../../apps/server/agent/src/durable/thread-title.ts"],
+      "reason": "Register concrete original driver layers and operation protocol resolvers in the application scope. Start before workers and drain workers before provider scopes and store shutdown. Dispose only owned registrations and preserve startup/cleanup failures. A type-only access port breaks the observed facade/application/instances/registry ESM initialization cycle without changing import order or adding lazy fallback.",
+      "verification": "The facade-before-registry import smoke passed before application startup. Accepted M3 parent gate: 16 original packages/provider-opencode test files / 142 tests; 99 shared consumer tests; actual native arithmetic and same-session continuation plus HTTP/SSE/browser check/history passed; source/test types and isolated production build passed. This is historical M3 evidence, not acceptance of subsequent M4 changes or the six separately restored T8 server test/support files.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-NATIVE-CURSOR-ADMISSION",
+      "paths": ["../../apps/server/agent/src/providers/t3code/continuation.ts", "../../apps/server/agent/src/providers/t3code/execution.ts"],
+      "reason": "Reject unproven persisted native turn cursors before native dispatch, while retaining valid historical completed-turn forks with older optional head hints. Gate native fork by actual original runtime capabilities, preserving Codex strong-turn and Claude assistant-UUID requirements rather than a hardcoded family allowlist.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-LIVE-GENERATION-CONFLICT",
+      "paths": ["../../apps/server/agent/src/providers/t3code/runtime-host.ts", "../../apps/server/agent/src/providers/t3code/runtime-host.test.ts"],
+      "reason": "Reject conflicting live runtime bindings with structured HTTP 409/provider_busy while preserving the current generation and nested ownership lifetime.",
+      "verification": "All 22 host/runtime/continuation/execution tests passed, including conflicting and identical nested bindings; Agent source/test typecheck and isolated production build passed.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-ADMITTED-NATIVE-CHILD-ROOT",
+      "paths": ["../../apps/server/agent/src/providers/t3code/execution.ts", "../../apps/server/agent/src/providers/t3code/execution.test.ts"],
+      "reason": "Original child conversations have their own root_turn with no parent node and no PM run. Admit that root only after its child app-thread/native provider-thread association is established; retain root-terminal matching and exclude child answers from the root reply.",
+      "verification": "The previously timing-out v1/v2 child consumer scenarios passed in the 99-test gate. A shared regression also accepted the associated native child, rejected a foreign provider-thread root with the same child app-thread, and preserved the root answer.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-ACP-RESPONSE-GENERATION",
+      "paths": [
+        "packages/effect-acp/src/client.ts",
+        "packages/provider-acp/src/server/AcpSessionRuntime.ts",
+        "packages/provider-acp/src/server/adapter.ts"
+      ],
+      "reason": "Retain the decoded initialize response shape as connection-owned generation metadata, expose readAcpProtocolGeneration, and consume that actual evidence in the original runtime. A numeric protocolVersion (including v1-shaped version 2) is not a dialect proof. Original ACP encoders/conversion, native lifecycle and preceding PM-FX-FORCED-MODE behavior remain authoritative.",
+      "verification": "Pending parent M4 integrated verification. No build, typecheck, lint, test, formatter, dependency installation, native/account smoke or service operation was executed by this provenance slice.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-EXECUTION-AUTHORIZATION-AND-CONTINUATION",
+      "paths": [
+        "packages/provider-core/src/server/ProviderRuntimeHost.ts",
+        "packages/provider-core/src/server/ProviderContinuationRequests.ts",
+        "../../apps/server/agent/src/providers/t3code/runtime-host.ts",
+        "../../apps/server/agent/src/providers/t3code/host.ts",
+        "../../apps/server/agent/src/providers/t3code/continuation.ts",
+        "../../apps/server/agent/src/providers/t3code/execution.ts"
+      ],
+      "reason": "Bind actual ephemeral PM tool/compaction authorization to the exact provider/thread/execution owner. Original Codex/Claude/ACP/Muse/Pi delayed native offers carry hostExecution captured when their operation was admitted, not a newer callback-time live binding. Retained host services resolve current authority through the same RuntimeHost; continuation adoption preserves original CAS/dispatch/current-generation guards and cannot create a new generation or turn native permission into PM business authority.",
+      "verification": "Pending parent M4 integrated verification. No build, typecheck, lint, test, formatter, dependency installation, native/account smoke or service operation was executed by this provenance slice.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-RETAINED-TYPED-NATIVE-ASSEMBLY",
+      "paths": [
+        "../../apps/server/agent/src/providers/t3code/registration.ts",
+        "../../apps/server/agent/src/providers/t3code/host-runtime.ts",
+        "../../apps/server/agent/src/providers/t3code/host-runtime.test.ts",
+        "../../apps/server/agent/src/providers/t3code/application.ts",
+        "../../apps/server/agent/src/providers/t3code/production.ts"
+      ],
+      "reason": "Each typed makePmProviderFamily closes only its original driver requirements, builds the native layer with Layer.buildWithScope in the retained context scope, and invokes the original instance registry. Retain original driver/controller/catalog/installer state across normal operation release; preserve per-operation PM locks and authoritative assertCurrent. Identity includes data root, instance/driver/revision, cwd/Home/private state, effective and explicit instance environments, config and custom models. Invalidation/root/identity change and shutdown retire and drain owned native contexts; cleanup failure remains observable. All ten concrete families are explicitly registered without a generic fallback or intersection-type assertion claiming unprovided services.",
+      "verification": "Pending parent M4 integrated verification. No build, typecheck, lint, test, formatter, dependency installation, native/account smoke or service operation was executed by this provenance slice.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-NATIVE-PROCESS-SCOPE",
+      "paths": [
+        "apps/server/src/process/agentScope.ts",
+        "apps/server/src/process/agentScope.test.ts",
+        "apps/server/src/processRunner.ts",
+        "apps/server/src/processRunner.test.ts",
+        "../../apps/server/agent/src/providers/t3code/upstream-services/agent-scope.ts",
+        "../../apps/server/agent/src/providers/t3code/upstream-services/agent-scope.test.ts",
+        "../../apps/server/agent/src/providers/t3code/upstream-services/process-platform.ts"
+      ],
+      "reason": "Port the pinned original AgentScope and actual ProcessRunner closure with PM-bound Node spawner/environment/cwd and private complete-context state identity. Probe/memory properties/persistent scopes use a private hashed application branch; startup orphan cleanup targets only its agents child branch. stop accepts only exact units issued by that service and retained-layer teardown requests cleanup only for nonpersistent issued units. Preserve original OOM race/classification guards and native child finalizers; Codex additionally retains actual launch.unit for owned process cleanup. Unsupported platforms or unavailable Linux user manager expose no unit and are not claimed as verified descendant cleanup.",
+      "verification": "Pending parent M4 integrated verification. No build, typecheck, lint, test, formatter, dependency installation, native/account smoke or service operation was executed by this provenance slice.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-NATIVE-USAGE-HOST-REUSE",
+      "paths": [
+        "../../apps/server/agent/src/providers/t3code/upstream-services/usage-history.ts",
+        "../../apps/server/agent/src/providers/t3code/upstream-services/reset-credit-coordinator.ts",
+        "../../apps/server/agent/src/providers/t3code/host.ts",
+        "../../apps/server/agent/src/usage/service-tiers.ts",
+        "apps/server/src/provider/Drivers/codexUsage.ts",
+        "apps/server/src/provider/resetCreditCoordinator.ts"
+      ],
+      "reason": "Resolve original Codex historical launch tiers from the existing PM per-instance session/turn/model launch ledger, not a foreign SQL UsageHistory repository. Missing tiers/telemetry remain unknown. Reuse the actual original ResetCreditCoordinator service through a WeakMap keyed by the application RuntimeHost so native reset-credit state survives retained-context/revision rebuilds without crossing hosts. No new usage or Chat persistence design.",
+      "verification": "Pending parent M4 integrated verification. No build, typecheck, lint, test, formatter, dependency installation, native/account smoke or service operation was executed by this provenance slice.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-MCP-APP-SNAPSHOT-ATTACHMENTS",
+      "paths": [
+        "apps/server/src/mcpApps/McpAppSnapshot.ts",
+        "../../apps/server/agent/src/providers/t3code/upstream-services/mcp-app-snapshot.ts",
+        "../../apps/server/agent/src/providers/t3code/upstream-services/mcp-app-snapshot.test.ts",
+        "../../apps/server/agent/src/providers/t3code/upstream-services/attachments.ts",
+        "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts"
+      ],
+      "reason": "Port the original pure MCP document/MIME/size/CSP/permission snapshot logic at the host persistence boundary. Store only application-owned private bytes through canonical attachment-root checks, exclusive private file creation and actual PM attachment registration, with cleanup on registration failure. Keep the upstream application snapshot service reference-only; this does not activate its business store, browser/iframe capability or orchestrator tools.",
+      "verification": "Pending parent M4 integrated verification. No build, typecheck, lint, test, formatter, dependency installation, native/account smoke or service operation was executed by this provenance slice.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-ROOT-NATIVE-HELPERS-AND-DISK-SDKS",
+      "paths": [
+        "../../apps/server/agent/src/index.ts",
+        "../../apps/server/agent/src/server.ts",
+        "../../apps/server/agent/scripts/build.mjs",
+        "apps/server/src/cli/managedChatGptToken.ts",
+        "apps/server/src/claude-history-worker.ts",
+        "apps/server/src/claudeHistoryWorker.ts",
+        "packages/provider-cursor/src/server/CursorSdkWorker.ts",
+        "packages/provider-cursor/src/server/CursorSdkWorkerRunner.ts"
+      ],
+      "reason": "Dispatch __managed-chatgpt-token and __claude-history before loading the PM server/stores. The managed helper remains the original lean private broker IPC client; no token is placed in argv/environment/logs. Emit the original Claude history worker and source-owned Cursor SDK worker beside root chunks at their adapted URL resolution paths. Preserve exact bound worker cwd/environment, advanced Cursor IPC and owned native process cleanup. Claude/Cursor/Muse SDK packages remain disk-external with their native/dynamic resources; package/dependency/artifact readiness is not inferred from these build entries.",
+      "pinnedSdkRequirements": {
+        "@anthropic-ai/claude-agent-sdk": "0.3.276",
+        "@cursor/sdk": "1.0.38",
+        "@muse-code/sdk": "1.4.6"
+      },
+      "verification": "Pending parent M4 integrated verification. No build, typecheck, lint, test, formatter, dependency installation, native/account smoke or service operation was executed by this provenance slice.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-SOURCE-INVENTORY-RECONCILIATION",
+      "paths": [
+        "source-manifest.json",
+        "codex-patches.json",
+        "claude-patches.json",
+        "antigravity-patches.json",
+        "sdk-provider-patches.json",
+        "acp-provider-patches.json",
+        "opencode-patches.json"
+      ],
+      "reason": "Read and reconcile the five M4 family provenance ledgers and the restored OpenCode native-test ledger without rewriting them. Add exact original-source/hash/blob/mode/byte/import records for the four AgentScope/ProcessRunner files and managedChatGptToken.ts; preserve the historical M0 authoring fields separately from implementation inventory. Promote explicitly adapted originals to copy-then-patch without altering upstream hashes. Correct only the three Main-approved declaration-only ACP replay wrappers and obsolete Pi business MCP testkit to reference-only; preserve surviving native test/replay algorithms and record partial business-case/export removals in family ledgers. All six old T8 server native-test/support files are now restored with exact dispositions in opencode-patches.json; no native test was excluded or counted as passing. Selected T14 client imports remain later-stage pending.",
+      "verification": "Pending parent M4 integrated verification. No build, typecheck, lint, test, formatter, dependency installation, native/account smoke or service operation was executed by this provenance slice.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-NATIVE-HISTORY-AND-EXECUTION-BOUNDARIES",
+      "paths": [
+        "../../apps/server/agent/src/providers/t3code/continuation.ts",
+        "../../apps/server/agent/src/providers/t3code/execution.ts",
+        "../../apps/server/agent/src/providers/t3code/continuation.test.ts",
+        "../../apps/server/agent/src/providers/t3code/execution.test.ts",
+        "packages/provider-core/src/server/ProviderAdapter.ts"
+      ],
+      "reason": "Retain exact native identity and completed-boundary evidence independently of the original runtime graph. An optional explicit latestCompletedTurnRef proves the current native tip; array order and older strong graph refs never substitute for a weak latest turn. Completed weak graph turns refresh a validated original snapshot without fabricating graph nodes. Forks adopt a freshly read target snapshot and never relabel a source graph; uncertain post-side-effect results fail without retry. Callback, interruption and scope-release failures remain observable. Chat persistence is unchanged.",
+      "verification": "Parent M4: 217/217 consumer tests passed with zero skips; retained source: 297 files, 3512 passed and 2 skipped. Actual OpenCode production HTTP/SSE completed 3083 then 3090 in the same session with history reread; actual Codex completed 1112 then 1119. Final unmodified Pi production entry completed 1199 then 1206 in the same session. Earlier Pi intermittent failure has no proven root-cause fix and remains a release-review risk.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-FIRST-NATIVE-STATE-DIRECTORY-AND-PROBE-CWD",
+      "paths": [
+        "../../apps/server/agent/src/providers/t3code/host.ts",
+        "../../apps/server/agent/src/providers/t3code/host.test.ts",
+        "packages/provider-grok/src/server/status.ts",
+        "../../apps/server/agent/src/providers/drivers/grok-native.test.ts"
+      ],
+      "reason": "Initialize the application-owned private state directory before exposing ServerConfig: the original Claude status CLI deliberately launches there and otherwise reports ENOENT as missing installation. Preserve the native Home. Pass the bound cwd into Grok ACP initialize metadata discovery instead of the PM process cwd.",
+      "verification": "New real-child first-status regression failed with ENOENT before the fix; all 8 host tests passed after it. Actual Claude 2.1.303 status changed from not-installed to installed/nativeReady:true while identity remained unknown. Combined Codex/Grok native regressions passed 13/13, including exact Grok child Home/cwd and no inference during checks.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-RESTORED-SOURCE-FIXTURE-HOST-BOUNDARIES",
+      "paths": [
+        "../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts",
+        "../../apps/server/agent/src/providers/t3code/testing/native-test-host.test.ts",
+        "apps/server/src/orchestration-v2/Adapters/AcpAdapterV2.test.ts",
+        "apps/server/src/orchestration-v2/Adapters/OpenCode2AdapterV2.test.ts",
+        "apps/server/src/provider/ProviderAuthService.test.ts",
+        "apps/server/src/provider/ProviderInstanceRegistry.test.ts",
+        "apps/server/src/provider/Drivers/opencodeUsage.test.ts",
+        "apps/server/src/provider/testing/ProviderInstanceRegistryLive.fixture.mjs"
+      ],
+      "reason": "Native fixtures bind the authoritative environment before constructing Provider context and restore it when their owned scope closes. Attachment cases register actual private bytes and use the real document worker. Restore the registry child verbatim; close its consumer scope before removing the host layer's owned root. Preserve native retry transitions rather than incidental text or coalescible event counts. OpenCode rollback replay includes the original idle-state check. Bulk history fixture writes use one transaction without reducing the data or boundaries. Flip distinct auth effects before combining their heterogeneous result types.",
+      "verification": "Parent full retained-source suite: 297 files passed, 3512 tests passed, 2 skipped (not counted as passed). Combined native consumers and host/history/execution: 217 passed, zero skipped.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-EXACT-OPTIONAL-DTO-BOUNDARY",
+      "paths": [
+        "../../packages/agent-contracts/src/provider.ts",
+        "../../apps/server/agent/src/agents/cli-chat.ts",
+        "../../apps/server/agent/src/durable/native-output.ts",
+        "../../apps/server/agent/src/providers/auth.ts",
+        "../../apps/server/agent/src/providers/native.ts",
+        "../../apps/server/agent/src/providers/catalog.ts",
+        "../../apps/server/agent/src/providers/instances.ts",
+        "../../apps/server/agent/src/providers/t3code/management.ts"
+      ],
+      "reason": "Omit absent runtime options and cleared state fields; represent optional decoded model metadata accurately at the public DTO boundary. No parser, model-selection or authentication semantics change and no compiler strictness relaxation. Rebuild the PM contracts declaration package before checking the independently strict original packages.",
+      "verification": "PM contracts build, all 14 original package typechecks, selected original server typecheck and Agent source/test typechecks passed; scoped Agent/contracts oxlint and isolated production build passed.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-SOURCE-OPENCODE-TEST-SDK-IDENTITY",
+      "paths": ["apps/server/package.json"],
+      "reason": "The selected server testkit must instantiate the same exact 1.19.5 OpenCode SDK class as the retained original provider-opencode package. Align only this isolated server devDependency; do not cast incompatible private SDK members or change the PM/global SDK dependency.",
+      "verification": "Offline filtered workspace reconciliation passed with lifecycle scripts disabled; selected original server typecheck and full retained-source suite passed (3512 tests passed, 2 skipped).",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M4-LINUX-PROCESS-SNAPSHOT-RACE",
+      "paths": ["packages/provider-acp/src/server/AcpSessionRuntime.ts"],
+      "reason": "Enumerate numeric /proc names without Dirent fallback lstat calls against unrelated exiting PIDs. Existing process identity reads already handle disappearance and retain ownership/PID-reuse checks; no broad error suppression.",
+      "verification": "The observed concurrent native run reported ENOENT in readdirSync with Dirents. After correction the full retained-source suite passed 3512 tests with 2 skips; M5 retained-source gate subsequently passed 3523 with 2 skips.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M5-SELECTED-ORIGINAL-CLIENT-CLOSURE",
+      "paths": ["packages/client-runtime/package.json", "packages/client-runtime/tsconfig.json", "packages/client-runtime/src/providerClients.ts", "packages/client-runtime/src/providerUpdateRequiredModels.ts", "packages/client-runtime/src/modelTraits.ts", "packages/client-runtime/src/modelTraitConstants.ts", "packages/client-runtime/src/providerSettingsFields.ts", "packages/client-runtime/src/state/providerInstanceDisplay.ts", "packages/client-runtime/src/state/providerInstanceDisplay.test.ts", "../../packages/agent-client-runtime/src/providers.ts", "../../packages/agent-contracts/src/provider.ts"],
+      "reason": "Import the five selected original client modules and original compiler configuration. Extract the unchanged reasoning constant instead of importing thread/orchestrator state; extract browser-safe settings annotations without React/rendering or unsafe decoder casts. Ten PM definitions consume original metadata and model option types. Current readiness is explicit, historical opaque IDs stay readable, and fresh empty inventory cannot resurrect stale models. The PM boundary preserves missing/invalid explicit selection and masks all original secret fields.",
+      "extractions": [
+        { "source": "packages/client-runtime/src/state/threadExecution.ts", "sourceSha256": "ae966ef7a329d31111595ad52630d447c4a7bdf88c661964d583c3f0e37b694b", "lines": "148-154", "destination": "packages/client-runtime/src/modelTraitConstants.ts" },
+        { "source": "apps/web/src/components/settings/ProviderSettingsForm.tsx", "sourceSha256": "d09c55e62b7fe50adfa38488e5e9f3e422a8569056cebb2b8b61f2ecc21628e1", "lines": "28-143,269-273", "destination": "packages/client-runtime/src/providerSettingsFields.ts" }
+      ],
+      "verification": "Parent: 17 client tests and 31 backend metadata/readiness tests passed; actual imported registry exercised all ten drivers without inference. Both PM packages build; all 15 selected original packages typecheck. Original display behavior tests are included in the 3523-pass retained-source gate.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M5-EXISTING-SETTINGS-AND-COMPOSER",
+      "paths": ["../../apps/web/src/features/agent/src/settings", "../../apps/web/src/features/agent/hooks/use-providers.ts", "../../apps/web/src/features/agent/components/assistant-ui/elements/composer-model-picker.aui.tsx", "../../apps/web/src/features/agent/components/assistant-ui/elements/composer-traits-picker.aui.tsx", "../../apps/web/src/features/agent/components/assistant-ui/elements/composer-traits-state.ts", "../../apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx", "../../apps/web/src/features/agent/components/assistant-ui/elements/model-context-bridge.aui.tsx", "../../apps/web/src/features/agent/src/pm/state.ts"],
+      "reason": "Keep existing frontend and shared full-page/PM-embedded runtime. Consume original fields, structured icons, instance names/badges, model short names/update notices and traits. Preserve masked secret/CAS/failed-draft behavior and explicit invalid selections; native readiness is independent of identity. Prompt-controlled ultrathink changes actual Composer text; shared submission gates reject invalid saved options without silently deleting them.",
+      "sourceUiReferences": [
+        { "path": "apps/web/src/components/chat/ProviderPackageIcon.tsx", "sha256": "3cfd94dc91e3748a7fd329a275bc38d2c020eadb0f07adac55b32911617df617" },
+        { "path": "apps/web/src/components/chat/ProviderInstanceIcon.tsx", "sha256": "435733f8384d11b9d8bbe761d95626984c6db683d2319703ac968fe6351e04a3" },
+        { "path": "apps/web/src/components/settings/ProviderSettingsForm.tsx", "sha256": "d09c55e62b7fe50adfa38488e5e9f3e422a8569056cebb2b8b61f2ecc21628e1" },
+        { "path": "apps/web/src/components/chat/TraitsPicker.tsx", "sha256": "e18600c9194af0227a803aedc21e06ada359974bd3596acd3ac67837a1f44011" }
+      ],
+      "verification": "Parent Web lint/typecheck/build passed, retaining chunk-size and mixed dynamic/static import warnings; Agent lint passed and four native-trait preference/prompt behavior tests passed. Actual desktop and 390px settings/Composer/Usage and full-page/PM-embedded shared Chat were observed. Ten creation choices, ACP local/registry fields, real revision409 draft recovery, keyboard save and masked-secret retain/clear passed. Native Low was explicitly selected before actual OpenCode reply1894; PM embed reply1895 completed in the same native session.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M5-NATIVE-USAGE-AND-PROBE-EVIDENCE",
+      "paths": ["packages/provider-core/src/server/usage.ts", "packages/provider-core/src/server/managedProvider.ts", "apps/server/src/provider/Drivers/codexUsage.ts", "../../apps/server/agent/src/providers/t3code/native-usage.ts", "../../apps/server/agent/src/providers/t3code/registration.ts", "../../apps/server/agent/src/providers/t3code/host-runtime.ts", "../../apps/server/agent/src/providers/t3code/contract.ts", "../../apps/server/agent/src/providers/t3code/config-mapping.ts", "../../apps/server/agent/src/usage"],
+      "reason": "Close original history readers over the retained family layer with separate execution/usage requirements. Disabled stored rows retain read-only native history without an execution instance. Cache/in-flight identity includes effective environment/config/native paths/revision; old unbound cache reparses live history and discloses removed-file gaps. Original unknown tiers remain uncertain. Cursor keychain preference uses the existing settings snapshot/commit notification. Exact raw quota-probe provenance is weakly keyed to the returned original snapshot so cached success is not confused with failed reads retaining last-good bars; reset credit requires successful evidence and existing account/revision exclusion.",
+      "verification": "Parent Agent source/test and 15 original-package types passed. Retained source: 298 files, 3523 passed, 2 skipped. Host/usage103 passed with zero skips; isolated Claude quota3 passed after fixture Fetch-layer isolation. Native Usage history/partial coverage were observed. Real OpenCode Go quota returned 'OpenCode Go could not read usage.' and UI displayed failure/unknown; no real quota success is claimed.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M5-DOCUMENT-ANCHORS-AND-BUNDLE-BOUNDARY",
+      "paths": ["../../scripts/check-docs.mjs", "../../packages/agent-contracts/tsconfig.json", "../../packages/agent-client-runtime/tsconfig.build.json", "../../packages/agent-client-runtime/src/index.ts", "../../apps/server/agent/scripts/build.mjs"],
+      "reason": "Recognize real Markdown heading/explicit anchors rather than rejecting untouched upstream README links; use parsed headings and GitHub duplicate slugs, never fenced text. Compile browser globals required by original contracts and rewrite source .ts exports for emitted consumers. Bundle original Provider helper/contract closure instead of leaking vendored TypeScript through external PM package imports; keep Effect and disk-backed SDK boundaries intact.",
+      "verification": "Actual docs checker accepted Unicode/duplicate/inline-code/explicit anchors and rejected missing, fenced-heading and fenced-HTML anchors; temporary fixture removed. PM contract/client builds and existing source tests passed. Portable artifact verification remains T18.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M5-PROCESS-PLATFORM-WITHOUT-INTERACTIVE-TERMINAL",
+      "paths": ["../../apps/server/agent/src/providers/t3code/upstream-services/process-platform.ts", "../../apps/server/agent/src/providers/t3code/host-runtime.test.ts"],
+      "reason": "Compose NodeChildProcessSpawner, NodeFileSystem, NodeCrypto, NodePath and NodeStdio instead of NodeServices.layer. Provider layers own native child stdin/auth pipes, never an unused interactive PM terminal. Preserve bound cwd/environment and actual process cleanup; do not suppress listener warnings or raise listener limits.",
+      "verification": "Parent M5 targeted21 passed without listener warnings. The permanent disabled-reader host regression asserts process.stdin end-listener count is unchanged and is included in the host/usage103 pass; ten-family reader acquisition no longer composes unused terminals.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M5-ISOLATED-CLAUDE-FETCH-FIXTURE",
+      "paths": ["../../apps/server/agent/src/usage/limits/core-revision.test.ts"],
+      "reason": "Provide each fixture's own FetchHttpClient.Fetch reference inside the original Claude family layer. Effect default Reference memoization otherwise reuses the preceding global fetch fixture. Preserve original native quota/read/reset dispatch and revision/account evidence; this is transport isolation in tests, not a production Claude fallback or real-account quota fix.",
+      "verification": "Parent isolated Claude quota3 and host/usage103 passed. Real Claude inference403 remains a distinct unresolved account/service result.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-M6-REPRODUCIBLE-SOURCE-AND-PORTABLE-ARTIFACT",
+      "paths": ["source-manifest.json", "sync-inventory.json", "sync-imports.json", "scripts/sync.mjs", "scripts/imports.mjs", "scripts/capture.py", "scripts/verify-sync.mjs", "SYNC.md", "integration-patches", "../../apps/server/agent/scripts/build.mjs", "../../apps/server/agent/scripts/package.mjs", "../../apps/server/agent/scripts/verify-artifact.mjs"],
+      "reason": "Reconcile actual selected metadata/client helpers/UI hashes and all patched upstream bytes. Preserve pristine SHA256/blob/mode separately from destination hashes; exact deterministic line splices include old and new lines with both whole-file hashes and no fuzz. New PM-owned helper/test files are hashed existing assets, not a second upstream copy. Sync validates the pinned checkout and all references/patches/assets before conflict preflight, refuses unsafe paths/symlinks and never overwrites changed/unrelated PM files. Package actual build externals with complete disk SDK/native resource graphs and licensing, one Effect4.0.5 identity, relative internal links and original package depth for artifact-owned workspaceRoot.",
+      "verification": "Unexecuted by T18. Exact offline clean/repeat/check/wrong-source/hash/conflict/symlink and relocated-production commands are documented in SYNC.md and local provider-t18-result.md; M6 acceptance belongs to Main.",
+      "status": "implemented-pending-parent-M6-gate"
+    },
+    {
+      "id": "PM-M6-CONTINUITY-CONSUMER-CLEANUP",
+      "paths": ["../../apps/server/agent/src/providers/process.ts", "../../apps/web/src/features/agent/src/workspace/workspace.tsx", "../../apps/server/agent/src/providers/runtime.ts", "../../apps/server/agent/src/providers/native.ts", "../../apps/server/agent/src/providers/instances.ts", "../../apps/server/agent/src/providers/drivers/pi-continuity.test.ts"],
+      "reason": "T17 owns runtime/durable consumer continuity and removal of the unconsumed local runProviderCommand/WorkspaceSurface implementations and obsolete error-helper reexports. Preserve the existing Chat store, historical metadata and legitimate original native continuation. No vendor original byte changes or source reconstruction ownership are transferred to T18.",
+      "verification": "T17 reported semantic tsserver references and repository search before removal. T18 did not execute or count these consumer regressions; Main owns integrated verification. Removed paths are historical provenance, not inputs to recreate.",
+      "status": "T17-owned-pending-parent-M6-gate"
+    },
+    {
+      "id": "PM-M6-GIT-EXECUTABLE-CLASS-ADMISSION",
+      "paths": ["scripts/sync.mjs", "scripts/verify-sync.mjs", "scripts/capture.py", "source-manifest.json", "sync-inventory.json", "sync-imports.json", "SYNC.md", "../../apps/server/agent/scripts/verify-artifact.mjs"],
+      "reason": "Source reconstruction records Git-style executable classes, not every filesystem read/write permission bit. Accept matching non-executable 0664 versus canonical 0644 without chmod or rewriting an existing file; preserve hash and executable-class refusal. Reject setuid/setgid/sticky regular files before writes and constrain new-file modes to canonical 0644/0755. Permanent POSIX fixtures assert ordinary-permission acceptance is byte/mode/inode/mtime/ctime untouched and executable/special-mode conflicts cannot partially restore a missing file. The artifact verifier's child-exit callback uses explicit if/else rather than an unused-expression conditional.",
+      "verification": "Parent observed the original nine offline scenarios pass for 1159 files, then current-repository check rejected LICENSE0664 versus inventory0644. Parent also observed Agent source/test types and isolated build pass, with one artifact-verifier no-unused-expressions lint warning. T18 implemented these reported fixes and authored the new permission cases without running tests/build/lint; parent owns post-fix verification.",
+      "status": "implemented-pending-parent-mode-and-lint-verification"
+    }
+  ]
+}

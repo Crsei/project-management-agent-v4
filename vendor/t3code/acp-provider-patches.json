@@ -1,0 +1,391 @@
+{
+  "version": 1,
+  "owner": "T13",
+  "milestone": "M4",
+  "hostContract": "pm-provider-host/1",
+  "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "implementation": "Original provider-acp, provider-grok, provider-fx and provider-acp-registry modules own native execution. PM adaptations are limited to host composition, generation-owned transport and existing-record continuation metadata.",
+  "patches": [
+    {
+      "paths": [
+        "packages/provider-acp/src/server/adapter.ts"
+      ],
+      "reason": "Replace t3 application MCP/self-invocation/environment injection with ProviderRuntimeHost stdio/ACP-MCP bindings. Recheck exact execution ownership and original PM tool authorization. Keep original native lifecycle, cancellation, process scopes, models, configuration and requests. Unbound upstream runtime fixtures retain native behavior; bound PM resumes never silently replace a failed native target. Protocol/authority failures propagate directly; only actual native activation failures enter the original native activation-failure Ref."
+    },
+    {
+      "paths": [
+        "packages/provider-acp/src/server/AcpSessionRuntime.ts"
+      ],
+      "reason": "Retain the actual initialize-response wire generation using effect-acp readAcpProtocolGeneration; do not infer dialect from protocolVersion. An initialized real runtime without this evidence fails rather than fabricating a dialect. Native adoption retains the current connection generation."
+    },
+    {
+      "paths": [
+        "packages/provider-acp/src/server/adapter.ts"
+      ],
+      "reason": "Expose operation-scoped readAcpSessionEvidence. Legacy metadata is captured from original native session/list or the original family metadata hook BEFORE load/resume. No ensure/new or probe prompt. Reject directory/cursor mismatch, running work, unfinished user history, background work and pending native requests. Existing valid sidecars bypass legacy metadata probing."
+    },
+    {
+      "paths": [
+        "packages/provider-acp/src/server/adapter.ts"
+      ],
+      "reason": "Buffered continuation adoption uses the original provider-owned message branch, original offered-request generation identity, original startTurn transition permit and current PM authority. Every native offer attaches hostExecution captured from the original openSession binding, never a newer callback-time binding. It never builds/sends a prompt or reopens quarantined/stopped generations. Do not wrap adoption in the original dispatchIfCurrent permit because that would deadlock the original startTurn permit."
+    },
+    {
+      "paths": [
+        "packages/provider-acp/src/server/mcpOverAcpBridge.ts"
+      ],
+      "reason": "Use actual MCP SDK StdioClientTransport, exact generation-bound named servers and explicit native environment/cwd. Preserve original typed ACP connect/message/notification/disconnect APIs, correlated native responses, cancellation, bounded admission/message size and process cleanup. Notifications without a real request ID do not enter request correlation; no synthetic IDs are assigned. No t3 HTTP business MCP token/endpoint. Disposal attempts every owned transport and surfaces cleanup failures."
+    },
+    {
+      "paths": [
+        "packages/provider-grok/src/server/adapter.ts",
+        "packages/provider-fx/src/server/adapter.ts",
+        "packages/provider-acp-registry/src/server/adapter.ts"
+      ],
+      "reason": "Remove SelfInvocation/McpProviderSessions application dependencies and require the same ProviderRuntimeHost as the PM operation. Original family settings, auth, model, CLI preparation, version/status, maintenance and usage modules remain authoritative."
+    },
+    {
+      "paths": [
+        "packages/provider-acp-registry/src/server/AcpRegistrySupport.ts"
+      ],
+      "reason": "Export the existing original agent schema decoder and existing resolveAcpRegistryPlatformTarget/resolveAcpRegistryPlatformTargetCandidates helpers for one-time app-owned preparation metadata conversion. Main approved additive helper exports after semantic references in local://m4-acp-platform-export-refs.md; implementations and existing source callers are unchanged. No parallel catalog schema or duplicate platform selection logic."
+    },
+    {
+      "paths": [
+        "packages/provider-fx/src/server/acpSupport.ts",
+        "packages/provider-fx/src/server/acpSupport.test.ts",
+        "packages/provider-fx/src/server/testing/config-mode-peer.ts"
+      ],
+      "reason": "Preserved preceding PM-FX-FORCED-MODE patch and its real typed-v2 regression: force setConfigOption with the ACP-v2 id discriminator even when advertised ask differs from enforced native mode. This slice does not overwrite that patch."
+    },
+    {
+      "paths": [
+        "apps/server/src/orchestration-v2/Adapters/AcpAdapterV2.test.ts",
+        "apps/server/src/orchestration-v2/Adapters/FxAdapterV2.test.ts",
+        "apps/server/src/orchestration-v2/Adapters/GrokAdapterV2.test.ts",
+        "apps/server/src/orchestration-v2/Adapters/AcpRegistryAdapterV2.test.ts",
+        "apps/server/src/orchestration-v2/Adapters/AcpProviderRuntimeHost.testkit.ts",
+        "packages/provider-grok/src/server/driver.test.ts",
+        "apps/server/src/textGeneration/GrokTextGeneration.test.ts"
+      ],
+      "reason": "Retain executable original native suites while removing t3 business-only host/self-invocation dependencies. Reuse the shared real PM runtime-host fixture, not app ProviderReplayHarness or fake business projections. Add original-process v1-shape/advertised-version-2 dialect assertions and buffer-only adoption/current-generation assertions. Native source recording/replay helpers and scripts remain retained."
+    }
+  ],
+  "localPaths": [
+    "apps/server/agent/src/providers/t3code/families/acp.ts",
+    "apps/server/agent/src/providers/t3code/families/grok.ts",
+    "apps/server/agent/src/providers/t3code/families/fx.ts",
+    "apps/server/agent/src/providers/t3code/families/acp-registry.ts",
+    "apps/server/agent/src/providers/t3code/families/acp-registry-migration.ts",
+    "apps/server/agent/src/providers/drivers/grok.ts",
+    "apps/server/agent/src/providers/drivers/fx.ts",
+    "apps/server/agent/src/providers/drivers/acpRegistry.ts",
+    "apps/server/agent/src/providers/drivers/acp-registry-support.ts",
+    "apps/server/agent/src/providers/drivers/acp-test-harness.ts",
+    "apps/server/agent/src/providers/drivers/acp-native-peer.ts",
+    "apps/server/agent/src/providers/drivers/acp-protocol.test.ts",
+    "apps/server/agent/src/providers/drivers/grok-native.test.ts",
+    "apps/server/agent/src/providers/drivers/fx-native.test.ts",
+    "apps/server/agent/src/providers/drivers/acp-registry.test.ts",
+    "vendor/t3code/packages/provider-acp/src/server/mcpOverAcpBridge.test.ts",
+    "vendor/t3code/packages/provider-acp/src/server/mcpOverAcpBridge.test-peer.ts"
+  ],
+  "removedLocalLifecycle": [
+    "apps/server/agent/src/providers/drivers/acp.ts",
+    "apps/server/agent/src/providers/drivers/acp-auth.ts",
+    "apps/server/agent/src/providers/drivers/acp-auth-state.ts",
+    "apps/server/agent/src/providers/drivers/acp-output.ts",
+    "apps/server/agent/src/providers/drivers/acp-output.test.ts"
+  ],
+  "sourceClosure": [
+    {
+      "source_path": "apps/server/scripts/acp-mock-agent.ts",
+      "destination_path": "vendor/t3code/apps/server/scripts/acp-mock-agent.ts",
+      "sha256": "5bd1c9b3b6920d4ce851b080364650631c8104acb5e24bbbbc5bd00197e589a5",
+      "git_blob_sha1": "3d11bc8e7083c10459ada88f11fa7f2f537728a8",
+      "git_mode": "100644",
+      "bytes": 62379,
+      "category": "test-support",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/scripts/acp-replay-agent.ts",
+      "destination_path": "vendor/t3code/apps/server/scripts/acp-replay-agent.ts",
+      "sha256": "c7eba573366562a4d32e75c67bc822873249f6379b6bd4da6b93e185a6132bd1",
+      "git_blob_sha1": "950c6909d0133bbb3f043b5b65a731ad139e2365",
+      "git_mode": "100644",
+      "bytes": 10043,
+      "category": "test-support",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/scripts/acpMockCancellationState.ts",
+      "destination_path": "vendor/t3code/apps/server/scripts/acpMockCancellationState.ts",
+      "sha256": "6840119bc48c38e0652f4daf4550b1f44184a361f5103ec4a9dbd52fac7c9605",
+      "git_blob_sha1": "2b141e9248ba5d12e8b01502ebb173d7af46359b",
+      "git_mode": "100644",
+      "bytes": 135,
+      "category": "test-support",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/AcpAdapterV2.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/AcpAdapterV2.test.ts",
+      "sha256": "30a5afade73bd3941bce43d6351c7f794950e898eabae2a07c919e6ef4b23637",
+      "git_blob_sha1": "f05ace7ff750d0594ea59b7df9829d7a2242eec4",
+      "git_mode": "100644",
+      "bytes": 302170,
+      "category": "behavior-test",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/AcpAdapterV2.testkit.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/AcpAdapterV2.testkit.ts",
+      "sha256": "d9c23af720e2b1f608a22a3e5c29243708cc50bcafe14c6e96964645224aba81",
+      "git_blob_sha1": "d043ac09a6aeed76c9a168810b64f9b70541daff",
+      "git_mode": "100644",
+      "bytes": 11135,
+      "category": "test-support",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/AcpRegistryAdapterV2.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/AcpRegistryAdapterV2.test.ts",
+      "sha256": "dab2658e0623602705c47473f137e7783dfbfa1e61edb383ae7dba19daf39531",
+      "git_blob_sha1": "fab0020b7e03ed0538430a240f4c2aadb02ec05c",
+      "git_mode": "100644",
+      "bytes": 72442,
+      "category": "behavior-test",
+      "action": "copy-then-patch",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/AcpRegistryAdapterV2.testkit.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/AcpRegistryAdapterV2.testkit.ts",
+      "sha256": "59d74cb51bbcd31fa2c3ada03457ca4a619d9514c50ecca711ef2f2d7371be1b",
+      "git_blob_sha1": "2e5d9e4058da1e856fabf486dfff970c93d07dba",
+      "git_mode": "100644",
+      "bytes": 3976,
+      "category": "test-support",
+      "action": "copy-then-patch",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "removed: unconsumed t3 application replay wrapper; Main approved after semantic references showed declaration-only"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/FxAdapterV2.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/FxAdapterV2.test.ts",
+      "sha256": "92d0e937748067bdf6ebf3e8f69e59527addfd1f6e0e072cf1e2ceeaf5e6bf69",
+      "git_blob_sha1": "b6e78f8115d6944b0fbee96e8cd7d84ed10e86fe",
+      "git_mode": "100644",
+      "bytes": 12938,
+      "category": "behavior-test",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/FxAdapterV2.testkit.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/FxAdapterV2.testkit.ts",
+      "sha256": "ad37fba04ba8471474ed0bed21f7caf226690279bf11a7f0ef98c2ed3bb6c1fe",
+      "git_blob_sha1": "2161c30a4f51c0a55d8adec977fa478507bcd50c",
+      "git_mode": "100644",
+      "bytes": 3847,
+      "category": "test-support",
+      "action": "copy-then-patch",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "removed: unconsumed t3 application replay wrapper; Main approved after semantic references showed declaration-only"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/GrokAdapterV2.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/GrokAdapterV2.test.ts",
+      "sha256": "d4e1cbc5b9c1824b4044ea89a2cab945f1bdf6dc5e04dd3bbf3628c16ba9e643",
+      "git_blob_sha1": "d2c23e185ba968bbb415e9db49e1c0e0c8e1ae22",
+      "git_mode": "100644",
+      "bytes": 21041,
+      "category": "behavior-test",
+      "action": "copy-then-patch",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/GrokAdapterV2.testkit.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/GrokAdapterV2.testkit.ts",
+      "sha256": "f62ec25b1b40181836b2f1929120490f416ec6fac1ff7b186a1ff4a8b50c25af",
+      "git_blob_sha1": "9b4483561ce0af92b955d142e538ec99ae25f382",
+      "git_mode": "100644",
+      "bytes": 4501,
+      "category": "test-support",
+      "action": "copy-then-patch",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "removed: unconsumed t3 application replay wrapper; Main approved after semantic references showed declaration-only"
+    },
+    {
+      "source_path": "apps/server/src/provider/AcpRegistryProbe.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/AcpRegistryProbe.test.ts",
+      "sha256": "926080bbcfb1d171d4d26dd6bdbdad75cfb4e14b3dc85403f9575c79776b332c",
+      "git_blob_sha1": "bc7c14d3b3c8a02c629c94405a37ee1adf8eff63",
+      "git_mode": "100644",
+      "bytes": 13691,
+      "category": "behavior-test",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/provider/GrokProvider.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/GrokProvider.test.ts",
+      "sha256": "e6d2d01f10956419a1b91383430f3eda34403bc95fbd2116eb5326632bca0248",
+      "git_blob_sha1": "4ecc0ad28971bd6123c6cdd306a91d865d1dc64e",
+      "git_mode": "100644",
+      "bytes": 26330,
+      "category": "behavior-test",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/provider/acp/AcpJsonRpcConnection.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/acp/AcpJsonRpcConnection.test.ts",
+      "sha256": "f11a3bf1d17d278a28d0261b209c169ce2687b3dde9d17dd6d6ab49c5bc40ba0",
+      "git_blob_sha1": "9e2da61be2af3c1aa0501a75753bb6148239feac",
+      "git_mode": "100644",
+      "bytes": 44973,
+      "category": "behavior-test",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/provider/acp/AcpSessionRuntime.processTree.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/acp/AcpSessionRuntime.processTree.test.ts",
+      "sha256": "b8b7ba1f201bb3dde150383f82c63c115b4500fc31e1908c82cb23fe71a28090",
+      "git_blob_sha1": "0c6bddbbf8567d384a8100b048cb9d7e591afd99",
+      "git_mode": "100644",
+      "bytes": 30837,
+      "category": "behavior-test",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/provider/testFixtures/grok-text-mock-agent.mjs",
+      "destination_path": "vendor/t3code/apps/server/src/provider/testFixtures/grok-text-mock-agent.mjs",
+      "sha256": "d38b1ab1d82245a71fdd7299c61c88cf6fc59d92513fa90077598db96098a64d",
+      "git_blob_sha1": "357bdb7fe564da229c9ce1c9567b114d4396cd62",
+      "git_mode": "100644",
+      "bytes": 1971,
+      "category": "test-support",
+      "action": "copy-verbatim",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    },
+    {
+      "source_path": "apps/server/src/textGeneration/GrokTextGeneration.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/textGeneration/GrokTextGeneration.test.ts",
+      "sha256": "389819b3fbc701ac7ba500f3adbb7c32536079b2173610011899e5d463c7ef0c",
+      "git_blob_sha1": "c74f77db4d061d8bb51e260affbed52c5fe0c76d",
+      "git_mode": "100644",
+      "bytes": 5272,
+      "category": "behavior-test",
+      "action": "copy-then-patch",
+      "owner": "T13",
+      "role": "test-only",
+      "m4Disposition": "retained original native test/support source; host-boundary patches described above"
+    }
+  ],
+  "closedExports": {
+    "shared": [
+      "makeAcpDriverLayer(context,runtimeHost)",
+      "acpProtocolResolver",
+      "acpCapabilities"
+    ],
+    "grok": [
+      "grokDriver",
+      "makeGrokDriverLayer",
+      "grokProtocolResolver",
+      "grokCapabilities",
+      "grokInstallationMethods"
+    ],
+    "fx": [
+      "fxDriver",
+      "makeFxDriverLayer",
+      "fxProtocolResolver",
+      "fxCapabilities",
+      "fxInstallationMethods"
+    ],
+    "acpRegistry": [
+      "acpRegistryDriver",
+      "makeAcpRegistryDriverLayer",
+      "acpRegistryProtocolResolver",
+      "acpRegistryCapabilities",
+      "acpRegistryInstallationMethods",
+      "makeAcpRegistryCatalogLayer",
+      "readPreparedAcpRegistryConfigMigration"
+    ],
+    "routeBoundary": [
+      "searchAcpRegistry",
+      "prepareAcpRegistry"
+    ]
+  },
+  "parentIntegration": [
+    "Register the three original drivers, concrete family layers, per-operation protocol resolvers, capability projectors and Registry installation methods in the parent-owned production application. Generic execution/host/registration/manifests/locks remain parent-owned.",
+    "The provider-acp runtime requires the already pinned @modelcontextprotocol/sdk dependency. Parent owns package/lock/build integration, original effect-acp readAcpProtocolGeneration and generic execution contracts.",
+    "Fresh generic ensureThread must use forceNewNativeThread:false: original ACP openSession already starts one native process/session. true deliberately replaces it and explains the prior two-process-per-operation symptom. Do not add a family shortcut or bypass original open.",
+    "Run readPreparedAcpRegistryConfigMigration once before workers and persist changed app-owned config with the existing startup/CAS policy without a spurious revision bump. Preserve instance IDs and exact validated existing commandPath. No per-request fallback, native execution/download, credential migration or new persistence design.",
+    "Host background-compaction and retained-instance continuation authorization resolve the current RuntimeHost generation, not the first acquisition context.execution. ACP composition passes the same runtimeHost to both landed shared services; delayed native offers carry only their originally captured hostExecution.",
+    "Update frozen-source disposition bookkeeping for the three declaration-only business replay wrappers removed after Main semantic-reference approval; do not import the application business registry/harness to make source tests compile.",
+    "Shared HTTP routes still consume searchAcpRegistry/prepareAcpRegistry through the routes-only boundary. No legacy local ACP lifecycle helper or parser shim remains."
+  ],
+  "preparedNativeScenarios": [
+    "Controlled actual typed ACP-v2 process named pm-acp-native-fixture: native arithmetic/streaming, one fresh process/session, native resume, missing-sidecar zero-prompt metadata adoption, native directory mismatch before load, unfinished native work rejection, callback failure, actual cancellation, native write-permission rejection, PM generation-owned native ACP-MCP tools/list and fixture_add producing 42.",
+    "Original source ACP-v1 recording/replay process retains native request/form behavior and asserts actual v1 dialect for both numeric protocol versions 1 and 2.",
+    "Original source buffered-carryover process asserts current-generation-only adoption, no duplicate drain, no native prompt and no reopened terminal child/lineage.",
+    "Actual SDK stdio MCP process covers native initialize/tools/list/tools/call, foreign-server rejection, revoked authority, interrupted outstanding request and bounded messages. Controlled tool is not PM17 business inference evidence.",
+    "Registry one-time preparation receipt conversion covers exact prior binary fingerprint/root/path and tampering rejection without changing context revision; source catalog/install suites retain original distribution behavior."
+  ],
+  "nativeAccountPrerequisites": {
+    "grok": "Parent-only gate requires the selected installed native Grok CLI and its existing authorized native Home/environment, confirmed by original native status/auth/model behavior. A catalog entry or fixture model is not account/inference proof.",
+    "fx": "Parent-only gate requires the selected installed native FX CLI and its existing authorized login/account/model. Validate actual typed-v2 forced supervised mode, cancellation, tool permission and native usage without importing credentials.",
+    "acpRegistry": "Actual controlled agent name is pm-acp-native-fixture. No real Registry account/inference gate was executed by this slice. Parent must name the actual authorized selected Registry agent ID/version/distribution/command from allowed configuration/native availability and record native inference evidence; official catalog search/preparation alone is not proof."
+  },
+  "verification": {
+    "executed": [],
+    "status": "Not run by assignment. No builds, tests, lint, formatter, dependency install, native/account operation or external service change was performed.",
+    "parentReportedGate": "Main supplied a failed integrated typecheck at local://provider-m4-type-errors.txt. T13 addressed assigned native serverId narrowing, actual notification/request distinction and native activation-failure error-channel diagnostics without rerunning any check; Registry platform-helper source reuse is documented in its patch entry.",
+    "parentGates": [
+      "Integrated vendor typecheck and original native suites after all slices land",
+      "Local acp-protocol/grok-native/fx-native/acp-registry node tests",
+      "Existing PM-FX-FORCED-MODE real typed native suite",
+      "Actual authorized Grok/FX/named Registry native account, cancellation, tools/permissions and usage gates",
+      "Generation revocation, process cleanup, no implicit business Run/completion and existing Chat record persistence gates"
+    ]
+  },
+  "persistence": "Existing Chat records and PM continuation sidecars remain the persistence design. Native completion is not PM business completion; PM revisions, approvals and receipts remain authoritative."
+}

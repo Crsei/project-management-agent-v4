@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/AcpRegistryAdapterV2.test.ts",
+  "beforeSha256": "dab2658e0623602705c47473f137e7783dfbfa1e61edb383ae7dba19daf39531",
+  "afterSha256": "23169762bc2a85480bd086be2714323c7f8099c05dd9c10573163778e9044e54",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 14,
+      "before": [
+        "import { resolveSelfInvocation } from \"@t3tools/shared/nodeRuntime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 30,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { layerAcpRuntimeHost } from \"./AcpProviderRuntimeHost.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 37,
+      "before": [
+        "import * as ServerSettings from \"../../serverSettings.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 108,
+      "before": [
+        "  McpProviderSessions.layer,\n"
+      ],
+      "after": [
+        "  layerAcpRuntimeHost,\n"
+      ]
+    },
+    {
+      "start": 111,
+      "before": [
+        "  ServerSettings.layerTest(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 240,
+      "before": [
+        "    selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 511,
+      "before": [
+        "        selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 924,
+      "before": [
+        "          selfInvocation: yield* resolveSelfInvocation(),\n"
+      ],
+      "after": []
+    }
+  ]
+}

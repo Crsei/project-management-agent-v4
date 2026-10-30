@@ -32,11 +32,11 @@ try {
 } catch {
   const password = randomBytes(32).toString('hex');
   const image = process.env.POSTGRES_IMAGE || 'postgres:16-alpine';
-  const databaseUrl = `postgresql://project_management:${password}@127.0.0.1:55443/project_management`;
+  const databaseUrl = `postgresql://project_management:${password}@127.0.0.1:55444/project_management`;
   await writeFile(path.join(root, '.env'), [
-    'HOST=127.0.0.1', 'PORT=4193', 'PUBLIC_ORIGIN=http://127.0.0.1:3223',
-    'PM_API_URL=http://127.0.0.1:4193', 'PM_WEB_PORT=3223',
-    'POSTGRES_PORT=55443', `POSTGRES_IMAGE=${image}`, `POSTGRES_PASSWORD=${password}`,
+    'HOST=127.0.0.1', 'PORT=4194', 'PUBLIC_ORIGIN=http://127.0.0.1:3224',
+    'PM_API_URL=http://127.0.0.1:4194', 'PM_WEB_PORT=3224',
+    'POSTGRES_PORT=55444', `POSTGRES_IMAGE=${image}`, `POSTGRES_PASSWORD=${password}`,
     `DATABASE_URL=${databaseUrl}`,
     'BLOB_PROVIDER=local', 'BLOB_ROOT=.local/blobs', 'CORE_WORKSPACE_ROOT=.local/pm-workspaces',
     'COOKIE_SECURE=false', 'WORKER_INTERVAL_MS=500',
@@ -56,12 +56,12 @@ try {
 }
 try {
   await writeFile(path.join(root, '.env.agent'), [
-    'HOST=127.0.0.1', 'AGENT_WORKSPACE_API_PORT=4323', 'AGENT_WEB_PORT=4324',
-    'PM_API_URL=http://127.0.0.1:4193', 'AGENT_WORKSPACE_API_ONLY=1',
+    'HOST=127.0.0.1', 'AGENT_WORKSPACE_API_PORT=4325', 'AGENT_WEB_PORT=4326',
+    'PM_API_URL=http://127.0.0.1:4194', 'AGENT_WORKSPACE_API_ONLY=1',
     `AGENT_WORKSPACE_DATA_DIR=${path.join(root, '.local', 'agent-data')}`,
     'VITE_ENABLE_UI_LAB=0', '',
   ].join('\n'), { flag: 'wx', mode: 0o600 });
-  console.log('Created private .env.agent with isolated v3 data; no Provider credentials or global CLI homes were imported.');
+  console.log('Created private .env.agent with isolated v4 data; no Provider credentials or global CLI homes were imported.');
 } catch (error) {
   if (error.code !== 'EEXIST') throw error;
   console.log('Existing .env.agent preserved.');

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source": "packages/shared/package.json",
+  "beforeSha256": "b34f7425e86e1887e91aa4e4b58be728964533cfa92892635ff5c6c27cb31228",
+  "afterSha256": "134b9153a3e47fb1f0535ec260b04cab47cb6645ec34b44ba0d5166677147259",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 531,
+      "before": [
+        "    \"remark-gfm\": \"catalog:\",\n",
+        "    \"remark-math\": \"6.0.0\",\n"
+      ],
+      "after": [
+        "    \"remark-gfm\": \"file:../../third-party/remark-gfm\",\n",
+        "    \"remark-math\": \"file:../../third-party/remark-math\",\n"
+      ]
+    }
+  ]
+}

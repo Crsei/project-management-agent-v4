@@ -10,12 +10,16 @@ type DirectoryPerson = {
   presence?: "available" | "away" | "offline" | null
   teams?: readonly { id: string; name: string }[]
 }
+/** Structural FilterCard condition; the model never imports the card component. */
+export type TeamProjectionCondition = { field: string; operator: "is" | "isNot"; values: readonly string[] }
 export type TeamProjectionFilters = {
   query: string
   teamId: string | null
   memberId?: string | null
   presenceFilter?: "all" | "available" | "away" | "offline"
   workloadStateFilter?: "all" | "open" | "done"
+  /** Every matching condition applies (AND); values inside one condition are OR. */
+  conditions?: readonly TeamProjectionCondition[]
 }
 export type ProjectedTeam = {
   id: string
@@ -77,11 +81,27 @@ export function workloadProjection<Member extends DirectoryPerson>(source: TeamW
   const byUser = new Map(members.map(member => [member.userId, member]))
   const needle = state.query.trim().toLocaleLowerCase()
   const matchesText = (value: string) => value.toLocaleLowerCase().includes(needle)
-  const stateMatches = (task: TeamWorkload["tasks"][number]) => state.workloadStateFilter === "open" ? task.open : state.workloadStateFilter === "done" ? task.done : true
-  const teamMatches = (task: TeamWorkload["tasks"][number]) => !state.teamId || task.teamIds.includes(state.teamId)
+  const conditions = state.conditions ?? []
+  const stateConditions = conditions.filter(condition => condition.field === "state" && condition.values.length)
+  const teamConditions = conditions.filter(condition => condition.field === "team" && condition.values.length)
+  const memberConditions = conditions.filter(condition => condition.field === "member" && condition.values.length)
+  const satisfied = (condition: TeamProjectionCondition, matched: boolean) => condition.operator === "isNot" ? !matched : matched
+  const stateMatches = (task: TeamWorkload["tasks"][number]) => {
+    if (stateConditions.length) return stateConditions.every(condition => satisfied(condition, condition.values.some(value => value === "open" ? task.open : value === "done" ? task.done : false)))
+    const filter = state.workloadStateFilter ?? "all"
+    return filter === "all" ? true : filter === "open" ? task.open : task.done
+  }
+  const teamMatches = (task: TeamWorkload["tasks"][number]) => {
+    if (teamConditions.length) return teamConditions.every(condition => satisfied(condition, condition.values.some(id => task.teamIds.includes(id))))
+    return !state.teamId || task.teamIds.includes(state.teamId)
+  }
+  const memberMatches = (userId: string | null) => {
+    if (memberConditions.length) return memberConditions.every(condition => satisfied(condition, condition.values.includes(userId ?? "")))
+    return !state.memberId || userId === state.memberId
+  }
   const taskMatches = (task: TeamWorkload["tasks"][number]) => {
     const assignee = task.assigneeId ? byUser.get(task.assigneeId) : undefined
-    return stateMatches(task) && teamMatches(task) && (!state.memberId || task.assigneeId === state.memberId) && (!needle || matchesText(`${task.id} ${task.title} ${assignee?.name ?? ""} ${assignee?.email ?? ""}`))
+    return stateMatches(task) && teamMatches(task) && memberMatches(task.assigneeId) && (!needle || matchesText(`${task.id} ${task.title} ${assignee?.name ?? ""} ${assignee?.email ?? ""}`))
   }
   const stamp = Date.parse(source.serverNow)
   const records = new Map(source.tasks.map(task => [task.id, {
@@ -98,10 +118,13 @@ export function workloadProjection<Member extends DirectoryPerson>(source: TeamW
   })
   const rows = source.members.flatMap(row => {
     const member = byUser.get(row.userId)
-    if (!member || state.memberId && row.userId !== state.memberId) return []
+    if (!member || !memberMatches(row.userId)) return []
     const personMatches = !!needle && matchesText(`${member.name} ${member.email}`)
     const issues = resolve(row.taskIds)
-    if (state.teamId && !row.teamIds.includes(state.teamId) && !issues.length) return []
+    const rowInTeam = teamConditions.length
+      ? teamConditions.every(condition => satisfied(condition, condition.values.some(id => row.teamIds.includes(id))))
+      : !state.teamId || row.teamIds.includes(state.teamId)
+    if (!rowInTeam && !issues.length) return []
     if (needle && !personMatches && !issues.length) return []
     return [{ id: row.userId, member, issues, openCount: row.openCount, doneCount: row.doneCount, knownOpenPoints: row.knownOpenPoints, unknownEstimateCount: row.unknownEstimateCount, capacityPoints: row.capacityPoints, overloaded: row.overloaded }]
   })
@@ -111,7 +134,9 @@ export function workloadProjection<Member extends DirectoryPerson>(source: TeamW
     rows, unassigned: { issues: pool, unknownAssigneeCount: source.summary.unknownAssigneeCount },
     summary: { uniqueTaskCount: visibleTasks.length, rowTaskCount: rows.reduce((sum, row) => sum + row.issues.length, 0), overloadedMembers: source.summary.overloadedMemberCount, unknownOverloadMembers: source.summary.unknownOverloadMemberCount, unknownCapacityMembers: source.members.filter(row => row.capacityPoints === null).length, unknownEstimateCount: source.summary.unknownEstimateCount },
     grouping: "teams" as const,
-    groups: source.teams.filter(team => !state.teamId || team.id === state.teamId).map(team => ({ id: team.id, label: team.name, issues: resolve(team.taskIds) })).filter(group => !state.memberId || group.issues.length > 0),
+    groups: source.teams.filter(team => teamConditions.length
+      ? teamConditions.every(condition => satisfied(condition, condition.values.includes(team.id)))
+      : !state.teamId || team.id === state.teamId).map(team => ({ id: team.id, label: team.name, issues: resolve(team.taskIds) })).filter(group => (!memberConditions.length && !state.memberId) || group.issues.length > 0),
     pool,
   }
 }

@@ -45,7 +45,7 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     const token=f.token('verify-recovery-email',email);
     const stranger=await createUser(f.pool,{email:`${randomUUID()}@example.test`,password:recoveryPassword,name:'Other account'});
     const session=await login(f.pool,{email:stranger.email,password:recoveryPassword});
-    const forbidden=await f.request('/api/v1/auth/security/recovery-email/confirm',{actionId:randomUUID(),token,expectedRecoveryEmailVersion:1},`pm_v3_session=${session.token}`);
+    const forbidden=await f.request('/api/v1/auth/security/recovery-email/confirm',{actionId:randomUUID(),token,expectedRecoveryEmailVersion:1},`pm_v4_session=${session.token}`);
     assert.notEqual(forbidden.body.status,'committed');
     const verified=await f.request('/api/v1/auth/security/recovery-email/confirm',{actionId:randomUUID(),token,expectedRecoveryEmailVersion:1});assert.equal(verified.body.status,'committed');
     const after=(await f.request('/api/v1/auth/security')).body;
@@ -95,7 +95,7 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
     assert.equal((await f.request(`${base}/complete`,{actionId,token,newPassword:nextPassword},'')).status,409);
     assert.equal((await f.request(`${base}/inspect`,{token},'')).status,200);
     const second=await createUser(f.pool,{email:`${randomUUID()}@example.test`,password:recoveryPassword,name:'Other'});
-    const otherSession=await login(f.pool,{email:second.email,password:recoveryPassword}),otherCookie=`pm_v3_session=${otherSession.token}`,otherEmail=`${randomUUID()}@example.test`;
+    const otherSession=await login(f.pool,{email:second.email,password:recoveryPassword}),otherCookie=`pm_v4_session=${otherSession.token}`,otherEmail=`${randomUUID()}@example.test`;
     assert.equal((await f.request('/api/v1/auth/security/recovery-email',{actionId:randomUUID(),expectedCredentialVersion:1,expectedRecoveryEmailVersion:1,email:otherEmail,currentPassword:recoveryPassword},otherCookie)).body.status,'committed');
     await deliverAccountRecoveryMailBatch(f.pool,f.config);
     assert.equal((await f.request('/api/v1/auth/security/recovery-email/confirm',{actionId:randomUUID(),token:f.token('verify-recovery-email',otherEmail),expectedRecoveryEmailVersion:1},otherCookie)).body.status,'committed');
@@ -188,7 +188,7 @@ describe('account recovery real HTTP/PostgreSQL/SMTP',{skip:!recoveryDatabaseUrl
   it('replaces trust only after new verification and arbitrates a shared candidate email through the unique index',{timeout:mailFixtureCaseTimeout},async t=>{
     const f=await createRecoveryFixture({database,signal:t.signal});t.after(()=>f.close(),{timeout:mailFixtureCleanupTimeout});const old=await f.bind();
     await f.request(`${base}/requests`,{requestId:randomUUID(),email:old},'');await deliverAccountRecoveryMailBatch(f.pool,f.config);const oldToken=f.token('recovery',old);
-    const second=await createUser(f.pool,{email:`${randomUUID()}@example.test`,password:recoveryPassword,name:'Competing account'}),session=await login(f.pool,{email:second.email,password:recoveryPassword}),cookie=`pm_v3_session=${session.token}`,candidate=`${randomUUID()}@example.test`;
+    const second=await createUser(f.pool,{email:`${randomUUID()}@example.test`,password:recoveryPassword,name:'Competing account'}),session=await login(f.pool,{email:second.email,password:recoveryPassword}),cookie=`pm_v4_session=${session.token}`,candidate=`${randomUUID()}@example.test`;
     await f.request('/api/v1/auth/security/recovery-email',{actionId:randomUUID(),expectedCredentialVersion:1,expectedRecoveryEmailVersion:2,email:candidate,currentPassword:recoveryPassword});await deliverAccountRecoveryMailBatch(f.pool,f.config);const firstToken=f.token('verify-recovery-email',candidate);
     assert.equal((await f.request('/api/v1/auth/security')).body.recoveryEmail.email,old);
     await f.request('/api/v1/auth/security/recovery-email',{actionId:randomUUID(),expectedCredentialVersion:1,expectedRecoveryEmailVersion:1,email:candidate,currentPassword:recoveryPassword},cookie);await deliverAccountRecoveryMailBatch(f.pool,f.config);const secondToken=f.token('verify-recovery-email',candidate);

@@ -15,8 +15,9 @@ import { accountRecoveryPaths } from './account-recovery-openapi.ts';
 import { webhookResponseSchemas } from './webhook-schemas.ts';
 import { localProjectPaths } from './local-project-openapi.ts';
 import { agentFileAreaPaths } from './agent-file-area-openapi.ts';
+import { documentSourcePaths } from './document-source-openapi.ts';
 import { automationPaths } from './automation-openapi.ts';
-import { agentChatAccessSchema, agentChatAccessInputSchema, agentChatContextSourceSchema, agentChatToolCallSchema, agentChatToolResultSchema, agentChatMessageSchema, agentChatReasoningEffortSchema, agentChatReasoningSchema } from './agent-chat.ts';
+import { agentChatToolResultSchema } from '../../agent-contracts/src/pm-tool-result.ts';
 
 // Payload validators remain owned by application commands. This module only
 // describes their wire input and the HTTP adapter's public response envelopes.
@@ -89,25 +90,16 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     TaskCommentsPage: taskCommentsPageSchema, TaskCommentHistoryPage: taskCommentHistoryPageSchema,
     NotificationState: notificationStateSchema, NotificationInboxItem: notificationInboxItemSchema,
     NotificationInboxPage: notificationInboxPageSchema, MentionCandidatesPage: mentionCandidatesPageSchema,
-    AgentChatAccess: agentChatAccessSchema, AgentChatAccessInput: agentChatAccessInputSchema,
-    AgentChatContextSource: agentChatContextSourceSchema, AgentChatToolCall: agentChatToolCallSchema,
-    AgentChatToolResult: agentChatToolResultSchema, AgentChatMessage: agentChatMessageSchema,
-    AgentChatReasoningEffort: agentChatReasoningEffortSchema, AgentChatReasoning: agentChatReasoningSchema,
+    AgentChatToolResult: agentChatToolResultSchema,
   })) {
     const schema = z.toJSONSchema(validator, { io: 'output', target: 'draft-2020-12' });
     delete schema.$schema;
     schemas[name] = schema;
   }
-  schemas.AgentChatMessageStatus = { type: 'string', enum: ['complete', 'streaming', 'cancelled', 'error', 'interrupted'] };
-  schemas.AgentChatThread = object({
-    id: uuid, title: text, createdAt: timestamp, updatedAt: timestamp,
-    lastMessageAt: nullable(timestamp), messageCount: nonnegativeInteger,
-  });
-  schemas.AgentChatThreadList = object({ items: array(ref('AgentChatThread')) });
-  schemas.AgentChatThreadDetail = object({ thread: ref('AgentChatThread'), messages: array(ref('AgentChatMessage')) });
-  schemas.AgentChatStatus = object({ enabled: boolean, provider: { const: 'openai-compatible' }, model: nullable(text), reasoning: ref('AgentChatReasoning') });
-  schemas.AgentChatStreamError = object({ messageId: nullable(uuid), code: text, message: text });
-  schemas.AgentChatStreamDelta = object({ messageId: uuid, delta: text });
+  schemas.PmToolScope = object({ kind: { enum: ['workspace', 'projects'] }, projectIds: array(coreIdentifier) });
+  schemas.PmToolRequest = object({ operationId: uuid, name: text, arguments: {}, scope: ref('PmToolScope'), threadId: text, messageId: text, generationId: text });
+  schemas.PmToolCallRecord = object({ operationId: uuid, name: text, status: { enum: ['running', 'succeeded', 'failed', 'unknown'] }, result: nullable(ref('AgentChatToolResult')), error: nullable(object({ code: text, message: text })), threadId: text, messageId: text, generationId: text, workspaceId: uuid, createdAt: timestamp, finishedAt: nullable(timestamp) });
+  schemas.PmToolDefinition = object({ name: text, description: text, write: boolean, capabilities: array(text), available: boolean, denyReason: nullable(text), inputSchema: { type: 'object', additionalProperties: true } });
   schemas.SelfProfile = object({ userId: uuid, name: text, timeZone: { type: 'string', description: 'Validated IANA time zone.' }, jobTitle: nullable(text), phone: nullable(text), avatarDataUrl: nullable(text), version, joinedAt: timestamp, updatedAt: timestamp });
   schemas.MemberRole = { type: 'string', enum: ['admin', 'member', 'guest'] };
   schemas.MemberDirectoryAccess = object({ capabilities: array(text), projectIds: nullable(array(coreIdentifier)), version, revokedAt: nullable(timestamp) });
@@ -268,57 +260,18 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     ...accountRecoveryPaths,
     ...localProjectPaths(),
     ...agentFileAreaPaths(),
+    ...documentSourcePaths(),
     ...automationPaths(),
     '/health/live': { get: { operationId: 'getLiveness', summary: 'Process liveness only', security: [], responses: { 200: response('Process responds; no business-readiness guarantee.', object({ status: { const: 'alive' } })) } } },
     '/health/ready': { get: { operationId: 'getReadiness', summary: 'Database, storage, live Worker heartbeat and quarantined outbox readiness', security: [], responses: { 200: response('All readiness checks passed.', ref('Readiness')), 503: response('Backend is uninitialized or at least one readiness check failed.', ref('Readiness')) } } },
     '/api/v1/capabilities': { get: { operationId: 'getCapabilities', summary: 'Configured phase-one capabilities; enabled does not imply readiness', security: [], responses: { 200: response('Execution remains disabled. Check /health/ready before business traffic.', ref('Capabilities')) } } },
-    '/api/v1/workspaces/{workspaceId}/agent/status': { get: {
-      ...secured('Read whether the server has an OpenAI-compatible chat model configured; this is not a live provider probe', ref('AgentChatStatus'), [workspace]),
-      operationId: 'getAgentChatStatus',
-      description: 'Requires current domain.read. The API key is server-only and never returned. enabled only means configuration exists; a provider failure is reported when a message is sent. reasoning lists the distinct documented effort options for this exact provider/model. Unknown compatible providers/models and retired aliases advertise only auto, supported=false; auto always omits the provider override.',
-    } },
-    '/api/v1/workspaces/{workspaceId}/agent/threads': {
-      get: { ...secured('List the current actor’s private agent conversations', ref('AgentChatThreadList'), [workspace]), operationId: 'listAgentThreads' },
-      post: {
-        ...secured('Create or idempotently return one private agent conversation', object({ thread: ref('AgentChatThread') }), [workspace]),
-        operationId: 'createAgentThread',
-        requestBody: { required: true, content: json(object({ id: uuid, title: { type: 'string', minLength: 1, maxLength: 200 } }, ['id'])) },
-        description: 'Reusing an existing id owned by the same actor returns the existing thread. An id owned by another actor is rejected without disclosure.',
-      },
-    },
-    '/api/v1/workspaces/{workspaceId}/agent/threads/{threadId}': {
-      get: { ...secured('Read one private agent conversation and its persisted messages', ref('AgentChatThreadDetail'), [workspace, param('threadId', 'path', uuid)]), operationId: 'getAgentThread' },
-      delete: { ...secured('Delete one private agent conversation and its messages', object({ deleted: { const: true } }), [workspace, param('threadId', 'path', uuid)]), operationId: 'deleteAgentThread', description: 'Stops an in-flight reply owned by this API process before deleting the thread. Model side effects outside this service cannot be undone.' },
-    },
-    '/api/v1/workspaces/{workspaceId}/agent/threads/{threadId}/access': {
-      get: { ...secured('Read current private-chat authorization and effective tool capabilities', ref('AgentChatAccess'), [workspace, param('threadId', 'path', uuid)]), operationId: 'getAgentThreadAccess' },
-      put: {
-        ...secured('Explicitly enable or revoke scoped Full access using the current revision', ref('AgentChatAccess'), [workspace, param('threadId', 'path', uuid)]),
-        operationId: 'setAgentThreadAccess', requestBody: { required: true, content: json(ref('AgentChatAccessInput')) },
-        description: 'Initial access is disabled. Enabling freezes the selected authorized project IDs and tool version for a finite grant. Allowed tools are auto-approved within that scope only. A disabled input may save scope without enabling tools. Revocation prevents new dispatch, not rollback of committed effects. A stale expectedRevision is rejected; after a lost response read access before retrying.',
-      },
-    },
-    '/api/v1/workspaces/{workspaceId}/agent/threads/{threadId}/messages': { post: {
-      operationId: 'streamAgentChatMessage',
-      summary: 'Persist a user message and stream one untrusted model reply over SSE',
-      security: authenticated,
-      parameters: [workspace, param('threadId', 'path', uuid)],
-      requestBody: { required: true, content: json(object({ messageId: uuid, content: { type: 'string', minLength: 1, maxLength: 16000 }, reasoningEffort: { ...ref('AgentChatReasoningEffort'), default: 'auto' } }, ['messageId', 'content'])) },
-      description: 'SSE events: user, assistant, delta, capabilities, context, tool, done, cancelled, error. capabilities carries {messageId,access}, context {messageId,sources}, tool {messageId,toolCall}; assistant snapshots retain actual tool calls and sources, never raw model thinking. reasoningEffort applies to every model round of this message only; auto omits the override. A non-auto value not advertised by status is rejected with 400 agent_reasoning_unsupported before either message is persisted. The client messageId is idempotent within the thread. Only one reply may stream per thread. Closing the reader does not cancel generation; POST cancel is explicit. EOF without done/cancelled/error leaves the result unknown; reconcile via GET thread, never blindly resend. Model text is not a business fact; only scoped, server-authorized native tools can write PM data.',
-      responses: {
-        200: { description: 'SSE. user/assistant/done/cancelled carry {message}; delta carries {messageId,delta}; error carries {messageId,code,message}.', content: { 'text/event-stream': { schema: { type: 'string' } } } },
-        ...errors(400, 401, 403, 404, 409, 503),
-      },
-    } },
-    '/api/v1/workspaces/{workspaceId}/agent/threads/{threadId}/cancel': { post: {
-      ...secured('Explicitly cancel the current reply; partial text is retained', object({ cancelled: boolean }), [workspace, param('threadId', 'path', uuid)]),
-      operationId: 'cancelAgentThread',
-      requestBody: { required: false, content: json(object({ messageId: uuid }, [])) },
-      description: 'Cancellation is explicit. The server aborts the provider request and waits for the generation handler to persist both partial text and terminal status. cancelled=true confirms persisted cancellation; false means no matching active reply or another terminal outcome won the race. Persistence failure returns 503. Clients must reconcile unknown outcomes via GET thread and must not infer cancellation from a disconnected reader. External provider usage already incurred is not reversible.',
-    } },
+    '/api/v1/workspaces/{workspaceId}/agent-tools': { get: { ...secured('List the registered PM tools for the authenticated actor', object({ tools: array(ref('PmToolDefinition')) }), [workspace]), operationId: 'listPmAgentTools' } },
+    '/api/v1/workspaces/{workspaceId}/agent-tools/call': { post: { ...secured('Execute an idempotent PM tool operation', ref('PmToolCallRecord'), [workspace]), operationId: 'callPmAgentTool', requestBody: { required: true, content: json(ref('PmToolRequest')) }, description: 'Current PM identity and scope are checked; a reused operationId with different input is rejected.' } },
+    '/api/v1/workspaces/{workspaceId}/agent-tools/result': { post: { ...secured('Reconcile the original PM tool outcome without redispatch', ref('PmToolCallRecord'), [workspace]), operationId: 'reconcilePmAgentTool', requestBody: { required: true, content: json(ref('PmToolRequest')) } } },
+    '/api/v1/workspaces/{workspaceId}/agent-tools/core-files': { get: { ...secured('Read authorized managed PM core files for change observation', object({ files: array(object({ path: text, projectId: coreIdentifier, entityId: nullable(text), content: text })), complete: boolean, error: text }, ['files', 'complete']), [workspace, param('projectId', 'query', coreIdentifier, true)]), operationId: 'listPmAgentCoreFiles', description: 'Incomplete scans include an error and cannot establish file deletions.' } },
     '/openapi.json': { get: { operationId: 'getOpenApi', summary: 'Live contract generated from the command registry', security: [], responses: { 200: response('OpenAPI 3.1 document', { type: 'object', additionalProperties: true }) } } },
-    '/api/v1/auth/login': { post: { operationId: 'login', summary: 'Create a server-side session', security: [], requestBody: { required: true, content: json(object({ email: { type: 'string', maxLength: 254 }, password: { type: 'string', maxLength: 256 } })) }, responses: { 200: { ...response('Session actor and expiry; token is only returned in Set-Cookie.', object({ actor: ref('Actor'), expiresAt: timestamp })), headers: { 'Set-Cookie': { description: 'pm_v3_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.', schema: { type: 'string' } } } }, ...errors(400, 401, 403, 429, 503) } } },
-    '/api/v1/auth/logout': { post: { ...secured('Revoke the current session and clear pm_v3_session', object({ loggedOut: { const: true } })), operationId: 'logout' } },
+    '/api/v1/auth/login': { post: { operationId: 'login', summary: 'Create a server-side session', security: [], requestBody: { required: true, content: json(object({ email: { type: 'string', maxLength: 254 }, password: { type: 'string', maxLength: 256 } })) }, responses: { 200: { ...response('Session actor and expiry; token is only returned in Set-Cookie.', object({ actor: ref('Actor'), expiresAt: timestamp })), headers: { 'Set-Cookie': { description: 'pm_v4_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.', schema: { type: 'string' } } } }, ...errors(400, 401, 403, 429, 503) } } },
+    '/api/v1/auth/logout': { post: { ...secured('Revoke the current session and clear pm_v4_session', object({ loggedOut: { const: true } })), operationId: 'logout' } },
     '/api/v1/auth/me': { get: { ...secured('Read the authenticated actor', object({ actor: ref('Actor') })), operationId: 'getMe' } },
     '/api/v1/auth/security': { get: { ...secured('Read own credential version and active sessions; token hashes and unobserved device metadata are never exposed', ref('AccountSecurity')), operationId: 'getAccountSecurity' } },
     '/api/v1/auth/security/password': { post: {
@@ -438,8 +391,8 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
   };
   return {
     openapi: '3.1.0', jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
-    info: { title: 'Project Management API', version: '0.1.0', description: 'Phase-one modular backend. Supersedes the historical bootstrap.openapi.yaml contract. Server-side sessions accept either pm_v3_session cookie or Authorization: Bearer; an Authorization header takes precedence. Origin must match configured PUBLIC_ORIGIN, cross-site writes are rejected, and this server does not enable cross-origin browser CORS. Disabled execution is not represented as available commands.' },
+    info: { title: 'Project Management API', version: '0.1.0', description: 'Phase-one modular backend. Supersedes the historical bootstrap.openapi.yaml contract. Server-side sessions accept either pm_v4_session cookie or Authorization: Bearer; an Authorization header takes precedence. Origin must match configured PUBLIC_ORIGIN, cross-site writes are rejected, and this server does not enable cross-origin browser CORS. Disabled execution is not represented as available commands.' },
     servers: [{ url: '/' }], paths,
-    components: { schemas, securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'pm_v3_session' }, bearerAuth: { type: 'http', scheme: 'bearer', description: 'The same opaque server-side session token, not a JWT. Inject explicitly; never store in a generated client.' } } },
+    components: { schemas, securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'pm_v4_session' }, bearerAuth: { type: 'http', scheme: 'bearer', description: 'The same opaque server-side session token, not a JWT. Inject explicitly; never store in a generated client.' } } },
   };
 }

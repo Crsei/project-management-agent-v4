@@ -1,0 +1,757 @@
+{
+  "ledger_version": 1,
+  "slice": "M1-markdown-import-dependency-fix",
+  "source_manifest": "vendor/t3code/source-manifest.json",
+  "host_contract": "docs/implementation/t3code-provider-host-contract.zh.md",
+  "upstream_commit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "status": "source-complete-pending-parent-install-and-verification",
+  "reason": "The frozen source workspace replaces remark-math's micromark-extension-math edge with micromark-extension-llm-math@3.1.0 and applies three external math/table patches. Those package-manager adaptations were omitted from the initial source import.",
+  "isolation": {
+    "entrypoint": "vendor/t3code/packages/shared/package.json",
+    "strategy": "Six local file dependencies preserve original package names and versions. Only the edges leading to the patched modules are redirected; all parser/plugin JavaScript is verbatim npm release source plus the original pinned upstream patches.",
+    "global_overrides_added": [],
+    "global_patched_dependencies_added": [],
+    "root_or_web_dependencies_changed": [],
+    "source_checkout_modified": false,
+    "exports_or_types_redefined": false,
+    "markdown_math_implementation_changed": false,
+    "test_assertions_changed": false
+  },
+  "source_config": {
+    "path": "pnpm-workspace.yaml",
+    "git_blob_sha1": "a07ad2b008d792ae38b1a00b0d2ed619e44fded9",
+    "sha256": "97a95e2067eee109099fe42f326261f52b47eeb3b60f0caeed336dd4fdab0aad",
+    "required_overrides": {
+      "mdast-util-math": "3.0.0",
+      "micromark-extension-llm-math": "3.1.0",
+      "remark-math>micromark-extension-math": "npm:micromark-extension-llm-math@3.1.0",
+      "micromark-extension-gfm-table": "2.1.1"
+    },
+    "copy_precondition": "Source workspace and patch file Git blob SHA1 values matched git ls-tree at the frozen commit before copying; npm tarball SHA512 values matched the frozen source manifest before extraction."
+  },
+  "shared_dependency_changes": [
+    {
+      "dependency": "remark-gfm",
+      "from": "catalog:",
+      "to": "file:../../third-party/remark-gfm"
+    },
+    {
+      "dependency": "remark-math",
+      "from": "6.0.0",
+      "to": "file:../../third-party/remark-math"
+    }
+  ],
+  "local_dependency_changes": [
+    {
+      "path": "vendor/t3code/third-party/remark-math/package.json",
+      "dependency": "mdast-util-math",
+      "from": "^3.0.0",
+      "to": "file:../mdast-util-math"
+    },
+    {
+      "path": "vendor/t3code/third-party/remark-math/package.json",
+      "dependency": "micromark-extension-math",
+      "from": "^3.0.0",
+      "to": "file:../micromark-extension-llm-math"
+    },
+    {
+      "path": "vendor/t3code/third-party/remark-gfm/package.json",
+      "dependency": "micromark-extension-gfm",
+      "from": "^3.0.0",
+      "to": "file:../micromark-extension-gfm"
+    },
+    {
+      "path": "vendor/t3code/third-party/micromark-extension-gfm/package.json",
+      "dependency": "micromark-extension-gfm-table",
+      "from": "^2.0.0",
+      "to": "file:../micromark-extension-gfm-table"
+    }
+  ],
+  "upstream_patches": [
+    {
+      "source_path": "patches/mdast-util-math@3.0.0.patch",
+      "vendored_path": "vendor/t3code/third-party/patches/mdast-util-math@3.0.0.patch",
+      "git_blob_sha1": "ace1131cf26aa2b3469fb427ffdb87bb4e224168",
+      "sha256": "afe6b2c89e1eaddfd3c90cf2723f12c9a17d513e65beff51653781486013251c",
+      "application": "Applied in memory against the integrity-verified npm baseline with exact source line numbers, complete old-line equality, and hunk counts; no offsets beyond earlier hunks, no fuzz, no parser rewrite.",
+      "hunk_count": 1,
+      "patched_files": [
+        "lib/index.js"
+      ]
+    },
+    {
+      "source_path": "patches/micromark-extension-llm-math@3.1.0.patch",
+      "vendored_path": "vendor/t3code/third-party/patches/micromark-extension-llm-math@3.1.0.patch",
+      "git_blob_sha1": "335ce4c11d57edafda9687ba9aa7532f9dbdbde9",
+      "sha256": "49ab4815c18b003f6af998dcc6c258c17a21b50b2cc87745f12d4bd8b6d591f9",
+      "application": "Applied in memory against the integrity-verified npm baseline with exact source line numbers, complete old-line equality, and hunk counts; no offsets beyond earlier hunks, no fuzz, no parser rewrite.",
+      "hunk_count": 21,
+      "patched_files": [
+        "dev/lib/math-flow.js",
+        "dev/lib/math-tex-flow.js",
+        "dev/lib/math-tex-text.js",
+        "dev/lib/math-text.js",
+        "package.json"
+      ]
+    },
+    {
+      "source_path": "patches/micromark-extension-gfm-table@2.1.1.patch",
+      "vendored_path": "vendor/t3code/third-party/patches/micromark-extension-gfm-table@2.1.1.patch",
+      "git_blob_sha1": "78cda546653768264f2d7528c9cee50470dab7d7",
+      "sha256": "9ad23a530e45d9f83cba1da8654fe16d5af8b59d5c73d5c7a7c91fd25b9be1d8",
+      "application": "Applied in memory against the integrity-verified npm baseline with exact source line numbers, complete old-line equality, and hunk counts; no offsets beyond earlier hunks, no fuzz, no parser rewrite.",
+      "hunk_count": 5,
+      "patched_files": [
+        "dev/lib/syntax.js",
+        "package.json"
+      ]
+    }
+  ],
+  "packages": [
+    {
+      "name": "remark-math",
+      "version": "6.0.0",
+      "path": "vendor/t3code/third-party/remark-math",
+      "tarball_url": "https://registry.npmjs.org/remark-math/-/remark-math-6.0.0.tgz",
+      "tarball_integrity": "sha512-MMqgnP74Igy+S3WwnhQ7kqGlEerTETXMvJhrUzDikVZ2/uogJCb+WHUg97hK9/jcfc0dkD73s3LN8zU49cTEtA==",
+      "repository": "https://github.com/remarkjs/remark-math/tree/main/packages/remark-math",
+      "license": {
+        "spdx": "MIT",
+        "path": "license",
+        "sha256": "cb992262f361a5359e6771c28740d33c7041e15332ae8537fae40538992591a9",
+        "source_url": "https://raw.githubusercontent.com/remarkjs/remark-math/d5d0660b150810a535bbb07eac6cc96a4510aa24/license",
+        "source_git_commit": "d5d0660b150810a535bbb07eac6cc96a4510aa24",
+        "note": "The npm tarball omits the monorepo root license. Copy the original root license from the exact gitHead recorded by registry.npmjs.org/remark-math/6.0.0, matching the copyright and license link in the packaged readme."
+      },
+      "files": [
+        {
+          "path": "index.d.ts",
+          "baseline_sha256": "4e3ab6678655e507463a9bfa1aa39a4a5497fac4c75e5f7f7a16c0b7d001c34a",
+          "vendored_sha256": "4e3ab6678655e507463a9bfa1aa39a4a5497fac4c75e5f7f7a16c0b7d001c34a",
+          "change": "verbatim"
+        },
+        {
+          "path": "index.js",
+          "baseline_sha256": "ff503a9bd25827d5d77b2bc2ef6a5cfc830c24b217ebcc0613484fe513001de7",
+          "vendored_sha256": "ff503a9bd25827d5d77b2bc2ef6a5cfc830c24b217ebcc0613484fe513001de7",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/index.d.ts",
+          "baseline_sha256": "f0eb42a134d7bb15f24aed89d8f3b5ffe6e326c74abdad75fff520c281239375",
+          "vendored_sha256": "f0eb42a134d7bb15f24aed89d8f3b5ffe6e326c74abdad75fff520c281239375",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/index.js",
+          "baseline_sha256": "d89e4f61bb3e92fd317064a2419edc99e863b1a63783fcddeb428c7eccb03de9",
+          "vendored_sha256": "d89e4f61bb3e92fd317064a2419edc99e863b1a63783fcddeb428c7eccb03de9",
+          "change": "verbatim"
+        },
+        {
+          "path": "license",
+          "baseline_sha256": null,
+          "vendored_sha256": "cb992262f361a5359e6771c28740d33c7041e15332ae8537fae40538992591a9",
+          "change": "release-license-supplement"
+        },
+        {
+          "path": "package.json",
+          "baseline_sha256": "936d400d2c2a3f121c4d2b6b84b8a891af02852032b0dcb31f0407d2d6a4364f",
+          "vendored_sha256": "f83ca6fbf9573eed0f660c0007b4e07c202bd8209eb4aa02cba4ccf35d03e4f7",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "readme.md",
+          "baseline_sha256": "8c2f2da789935ff56a31ddc6073fe005e5c07afbdbd835984144938aca93e068",
+          "vendored_sha256": "8c2f2da789935ff56a31ddc6073fe005e5c07afbdbd835984144938aca93e068",
+          "change": "verbatim"
+        }
+      ]
+    },
+    {
+      "name": "mdast-util-math",
+      "version": "3.0.0",
+      "path": "vendor/t3code/third-party/mdast-util-math",
+      "tarball_url": "https://registry.npmjs.org/mdast-util-math/-/mdast-util-math-3.0.0.tgz",
+      "tarball_integrity": "sha512-Tl9GBNeG/AhJnQM221bJR2HPvLOSnLE/T9cJI9tlc6zwQk2nPk/4f0cHkOdEixQPC/j8UtKDdITswvLAy1OZ1w==",
+      "repository": "syntax-tree/mdast-util-math",
+      "license": {
+        "spdx": "MIT",
+        "path": "license",
+        "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+      },
+      "files": [
+        {
+          "path": "index.d.ts",
+          "baseline_sha256": "830c61b95e880bcd42f96d8a4181b0d84dec566ba5dd131b386dcb9608043832",
+          "vendored_sha256": "830c61b95e880bcd42f96d8a4181b0d84dec566ba5dd131b386dcb9608043832",
+          "change": "verbatim"
+        },
+        {
+          "path": "index.js",
+          "baseline_sha256": "266fcd72f8606ae61640f98ea2aa660562c08d3e5cc14956d09051813aab47c0",
+          "vendored_sha256": "266fcd72f8606ae61640f98ea2aa660562c08d3e5cc14956d09051813aab47c0",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/index.d.ts",
+          "baseline_sha256": "347511f401eb79a6030b80f6a67d126ab41da1f663f0374c1d0a93312ae08e00",
+          "vendored_sha256": "347511f401eb79a6030b80f6a67d126ab41da1f663f0374c1d0a93312ae08e00",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/index.js",
+          "baseline_sha256": "fabe05044becc9ae3ff1320f4c2ed30d8aa8859b4944e126cac22a570bae9574",
+          "vendored_sha256": "604adb78d0d9d3c9f4fb67e26d0f9379938621dd39c721d6e910d2afbdca3c87",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "license",
+          "baseline_sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+          "vendored_sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+          "change": "verbatim"
+        },
+        {
+          "path": "package.json",
+          "baseline_sha256": "d9d6c7f8e4783917a559989166b153a2234096db0de812205538e18efe3f2a65",
+          "vendored_sha256": "d9d6c7f8e4783917a559989166b153a2234096db0de812205538e18efe3f2a65",
+          "change": "verbatim"
+        },
+        {
+          "path": "readme.md",
+          "baseline_sha256": "355b2de5a960d720935a74bbebd987087e8232fde7e63c8eb3ffad4978572fd1",
+          "vendored_sha256": "355b2de5a960d720935a74bbebd987087e8232fde7e63c8eb3ffad4978572fd1",
+          "change": "verbatim"
+        }
+      ]
+    },
+    {
+      "name": "micromark-extension-llm-math",
+      "version": "3.1.0",
+      "path": "vendor/t3code/third-party/micromark-extension-llm-math",
+      "tarball_url": "https://registry.npmjs.org/micromark-extension-llm-math/-/micromark-extension-llm-math-3.1.0.tgz",
+      "tarball_integrity": "sha512-VIYHuIEk0gpHrojEtNGaxGwdpSLtdWYlLL2vu9PM4M1ilEtak10S8F9zzbNAPBNRoWFs/bjs+J7R3yUBoIQUEA==",
+      "repository": "ofk/micromark-extension-llm-math",
+      "license": {
+        "spdx": "MIT",
+        "path": "license",
+        "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+      },
+      "files": [
+        {
+          "path": "dev/index.d.ts",
+          "baseline_sha256": "7f49647e8fca8099752b6f37f1db62b4710badc3fca033316c7eba63fac1636b",
+          "vendored_sha256": "7f49647e8fca8099752b6f37f1db62b4710badc3fca033316c7eba63fac1636b",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/index.js",
+          "baseline_sha256": "060a8c6966e4e7330c69af655b5ce8942da37a84fc210a3b1b0093998c83dae8",
+          "vendored_sha256": "060a8c6966e4e7330c69af655b5ce8942da37a84fc210a3b1b0093998c83dae8",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/html.d.ts",
+          "baseline_sha256": "2e2a8849930077c479f6d3209066f747986afa8069741c3af3ae6431c14dfa1c",
+          "vendored_sha256": "2e2a8849930077c479f6d3209066f747986afa8069741c3af3ae6431c14dfa1c",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/html.js",
+          "baseline_sha256": "99c33563a1d98bec253639d4b0419196d39734d8380b81861c0f20516138dac9",
+          "vendored_sha256": "99c33563a1d98bec253639d4b0419196d39734d8380b81861c0f20516138dac9",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/math-flow.d.ts",
+          "baseline_sha256": "f6104502e39c93ffabd8bd6c828eadd2a309db34d56ba92fba8b9c57f9546888",
+          "vendored_sha256": "f6104502e39c93ffabd8bd6c828eadd2a309db34d56ba92fba8b9c57f9546888",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/math-flow.js",
+          "baseline_sha256": "3db6ca33b5b1dd540542a3bbcf34a4d5447e271362e4f004cb3ffd7080afefb9",
+          "vendored_sha256": "e08c7bf051a57cfce361234b8b1725c63e23a6971efdb46233d7ede95c9a0d78",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "dev/lib/math-tex-flow.d.ts",
+          "baseline_sha256": "bee1ef70347d5fa31aac40ea7bb23ff33460e4e15681d0067ad0963b1465353d",
+          "vendored_sha256": "bee1ef70347d5fa31aac40ea7bb23ff33460e4e15681d0067ad0963b1465353d",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/math-tex-flow.js",
+          "baseline_sha256": "b0f93df5c8d55658006edf07ae5eee14cccc8980a2208ec7d1655a70fe6dacc3",
+          "vendored_sha256": "dabd955c3313ae3b0150c34ddddf69d90afe2ebfe61356478d13d371a3620de0",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "dev/lib/math-tex-text.d.ts",
+          "baseline_sha256": "750b2c5e38cdcdba1a5e98caf262566f55d3206ac2053bfad0fbabf0d4cd607b",
+          "vendored_sha256": "750b2c5e38cdcdba1a5e98caf262566f55d3206ac2053bfad0fbabf0d4cd607b",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/math-tex-text.js",
+          "baseline_sha256": "832ca5dfbf555e8b4dc28f0fdb28df443015d2e3995458d30a89770918208e88",
+          "vendored_sha256": "63b2959cc3c9cddaa329ce195fa7200f01b5de6c9ba1971081383646f8f83681",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "dev/lib/math-text.d.ts",
+          "baseline_sha256": "64fc84a5757c9bf1809724820541c56d18eb629aa61cac06295a4068b33d96d5",
+          "vendored_sha256": "64fc84a5757c9bf1809724820541c56d18eb629aa61cac06295a4068b33d96d5",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/math-text.js",
+          "baseline_sha256": "296c608defa89b51c5b0f87f117c669f94950edf02e99ce7e515101f7d557c8f",
+          "vendored_sha256": "f73c20b7dad18e37893ef5830f4b1ba2484d6cdb88b2e8e530e0254548b19fc6",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "dev/lib/syntax.d.ts",
+          "baseline_sha256": "65ad2a70953577fbfdac2a81a642d4454f4619cc86722290dc70077ca7609ce8",
+          "vendored_sha256": "65ad2a70953577fbfdac2a81a642d4454f4619cc86722290dc70077ca7609ce8",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/syntax.js",
+          "baseline_sha256": "22a93482eea970789f79f1dc0d4ff2b1cd93ea3f3f7808a7d6b8850443724ca5",
+          "vendored_sha256": "22a93482eea970789f79f1dc0d4ff2b1cd93ea3f3f7808a7d6b8850443724ca5",
+          "change": "verbatim"
+        },
+        {
+          "path": "index.d.ts",
+          "baseline_sha256": "7f49647e8fca8099752b6f37f1db62b4710badc3fca033316c7eba63fac1636b",
+          "vendored_sha256": "7f49647e8fca8099752b6f37f1db62b4710badc3fca033316c7eba63fac1636b",
+          "change": "verbatim"
+        },
+        {
+          "path": "index.js",
+          "baseline_sha256": "d2651b530ac7e16dac559f6230bae438846f693dbc7b8e39b2b3001bf8455208",
+          "vendored_sha256": "d2651b530ac7e16dac559f6230bae438846f693dbc7b8e39b2b3001bf8455208",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/html.d.ts",
+          "baseline_sha256": "2e2a8849930077c479f6d3209066f747986afa8069741c3af3ae6431c14dfa1c",
+          "vendored_sha256": "2e2a8849930077c479f6d3209066f747986afa8069741c3af3ae6431c14dfa1c",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/html.js",
+          "baseline_sha256": "04fd9342e69d60a7dac77feac590fb577d3ec39ee5ae0238ba6f7d9da2d1460b",
+          "vendored_sha256": "04fd9342e69d60a7dac77feac590fb577d3ec39ee5ae0238ba6f7d9da2d1460b",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/math-flow.d.ts",
+          "baseline_sha256": "f6104502e39c93ffabd8bd6c828eadd2a309db34d56ba92fba8b9c57f9546888",
+          "vendored_sha256": "f6104502e39c93ffabd8bd6c828eadd2a309db34d56ba92fba8b9c57f9546888",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/math-flow.js",
+          "baseline_sha256": "5399d010e7dee830eb033b56bc3162c6ec0be64cc4da82d808533bd9aa918248",
+          "vendored_sha256": "5399d010e7dee830eb033b56bc3162c6ec0be64cc4da82d808533bd9aa918248",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/math-tex-flow.d.ts",
+          "baseline_sha256": "bee1ef70347d5fa31aac40ea7bb23ff33460e4e15681d0067ad0963b1465353d",
+          "vendored_sha256": "bee1ef70347d5fa31aac40ea7bb23ff33460e4e15681d0067ad0963b1465353d",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/math-tex-flow.js",
+          "baseline_sha256": "ad223af238772d4d996a63f60e56308e568fb91119f21d5276c8497db1fd1678",
+          "vendored_sha256": "ad223af238772d4d996a63f60e56308e568fb91119f21d5276c8497db1fd1678",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/math-tex-text.d.ts",
+          "baseline_sha256": "750b2c5e38cdcdba1a5e98caf262566f55d3206ac2053bfad0fbabf0d4cd607b",
+          "vendored_sha256": "750b2c5e38cdcdba1a5e98caf262566f55d3206ac2053bfad0fbabf0d4cd607b",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/math-tex-text.js",
+          "baseline_sha256": "55c867e194be9ac92d471ca3fa312d068eb52b52d343cb93e7c5c9f87fb01c39",
+          "vendored_sha256": "55c867e194be9ac92d471ca3fa312d068eb52b52d343cb93e7c5c9f87fb01c39",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/math-text.d.ts",
+          "baseline_sha256": "64fc84a5757c9bf1809724820541c56d18eb629aa61cac06295a4068b33d96d5",
+          "vendored_sha256": "64fc84a5757c9bf1809724820541c56d18eb629aa61cac06295a4068b33d96d5",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/math-text.js",
+          "baseline_sha256": "3cc18c52dd2eb71bd2b843c5cf3fa4f8aa8f465748ffd5fd978cd086b25dc981",
+          "vendored_sha256": "3cc18c52dd2eb71bd2b843c5cf3fa4f8aa8f465748ffd5fd978cd086b25dc981",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/syntax.d.ts",
+          "baseline_sha256": "65ad2a70953577fbfdac2a81a642d4454f4619cc86722290dc70077ca7609ce8",
+          "vendored_sha256": "65ad2a70953577fbfdac2a81a642d4454f4619cc86722290dc70077ca7609ce8",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/syntax.js",
+          "baseline_sha256": "f0ab24c1224d83f4269fc14893f5290853bfdef51d81a0842eeb6034d1a131af",
+          "vendored_sha256": "f0ab24c1224d83f4269fc14893f5290853bfdef51d81a0842eeb6034d1a131af",
+          "change": "verbatim"
+        },
+        {
+          "path": "license",
+          "baseline_sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+          "vendored_sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+          "change": "verbatim"
+        },
+        {
+          "path": "package.json",
+          "baseline_sha256": "d9e83f780052a0c6813ffcdee478fc38d7f7cfa76349d6187c8fd1ed349af4cc",
+          "vendored_sha256": "77623ec365a8783b20ccb99b519ee3023b8e4809cd0e3fb4b6afe9c0ee7ac840",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "readme.md",
+          "baseline_sha256": "7f3b9d5cfe48c0681c2eb76c20b69d9b7ebf8a08f39a35bf037685fc64a9ffb7",
+          "vendored_sha256": "7f3b9d5cfe48c0681c2eb76c20b69d9b7ebf8a08f39a35bf037685fc64a9ffb7",
+          "change": "verbatim"
+        }
+      ]
+    },
+    {
+      "name": "remark-gfm",
+      "version": "4.0.1",
+      "path": "vendor/t3code/third-party/remark-gfm",
+      "tarball_url": "https://registry.npmjs.org/remark-gfm/-/remark-gfm-4.0.1.tgz",
+      "tarball_integrity": "sha512-1quofZ2RQ9EWdeN34S79+KExV1764+wCUGop5CPL1WGdD0ocPpu91lzPGbwWMECpEpd42kJGQwzRfyov9j4yNg==",
+      "repository": "remarkjs/remark-gfm",
+      "license": {
+        "spdx": "MIT",
+        "path": "license",
+        "sha256": "dd1081884a92952802f4803110a6bb543acea9a814c786d58605b4c1219b5ebb"
+      },
+      "files": [
+        {
+          "path": "index.d.ts",
+          "baseline_sha256": "7116e0399952e03afe9749a77ceaca29b0e1950989375066a9ddc9cb0b7dd252",
+          "vendored_sha256": "7116e0399952e03afe9749a77ceaca29b0e1950989375066a9ddc9cb0b7dd252",
+          "change": "verbatim"
+        },
+        {
+          "path": "index.js",
+          "baseline_sha256": "0cf2ebbaae90578f4a838505ebc3d7fd1d8339484c7f13be1a3d4d09427c2dc9",
+          "vendored_sha256": "0cf2ebbaae90578f4a838505ebc3d7fd1d8339484c7f13be1a3d4d09427c2dc9",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/index.d.ts",
+          "baseline_sha256": "36a86373da8b63c90d836a2422b4ecca167e15af592bab9c3367f59ef4cf923a",
+          "vendored_sha256": "36a86373da8b63c90d836a2422b4ecca167e15af592bab9c3367f59ef4cf923a",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/index.d.ts.map",
+          "baseline_sha256": "2eb080dddc4dd00fce494c1cd2922d774def261dfed3ed369a95ca15f8981eb2",
+          "vendored_sha256": "2eb080dddc4dd00fce494c1cd2922d774def261dfed3ed369a95ca15f8981eb2",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/index.js",
+          "baseline_sha256": "9317003279e791d39b7e3482cecfb3409843378164a238a535984f644e53c7ef",
+          "vendored_sha256": "9317003279e791d39b7e3482cecfb3409843378164a238a535984f644e53c7ef",
+          "change": "verbatim"
+        },
+        {
+          "path": "license",
+          "baseline_sha256": "dd1081884a92952802f4803110a6bb543acea9a814c786d58605b4c1219b5ebb",
+          "vendored_sha256": "dd1081884a92952802f4803110a6bb543acea9a814c786d58605b4c1219b5ebb",
+          "change": "verbatim"
+        },
+        {
+          "path": "package.json",
+          "baseline_sha256": "c199482a69355b610bd1ff225b097776d4a990445b11e5f4c618930dacc8c79d",
+          "vendored_sha256": "7cedda98da82289561fed38d0bd9fc75ed57ebec82a25c9ad318929536b4a00b",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "readme.md",
+          "baseline_sha256": "22ac117c9fced0eac382eda19c92ec105614973ef69f3ba9f395e3d86c146e87",
+          "vendored_sha256": "22ac117c9fced0eac382eda19c92ec105614973ef69f3ba9f395e3d86c146e87",
+          "change": "verbatim"
+        }
+      ]
+    },
+    {
+      "name": "micromark-extension-gfm",
+      "version": "3.0.0",
+      "path": "vendor/t3code/third-party/micromark-extension-gfm",
+      "tarball_url": "https://registry.npmjs.org/micromark-extension-gfm/-/micromark-extension-gfm-3.0.0.tgz",
+      "tarball_integrity": "sha512-vsKArQsicm7t0z2GugkCKtZehqUm31oeGBV/KVSorWSy8ZlNAv7ytjFhvaryUiCUJYqs+NoE6AFhpQvBTM6Q4w==",
+      "repository": "micromark/micromark-extension-gfm",
+      "license": {
+        "spdx": "MIT",
+        "path": "license",
+        "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+      },
+      "files": [
+        {
+          "path": "index.d.ts",
+          "baseline_sha256": "14c8d1819e24a0ccb0aa64f85c61a6436c403eaf44c0e733cdaf1780fed5ec9f",
+          "vendored_sha256": "14c8d1819e24a0ccb0aa64f85c61a6436c403eaf44c0e733cdaf1780fed5ec9f",
+          "change": "verbatim"
+        },
+        {
+          "path": "index.js",
+          "baseline_sha256": "66b05551c6efe3d6a1c75bca914c192139bc3c998fdb2b0d0784ab6685934bbc",
+          "vendored_sha256": "66b05551c6efe3d6a1c75bca914c192139bc3c998fdb2b0d0784ab6685934bbc",
+          "change": "verbatim"
+        },
+        {
+          "path": "license",
+          "baseline_sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+          "vendored_sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61",
+          "change": "verbatim"
+        },
+        {
+          "path": "package.json",
+          "baseline_sha256": "f0c6ffb3bbbf52b1e5d939566b8d68097cbdd061598f09fde72af8a38c948bee",
+          "vendored_sha256": "b2cea666a87352641b312fde7f7bc0411c558b2d98877acb4498ff2501ff53fe",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "readme.md",
+          "baseline_sha256": "0e4456c3fd134e3e489ebde3ebf23b4412a85bc51c442450d172acd72dbe53e3",
+          "vendored_sha256": "0e4456c3fd134e3e489ebde3ebf23b4412a85bc51c442450d172acd72dbe53e3",
+          "change": "verbatim"
+        }
+      ]
+    },
+    {
+      "name": "micromark-extension-gfm-table",
+      "version": "2.1.1",
+      "path": "vendor/t3code/third-party/micromark-extension-gfm-table",
+      "tarball_url": "https://registry.npmjs.org/micromark-extension-gfm-table/-/micromark-extension-gfm-table-2.1.1.tgz",
+      "tarball_integrity": "sha512-t2OU/dXXioARrC6yWfJ4hqB7rct14e8f7m0cbI5hUmDyyIlwv5vEtooptH8INkbLzOatzKuVbQmAYcbWoyz6Dg==",
+      "repository": "micromark/micromark-extension-gfm-table",
+      "license": {
+        "spdx": "MIT",
+        "path": "license",
+        "sha256": "dd1081884a92952802f4803110a6bb543acea9a814c786d58605b4c1219b5ebb"
+      },
+      "files": [
+        {
+          "path": "dev/index.d.ts",
+          "baseline_sha256": "543afb9ef830c853641abeeb1e2322446efd8ea012e241530fe1a8a89057530e",
+          "vendored_sha256": "543afb9ef830c853641abeeb1e2322446efd8ea012e241530fe1a8a89057530e",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/index.js",
+          "baseline_sha256": "5c9e4cf61b33196d25e75dc4cf0cb669f5a41bd2cef275e2bb8ec5ed1d1186dc",
+          "vendored_sha256": "5c9e4cf61b33196d25e75dc4cf0cb669f5a41bd2cef275e2bb8ec5ed1d1186dc",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/edit-map.d.ts",
+          "baseline_sha256": "bf2547c2b1dbd6649efdcf41fd74556acaf582bc2f5a2ea95026b7ce6a4d65db",
+          "vendored_sha256": "bf2547c2b1dbd6649efdcf41fd74556acaf582bc2f5a2ea95026b7ce6a4d65db",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/edit-map.d.ts.map",
+          "baseline_sha256": "0d0f31f3de2ee0d31cdf9a3d3573eba539ee469342485a392fb971a8c46a7d52",
+          "vendored_sha256": "0d0f31f3de2ee0d31cdf9a3d3573eba539ee469342485a392fb971a8c46a7d52",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/edit-map.js",
+          "baseline_sha256": "f135834f49bfd2663a9a08555222ffee11dff1407750b887cc3f0940031621c7",
+          "vendored_sha256": "f135834f49bfd2663a9a08555222ffee11dff1407750b887cc3f0940031621c7",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/html.d.ts",
+          "baseline_sha256": "ebac21985cba5e3fc05f499413629276b00354ffaf5d921abe0fc917f4401694",
+          "vendored_sha256": "ebac21985cba5e3fc05f499413629276b00354ffaf5d921abe0fc917f4401694",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/html.d.ts.map",
+          "baseline_sha256": "c1deb66e5d1c6507dd5e83287c2c05098129a82a6bcdf26c7a9d9cc2747409f0",
+          "vendored_sha256": "c1deb66e5d1c6507dd5e83287c2c05098129a82a6bcdf26c7a9d9cc2747409f0",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/html.js",
+          "baseline_sha256": "247721c8bed40523b31cba6eafe64dd4db358df4d2003d18178621a7a6090ff0",
+          "vendored_sha256": "247721c8bed40523b31cba6eafe64dd4db358df4d2003d18178621a7a6090ff0",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/infer.d.ts",
+          "baseline_sha256": "23674664010fcde2276a8c15a6c57a314a22511a1f0a259e737f7de6ffa720c2",
+          "vendored_sha256": "23674664010fcde2276a8c15a6c57a314a22511a1f0a259e737f7de6ffa720c2",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/infer.d.ts.map",
+          "baseline_sha256": "3130396247744ec970e0f506cdc1d8b8891452b765a37fe257b4ba7b1bfdc85b",
+          "vendored_sha256": "3130396247744ec970e0f506cdc1d8b8891452b765a37fe257b4ba7b1bfdc85b",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/infer.js",
+          "baseline_sha256": "c81e7f7f04912ccd40d271fb98fd6f32e3d590a7d60fe22bdd32f02a28a3a000",
+          "vendored_sha256": "c81e7f7f04912ccd40d271fb98fd6f32e3d590a7d60fe22bdd32f02a28a3a000",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/syntax.d.ts",
+          "baseline_sha256": "2f513a106ffe94048c21d8fd6b379aac2cc050b4f40c44d30313cc278b324307",
+          "vendored_sha256": "2f513a106ffe94048c21d8fd6b379aac2cc050b4f40c44d30313cc278b324307",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/syntax.d.ts.map",
+          "baseline_sha256": "45914044ce08423d8793d0527353c8c4059eddae436e585b33163a77977094e6",
+          "vendored_sha256": "45914044ce08423d8793d0527353c8c4059eddae436e585b33163a77977094e6",
+          "change": "verbatim"
+        },
+        {
+          "path": "dev/lib/syntax.js",
+          "baseline_sha256": "1f66c5c88a7f9d3696916ddd7d2206c2b7b9271405be5dbfbb0f82208edf3f5c",
+          "vendored_sha256": "05e7566591b822c0091245d960e6f02aecfaf17bc4048c50574e41190acc280f",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "index.d.ts",
+          "baseline_sha256": "543afb9ef830c853641abeeb1e2322446efd8ea012e241530fe1a8a89057530e",
+          "vendored_sha256": "543afb9ef830c853641abeeb1e2322446efd8ea012e241530fe1a8a89057530e",
+          "change": "verbatim"
+        },
+        {
+          "path": "index.js",
+          "baseline_sha256": "bfdd4285a9f61faa334ced8f98fbbd1c3ba35f00a1613839c23c30c0786dcc97",
+          "vendored_sha256": "bfdd4285a9f61faa334ced8f98fbbd1c3ba35f00a1613839c23c30c0786dcc97",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/edit-map.d.ts",
+          "baseline_sha256": "bf2547c2b1dbd6649efdcf41fd74556acaf582bc2f5a2ea95026b7ce6a4d65db",
+          "vendored_sha256": "bf2547c2b1dbd6649efdcf41fd74556acaf582bc2f5a2ea95026b7ce6a4d65db",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/edit-map.d.ts.map",
+          "baseline_sha256": "0d0f31f3de2ee0d31cdf9a3d3573eba539ee469342485a392fb971a8c46a7d52",
+          "vendored_sha256": "0d0f31f3de2ee0d31cdf9a3d3573eba539ee469342485a392fb971a8c46a7d52",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/edit-map.js",
+          "baseline_sha256": "47e082373ee2022e2569ea4c0d7e05dbeae0a55885a6b5fb7efce65436b9bd82",
+          "vendored_sha256": "47e082373ee2022e2569ea4c0d7e05dbeae0a55885a6b5fb7efce65436b9bd82",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/html.d.ts",
+          "baseline_sha256": "ebac21985cba5e3fc05f499413629276b00354ffaf5d921abe0fc917f4401694",
+          "vendored_sha256": "ebac21985cba5e3fc05f499413629276b00354ffaf5d921abe0fc917f4401694",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/html.d.ts.map",
+          "baseline_sha256": "c1deb66e5d1c6507dd5e83287c2c05098129a82a6bcdf26c7a9d9cc2747409f0",
+          "vendored_sha256": "c1deb66e5d1c6507dd5e83287c2c05098129a82a6bcdf26c7a9d9cc2747409f0",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/html.js",
+          "baseline_sha256": "e01378aaa7ce1f99b772f486606e3fa6fc1e48839ce6c79c4586127ccfc69852",
+          "vendored_sha256": "e01378aaa7ce1f99b772f486606e3fa6fc1e48839ce6c79c4586127ccfc69852",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/infer.d.ts",
+          "baseline_sha256": "23674664010fcde2276a8c15a6c57a314a22511a1f0a259e737f7de6ffa720c2",
+          "vendored_sha256": "23674664010fcde2276a8c15a6c57a314a22511a1f0a259e737f7de6ffa720c2",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/infer.d.ts.map",
+          "baseline_sha256": "3130396247744ec970e0f506cdc1d8b8891452b765a37fe257b4ba7b1bfdc85b",
+          "vendored_sha256": "3130396247744ec970e0f506cdc1d8b8891452b765a37fe257b4ba7b1bfdc85b",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/infer.js",
+          "baseline_sha256": "c2a038479872bd8026d513d528e56717fa266f09905f53192c6b5a0da6bc9ea7",
+          "vendored_sha256": "c2a038479872bd8026d513d528e56717fa266f09905f53192c6b5a0da6bc9ea7",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/syntax.d.ts",
+          "baseline_sha256": "2f513a106ffe94048c21d8fd6b379aac2cc050b4f40c44d30313cc278b324307",
+          "vendored_sha256": "2f513a106ffe94048c21d8fd6b379aac2cc050b4f40c44d30313cc278b324307",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/syntax.d.ts.map",
+          "baseline_sha256": "45914044ce08423d8793d0527353c8c4059eddae436e585b33163a77977094e6",
+          "vendored_sha256": "45914044ce08423d8793d0527353c8c4059eddae436e585b33163a77977094e6",
+          "change": "verbatim"
+        },
+        {
+          "path": "lib/syntax.js",
+          "baseline_sha256": "45aac9771cc150aa2e3b62ae12fc370c07b72732d84e847b47e09dd17b3a7bfe",
+          "vendored_sha256": "45aac9771cc150aa2e3b62ae12fc370c07b72732d84e847b47e09dd17b3a7bfe",
+          "change": "verbatim"
+        },
+        {
+          "path": "license",
+          "baseline_sha256": "dd1081884a92952802f4803110a6bb543acea9a814c786d58605b4c1219b5ebb",
+          "vendored_sha256": "dd1081884a92952802f4803110a6bb543acea9a814c786d58605b4c1219b5ebb",
+          "change": "verbatim"
+        },
+        {
+          "path": "package.json",
+          "baseline_sha256": "77614bfc3e826a49007c78569df530d2a0832188cce1b54dd4fe81b056540dc2",
+          "vendored_sha256": "0c430537b47099473b4cd11b6d73b8237c09961a3daff4fd07e33e34ad4843d0",
+          "change": "upstream-patch-or-local-dependency-edge"
+        },
+        {
+          "path": "readme.md",
+          "baseline_sha256": "dcced8c7d82f5d1432d809c875c8f59a56830d0b8e2606207fb54d4bd3df9a3a",
+          "vendored_sha256": "dcced8c7d82f5d1432d809c875c8f59a56830d0b8e2606207fb54d4bd3df9a3a",
+          "change": "verbatim"
+        }
+      ]
+    }
+  ],
+  "parent_integration": {
+    "required_workspace_manifest_changes": [],
+    "required_lockfile_change": "Run the parent-owned workspace install to record shared's two local dependencies and the four local transitive edges in pnpm-lock.yaml. No workspace package globs, aliases, overrides, or patchedDependencies entries are needed.",
+    "required_verification": [
+      "Run all original shared markdownMath.test.ts and composerInlineTokens.test.ts assertions without skips or assertion edits.",
+      "Run the integrated vendor suite and the shared typecheck after all implementation slices converge.",
+      "Check parent-installed resolution: shared remark-math -> local mdast-util-math and local micromark-extension-llm-math; shared remark-gfm -> local micromark-extension-gfm -> local micromark-extension-gfm-table; root/Web remark-math and remark-gfm remain registry dependencies."
+    ],
+    "implementation_checks_not_run": [
+      "dependency installation",
+      "builds",
+      "typechecks",
+      "tests",
+      "lint",
+      "runtime smoke executions",
+      "formatters"
+    ]
+  }
+}

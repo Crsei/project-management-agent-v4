@@ -8,18 +8,21 @@ import styles from "./grouped-list.module.css"
 export type GroupHeaderProps = {
   group: GroupSnapshot
   collapsed?: boolean
+  icon?: ReactNode
   onToggle?: () => void
   onCreate?: () => void
 }
 export function GroupHeader({
   group,
   collapsed,
+  icon,
   onToggle,
   onCreate,
 }: GroupHeaderProps) {
   const { t } = useI18n()
   return (
     <header className={styles.header}>
+      {icon}
       {onToggle ? (
         <Button
           variant="ghost"

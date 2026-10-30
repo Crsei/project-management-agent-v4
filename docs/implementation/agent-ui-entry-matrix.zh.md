@@ -67,17 +67,15 @@
 
 ## 6. 本副本当前实现状态
 
-截至本文记录时，对本副本源码的核对结果：
+当前入口以 [统一改造计划](agent-chat-pm-unification-plan.zh.md) 为准；第 1–5 节是历史目标，不自动纳入本次范围。
 
-- `apps/web/src/routes.tsx` 保留 `:workspaceSlug/agent`（`AgentChatPage`）；原 `:workspaceSlug/automations` 路由已迁出 PM 外壳，自动化由独立 Agent Chat 的 `?view=automations` 承载。
-- `/agent` 已按 `agent-workspace` 的前端结构接入 assistant-ui：左侧栏（会话工作区、线程搜索/分组/删除）、Composer、Thread 对话区；运行时使用 `useExternalStoreRuntime` 适配 PM 现有 SSE，未引入 AI SDK transport。
-- `issues` 与 `projects/:projectId/issues` 的任务集合工具栏保留次级“Agent 助手”导航按钮（`TaskCollectionControls`），携带当前项目范围及返回路径。任务详情通过共享侧栏打开，默认选中当前任务；侧栏与 `/agent` 共用 `AgentConversation` 和任务选择器。打开入口或选择任务本身不发模型请求、不授权；发送消息仅附加任务/项目 ID，正文由显式授权后的工具读取。展开完整页保留线程、任务和草稿，详见[共享对话交付记录](backend-delivery.md#agent-shared-conversation)。
-- `automations` 已迁入独立 Agent Chat：PM 继续拥有规则、只读报告和 Worker 每日调度，Agent Chat 通过 `?view=automations` 渲染同一套真实请求；不调用模型、Host 或外部连接器，不接管聊天授权。原 PM 外壳路由与侧栏入口已移除。
-- `runs`、`proposals`、`pulse` 仍未注册路由，不建立占位页；`settings/agent` 仍由原设置中心处理。
-- `apps/web/src/features/pm/pm-shell.tsx` 的可折叠 Agent 分组仅保留已接通的“对话”；PM 内嵌聊天侧栏的自动化入口跳到 Agent Chat 的自动化视图。
-- 侧栏左上角的工作区切换菜单已并入 Project Management / Agent Workspace 全局切换，进入 `/agent` 或按已保存启动页返回 PM。当前只做导航与展示，不自动携带项目/任务上下文；原工作区授权列表、Agent 分组和对话行为不变。
-- 因此第 2–4 节其余部分是接入要求，不是本副本已交付事实；后续实现需逐项补齐并单独验收。
-- 其他页面的具体插入点、共享 Provider/Panel、选区与草稿边界、阶段和后端门禁见 [Agent 页面区域接入计划](agent-page-areas-integration-plan.zh.md)。
+- PM 项目/任务/文档详情侧栏嵌入现有 Chat runtime；完整页为 `/agent/workspace`。模型、会话历史、输出订阅、取消、归档和删除均由 Chat 所有，不再适配第二条 PM 聊天 SSE。
+- 项目操作、任务创建和任务集合的 Agent 入口携带真实 workspace/project/returnTo；任务引用仅是对象标识，正文和 revision 由 PM 工具按当前权限读取。
+- 侧栏与完整页交接同一线程、模型、生成、文本草稿、附件、引用和返回位置。附件 File 与引用对象仅在同一应用运行期交接；硬刷新不承诺恢复浏览器内存对象。
+- `/pm/:workspace/agent` 只做导航重定向，不复用旧 PM thread ID；旧 PM 模型设置与对话组件已退出。Provider 设置归 Chat。
+- 工具卡、来源/收据/冲突和原请求核对、PM 核心文件差异查看均在 Chat 展示。不会因模型报告成功而改变任务完成状态。
+- PM 自动化规则/只读报告及 Worker 保留原有业务归属；不因界面统一新增 Proposal、Run 或审批系统。
+- 会话与持久化仍暂沿用 Chat，尚未完成统一设计。
 
 ## 7. 关联文档
 

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "source": "apps/server/tsconfig.json",
+  "beforeSha256": "56138da5a3d70f586c87726a1d5410a371b259ef663019faa44ace50ef70ea2d",
+  "afterSha256": "34e68af5dcb1f4dff189fff9908cfff0b3db5c2edd079bef4ace279eca6e4fcf",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 3,
+      "before": [
+        "    \"types\": [\"node\"],\n",
+        "    \"lib\": [\"ESNext\", \"esnext.disposable\"]\n"
+      ],
+      "after": [
+        "    \"types\": [\n",
+        "      \"node\"\n",
+        "    ],\n",
+        "    \"resolveJsonModule\": true\n"
+      ]
+    },
+    {
+      "start": 6,
+      "before": [
+        "  \"include\": [\"src\", \"vite.config.ts\", \"scripts\", \"integration\", \"../../scripts/lib\"]\n"
+      ],
+      "after": [
+        "  \"include\": [\n",
+        "    \"src/**/*.ts\",\n",
+        "    \"scripts/**/*.ts\"\n",
+        "  ]\n"
+      ]
+    }
+  ]
+}

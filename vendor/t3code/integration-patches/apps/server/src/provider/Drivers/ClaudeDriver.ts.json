@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/Drivers/ClaudeDriver.ts",
+  "beforeSha256": "80ce51f5f4e4014a81e42998070dd45834dd60637b998340e744318c8cfdefca",
+  "afterSha256": "d1455570dbce6b07aecbf0400bacf6cdf5441439cf75cdaeedde7435f656c5f6",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 16,
+      "before": [
+        "import * as ServerConfig from \"../../config.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    }
+  ]
+}

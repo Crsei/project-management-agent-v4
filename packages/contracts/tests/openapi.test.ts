@@ -5,12 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
-import { buildApp } from '../../../apps/api/src/app.ts';
+import { buildApp } from '../../../apps/server/pm/src/app.ts';
 import { createRegistry } from '../../application/src/registry.ts';
 import { LocalBlobStore } from '../../infrastructure/src/blobs.ts';
 import { buildOpenApi } from '../src/openapi.ts';
 import { generateContracts, schemaType } from '../../../scripts/generate-contracts.ts';
-import { agentChatAccessInputSchema, agentChatReasoningEffortSchema, agentChatReasoningSchema } from '../src/agent-chat.ts';
 
 const root = new URL('../../../', import.meta.url);
 const registry = createRegistry(new LocalBlobStore('/unused-contract-test-store'));
@@ -59,7 +58,7 @@ test('all local schema refs resolve and transport capabilities are described', (
   assert.ok(stream.parameters.some((parameter: { name: string; in: string }) => parameter.name === 'Last-Event-ID' && parameter.in === 'header'));
   assert.ok(stream.responses[410]);
   assert.ok(contract.paths['/health/ready']!.get.responses[503].content['application/json'].schema.$ref.endsWith('/Readiness'));
-  assert.deepEqual(contract.components.securitySchemes.sessionCookie, { type: 'apiKey', in: 'cookie', name: 'pm_v3_session' });
+  assert.deepEqual(contract.components.securitySchemes.sessionCookie, { type: 'apiKey', in: 'cookie', name: 'pm_v4_session' });
   const entity = contract.components.schemas.Entity!;
   for (const field of ['createdAt', 'updatedAt']) {
     assert.ok(entity.required.includes(field));
@@ -98,27 +97,18 @@ test('knowledge graph wire contract is strict, authenticated and contains no raw
   assert.deepEqual(Object.keys(contract.components.schemas.GraphNode!.properties), ['id', 'title', 'entity', 'status', 'archived', 'stale']);
 });
 
-test('chat reasoning status and next-message effort use exact wire schemas without persisting thoughts', () => {
-  const schemas = contract.components.schemas;
-  assert.deepEqual(schemas.AgentChatReasoningEffort!.enum, agentChatReasoningEffortSchema.options);
-  const expected = z.toJSONSchema(agentChatReasoningSchema, { io: 'output', target: 'draft-2020-12' });
-  delete expected.$schema;
-  assert.deepEqual(schemas.AgentChatReasoning, expected);
-  assert.ok(schemas.AgentChatStatus!.required.includes('reasoning'));
-  assert.equal(schemas.AgentChatStatus!.properties.reasoning.$ref, '#/components/schemas/AgentChatReasoning');
-  const route = contract.paths['/api/v1/workspaces/{workspaceId}/agent/threads/{threadId}/messages']!.post;
-  const body = route.requestBody.content['application/json'].schema;
-  assert.deepEqual(body.required, ['messageId', 'content']);
-  assert.equal(body.additionalProperties, false);
-  assert.equal(body.properties.reasoningEffort.$ref, '#/components/schemas/AgentChatReasoningEffort');
-  assert.equal(body.properties.reasoningEffort.default, 'auto');
-  assert.ok(route.responses[400]);
-  assert.ok(route.description.includes('agent_reasoning_unsupported'));
-  assert.equal(Object.hasOwn(schemas.AgentChatMessage!.properties, 'reasoning_content'), false);
-  assert.equal(Object.hasOwn(schemas.AgentChatMessage!.properties, 'reasoningEffort'), false);
-  const scope = { kind: 'projects', projectIds: ['PRJ-1'] };
-  assert.deepEqual(agentChatAccessInputSchema.parse({ enabled: false, expectedRevision: 0, scope }), { enabled: false, expectedRevision: 0, scope });
-  assert.equal(agentChatAccessInputSchema.safeParse({ enabled: true, expectedRevision: 0 }).success, false);
+test('unified PM tool API documents original-operation reconciliation, not legacy chat routes', () => {
+  const paths = contract.paths;
+  assert.equal(paths['/api/v1/workspaces/{workspaceId}/agent/status'], undefined);
+  assert.equal(paths['/api/v1/workspaces/{workspaceId}/agent/threads'], undefined);
+  for (const action of ['call', 'result']) {
+    const route = paths[`/api/v1/workspaces/{workspaceId}/agent-tools/${action}`]!.post;
+    assert.deepEqual(route.security, [{ sessionCookie: [] }, { bearerAuth: [] }]);
+    assert.equal(route.requestBody.content['application/json'].schema.$ref, '#/components/schemas/PmToolRequest');
+    assert.equal(route.responses[200].content['application/json'].schema.$ref, '#/components/schemas/PmToolCallRecord');
+  }
+  assert.deepEqual(contract.components.schemas.PmToolRequest!.required, ['operationId', 'name', 'arguments', 'scope', 'threadId', 'messageId', 'generationId']);
+  assert.deepEqual(contract.components.schemas.PmToolCallRecord!.properties.status.enum, ['running', 'succeeded', 'failed', 'unknown']);
 });
 
 test('generation is deterministic and --check detects YAML and client type drift without writing', async t => {

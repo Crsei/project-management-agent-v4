@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/AntigravityAdapterV2.ts",
+  "beforeSha256": "fafa11d521a86021857f18f546c6423c066804508483189ac4609563e7815312",
+  "afterSha256": "8123b1383609180b5ebba56aa539cd2a68eccba92ca90caa799063f19db45856",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 7,
+      "before": [
+        "import type { SelfInvocation } from \"@t3tools/shared/nodeRuntime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 65,
+      "before": [
+        "  readonly selfInvocation: SelfInvocation;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 82,
+      "before": [],
+      "after": [
+        "  readonly readLegacySessionMetadata?: AcpAdapterV2Flavor[\"readLegacySessionMetadata\"];\n"
+      ]
+    },
+    {
+      "start": 164,
+      "before": [],
+      "after": [
+        "        resolveAttachmentPath: options.host.resolveAttachmentPath,\n"
+      ]
+    },
+    {
+      "start": 170,
+      "before": [],
+      "after": [
+        "    ...(options.readLegacySessionMetadata === undefined\n",
+        "      ? {} : { readLegacySessionMetadata: options.readLegacySessionMetadata }),\n"
+      ]
+    },
+    {
+      "start": 229,
+      "before": [
+        "    selfInvocation: options.selfInvocation,\n"
+      ],
+      "after": []
+    }
+  ]
+}

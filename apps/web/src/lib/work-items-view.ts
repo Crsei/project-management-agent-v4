@@ -16,30 +16,28 @@ export function selectWorkItems(
   view: WorkItemsViewState,
 ) {
   const q = view.query.trim().toLocaleLowerCase()
-  const f = view.filters
-  const matches = (wanted: readonly string[], actual: readonly string[]) =>
-    !wanted.length || wanted.some((id) => actual.includes(id))
-  const result = items.filter(
-    (item) =>
-      (!q ||
-        `${item.identifier} ${item.title}`.toLocaleLowerCase().includes(q)) &&
-      matches(f.state, [item.stateId]) &&
-      matches(f.priority, [item.priorityId]) &&
-      matches(f.assignees, item.assigneeIds) &&
-      matches(f.labels, item.labelIds),
+  const conditions = view.filters.filter(
+    (condition) => condition.values.length,
   )
-  if (view.sort === "manual") return result
-  const key = (item: WorkItemRecord) =>
-    view.sort === "dueDate"
-      ? (item.dueDate ?? "9999-99-99")
-      : view.sort === "priority"
-        ? item.priorityId
-        : item.title
-  return result.sort(
-    (a, b) =>
-      (key(a).localeCompare(key(b)) || a.id.localeCompare(b.id)) *
-      (view.sortDirection === "desc" ? -1 : 1),
-  )
+  return items.filter((item) => {
+    if (
+      q &&
+      !`${item.identifier} ${item.title}`.toLocaleLowerCase().includes(q)
+    )
+      return false
+    return conditions.every((condition) => {
+      const actual =
+        condition.field === "state"
+          ? [item.stateId]
+          : condition.field === "priority"
+            ? [item.priorityId]
+            : condition.field === "assignees"
+              ? item.assigneeIds
+              : item.labelIds
+      const hit = condition.values.some((id) => actual.includes(id))
+      return condition.operator === "isNot" ? !hit : hit
+    })
+  })
 }
 export function groupWorkItems(
   items: readonly WorkItemRecord[],

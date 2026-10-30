@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexChatGptHandoff.ts",
+  "beforeSha256": "edd5f2868c60ba4f38d99a0c3cf31a5614aa66fadd11c9bb1928291e188fe2b0",
+  "afterSha256": "eb04353f705beac04016d9ae3435e16f9fb081c957b9e9a25235daba71e743ff",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 6,
+      "before": [
+        "import * as ServerSecretStore from \"../auth/ServerSecretStore.ts\";\n",
+        "import * as ServerEnvironment from \"../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerSecretStore from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-secret-store.ts\";\n",
+        "import * as ServerEnvironment from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-environment.ts\";\n"
+      ]
+    }
+  ]
+}

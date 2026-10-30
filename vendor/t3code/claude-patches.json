@@ -1,0 +1,434 @@
+{
+  "schemaVersion": 1,
+  "owner": "T10",
+  "slice": "M4-Claude",
+  "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "hostContract": "pm-provider-host/1",
+  "verification": "Implementation only: no build, lint, tests, formatter, dependency installation, native smoke, authentication, or service restart was run by T10.",
+  "sourceCopies": [
+    {
+      "sourcePath": "apps/server/src/claude-history-worker.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/claude-history-worker.ts",
+      "upstreamSha256": "e01eae19df8e66251b1c368c24a4f5a8557053155744a6698abf58562e1faa77",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/claudeHistoryWorker.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/claudeHistoryWorker.ts",
+      "upstreamSha256": "4fc2f75c1b98192479c27e77b85a84ff15204087082a1b513413e327df66aed6",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/claudeModelOptions.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/claudeModelOptions.test.ts",
+      "upstreamSha256": "e4f59dd453909949bda4e5463197c6e8eb733fc4f5983d7607593f69e767df8d",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/claudeModelOptions.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/claudeModelOptions.ts",
+      "upstreamSha256": "c6e2c715cc71aac3ca1e4c036abb65fecd28faa6fc8561f05c56a5ae994528f3",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts",
+      "upstreamSha256": "6f0bd45c713fd0f12ead8ac992d87346e5af112660192623ada348d8d735dc73",
+      "action": "copy-then-patch"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.testkit.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.testkit.ts",
+      "upstreamSha256": "b1d830c1a2b8daaf12a8b6a9bca7dadc7da8cbcc7841890e198baab3037498c5",
+      "action": "copy-then-patch"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
+      "upstreamSha256": "8b7146400cd440e084d89c6b8f578f325d634aa70bad3c51a94cf9146260ba8b",
+      "action": "copy-then-patch"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/ClaudeAgentSdkQueryRunner.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAgentSdkQueryRunner.test.ts",
+      "upstreamSha256": "d84475a33732f289f437323c447917d3dbaf2f2011e3c214f2fabd160b3447c4",
+      "action": "copy-then-patch"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/ClaudeTaskOutputTail.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeTaskOutputTail.test.ts",
+      "upstreamSha256": "5a7985e7de0b0bb7115a2c34f6501aa7f032fcd1a79691a421dddae96eda3745",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/ClaudeTaskOutputTail.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeTaskOutputTail.ts",
+      "upstreamSha256": "5572cbd79381d85f6ea5b4b773fe20ae1a77fc15e3108bb8e1357a35048564b9",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/claudeWorkflowProgress.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/claudeWorkflowProgress.test.ts",
+      "upstreamSha256": "7e58dfe864c88a53045469ea8fc8e1d4f865e65e386684e90baea7ac871159dd",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/orchestration-v2/Adapters/claudeWorkflowProgress.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/claudeWorkflowProgress.ts",
+      "upstreamSha256": "dd7d9ee955b379502e9353afb9279d0efbc469605f0d59a32bd4f4525be006b4",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/ClaudeCapabilitiesProbe.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/ClaudeCapabilitiesProbe.test.ts",
+      "upstreamSha256": "7d02d0eefef9b224d2ea4d1a8909f24b0d32dc775b3369586ae8b37cac249295",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/ClaudeModelCatalog.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/ClaudeModelCatalog.test.ts",
+      "upstreamSha256": "310963e6603f7af30192d61bee7c3473ff53f1b8df1ac230a4a807ab8a5c94db",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/ClaudeModelCatalog.testFixtures.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/ClaudeModelCatalog.testFixtures.ts",
+      "upstreamSha256": "49126dfc284b8b6248b17c7a1424bfc999ee89611fc569e2b73d17bfcb850dfc",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/ClaudeModelCatalog.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/ClaudeModelCatalog.ts",
+      "upstreamSha256": "18359a8f5c934fd88e6b5643d8075d5f256ed2ccd1fb5b9119f7150a8531d09e",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/ClaudeModelManifest.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/ClaudeModelManifest.ts",
+      "upstreamSha256": "89f889fedf8e7bf6671d6091d1ddbfddb077caf6ee7074777401973637832480",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/ClaudeProvider.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/ClaudeProvider.ts",
+      "upstreamSha256": "e94b176ef0038edf1815d1b088fa7dc8f0ed67f3bdf574d28c02a942e207ef50",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/ClaudeTurnTokenUsage.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/ClaudeTurnTokenUsage.ts",
+      "upstreamSha256": "82a8699fdecb17b273d73f4d2b0e2695b8efd2755e91d93e50792b27eb6abfb5",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/ClaudeDriver.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/ClaudeDriver.ts",
+      "upstreamSha256": "80ce51f5f4e4014a81e42998070dd45834dd60637b998340e744318c8cfdefca",
+      "action": "copy-then-patch"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/ClaudeExecutable.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/ClaudeExecutable.test.ts",
+      "upstreamSha256": "9e96c54a12b738664350fa1d5f916f0d6afa9be47e58772bc53c0be985118398",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/ClaudeExecutable.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/ClaudeExecutable.ts",
+      "upstreamSha256": "1b62d71c495977f2432ecd8b132760916d6bba8422647522fb2b1ebcd8b16304",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/ClaudeHome.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/ClaudeHome.test.ts",
+      "upstreamSha256": "1a4bc99bf6ca06fc5dfbdd0149728ed59ebc8fd10b2edee53ef1c96cb1f42b27",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/ClaudeHome.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/ClaudeHome.ts",
+      "upstreamSha256": "0a87eea0f4a41bea0c712318d55f6bb7407ab49bca1fad44bbf748a148af1302",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/ClaudeSkillDispatch.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/ClaudeSkillDispatch.test.ts",
+      "upstreamSha256": "16dc653b78b5a9119ce57de75d1bd8fe4d6a4db686bc41211c1a66a184a82c2d",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/ClaudeSkillDispatch.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/ClaudeSkillDispatch.ts",
+      "upstreamSha256": "28854b8b7cd19149bccddef70283c639a24b1fabdaaa6d1834142433f4bfe7d8",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/ClaudeSkills.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/ClaudeSkills.test.ts",
+      "upstreamSha256": "9648ee15611ef60652493d736fc22b797a75145f4ff26b8df415b156ceee2165",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/ClaudeSkills.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/ClaudeSkills.ts",
+      "upstreamSha256": "55ee9d5b135055caa255e1a597730c08ec32a8fa53e36906c5e83e7e4424ba88",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/claudeUsage.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/claudeUsage.test.ts",
+      "upstreamSha256": "080533413d3370e2f91a242a76aebe888534cd032ce7a795adfb200eecc8f7e5",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/Drivers/claudeUsage.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/Drivers/claudeUsage.ts",
+      "upstreamSha256": "125c7141cf741d997d1e81110b1693e68e0f112a4295cd0f60ad0d6accdda9f8",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/claudeResetCredits.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/claudeResetCredits.test.ts",
+      "upstreamSha256": "2e4f2c2da8800a0a88098fe03e11f289fb2d7b18d0c55de8f7c4e3cebb9c9e69",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/claudeResetCredits.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/claudeResetCredits.ts",
+      "upstreamSha256": "68737f92c18054f96212d786936616b8574984385d9031087b268a85f2b7a442",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/claudeUsageLimits.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/claudeUsageLimits.test.ts",
+      "upstreamSha256": "d3f6e44f2fc25f7827dc64c149de44586f728b7255f77690d6e44a65701ab0b6",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/provider/claudeUsageLimits.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/provider/claudeUsageLimits.ts",
+      "upstreamSha256": "b80657a4ab94b3e5cdd2b80b31b73611eb917b5d8dc081683c1cf879a234044d",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/ClaudeTextGeneration.test.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/textGeneration/ClaudeTextGeneration.test.ts",
+      "upstreamSha256": "61d709cc4c4bbe015578857d769e6f6e9d2d446b607cba9f905aeea71e73c35e",
+      "action": "copy-then-patch"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/ClaudeTextGeneration.ts",
+      "destinationPath": "vendor/t3code/apps/server/src/textGeneration/ClaudeTextGeneration.ts",
+      "upstreamSha256": "6bfd041d631bac060b1f7422fc4b6916b419434dcc184deb8c4d2637e9f6e20c",
+      "action": "copy-verbatim"
+    },
+    {
+      "sourcePath": "apps/server/src/textGeneration/testing/ClaudeTextGeneration.fixture.mjs",
+      "destinationPath": "vendor/t3code/apps/server/src/textGeneration/testing/ClaudeTextGeneration.fixture.mjs",
+      "upstreamSha256": "468a36a1f8f5cd8873c93e123c3d9a91e5a5384cb6cfae648aa9ac073ab3de07",
+      "action": "copy-verbatim"
+    }
+  ],
+  "patches": [
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts"
+      ],
+      "boundary": "PM host/transport/persistence",
+      "changes": [
+        "Replace t3 MCP HTTP sessions/business/device instructions with the application-owned stdio binding. Fail native admission when MCP registration fails. Preserve original SDK stream/turn/task/Skills/model/compaction machinery.",
+        "Force native default/plan mode, sandbox and hooks/settings-source restrictions; reject launchArgs that replace transport/session/authorization. Grant only exact live pm_tools transport admission, never business authority.",
+        "Capture binding executionId once per original operation. Recheck the real PM authorization before native compaction and before/after resume-return answers; attach that same hostExecution to delayed continuation offers.",
+        "Prime one zero-prompt original SDK query; recognize its real initialize response and reuse that query for the first native turn. Per-runtime WeakMap evidence replaces configuration-based dialect inference.",
+        "Adopt legacy metadata using SDK getSessionInfo/getSessionMessages in the bound original worker, verify native cwd/session and completed nonsynthetic root assistant UUIDs without prompting or ensureThread allocation.",
+        "Native bounded forks require strong completed assistant UUID evidence; reject weak/synthetic/unknown cursors and non-distinct fork sessions.",
+        "Adopt actual original buffered output only in the existing live generation/query, preserving request dispatchIfCurrent and isCurrent guards. Never issue an empty model prompt or reopen a terminal generation."
+      ]
+    },
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/provider/Drivers/ClaudeDriver.ts",
+        "vendor/t3code/apps/server/src/provider/Drivers/ClaudeHome.ts",
+        "vendor/t3code/apps/server/src/provider/Drivers/ClaudeLaunchArgs.ts"
+      ],
+      "boundary": "PM host/environment",
+      "changes": [
+        "Redirect ServerConfig to the real PM host service.",
+        "Use bound HostProcess.Environment rather than global process.env; preserve native HOME/XDG and explicit/inherited CLAUDE_CONFIG_DIR. Keep existing PM IDE/cloud-MCP suppression.",
+        "Keep launch validation at the native source boundary as well as the public facade."
+      ]
+    },
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/claudeHistoryWorker.ts"
+      ],
+      "boundary": "Native SDK worker/environment",
+      "changes": [
+        "Preserve original forkSession implementation and native UUID remapping.",
+        "Add metadata-only readSession (SDK getSessionInfo/getSessionMessages) and subagentLaunchToolUseId (SDK getSubagentMessages). Return identities/completion markers only, not transcript bodies.",
+        "Always run SDK filesystem helpers in the original worker with the bound instance environment; never mutate process.env or import global credentials."
+      ]
+    },
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
+        "apps/server/agent/src/providers/drivers/testing/claude-native.fixture.mjs"
+      ],
+      "boundary": "Pinned SDK 0.3.276 integrated-gate corrections",
+      "changes": [
+        "Capture the bound FileSystem service in layerQueryRunner and provide it, together with the captured platform, to managed-MCP detection inside queryRunner.open; the returned operation remains closed.",
+        "Type native child processes at the actual SDK SpawnedProcess boundary, avoiding incompatible union listener overloads without casts or changing process lifecycle behavior.",
+        "Collect user tool-result blocks with the original runtime type guard in an explicit loop; preserve all SDK-supported result variants rather than casting or narrowing the content union to a smaller subset.",
+        "Remove the unused controlled-fixture node:path import. Parent supplied the failing integrated diagnostics; T10 did not rerun checks after these corrections."
+      ]
+    },
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/provider/ClaudeProvider.ts"
+      ],
+      "boundary": "Native readiness/auth DTO certainty",
+      "changes": [
+        "Missing account evidence remains unknown, not authenticated. Custom endpoints do not inherit first-party authenticated identity/email/workspace. Actual native ready remains independent."
+      ]
+    },
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/provider/ClaudeTurnTokenUsage.ts",
+        "vendor/t3code/apps/server/src/provider/ClaudeTurnTokenUsage.test.ts"
+      ],
+      "boundary": "Native telemetry certainty",
+      "changes": [
+        "Missing cache counters and missing earlier-segment usage do not become synthetic zeros or complete totals; keep known native usage partial/unavailable and preserve explicit zero."
+      ]
+    },
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/textGeneration/ClaudeTextGeneration.ts",
+        "vendor/t3code/apps/server/src/textGeneration/ClaudeTextGeneration.test.ts"
+      ],
+      "boundary": "Isolated native title execution",
+      "changes": [
+        "Retain original temp-cwd CLI structured generation. Title operations always use no native tools, even if investigate is requested; never receive a PM bridge.",
+        "Use explicit test environments instead of mutating global process.env; use shared real PM test-host fixture."
+      ]
+    },
+    {
+      "paths": [
+        "apps/server/agent/src/providers/drivers/claude.ts",
+        "apps/server/agent/src/providers/t3code/families/claude.ts",
+        "apps/server/agent/src/providers/t3code/upstream-services/port-discovery.ts"
+      ],
+      "boundary": "Local facade/concrete assembly",
+      "changes": [
+        "Preserve public claude instance/config schema fields. Delegate management/execution through the pure application-access getter, without import-time processes or a fallback runtime.",
+        "Export original driver, closed family layer, actual operation protocol resolver and native capability projector. Use the same application RuntimeHost in host services and continuation service; consume makePmResetCreditCoordinatorLayer(runtimeHost) so original reset-credit state is shared with usage consumers and survives retained-context rebuilds without crossing application hosts.",
+        "Only narrow agent process lifecycle accounting is provided; no Preview/browser server capability or fake scan/subscribe/stopServer port. Optional raw native/canonical event logs stay explicitly disabled."
+      ]
+    },
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts",
+        "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAgentSdkQueryRunner.test.ts",
+        "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.testkit.ts",
+        "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAttachmentFixtures.testkit.ts",
+        "vendor/t3code/apps/server/src/provider/Drivers/ClaudeHome.test.ts",
+        "apps/server/agent/src/providers/drivers/claude-native.test.ts",
+        "apps/server/agent/src/providers/drivers/testing/claude-native.fixture.mjs"
+      ],
+      "boundary": "Behavioral native test adaptation",
+      "changes": [
+        "Retain original native SDK/stream/callback/compaction/Skills/Home/model/usage/process suites. Replace only t3-business/device privilege expectations with PM transport/default-denial scenarios.",
+        "Remove excluded business orchestrator replay wrappers; retain original native recording/replay algorithms behind makeClaudeNativeReplayAdapter and an owned continuation queue.",
+        "Original native attachment budget cases persist real fixture bytes under the application's private attachment directory and register their actual sizes/paths through PM's production attachment registry. Path lookup does not admit attachments; no forged resolver remains. Separate real PM tests cover registry integrity/path/revocation checks.",
+        "Add controlled real SDK subprocess protocol cases for same-query initialization/continuation, zero-prompt SDK legacy metadata, strong UUID forks, compaction rechecks, stale PM grants, denied transport and EOF rejection. These are not real-account inference evidence."
+      ]
+    },
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/provider/Drivers/ClaudeHome.ts",
+        "vendor/t3code/apps/server/src/provider/Drivers/ClaudeHome.test.ts",
+        "apps/server/agent/src/providers/drivers/claude-native.test.ts",
+        "apps/server/agent/src/providers/drivers/testing/claude-native.fixture.mjs"
+      ],
+      "boundary": "Native Home and authored regression coverage",
+      "changes": [
+        "Resolve inherited relative CLAUDE_CONFIG_DIR against bound HostProcess.WorkingDirectory without shell-expanding literal ~ or rewriting the native environment.",
+        "Add authored regressions for native readiness with absent auth evidence, explicit logged-out evidence and custom endpoints not inheriting first-party identity. The direct-version shebang fixture assertion is Unix-only; real Windows native readiness remains a parent/platform validation requirement.",
+        "All authored tests remain unrun. The deterministic native protocol fixture is not real-account, external-service or real PM MCP end-to-end evidence."
+      ]
+    },
+    {
+      "paths": [
+        "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
+        "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts",
+        "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAgentSdkQueryRunner.test.ts"
+      ],
+      "boundary": "Selected source typecheck/native lifecycle corrections",
+      "changes": [
+        "Omit absent instructionText and native metadata readSession dir fields instead of passing undefined; preserve present values, including empty instruction text, and the original native query/worker calls.",
+        "Narrow logged settings keys, native permission callback/query availability and live runtime request identity before use. Usage-limit notice selectors require a real string native item identity, not a cast or non-null assertion.",
+        "Use makePmAgentProcessLifecycle for the real CLI process test; observe its activeAgents before launch, while the marked native process is alive and after its native exit/error release callback. The test no longer maintains a placeholder counter.",
+        "These corrections respond to parent-supplied selected source diagnostics. No build, lint, test, formatter or runtime validation was run by this implementation slice."
+      ]
+    }
+  ],
+  "removedSupersededLocalPaths": [
+    "apps/server/agent/src/providers/drivers/claude-output.ts",
+    "apps/server/agent/src/providers/drivers/claude-usage.ts",
+    "apps/server/agent/src/providers/drivers/claude-catalog.ts",
+    "apps/server/agent/src/providers/drivers/claude-model-manifest.ts",
+    "apps/server/agent/src/agents/claude-history-worker.ts"
+  ],
+  "exports": {
+    "module": "apps/server/agent/src/providers/t3code/families/claude.ts",
+    "names": [
+      "claudeDriver",
+      "makeClaudeDriverLayer(context,runtimeHost)",
+      "claudeProtocolResolver",
+      "claudeCapabilities"
+    ],
+    "installation": "No fake prepare/remove export: original detected-installation maintenance implements update."
+  },
+  "parentIntegration": [
+    "Register the Claude family driver/layer/protocol/capability projector in parent-owned production assembly. Supply the same RuntimeHost and retained native AgentScope lifecycle.",
+    "Align all Claude SDK consumers/lockfiles to exact @anthropic-ai/claude-agent-sdk 0.3.276, not the old root ^0.3.309.",
+    "Build original vendor/t3code/apps/server/src/claude-history-worker.ts to claude-history-worker.mjs as a sibling of the bundled original adapter module. Executable packaging dispatches __claude-history to runClaudeHistoryWorker. Remove the deleted local agents/claude-history-worker build entry.",
+    "Migrate shared catalog.ts resolveClaudeModelId to original resolveClaudeModelSlug/BUNDLED_CLAUDE_MODEL_CATALOG and usage/limits/core.ts claudeQueryOptions to original metadata/usage source. Mixed native-output.test.ts and codex-claude-usage.test.ts own their obsolete Claude local-helper assertions.",
+    "Route shared isolated title generation through retained original instance.textGeneration rather than the Chat execution service. Keep existing PM scheduled idle-compaction submitChat authorization/revision checks.",
+    "Keep actual auth/resource mutation locks, lease assertCurrent, approvals and receipts. Persist only the existing Chat records/continuation sidecars; do not redesign Chat persistence."
+  ],
+  "externalRequirements": {
+    "sdk": "@anthropic-ai/claude-agent-sdk@0.3.276",
+    "sdkNativeCliVersion": "2.1.276",
+    "peerDependencies": {
+      "@anthropic-ai/sdk": ">=0.93.0",
+      "@modelcontextprotocol/sdk": "^1.29.0",
+      "zod": "^4.0.0"
+    },
+    "optionalNativePackages": [
+      "@anthropic-ai/claude-agent-sdk-linux-x64@0.3.276",
+      "@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.276",
+      "@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.276",
+      "@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.276",
+      "@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.276",
+      "@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.276",
+      "@anthropic-ai/claude-agent-sdk-win32-x64@0.3.276",
+      "@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.276"
+    ],
+    "resources": [
+      "sdk.mjs",
+      "extractFromBunfs.js",
+      "manifest.json",
+      "manifest.zst.json",
+      "selected platform native SDK package/resources"
+    ],
+    "runtime": "Compatible native Claude CLI or intact platform SDK executable/resources; project Node 24/Effect 4.0.5 platform stack. Real validation requires the existing authorized native account/environment and compatible model availability. Preserve original native sandbox platform requirements. No accounts, installation or platform readiness were inferred."
+  },
+  "unrunParentVerification": [
+    "Original Claude source behavior suites (ClaudeAdapterV2, ClaudeAgentSdkQueryRunner, task output/workflow, ClaudeModelCatalog/options, Home/Executable/Skills/SkillDispatch, usage/limits/reset, ClaudeTextGeneration).",
+    "New ClaudeTurnTokenUsage.test.ts and local providers/drivers/claude-native.test.ts.",
+    "Parent integrated agent/source/test types, targeted lint, production build and worker/resource packaging.",
+    "Existing Chat callback/PM authorization/revisions/approvals/receipts/idle compaction/fork regressions; real authorized Claude status/catalog/inference/continuation + history/SSE/UI smoke."
+  ],
+  "persistenceReminder": "Session persistence has not undergone a unified design; existing Agent Chat records remain authoritative."
+}

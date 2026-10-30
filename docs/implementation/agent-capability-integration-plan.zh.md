@@ -1,5 +1,7 @@
 # Agent Chat 能力接入计划：本次范围
 
+> 历史交付记录：下述 PM 独立聊天运行时、PostgreSQL 聊天历史和 Full access grant 是统一改造前的合同，不再作为当前入口/模型/会话实现。当前以 [Agent Chat ↔ PM 统一改造计划](agent-chat-pm-unification-plan.zh.md) 为准；保留本页仅用于历史证据，不恢复旧助手。
+
 状态：CHAT01–CHAT08 本次范围已实现并完成定向验收；全仓库回归未通过，不宣称全项目封板。实际检查与本副本激活见第8节。旧完整计划副本仅供参考，未恢复其中的范围外任务。
 
 配套：[本次任务清单](agent-capability-integration-tasks.zh.md)、[Full access 权限子任务](agent-full-access-first-tasks.zh.md)、[同步 UI 技术栈](agent-workspace-ui-adoption.zh.md)。

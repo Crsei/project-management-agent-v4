@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import type { LocalProjectAttempt } from '../packages/contracts/src/local-projects.ts';
 import type { Command, CommandReceipt, Entity } from '../packages/domain/src/core.ts';
 import type { FileRecord } from '../packages/pm-schema/index.ts';

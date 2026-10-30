@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from "react"
 import { Bell, ChevronDown, Timer, FilePlus2, Pause, Pencil, Play, RotateCcw, UserRoundCheck, Video, Info, SlidersHorizontal, MoreHorizontal, Flag, CalendarDays, Tag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,12 +7,13 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTab, TabsPanel } from "@/components/ui/tabs"
-import { FilterToolbar } from "@/components/blocks/filter-toolbar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { DataTable } from "@/components/blocks/data-table"
 import { DashboardGrid, DashboardWidget } from "@/components/blocks/dashboard/dashboard"
 import { useI18n } from "@/lib/i18n-provider"
 import { PmSearch, PmMemberIdentity, usePmScenarioState } from "./shared"
-import { type PmPageProps } from "./model"
+import { pmClock, type PmPageProps } from "./model"
 import { dashboardMembers, dashboardStates, dashboardCatalog, dashboardAvatarSources } from "./dashboard-1-fixtures"
 import { useDashboardState, dashboardIssues, dashboardLogs, openDashboardDraft, submitDashboardDraft, checkDashboardResult, formatTimer, type DashboardScope, type FixtureOutcome } from "./dashboard-1-controller"
 import { usePmProjectDomain } from "./dashboards-views"
@@ -54,6 +55,38 @@ function closeDisclosure(event: KeyboardEvent<HTMLDetailsElement>) {
     event.currentTarget.querySelector("summary")?.focus();
     event.stopPropagation();
 }
+type IssueFilterTarget = {
+    stateId: string;
+    priorityId: string;
+    assigneeIds: readonly string[];
+    projectId: string;
+    dueDate: string | null;
+};
+function issueDueBucket(date: string | null, today: string, weekEnd: string) {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+        return "none";
+    if (date < today)
+        return "overdue";
+    if (date === today)
+        return "today";
+    return date <= weekEnd ? "week" : "later";
+}
+function matchesIssueFilter(issue: IssueFilterTarget, condition: FilterCondition, today: string, weekEnd: string) {
+    if (!condition.values.length)
+        return true;
+    let hit = false;
+    if (condition.field === "status")
+        hit = condition.values.includes(issue.stateId);
+    else if (condition.field === "priority")
+        hit = condition.values.includes(issue.priorityId);
+    else if (condition.field === "assignee")
+        hit = issue.assigneeIds.length ? issue.assigneeIds.some((id) => condition.values.includes(id)) : condition.values.includes("unassigned");
+    else if (condition.field === "project")
+        hit = condition.values.includes(issue.projectId);
+    else if (condition.field === "due")
+        hit = condition.values.includes(issueDueBucket(issue.dueDate, today, weekEnd));
+    return condition.operator === "isNot" ? !hit : hit;
+}
 function PersonalSectionTitle({ children }: {
     children: ReactNode;
 }) {
@@ -66,13 +99,17 @@ const text = (zh: string, english: string) => (en ? english : zh);
 const [state, setState] = useDashboardState(scenario);
 const [agendaScroll, setAgendaScroll] = usePmScenarioState("dashboard-1-agenda-reading", () => 0);
 const agendaRef = useRef<HTMLElement>(null);
-const [filtersOpen, setFiltersOpen] = useState(false);
+const [conditions, setConditions] = usePmScenarioState<FilterCondition[]>("dashboard-1-issue-filters", () => []);
 useLayoutEffect(() => {
     if (agendaRef.current)
         agendaRef.current.scrollTop = agendaScroll;
 }, [agendaScroll]);
 const readonly = scenario === "readonly";
-const items = dashboardIssues(state, locale);
+const issueFilterToday = pmClock.slice(0, 10);
+const issueFilterWeekEnd = new Date(Date.parse(`${issueFilterToday}T00:00:00Z`) + 7 * 86400000).toISOString().slice(0, 10);
+const filteredIssues = state.issues.filter((issue) => conditions.every((condition) => matchesIssueFilter(issue, condition, issueFilterToday, issueFilterWeekEnd)));
+const activeFilterCount = conditions.filter((condition) => condition.values.length > 0).length;
+const items = dashboardIssues({ ...state, issues: filteredIssues }, locale);
 const logs = dashboardLogs(state);
 const minutes = logs.reduce((total, log) => total + log.minutes, 0);
 const chartSamples = logs.flatMap(log => log.samples);
@@ -123,25 +160,39 @@ const stats = [
         scope: "reported" as const,
         icon: FilePlus2,
         title: text("创建的任务", "Issues created"),
-        count: state.issues.filter((issue) => issue.createdByMe).length,
+        count: filteredIssues.filter((issue) => issue.createdByMe).length,
     },
     {
         scope: "assigned" as const,
         icon: UserRoundCheck,
         title: text("分配的任务", "Issues assigned"),
-        count: state.issues.filter((issue) => issue.assignedToMe).length,
+        count: filteredIssues.filter((issue) => issue.assignedToMe).length,
     },
     {
         scope: "watching" as const,
         icon: Bell,
         title: text("关注的任务", "Issues subscribed"),
-        count: state.issues.filter((issue) => issue.watching).length,
+        count: filteredIssues.filter((issue) => issue.watching).length,
     },
 ];
 const fixtureProjects = usePmProjectDomain(scenario)
 const [fixtureIssueDomain] = useIssueDomain(scenario)
 const [fixturePeople] = usePeopleDomain(scenario)
 const surface = useFixtureDashboardSurface(scenario, "dashboard1", fixtureProjects, fixtureIssueDomain.items, fixturePeople)
+const issueProjectOptions = [...new Set(state.issues.map((issue) => issue.projectId))].map((id) => ({ value: id, label: fixtureProjects.find((project) => project.id === id)?.title[locale] ?? (id === "roadmap" ? text("路线图", "Roadmap") : id) }));
+const filterFields: FilterField[] = [
+    { id: "status", label: text("状态", "Status"), options: dashboardStates.map((status) => ({ value: status.id, label: status.label[locale] })) },
+    { id: "priority", label: text("优先级", "Priority"), options: catalog.priorities.map((priority) => ({ value: priority.id, label: priority.label })) },
+    { id: "assignee", label: text("负责人", "Assignee"), options: [...catalog.assignees.map((assignee) => ({ value: assignee.id, label: assignee.label })), { value: "unassigned", label: text("未分配", "Unassigned") }] },
+    ...(issueProjectOptions.length ? [{ id: "project", label: text("项目", "Project"), options: issueProjectOptions }] : []),
+    { id: "due", label: text("截止日期", "Due date"), options: [
+        { value: "overdue", label: text("已逾期", "Overdue") },
+        { value: "today", label: text("今天到期", "Due today") },
+        { value: "week", label: text("未来 7 天", "Next 7 days") },
+        { value: "later", label: text("更晚", "Later") },
+        { value: "none", label: text("无到期日", "No due date") },
+    ] },
+];
 useLayoutEffect(() => {
     const page = document.querySelector<HTMLElement>('[data-pm-page="pm-dashboard-1"]');
     if (!page)
@@ -160,8 +211,8 @@ useLayoutEffect(() => {
 return <DashboardView {...surface}
 readModel={{ ...surface.readModel, title: (text("我的工作区", "My workspace")), issues: scenario === "loading" ? [] : items.map(item => ({ ...item, version: `fixture:${item.revision}`, moduleIds: [], cycleId: null, estimatePointId: null })),
 catalog: { ...catalog, projects: [], modules: [], cycles: [], estimatePoints: [] },
-stateCounts: dashboardStates.map(status => ({ id: status.id, label: status.label[locale], count: { value: state.issues.filter(issue => issue.createdByMe && issue.stateId === status.id).length, description: text("由我创建的任务", "Issues reported by me") } })),
-counts: { ...surface.readModel.counts, issues: { value: scenario === "loading" ? null : state.issues.length, description: text("显式个人场景计数", "Explicit personal fixture count") }, completed: { value: scenario === "loading" ? null : state.issues.filter(issue => issue.stateId === "done").length, description: text("显式个人场景计数", "Explicit personal fixture count") } },
+stateCounts: dashboardStates.map(status => ({ id: status.id, label: status.label[locale], count: { value: filteredIssues.filter(issue => issue.createdByMe && issue.stateId === status.id).length, description: text("由我创建的任务", "Issues reported by me") } })),
+counts: { ...surface.readModel.counts, issues: { value: scenario === "loading" ? null : filteredIssues.length, description: text("显式个人场景计数", "Explicit personal fixture count") }, completed: { value: scenario === "loading" ? null : filteredIssues.filter(issue => issue.stateId === "done").length, description: text("显式个人场景计数", "Explicit personal fixture count") } },
 data: { ...surface.readModel.data, emptyDescription: (text("当前本地场景没有任务。请选择其他场景查看示例。", "This local scene has no issues. Choose another scene to inspect the examples.")) } }}
 headerActions={<>{(readonly ? <Badge>{text("只读", "Read only")}</Badge> : undefined)}</>}
 toolbar={(<nav aria-label={text("工作区视图", "Workspace views")} className={d1.navigation}>
@@ -374,7 +425,7 @@ distribution: (<section aria-label={text("任务状态统计", "Issue status sta
                     <span>{status.label[locale]}</span>
                   </span>
                   <strong className={d1.statNumber}>
-                    {state.issues.filter((issue) => issue.createdByMe && issue.stateId === status.id).length}
+                    {filteredIssues.filter((issue) => issue.createdByMe && issue.stateId === status.id).length}
                   </strong>
                 </Button>))}
             </div>
@@ -517,15 +568,18 @@ timeline: (<DashboardGrid>
 issues: (<>
 <section aria-label={text("我的任务", "My issues")} data-dashboard-issues className={d1.issues}>
             <PersonalSectionTitle>{text("我的任务", "My issues")}</PersonalSectionTitle>
-            <details className={d1.issueFilters} onKeyDown={closeDisclosure} onToggle={event => setFiltersOpen(event.currentTarget.open)}>
-              <summary title={text("筛选任务", "Filter issues")}><SlidersHorizontal size={14} aria-hidden="true"/><span className="sr-only">{text("筛选任务", "Filter issues")}</span></summary>
-            <FilterToolbar label={text("任务筛选", "Issue filters")} search={<PmSearch label={text("搜索任务", "Search issues")} value={state.query} onChange={(query) => setState((previous) => ({ ...previous, query }))}/>} filters={<PersonalPicker label={text("筛选状态", "Filter status")} value={state.statusFilter} options={[
-            { value: "all", label: text("所有状态", "All statuses") },
-            ...dashboardStates.map((status) => ({
-                value: status.id,
-                label: status.label[locale],
-            })),
-        ]} onChange={(statusFilter) => setState((previous) => ({ ...previous, statusFilter }))}/>} summary={`${scopeLabels.find((scope) => scope.value === state.scope)?.label} · ${items.length} ${text("项", "issues")} · ${state.selectedIds.length} ${text("已选", "selected")}`} actions={<Button variant="ghost" onClick={() => setState((previous) => ({
+            <div className="flex flex-wrap items-center gap-2 py-3">
+              <PmSearch label={text("搜索任务", "Search issues")} value={state.query} onChange={(query) => setState((previous) => ({ ...previous, query }))}/>
+              <Popover>
+                <PopoverTrigger render={<Button variant="ghost" size="sm" aria-label={text("筛选任务", "Filter issues")} />}>
+                  <SlidersHorizontal size={14} aria-hidden="true"/>{text("筛选", "Filter")}{activeFilterCount > 0 && ` (${activeFilterCount})`}
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-[min(460px,calc(100vw-2rem))] p-0">
+                  <FilterCard title={text("任务筛选", "Issue filters")} fields={filterFields} conditions={conditions} onChange={setConditions} emptyHint={text("尚未添加筛选条件，显示当前范围内的全部任务。", "No filter conditions yet; every issue in scope is shown.")} addLabel={text("添加条件", "Add filter")} clearLabel={text("清除条件", "Clear conditions")} whereLabel={text("条件", "Where")} andLabel={text("且", "and")} anyLabel={text("任一", "Any")} removeLabel={text("移除条件", "Remove filter")}/>
+                </PopoverContent>
+              </Popover>
+              <span className={d1.caption}>{scopeLabels.find((scope) => scope.value === state.scope)?.label} · {items.length} {text("项", "issues")} · {state.selectedIds.length} {text("已选", "selected")}</span>
+              <Button variant="ghost" onClick={() => { setConditions([]); setState((previous) => ({
             ...previous,
             scope: "overview",
             query: "",
@@ -533,11 +587,11 @@ issues: (<>
             selectedDay: null,
             selectedIds: [],
             sort: null,
-        }))}>
-                  {text("清除筛选", "Clear filters")}
-                </Button>}/>
-            </details>
-            <DataTable className={d1.issueTable} columnConfig={{ widths: { title: 388, status: 144, priority: 128, assignee: 176, labels: 224, due: 160, actions: 44 } }} rows={items} getRowId={(issue) => issue.id} getRowLabel={(issue) => issue.identifier} caption={text("当前筛选的任务", "Issues in current filter")} selectedIds={state.selectedIds} onSelectionChange={filtersOpen ? (selectedIds) => setState((previous) => ({ ...previous, selectedIds })) : undefined} activeRowId={state.selectedIssueId} sort={state.sort} onSortChange={(sort) => setState((previous) => ({ ...previous, sort }))} columns={[
+        })); }}>
+                {text("清除筛选", "Clear filters")}
+              </Button>
+            </div>
+            <DataTable className={d1.issueTable} columnConfig={{ widths: { title: 388, status: 144, priority: 128, assignee: 176, labels: 224, due: 160, actions: 44 } }} rows={items} getRowId={(issue) => issue.id} getRowLabel={(issue) => issue.identifier} caption={text("当前筛选的任务", "Issues in current filter")} selectedIds={state.selectedIds} onSelectionChange={(selectedIds) => setState((previous) => ({ ...previous, selectedIds }))} activeRowId={state.selectedIssueId} sort={state.sort} onSortChange={(sort) => setState((previous) => ({ ...previous, sort }))} columns={[
         {
             id: "title",
             header: text("任务", "Issues"),
@@ -620,7 +674,7 @@ issues: (<>
                   <time><CalendarDays size={13} aria-hidden="true"/>{issue.dueDate ?? "—"}</time>
                 </div>
                 <div className={d1.labels}>{issue.labelIds.map(id => <Badge key={id}><Tag size={12} aria-hidden="true"/>{id}</Badge>)}</div>
-                {filtersOpen && <label className={d1.mobileSelection}><input type="checkbox" checked={state.selectedIds.includes(issue.id)} onChange={event => setState(previous => ({...previous, selectedIds: event.target.checked ? [...previous.selectedIds, issue.id] : previous.selectedIds.filter(id => id !== issue.id)}))}/>{text("选择", "Select")} {issue.identifier}</label>}
+                <label className={d1.mobileSelection}><input type="checkbox" checked={state.selectedIds.includes(issue.id)} onChange={event => setState(previous => ({...previous, selectedIds: event.target.checked ? [...previous.selectedIds, issue.id] : previous.selectedIds.filter(id => id !== issue.id)}))}/>{text("选择", "Select")} {issue.identifier}</label>
               </article>)}
             </div>
           </section>

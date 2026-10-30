@@ -1,7 +1,7 @@
 .board {
   display: flex;
   align-items: stretch;
-  gap: 16px;
+  gap: 12px;
   min-height: 100%;
   width: max-content;
   min-width: 100%;
@@ -15,7 +15,7 @@
   height: 100%;
   background: var(--surface-raised);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
 }
 .column[data-collapsed="true"] {
@@ -30,9 +30,8 @@
   gap: 8px;
 }
 .item {
-  border: 1px solid var(--border);
+  position: relative;
   border-radius: 8px;
-  background: var(--surface);
   min-width: 0;
 }
 .item[data-dragging] {
@@ -41,13 +40,30 @@
 }
 .board > [data-drop-target] {
   outline: 2px solid var(--ring);
-  border-radius: 8px;
+  border-radius: 12px;
 }
+/* Drag and move stay available, but only surface on hover or keyboard focus. */
 .controls {
-  display: flex;
-  gap: 4px;
-  padding: 0 8px 4px;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: none;
+  gap: 1px;
+  padding: 1px;
+  border-radius: 4px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
   align-items: center;
+}
+.item:hover > .controls,
+.item:focus-within > .controls {
+  display: flex;
+}
+@media (pointer: coarse) {
+  .controls {
+    display: flex;
+  }
 }
 .handle {
   touch-action: none;

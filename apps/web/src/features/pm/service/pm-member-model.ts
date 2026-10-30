@@ -1,5 +1,6 @@
 import type { MemberDirectoryMember, MemberInvitationDto } from "@contracts"
 import type { ControlledInvitation, ControlledMember, MemberDirectoryInteraction } from "@/views/pm/people-controlled-contracts"
+import { matchesMemberConditions } from "@/views/pm/member-directory-filters"
 
 export const memberRoleValues = { admin: 0, member: 1, guest: 2, custom: 3, unknown: 4 } as const
 
@@ -25,10 +26,10 @@ export function invitationRecord(invitation: MemberInvitationDto): ControlledInv
   }
 }
 
-/** Filtering uses only visible source facts, never inferred grants or contact details. */
 export function visibleDirectoryMembers(all: readonly ControlledMember[], state: MemberDirectoryInteraction, variant: string): ControlledMember[] {
   const query = state.query.trim().toLocaleLowerCase()
   const rows = all.filter(member =>
+    matchesMemberConditions(member, state.conditions) &&
     [member.name, member.email, member.companyRole ?? "", ...(member.teams ?? []).map(team => team.name)].join(" ").toLocaleLowerCase().includes(query) &&
     (state.activeFilter === "all" || member.isActive === (state.activeFilter === "active")) &&
     (variant === "member1" ? !state.roleFilters?.length || state.roleFilters.includes(member.role) : state.roleFilter === null || state.roleFilter === member.role) &&

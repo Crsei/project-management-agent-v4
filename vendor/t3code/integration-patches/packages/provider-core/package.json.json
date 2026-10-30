@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "source": "packages/provider-core/package.json",
+  "beforeSha256": "5b16fea2e1923da54bc960cc55ce5eb0eb55f4f0bafced658a63b335d8e2a2bb",
+  "afterSha256": "dfceb36838c58b8d4397c53cf4a24adc60344a5c9ac2d8c1793bf116c6043fd4",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 125,
+      "before": [],
+      "after": [
+        "    \"./server/ProviderRuntimeHost\": {\n",
+        "      \"types\": \"./src/server/ProviderRuntimeHost.ts\",\n",
+        "      \"import\": \"./src/server/ProviderRuntimeHost.ts\"\n",
+        "    },\n"
+      ]
+    }
+  ]
+}

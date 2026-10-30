@@ -18,6 +18,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FilterToolbar } from "@/components/blocks/filter-toolbar"
+import { FilterCard, type FilterField } from "@/components/blocks/filter-card"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuCheckboxItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu"
 import { useI18n } from "@/lib/i18n-provider"
 import { DataRegion } from "@/components/ui/data-region"
@@ -310,12 +312,42 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
   const owner = selected?.owner
   const selectedCounts = selected?.taskCounts
   const hasArchiveFilter = state.archiveScope !== defaultArchiveScope
-  const filterCount = Number(state.status !== "all") + Number(state.starredOnly) + Number(state.updatedWithin > 0) + Number(hasArchiveFilter)
+  const conditions = props.filters?.conditions ?? []
+  const conditionCount = conditions.filter(condition => condition.values.length > 0).length
+  // The card is authoritative when the host supplies it; legacy state drives the lab menu otherwise.
+  const filterCount = props.filters
+    ? conditionCount
+    : Number(state.status !== "all") + Number(state.starredOnly) + Number(state.updatedWithin > 0) + Number(hasArchiveFilter)
   const update = <K extends keyof ProjectCollectionViewInteraction>(
     key: K,
     value: ProjectCollectionViewInteraction[K],
   ) => setState((previous) => ({ ...previous, [key]: value }))
   const statusOptions = readModel.statusOptions
+  const conditionFields: FilterField[] = [
+    { id: "status", label: en ? "Status" : "业务状态", single: true, options: statusOptions },
+    { id: "team", label: en ? "Team size" : "团队规模", single: true, options: [
+      { value: "small", label: en ? "1–5 members" : "1–5 人" },
+      { value: "medium", label: en ? "6–10 members" : "6–10 人" },
+      { value: "large", label: en ? "11+ members" : "11 人及以上" },
+    ] },
+    { id: "completion", label: en ? "Completion" : "任务完成率", single: true, options: [
+      { value: "complete", label: "100%" },
+      { value: "started", label: "1–99%" },
+      { value: "not-started", label: "0%" },
+      { value: "unknown", label: en ? "Unavailable" : "暂无统计" },
+    ] },
+    { id: "updated", label: en ? "Updated" : "最近更新", single: true, options: [
+      { value: "7", label: en ? "Last 7 days" : "最近 7 天" },
+      { value: "14", label: en ? "Last 14 days" : "最近 14 天" },
+    ] },
+    { id: "archive", label: en ? "Archive" : "归档范围", single: true, options: [
+      { value: "current", label: en ? "Current" : "未归档" },
+      { value: "archived", label: en ? "Archived" : "已归档" },
+    ] },
+    { id: "starred", label: en ? "Starred" : "收藏", single: true, options: [
+      { value: "starred", label: en ? "Starred only" : "仅显示收藏" },
+    ] },
+  ]
   const openDetail = (
     project: ProjectCollectionRecord,
     element: HTMLButtonElement,
@@ -360,12 +392,40 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
       ]}
     />
   )
-  const clearQuery = () => setState((previous) => ({
-    ...previous, quickView: "all", search: "", teamSize: "all", status: "all", starredOnly: false, updatedWithin: 0, archiveScope: defaultArchiveScope,
-  }))
-  const hasFilters = !!state.search || state.teamSize !== "all" || state.status !== "all" || state.starredOnly || !!state.updatedWithin || hasArchiveFilter || (browse && state.quickView !== "active" && state.quickView !== "all")
+  const clearQuery = () => {
+    if (props.filters?.onClear) {
+      props.filters.onClear()
+      return
+    }
+    setState((previous) => ({
+      ...previous, quickView: "all", search: "", teamSize: "all", status: "all", starredOnly: false, updatedWithin: 0, archiveScope: defaultArchiveScope,
+    }))
+  }
+  const hasFilters = !!state.search || state.teamSize !== "all" || state.status !== "all" || state.starredOnly || !!state.updatedWithin || hasArchiveFilter || conditionCount > 0 || (browse && state.quickView !== "active" && state.quickView !== "all")
   const clearFilters = hasFilters ? <Button variant="ghost" onClick={clearQuery}>{en ? "Clear filters" : "清除筛选"}</Button> : undefined
-  const filterControl = Object.values(capabilities.filters).some(Boolean) ? (
+  const filterControl = props.filters ? (
+    <Popover>
+      <PopoverTrigger render={<Button variant="secondary" aria-label={en ? "Filters" : "筛选"} data-pm-filter-button />}>
+        <SlidersHorizontal aria-hidden="true" />
+        {en ? "Filters" : "筛选"}{conditionCount ? ` · ${conditionCount}` : ""}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[340px] max-w-[calc(100vw-2rem)] p-0">
+        <FilterCard
+          title={en ? "Filter projects" : "筛选项目"}
+          fields={conditionFields}
+          conditions={conditions}
+          onChange={props.filters.onChange}
+          emptyHint={en ? "No conditions yet." : "尚未添加筛选条件。"}
+          addLabel={en ? "Add condition" : "添加条件"}
+          clearLabel={en ? "Clear conditions" : "清除条件"}
+          whereLabel={en ? "Where" : "条件"}
+          andLabel={en ? "and" : "并且"}
+          anyLabel={en ? "Any" : "任意"}
+          removeLabel={en ? "Remove condition" : "移除条件"}
+        />
+      </PopoverContent>
+    </Popover>
+  ) : Object.values(capabilities.filters).some(Boolean) ? (
     <DropdownMenu open={state.filtersOpen} onOpenChange={(open) => update("filtersOpen", open)}>
       <DropdownMenuTrigger render={<Button variant="secondary" aria-label={en ? "Filters" : "筛选"} />}>
         <SlidersHorizontal aria-hidden="true" />
@@ -462,11 +522,11 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
         {variant === "table" && props.toolbarActions}
         {!browse && !props.toolbarActions && (variant === "cover" ? <div className={styles.toolbar} role="group" aria-label={en ? "Project search and filters" : "项目搜索与筛选"}>
           <PmSearch value={state.search} onChange={(value) => update("search", value)} label={en ? "Search projects..." : "搜索项目…"} />
-          <div className={styles.toolbarFilters}>{sortControl}{capabilities.filters.teamSize && teamControl}{filterControl}{clearFilters}</div>
+          <div className={styles.toolbarFilters}>{sortControl}{!props.filters && capabilities.filters.teamSize && teamControl}{filterControl}{clearFilters}</div>
         </div> : <FilterToolbar
           label={en ? "Project search and filters" : "项目搜索与筛选"}
           search={<PmSearch value={state.search} onChange={(value) => update("search", value)} label={en ? "Search projects..." : "搜索项目…"} />}
-          filters={<>{sortControl}{capabilities.filters.teamSize && teamControl}{filterControl}{clearFilters}</>}
+          filters={<>{sortControl}{!props.filters && capabilities.filters.teamSize && teamControl}{filterControl}{clearFilters}</>}
         />)}
       {!props.toolbarActions && <Button
         ref={addButton}

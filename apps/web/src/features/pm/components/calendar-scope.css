@@ -1,0 +1,181 @@
+/* 工作区日历（默认月视图）专用视觉层。
+   作用域：.native-workbench[data-task-layout="calendar"]:not([data-task-project])
+   再排除个人任务变体（data-task-scope=mine/important），因此不触碰项目日历、时间线、
+   我的任务与重要/我关注的页面。仅调整排版、比例、圆角与实体边缘，不改变结构与顺序。 */
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-heading {
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px 12px;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-heading h1 {
+  color: var(--foreground);
+  font-size: var(--text-page);
+  line-height: var(--text-page--line-height);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-heading .collection-heading-actions {
+  gap: 8px;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-heading .collection-heading-actions :is(.primary-button, .task-agent-entry, .task-more-trigger) {
+  min-height: 32px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-heading .collection-heading-actions .primary-button {
+  padding: 0 12px;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-controls {
+  min-width: 0;
+  min-height: 48px;
+  gap: 8px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-controls > .task-search {
+  flex: 0 1 240px;
+  min-width: 160px;
+  min-height: 32px;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+  color: var(--muted-foreground);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-controls > .task-search input {
+  min-height: 30px;
+  padding: 4px 0;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-controls > .task-toolbar-button {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--control-radius);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-chipsbar {
+  padding: 6px 24px;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-filter-panel {
+  padding: 12px 24px;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-filter-panel > label {
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-filter-panel select {
+  min-height: 32px;
+  border-radius: var(--control-radius);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-content {
+  min-width: 0;
+  padding: 0 24px 24px;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-content > .task-date-group {
+  margin: 0;
+  min-width: 0;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-date-group > .task-group-heading {
+  min-height: 40px;
+  padding: 8px 0;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-date-group > .task-group-heading .secondary-button {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: var(--control-radius);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-group-heading h2 {
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+  font-weight: 500;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-group-heading h2 span {
+  color: var(--muted-foreground);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-weight: 400;
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-content > .task-terminal-group {
+  margin: 12px 0 0;
+  border-radius: var(--radius-module-value);
+}
+
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-terminal-group > summary {
+  min-height: 40px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+@media (max-width: 640px) {
+  .native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-heading {
+    gap: 12px;
+    padding: 16px 16px 8px;
+    flex-wrap: wrap;
+  }
+
+  .native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-heading .collection-heading-actions {
+    flex-wrap: wrap;
+    margin-left: auto;
+    justify-content: flex-end;
+  }
+
+  .native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-controls {
+    gap: 6px;
+    padding: 8px 16px;
+  }
+
+  .native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-controls > .task-search {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-filter-panel,
+  .native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-chipsbar {
+    padding-inline: 16px;
+  }
+
+  .native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-collection-content {
+    padding: 0 16px 16px;
+  }
+
+  .native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-date-group > .task-group-heading {
+    padding-inline: 0;
+  }
+}
+
+@media (forced-colors: active) {
+  .native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-controls {
+    border-bottom: 1px solid CanvasText;
+  }
+}

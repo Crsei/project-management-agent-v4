@@ -1,0 +1,764 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/ProviderRegistry.test.ts",
+  "beforeSha256": "f8aac05d65741ab4396b592011dc7f2762a06bdba5b561a220634b9700addcb9",
+  "afterSha256": "acb4251dee8078611b4114e0f2b57653b3f2bb16f73299ae1fc0e18ea104571c",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1,
+      "before": [
+        "import * as ServerSecretStore from \"../auth/ServerSecretStore.ts\";\n",
+        "import * as CodexInstallation from \"./CodexInstallation.ts\";\n",
+        "import * as CodexManagedTokenBroker from \"./CodexManagedTokenBroker.ts\";\n",
+        "import * as ServerEnvironment from \"../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 7,
+      "before": [
+        "import * as DateTime from \"effect/DateTime\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 21,
+      "before": [
+        "  EnvironmentId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 24,
+      "before": [
+        "  DEFAULT_SERVER_SETTINGS,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 28,
+      "before": [
+        "  ServerSettings,\n",
+        "  ServerSettingsError,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 32,
+      "before": [
+        "  type ServerSettings as ContractServerSettings,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 36,
+      "before": [
+        "import { deepMerge } from \"@t3tools/shared/Struct\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 38,
+      "before": [
+        "import { applyServerSettingsPatch } from \"@t3tools/shared/serverSettings\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 42,
+      "before": [
+        "import * as BackgroundPolicy from \"../background/BackgroundPolicy.ts\";\n",
+        "import * as AntigravityInstallation from \"./AntigravityInstallation.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 46,
+      "before": [
+        "import * as ResetCreditCoordinator from \"./resetCreditCoordinator.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 48,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n",
+        "import * as OpenCodeRuntime from \"@t3tools/provider-opencode/server/OpenCodeRuntime\";\n",
+        "import * as OpenCodeServerLedger from \"@t3tools/provider-opencode/server/OpenCodeServerLedger\";\n",
+        "import * as ProviderEventLoggers from \"@t3tools/provider-core/server/ProviderEventLoggers\";\n",
+        "import * as ProviderInstanceRegistryHydration from \"./ProviderInstanceRegistryHydration.ts\";\n",
+        "import * as PortScanner from \"../preview/PortScanner.ts\";\n",
+        "import * as ServerConfig from \"../config.ts\";\n",
+        "import * as ServerSettingsModule from \"../serverSettings.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n",
+        "import * as PmNativeTestHost from \"../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 74,
+      "before": [
+        "const decodeServerSettings = Schema.decodeSync(ServerSettings);\n",
+        "const encodeServerSettings = Schema.encodeSync(ServerSettings);\n",
+        "const encodedDefaultServerSettings = encodeServerSettings(DEFAULT_SERVER_SETTINGS);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 78,
+      "before": [
+        "const disabledDefaultSlots = (\n",
+        "  ...drivers: ReadonlyArray<string>\n",
+        "): ContractServerSettings[\"providerInstances\"] =>\n",
+        "  Object.fromEntries(\n",
+        "    drivers.map((driver) => [\n",
+        "      ProviderInstanceId.make(driver),\n",
+        "      { driver: ProviderDriverKind.make(driver), enabled: false },\n",
+        "    ]),\n",
+        "  );\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 94,
+      "before": [
+        "const TEST_EPOCH = DateTime.makeUnsafe(\"1970-01-01T00:00:00.000Z\");\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 109,
+      "before": [
+        "const layerBackgroundPolicyAlwaysRun = Layer.mock(BackgroundPolicy.BackgroundPolicy)({\n",
+        "  reportClientActivity: () => Effect.void,\n",
+        "  removeRpcClient: () => Effect.void,\n",
+        "  snapshot: Effect.succeed({\n",
+        "    hostPower: {\n",
+        "      source: \"unknown\",\n",
+        "      idle: \"unknown\",\n",
+        "      idleSeconds: null,\n",
+        "      locked: \"unknown\",\n",
+        "      suspended: false,\n",
+        "      onBattery: \"unknown\",\n",
+        "      lowPowerMode: \"unknown\",\n",
+        "      thermalState: \"unknown\",\n",
+        "      stale: true,\n",
+        "      updatedAt: TEST_EPOCH,\n",
+        "    },\n",
+        "    leases: [],\n",
+        "    activeForegroundLeaseCount: 0,\n",
+        "    activeScopeKeys: [],\n",
+        "    shouldRunOpportunisticWork: true,\n",
+        "    updatedAt: TEST_EPOCH,\n",
+        "  }),\n",
+        "  shouldRunScopeWork: () => Effect.succeed(true),\n",
+        "  shouldRunOpportunisticWork: Effect.succeed(true),\n",
+        "});\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 249,
+      "before": [
+        "function makeMutableServerSettingsService(\n",
+        "  initial: ContractServerSettings = DEFAULT_SERVER_SETTINGS,\n",
+        ") {\n",
+        "  return Effect.gen(function* () {\n",
+        "    const settingsRef = yield* Ref.make(initial);\n",
+        "    const changes = yield* PubSub.unbounded<ContractServerSettings>();\n",
+        "\n",
+        "    return {\n",
+        "      start: Effect.void,\n",
+        "      ready: Effect.void,\n",
+        "      getSettings: Ref.get(settingsRef),\n",
+        "      updateSettings: (patch) =>\n",
+        "        Effect.gen(function* () {\n",
+        "          const current = yield* Ref.get(settingsRef);\n",
+        "          const next = applyServerSettingsPatch(current, patch);\n",
+        "          encodeServerSettings(next);\n",
+        "          yield* Ref.set(settingsRef, next);\n",
+        "          yield* PubSub.publish(changes, next);\n",
+        "          return next;\n",
+        "        }),\n",
+        "      updateProviderInstance: (mutation, patch = {}) =>\n",
+        "        Effect.gen(function* () {\n",
+        "          const current = yield* Ref.get(settingsRef);\n",
+        "          const next = ServerSettingsModule.applyProviderInstanceMutation(\n",
+        "            applyServerSettingsPatch(current, patch),\n",
+        "            mutation,\n",
+        "          );\n",
+        "          encodeServerSettings(next);\n",
+        "          yield* Ref.set(settingsRef, next);\n",
+        "          yield* PubSub.publish(changes, next);\n",
+        "          return next;\n",
+        "        }),\n",
+        "      withSettingsSnapshot: (use) => Ref.get(settingsRef).pipe(Effect.flatMap(use)),\n",
+        "      get streamChanges() {\n",
+        "        return Stream.fromPubSub(changes);\n",
+        "      },\n",
+        "      get subscribeChanges() {\n",
+        "        return PubSub.subscribe(changes).pipe(\n",
+        "          Effect.map((subscription) => Stream.fromSubscription(subscription)),\n",
+        "        );\n",
+        "      },\n",
+        "    } satisfies ServerSettingsModule.ServerSettingsService[\"Service\"];\n",
+        "  });\n",
+        "}\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 305,
+      "before": [
+        "const layerTestNodeServices = Layer.mergeAll(\n",
+        "  ProviderLatestVersions.layer,\n",
+        "  NodeServices.layer,\n",
+        "  Layer.mock(CodexManagedTokenBroker.CodexManagedTokenBroker)({\n",
+        "    endpoint: Effect.succeed(\"unused-private-pipe\"),\n",
+        "  }),\n",
+        "  Layer.mock(CodexInstallation.CodexInstallation)({\n",
+        "    managedDirectory: \"unused-managed-installation\",\n",
+        "  }),\n",
+        "  Layer.mock(ServerSecretStore.ServerSecretStore)({}),\n",
+        "  Layer.succeed(ServerEnvironment.ServerEnvironmentIdentity, {\n",
+        "    getEnvironmentId: Effect.succeed(EnvironmentId.make(\"00000000-0000-4000-8000-000000000001\")),\n",
+        "  }),\n",
+        ");\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 321,
+      "before": [
+        "  Layer.mergeAll(layerTestNodeServices, ServerSettingsModule.layerTest(), layerTestHttpClient),\n"
+      ],
+      "after": [
+        "  Layer.mergeAll(ProviderLatestVersions.layer, NodeServices.layer, layerTestHttpClient),\n"
+      ]
+    },
+    {
+      "start": 952,
+      "before": [
+        "              ServerConfig.layerTest(process.cwd(), {\n",
+        "                prefix: \"t3-pi-model-cache-\",\n",
+        "              }).pipe(Layer.provideMerge(NodeServices.layer)),\n"
+      ],
+      "after": [
+        "              PmNativeTestHost.layer({ driver: \"pi\", prefix: \"pm-pi-model-cache\" }),\n"
+      ]
+    },
+    {
+      "start": 1083,
+      "before": [
+        "            ServerConfig.layerTest(process.cwd(), {\n",
+        "              prefix: \"t3-codex-retired-model-cache-\",\n",
+        "            }).pipe(Layer.provideMerge(NodeServices.layer)),\n"
+      ],
+      "after": [
+        "            PmNativeTestHost.layer({ driver: \"codex\", prefix: \"pm-codex-retired-model-cache\" }),\n"
+      ]
+    },
+    {
+      "start": 1351,
+      "before": [
+        "                ServerConfig.layerTest(process.cwd(), {\n",
+        "                  prefix: \"t3-provider-registry-shared-workspace-scan-\",\n",
+        "                }),\n"
+      ],
+      "after": [
+        "                PmNativeTestHost.layer({ driver: \"codex\", prefix: \"pm-provider-registry-shared-workspace-scan\" }),\n"
+      ]
+    },
+    {
+      "start": 1355,
+      "before": [
+        "              Layer.provideMerge(NodeServices.layer),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1446,
+      "before": [
+        "              ServerConfig.layerTest(process.cwd(), {\n",
+        "                prefix: \"t3-provider-registry-unhealthy-workspace-\",\n",
+        "              }),\n"
+      ],
+      "after": [
+        "              PmNativeTestHost.layer({ driver: \"codex\", prefix: \"pm-provider-registry-unhealthy-workspace\" }),\n"
+      ]
+    },
+    {
+      "start": 1450,
+      "before": [
+        "            Layer.provideMerge(NodeServices.layer),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1566,
+      "before": [
+        "              ServerConfig.layerTest(process.cwd(), {\n",
+        "                prefix: \"t3-provider-registry-shared-refresh-\",\n",
+        "              }),\n"
+      ],
+      "after": [
+        "              PmNativeTestHost.layer({ driver: \"codex\", prefix: \"pm-provider-registry-shared-refresh\" }),\n"
+      ]
+    },
+    {
+      "start": 1570,
+      "before": [
+        "            Layer.provideMerge(NodeServices.layer),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1672,
+      "before": [
+        "              ServerConfig.layerTest(process.cwd(), {\n",
+        "                prefix: \"t3-provider-registry-merged-persist-\",\n",
+        "              }),\n"
+      ],
+      "after": [
+        "              PmNativeTestHost.layer({ driver: \"cursor\", prefix: \"pm-provider-registry-merged-persist\" }),\n"
+      ]
+    },
+    {
+      "start": 1676,
+      "before": [
+        "            Layer.provideMerge(layerBackgroundPolicyAlwaysRun),\n",
+        "            Layer.provideMerge(NodeServices.layer),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1800,
+      "before": [
+        "                ServerConfig.layerTest(process.cwd(), {\n",
+        "                  prefix: \"t3-provider-registry-opencode-authoritative-persist-\",\n",
+        "                }),\n"
+      ],
+      "after": [
+        "                PmNativeTestHost.layer({ driver: \"opencode\", prefix: \"pm-provider-registry-opencode-authoritative-persist\" }),\n"
+      ]
+    },
+    {
+      "start": 1804,
+      "before": [
+        "              Layer.provideMerge(NodeServices.layer),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1903,
+      "before": [
+        "              ServerConfig.layerTest(process.cwd(), {\n",
+        "                prefix: \"t3-provider-registry-refresh-failure-\",\n",
+        "              }),\n"
+      ],
+      "after": [
+        "              PmNativeTestHost.layer({ driver: \"codex\", prefix: \"pm-provider-registry-refresh-failure\" }),\n"
+      ]
+    },
+    {
+      "start": 1907,
+      "before": [
+        "            Layer.provideMerge(layerBackgroundPolicyAlwaysRun),\n",
+        "            Layer.provideMerge(NodeServices.layer),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1928,
+      "before": [
+        "    it.effect(\"re-probes when settings change the codex binaryPath\", () =>\n",
+        "      Effect.gen(function* () {\n",
+        "        const firstMissing = `t3code_codex_first_`;\n",
+        "        const secondMissing = `t3code_codex_second_`;\n",
+        "        const spawnedCommands: Array<string> = [];\n",
+        "        const secondProbeStarted = yield* Deferred.make<void>();\n",
+        "        const releaseSecondProbe = yield* Deferred.make<void>();\n",
+        "        const allowLazySettingsStream = yield* Deferred.make<void>();\n",
+        "        const mutableServerSettings = yield* makeMutableServerSettingsService(\n",
+        "          decodeServerSettings(\n",
+        "            deepMerge(encodedDefaultServerSettings, {\n",
+        "              providerInstances: {\n",
+        "                ...disabledDefaultSlots(\"claudeAgent\", \"cursor\", \"grok\", \"opencode\"),\n",
+        "                [ProviderInstanceId.make(\"codex\")]: {\n",
+        "                  driver: ProviderDriverKind.make(\"codex\"),\n",
+        "                  enabled: true,\n",
+        "                  config: { binaryPath: firstMissing },\n",
+        "                },\n",
+        "              },\n",
+        "            }),\n",
+        "          ),\n",
+        "        );\n",
+        "        const serverSettings = {\n",
+        "          ...mutableServerSettings,\n",
+        "          streamChanges: Stream.unwrap(\n",
+        "            Deferred.await(allowLazySettingsStream).pipe(\n",
+        "              Effect.as(mutableServerSettings.streamChanges),\n",
+        "            ),\n",
+        "          ),\n",
+        "        } satisfies ServerSettingsModule.ServerSettingsService[\"Service\"];\n",
+        "        const scope = yield* Scope.make();\n",
+        "        yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));\n",
+        "        const layerProviderRegistry = ProviderRegistry.layer.pipe(\n",
+        "          Layer.provideMerge(\n",
+        "            ProviderInstanceRegistryHydration.layer.pipe(Layer.provide(PortScanner.layerTest)),\n",
+        "          ),\n",
+        "          Layer.provideMerge(AntigravityInstallation.AntigravityInstallation.layer),\n",
+        "          Layer.provideMerge(\n",
+        "            Layer.succeed(ServerSettingsModule.ServerSettingsService, serverSettings),\n",
+        "          ),\n",
+        "          Layer.provideMerge(ServerSecretStore.layer),\n",
+        "          Layer.provideMerge(\n",
+        "            ServerConfig.layerTest(process.cwd(), {\n",
+        "              prefix: \"t3-provider-registry-\",\n",
+        "            }),\n",
+        "          ),\n",
+        "          Layer.provideMerge(layerTestHttpClient),\n",
+        "          Layer.provideMerge(\n",
+        "            Layer.succeed(\n",
+        "              ProviderEventLoggers.ProviderEventLoggers,\n",
+        "              ProviderEventLoggers.NoOpProviderEventLoggers,\n",
+        "            ),\n",
+        "          ),\n",
+        "          Layer.provideMerge(ProviderLatestVersions.layer),\n",
+        "          Layer.provideMerge(McpProviderSessions.layer),\n",
+        "          Layer.provideMerge(ModelManifest.layerTest),\n",
+        "          Layer.provideMerge(ResetCreditCoordinator.layerTest),\n",
+        "          Layer.provideMerge(\n",
+        "            OpenCodeRuntime.layer.pipe(Layer.provide(OpenCodeServerLedger.layerTest)),\n",
+        "          ),\n",
+        "          Layer.updateService(ChildProcessSpawner.ChildProcessSpawner, (spawner) =>\n",
+        "            ChildProcessSpawner.make((command) => {\n",
+        "              if (command._tag !== \"StandardCommand\") return spawner.spawn(command);\n",
+        "              spawnedCommands.push(command.command);\n",
+        "              const beforeSpawn =\n",
+        "                command.command === secondMissing\n",
+        "                  ? Deferred.succeed(secondProbeStarted, undefined).pipe(\n",
+        "                      Effect.andThen(Deferred.await(releaseSecondProbe)),\n",
+        "                    )\n",
+        "                  : Effect.void;\n",
+        "              return beforeSpawn.pipe(Effect.andThen(spawner.spawn(command)));\n",
+        "            }),\n",
+        "          ),\n",
+        "          Layer.provideMerge(NodeServices.layer),\n",
+        "          Layer.provideMerge(layerBackgroundPolicyAlwaysRun),\n",
+        "        );\n",
+        "        const runtimeServices = yield* Layer.build(layerProviderRegistry).pipe(\n",
+        "          Scope.provide(scope),\n",
+        "        );\n",
+        "\n",
+        "        yield* Effect.gen(function* () {\n",
+        "          const registry = yield* ProviderRegistry.ProviderRegistry;\n",
+        "          const codexSnapshots = registry.streamChanges.pipe(\n",
+        "            Stream.map((providers) =>\n",
+        "              providers.find((provider) => provider.instanceId === \"codex\"),\n",
+        "            ),\n",
+        "            Stream.filter((provider): provider is ServerProvider => provider !== undefined),\n",
+        "          );\n",
+        "          const firstError = yield* Stream.toPull(\n",
+        "            codexSnapshots.pipe(Stream.filter((provider) => provider.status === \"error\")),\n",
+        "          );\n",
+        "          const currentCodex = (yield* registry.getProviders).find(\n",
+        "            (provider) => provider.instanceId === \"codex\",\n",
+        "          );\n",
+        "          const initialCodex =\n",
+        "            currentCodex?.status === \"error\" ? currentCodex : (yield* firstError)[0];\n",
+        "          assert.strictEqual(initialCodex?.status, \"error\");\n",
+        "          assert.strictEqual(initialCodex?.installed, false);\n",
+        "          assert.deepStrictEqual(spawnedCommands, [firstMissing]);\n",
+        "\n",
+        "          const pendingRebuild = yield* Stream.toPull(\n",
+        "            codexSnapshots.pipe(\n",
+        "              Stream.filter((provider) => provider.status === \"warning\" && !provider.installed),\n",
+        "            ),\n",
+        "          );\n",
+        "          yield* serverSettings.updateSettings({\n",
+        "            providerInstances: {\n",
+        "              ...disabledDefaultSlots(\"claudeAgent\", \"cursor\", \"grok\", \"opencode\"),\n",
+        "              [ProviderInstanceId.make(\"codex\")]: {\n",
+        "                driver: ProviderDriverKind.make(\"codex\"),\n",
+        "                enabled: true,\n",
+        "                config: { binaryPath: secondMissing },\n",
+        "              },\n",
+        "            },\n",
+        "          });\n",
+        "          yield* Deferred.succeed(allowLazySettingsStream, undefined);\n",
+        "\n",
+        "          yield* Deferred.await(secondProbeStarted);\n",
+        "          yield* pendingRebuild;\n",
+        "          const rebuiltError = yield* Stream.toPull(\n",
+        "            codexSnapshots.pipe(Stream.filter((provider) => provider.status === \"error\")),\n",
+        "          );\n",
+        "          yield* Deferred.succeed(releaseSecondProbe, undefined);\n",
+        "          const [reprobedCodex] = yield* rebuiltError;\n",
+        "          assert.deepStrictEqual(spawnedCommands, [firstMissing, secondMissing]);\n",
+        "          assert.strictEqual(reprobedCodex?.status, \"error\");\n",
+        "          assert.strictEqual(reprobedCodex?.installed, false);\n",
+        "        }).pipe(Effect.provide(runtimeServices));\n",
+        "      }),\n",
+        "    );\n",
+        "\n",
+        "    it.effect(\"includes unavailable instance snapshots in getProviders\", () =>\n",
+        "      Effect.gen(function* () {\n",
+        "        const serverSettings = yield* makeMutableServerSettingsService(\n",
+        "          decodeServerSettings(\n",
+        "            deepMerge(encodedDefaultServerSettings, {\n",
+        "              providerInstances: {\n",
+        "                ...disabledDefaultSlots(\"codex\", \"claudeAgent\", \"cursor\", \"grok\", \"opencode\"),\n",
+        "                ghost_main: {\n",
+        "                  driver: \"ghostDriver\",\n",
+        "                  displayName: \"A fork-only driver we don't ship\",\n",
+        "                  enabled: false,\n",
+        "                  config: { arbitrary: \"payload\" },\n",
+        "                },\n",
+        "              } as unknown as ContractServerSettings[\"providerInstances\"],\n",
+        "            }),\n",
+        "          ),\n",
+        "        );\n",
+        "        const scope = yield* Scope.make();\n",
+        "        yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));\n",
+        "        const layerProviderRegistry = ProviderRegistry.layer.pipe(\n",
+        "          Layer.provideMerge(\n",
+        "            ProviderInstanceRegistryHydration.layer.pipe(Layer.provide(PortScanner.layerTest)),\n",
+        "          ),\n",
+        "          Layer.provideMerge(AntigravityInstallation.AntigravityInstallation.layer),\n",
+        "          Layer.provideMerge(\n",
+        "            Layer.succeed(ServerSettingsModule.ServerSettingsService, serverSettings),\n",
+        "          ),\n",
+        "          Layer.provideMerge(ServerSecretStore.layer),\n",
+        "          Layer.provideMerge(\n",
+        "            ServerConfig.layerTest(process.cwd(), {\n",
+        "              prefix: \"t3-provider-registry-\",\n",
+        "            }),\n",
+        "          ),\n",
+        "          Layer.provideMerge(layerTestHttpClient),\n",
+        "          Layer.provideMerge(\n",
+        "            Layer.succeed(\n",
+        "              ProviderEventLoggers.ProviderEventLoggers,\n",
+        "              ProviderEventLoggers.NoOpProviderEventLoggers,\n",
+        "            ),\n",
+        "          ),\n",
+        "          Layer.provideMerge(ProviderLatestVersions.layer),\n",
+        "          Layer.provideMerge(McpProviderSessions.layer),\n",
+        "          Layer.provideMerge(ModelManifest.layerTest),\n",
+        "          Layer.provideMerge(ResetCreditCoordinator.layerTest),\n",
+        "          Layer.provideMerge(\n",
+        "            OpenCodeRuntime.layer.pipe(Layer.provide(OpenCodeServerLedger.layerTest)),\n",
+        "          ),\n",
+        "          Layer.provideMerge(NodeServices.layer),\n",
+        "          Layer.provideMerge(layerBackgroundPolicyAlwaysRun),\n",
+        "        );\n",
+        "        const runtimeServices = yield* Layer.build(layerProviderRegistry).pipe(\n",
+        "          Scope.provide(scope),\n",
+        "        );\n",
+        "\n",
+        "        yield* Effect.gen(function* () {\n",
+        "          const registry = yield* ProviderRegistry.ProviderRegistry;\n",
+        "          const providers = yield* registry.getProviders;\n",
+        "          const ghost = providers.find((provider) => provider.instanceId === \"ghost_main\");\n",
+        "\n",
+        "          assert.notStrictEqual(ghost, undefined);\n",
+        "          assert.strictEqual(ghost?.driver, \"ghostDriver\");\n",
+        "          assert.strictEqual(ghost?.availability, \"unavailable\");\n",
+        "          assert.strictEqual(Object.hasOwn(ghost ?? {}, \"setup\"), false);\n",
+        "          assert.match(ghost?.unavailableReason ?? \"\", /ghostDriver/);\n",
+        "        }).pipe(Effect.provide(runtimeServices));\n",
+        "      }),\n",
+        "    );\n",
+        "\n",
+        "    const startupSettings = (instanceId?: string) =>\n",
+        "      decodeServerSettings({\n",
+        "        ...encodedDefaultServerSettings,\n",
+        "        providerInstances: {\n",
+        "          ...disabledDefaultSlots(\n",
+        "            \"codex\",\n",
+        "            \"claudeAgent\",\n",
+        "            \"cursor\",\n",
+        "            \"grok\",\n",
+        "            \"opencode\",\n",
+        "            \"antigravity\",\n",
+        "            \"pi\",\n",
+        "            \"muse\",\n",
+        "          ),\n",
+        "          ...(instanceId ? { [instanceId]: { driver: \"ghostDriver\" } } : {}),\n",
+        "        },\n",
+        "      });\n",
+        "\n",
+        "    const hydrateDuringSettingsChange = Effect.fnUntraced(function* (input: {\n",
+        "      seed: ContractServerSettings;\n",
+        "      saved: ContractServerSettings;\n",
+        "      current: ContractServerSettings;\n",
+        "      failCurrentRead?: boolean;\n",
+        "    }) {\n",
+        "      const changes = yield* PubSub.unbounded<ContractServerSettings | undefined>();\n",
+        "      const consume = yield* Deferred.make<void>();\n",
+        "      const drained: Array<Deferred.Deferred<void>> = [];\n",
+        "      let readSeed = true;\n",
+        "      let failCurrentRead = false;\n",
+        "      const settings = yield* makeMutableServerSettingsService(input.current);\n",
+        "      const serverSettings = {\n",
+        "        ...settings,\n",
+        "        getSettings: Effect.suspend(() => {\n",
+        "          if (!readSeed) {\n",
+        "            readSeed = true;\n",
+        "            return PubSub.publish(changes, input.saved).pipe(Effect.as(input.seed));\n",
+        "          }\n",
+        "          return failCurrentRead\n",
+        "            ? Effect.fail(\n",
+        "                new ServerSettingsError({\n",
+        "                  settingsPath: \"<memory>\",\n",
+        "                  operation: \"read-secret\",\n",
+        "                  cause: new Error(\"secret materialization failed\"),\n",
+        "                }),\n",
+        "              )\n",
+        "            : settings.getSettings;\n",
+        "        }),\n",
+        "        streamChanges: Stream.empty,\n",
+        "        subscribeChanges: Effect.gen(function* () {\n",
+        "          const subscription = yield* PubSub.subscribe(changes);\n",
+        "          const done = yield* Deferred.make<void>();\n",
+        "          drained.push(done);\n",
+        "          // The terminal marker acknowledges preceding reconciles, including no-op/failed reads.\n",
+        "          return Stream.fromEffectRepeat(\n",
+        "            Deferred.await(consume).pipe(Effect.andThen(PubSub.take(subscription))),\n",
+        "          ).pipe(\n",
+        "            Stream.takeWhile((next): next is ContractServerSettings => next !== undefined),\n",
+        "            Stream.ensuring(Deferred.succeed(done, undefined)),\n",
+        "          );\n",
+        "        }),\n",
+        "      } satisfies ServerSettingsModule.ServerSettingsService[\"Service\"];\n",
+        "      const dependencies = yield* Layer.build(\n",
+        "        Layer.mergeAll(\n",
+        "          AntigravityInstallation.AntigravityInstallation.layer,\n",
+        "          ServerSecretStore.layer,\n",
+        "          OpenCodeRuntime.layer.pipe(Layer.provide(OpenCodeServerLedger.layerTest)),\n",
+        "        ).pipe(\n",
+        "          Layer.provideMerge(\n",
+        "            Layer.succeed(ServerSettingsModule.ServerSettingsService, serverSettings),\n",
+        "          ),\n",
+        "          Layer.provideMerge(\n",
+        "            ServerConfig.layerTest(process.cwd(), { prefix: \"t3-provider-registry-\" }),\n",
+        "          ),\n",
+        "          Layer.provideMerge(layerTestHttpClient),\n",
+        "          Layer.provideMerge(\n",
+        "            Layer.succeed(\n",
+        "              ProviderEventLoggers.ProviderEventLoggers,\n",
+        "              ProviderEventLoggers.NoOpProviderEventLoggers,\n",
+        "            ),\n",
+        "          ),\n",
+        "          Layer.provideMerge(ProviderLatestVersions.layer),\n",
+        "          Layer.provideMerge(McpProviderSessions.layer),\n",
+        "          Layer.provideMerge(ResetCreditCoordinator.layerTest),\n",
+        "          Layer.provideMerge(layerBackgroundPolicyAlwaysRun),\n",
+        "        ),\n",
+        "      );\n",
+        "      readSeed = false;\n",
+        "      const services = yield* Layer.build(\n",
+        "        ProviderInstanceRegistryHydration.layer.pipe(Layer.provide(PortScanner.layerTest)),\n",
+        "      ).pipe(Effect.provide(dependencies));\n",
+        "      failCurrentRead = input.failCurrentRead ?? false;\n",
+        "      yield* PubSub.publish(changes, undefined);\n",
+        "      yield* Deferred.succeed(consume, undefined);\n",
+        "      yield* Effect.forEach(drained, Deferred.await);\n",
+        "      const registry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry.pipe(\n",
+        "        Effect.provide(services),\n",
+        "      );\n",
+        "      return (yield* registry.listUnavailable).map(\n",
+        "        (provider): string | undefined => provider.instanceId,\n",
+        "      );\n",
+        "    });\n",
+        "\n",
+        "    it.effect(\"applies a settings change saved while the provider registry starts\", () =>\n",
+        "      Effect.gen(function* () {\n",
+        "        const saved = startupSettings(\"ghost_late\");\n",
+        "        const unavailable = yield* hydrateDuringSettingsChange({\n",
+        "          seed: startupSettings(),\n",
+        "          saved,\n",
+        "          current: saved,\n",
+        "        });\n",
+        "        assert.include(unavailable, \"ghost_late\");\n",
+        "      }),\n",
+        "    );\n",
+        "\n",
+        "    it.effect(\"does not apply a queued settings change older than the registry seed\", () =>\n",
+        "      Effect.gen(function* () {\n",
+        "        const seed = startupSettings(\"ghost_current\");\n",
+        "        const unavailable = yield* hydrateDuringSettingsChange({\n",
+        "          seed,\n",
+        "          saved: startupSettings(\"ghost_stale\"),\n",
+        "          current: seed,\n",
+        "        });\n",
+        "        assert.include(unavailable, \"ghost_current\");\n",
+        "        assert.notInclude(unavailable, \"ghost_stale\");\n",
+        "      }),\n",
+        "    );\n",
+        "\n",
+        "    it.effect(\n",
+        "      \"retains the newer registry seed when a queued stale change cannot read current settings\",\n",
+        "      () =>\n",
+        "        Effect.gen(function* () {\n",
+        "          const seed = startupSettings(\"ghost_current\");\n",
+        "          const unavailable = yield* hydrateDuringSettingsChange({\n",
+        "            seed,\n",
+        "            saved: startupSettings(\"ghost_stale\"),\n",
+        "            current: seed,\n",
+        "            failCurrentRead: true,\n",
+        "          });\n",
+        "          assert.include(unavailable, \"ghost_current\");\n",
+        "          assert.notInclude(unavailable, \"ghost_stale\");\n",
+        "        }),\n",
+        "    );\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2320,
+      "before": [
+        "        assert.strictEqual(status.auth.status, \"authenticated\");\n"
+      ],
+      "after": [
+        "        assert.strictEqual(status.auth.status, \"unknown\");\n"
+      ]
+    },
+    {
+      "start": 2322,
+      "before": [
+        "        assert.strictEqual(status.auth.label, \"Custom API endpoint\");\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2393,
+      "before": [
+        "    it.effect(\"keeps a CLI that says nothing about its account authenticated\", () =>\n"
+      ],
+      "after": [
+        "    it.effect(\"keeps an account-silent CLI ready without inventing authentication\", () =>\n"
+      ]
+    },
+    {
+      "start": 2400,
+      "before": [
+        "        assert.strictEqual(status.auth.status, \"authenticated\");\n"
+      ],
+      "after": [
+        "        assert.strictEqual(status.auth.status, \"unknown\");\n"
+      ]
+    }
+  ]
+}

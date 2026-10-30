@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/status.ts",
+  "beforeSha256": "52204f2dd930f7b7a2a7457bd06b203341396898710b9d0a9753ed488c14d281",
+  "afterSha256": "3072169e0ce6f3eb149562dec474206703266803cb5e7f8a76fab0c7afe0e7f7",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 615,
+      "before": [
+        "    auth: { status: status === \"ready\" ? (\"authenticated\" as const) : (\"unknown\" as const) },\n"
+      ],
+      "after": [
+        "    // Native readiness/catalog visibility is not evidence of provider login or paid inference.\n",
+        "    auth: { status: \"unknown\" as const },\n"
+      ]
+    },
+    {
+      "start": 856,
+      "before": [
+        "          status: catalogReady ? \"authenticated\" : \"unknown\",\n"
+      ],
+      "after": [
+        "          status: \"unknown\",\n"
+      ]
+    }
+  ]
+}

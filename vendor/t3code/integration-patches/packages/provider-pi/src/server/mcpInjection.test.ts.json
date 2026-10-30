@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "source": "packages/provider-pi/src/server/mcpInjection.test.ts",
+  "beforeSha256": "9ae20628b02f6dc87a6e24098075717ae66d0fc905098a6b196500c29ac36484",
+  "afterSha256": "b3ea07c5e96f16521317de5af3d13abd97d256289836d559fb325c2b0f1c5e81",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1,
+      "before": [
+        "import { EnvironmentId, ProviderInstanceId, ThreadId } from \"@t3tools/contracts\";\n"
+      ],
+      "after": [
+        "import { ProviderInstanceId, ThreadId } from \"@t3tools/contracts\";\n"
+      ]
+    },
+    {
+      "start": 13,
+      "before": [
+        "const mcpSession = {\n",
+        "  environmentId: EnvironmentId.make(\"environment-pi-t3-mcp\"),\n",
+        "  threadId,\n",
+        "  providerSessionId: \"mcp-session-pi\",\n",
+        "  providerInstanceId: ProviderInstanceId.make(\"pi\"),\n",
+        "  endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "  authorizationHeader: \"Bearer secret-pi-token\",\n",
+        "  browserToolsAvailable: true,\n"
+      ],
+      "after": [
+        "const runtimeBinding = {\n",
+        "  threadId, providerInstanceId: ProviderInstanceId.make(\"pi\"), executionId: \"pi-generation\",\n",
+        "  cwd: \"/workspace\", nativePermissions: \"deny-ungranted\" as const, instructionText: \"\",\n",
+        "  mcpServers: [{ name: \"pm_tools\", transport: \"stdio\" as const, command: \"pm-cli\", args: [\"http://127.0.0.1:43123\", \"mcp\"] }],\n"
+      ]
+    },
+    {
+      "start": 23,
+      "before": [
+        "describe(\"pi T3 MCP injection\", () => {\n"
+      ],
+      "after": [
+        "describe(\"Pi host transport injection\", () => {\n"
+      ]
+    },
+    {
+      "start": 33,
+      "before": [
+        "      mcpSession,\n"
+      ],
+      "after": [
+        "      runtimeBinding, pmToolsExtensionPath: \"/host/pm-cli/pi-tools.ts\",\n"
+      ]
+    },
+    {
+      "start": 55,
+      "before": [],
+      "after": [
+        "      \"--extension\", \"/host/pm-cli/pi-tools.ts\",\n"
+      ]
+    },
+    {
+      "start": 57,
+      "before": [
+        "    assert.equal(launch.env[T3_MCP_URL_ENV], \"http://127.0.0.1:43123/mcp\");\n",
+        "    assert.equal(launch.env[T3_MCP_BEARER_ENV], \"secret-pi-token\");\n"
+      ],
+      "after": [
+        "    assert.equal(launch.env.AGENT_PM_TOOL_BRIDGE, \"http://127.0.0.1:43123\");\n",
+        "    assert.equal(launch.env.AGENT_PM_TOOL_EXTENSION, \"/host/pm-cli/pi-tools.ts\");\n",
+        "    assert.isUndefined(launch.env[T3_MCP_URL_ENV]);\n",
+        "    assert.isUndefined(launch.env[T3_MCP_BEARER_ENV]);\n"
+      ]
+    },
+    {
+      "start": 69,
+      "before": [
+        "      mcpSession: undefined,\n"
+      ],
+      "after": [
+        "      runtimeBinding: undefined,\n"
+      ]
+    },
+    {
+      "start": 100,
+      "before": [
+        "      mcpSession,\n"
+      ],
+      "after": [
+        "      runtimeBinding,\n"
+      ]
+    }
+  ]
+}

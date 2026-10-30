@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "source": "packages/provider-fx/src/server/acpSupport.ts",
+  "beforeSha256": "59370e056cc0714b5d9b510d2f4b1c8e714587835f715bc1b3b4365507ca3a44",
+  "afterSha256": "57897e089dabe2e645e5fa58cef3bfe1b67b2aa6863217c1059528d6c2aebea5",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 147,
+      "before": [
+        "      yield* runtime.request(\"session/set_config_option\", {\n",
+        "        sessionId,\n",
+        "        configId: FX_MODE_CONFIG_ID,\n",
+        "        value: target,\n",
+        "      });\n"
+      ],
+      "after": [
+        "      yield* runtime.setConfigOption(FX_MODE_CONFIG_ID, target, { force: true });\n"
+      ]
+    }
+  ]
+}

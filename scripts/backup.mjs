@@ -4,7 +4,7 @@ import { open, mkdir, mkdtemp, rm, lstat } from 'node:fs/promises';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import { createUser } from '../packages/infrastructure/src/auth.ts';
 import { createPool } from '../packages/infrastructure/src/database.ts';
 import { readBlobStoreConfig, blobStorageLocator } from '../packages/infrastructure/src/blob-storage-config.ts';
@@ -33,7 +33,7 @@ async function main() {
   if (!values.stopped) throw new Error('--stopped must attest API, Worker and every external Markdown writer are stopped');
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
   const database = new URL(process.env.DATABASE_URL);
-  if (database.hostname !== '127.0.0.1' || database.port !== (process.env.POSTGRES_PORT ?? '55443') || database.pathname !== '/project_management' || database.username !== 'project_management' || database.search) throw new Error('Only the dedicated local PostgreSQL public schema is supported');
+  if (database.hostname !== '127.0.0.1' || database.port !== (process.env.POSTGRES_PORT ?? '55444') || database.pathname !== '/project_management' || database.username !== 'project_management' || database.search) throw new Error('Only the dedicated local PostgreSQL public schema is supported');
   const container = process.env.PM_BACKUP_POSTGRES_CONTAINER ?? (await exec('docker', ['compose', '--env-file', '.env', '-f', 'deploy/compose.yaml', 'ps', '-q', 'postgres'])).stdout.trim();
   if (!/^[a-f0-9]{12,64}$/.test(container)) throw new Error('A single explicit PostgreSQL container is required');
   const ports = JSON.parse((await exec('docker', ['inspect', '--format', '{{json .NetworkSettings.Ports}}', container])).stdout);

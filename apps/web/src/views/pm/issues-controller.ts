@@ -105,7 +105,7 @@ export function createIssueListUi(compact = false): IssueListUi {
     view: {
       ...defaultWorkItemsView,
       query: "",
-      filters: { state: [], priority: [], assignees: [], labels: [] },
+      filters: [],
       groupBy: "state",
       sort: "manual",
       sortDirection: "asc",
@@ -137,26 +137,60 @@ export function sortIssueList(
   locale: "zh-CN" | "en",
 ): WorkItemRecord[] {
   if (view.sort === "manual") return [...items]
-  const rank = new Map(
+  const priorityRank = new Map(
     catalog.priorities.map((option, index) => [option.id, index]),
   )
+  const stateRank = new Map(
+    catalog.states.map((option, index) => [option.id, index]),
+  )
+  const label = (options: WorkItemCatalog["labels"], id: string | undefined) =>
+    options.find((option) => option.id === id)?.label
   const direction = view.sortDirection === "desc" ? -1 : 1
   const tie = (a: WorkItemRecord, b: WorkItemRecord) => a.id.localeCompare(b.id)
+  // Missing values stay last in both directions; ranks always have a value.
+  const compareOptional = (
+    left: string | null | undefined,
+    right: string | null | undefined,
+    compare: (left: string, right: string) => number,
+  ) => {
+    if (!left && !right) return 0
+    if (!left) return 1
+    if (!right) return -1
+    return compare(left, right) * direction
+  }
   return [...items].sort((a, b) => {
     if (view.sort === "priority") {
-      const left = rank.get(a.priorityId) ?? rank.size
-      const right = rank.get(b.priorityId) ?? rank.size
+      const left = priorityRank.get(a.priorityId) ?? priorityRank.size
+      const right = priorityRank.get(b.priorityId) ?? priorityRank.size
       return (left - right) * direction || tie(a, b)
     }
-    if (view.sort === "dueDate") {
-      const left = a.dueDate
-      const right = b.dueDate
-      // Unscheduled issues stay last in both directions.
-      if (!left && !right) return tie(a, b)
-      if (!left) return 1
-      if (!right) return -1
-      return left.localeCompare(right) * direction || tie(a, b)
+    if (view.sort === "state") {
+      const left = stateRank.get(a.stateId) ?? stateRank.size
+      const right = stateRank.get(b.stateId) ?? stateRank.size
+      return (left - right) * direction || tie(a, b)
     }
+    if (view.sort === "dueDate")
+      return (
+        compareOptional(a.dueDate, b.dueDate, (left, right) =>
+          left.localeCompare(right),
+        ) || tie(a, b)
+      )
+    if (view.sort === "assignees")
+      return (
+        compareOptional(
+          label(catalog.assignees, a.assigneeIds[0]),
+          label(catalog.assignees, b.assigneeIds[0]),
+          (left, right) => left.localeCompare(right, locale),
+        ) || tie(a, b)
+      )
+    if (view.sort === "labels")
+      return (
+        compareOptional(
+          label(catalog.labels, a.labelIds[0]),
+          label(catalog.labels, b.labelIds[0]),
+          (left, right) => left.localeCompare(right, locale),
+        ) || tie(a, b)
+      )
     return (a.title.localeCompare(b.title, locale) || tie(a, b)) * direction
   })
 }

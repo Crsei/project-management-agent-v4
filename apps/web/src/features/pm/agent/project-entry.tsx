@@ -1,5 +1,5 @@
 import { Bot } from "lucide-react"
-import { useLocation, useNavigate, useParams } from "react-router"
+import { useLocation, useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { allowed, useText } from "../service/pm-ui"
 import { usePmService } from "../service/pm-service"
@@ -10,18 +10,17 @@ import { usePmService } from "../service/pm-service"
  */
 export function ProjectAgentAction({ projectId, projectTitle }: { projectId: string; projectTitle: string }) {
   const { workspace } = usePmService()
-  const { workspaceSlug } = useParams<{ workspaceSlug: string }>()
   const navigate = useNavigate()
   const location = useLocation()
   const t = useText()
   if (!workspace || !allowed(workspace, "domain.read", projectId)) return null
-  const root = `/pm/${encodeURIComponent(workspaceSlug || workspace.id)}`
   const open = () => {
     const query = new URLSearchParams({
+      workspace: workspace.id,
       project: projectId,
       returnTo: `${location.pathname}${location.search}${location.hash}`,
     })
-    navigate(`${root}/agent?${query}`)
+    navigate(`/agent/workspace?${query}`)
   }
   return <Button
     type="button"

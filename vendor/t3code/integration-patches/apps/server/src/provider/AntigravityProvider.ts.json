@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/AntigravityProvider.ts",
+  "beforeSha256": "9033fad6d2c21c9c46eff22c00bfe38c77db00849f4cf9d3fbd36bbc76d2adca",
+  "afterSha256": "2ae5e57fda3061b9f2e647c1fa9e18e5ce5078b2c37c26ceca1bcb388defa765",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 297,
+      "before": [],
+      "after": [
+        "            canLogout: started.initializeResult.agentCapabilities?.auth?.logout !== undefined,\n"
+      ]
+    }
+  ]
+}

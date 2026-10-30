@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { Link, Outlet, useLocation, useParams } from "react-router"
-import { Activity, Archive, CalendarDays, ChevronRight, Circle, CircleCheck, CircleDashed, CircleDot, CircleX, Columns3, GitBranch, LayoutDashboard, ListTodo, Paperclip, Pause, Search, Star, Table2, ChartGantt } from "lucide-react"
+import { Activity, Archive, CalendarDays, ChevronRight, Columns3, GitBranch, LayoutDashboard, ListTodo, Paperclip, Search, Star, Table2, ChartGantt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useWorkspaceStore } from "@/providers/app-providers"
@@ -84,24 +84,6 @@ function projectColor(identifier: string) {
   let hash = 0
   for (let index = 0; index < identifier.length; index++) hash = (hash * 31 + identifier.charCodeAt(index)) >>> 0
   return hash % 6
-}
-
-const projectStates: Readonly<Record<string, { zh: string; en: string; icon: typeof Circle }>> = {
-  planning: { zh: "规划中", en: "Planning", icon: CircleDashed },
-  draft: { zh: "草稿", en: "Draft", icon: CircleDashed },
-  active: { zh: "进行中", en: "Active", icon: CircleDot },
-  paused: { zh: "已暂停", en: "Paused", icon: Pause },
-  completed: { zh: "已完成", en: "Completed", icon: CircleCheck },
-  cancelled: { zh: "已取消", en: "Cancelled", icon: CircleX },
-}
-
-function ProjectStateIndicator({ status, archived }: { status: string; archived: boolean }) {
-  const t = useText()
-  const known = Object.hasOwn(projectStates, status) ? projectStates[status] : undefined
-  const Icon = archived ? Archive : known?.icon ?? Circle
-  const stateLabel = known ? t(known.zh, known.en) : status || t("未知", "Unknown")
-  const label = `${t("状态", "Status")}: ${stateLabel}${archived ? ` · ${t("已归档", "Archived")}` : ""}`
-  return <span className="shrink-0 text-muted-foreground" title={label}><Icon className="size-3" aria-hidden="true" /><span className="sr-only">{label}</span></span>
 }
 
 function readProjectExpansion(key: string | null): Record<string, boolean> {
@@ -188,7 +170,6 @@ function ProjectSidebarContent({ base, projectId }: { base: string; projectId?: 
                     <span className={styles.projectToken} data-color={projectColor(project.id)} aria-hidden="true"><ProjectIdentityIcon project={project} /></span>
                     <span className="min-w-0 flex-1 truncate" title={name}>{name}</span>
                     {favoriteIds.has(project.id) && <span className={styles.favorite} title={t("已收藏的项目", "Favorite project")}><Star className="size-3 fill-current" aria-hidden="true" /><span className="sr-only">{t("已收藏的项目", "Favorite project")}</span></span>}
-                    <ProjectStateIndicator status={string(project.data.status)} archived={!!project.data.archivedAt || project.data.archived === true} />
                   </Link>
                   <ProjectMenuButton projectId={project.id} />
                   <button type="button" aria-expanded={open} aria-controls={childrenId} aria-label={`${t(open ? "收起项目" : "展开项目", open ? "Collapse project" : "Expand project")}: ${name}`} onClick={() => setExpanded(previous => ({ ...previous, [project.id]: !open }))} className={`${styles.expandProject} flex shrink-0 items-center justify-center rounded-control text-muted-foreground hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}><ChevronRight className={`size-3.5 ${open ? "rotate-90" : ""}`} aria-hidden="true" /></button>

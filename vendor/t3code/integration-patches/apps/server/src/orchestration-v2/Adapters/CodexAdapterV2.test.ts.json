@@ -1,0 +1,1031 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.test.ts",
+  "beforeSha256": "d369461f3873c17ed119a8aefa668f825fad9fb94084a95f0acce020b09fee49",
+  "afterSha256": "500537a943f5dc106420b294f5f0005e1c27891f46d7458f51bea04977b680c5",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 7,
+      "before": [
+        "  CommandId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 10,
+      "before": [
+        "  EnvironmentId,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 42,
+      "before": [
+        "import { resolveAttachmentPathById } from \"../../attachmentStore.ts\";\n"
+      ],
+      "after": [
+        "import { resolveAttachmentPathById } from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/attachments.ts\";\n"
+      ]
+    },
+    {
+      "start": 59,
+      "before": [
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { ProviderRuntimeHost } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 62,
+      "before": [
+        "import * as EffectWorker from \"../EffectWorker.ts\";\n",
+        "import * as Orchestrator from \"../Orchestrator.ts\";\n",
+        "import * as ProviderReplayHarness from \"../testkit/ProviderReplayHarness.ts\";\n"
+      ],
+      "after": [
+        "import { makeReplayServerConfig, runtimeHostLayer } from \"../../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 69,
+      "before": [
+        "import * as CodexAdapterV2Testkit from \"./CodexAdapterV2.testkit.ts\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 71,
+      "before": [
+        "const replayTranscriptJson = Schema.fromJsonString(CodexReplay.CodexAppServerReplayTranscript);\n",
+        "const encodeReplayTranscriptJson = Schema.encodeEffect(replayTranscriptJson);\n",
+        "const decodeReplayTranscriptJson = Schema.decodeUnknownEffect(replayTranscriptJson);\n",
+        "const encodeStringJson = Schema.encodeEffect(Schema.fromJsonString(Schema.String));\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 147,
+      "before": [
+        "    (hasT3Mcp) =>\n"
+      ],
+      "after": [
+        "    (includeRuntimeContext) =>\n"
+      ]
+    },
+    {
+      "start": 162,
+      "before": [
+        "              ...(hasT3Mcp === undefined ? {} : { hasT3Mcp }),\n"
+      ],
+      "after": [
+        "              ...(includeRuntimeContext === undefined ? {} : { includeRuntimeContext }),\n"
+      ]
+    },
+    {
+      "start": 173,
+      "before": [
+        "            assert.equal(params.additionalContext !== undefined, hasT3Mcp === true);\n"
+      ],
+      "after": [
+        "            assert.equal(params.additionalContext !== undefined, includeRuntimeContext === true);\n"
+      ]
+    },
+    {
+      "start": 238,
+      "before": [
+        "        hasT3Mcp: true,\n"
+      ],
+      "after": [
+        "        includeRuntimeContext: true,\n"
+      ]
+    },
+    {
+      "start": 245,
+      "before": [
+        "      assert.isDefined(withT3.additionalContext?.[\"t3_code_runtime\"]);\n"
+      ],
+      "after": [
+        "      assert.isDefined(withT3.additionalContext?.[\"runtime_info\"]);\n"
+      ]
+    },
+    {
+      "start": 781,
+      "before": [
+        "        serverConfig: yield* ProviderReplayHarness.makeReplayServerConfig(scenario).pipe(\n"
+      ],
+      "after": [
+        "        serverConfig: yield* makeReplayServerConfig(scenario, { driver: \"codex\" }).pipe(\n"
+      ]
+    },
+    {
+      "start": 858,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 908,
+      "before": [
+        "        serverConfig: yield* ProviderReplayHarness.makeReplayServerConfig(transcript.scenario).pipe(\n"
+      ],
+      "after": [
+        "        serverConfig: yield* makeReplayServerConfig(transcript.scenario, { driver: \"codex\" }).pipe(\n"
+      ]
+    },
+    {
+      "start": 973,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1005,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1051,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1083,
+      "before": [
+        "      const serverConfig = yield* ProviderReplayHarness.makeReplayServerConfig(\n",
+        "        transcript.scenario,\n",
+        "      ).pipe(Effect.orDie);\n"
+      ],
+      "after": [
+        "      const serverConfig = yield* makeReplayServerConfig(transcript.scenario, { driver: \"codex\" }).pipe(Effect.orDie);\n"
+      ]
+    },
+    {
+      "start": 1307,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1315,
+      "before": [
+        "      yield* (yield* McpProviderSessions.McpProviderSessions).set({\n",
+        "        environmentId: EnvironmentId.make(\"environment-codex-mcp\"),\n",
+        "        threadId: ThreadId.make(`thread-${scenario}`),\n",
+        "        providerSessionId: `provider-session-${scenario}`,\n",
+        "        providerInstanceId: ProviderInstanceId.make(\"codex\"),\n",
+        "        endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "        authorizationHeader: \"Bearer secret-codex-token\",\n",
+        "        browserToolsAvailable: true,\n"
+      ],
+      "after": [
+        "      yield* (yield* ProviderRuntimeHost).bind({\n",
+        "        threadId: ThreadId.make(`thread-${scenario}`), executionId: `provider-session-${scenario}`,\n",
+        "        providerInstanceId: ProviderInstanceId.make(\"codex\"), cwd: \"/workspace\",\n",
+        "        nativePermissions: \"deny-ungranted\", instructionText: \"\",\n",
+        "        mcpServers: [{ name: \"pm_tools\", transport: \"stdio\", command: \"node\", args: [\"/controlled/pm-cli\", \"mcp\"] }],\n"
+      ]
+    },
+    {
+      "start": 1347,
+      "before": [
+        "            \"mcp_servers.t3-code\": {\n",
+        "              url: \"http://127.0.0.1:43123/mcp\",\n"
+      ],
+      "after": [
+        "            \"mcp_servers.pm_tools\": {\n",
+        "              command: \"node\", args: [\"/controlled/pm-cli\", \"mcp\"], enabled: true,\n"
+      ]
+    },
+    {
+      "start": 1350,
+      "before": [
+        "              http_headers: { Authorization: \"Bearer secret-codex-token\" },\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1358,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1524,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1672,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1879,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 1895,
+      "before": [
+        "          hasT3Mcp: true,\n"
+      ],
+      "after": [
+        "          includeRuntimeContext: true,\n"
+      ]
+    },
+    {
+      "start": 1897,
+      "before": [
+        "        assert.include(\n",
+        "          params.additionalContext?.t3_code_orchestration_01?.value ?? \"\",\n",
+        "          \"delegate_task\",\n",
+        "        );\n"
+      ],
+      "after": [
+        "        assert.include(params.additionalContext?.runtime_info?.value ?? \"\", \"Codex harness\");\n",
+        "        assert.notInclude(JSON.stringify(params.additionalContext), \"delegate_task\");\n"
+      ]
+    },
+    {
+      "start": 1955,
+      "before": [
+        "        yield* (yield* McpProviderSessions.McpProviderSessions).set({\n",
+        "          environmentId: EnvironmentId.make(\"test\"),\n",
+        "          threadId: harness.threadId,\n",
+        "          providerSessionId: \"context-session\",\n",
+        "          providerInstanceId: ProviderInstanceId.make(\"codex\"),\n",
+        "          endpoint: \"http://127.0.0.1:43123/mcp\",\n",
+        "          authorizationHeader: \"Bearer test\",\n",
+        "          browserToolsAvailable: true,\n"
+      ],
+      "after": [
+        "        yield* (yield* ProviderRuntimeHost).bind({\n",
+        "          threadId: harness.threadId, executionId: \"context-session\",\n",
+        "          providerInstanceId: ProviderInstanceId.make(\"codex\"), cwd: \"/workspace\",\n",
+        "          nativePermissions: \"deny-ungranted\", instructionText: \"\", mcpServers: [],\n"
+      ]
+    },
+    {
+      "start": 1977,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 2057,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 2194,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 2246,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 2374,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 2716,
+      "before": [
+        "        if (outcome === \"recover\") {\n",
+        "          const fs = yield* FileSystem.FileSystem;\n",
+        "          const cwd = yield* fs.makeTempDirectoryScoped({ prefix: \"t3-capacity-retry-\" });\n",
+        "          const localTranscript = yield* decodeReplayTranscriptJson(\n",
+        "            (yield* encodeReplayTranscriptJson(\n",
+        "              makeCodexReplayTranscript({ scenario, entries }),\n",
+        "            )).replaceAll(yield* encodeStringJson(\"/workspace\"), yield* encodeStringJson(cwd)),\n",
+        "          );\n",
+        "          const driver = yield* CodexReplay.makeReplayDriver(localTranscript);\n",
+        "          yield* Effect.gen(function* () {\n",
+        "            const orchestrator = yield* Orchestrator.OrchestratorV2;\n",
+        "            const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;\n",
+        "            const threadId = ThreadId.make(\"thread:capacity-retry\");\n",
+        "            yield* orchestrator.dispatch({\n",
+        "              type: \"thread.create\",\n",
+        "              commandId: CommandId.make(\"create-capacity-retry\"),\n",
+        "              threadId,\n",
+        "              projectId: ProjectId.make(\"project:capacity-retry\"),\n",
+        "              title: \"Capacity retry\",\n",
+        "              modelSelection: CODEX_TEST_MODEL_SELECTION,\n",
+        "              runtimeMode: \"full-access\",\n",
+        "              interactionMode: \"default\",\n",
+        "              branch: null,\n",
+        "              worktreePath: cwd,\n",
+        "              createdBy: \"user\",\n",
+        "              creationSource: \"web\",\n",
+        "            });\n",
+        "            const retrying = yield* orchestrator.streamDomainEvents.pipe(\n",
+        "              Stream.filter(\n",
+        "                (event) =>\n",
+        "                  event.type === \"turn-item.updated\" &&\n",
+        "                  event.payload.type === \"error\" &&\n",
+        "                  event.payload.retry != null &&\n",
+        "                  event.payload.status === \"running\",\n",
+        "              ),\n",
+        "              Stream.runHead,\n",
+        "              Effect.forkChild({ startImmediately: true }),\n",
+        "            );\n",
+        "            yield* orchestrator.dispatch({\n",
+        "              type: \"message.dispatch\",\n",
+        "              commandId: CommandId.make(\"start-capacity-retry\"),\n",
+        "              threadId,\n",
+        "              messageId: MessageId.make(\"message:capacity-retry\"),\n",
+        "              text: prompt,\n",
+        "              attachments: [],\n",
+        "              createdBy: \"user\",\n",
+        "              creationSource: \"web\",\n",
+        "              dispatchMode: { type: \"start_immediately\" },\n",
+        "            });\n",
+        "            yield* worker.drain();\n",
+        "            yield* Fiber.join(retrying);\n",
+        "            assert.equal(\n",
+        "              (yield* orchestrator.getThreadProjection(threadId)).runs.at(-1)?.status,\n",
+        "              \"running\",\n",
+        "            );\n",
+        "            const completed = yield* orchestrator.streamDomainEvents.pipe(\n",
+        "              Stream.filter(\n",
+        "                (event) => event.type === \"run.updated\" && event.payload.status === \"waiting\",\n",
+        "              ),\n",
+        "              Stream.runHead,\n",
+        "              Effect.forkChild({ startImmediately: true }),\n",
+        "            );\n",
+        "            yield* TestClock.adjust(\"2 seconds\");\n",
+        "            yield* Fiber.join(completed);\n",
+        "            yield* worker.drain();\n",
+        "            const projection = yield* orchestrator.getThreadProjection(threadId);\n",
+        "            assert.equal(projection.runs.at(-1)?.status, \"completed\");\n",
+        "            assert.deepEqual(\n",
+        "              projection.providerTurns.map((turn) => turn.status),\n",
+        "              [\"failed\", \"completed\"],\n",
+        "            );\n",
+        "            assert.lengthOf(\n",
+        "              projection.messages.filter((message) => message.role === \"user\"),\n",
+        "              1,\n",
+        "            );\n",
+        "            assert.isNull((yield* Ref.get(driver.state)).failure);\n",
+        "          }).pipe(\n",
+        "            Effect.provide(\n",
+        "              ProviderReplayHarness.layerWithRegistry(\n",
+        "                { name: \"codex-capacity-retry\", runtimePolicyOverride: { cwd } },\n",
+        "                CodexAdapterV2Testkit.layer({ transcript: localTranscript, driver }),\n",
+        "                { runEffectWorker: false },\n",
+        "              ),\n",
+        "            ),\n",
+        "          );\n",
+        "        }\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2804,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 2956,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 3124,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 3257,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 3475,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 3631,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 3637,
+      "before": [
+        "  it.effect(\"stops a completed run's background command without a client-supplied run\", () => {\n",
+        "    const transcript = makeBackgroundStopTranscript(true);\n",
+        "    return Effect.scoped(\n",
+        "      Effect.gen(function* () {\n",
+        "        const fs = yield* FileSystem.FileSystem;\n",
+        "        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: \"t3-bg-stop-workspace-\" });\n",
+        "        const localTranscript = yield* decodeReplayTranscriptJson(\n",
+        "          (yield* encodeReplayTranscriptJson(transcript)).replaceAll(\n",
+        "            yield* encodeStringJson(\"/workspace\"),\n",
+        "            yield* encodeStringJson(cwd),\n",
+        "          ),\n",
+        "        );\n",
+        "        const replayDriver = yield* CodexReplay.makeReplayDriver(localTranscript);\n",
+        "        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;\n",
+        "        assert.equal(\n",
+        "          Number(yield* spawner.exitCode(ChildProcess.make(\"git\", [\"init\", \"--quiet\"], { cwd }))),\n",
+        "          0,\n",
+        "        );\n",
+        "        assert.equal(\n",
+        "          Number(\n",
+        "            yield* spawner.exitCode(\n",
+        "              ChildProcess.make(\n",
+        "                \"git\",\n",
+        "                [\n",
+        "                  \"-c\",\n",
+        "                  \"user.name=Test\",\n",
+        "                  \"-c\",\n",
+        "                  \"user.email=test@example.com\",\n",
+        "                  \"commit\",\n",
+        "                  \"--allow-empty\",\n",
+        "                  \"--quiet\",\n",
+        "                  \"-m\",\n",
+        "                  \"Initial commit\",\n",
+        "                ],\n",
+        "                { cwd },\n",
+        "              ),\n",
+        "            ),\n",
+        "          ),\n",
+        "          0,\n",
+        "        );\n",
+        "        yield* Effect.gen(function* () {\n",
+        "          const orchestrator = yield* Orchestrator.OrchestratorV2;\n",
+        "          const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;\n",
+        "          const threadId = ThreadId.make(\"thread:background-stop\");\n",
+        "          yield* orchestrator.dispatch({\n",
+        "            type: \"thread.create\",\n",
+        "            commandId: CommandId.make(\"create-background-stop\"),\n",
+        "            threadId,\n",
+        "            projectId: ProjectId.make(\"project:background-stop\"),\n",
+        "            title: \"Background stop\",\n",
+        "            modelSelection: CODEX_TEST_MODEL_SELECTION,\n",
+        "            runtimeMode: \"full-access\",\n",
+        "            interactionMode: \"default\",\n",
+        "            branch: null,\n",
+        "            worktreePath: cwd,\n",
+        "            createdBy: \"user\",\n",
+        "            creationSource: \"web\",\n",
+        "          });\n",
+        "          const waiting = yield* orchestrator.streamDomainEvents.pipe(\n",
+        "            Stream.filter(\n",
+        "              (event) => event.type === \"run.updated\" && event.payload.status === \"waiting\",\n",
+        "            ),\n",
+        "            Stream.runHead,\n",
+        "            Effect.forkChild({ startImmediately: true }),\n",
+        "          );\n",
+        "          yield* orchestrator.dispatch({\n",
+        "            type: \"message.dispatch\",\n",
+        "            commandId: CommandId.make(\"start-background-stop\"),\n",
+        "            threadId,\n",
+        "            messageId: MessageId.make(\"message:background-stop\"),\n",
+        "            text: BG_PROMPT,\n",
+        "            attachments: [],\n",
+        "            createdBy: \"user\",\n",
+        "            creationSource: \"web\",\n",
+        "            dispatchMode: { type: \"start_immediately\" },\n",
+        "          });\n",
+        "          yield* worker.drain();\n",
+        "          assert.isNull((yield* Ref.get(replayDriver.state)).failure);\n",
+        "          yield* Fiber.join(waiting);\n",
+        "          yield* worker.drain();\n",
+        "          const projection = yield* orchestrator.getThreadProjection(threadId);\n",
+        "          const run = projection.runs.at(-1)!;\n",
+        "          assert.equal(run.status, \"completed\");\n",
+        "          assert.equal(\n",
+        "            (yield* orchestrator.getThreadShell(threadId))?.pendingBackgroundTasks?.length,\n",
+        "            1,\n",
+        "          );\n",
+        "          const stopped = yield* orchestrator.streamDomainEvents.pipe(\n",
+        "            Stream.filter(\n",
+        "              (event) =>\n",
+        "                event.type === \"turn-item.updated\" &&\n",
+        "                event.payload.type === \"command_execution\" &&\n",
+        "                event.payload.status === \"interrupted\",\n",
+        "            ),\n",
+        "            Stream.runHead,\n",
+        "            Effect.forkChild({ startImmediately: true }),\n",
+        "          );\n",
+        "          yield* orchestrator.dispatch({\n",
+        "            type: \"thread.stop\",\n",
+        "            commandId: CommandId.make(\"stop-background-command\"),\n",
+        "            threadId,\n",
+        "          });\n",
+        "          yield* worker.drain();\n",
+        "          yield* Fiber.join(stopped);\n",
+        "          assert.equal(\n",
+        "            (yield* orchestrator.getThreadProjection(threadId)).runs.at(-1)?.status,\n",
+        "            \"completed\",\n",
+        "          );\n",
+        "          assert.deepEqual(\n",
+        "            (yield* orchestrator.getThreadShell(threadId))?.pendingBackgroundTasks,\n",
+        "            [],\n",
+        "          );\n",
+        "        }).pipe(\n",
+        "          Effect.provide(\n",
+        "            ProviderReplayHarness.layerWithRegistry(\n",
+        "              { name: \"codex-background-stop\", runtimePolicyOverride: { cwd } },\n",
+        "              CodexAdapterV2Testkit.layer({\n",
+        "                transcript: localTranscript,\n",
+        "                driver: replayDriver,\n",
+        "              }),\n",
+        "              { runEffectWorker: false },\n",
+        "            ),\n",
+        "          ),\n",
+        "        );\n",
+        "      }).pipe(Effect.provide(NodeServices.layer)),\n",
+        "    );\n",
+        "  });\n"
+      ],
+      "after": [
+        "  ;\n"
+      ]
+    },
+    {
+      "start": 3765,
+      "before": [
+        "  it.effect(\"Stop ends a background command no Codex process tracks any more\", () =>\n",
+        "    Effect.scoped(\n",
+        "      Effect.gen(function* () {\n",
+        "        const fs = yield* FileSystem.FileSystem;\n",
+        "        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: \"t3-bg-stale-workspace-\" });\n",
+        "        const staleTranscript = makeCodexReplayTranscript({\n",
+        "          scenario: \"codex-bg-stop-untracked\",\n",
+        "          entries: [\n",
+        "            ...backgroundExecTranscript.entries.slice(0, -1),\n",
+        "            { type: \"runtime_exit\", status: \"success\" },\n",
+        "          ],\n",
+        "        });\n",
+        "        const localTranscript = yield* decodeReplayTranscriptJson(\n",
+        "          (yield* encodeReplayTranscriptJson(staleTranscript)).replaceAll(\n",
+        "            yield* encodeStringJson(\"/workspace\"),\n",
+        "            yield* encodeStringJson(cwd),\n",
+        "          ),\n",
+        "        );\n",
+        "        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;\n",
+        "        for (const args of [\n",
+        "          [\"init\", \"--quiet\"],\n",
+        "          [\n",
+        "            \"-c\",\n",
+        "            \"user.name=Test\",\n",
+        "            \"-c\",\n",
+        "            \"user.email=test@example.com\",\n",
+        "            \"commit\",\n",
+        "            \"--allow-empty\",\n",
+        "            \"--quiet\",\n",
+        "            \"-m\",\n",
+        "            \"Initial commit\",\n",
+        "          ],\n",
+        "        ]) {\n",
+        "          assert.equal(Number(yield* spawner.exitCode(ChildProcess.make(\"git\", args, { cwd }))), 0);\n",
+        "        }\n",
+        "        yield* Effect.gen(function* () {\n",
+        "          const orchestrator = yield* Orchestrator.OrchestratorV2;\n",
+        "          const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;\n",
+        "          const threadId = ThreadId.make(\"thread:background-stop-untracked\");\n",
+        "          yield* orchestrator.dispatch({\n",
+        "            type: \"thread.create\",\n",
+        "            commandId: CommandId.make(\"create-background-stop-untracked\"),\n",
+        "            threadId,\n",
+        "            projectId: ProjectId.make(\"project:background-stop-untracked\"),\n",
+        "            title: \"Background stop untracked\",\n",
+        "            modelSelection: CODEX_TEST_MODEL_SELECTION,\n",
+        "            runtimeMode: \"full-access\",\n",
+        "            interactionMode: \"default\",\n",
+        "            branch: null,\n",
+        "            worktreePath: cwd,\n",
+        "            createdBy: \"user\",\n",
+        "            creationSource: \"web\",\n",
+        "          });\n",
+        "          const settled = yield* orchestrator.streamDomainEvents.pipe(\n",
+        "            Stream.filter(\n",
+        "              (event) =>\n",
+        "                event.type === \"run.updated\" &&\n",
+        "                (event.payload.status === \"waiting\" || event.payload.status === \"completed\"),\n",
+        "            ),\n",
+        "            Stream.runHead,\n",
+        "            Effect.forkChild({ startImmediately: true }),\n",
+        "          );\n",
+        "          yield* orchestrator.dispatch({\n",
+        "            type: \"message.dispatch\",\n",
+        "            commandId: CommandId.make(\"start-background-stop-untracked\"),\n",
+        "            threadId,\n",
+        "            messageId: MessageId.make(\"message:background-stop-untracked\"),\n",
+        "            text: BG_PROMPT,\n",
+        "            attachments: [],\n",
+        "            createdBy: \"user\",\n",
+        "            creationSource: \"web\",\n",
+        "            dispatchMode: { type: \"start_immediately\" },\n",
+        "          });\n",
+        "          yield* worker.drain();\n",
+        "          yield* Fiber.join(settled);\n",
+        "          yield* worker.drain();\n",
+        "          const before = yield* orchestrator.getThreadShell(threadId);\n",
+        "          assert.deepEqual(\n",
+        "            before?.pendingBackgroundTasks?.map((task) => task.kind),\n",
+        "            [\"command\"],\n",
+        "            \"the thread still shows the command the gone process never finished\",\n",
+        "          );\n",
+        "          const run = (yield* orchestrator.getThreadProjection(threadId)).runs.at(-1)!;\n",
+        "          yield* orchestrator.dispatch({\n",
+        "            type: \"run.interrupt\",\n",
+        "            commandId: CommandId.make(\"stop-background-untracked\"),\n",
+        "            threadId,\n",
+        "            runId: run.id,\n",
+        "            holdQueue: true,\n",
+        "          });\n",
+        "          yield* worker.drain();\n",
+        "          const projection = yield* orchestrator.getThreadProjection(threadId);\n",
+        "          assert.deepEqual(\n",
+        "            projection.turnItems.flatMap((item) =>\n",
+        "              item.type === \"command_execution\" ? [item.status] : [],\n",
+        "            ),\n",
+        "            [\"interrupted\"],\n",
+        "          );\n",
+        "          assert.equal(projection.runs.at(-1)?.status, \"completed\");\n",
+        "          assert.deepEqual(\n",
+        "            (yield* orchestrator.getThreadShell(threadId))?.pendingBackgroundTasks,\n",
+        "            [],\n",
+        "          );\n",
+        "        }).pipe(\n",
+        "          Effect.provide(\n",
+        "            ProviderReplayHarness.layerWithRegistry(\n",
+        "              { name: \"codex-background-stop-untracked\", runtimePolicyOverride: { cwd } },\n",
+        "              CodexAdapterV2Testkit.layer({ transcript: localTranscript }),\n",
+        "              { runEffectWorker: false },\n",
+        "            ),\n",
+        "          ),\n",
+        "        );\n",
+        "      }).pipe(Effect.provide(NodeServices.layer)),\n",
+        "    ),\n",
+        "  );\n"
+      ],
+      "after": [
+        "  ;\n"
+      ]
+    },
+    {
+      "start": 4160,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4390,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4501,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4749,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4860,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 4962,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5125,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5371,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5586,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5739,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5856,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 5928,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6042,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6120,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6207,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6270,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6429,
+      "before": [
+        "            Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "            Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6582,
+      "before": [
+        "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "        Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6726,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6884,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 6976,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7057,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7120,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7219,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7284,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7374,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7440,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7613,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7650,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    },
+    {
+      "start": 7679,
+      "before": [
+        "          Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
+      ],
+      "after": [
+        "          Layer.mergeAll(IdAllocator.layer, runtimeHostLayer, NodeServices.layer),\n"
+      ]
+    }
+  ]
+}

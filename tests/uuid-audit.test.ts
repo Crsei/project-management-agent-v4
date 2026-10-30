@@ -12,8 +12,8 @@ import { DomainError } from '../packages/domain/src/core.ts';
 import type { Actor, Command, CommandReceipt, Entity, EntityKind } from '../packages/domain/src/core.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
 import { createPool, lockWorkspace, migrate } from '../packages/infrastructure/src/database.ts';
-import { executeCoreCommand, isCoreEntityKind, listCoreEntities, readCoreEntity } from '../apps/api/src/core-adapter.ts';
-import { CoreWorkspacePool, authorizeCoreScope } from '../apps/api/src/core-routes.ts';
+import { executeCoreCommand, isCoreEntityKind, listCoreEntities, readCoreEntity } from '../apps/server/pm/src/core-adapter.ts';
+import { CoreWorkspacePool, authorizeCoreScope } from '../apps/server/pm/src/core-routes.ts';
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 const registry = { ...accessCommands, ...intentCommands };

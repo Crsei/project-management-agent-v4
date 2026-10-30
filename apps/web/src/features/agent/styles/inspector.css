@@ -1,0 +1,409 @@
+/* Shared layout primitives for the workspace inspector panels. */
+
+.inspector-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  height: 100%;
+}
+
+.live-panel-body > .inspector-panel {
+  height: 100%;
+}
+
+.inspector-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inspector-toolbar-spacer {
+  flex: 1;
+}
+
+.inspector-muted {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.inspector-mono {
+  font-family: var(--font-ibm-plex-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+}
+
+.inspector-scroll {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.inspector-split {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+}
+
+.inspector-tree {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module);
+  padding: 6px;
+  max-height: 42%;
+}
+
+.inspector-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inspector-tree-row:hover,
+.inspector-tree-row:focus-visible {
+  background: var(--muted);
+}
+
+.inspector-tree-row[aria-selected="true"] {
+  background: var(--muted);
+  color: var(--brand);
+}
+
+.inspector-tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-ibm-plex-mono, ui-monospace, monospace);
+}
+
+.inspector-badge[data-tone="added"] {
+  color: var(--success);
+}
+
+.inspector-badge[data-tone="deleted"] {
+  color: var(--danger);
+}
+
+.inspector-badge[data-tone="modified"] {
+  color: var(--warning, #b4772f);
+}
+
+.inspector-code {
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module);
+  background: var(--muted);
+  font-family: var(--font-ibm-plex-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.inspector-diff {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module);
+}
+
+.inspector-terminal {
+  flex: 1;
+  min-height: 260px;
+  overflow: hidden;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module);
+  background: var(--background);
+}
+
+.inspector-terminal .xterm,
+.inspector-terminal .xterm-viewport,
+.inspector-terminal .xterm-screen {
+  height: 100%;
+}
+
+.inspector-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+}
+
+.inspector-browser-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  justify-content: center;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module);
+  background: var(--muted);
+}
+
+.inspector-browser-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  border: 0;
+  background: #fff;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
+}
+
+.inspector-browser-frame[data-viewport="tablet"] {
+  width: 834px;
+}
+
+.inspector-browser-frame[data-viewport="mobile"] {
+  width: 390px;
+}
+
+.inspector-empty {
+  padding: 18px 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-module);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.live-panel-scroll--fill {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.live-panel-scroll--fill > .live-panel-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.live-workspace-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.live-workspace-panel--wide {
+  width: min(960px, 72vw);
+}
+
+@media (max-width: 1279px) {
+  .live-workspace-panel--wide {
+    width: min(760px, 70vw);
+  }
+}
+
+.live-inspector-rail {
+  display: flex;
+  flex: 0 0 64px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 8px 4px;
+  border-left: 1px solid var(--border);
+  background: var(--card);
+}
+
+.live-inspector-rail-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  height: 52px;
+  padding: 4px;
+  border-radius: var(--radius-menu);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.live-inspector-rail-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.live-inspector-rail-button:hover,
+.live-inspector-rail-button:focus-visible {
+  color: var(--foreground);
+}
+
+.live-inspector-rail-button[aria-pressed="true"] {
+  background: var(--muted);
+  color: var(--brand);
+}
+
+/* PM chat inspector. The tool selector exists only inside the open panel. */
+.pm-agent-inspector {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  min-width: 320px;
+  max-width: 45%;
+  min-height: 0;
+  background: var(--pm-surface, var(--surface));
+}
+
+.pm-agent-inspector-header,
+.pm-agent-inspector-sheet .pm-agent-inspector-header {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pm-agent-inspector-tabs {
+  display: flex;
+  flex: 1;
+  align-self: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.pm-agent-inspector-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pm-agent-inspector-tab svg,
+.pm-agent-inspector-close svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.pm-agent-inspector-tab:hover {
+  color: var(--foreground);
+}
+
+.pm-agent-inspector-tab[aria-selected="true"] {
+  border-bottom-color: var(--ring);
+  color: var(--foreground);
+}
+
+.pm-agent-inspector-close {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.pm-agent-inspector-close:hover {
+  background: var(--surface-hover, var(--muted));
+  color: var(--foreground);
+}
+
+.pm-agent-inspector-tab:focus-visible,
+.pm-agent-inspector-close:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.pm-agent-inspector-path {
+  display: block;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pm-agent-inspector-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.pm-agent-inspector-body[hidden] {
+  display: none;
+}
+
+.pm-agent-inspector-resizer {
+  flex: 0 0 5px;
+  width: 5px;
+  border-left: 1px solid var(--border);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pm-agent-inspector-resizer:hover,
+.pm-agent-inspector-resizer:focus-visible {
+  background: var(--ring);
+}
+
+.pm-agent-inspector-sheet[data-slot="sheet-content"] {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(620px, 100vw) !important;
+  max-width: 100vw !important;
+  font-family: var(--font-sans);
+}

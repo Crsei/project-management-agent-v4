@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/ClaudeAgentSdkQueryRunner.test.ts",
+  "beforeSha256": "d84475a33732f289f437323c447917d3dbaf2f2011e3c214f2fabd160b3447c4",
+  "afterSha256": "17f3d05115bf646fee15882c6d9b8c07509a4b113b13056fa8080f7216334313",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 26,
+      "before": [
+        "import * as PortScanner from \"../../preview/PortScanner.ts\";\n"
+      ],
+      "after": [
+        "import * as PortScanner from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/port-discovery.ts\";\n"
+      ]
+    },
+    {
+      "start": 69,
+      "before": [
+        "  Layer.provide(PortScanner.layerTest),\n"
+      ],
+      "after": [
+        "  Layer.provide(PortScanner.layer),\n"
+      ]
+    },
+    {
+      "start": 114,
+      "before": [
+        "  Layer.provide(PortScanner.layerTest),\n"
+      ],
+      "after": [
+        "  Layer.provide(PortScanner.layer),\n"
+      ]
+    },
+    {
+      "start": 494,
+      "before": [
+        "    let runningAgents = 0;\n",
+        "    let releaseAgent!: () => void;\n",
+        "    const agentReleased = new Promise<void>((resolve) => (releaseAgent = resolve));\n"
+      ],
+      "after": [
+        "    const lifecycle = PortScanner.makePmAgentProcessLifecycle();\n",
+        "    const agentReleased = Promise.withResolvers<void>();\n"
+      ]
+    },
+    {
+      "start": 499,
+      "before": [
+        "        Layer.mock(PortScanner.PortDiscovery)({\n"
+      ],
+      "after": [
+        "        Layer.succeed(PortScanner.PortDiscovery, {\n",
+        "          ...lifecycle,\n"
+      ]
+    },
+    {
+      "start": 501,
+      "before": [
+        "            runningAgents += 1;\n"
+      ],
+      "after": [
+        "            const release = lifecycle.trackAgent();\n"
+      ]
+    },
+    {
+      "start": 503,
+      "before": [
+        "              runningAgents -= 1;\n",
+        "              releaseAgent();\n"
+      ],
+      "after": [
+        "              release();\n",
+        "              agentReleased.resolve();\n"
+      ]
+    },
+    {
+      "start": 534,
+      "before": [],
+      "after": [
+        "      assert.equal(lifecycle.activeAgents(), 0);\n"
+      ]
+    },
+    {
+      "start": 536,
+      "before": [
+        "      assert.equal(runningAgents, 1);\n"
+      ],
+      "after": [
+        "      assert.equal(lifecycle.activeAgents(), 1);\n"
+      ]
+    },
+    {
+      "start": 538,
+      "before": [
+        "      yield* Effect.promise(() => agentReleased);\n",
+        "      assert.equal(runningAgents, 0);\n"
+      ],
+      "after": [
+        "      yield* Effect.promise(() => agentReleased.promise);\n",
+        "      assert.equal(lifecycle.activeAgents(), 0);\n"
+      ]
+    }
+  ]
+}

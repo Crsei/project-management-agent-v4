@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/TurnTokenUsage.test.ts",
+  "beforeSha256": "dc721e899662d6777b76cbaf5cb571c000ec8aa94858525218085d24c8b190df",
+  "afterSha256": "ecb0e9eda6ee9c7cd0df2a99889dff8193ca753f3d1803ba7d060fddf84ced63",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 118,
+      "before": [
+        "    expect(\n",
+        "      normalizeClaudeTurnTokenUsage(\n",
+        "        {\n",
+        "          subtype: \"success\",\n",
+        "          usage: {\n",
+        "            input_tokens: 4,\n",
+        "            output_tokens: 2,\n",
+        "          },\n"
+      ],
+      "after": [
+        "    const interrupted = normalizeClaudeTurnTokenUsage(\n",
+        "      {\n",
+        "        subtype: \"success\",\n",
+        "        usage: {\n",
+        "          input_tokens: 4,\n",
+        "          output_tokens: 2,\n"
+      ]
+    },
+    {
+      "start": 127,
+      "before": [
+        "        false,\n",
+        "        \"interrupted\",\n",
+        "      ),\n",
+        "    ).toMatchObject({ usageStatus: \"partial\", inputTokens: 4, outputTokens: 2 });\n"
+      ],
+      "after": [
+        "      },\n",
+        "      false,\n",
+        "      \"interrupted\",\n",
+        "    );\n",
+        "    expect(interrupted).toMatchObject({ usageStatus: \"partial\", outputTokens: 2 });\n",
+        "    expect(interrupted.inputTokens).toBeUndefined();\n",
+        "    expect(interrupted.cachedInputTokens).toBeUndefined();\n",
+        "    expect(interrupted.cacheCreationTokens).toBeUndefined();\n"
+      ]
+    }
+  ]
+}

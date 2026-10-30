@@ -1,5 +1,6 @@
 import { isScheduleDate } from "./schedule-date-utils"
 import type { RuntimeStatus } from "./runtime-status"
+import type { CalendarSettings, TimelineSettings } from "./schedule-view-model"
 
 export type WorkItemProperty =
   | "state"
@@ -32,6 +33,8 @@ export type WorkItemRecord = {
   dueDate: string | null
   parentId?: string | null
   subItemCount?: number | null
+  /** Checked/total source checklist items; absent when the host has no checklist data. */
+  subtasks?: { completed: number; total: number } | null
   attachmentCount?: number | null
   linkCount?: number | null
   revision: number
@@ -46,20 +49,62 @@ export type WorkItemCatalog = {
   labels: readonly WorkItemOption[]
 }
 export type WorkItemPatch = Partial<Pick<WorkItemRecord, WorkItemField>>
-export type WorkItemsFilters = {
-  state: string[]
-  priority: string[]
-  assignees: string[]
-  labels: string[]
+/** Filters are an ordered AND list; values inside one row are OR. */
+export type WorkItemsFilterField =
+  | "state"
+  | "priority"
+  | "assignees"
+  | "labels"
+export type WorkItemsFilterOperator = "is" | "isNot"
+export type WorkItemsFilterCondition = {
+  field: WorkItemsFilterField
+  operator: WorkItemsFilterOperator
+  values: string[]
+}
+export type WorkItemsFilters = readonly WorkItemsFilterCondition[]
+export type WorkItemsSort =
+  | "manual"
+  | "title"
+  | "dueDate"
+  | "priority"
+  | "state"
+  | "assignees"
+  | "labels"
+export const workItemsFilterFields: readonly WorkItemsFilterField[] = [
+  "state",
+  "priority",
+  "assignees",
+  "labels",
+]
+export const workItemsSortFields: readonly Exclude<WorkItemsSort, "manual">[] =
+  ["priority", "dueDate", "title", "state", "assignees", "labels"]
+export function filterValues(
+  filters: WorkItemsFilters,
+  field: WorkItemsFilterField,
+) {
+  return filters.find((condition) => condition.field === field)?.values ?? []
+}
+/** Replaces the first row for a field; empty values remove that row. */
+export function withFilterValues(
+  filters: WorkItemsFilters,
+  field: WorkItemsFilterField,
+  values: readonly string[],
+): WorkItemsFilters {
+  const remaining = filters.filter((condition) => condition.field !== field)
+  if (!values.length) return remaining
+  return [
+    ...remaining,
+    { field, operator: "is" as const, values: [...values] },
+  ]
 }
 export type WorkItemsViewState = {
   layout: "list" | "board" | "table" | "timeline" | "calendar"
-  timeline?: import("./schedule-view-model").TimelineSettings
-  calendar?: import("./schedule-view-model").CalendarSettings
+  timeline?: TimelineSettings
+  calendar?: CalendarSettings
   query: string
   filters: WorkItemsFilters
   groupBy: "state" | "priority"
-  sort: "manual" | "title" | "dueDate" | "priority"
+  sort: WorkItemsSort
   sortDirection: "asc" | "desc"
   visibleProperties: WorkItemProperty[]
   showEmptyGroups: boolean
@@ -117,7 +162,7 @@ export type CreateResult = {
 export const defaultWorkItemsView: WorkItemsViewState = {
   layout: "list",
   query: "",
-  filters: { state: [], priority: [], assignees: [], labels: [] },
+  filters: [],
   groupBy: "state",
   sort: "manual",
   sortDirection: "asc",

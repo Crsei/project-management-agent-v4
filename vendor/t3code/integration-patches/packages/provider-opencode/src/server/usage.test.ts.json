@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/usage.test.ts",
+  "beforeSha256": "99bad93e0d8229eb921d5b067a9bb3b21574f68096f1eccb8f8c5aaf1efcd12b",
+  "afterSha256": "c552eeccb00ebd1cacf17c47670bfa7223d4f27289f18df2c7cb6f84c0c093c7",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 44,
+      "before": [
+        "      for (let index = 0; index < 130; index++) {\n",
+        "        yield* insert(index * 2 - 10, `msg-${index}`, data);\n",
+        "      }\n",
+        "      yield* insert(300, \"old\", data, sinceMs - 1);\n",
+        "      yield* insert(301, \"user\", JSON.stringify({ ...message, role: \"user\" }));\n",
+        "      yield* insert(302, \"invalid\", \"{invalid\");\n",
+        "      yield* insert(303, \"msg-0\", data);\n"
+      ],
+      "after": [
+        "      yield* db.withTransaction(Effect.gen(function* () {\n",
+        "        for (let index = 0; index < 130; index++) {\n",
+        "          yield* insert(index * 2 - 10, `msg-${index}`, data);\n",
+        "        }\n",
+        "        yield* insert(300, \"old\", data, sinceMs - 1);\n",
+        "        yield* insert(301, \"user\", JSON.stringify({ ...message, role: \"user\" }));\n",
+        "        yield* insert(302, \"invalid\", \"{invalid\");\n",
+        "        yield* insert(303, \"msg-0\", data);\n",
+        "      }));\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "source": "packages/provider-grok/package.json",
+  "beforeSha256": "1ca8012e183c9d6baa3f64f6ca18e7fe9e0bc7a2226e471b702f5e430d489a32",
+  "afterSha256": "4164381e27930d279dbd2a443d2165607c034dff3583b040a996f6a00188a185",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 31,
+      "before": [],
+      "after": [
+        "    \"@effect/platform-node\": \"catalog:\",\n"
+      ]
+    },
+    {
+      "start": 35,
+      "before": [
+        "    \"effect\": \"catalog:\"\n"
+      ],
+      "after": [
+        "    \"effect\": \"catalog:\",\n",
+        "    \"effect-acp\": \"workspace:*\"\n"
+      ]
+    },
+    {
+      "start": 38,
+      "before": [
+        "    \"@effect/platform-node\": \"catalog:\",\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 42,
+      "before": [
+        "    \"effect-acp\": \"workspace:*\",\n"
+      ],
+      "after": []
+    }
+  ]
+}

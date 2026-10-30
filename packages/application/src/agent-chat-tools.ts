@@ -13,6 +13,7 @@ const assignee = z.union([z.uuid().toLowerCase(), z.literal('')]).nullable();
 const priority = z.enum(['low', 'medium', 'high', 'urgent']).nullable();
 const labels = z.array(z.string().trim().min(1).max(80)).max(30).nullable();
 const relation = z.enum(['parent', 'blocked_by', 'depends_on', 'related_to', 'cycle', 'milestone', 'module', 'requirement', 'release', 'goals']);
+const workflowState = z.string().trim().min(1).max(120);
 const page = { after: id.nullable(), limit: z.number().int().min(1).max(20) };
 
 /** Null means unchanged on update; empty text clears an optional text/date/assignee field. */
@@ -30,11 +31,14 @@ export const agentChatToolInputSchemas = {
   pm_read_relations: z.strictObject({ id, after: nullableText, limit: z.number().int().min(1).max(20) }),
   pm_add_relation: z.strictObject({ sourceId: id, targetId: id, relation, revision, targetRevision: revision }),
   pm_remove_relation: z.strictObject({ sourceId: id, targetId: id, relation, revision, targetRevision: revision }),
+  pm_archive_task: z.strictObject({ id, revision }),
+  pm_restore_task: z.strictObject({ id, revision }),
+  pm_delete_task: z.strictObject({ id, revision }),
+  pm_transition_task: z.strictObject({ id, revision, status: workflowState }),
 } as const;
 
 export type AgentChatToolName = keyof typeof agentChatToolInputSchemas;
 export type AgentChatToolInput<Name extends AgentChatToolName> = z.infer<typeof agentChatToolInputSchemas[Name]>;
-export const AGENT_CHAT_TOOLS_VERSION = 1;
 export const AGENT_CHAT_TOOL_NAMES = Object.keys(agentChatToolInputSchemas) as AgentChatToolName[];
 const descriptions: Record<AgentChatToolName, string> = {
   pm_query: 'Search authorized projects, tasks and documents by text; stable ID pagination. Summaries are not full bodies.',
@@ -50,10 +54,23 @@ const descriptions: Record<AgentChatToolName, string> = {
   pm_read_relations: 'Read bounded formal relationships only when both endpoints are currently authorized; hidden endpoints are omitted.',
   pm_add_relation: 'Add a legal formal relationship at both exact endpoint revisions. No project move or lifecycle changes.',
   pm_remove_relation: 'Remove one legal formal relationship at both exact endpoint revisions. Both endpoints must be authorized.',
+  pm_archive_task: 'Archive one authorized task at the exact revision through the native core. Never deletes, never moves projects.',
+  pm_restore_task: 'Restore one archived task at the exact revision through the native core. Ordinary fields and workflow state are unchanged.',
+  pm_delete_task: 'Permanently delete one already archived task at the exact revision through the native core. Blocked while native references or retained business records exist.',
+  pm_transition_task: 'Move one authorized task to a configured workflow state at the exact revision; the native Markdown workflow validates the transition.',
+};
+const readOnlyTools: readonly AgentChatToolName[] = ['pm_query', 'pm_read', 'pm_read_comments', 'pm_read_relations'];
+const lifecycleTools: readonly AgentChatToolName[] = ['pm_archive_task', 'pm_restore_task', 'pm_delete_task'];
+const capabilitiesFor = (name: AgentChatToolName): Capability[] => {
+  if (name === 'pm_create_comment') return ['domain.read', 'intent.propose'];
+  if (lifecycleTools.includes(name)) return ['domain.read', 'planning.lifecycle'];
+  if (readOnlyTools.includes(name)) return ['domain.read'];
+  // Lifecycle-only capabilities (workitem.complete / workitem.cancel_reopen) are checked against the exact target state at call time.
+  return ['domain.read', 'planning.edit'];
 };
 export const AGENT_CHAT_TOOL_REGISTRY = AGENT_CHAT_TOOL_NAMES.map(name => ({
-  name, description: descriptions[name], write: !['pm_query', 'pm_read', 'pm_read_comments', 'pm_read_relations'].includes(name),
-  capabilities: (name === 'pm_create_comment' ? ['domain.read', 'intent.propose'] : ['domain.read', ...(!['pm_query', 'pm_read', 'pm_read_comments', 'pm_read_relations'].includes(name) ? ['planning.edit'] : [])]) as Capability[],
+  name, description: descriptions[name], write: !readOnlyTools.includes(name),
+  capabilities: capabilitiesFor(name),
 }));
 export const agentChatToolDefinitions = AGENT_CHAT_TOOL_REGISTRY.map(tool => ({ type: 'function' as const, function: {
   name: tool.name, description: tool.description, strict: true,
@@ -66,12 +83,10 @@ export type AgentChatToolContext = {
   workspaceId: string;
   threadId: string;
   messageId: string;
-  toolCallId: string;
   operationId: string;
-  grantId: string;
   scope: AgentChatToolScope;
   signal?: AbortSignal;
-  /** Trusted current-grant check supplied by the dispatcher, rerun inside the native mutation lock. */
+  /** Recheck the current PM actor and project scope inside the native mutation lock. */
   checkAuthorization?: (sql: SqlExecutor) => Promise<void>;
 };
 export function parseAgentChatToolInput<Name extends AgentChatToolName>(name: Name, input: unknown): AgentChatToolInput<Name> {
@@ -96,5 +111,28 @@ export function assertAgentToolRecord(scope: AgentChatToolScope, record: FileRec
 export function assertAgentToolOrdinaryMutation(before: FileRecord | undefined, after: Entity): void {
   if (before && (before.entity.status !== after.status || before.entity.archived !== after.archived || before.entity.project !== after.project)) {
     throw new DomainError('agent_tool_protected_action', 'Lifecycle, archive and cross-project moves are not Agent tools', 403);
+  }
+}
+/** Lifecycle tools change exactly one lifecycle field of an existing work item and never move it between projects. */
+export function assertAgentToolLifecycleMutation(before: FileRecord | undefined, after: Entity, expected: { archived?: boolean; status?: string }): void {
+  if (!before || before.entity.entity !== 'work_item' || after.entity !== 'work_item') {
+    throw new DomainError('agent_tool_protected_action', 'Lifecycle tools operate only on existing work items', 403);
+  }
+  if (before.entity.project !== after.project || agentToolProjectId(before.entity) !== agentToolProjectId(after)) {
+    throw new DomainError('agent_tool_protected_action', 'Lifecycle tools cannot move an entity between projects', 403);
+  }
+  const archiveRequested = expected.archived !== undefined, transitionRequested = expected.status !== undefined;
+  if (!archiveRequested && !transitionRequested) throw new DomainError('agent_tool_protected_action', 'A lifecycle tool must name the lifecycle change', 403);
+  if (archiveRequested && after.archived !== expected.archived) {
+    throw new DomainError('agent_tool_protected_action', 'Archive state may change only as explicitly requested', 403);
+  }
+  if (transitionRequested && after.status !== expected.status) {
+    throw new DomainError('agent_tool_protected_action', 'Workflow state may change only as explicitly requested', 403);
+  }
+  if (transitionRequested && after.archived !== before.entity.archived) {
+    throw new DomainError('agent_tool_protected_action', 'A workflow transition cannot change the archive state', 403);
+  }
+  if (archiveRequested && after.status !== before.entity.status) {
+    throw new DomainError('agent_tool_protected_action', 'An archive change cannot change the workflow state', 403);
   }
 }

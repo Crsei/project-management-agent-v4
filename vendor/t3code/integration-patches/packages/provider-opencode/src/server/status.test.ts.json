@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/status.test.ts",
+  "beforeSha256": "d8dd45f90d64bc131fa4153df5ed44958461d80484f1ff694781ed5d08664320",
+  "afterSha256": "e35e165c1de1424dbaf3e8fed233d193f115445619ac967ffca8d4a002586a07",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 549,
+      "before": [
+        "      NodeAssert.equal(ready.auth.status, \"authenticated\");\n"
+      ],
+      "after": [
+        "      NodeAssert.equal(ready.auth.status, \"unknown\", \"A discovered model catalog does not prove native authentication or paid inference\");\n"
+      ]
+    }
+  ]
+}

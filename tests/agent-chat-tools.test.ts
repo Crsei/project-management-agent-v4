@@ -9,7 +9,7 @@ import { agentChatToolDefinitions, AGENT_CHAT_TOOL_NAMES, parseAgentChatToolInpu
 
 const revision = 'a'.repeat(64);
 test('registered PM schemas reject model identity, protected fields, raw patches and unsupported actions', () => {
-  assert.equal(AGENT_CHAT_TOOL_NAMES.length, 13);
+  assert.equal(AGENT_CHAT_TOOL_NAMES.length, 17);
   for (const definition of agentChatToolDefinitions) {
     assert.equal(definition.function.strict, true);
     assert.equal(definition.function.parameters.additionalProperties, false);

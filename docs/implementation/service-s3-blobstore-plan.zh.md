@@ -37,8 +37,8 @@
 | [registry.ts](../../packages/application/src/registry.ts) | `createRegistry(blobs: LocalBlobStore, …)` 是具体类型绑定，但函数只把对象交给 delivery/project-extras | 改为 `BlobStore`，不把 `root` 或 SDK 客户端传入业务层 |
 | [delivery.ts](../../packages/application/src/delivery.ts) | 已使用 `BlobStore`。StageUpload 先 put，后在命令事务登记 upload/outbox；租约一小时。登记要求 owner、TTL、单次消费和 upload CAS；版本/下载/审核均 read 并核验 SHA 与大小 | 不修改 StageUpload payload、upload/artifact_version 的 objectKey 语义、两阶段业务或收据结构 |
 | [project-extras.ts](../../packages/application/src/project-extras.ts) | 已使用 `BlobStore`；封面会 read 版本，并核验 SQL SHA/contentDigest/size 和真实栅格签名 | S3 下保持这条真实读取，不能只凭 HEAD/MIME 设置封面 |
-| [app.ts](../../apps/api/src/app.ts) | `buildApp` 接收 `blobRoot` 并直接 new LocalBlobStore；onReady 在有 DB 时 init；ready 调 check；capabilities.storage.enabled 当前只是 `Boolean(pool)` | 新增抽象注入并改造装配；禁用/错误 provider 不能因 DB 存在就称存储可用 |
-| [main.ts](../../apps/api/src/main.ts)、[config.ts](../../apps/api/src/config.ts)、[runtime-config.ts](../../packages/infrastructure/src/runtime-config.ts) | main 将 runtime.blobRoot 传给 buildApp；API config 只校验 HOST/PORT；runtime 配置无 S3，默认本地 `.local/blobs` | provider 判别配置放基础设施配置层；HOST/PORT 不承载 S3 业务规则；不通过隐式 SDK profile/本机文件查找凭据 |
+| [app.ts](../../apps/server/pm/src/app.ts) | `buildApp` 接收 `blobRoot` 并直接 new LocalBlobStore；onReady 在有 DB 时 init；ready 调 check；capabilities.storage.enabled 当前只是 `Boolean(pool)` | 新增抽象注入并改造装配；禁用/错误 provider 不能因 DB 存在就称存储可用 |
+| [main.ts](../../apps/server/pm/src/main.ts)、[config.ts](../../apps/server/pm/src/config.ts)、[runtime-config.ts](../../packages/infrastructure/src/runtime-config.ts) | main 将 runtime.blobRoot 传给 buildApp；API config 只校验 HOST/PORT；runtime 配置无 S3，默认本地 `.local/blobs` | provider 判别配置放基础设施配置层；HOST/PORT 不承载 S3 业务规则；不通过隐式 SDK profile/本机文件查找凭据 |
 | [backup.mjs](../../scripts/backup.mjs) | 仅接受专用本机 Compose PG；先 dump public，再 readdir BLOB_ROOT/copyFile；没有使用 BlobStore。`--verify` 只逐项检查 artifact_version 对清单，不含所有 upload 引用；core 复制排除 cache，但脚本未协调外部写入者停写 | 不能把该脚本用于 S3 后继续报告完整备份；改成显式 provider 感知、引用集合完整且停写的一致备份 |
 | [部署 Compose](../../deploy/compose.app.yaml)、[Dockerfile](../../deploy/Dockerfile)、[部署手册](../../deploy/README.md) | API 固定本地 BLOB_ROOT 和 blob 卷；Worker 不挂载 core/blob 卷；replicas=1 是运维约束。共享 backend env_file 当前也注入 Worker/migrate | 只给 API 和显式维护进程 S3 身份/网络；不把新秘密扩散到 Web、Worker、migrate；保留 core 卷和单写 |
 | [blobs 测试](../../packages/infrastructure/tests/blobs.test.ts) | 真实本地目录测试独立身份、并发完整性、重启、路径逃逸、8 MiB、篡改、symlink；底层允许空 bytes | 共用 provider 行为测试保留空 bytes 和精确边界；UI 的不允许空上传不倒灌成新 BlobStore 限制 |
@@ -80,7 +80,7 @@ API `buildApp({blobRoot})` 的调用还在 [dashboard fixture](../../tests/dashb
 
 拟新增基础设施 factory `createBlobStore(providerConfig): BlobStore`，构造本身无 I/O。`main` 解析 provider 配置，创建实现并将 `blobStore: BlobStore` 和非秘密 `blobStorageLocator` 注入 `buildApp`；`buildApp` 在基础设施装配边界用拟 `bindBlobStore(pool, locator, store): BlobStore` 包装绑定门禁，registry、下载和cover统一只拿此受保护实例，`createRegistry` 改收 `BlobStore`。门禁的 init/check 读取DB binding并匹配marker，未初始化、migrating或校验失败时read/put必须拒绝；网络恢复可重新check，但不能自动接受变更后的storeId/locator。底层Local/S3适配器不直接依赖pg或业务SQL。应用集成fixture初始化自有binding并注入受保护Local；纯适配器测试/静态合同生成可直接构造不带应用门禁的Local。所有buildApp调用迁移，不保留blobRoot专用入口；SDK、root、bucket不进入delivery或Files。
 
-`runtimeConfig` 是 Worker 也会调用的共享函数（见 [Worker](../../apps/worker/src/main.ts)）；通用 DB/间隔配置与 `readBlobStoreConfig` 作为同一基础设施配置模块的独立入口，只有 API/维护进程调用后者。Worker 继续 outbox/SSE、维护和独立 SMTP 循环，不为 S3 新增后台发送循环，也不需要 S3 凭据或出网。合同生成继续使用不 init 的 Local 实例，仅生成静态 schema。
+`runtimeConfig` 是 Worker 也会调用的共享函数（见 [Worker](../../apps/server/worker/src/main.ts)）；通用 DB/间隔配置与 `readBlobStoreConfig` 作为同一基础设施配置模块的独立入口，只有 API/维护进程调用后者。Worker 继续 outbox/SSE、维护和独立 SMTP 循环，不为 S3 新增后台发送循环，也不需要 S3 凭据或出网。合同生成继续使用不 init 的 Local 实例，仅生成静态 schema。
 
 ## 4. 存储行为、错误与网络未知结果
 

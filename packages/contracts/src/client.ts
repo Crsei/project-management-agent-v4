@@ -21,7 +21,6 @@ import type { WebhookOverview, WebhookDeliveryPage, WebhookDeliveryDetail } from
 import { AccountRecoveryClient } from './account-recovery-client.ts';
 import { createLocalProjectClient } from './local-project-client.ts';
 import { createAgentContextClient } from './agent-file-area-client.ts';
-import { agentChatAccessSchema, agentChatContextSourceSchema, agentChatToolCallSchema, type AgentChatAccess, type AgentChatAccessInput, type AgentChatMessage, type AgentChatReasoningEffort, type AgentChatStatus, type AgentChatStreamEvent, type AgentChatThreadDetail, type AgentChatThreadList } from './agent-chat.ts';
 export type { DashboardRecord } from '../../domain/src/dashboard.ts';
 export type { PersonalDashboard, SelfProfile, PrivateNote, PrivateNoteData, TaskWatch, TaskWatchData, ProjectMeeting, ProjectMeetingData, MeetingParticipant } from '../../domain/src/dashboard-personal.ts';
 export type { TimeDashboard, TimeTimer, TimeWorklog, TimeTotals, TimePeriodTotal, TimeTaskReference, PresencePreference, PresenceStatus, PresenceMember, PresenceSelf, TimerData, WorklogData, PresencePreferenceData, PresenceHeartbeatData } from '../../domain/src/dashboard-time.ts';
@@ -44,7 +43,6 @@ export type { ArtifactVisibility, ArtifactCopyOrigin, ArtifactCopyOriginResponse
 export type { WebhookOverview, WebhookTargetDto, WebhookEndpointDto, WebhookDeliveryDto, WebhookDeliveryPage, WebhookDeliveryDetail } from '../../domain/src/webhooks.ts';
 export type { LocalDirectory, LocalProjectInitialization, LocalProjectSettings, LocalProjectDirectoryListing, LocalProjectPreview, LocalProjectLocation, LocalProjectAttempt } from './local-projects.ts';
 export type { AgentScope, AgentFileArea, AgentCatalog, AgentFileAreaUpdate, ResolvedAgentContext } from './agent-file-areas.ts';
-export type { AgentChatMessage, AgentChatMessageRole, AgentChatMessageStatus, AgentChatThread, AgentChatThreadList, AgentChatThreadDetail, AgentChatStatus, AgentChatReasoningEffort, AgentChatStreamEvent, AgentChatAccess, AgentChatAccessInput, AgentChatScope, AgentChatToolCapability, AgentChatContextSource, AgentChatToolCall, AgentChatToolResult, AgentChatToolEntity, AgentChatToolComment, AgentChatToolRelation, AgentChatToolReceipt } from './agent-chat.ts';
 // BEGIN GENERATED COMMAND PAYLOAD TYPES
 export type CommandPayloadMap = {
   AcceptIntent: { "revision": number; "reason": string; "basisRefs"?: Array<{ "kind": "project" | "work_item" | "milestone" | "conversation" | "intent" | "decision" | "upload" | "artifact" | "artifact_version" | "evidence" | "submission" | "review"; "id": string; }>; };
@@ -220,21 +218,6 @@ function isReceipt(value: unknown): value is CommandReceipt {
   const item = value as Partial<CommandReceipt>;
   return typeof item.commandId === 'string' && typeof item.httpStatus === 'number' && (item.status === 'committed' || item.status === 'rejected');
 }
-const agentChatContextSourcesSchema = agentChatContextSourceSchema.array();
-const agentChatToolCallsSchema = agentChatToolCallSchema.array();
-function isAgentChatMessage(value: unknown): value is AgentChatMessage {
-  if (!value || typeof value !== 'object') return false;
-  const item = value as Partial<AgentChatMessage>;
-  return typeof item.id === 'string' && typeof item.threadId === 'string'
-    && (item.role === 'user' || item.role === 'assistant')
-    && typeof item.content === 'string'
-    && (item.status === 'complete' || item.status === 'streaming' || item.status === 'cancelled' || item.status === 'error' || item.status === 'interrupted')
-    && (item.errorCode === null || typeof item.errorCode === 'string')
-    && (item.model === null || typeof item.model === 'string')
-    && typeof item.createdAt === 'string' && typeof item.updatedAt === 'string'
-    && (item.toolCalls === undefined || agentChatToolCallsSchema.safeParse(item.toolCalls).success)
-    && (item.contextSources === undefined || agentChatContextSourcesSchema.safeParse(item.contextSources).success);
-}
 
 export class ProjectManagementClient {
   #baseUrl: URL;
@@ -287,22 +270,6 @@ export class ProjectManagementClient {
   login(credentials: { email: string; password: string }, options?: RequestOptions) { return this.#json<{ actor: Actor; expiresAt: string }>('POST', '/api/v1/auth/login', options, credentials); }
   logout(options?: RequestOptions) { return this.#json<{ loggedOut: true }>('POST', '/api/v1/auth/logout', options); }
   getMe(options?: RequestOptions) { return this.#json<{ actor: Actor }>('GET', '/api/v1/auth/me', options); }
-  getAgentChatStatus(workspaceId: string, options?: RequestOptions): Promise<AgentChatStatus> { return this.#json<AgentChatStatus>('GET', `/api/v1/workspaces/${segment(workspaceId)}/agent/status`, options); }
-  listAgentThreads(workspaceId: string, options?: RequestOptions): Promise<AgentChatThreadList> { return this.#json<AgentChatThreadList>('GET', `/api/v1/workspaces/${segment(workspaceId)}/agent/threads`, options); }
-  createAgentThread(workspaceId: string, input: { id: string; title?: string }, options?: RequestOptions): Promise<{ thread: AgentChatThreadDetail['thread'] }> { return this.#json('POST', `/api/v1/workspaces/${segment(workspaceId)}/agent/threads`, options, input); }
-  getAgentThread(workspaceId: string, threadId: string, options?: RequestOptions): Promise<AgentChatThreadDetail> { return this.#json<AgentChatThreadDetail>('GET', `/api/v1/workspaces/${segment(workspaceId)}/agent/threads/${segment(threadId)}`, options); }
-  deleteAgentThread(workspaceId: string, threadId: string, options?: RequestOptions): Promise<{ deleted: true }> { return this.#json('DELETE', `/api/v1/workspaces/${segment(workspaceId)}/agent/threads/${segment(threadId)}`, options); }
-  cancelAgentThread(workspaceId: string, threadId: string, input: { messageId?: string } = {}, options?: RequestOptions): Promise<{ cancelled: boolean }> { return this.#json('POST', `/api/v1/workspaces/${segment(workspaceId)}/agent/threads/${segment(threadId)}/cancel`, options, input); }
-  async getAgentThreadAccess(workspaceId: string, threadId: string, options?: RequestOptions): Promise<AgentChatAccess> {
-    const result = agentChatAccessSchema.safeParse(await this.#json('GET', `/api/v1/workspaces/${segment(workspaceId)}/agent/threads/${segment(threadId)}/access`, options));
-    if (!result.success) throw new ApiError(502, { error: { code: 'invalid_agent_access_response' } });
-    return result.data;
-  }
-  async setAgentThreadAccess(workspaceId: string, threadId: string, input: AgentChatAccessInput, options?: RequestOptions): Promise<AgentChatAccess> {
-    const result = agentChatAccessSchema.safeParse(await this.#json('PUT', `/api/v1/workspaces/${segment(workspaceId)}/agent/threads/${segment(threadId)}/access`, options, input));
-    if (!result.success) throw new ApiError(502, { error: { code: 'invalid_agent_access_response' } });
-    return result.data;
-  }
   getAccountSecurity(options?: RequestOptions): Promise<AccountSecurity> { return this.#json<AccountSecurity>('GET', '/api/v1/auth/security', options); }
   async #securityAction(path: string, input: ChangeOwnPassword | RevokeOwnSessions, kind: AccountSecurityActionKind, options?: RequestOptions): Promise<AccountSecurityAction> {
     const response = await this.#send('POST', path, options, input);
@@ -380,75 +347,6 @@ export class ProjectManagementClient {
     const response = await this.#send('GET', `/api/v1/workspaces/${segment(workspaceId)}/artifact-versions/${segment(versionId)}/content`, options);
     if (!response.ok) throw new ApiError(response.status, await response.json());
     return { bytes: new Uint8Array(await response.arrayBuffer()), etag: response.headers.get('etag'), contentDisposition: response.headers.get('content-disposition'), mediaType: response.headers.get('content-type') };
-  }
-  async *streamAgentMessage(workspaceId: string, threadId: string, input: { messageId: string; content: string; reasoningEffort?: AgentChatReasoningEffort }, options: RequestOptions = {}): AsyncGenerator<AgentChatStreamEvent> {
-    const response = await this.#send('POST', `/api/v1/workspaces/${segment(workspaceId)}/agent/threads/${segment(threadId)}/messages`, options, input, undefined, { Accept: 'text/event-stream' });
-    if (!response.ok) {
-      const result: unknown = await response.json().catch(() => ({ error: { code: 'invalid_response' } }));
-      throw new ApiError(response.status, result);
-    }
-    if (!response.headers.get('content-type')?.startsWith('text/event-stream') || !response.body) throw new ApiError(502, { error: { code: 'invalid_event_stream' } });
-    const reader = response.body.getReader(), decoder = new TextDecoder();
-    let pending = '', eventType = '', data: string[] = [];
-    const frame = (): AgentChatStreamEvent | undefined => {
-      if (data.length === 0) { eventType = ''; return; }
-      const raw = data.join('\n'), type = eventType;
-      eventType = ''; data = [];
-      let value: Record<string, unknown>;
-      try { value = JSON.parse(raw) as Record<string, unknown>; }
-      catch { throw new ApiError(502, { error: { code: 'invalid_event_stream' } }); }
-      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ApiError(502, { error: { code: 'invalid_event_stream' } });
-      if (type === 'capabilities' || type === 'context' || type === 'tool') {
-        if (typeof value.messageId !== 'string') throw new ApiError(502, { error: { code: 'invalid_event_stream' } });
-        if (type === 'capabilities') {
-          const access = agentChatAccessSchema.safeParse(value.access);
-          if (access.success) return { type, messageId: value.messageId, access: access.data };
-        } else if (type === 'context') {
-          const sources = agentChatContextSourcesSchema.safeParse(value.sources);
-          if (sources.success) return { type, messageId: value.messageId, sources: sources.data };
-        } else {
-          const toolCall = agentChatToolCallSchema.safeParse(value.toolCall);
-          if (toolCall.success) return { type, messageId: value.messageId, toolCall: toolCall.data };
-        }
-        throw new ApiError(502, { error: { code: 'invalid_event_stream' } });
-      }
-      if (type === 'delta' && typeof value.messageId === 'string' && typeof value.delta === 'string') return { type, messageId: value.messageId, delta: value.delta };
-      if (type === 'error' && typeof value.code === 'string' && typeof value.message === 'string') return { type, code: value.code, message: value.message, messageId: typeof value.messageId === 'string' ? value.messageId : null };
-      if (type === 'user' || type === 'assistant' || type === 'done' || type === 'cancelled') {
-        if (!isAgentChatMessage(value.message)) throw new ApiError(502, { error: { code: 'invalid_event_stream' } });
-        return { type, message: value.message };
-      }
-    };
-    try {
-      while (true) {
-        const chunk = await reader.read();
-        pending += decoder.decode(chunk.value, { stream: !chunk.done });
-        let end: number;
-        while ((end = pending.search(/[\r\n]/)) !== -1) {
-          if (pending[end] === '\r' && end === pending.length - 1 && !chunk.done) break;
-          const line = pending.slice(0, end);
-          const width = pending[end] === '\r' && pending[end + 1] === '\n' ? 2 : 1;
-          pending = pending.slice(end + width);
-          if (!line) {
-            const event = frame();
-            if (event) {
-              yield event;
-              if (event.type === 'done' || event.type === 'cancelled' || event.type === 'error') return;
-            }
-          } else if (!line.startsWith(':')) {
-            const colon = line.indexOf(':'), field = colon === -1 ? line : line.slice(0, colon);
-            const value = colon === -1 ? '' : line.slice(colon + 1).replace(/^ /, '');
-            if (field === 'event') eventType = value;
-            else if (field === 'data') data.push(value);
-          }
-        }
-        if (pending.length > 1024 * 1024 || data.reduce((total, part) => total + part.length, 0) > 1024 * 1024) throw new ApiError(502, { error: { code: 'invalid_event_stream' } });
-        if (chunk.done) throw new ApiError(502, { error: { code: 'agent_stream_incomplete' } });
-      }
-    } finally {
-      await reader.cancel().catch(() => undefined);
-      reader.releaseLock();
-    }
   }
   async *subscribeEvents(workspaceId: string, options: StreamOptions = {}): AsyncGenerator<StreamEvent> {
     const controller = new AbortController();

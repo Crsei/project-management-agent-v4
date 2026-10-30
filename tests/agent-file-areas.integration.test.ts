@@ -32,8 +32,8 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     assert.equal(initial.workspaces.find(workspace => workspace.id === empty.id)?.projects.length, 0);
     const group = initial.workspaces.find(workspace => workspace.id === f.workspaceId)!;
     assert.deepEqual(group.projects.map(entry => entry.id).sort(), [project.record.id, second.record.id].sort());
-    assert.deepEqual(group.fileArea, { path: join(f.root, '.pmv3', 'workspaces', f.workspaceId, 'workspace'), status: 'available', revision: 0, source: 'default', canManage: true, reason: 'initializes_on_first_use' });
-    await assert.rejects(lstat(join(f.root, '.pmv3')), { code: 'ENOENT' });
+    assert.deepEqual(group.fileArea, { path: join(f.root, '.pmv4', 'workspaces', f.workspaceId, 'workspace'), status: 'available', revision: 0, source: 'default', canManage: true, reason: 'initializes_on_first_use' });
+    await assert.rejects(lstat(join(f.root, '.pmv4')), { code: 'ENOENT' });
     assert.equal((await f.pool.query('SELECT count(*)::integer AS n FROM agent_file_areas')).rows[0].n, 0);
     assert.deepEqual(group.projects.find(entry => entry.id === project.record.id)?.fileArea, {
       path: project.location.path, status: 'available', revision: 0, source: 'project_location', canManage: true,
@@ -180,15 +180,15 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     let client = new ProjectManagementClient({ baseUrl: f.origin, auth: { type: 'cookie', credentials: 'include', cookie: () => f.ownerCookie } });
     const endpoint = `/api/v1/workspaces/${f.workspaceId}/agent-storage-settings`;
     const settings = await client.agentContexts.storageSettings(f.workspaceId);
-    assert.deepEqual(settings, { defaultRoot: join(f.root, '.pmv3'), effectiveRoot: join(f.root, '.pmv3'), revision: 0, canManage: true });
+    assert.deepEqual(settings, { defaultRoot: join(f.root, '.pmv4'), effectiveRoot: join(f.root, '.pmv4'), revision: 0, canManage: true });
     const catalog = await client.agentContexts.catalog();
     assert.equal(catalog.workspaces[0]?.projects.find(p => p.id === project.id)?.fileArea.source, 'default');
-    await assert.rejects(lstat(join(f.root, '.pmv3')), { code: 'ENOENT' });
+    await assert.rejects(lstat(join(f.root, '.pmv4')), { code: 'ENOENT' });
     assert.equal((await f.pool.query('SELECT count(*)::integer AS n FROM agent_storage_settings')).rows[0].n, 0);
     const workspace = await client.agentContexts.resolve({ workspaceId: f.workspaceId, projectId: null });
     const assigned = await client.agentContexts.resolve({ workspaceId: f.workspaceId, projectId: project.id });
-    assert.equal(workspace.path, join(f.root, '.pmv3', 'workspaces', f.workspaceId, 'workspace'));
-    assert.equal(assigned.path, join(f.root, '.pmv3', 'workspaces', f.workspaceId, 'projects', project.id));
+    assert.equal(workspace.path, join(f.root, '.pmv4', 'workspaces', f.workspaceId, 'workspace'));
+    assert.equal(assigned.path, join(f.root, '.pmv4', 'workspaces', f.workspaceId, 'projects', project.id));
     await writeFile(join(assigned.path, 'keep.txt'), 'preserve existing files');
     const saved = await client.agentContexts.saveStorageSettings(f.workspaceId, { directory: { mode: 'new', parentPath: f.parents[0], folderName: 'new-chat-default' }, expectedRevision: 0 });
     assert.equal(saved.revision, 1);
@@ -222,7 +222,7 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     const input = { directory: { mode: 'existing', path: f.parents[0] }, expectedRevision: 0 };
     for (const cookie of [reader.cookie, manager.cookie]) assert.equal((await f.request(endpoint, { method: 'PUT', cookie, body: input })).status, 403);
     assert.equal((await f.request('/api/v1/agent-contexts/resolve', { method: 'POST', cookie: manager.cookie, body: { workspaceId: f.workspaceId, projectId: null } })).status, 409);
-    await assert.rejects(lstat(join(f.root, '.pmv3')), { code: 'ENOENT' });
+    await assert.rejects(lstat(join(f.root, '.pmv4')), { code: 'ENOENT' });
     const link = join(f.parents[0], 'linked-default'); await symlink(f.parents[1], link, 'dir');
     for (const directory of [
       { mode: 'existing', path: f.root }, { mode: 'existing', path: link },

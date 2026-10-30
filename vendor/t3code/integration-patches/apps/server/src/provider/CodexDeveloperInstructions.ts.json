@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexDeveloperInstructions.ts",
+  "beforeSha256": "1fc109c65173d3391e2e1b81f6d22535b29a66dbce0789e5ebdcb5b5f13f9d4f",
+  "afterSha256": "b8a8ead00d6b205769c9fed214adac324a0eeca5a5a54e5ea15fc573fb8b2cc8",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1,
+      "before": [
+        "import { buildRuntimeInstructions } from \"@t3tools/provider-core/server/runtimeInstructions\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3,
+      "before": [
+        "import {\n",
+        "  T3_CODE_BROWSER_TOOL_INSTRUCTIONS,\n",
+        "  T3_CODE_DEVICE_TOOL_INSTRUCTIONS,\n",
+        "  T3_CODE_ORCHESTRATION_SECTIONS,\n",
+        "} from \"@t3tools/provider-core/server/orchestrationInstructions\";\n",
+        "\n",
+        "/** Codex silently truncates additionalContext values over 1,000 tokens, counted as UTF-8 bytes / 4. */\n"
+      ],
+      "after": [
+        "/** Native additionalContext values are limited to 1,000 tokens, measured as UTF-8 bytes / 4. */\n"
+      ]
+    },
+    {
+      "start": 11,
+      "before": [
+        "\n",
+        "export interface T3CodeToolAvailability {\n",
+        "  readonly browser: boolean;\n",
+        "  readonly device: boolean;\n",
+        "}\n",
+        "\n",
+        "const normalizeAvailability = (\n",
+        "  availability: boolean | T3CodeToolAvailability,\n",
+        "): T3CodeToolAvailability =>\n",
+        "  typeof availability === \"boolean\" ? { browser: availability, device: false } : availability;\n",
+        "\n",
+        "/** Instructions for unavailable tools would steer the model away from its remaining automation. */\n",
+        "const toolInstructions = (availability: boolean | T3CodeToolAvailability): string => {\n",
+        "  const tools = normalizeAvailability(availability);\n",
+        "  return [\n",
+        "    tools.browser ? T3_CODE_BROWSER_TOOL_INSTRUCTIONS : \"\",\n",
+        "    tools.device ? T3_CODE_DEVICE_TOOL_INSTRUCTIONS : \"\",\n",
+        "  ]\n",
+        "    .filter(Boolean)\n",
+        "    .join(\"\\n\\n\");\n",
+        "};\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 39,
+      "before": [
+        "/** Keep this outside collaboration mode; model-catalog mode text overrides client developer_instructions. */\n",
+        "export function buildCodexAdditionalContext(\n",
+        "  runtime: CodexRuntimeInfo,\n",
+        "  toolsAvailable: boolean | T3CodeToolAvailability = true,\n",
+        "): Record<string, V2TurnStartParams__AdditionalContextEntry> {\n",
+        "  const tools = toolInstructions(toolsAvailable);\n",
+        "  // Split values to fit per-entry caps; number keys because Codex emits them in key order.\n",
+        "  return {\n",
+        "    ...Object.fromEntries(\n",
+        "      T3_CODE_ORCHESTRATION_SECTIONS.map((section, index) => [\n",
+        "        `t3_code_orchestration_${String(index + 1).padStart(2, \"0\")}`,\n",
+        "        { kind: \"application\" as const, value: section },\n",
+        "      ]),\n",
+        "    ),\n",
+        "    t3_code_runtime: {\n",
+        "      kind: \"application\",\n",
+        "      value: buildRuntimeInstructions({ harness: \"Codex\", ...runtime }),\n",
+        "    },\n",
+        "    ...(tools ? { t3_code_tools: { kind: \"application\", value: tools } } : {}),\n",
+        "  };\n"
+      ],
+      "after": [
+        "/** Native harness identity only; PM supplies its own instructions and tool authority. */\n",
+        "export function buildCodexAdditionalContext(runtime: CodexRuntimeInfo): Record<string, V2TurnStartParams__AdditionalContextEntry> {\n",
+        "  const model = (runtime.modelName || runtime.model).replaceAll(/\\s+/g, \" \").trim();\n",
+        "  const effort = runtime.reasoningEffort?.replaceAll(/\\s+/g, \" \").trim();\n",
+        "  return { runtime_info: { kind: \"application\", value: `<runtime_info>You are using the Codex harness${model ? ` as ${model}` : \"\"}${effort ? ` with ${effort} reasoning effort` : \"\"}.</runtime_info>` } };\n"
+      ]
+    }
+  ]
+}

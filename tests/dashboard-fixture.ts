@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { Pool } from 'pg';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import type { Actor, Command, CommandReceipt, Entity } from '../packages/domain/src/core.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
 import { createPool, migrate } from '../packages/infrastructure/src/database.ts';

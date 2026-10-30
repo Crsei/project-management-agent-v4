@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "source": "apps/server/src/textGeneration/GrokTextGeneration.test.ts",
+  "beforeSha256": "389819b3fbc701ac7ba500f3adbb7c32536079b2173610011899e5d463c7ef0c",
+  "afterSha256": "96ff075b3dc52463f8950a10d1ea406de42e38944a496bdbe22e8fa92b2a675a",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 9,
+      "before": [
+        "import * as Layer from \"effect/Layer\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 16,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n",
+        "import * as TextGeneration from \"./TextGeneration.ts\";\n"
+      ],
+      "after": [
+        "import type { ProviderTextGeneration } from \"@t3tools/provider-core/server/textGeneration\";\n"
+      ]
+    },
+    {
+      "start": 25,
+      "before": [
+        "const layerGrokTextGenerationTest = ServerConfig.ServerConfig.layerTest(process.cwd(), {\n",
+        "  prefix: \"t3code-grok-text-generation-test-\",\n",
+        "}).pipe(Layer.provideMerge(NodeServices.layer));\n"
+      ],
+      "after": [
+        "const layerGrokTextGenerationTest = NodeServices.layer;\n"
+      ]
+    },
+    {
+      "start": 43,
+      "before": [
+        "  effectFn: (textGeneration: TextGeneration.TextGeneration[\"Service\"]) => Effect.Effect<A, E, R>,\n"
+      ],
+      "after": [
+        "  effectFn: (textGeneration: ProviderTextGeneration) => Effect.Effect<A, E, R>,\n"
+      ]
+    }
+  ]
+}

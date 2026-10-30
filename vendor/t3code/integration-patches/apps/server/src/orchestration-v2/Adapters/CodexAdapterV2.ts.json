@@ -1,0 +1,387 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
+  "beforeSha256": "44f0cfba17c5ddf47cd5b75ab443d18c3a8080cc4638034b5b7e75c36a75e422",
+  "afterSha256": "c12bf486f7142b91ac6588308daefcc811bd36fb777899cb1d93bddccec78f73",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1,
+      "before": [
+        "import * as DocumentText from \"../../provider/DocumentText.ts\";\n"
+      ],
+      "after": [
+        "import * as DocumentText from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/document-text.ts\";\n"
+      ]
+    },
+    {
+      "start": 100,
+      "before": [
+        "import { resolveAttachmentPath, resolveAttachmentPathById } from \"../../attachmentStore.ts\";\n"
+      ],
+      "after": [
+        "import { resolveAttachmentPath, resolveAttachmentPathById } from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/attachments.ts\";\n"
+      ]
+    },
+    {
+      "start": 102,
+      "before": [
+        "import { ServerConfig } from \"../../config.ts\";\n"
+      ],
+      "after": [
+        "import { ServerConfig } from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 120,
+      "before": [
+        "import * as McpProviderSession from \"@t3tools/provider-core/server/mcpSession\";\n",
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import {\n",
+        "  ProviderRuntimeHost,\n",
+        "  type ProviderRuntimeHostBinding,\n",
+        "} from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 128,
+      "before": [
+        "import { snapshotMcpApp } from \"../../mcpApps/McpAppSnapshot.ts\";\n"
+      ],
+      "after": [
+        "import { snapshotMcpApp } from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/mcp-app-snapshot.ts\";\n"
+      ]
+    },
+    {
+      "start": 157,
+      "before": [],
+      "after": [
+        "\n",
+        "/** Only the native connection opened for this operation can produce this evidence. */\n",
+        "export interface CodexSessionEvidence {\n",
+        "  readonly protocol: \"codex-app-server-v2.jsonrpc\";\n",
+        "  readonly homeDirectory: string;\n",
+        "  readonly userAgent: string;\n",
+        "  readonly readLegacy: (input: {\n",
+        "    readonly nativeSessionId: string;\n",
+        "    readonly turnId?: string;\n",
+        "    readonly messageId?: string;\n",
+        "    readonly ensure: ProviderAdapter.ProviderAdapterV2EnsureThreadInput;\n",
+        "  }) => Effect.Effect<ProviderAdapter.ProviderAdapterV2ThreadSnapshot,\n",
+        "    CodexErrors.CodexAppServerError | ProviderAdapter.ProviderAdapterProtocolError>;\n",
+        "}\n",
+        "const codexSessionEvidence = new WeakMap<ProviderAdapter.ProviderAdapterV2SessionRuntime,\n",
+        "  Effect.Effect<CodexSessionEvidence, CodexErrors.CodexAppServerError | ProviderAdapter.ProviderAdapterProtocolError>>();\n",
+        "export const readCodexSessionEvidence = (runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime) =>\n",
+        "  codexSessionEvidence.get(runtime);\n"
+      ]
+    },
+    {
+      "start": 729,
+      "before": [
+        "    readonly hasT3Mcp?: boolean;\n",
+        "    readonly browserToolsAvailable?: boolean;\n",
+        "    readonly deviceToolsAvailable?: boolean;\n"
+      ],
+      "after": [
+        "    readonly includeRuntimeContext?: boolean;\n"
+      ]
+    },
+    {
+      "start": 761,
+      "before": [
+        "    const t3Context =\n",
+        "      input.hasT3Mcp === true\n",
+        "        ? buildCodexAdditionalContext(\n",
+        "            { model: input.modelSelection.model, reasoningEffort: effort ?? undefined },\n",
+        "            {\n",
+        "              browser: input.browserToolsAvailable ?? true,\n",
+        "              device: input.deviceToolsAvailable ?? false,\n",
+        "            },\n",
+        "          )\n",
+        "        : undefined;\n",
+        "    const additionalContext =\n",
+        "      t3Context === undefined && Object.keys(appContext).length === 0\n",
+        "        ? undefined\n",
+        "        : { ...t3Context, ...appContext };\n"
+      ],
+      "after": [
+        "    const runtimeContext = input.includeRuntimeContext === true\n",
+        "      ? buildCodexAdditionalContext({ model: input.modelSelection.model, reasoningEffort: effort ?? undefined })\n",
+        "      : undefined;\n",
+        "    const additionalContext = runtimeContext === undefined && Object.keys(appContext).length === 0\n",
+        "      ? undefined : { ...runtimeContext, ...appContext };\n"
+      ]
+    },
+    {
+      "start": 1321,
+      "before": [
+        "  readonly mcpSession: McpProviderSession.McpProviderSessionConfig | undefined;\n"
+      ],
+      "after": [
+        "  readonly mcpSession: ProviderRuntimeHostBinding | undefined;\n"
+      ]
+    },
+    {
+      "start": 1335,
+      "before": [
+        "      ...(mcpSession === undefined\n",
+        "        ? {}\n",
+        "        : {\n",
+        "            // Override only T3's server so launch-argument MCP servers survive.\n",
+        "            \"mcp_servers.t3-code\": {\n",
+        "              url: mcpSession.endpoint,\n",
+        "              tool_timeout_sec: CODEX_T3_MCP_TOOL_TIMEOUT_SEC,\n",
+        "              http_headers: {\n",
+        "                Authorization: mcpSession.authorizationHeader,\n",
+        "              },\n",
+        "            },\n",
+        "          }),\n"
+      ],
+      "after": [
+        "      ...Object.fromEntries((mcpSession?.mcpServers ?? []).map(server => [\n",
+        "        `mcp_servers.${server.name}`,\n",
+        "        { command: server.command, args: [...server.args], enabled: true,\n",
+        "          tool_timeout_sec: CODEX_T3_MCP_TOOL_TIMEOUT_SEC },\n",
+        "      ])),\n"
+      ]
+    },
+    {
+      "start": 1373,
+      "before": [],
+      "after": [
+        "const codexCommandUnits = new WeakMap<ChildProcess.Command, string>();\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 1395,
+      "before": [
+        "  return ChildProcess.make(spawnCommand.command, spawnCommand.args, {\n"
+      ],
+      "after": [
+        "  const command = ChildProcess.make(spawnCommand.command, spawnCommand.args, {\n"
+      ]
+    },
+    {
+      "start": 1401,
+      "before": [],
+      "after": [
+        "  if (launch.unit) codexCommandUnits.set(command, launch.unit);\n",
+        "  return command;\n"
+      ]
+    },
+    {
+      "start": 1504,
+      "before": [],
+      "after": [
+        "          ...(input.runtimePolicy.cwd == null ? {} : { cwd: input.runtimePolicy.cwd }),\n"
+      ]
+    },
+    {
+      "start": 1506,
+      "before": [],
+      "after": [
+        "        const unit = codexCommandUnits.get(command);\n",
+        "        // Registered before spawn: the native process finalizer runs before descendant-unit cleanup.\n",
+        "        if (unit) yield* Effect.addFinalizer(() => agentScope.stop(unit));\n"
+      ]
+    },
+    {
+      "start": 1544,
+      "before": [
+        "  | McpProviderSessions.McpProviderSessions\n"
+      ],
+      "after": [
+        "  | ProviderRuntimeHost\n"
+      ]
+    },
+    {
+      "start": 1616,
+      "before": [
+        "  const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n"
+      ],
+      "after": [
+        "  const runtimeHost = yield* ProviderRuntimeHost;\n"
+      ]
+    },
+    {
+      "start": 1618,
+      "before": [
+        "    // @effect-diagnostics-next-line effectSucceedWithVoid:off - This optional result requires undefined, not the wider void type.\n",
+        "    threadId === null ? Effect.succeed(undefined) : mcpSessions.read(threadId);\n"
+      ],
+      "after": [
+        "    threadId === null ? Effect.succeed(undefined)\n",
+        "      : runtimeHost.read({ threadId, providerInstanceId: adapterOptions.instanceId });\n"
+      ]
+    },
+    {
+      "start": 1635,
+      "before": [],
+      "after": [
+        "        const originalHostBinding = yield* readMcpSession(input.threadId);\n",
+        "        const hostExecution = originalHostBinding === undefined ? undefined : {\n",
+        "          threadId: originalHostBinding.threadId,\n",
+        "          executionId: originalHostBinding.executionId,\n",
+        "        };\n"
+      ]
+    },
+    {
+      "start": 1698,
+      "before": [],
+      "after": [
+        "        let nativeInitialization: CodexSchema.V1InitializeResponse | undefined;\n"
+      ]
+    },
+    {
+      "start": 1713,
+      "before": [],
+      "after": [
+        "                Effect.tap(response => Effect.sync(() => { nativeInitialization = response; })),\n"
+      ]
+    },
+    {
+      "start": 4863,
+      "before": [],
+      "after": [
+        "                      ...(hostExecution ? { hostExecution } : {}),\n"
+      ]
+    },
+    {
+      "start": 6032,
+      "before": [],
+      "after": [
+        "                    ...(hostExecution ? { hostExecution } : {}),\n"
+      ]
+    },
+    {
+      "start": 6481,
+      "before": [
+        "            const mcpSession = yield* mcpSessions.read(turnInput.threadId);\n"
+      ],
+      "after": [
+        "            const hostBinding = yield* readMcpSession(turnInput.threadId);\n"
+      ]
+    },
+    {
+      "start": 6487,
+      "before": [
+        "              hasT3Mcp: mcpSession !== undefined,\n",
+        "              browserToolsAvailable: mcpSession?.browserToolsAvailable ?? true,\n",
+        "              deviceToolsAvailable: mcpSession?.capabilities?.has(\"device\") ?? false,\n"
+      ],
+      "after": [
+        "              includeRuntimeContext: hostBinding !== undefined,\n"
+      ]
+    },
+    {
+      "start": 6771,
+      "before": [
+        "              Effect.andThen(mcpSessions.read(threadInput.threadId)),\n"
+      ],
+      "after": [
+        "              Effect.andThen(readMcpSession(threadInput.threadId)),\n"
+      ]
+    },
+    {
+      "start": 7646,
+      "before": [
+        "                      mcpSession: yield* mcpSessions.read(threadInput.targetThreadId),\n"
+      ],
+      "after": [
+        "                      mcpSession: yield* readMcpSession(threadInput.targetThreadId),\n"
+      ]
+    },
+    {
+      "start": 7719,
+      "before": [],
+      "after": [
+        "        yield* Effect.acquireRelease(\n",
+        "          Effect.sync(() => codexSessionEvidence.set(runtime, Effect.gen(function* () {\n",
+        "            yield* ensureInitialized;\n",
+        "            // This typed v2 metadata request uses the same native connection, without creating a thread.\n",
+        "            yield* client.request(\"thread/loaded/list\", {});\n",
+        "            if (!nativeInitialization?.codexHome || !nativeInitialization.userAgent) {\n",
+        "              return yield* toProtocolError(\"Codex did not confirm its native Home and initialized protocol.\");\n",
+        "            }\n",
+        "            return {\n",
+        "              protocol: \"codex-app-server-v2.jsonrpc\" as const,\n",
+        "              homeDirectory: nativeInitialization.codexHome,\n",
+        "              userAgent: nativeInitialization.userAgent,\n",
+        "              readLegacy: Effect.fnUntraced(function* ({ nativeSessionId, turnId, messageId, ensure }) {\n",
+        "                const { thread } = yield* client.request(\"thread/read\", {\n",
+        "                  threadId: nativeSessionId, includeTurns: true,\n",
+        "                });\n",
+        "                if (thread.id !== nativeSessionId || thread.cwd !== ensure.runtimePolicy.cwd\n",
+        "                  || thread.status.type === \"active\" || thread.status.type === \"systemError\"\n",
+        "                  || thread.turns.some(turn => turn.status === \"inProgress\")) {\n",
+        "                  return yield* toProtocolError(\"The legacy Codex thread identity, native directory or idle boundary does not match.\");\n",
+        "                }\n",
+        "                let nativeTurns = thread.turns;\n",
+        "                if (thread.historyMode === \"paginated\") {\n",
+        "                  const turns: CodexSchema.V2ThreadReadResponse__Turn[] = [];\n",
+        "                  const cursors = new Set<string>();\n",
+        "                  let cursor: string | undefined;\n",
+        "                  do {\n",
+        "                    const page = yield* client.request(\"thread/turns/list\", {\n",
+        "                      threadId: nativeSessionId, sortDirection: \"asc\", ...(cursor ? { cursor } : {}),\n",
+        "                    });\n",
+        "                    turns.push(...page.data);\n",
+        "                    cursor = page.nextCursor ?? undefined;\n",
+        "                    if (cursor && cursors.has(cursor)) return yield* toProtocolError(\"Codex repeated a native history cursor.\");\n",
+        "                    if (cursor) cursors.add(cursor);\n",
+        "                  } while (cursor);\n",
+        "                  nativeTurns = turns;\n",
+        "                }\n",
+        "                const completed = nativeTurns.filter(turn => turn.status === \"completed\" && !turn.error);\n",
+        "                if (nativeTurns.some(turn => turn.status === \"inProgress\")\n",
+        "                  || (turnId && !completed.some(turn => turn.id === turnId))\n",
+        "                  || (!turnId && messageId && !completed.some(turn => turn.id === messageId))\n",
+        "                  || (nativeTurns.length > 0 && nativeTurns.at(-1)?.status !== \"completed\")) {\n",
+        "                  return yield* toProtocolError(\"The legacy Codex cursor is not a stable completed native turn.\");\n",
+        "                }\n",
+        "                const providerThread = providerThreadFromCodexThread({\n",
+        "                  appThreadId: ensure.threadId, idAllocator, ownerNodeId: null,\n",
+        "                  providerSessionId: input.providerSessionId, providerInstanceId: adapterOptions.instanceId, thread,\n",
+        "                });\n",
+        "                const providerTurns: OrchestrationV2ProviderTurn[] = [];\n",
+        "                for (const [index, turn] of nativeTurns.entries()) {\n",
+        "                  if (turn.status !== \"completed\" || turn.error) continue;\n",
+        "                  providerTurns.push({\n",
+        "                    id: idAllocator.derive.providerTurn({ driver: CODEX_PROVIDER, nativeTurnId: turn.id }),\n",
+        "                    providerThreadId: providerThread.id,\n",
+        "                    nodeId: idAllocator.derive.nodeFromProviderItem({ driver: CODEX_PROVIDER, nativeItemId: turn.id }),\n",
+        "                    runAttemptId: null, nativeTurnRef: { driver: CODEX_PROVIDER, nativeId: turn.id, strength: \"strong\" },\n",
+        "                    ordinal: index + 1, status: \"completed\",\n",
+        "                    startedAt: turn.startedAt == null ? null : codexTimestamp(turn.startedAt),\n",
+        "                    completedAt: turn.completedAt == null ? null : codexTimestamp(turn.completedAt),\n",
+        "                  });\n",
+        "                }\n",
+        "                const head = completed.at(-1);\n",
+        "                return {\n",
+        "                  providerThread: { ...providerThread, ...(head ? {\n",
+        "                    nativeConversationHeadRef: { driver: CODEX_PROVIDER, nativeId: head.id, strength: \"strong\" as const },\n",
+        "                  } : {}) },\n",
+        "                  providerTurns, messages: [], runtimeRequests: [], providerPayload: thread,\n",
+        "                };\n",
+        "              }),\n",
+        "            } satisfies CodexSessionEvidence;\n",
+        "          }))),\n",
+        "          () => Effect.sync(() => { codexSessionEvidence.delete(runtime); }),\n",
+        "        );\n"
+      ]
+    }
+  ]
+}

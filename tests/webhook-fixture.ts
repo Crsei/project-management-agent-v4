@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Pool } from 'pg';
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../apps/api/src/app.ts';
+import { buildApp } from '../apps/server/pm/src/app.ts';
 import { createPool, migrate } from '../packages/infrastructure/src/database.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
 import { readWebhookConfig, type WebhookConfig } from '../packages/infrastructure/src/webhook-config.ts';

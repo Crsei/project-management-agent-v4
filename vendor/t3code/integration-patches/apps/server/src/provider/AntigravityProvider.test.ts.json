@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/AntigravityProvider.test.ts",
+  "beforeSha256": "b4a627690471e02dee283b400e7f37fa0e779e835990987c6bda5bba84870dda",
+  "afterSha256": "bd19865c882877429453d04cb5347ee099415017eae54cb2479ad2dea6e20454",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [
+        "import * as NodeServices from \"@effect/platform-node/NodeServices\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 13,
+      "before": [
+        "import * as Layer from \"effect/Layer\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 20,
+      "before": [
+        "import * as BackgroundPolicy from \"../background/BackgroundPolicy.ts\";\n",
+        "import * as ServerConfig from \"../config.ts\";\n",
+        "import * as ServerSettings from \"../serverSettings.ts\";\n",
+        "import * as ProviderHostLive from \"./ProviderHostLive.ts\";\n",
+        "import * as ServerSecretStore from \"../auth/ServerSecretStore.ts\";\n"
+      ],
+      "after": [
+        "import * as PmNativeTestHost from \"../../../../../../apps/server/agent/src/providers/t3code/testing/native-test-host.testkit.ts\";\n"
+      ]
+    },
+    {
+      "start": 112,
+      "before": [
+        "const layerTest = ProviderHostLive.layer.pipe(\n",
+        "  Layer.provideMerge(\n",
+        "    Layer.mock(BackgroundPolicy.BackgroundPolicy)({\n",
+        "      shouldRunScopeWork: () => Effect.succeed(false),\n",
+        "    }),\n",
+        "  ),\n",
+        "  Layer.provideMerge(ServerSettings.layerTest()),\n",
+        "  Layer.provideMerge(ServerSecretStore.layer),\n",
+        "  Layer.provide(\n",
+        "    ServerConfig.layerTest(process.cwd(), { prefix: \"t3-antigravity-provider-test-\" }).pipe(\n",
+        "      Layer.provideMerge(NodeServices.layer),\n",
+        "    ),\n",
+        "  ),\n",
+        ");\n"
+      ],
+      "after": [
+        "const layerTest = PmNativeTestHost.layer({\n",
+        "  driver: \"antigravity\", instanceId: \"antigravity-test\", prefix: \"pm-antigravity-provider-source\",\n",
+        "});\n"
+      ]
+    }
+  ]
+}

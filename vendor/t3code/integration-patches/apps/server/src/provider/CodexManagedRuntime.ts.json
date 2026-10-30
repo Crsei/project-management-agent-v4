@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/CodexManagedRuntime.ts",
+  "beforeSha256": "1942eabb76a96e9399df89554b399fb094e309499582de26d6dd4f0cf7d57ec9",
+  "afterSha256": "067fb830eacf44f71a92dbfb55f368dc121fae9c22a0129e5ebb39713843e8d7",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 6,
+      "before": [
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 8,
+      "before": [
+        "import * as ServerEnvironment from \"../environment/ServerEnvironment.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerEnvironment from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-environment.ts\";\n"
+      ]
+    },
+    {
+      "start": 49,
+      "before": [
+        "    defaultReturnUrl: new URL(\n",
+        "      \"/welcome\",\n",
+        "      config.devUrl ?? `http://localhost:${config.port}`,\n",
+        "    ).toString(),\n"
+      ],
+      "after": []
+    }
+  ]
+}

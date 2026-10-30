@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/ClaudeProvider.ts",
+  "beforeSha256": "e94b176ef0038edf1815d1b088fa7dc8f0ed67f3bdf574d28c02a942e207ef50",
+  "afterSha256": "322521f8df66e6b4915e95ad97fbb49202392de1bc12f7892f824f46d32a0429",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 176,
+      "before": [
+        "): \"authenticated\" | \"unauthenticated\" {\n"
+      ],
+      "after": [
+        "): \"authenticated\" | \"unauthenticated\" | \"unknown\" {\n"
+      ]
+    },
+    {
+      "start": 180,
+      "before": [
+        "  if (capabilities.tokenSource !== \"none\") return \"authenticated\";\n",
+        "  // API keys can authenticate with tokenSource: none; also check key and account fields.\n"
+      ],
+      "after": [
+        "  const hasToken = Boolean(capabilities.tokenSource) && capabilities.tokenSource !== \"none\";\n"
+      ]
+    },
+    {
+      "start": 183,
+      "before": [
+        "  return hasApiKey || capabilities.email || capabilities.subscriptionType\n",
+        "    ? \"authenticated\"\n",
+        "    : \"unauthenticated\";\n"
+      ],
+      "after": [
+        "  if (hasToken || hasApiKey || capabilities.email || capabilities.subscriptionType) return \"authenticated\";\n",
+        "  return capabilities.tokenSource === \"none\" ? \"unauthenticated\" : \"unknown\";\n"
+      ]
+    },
+    {
+      "start": 628,
+      "before": [
+        "  const authMetadata =\n",
+        "    claudeAuthMetadata({\n",
+        "      subscriptionType: capabilities.subscriptionType,\n",
+        "      authMethod: capabilities.tokenSource,\n",
+        "    }) ??\n",
+        "    apiProviderAuthMetadata(capabilities.apiProvider) ??\n",
+        "    (customApiEndpoint ? { type: \"customEndpoint\", label: \"Custom API endpoint\" } : undefined);\n"
+      ],
+      "after": [
+        "  const authMetadata = customApiEndpoint ? { type: \"customEndpoint\", label: \"Custom API endpoint\" } :\n",
+        "    claudeAuthMetadata({ subscriptionType: capabilities.subscriptionType, authMethod: capabilities.tokenSource })\n",
+        "    ?? apiProviderAuthMetadata(capabilities.apiProvider);\n"
+      ]
+    },
+    {
+      "start": 667,
+      "before": [
+        "        status: \"authenticated\",\n",
+        "        ...(capabilities.email ? { email: capabilities.email } : {}),\n",
+        "        ...(capabilities.workspaceId ? { workspaceId: capabilities.workspaceId } : {}),\n"
+      ],
+      "after": [
+        "        status: customApiEndpoint ? \"unknown\" : claudeAuthStatus(capabilities),\n",
+        "        ...(!customApiEndpoint && capabilities.email ? { email: capabilities.email } : {}),\n",
+        "        ...(!customApiEndpoint && capabilities.workspaceId ? { workspaceId: capabilities.workspaceId } : {}),\n"
+      ]
+    }
+  ]
+}

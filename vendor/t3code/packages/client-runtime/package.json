@@ -1,0 +1,31 @@
+{
+  "name": "@t3tools/client-runtime",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./providerClients": "./src/providerClients.ts",
+    "./modelTraits": "./src/modelTraits.ts",
+    "./providerUpdateRequiredModels": "./src/providerUpdateRequiredModels.ts",
+    "./providerSettingsFields": "./src/providerSettingsFields.ts",
+    "./state/providerInstanceDisplay": "./src/state/providerInstanceDisplay.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/provider-core": "workspace:*",
+    "@t3tools/provider-acp-registry": "workspace:*",
+    "@t3tools/provider-cursor": "workspace:*",
+    "@t3tools/provider-fx": "workspace:*",
+    "@t3tools/provider-grok": "workspace:*",
+    "@t3tools/provider-muse": "workspace:*",
+    "@t3tools/provider-opencode": "workspace:*",
+    "@t3tools/provider-pi": "workspace:*",
+    "@t3tools/shared": "workspace:*",
+    "effect": "4.0.5"
+  },
+  "devDependencies": {
+    "vite-plus": "catalog:"
+  }
+}

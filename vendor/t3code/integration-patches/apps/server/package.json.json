@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "source": "apps/server/package.json",
+  "beforeSha256": "8585a44182ba5a536ea089c02ad3178633c176252066cc17540b3b6a13142739",
+  "afterSha256": "fa8be4a834716cf977cb41161d19d375e0c00031d48ebb343e5e95e8f9d838ff",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1,
+      "before": [
+        "  \"name\": \"t3\",\n"
+      ],
+      "after": [
+        "  \"name\": \"@pm/t3code-provider-server\",\n"
+      ]
+    },
+    {
+      "start": 3,
+      "before": [
+        "  \"license\": \"MIT\",\n",
+        "  \"repository\": {\n",
+        "    \"type\": \"git\",\n",
+        "    \"url\": \"https://github.com/pingdotgg/t3code\",\n",
+        "    \"directory\": \"apps/server\"\n"
+      ],
+      "after": [
+        "  \"private\": true,\n",
+        "  \"type\": \"module\",\n",
+        "  \"exports\": {\n",
+        "    \"./provider/*\": \"./src/provider/*.ts\",\n",
+        "    \"./orchestration-v2/*\": \"./src/orchestration-v2/*.ts\",\n",
+        "    \"./textGeneration/*\": \"./src/textGeneration/*.ts\",\n",
+        "    \"./claudeHistoryWorker\": \"./src/claudeHistoryWorker.ts\"\n"
+      ]
+    },
+    {
+      "start": 9,
+      "before": [
+        "  \"bin\": {\n",
+        "    \"t3\": \"./dist/bin.mjs\"\n",
+        "  },\n",
+        "  \"files\": [\n",
+        "    \"dist\"\n",
+        "  ],\n",
+        "  \"type\": \"module\",\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 17,
+      "before": [
+        "    \"dev\": \"node --watch --watch-path=src --watch-path=../../packages --watch-path=package.json src/bin.ts\",\n",
+        "    \"dev:built\": \"vp run dev\",\n",
+        "    \"build:bundle\": \"vp pack\",\n",
+        "    \"build:exe\": \"node scripts/cli.ts build-exe\",\n",
+        "    \"start\": \"node dist/bin.mjs\",\n",
+        "    \"typecheck\": \"tsc --noEmit\",\n",
+        "    \"test\": \"vp test run\",\n",
+        "    \"record:codex-replay\": \"bun scripts/record-codex-app-server-replay-fixture.ts\",\n",
+        "    \"record:claude-replay\": \"bun scripts/record-claude-agent-sdk-replay-fixture.ts\",\n",
+        "    \"record:cursor-replay\": \"node --env-file-if-exists=../../.env --experimental-strip-types scripts/record-cursor-agent-sdk-replay-fixture.ts\",\n",
+        "    \"record:pi-replay\": \"node scripts/record-pi-rpc-replay-fixture.ts\",\n",
+        "    \"record:grok-replay\": \"node scripts/record-grok-acp-replay-fixture.ts\",\n",
+        "    \"record:fx-replay\": \"node scripts/record-fx-acp-replay-fixture.ts\",\n",
+        "    \"record:muse-replay\": \"node scripts/record-muse-msp-replay-fixture.ts\",\n",
+        "    \"generate\": \"graphqlgen\",\n",
+        "    \"generate:expo-schema\": \"node scripts/fetch-expo-schema.ts\"\n"
+      ],
+      "after": [
+        "    \"typecheck\": \"tsc --noEmit\"\n"
+      ]
+    },
+    {
+      "start": 35,
+      "before": [
+        "    \"@anthropic-ai/claude-agent-sdk\": \"^0.3.276\",\n",
+        "    \"@cursor/sdk\": \"1.0.38\",\n"
+      ],
+      "after": [
+        "    \"@anthropic-ai/claude-agent-sdk\": \"0.3.276\",\n"
+      ]
+    },
+    {
+      "start": 38,
+      "before": [
+        "    \"@effect/platform-node-shared\": \"catalog:\",\n",
+        "    \"@ff-labs/fff-node\": \"0.11.0\",\n",
+        "    \"@muse-code/sdk\": \"1.4.6\",\n",
+        "    \"@napi-rs/keyring\": \"^1.3.0\",\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 51,
+      "before": [
+        "    \"@t3tools/source-control-azure-devops\": \"workspace:*\",\n",
+        "    \"@t3tools/source-control-bitbucket\": \"workspace:*\",\n",
+        "    \"@t3tools/source-control-core\": \"workspace:*\",\n",
+        "    \"@t3tools/source-control-definitions\": \"workspace:*\",\n",
+        "    \"@t3tools/source-control-forgejo\": \"workspace:*\",\n",
+        "    \"@t3tools/source-control-gitcafe\": \"workspace:*\",\n",
+        "    \"@t3tools/source-control-github\": \"workspace:*\",\n",
+        "    \"@t3tools/source-control-gitlab\": \"workspace:*\",\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 62,
+      "before": [
+        "    \"node-pty\": \"^1.2.0-beta.15\",\n",
+        "    \"playwright-core\": \"1.60.0\",\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 66,
+      "before": [
+        "    \"stream-chain\": \"^4.2.5\",\n",
+        "    \"stream-json\": \"3.6.0\",\n",
+        "    \"undici\": \"catalog:\",\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 70,
+      "before": [
+        "    \"yauzl\": \"^3.4.0\",\n",
+        "    \"zod\": \"^4.6.5\"\n"
+      ],
+      "after": [
+        "    \"yauzl\": \"3.4.0\",\n",
+        "    \"@t3tools/contracts\": \"workspace:*\",\n",
+        "    \"@t3tools/shared\": \"workspace:*\",\n",
+        "    \"effect-acp\": \"workspace:*\",\n",
+        "    \"effect-codex-app-server\": \"workspace:*\"\n"
+      ]
+    },
+    {
+      "start": 74,
+      "before": [
+        "    \"@effect/graphql-generator\": \"catalog:\",\n"
+      ],
+      "after": [
+        "    \"@cursor/sdk\": \"1.0.38\",\n",
+        "    \"@muse-code/sdk\": \"1.4.6\",\n"
+      ]
+    },
+    {
+      "start": 76,
+      "before": [
+        "    \"@opencode-ai/sdk\": \"^1.3.15\",\n",
+        "    \"@t3tools/contracts\": \"workspace:*\",\n"
+      ],
+      "after": [
+        "    \"@opencode-ai/sdk\": \"1.19.5\",\n"
+      ]
+    },
+    {
+      "start": 79,
+      "before": [
+        "    \"@t3tools/shared\": \"workspace:*\",\n",
+        "    \"@t3tools/source-control-testing\": \"workspace:*\",\n",
+        "    \"@t3tools/ssh\": \"workspace:*\",\n",
+        "    \"@t3tools/tailscale\": \"workspace:*\",\n",
+        "    \"@t3tools/web\": \"workspace:*\",\n"
+      ],
+      "after": [
+        "    \"vite-plus\": \"catalog:\",\n"
+      ]
+    },
+    {
+      "start": 85,
+      "before": [
+        "    \"@types/proper-lockfile\": \"^4.1.4\",\n",
+        "    \"@types/yauzl\": \"^3.4.0\",\n",
+        "    \"effect-acp\": \"workspace:*\",\n",
+        "    \"effect-codex-app-server\": \"workspace:*\",\n",
+        "    \"graphql\": \"16.14.1\",\n",
+        "    \"vite-plus\": \"catalog:\"\n"
+      ],
+      "after": [
+        "    \"@types/proper-lockfile\": \"4.1.4\",\n",
+        "    \"@types/yauzl\": \"3.4.0\"\n"
+      ]
+    },
+    {
+      "start": 92,
+      "before": [
+        "  \"engines\": {\n",
+        "    \"node\": \"^22.16 || ^23.11 || >=24.10\"\n"
+      ],
+      "after": [
+        "  \"t3code\": {\n",
+        "    \"upstreamCommit\": \"30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c\",\n",
+        "    \"upstreamVersion\": \"0.1.3\",\n",
+        "    \"scope\": \"Provider source closure only; not the t3 server application\"\n"
+      ]
+    }
+  ]
+}

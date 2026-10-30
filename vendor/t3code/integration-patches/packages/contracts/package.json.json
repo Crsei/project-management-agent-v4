@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "source": "packages/contracts/package.json",
+  "beforeSha256": "3c18fc7a950c25db5c13e1d474b235e530afe85d12c6133ea9dfb1aa28afa754",
+  "afterSha256": "8c331945ab29c1b16af342976f0ec3f242b39a39a8b8bacbdbc9275e9e649f32",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 31,
+      "before": [],
+      "after": [
+        "    \"@types/node\": \"catalog:\",\n"
+      ]
+    }
+  ]
+}

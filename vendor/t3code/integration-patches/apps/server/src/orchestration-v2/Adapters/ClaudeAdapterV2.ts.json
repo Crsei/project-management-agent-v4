@@ -1,0 +1,1079 @@
+{
+  "version": 1,
+  "source": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
+  "beforeSha256": "8b7146400cd440e084d89c6b8f578f325d634aa70bad3c51a94cf9146260ba8b",
+  "afterSha256": "297578bde3294b154dcc9ff78ec67668f8034982ad44d59c7bc00b23edeee3a9",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 25,
+      "before": [
+        "  forkSession as forkClaudeSession,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 29,
+      "before": [
+        "  getSessionMessages,\n",
+        "  getSubagentMessages,\n",
+        "  type HookCallback,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 129,
+      "before": [
+        "import { resolveAttachmentPath } from \"../../attachmentStore.ts\";\n"
+      ],
+      "after": [
+        "import { resolveAttachmentPath } from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/attachments.ts\";\n"
+      ]
+    },
+    {
+      "start": 131,
+      "before": [],
+      "after": [
+        "import { claudeLaunchFlags } from \"../../provider/Drivers/ClaudeLaunchArgs.ts\";\n"
+      ]
+    },
+    {
+      "start": 140,
+      "before": [
+        "import * as ServerConfig from \"../../config.ts\";\n",
+        "import * as PortScanner from \"../../preview/PortScanner.ts\";\n",
+        "import * as ServerSettings from \"../../serverSettings.ts\";\n"
+      ],
+      "after": [
+        "import * as ServerConfig from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n",
+        "import * as PortScanner from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/port-discovery.ts\";\n",
+        "import * as ServerSettings from \"../../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-settings.ts\";\n"
+      ]
+    },
+    {
+      "start": 148,
+      "before": [],
+      "after": [
+        "  hasClaudeManagedMcpConfig,\n"
+      ]
+    },
+    {
+      "start": 170,
+      "before": [
+        "import {\n",
+        "  T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,\n",
+        "  T3_CODE_ORCHESTRATION_INSTRUCTIONS,\n",
+        "} from \"@t3tools/provider-core/server/orchestrationInstructions\";\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 179,
+      "before": [
+        "import * as McpProviderSession from \"@t3tools/provider-core/server/mcpSession\";\n",
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+      ],
+      "after": [
+        "import { ProviderRuntimeHost, type ProviderRuntimeHostBinding } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
+      ]
+    },
+    {
+      "start": 206,
+      "before": [],
+      "after": [
+        "const isClaudeAssistantUuid = (value: string): boolean =>\n",
+        "  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);\n",
+        "\n",
+        "export interface ClaudeSessionEvidence {\n",
+        "  readonly homeDirectory: string;\n",
+        "  readonly negotiate: Effect.Effect<string, ClaudeAgentSdkQueryRunnerError>;\n",
+        "  readonly adoptBuffered: (input: {\n",
+        "    readonly request: ProviderContinuationRequests.ProviderContinuationRequest;\n",
+        "    readonly turn: Omit<ProviderAdapter.ProviderAdapterV2TurnInput, \"message\">;\n",
+        "    readonly isCurrent: Effect.Effect<boolean, Error>;\n",
+        "  }) => Effect.Effect<boolean, ClaudeAgentSdkQueryRunnerError>;\n",
+        "  readonly readLegacy: (source: { readonly sessionId: string; readonly turnId?: string; readonly messageId?: string },\n",
+        "    ensure: ProviderAdapter.ProviderAdapterV2EnsureThreadInput) =>\n",
+        "      Effect.Effect<ProviderAdapter.ProviderAdapterV2ThreadSnapshot, ClaudeAgentSdkQueryRunnerError>;\n",
+        "}\n",
+        "const claudeSessionEvidence = new WeakMap<ProviderAdapter.ProviderAdapterV2SessionRuntime, ClaudeSessionEvidence>();\n",
+        "export const readClaudeSessionEvidence = (runtime: ProviderAdapter.ProviderAdapterV2SessionRuntime) => claudeSessionEvidence.get(runtime);\n",
+        "const decodeClaudeNativeMetadata = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Struct({\n",
+        "  sessionId: Schema.String,\n",
+        "  cwd: Schema.String,\n",
+        "  messages: Schema.Array(Schema.Struct({\n",
+        "    type: Schema.String, uuid: Schema.String, sessionId: Schema.String,\n",
+        "    parentToolUseId: Schema.NullOr(Schema.String), stopReason: Schema.NullOr(Schema.String),\n",
+        "    synthetic: Schema.Boolean,\n",
+        "  })),\n",
+        "})));\n"
+      ]
+    },
+    {
+      "start": 505,
+      "before": [],
+      "after": [
+        "  /** Reads this live query's native initialize response without offering a user message. */\n",
+        "  readonly negotiateProtocol?: Effect.Effect<string, ClaudeAgentSdkQueryRunnerError>;\n"
+      ]
+    },
+    {
+      "start": 624,
+      "before": [],
+      "after": [
+        "  readonly environment?: NodeJS.ProcessEnv;\n"
+      ]
+    },
+    {
+      "start": 857,
+      "before": [
+        "const claudeConfigDirOf = (\n",
+        "  path: Path.Path,\n",
+        "  environment: NodeJS.ProcessEnv,\n",
+        "  homeDirectory: string,\n",
+        ") => path.resolve(environment.CLAUDE_CONFIG_DIR ?? path.join(homeDirectory, \".claude\"));\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 866,
+      "before": [
+        "  readonly method: \"forkSession\";\n"
+      ],
+      "after": [
+        "  readonly method: \"forkSession\" | \"readSession\" | \"subagentLaunchToolUseId\";\n"
+      ]
+    },
+    {
+      "start": 868,
+      "before": [
+        "  readonly options?: ForkSessionOptions;\n"
+      ],
+      "after": [
+        "  readonly options?: ForkSessionOptions & { readonly agentId?: string };\n"
+      ]
+    },
+    {
+      "start": 921,
+      "before": [],
+      "after": [
+        "  | FileSystem.FileSystem\n"
+      ]
+    },
+    {
+      "start": 930,
+      "before": [],
+      "after": [
+        "    const fileSystem = yield* FileSystem.FileSystem;\n"
+      ]
+    },
+    {
+      "start": 963,
+      "before": [],
+      "after": [
+        "            ...((yield* hasClaudeManagedMcpConfig().pipe(\n",
+        "              Effect.provideService(FileSystem.FileSystem, fileSystem),\n",
+        "              Effect.provideService(HostProcess.Platform, platform),\n",
+        "            )) ? {} : { strictMcpConfig: true }),\n"
+      ]
+    },
+    {
+      "start": 1012,
+      "before": [
+        "            const child = spawnProcess(spawnOptions);\n"
+      ],
+      "after": [
+        "            const child: ClaudeSpawnedProcess = spawnProcess(spawnOptions);\n"
+      ]
+    },
+    {
+      "start": 1067,
+      "before": [
+        "                        yield* Effect.logWarning(\n",
+        "                          \"orchestration-v2.claude-mcp-servers-unavailable\",\n",
+        "                          {\n",
+        "                            threadId: input.threadId,\n",
+        "                            servers: failed,\n",
+        "                          },\n",
+        "                        );\n"
+      ],
+      "after": [
+        "                        return yield* Effect.fail(queryRunnerError(\"A host MCP server failed to connect.\", \"setMcpServers\"));\n"
+      ]
+    },
+    {
+      "start": 1115,
+      "before": [],
+      "after": [
+        "            negotiateProtocol: Effect.tryPromise({\n",
+        "              try: () => queryRuntime.initializationResult(),\n",
+        "              catch: (cause) => queryRunnerError(cause, \"initialize\"),\n",
+        "            }).pipe(\n",
+        "              Effect.flatMap((result) => Array.isArray(result.commands) && Array.isArray(result.models)\n",
+        "                && Array.isArray(result.agents) && typeof result.output_style === \"string\"\n",
+        "                ? Effect.succeed(\"claude-agent-sdk.query.initialize/1\")\n",
+        "                : Effect.fail(queryRunnerError(\"Unsupported native initialize response.\", \"initialize\"))),\n",
+        "            ),\n"
+      ]
+    },
+    {
+      "start": 1276,
+      "before": [
+        "        const hostEnvironment = yield* HostProcess.Environment;\n",
+        "        const homeDirectory = yield* HostProcess.HomeDirectory;\n",
+        "        const usesHostConfig =\n",
+        "          claudeConfigDirOf(path, input.environment, homeDirectory) ===\n",
+        "          claudeConfigDirOf(path, hostEnvironment, homeDirectory);\n",
+        "        const fork: Effect.Effect<\n",
+        "          ForkSessionResult & { readonly headMessageId?: string },\n",
+        "          unknown\n",
+        "        > = usesHostConfig\n",
+        "          ? Effect.tryPromise(() => forkClaudeSession(input.sessionId, input.options))\n",
+        "          : forkClaudeSessionInWorker(input).pipe(\n",
+        "              Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),\n",
+        "              Effect.provideService(Path.Path, path),\n",
+        "            );\n"
+      ],
+      "after": [
+        "        // SDK filesystem helpers read process.env; always isolate them in the bound instance worker.\n",
+        "        const fork = forkClaudeSessionInWorker(input).pipe(\n",
+        "          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),\n",
+        "          Effect.provideService(Path.Path, path),\n",
+        "        );\n"
+      ]
+    },
+    {
+      "start": 1301,
+      "before": [
+        "        // The SDK remaps copied UUIDs. Capture the inherited head before the\n",
+        "        // fork's first run appends messages.\n",
+        "        const headMessageId = usesHostConfig\n",
+        "          ? yield* Effect.tryPromise({\n",
+        "              try: () =>\n",
+        "                getSessionMessages(\n",
+        "                  result.sessionId,\n",
+        "                  input.options.dir === undefined ? {} : { dir: input.options.dir },\n",
+        "                ),\n",
+        "              catch: (cause) => queryRunnerError(cause, \"getSessionMessages\"),\n",
+        "            }).pipe(\n",
+        "              Effect.map((messages) => messages.at(-1)?.uuid),\n",
+        "              Effect.orElseSucceed(() => undefined),\n",
+        "            )\n",
+        "          : result.headMessageId;\n",
+        "        return headMessageId === undefined ? result : { ...result, headMessageId };\n"
+      ],
+      "after": [
+        "        return result;\n"
+      ]
+    },
+    {
+      "start": 1336,
+      "before": [
+        "          const messages = yield* Effect.tryPromise({\n",
+        "            try: () =>\n",
+        "              getSubagentMessages(input.sessionId, input.agentId, {\n",
+        "                ...(input.dir === null ? {} : { dir: input.dir }),\n",
+        "                limit: 1,\n",
+        "              }),\n",
+        "            catch: (cause) => queryRunnerError(cause, \"getSubagentMessages\"),\n",
+        "          });\n",
+        "          const toolUseId = messages[0]?.parent_tool_use_id ?? null;\n"
+      ],
+      "after": [
+        "          const toolUseId = yield* runClaudeWorker({\n",
+        "            method: \"subagentLaunchToolUseId\", sessionId: input.sessionId,\n",
+        "            options: { ...(input.dir === null ? {} : { dir: input.dir }), agentId: input.agentId },\n",
+        "            environment: input.environment ?? hostEnvironment,\n",
+        "          }).pipe(\n",
+        "            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.NullOr(Schema.String)))),\n",
+        "            Effect.mapError((cause) => queryRunnerError(cause, \"getSubagentMessages\")),\n",
+        "            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),\n",
+        "            Effect.provideService(Path.Path, path),\n",
+        "          );\n"
+      ]
+    },
+    {
+      "start": 1428,
+      "before": [
+        "// Claude Code defers MCP tools behind ToolSearch, so the agent only finds\n",
+        "// t3_background_wait when the system prompt says when to reach for it.\n",
+        "const CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS = `\n",
+        "\n",
+        "### Background work you wait on\n",
+        "\n",
+        "To wait for a background command or Monitor you started (tests, a build), call \\`t3_background_wait\\` with its task ID before you end your turn. Do not mark work you leave running, or PRs. T3 MCP tools are deferred: load one with ToolSearch before you call it.\n",
+        "`;\n",
+        "\n",
+        "// Native subagents start from their task, not this session's system prompt.\n",
+        "const subagentDeviceInstructions: HookCallback = () =>\n",
+        "  Promise.resolve({\n",
+        "    hookSpecificOutput: {\n",
+        "      hookEventName: \"SubagentStart\",\n",
+        "      additionalContext: T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH,\n",
+        "    },\n",
+        "  });\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1457,
+      "before": [
+        "  /** The thread's T3 MCP session holds the `device` capability. */\n",
+        "  readonly deviceToolsAvailable?: boolean;\n"
+      ],
+      "after": [
+        "  readonly instructionText?: string;\n"
+      ]
+    },
+    {
+      "start": 1473,
+      "before": [
+        "    \"permission-mode\": launchArgPermissionMode,\n",
+        "    \"dangerously-skip-permissions\": launchArgSkipPermissions,\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1480,
+      "before": [
+        "  } = input.settings === undefined ? {} : parseCliArgs(input.settings.launchArgs).flags;\n"
+      ],
+      "after": [
+        "  } = input.settings === undefined ? {} : claudeLaunchFlags(input.settings.launchArgs);\n"
+      ]
+    },
+    {
+      "start": 1523,
+      "before": [
+        "  const deviceInstructions = input.mcpServers !== undefined && input.deviceToolsAvailable === true;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1527,
+      "before": [
+        "    permissionMode:\n",
+        "      (launchArgPermissionMode as PermissionMode | null | undefined) ??\n",
+        "      (launchArgSkipPermissions === null || launchArgSkipPermissions === \"true\"\n",
+        "        ? \"bypassPermissions\"\n",
+        "        : (input.permissionMode ?? \"default\")),\n"
+      ],
+      "after": [
+        "    permissionMode: input.permissionMode === \"plan\" ? \"plan\" : \"default\",\n"
+      ]
+    },
+    {
+      "start": 1540,
+      "before": [
+        "    ...(input.allowedTools === undefined ? {} : { allowedTools: [...input.allowedTools] }),\n",
+        "    ...(input.disallowedTools === undefined ? {} : { disallowedTools: [...input.disallowedTools] }),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 1543,
+      "before": [
+        "    ...(input.allowDangerouslySkipPermissions === true\n",
+        "      ? { allowDangerouslySkipPermissions: true }\n",
+        "      : {}),\n"
+      ],
+      "after": [
+        "    sandbox: { enabled: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: false },\n",
+        "    settingSources: [\"user\", \"project\", \"local\"],\n"
+      ]
+    },
+    {
+      "start": 1549,
+      "before": [
+        "          settings:\n",
+        "            typeof effectiveQuerySettings === \"string\"\n",
+        "              ? effectiveQuerySettings\n",
+        "              : {\n",
+        "                  ...effectiveQuerySettings,\n",
+        "                  showThinkingSummaries: true,\n",
+        "                },\n"
+      ],
+      "after": [
+        "          settings: {\n",
+        "            ...(typeof effectiveQuerySettings === \"object\" ? effectiveQuerySettings : {}),\n",
+        "            disableAllHooks: true,\n",
+        "            showThinkingSummaries: true,\n",
+        "          },\n"
+      ]
+    },
+    {
+      "start": 1557,
+      "before": [
+        "      : effectiveQuerySettings === undefined\n",
+        "        ? {}\n",
+        "        : { settings: effectiveQuerySettings }),\n"
+      ],
+      "after": [
+        "      : { settings: { ...(typeof effectiveQuerySettings === \"object\" ? effectiveQuerySettings : {}), disableAllHooks: true } }),\n"
+      ]
+    },
+    {
+      "start": 1572,
+      "before": [],
+      "after": [
+        "      // Host instructions carry no t3 business capabilities.\n"
+      ]
+    },
+    {
+      "start": 1573,
+      "before": [
+        "        buildRuntimeInstructions({ harness: \"Claude Code\" }) +\n",
+        "          (input.mcpServers === undefined\n",
+        "            ? \"\"\n",
+        "            : T3_CODE_ORCHESTRATION_INSTRUCTIONS +\n",
+        "              CLAUDE_BACKGROUND_WAIT_INSTRUCTIONS +\n",
+        "              (deviceInstructions\n",
+        "                ? `\\n${T3_CODE_DEVICE_TOOL_INSTRUCTIONS_WITH_TOOL_SEARCH}\\n`\n",
+        "                : \"\")),\n"
+      ],
+      "after": [
+        "        buildRuntimeInstructions({ harness: \"Claude Code\" }),\n",
+        "        ...(input.instructionText ? [input.instructionText] : []),\n"
+      ]
+    },
+    {
+      "start": 1584,
+      "before": [
+        "    ...(deviceInstructions\n",
+        "      ? { hooks: { SubagentStart: [{ hooks: [subagentDeviceInstructions] }] } }\n",
+        "      : {}),\n"
+      ],
+      "after": [
+        "    // PM does not install t3 device hooks or grant native permissions.\n"
+      ]
+    },
+    {
+      "start": 1627,
+      "before": [
+        "  const filePath = input.path.resolve(input.cwd ?? \".\", file);\n",
+        "  return yield* input.fileSystem\n",
+        "    .readFileString(filePath)\n",
+        "    .pipe(\n",
+        "      Effect.mapError((cause) => new ClaudeAppendSystemPromptFileError({ path: filePath, cause })),\n",
+        "    );\n"
+      ],
+      "after": [
+        "  const cwd = yield* input.fileSystem.realPath(input.cwd ?? \".\");\n",
+        "  const filePath = yield* input.fileSystem.realPath(input.path.resolve(cwd, file));\n",
+        "  const relative = input.path.relative(cwd, filePath);\n",
+        "  if (!relative || relative === \"..\" || relative.startsWith(\"..\" + input.path.sep) || input.path.isAbsolute(relative)) {\n",
+        "    return yield* new ClaudeAppendSystemPromptFileError({ path: filePath, cause: \"System-prompt file must remain inside the authorized working directory.\" });\n",
+        "  }\n",
+        "  const stat = yield* input.fileSystem.stat(filePath);\n",
+        "  if (stat.type !== \"File\" || Number(stat.size) > 1_000_000) {\n",
+        "    return yield* new ClaudeAppendSystemPromptFileError({ path: filePath, cause: \"System-prompt file exceeds the safe limit.\" });\n",
+        "  }\n",
+        "  return yield* input.fileSystem.readFileString(filePath).pipe(\n",
+        "    Effect.mapError((cause) => new ClaudeAppendSystemPromptFileError({ path: filePath, cause })),\n",
+        "  );\n"
+      ]
+    },
+    {
+      "start": 1671,
+      "before": [
+        "export const CLAUDE_T3_MCP_TOOL_WILDCARD = \"mcp__t3-code__*\";\n",
+        "\n",
+        "// Keep in sync with OrchestratorToolkit Tool.Readonly annotations; ClaudeAdapterV2.test.ts checks this.\n",
+        "export const CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS: ReadonlyArray<string> = [\n",
+        "  \"mcp__t3-code__orchestrator_capabilities\",\n",
+        "  \"mcp__t3-code__list_scheduled_tasks\",\n",
+        "  \"mcp__t3-code__t3_thread_list\",\n",
+        "  \"mcp__t3-code__t3_thread_wait\",\n",
+        "  \"mcp__t3-code__t3_worktree_status\",\n",
+        "  \"mcp__t3-code__t3_worktree_list\",\n",
+        "  \"mcp__t3-code__t3_project_list\",\n",
+        "  \"mcp__t3-code__t3_project_read\",\n",
+        "  \"mcp__t3-code__t3_thread_search\",\n",
+        "  \"mcp__t3-code__t3_preview_list\",\n",
+        "  \"mcp__t3-code__t3_environment_read\",\n",
+        "  \"mcp__t3-code__t3_environment_links\",\n",
+        "  \"mcp__t3-code__html_preview\",\n",
+        "  \"mcp__t3-code__html_render\",\n",
+        "];\n",
+        "\n",
+        "// T3 waits can block for an hour; exceed Claude's default 60 s timeout.\n",
+        "export const CLAUDE_T3_MCP_TOOL_TIMEOUT_MS = 65 * 60 * 1_000;\n",
+        "\n",
+        "// allowedTools pre-approves calls; tools controls availability. Pre-approve T3 tools for headless modes,\n",
+        "// limited to annotated read-only tools in read-only sandboxes.\n",
+        "\n"
+      ],
+      "after": [
+        "/** PM transport admission is decided at the live permission callback, never by an allowlist. */\n"
+      ]
+    },
+    {
+      "start": 1698,
+      "before": [
+        "  readonly mcpSession: McpProviderSession.McpProviderSessionConfig | undefined;\n",
+        "  readonly readOnlySandbox: boolean;\n",
+        "  readonly allowedTools?: ReadonlyArray<string>;\n",
+        "}): {\n",
+        "  readonly allowedTools?: ReadonlyArray<string>;\n",
+        "  readonly mcpServers?: ClaudeQueryOptions[\"mcpServers\"];\n",
+        "} {\n",
+        "  const session = input.mcpSession;\n",
+        "  if (session === undefined) {\n",
+        "    return input.allowedTools === undefined ? {} : { allowedTools: input.allowedTools };\n",
+        "  }\n",
+        "  const mcpAllowedTools = input.readOnlySandbox\n",
+        "    ? CLAUDE_READ_ONLY_T3_MCP_ALLOWED_TOOLS\n",
+        "    : [CLAUDE_T3_MCP_TOOL_WILDCARD];\n",
+        "  return {\n",
+        "    allowedTools: Array.from(new Set([...(input.allowedTools ?? []), ...mcpAllowedTools])),\n",
+        "    mcpServers: {\n",
+        "      \"t3-code\": {\n",
+        "        type: \"http\",\n",
+        "        url: session.endpoint,\n",
+        "        headers: {\n",
+        "          Authorization: session.authorizationHeader,\n",
+        "        },\n",
+        "        timeout: CLAUDE_T3_MCP_TOOL_TIMEOUT_MS,\n",
+        "      },\n",
+        "    },\n",
+        "  };\n"
+      ],
+      "after": [
+        "  readonly binding: ProviderRuntimeHostBinding | undefined;\n",
+        "}): { readonly mcpServers: NonNullable<ClaudeQueryOptions[\"mcpServers\"]> } {\n",
+        "  return { mcpServers: Object.fromEntries((input.binding?.mcpServers ?? []).map((server) => [\n",
+        "    server.name, { type: \"stdio\" as const, command: server.command, args: [...server.args] },\n",
+        "  ])) };\n"
+      ]
+    },
+    {
+      "start": 1962,
+      "before": [
+        "    const boundaryNativeId = sourceTurns[boundaryIndex]?.nativeTurnRef?.nativeId;\n",
+        "    if (\n",
+        "      boundaryNativeId !== undefined &&\n",
+        "      boundaryNativeId !== null &&\n",
+        "      !isSyntheticClaudeTurnId(boundaryNativeId)\n",
+        "    ) {\n"
+      ],
+      "after": [
+        "    const boundaryTurn = sourceTurns[boundaryIndex];\n",
+        "    const boundaryNativeId = boundaryTurn?.nativeTurnRef?.nativeId;\n",
+        "    if (boundaryTurn?.status === \"completed\" && boundaryTurn.nativeTurnRef?.strength === \"strong\"\n",
+        "      && boundaryNativeId != null && isClaudeAssistantUuid(boundaryNativeId)) {\n"
+      ]
+    },
+    {
+      "start": 1969,
+      "before": [
+        "    }\n",
+        "\n",
+        "    const terminalTurnsAfterBoundary = sourceTurns\n",
+        "      .slice(boundaryIndex + 1)\n",
+        "      .filter(isTerminalProviderTurn);\n",
+        "    if (terminalTurnsAfterBoundary.length === 0) {\n",
+        "      return undefined;\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2581,
+      "before": [
+        "const ClaudeBypassSettings = Schema.StructWithRest(\n",
+        "  Schema.Struct({\n",
+        "    disableAutoMode: Schema.optionalKey(Schema.Literal(\"disable\")),\n",
+        "    permissions: Schema.optionalKey(\n",
+        "      Schema.StructWithRest(\n",
+        "        Schema.Struct({\n",
+        "          disableBypassPermissionsMode: Schema.optionalKey(Schema.Literal(\"disable\")),\n",
+        "          disableAutoMode: Schema.optionalKey(Schema.Literal(\"disable\")),\n",
+        "        }),\n",
+        "        [Schema.Record(Schema.String, Schema.Unknown)],\n",
+        "      ),\n",
+        "    ),\n",
+        "  }),\n",
+        "  [Schema.Record(Schema.String, Schema.Unknown)],\n",
+        ");\n",
+        "const decodeClaudeBypassSettings = Schema.decodeUnknownEffect(\n",
+        "  fromLenientJson(ClaudeBypassSettings),\n",
+        ");\n",
+        "const decodeClaudeLaunchArgBypassSettings = Schema.decodeUnknownEffect(ClaudeBypassSettings);\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 2620,
+      "before": [
+        "function claudeBypassAvailability(\n",
+        "  settings: typeof ClaudeBypassSettings.Type,\n",
+        "): ClaudeBypassAvailability {\n",
+        "  return {\n",
+        "    bypassDisabled: settings.permissions?.disableBypassPermissionsMode === \"disable\",\n",
+        "    autoDisabled:\n",
+        "      settings.disableAutoMode === \"disable\" || settings.permissions?.disableAutoMode === \"disable\",\n",
+        "  };\n",
+        "}\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 3235,
+      "before": [
+        "  return message.message.content.filter(isClaudeUserToolResultContentBlock);\n"
+      ],
+      "after": [
+        "  const results: Array<ClaudeUserToolResultContentBlock> = [];\n",
+        "  for (const part of message.message.content) {\n",
+        "    if (isClaudeUserToolResultContentBlock(part)) results.push(part);\n",
+        "  }\n",
+        "  return results;\n"
+      ]
+    },
+    {
+      "start": 4326,
+      "before": [
+        "  const mcpSessions = yield* McpProviderSessions.McpProviderSessions;\n"
+      ],
+      "after": [
+        "  yield* Effect.try(() => claudeLaunchFlags(adapterOptions.settings.launchArgs));\n",
+        "  const runtimeHost = yield* ProviderRuntimeHost;\n"
+      ]
+    },
+    {
+      "start": 4334,
+      "before": [
+        "  const continuationRequests = adapterOptions.continuationRequests ?? {\n",
+        "    offer: () => Effect.void,\n",
+        "  };\n"
+      ],
+      "after": [
+        "  const continuationRequests = adapterOptions.continuationRequests ?? (yield* ProviderContinuationRequests.ProviderContinuationRequests);\n"
+      ]
+    },
+    {
+      "start": 4346,
+      "before": [
+        "  const readBypassSettings = (filePath: string) =>\n",
+        "    fileSystem.readFileString(filePath).pipe(\n",
+        "      Effect.flatMap(decodeClaudeBypassSettings),\n",
+        "      Effect.catchReason(\"PlatformError\", \"NotFound\", () => Effect.succeed({})),\n",
+        "    );\n",
+        "  const resolveBypassAvailability = Effect.fn(\"ClaudeAdapterV2.resolveBypassAvailability\")(\n",
+        "    function* (cwd: string | null) {\n",
+        "      // resolveSettings does not initialize remote-cache eligibility in the SDK host.\n",
+        "      // Keep the payload intact so the SDK also honors managedSourcesBehavior.\n",
+        "      const remote = yield* readBypassSettings(path.join(homePath, \"remote-settings.json\"));\n",
+        "      const home = customHome\n",
+        "        ? yield* readBypassSettings(path.join(homePath, \"settings.json\"))\n",
+        "        : {};\n",
+        "      const resolved = yield* Effect.tryPromise(() =>\n",
+        "        resolveClaudeSettings({\n",
+        "          ...(cwd === null ? {} : { cwd }),\n",
+        "          settingSources: customHome ? [\"project\", \"local\"] : [\"user\", \"project\", \"local\"],\n",
+        "          serverManagedSettings: remote,\n",
+        "        }),\n",
+        "      );\n",
+        "      const launchArgSettings = yield* readClaudeLaunchArgSettings({\n",
+        "        settings: adapterOptions.settings,\n",
+        "        cwd,\n",
+        "        fileSystem,\n",
+        "        path,\n",
+        "      });\n",
+        "      const launch = yield* decodeClaudeLaunchArgBypassSettings(launchArgSettings ?? {});\n",
+        "      const sources = [resolved.effective, home, remote, launch].map(claudeBypassAvailability);\n",
+        "      return {\n",
+        "        bypassDisabled: sources.some((source) => source.bypassDisabled),\n",
+        "        autoDisabled: sources.some((source) => source.autoDisabled),\n",
+        "      };\n",
+        "    },\n",
+        "  );\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 4505,
+      "before": [],
+      "after": [
+        "        const operationBinding = yield* runtimeHost.read({ threadId: input.threadId, providerInstanceId: adapterOptions.instanceId });\n",
+        "        const authorize = (action: \"tool\" | \"compaction\") => operationBinding\n",
+        "          ? runtimeHost.authorize({ threadId: operationBinding.threadId, providerInstanceId: adapterOptions.instanceId,\n",
+        "              executionId: operationBinding.executionId, action })\n",
+        "          : Effect.fail(new Error(\"This native operation has no generation-owned PM authorization.\"));\n"
+      ]
+    },
+    {
+      "start": 4513,
+      "before": [],
+      "after": [
+        "        let preparedQuery: { nativeThreadId: string; query: ClaudeAgentSdkQuerySession; consumed: boolean; owner: { readonly nativeThreadId: string } } | undefined;\n",
+        "        let activePermissionOwner: { readonly nativeThreadId: string } | undefined;\n",
+        "        let negotiatedProtocol: string | undefined;\n",
+        "        let preparedIdentityUsed = false;\n",
+        "        yield* Effect.addFinalizer(() => preparedQuery && !preparedQuery.consumed ? preparedQuery.query.close.pipe(Effect.orDie) : Effect.void);\n"
+      ]
+    },
+    {
+      "start": 4561,
+      "before": [
+        "        // A worktree handoff changes the project settings even within one session.\n",
+        "        let bypassCache: { cwd: string | null; availability: ClaudeBypassAvailability } | null =\n",
+        "          null;\n",
+        "        const queryPolicyForTurn = Effect.fnUntraced(function* (\n",
+        "          turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,\n",
+        "        ) {\n",
+        "          if (\n",
+        "            permissionModeForClaudeRuntimePolicy(turnInput.runtimePolicy) !== \"bypassPermissions\"\n",
+        "          ) {\n",
+        "            return claudeRuntimeQueryPolicyForRuntimePolicy(turnInput.runtimePolicy);\n",
+        "          }\n",
+        "          const cwd = turnInput.runtimePolicy.cwd;\n",
+        "          if (bypassCache === null || bypassCache.cwd !== cwd) {\n",
+        "            const resolved = yield* resolveBypassAvailability(cwd).pipe(Effect.option);\n",
+        "            if (Option.isNone(resolved)) {\n",
+        "              return claudeRuntimeQueryPolicyForRuntimePolicy(turnInput.runtimePolicy, {\n",
+        "                bypassDisabled: true,\n",
+        "                autoDisabled: false,\n",
+        "              });\n",
+        "            }\n",
+        "            bypassCache = { cwd, availability: resolved.value };\n",
+        "          }\n",
+        "          return claudeRuntimeQueryPolicyForRuntimePolicy(\n",
+        "            turnInput.runtimePolicy,\n",
+        "            bypassCache.availability,\n",
+        "          );\n",
+        "        });\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 5363,
+      "before": [
+        "            strength: \"weak\",\n"
+      ],
+      "after": [
+        "            strength: input.context.nativeMessageCursor !== null && isClaudeAssistantUuid(input.context.nativeMessageCursor) ? \"strong\" : \"weak\",\n"
+      ]
+    },
+    {
+      "start": 5589,
+      "before": [],
+      "after": [
+        "              environment: { ...adapterOptions.environment, CLAUDE_CONFIG_DIR: homePath },\n"
+      ]
+    },
+    {
+      "start": 7770,
+      "before": [],
+      "after": [
+        "            ...(operationBinding ? { hostExecution: {\n",
+        "              threadId: operationBinding.threadId, executionId: operationBinding.executionId,\n",
+        "            } } : {}),\n"
+      ]
+    },
+    {
+      "start": 9359,
+      "before": [],
+      "after": [
+        "          owner = activePermissionOwner,\n"
+      ]
+    },
+    {
+      "start": 9361,
+      "before": [
+        "          if (context === null) {\n"
+      ],
+      "after": [
+        "          if (context === null || owner !== activePermissionOwner || owner?.nativeThreadId !== context.nativeThreadId || callbackOptions.signal.aborted) {\n"
+      ]
+    },
+    {
+      "start": 9367,
+      "before": [],
+      "after": [
+        "          }\n",
+        "          if (/^mcp__pm_tools__[A-Za-z0-9_]+$/.test(toolName)) {\n",
+        "            const binding = operationBinding;\n",
+        "            if (binding?.nativePermissions === \"deny-ungranted\" && binding.executionId === String(context.input.runId)\n",
+        "              && binding.threadId === context.input.threadId && binding.cwd === context.input.runtimePolicy.cwd\n",
+        "              && binding.mcpServers.some((server) => server.name === \"pm_tools\")) {\n",
+        "              yield* authorize(\"tool\");\n",
+        "              if (owner === activePermissionOwner && !callbackOptions.signal.aborted && (yield* Ref.get(activeTurn)) === context) {\n",
+        "                return { behavior: \"allow\", updatedInput: toolInput } satisfies PermissionResult;\n",
+        "              }\n",
+        "            }\n",
+        "            return { behavior: \"deny\", message: \"This native PM transport no longer belongs to the live generation.\" } satisfies PermissionResult;\n"
+      ]
+    },
+    {
+      "start": 9587,
+      "before": [
+        "        const canUseTool: CanUseTool = (toolName, toolInput, callbackOptions) =>\n",
+        "          runPromise(canUseToolEffect(toolName, toolInput, callbackOptions));\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 9599,
+      "before": [],
+      "after": [
+        "              const owner = activePermissionOwner;\n",
+        "              yield* authorize(\"compaction\");\n",
+        "              if (callbackOptions.signal.aborted || owner !== activePermissionOwner) return { behavior: \"cancelled\" as const };\n"
+      ]
+    },
+    {
+      "start": 9656,
+      "before": [],
+      "after": [
+        "              yield* authorize(\"compaction\");\n",
+        "              if (callbackOptions.signal.aborted || owner !== activePermissionOwner) return { behavior: \"cancelled\" as const };\n"
+      ]
+    },
+    {
+      "start": 9713,
+      "before": [
+        "          const queryPolicy = yield* queryPolicyForTurn(turnInput);\n",
+        "          const mcpSession = yield* mcpSessions.read(turnInput.threadId);\n",
+        "          const mcpOverrides = claudeMcpQueryOverrides({\n",
+        "            mcpSession,\n",
+        "            readOnlySandbox:\n",
+        "              sandboxPolicyKindForClaudeRuntimePolicy(turnInput.runtimePolicy) === \"readOnly\",\n",
+        "            ...(queryPolicy.allowedTools === undefined\n",
+        "              ? {}\n",
+        "              : { allowedTools: queryPolicy.allowedTools }),\n",
+        "          });\n"
+      ],
+      "after": [
+        "          const queryPolicy: ClaudeRuntimeQueryPolicy = {\n",
+        "            permissionMode: turnInput.runtimePolicy.interactionMode === \"plan\" ? \"plan\" : \"default\",\n",
+        "            installPermissionCallback: true,\n",
+        "          };\n",
+        "          const binding = operationBinding;\n",
+        "          const mcpOverrides = claudeMcpQueryOverrides({ binding });\n"
+      ]
+    },
+    {
+      "start": 9829,
+      "before": [],
+      "after": [
+        "          const prepared = preparedQuery;\n",
+        "          const canReusePrepared = prepared && !prepared.consumed && prepared.nativeThreadId === nativeThreadId && resumeSessionAt === undefined;\n",
+        "          const permissionOwner = canReusePrepared ? prepared.owner : { nativeThreadId };\n",
+        "          activePermissionOwner = permissionOwner;\n"
+      ]
+    },
+    {
+      "start": 9846,
+      "before": [
+        "            ...(mcpOverrides.allowedTools === undefined\n",
+        "              ? {}\n",
+        "              : { allowedTools: mcpOverrides.allowedTools }),\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 9852,
+      "before": [
+        "            deviceToolsAvailable: mcpSession?.capabilities?.has(\"device\") === true,\n"
+      ],
+      "after": [
+        "            ...(binding?.instructionText === undefined\n",
+        "              ? {}\n",
+        "              : { instructionText: binding.instructionText }),\n"
+      ]
+    },
+    {
+      "start": 9859,
+      "before": [
+        "            canUseTool,\n",
+        "            onUserDialog,\n"
+      ],
+      "after": [
+        "            canUseTool: (...args) => runPromise(canUseToolEffect(...args, permissionOwner)),\n",
+        "            onUserDialog: (request, options) => activePermissionOwner === permissionOwner\n",
+        "              ? onUserDialog(request, options) : Promise.resolve({ behavior: \"cancelled\" }),\n"
+      ]
+    },
+    {
+      "start": 9865,
+      "before": [
+        "          const querySession = yield* queryRunner\n",
+        "            .open({\n",
+        "              threadId: turnInput.threadId,\n",
+        "              providerSessionId: input.providerSessionId,\n",
+        "              options: queryOptions,\n",
+        "            })\n",
+        "            .pipe(\n",
+        "              Effect.onError(() =>\n",
+        "                closedExistingNativeThreadId === nativeThreadId\n",
+        "                  ? Effect.gen(function* () {\n",
+        "                      yield* clearWakeStateForNativeThread(nativeThreadId);\n",
+        "                      yield* resetBackgroundTaskStateForNativeThreadProcess(nativeThreadId, {\n",
+        "                        status: \"idle\",\n",
+        "                      });\n",
+        "                    })\n",
+        "                  : Effect.void,\n",
+        "              ),\n",
+        "            );\n"
+      ],
+      "after": [
+        "          if (prepared && !prepared.consumed) {\n",
+        "            prepared.consumed = true;\n",
+        "            if (!canReusePrepared) yield* prepared.query.close;\n",
+        "          }\n",
+        "          const querySession = canReusePrepared ? prepared.query : yield* queryRunner.open({\n",
+        "            threadId: turnInput.threadId, providerSessionId: input.providerSessionId, options: queryOptions,\n",
+        "          });\n",
+        "          if (negotiatedProtocol !== undefined) {\n",
+        "            const protocol = yield* (querySession.negotiateProtocol ?? Effect.fail(queryRunnerError(\"Missing live initialize evidence.\", \"initialize\")));\n",
+        "            if (protocol !== negotiatedProtocol) return yield* Effect.fail(queryRunnerError(\"Native protocol changed inside this operation.\", \"initialize\"));\n",
+        "          }\n"
+      ]
+    },
+    {
+      "start": 9974,
+      "before": [],
+      "after": [
+        "            if (isCompactionCommandMessage({ role: \"user\", ...turnInput.message })) {\n",
+        "              yield* authorize(\"compaction\");\n",
+        "            }\n"
+      ]
+    },
+    {
+      "start": 10687,
+      "before": [
+        "              const nativeThreadId = yield* queryRunner.allocateSessionId;\n"
+      ],
+      "after": [
+        "              const nativeThreadId = preparedQuery && !preparedIdentityUsed && input.initialNativeThreadId === undefined\n",
+        "                ? preparedQuery.nativeThreadId : yield* queryRunner.allocateSessionId;\n",
+        "              preparedIdentityUsed = true;\n"
+      ]
+    },
+    {
+      "start": 11038,
+      "before": [],
+      "after": [
+        "              if (!forked.sessionId.trim() || forked.sessionId === sourceNativeThreadId) {\n",
+        "                return yield* new ProviderAdapter.ProviderAdapterProtocolError({ driver: CLAUDE_PROVIDER,\n",
+        "                  detail: \"Claude SDK did not create a distinct native fork session.\" });\n",
+        "              }\n"
+      ]
+    },
+    {
+      "start": 11088,
+      "before": [],
+      "after": [
+        "        claudeSessionEvidence.set(runtime, {\n",
+        "          homeDirectory: homePath,\n",
+        "          negotiate: Effect.gen(function* () {\n",
+        "            if (!preparedQuery) {\n",
+        "              const nativeThreadId = input.initialNativeThreadId ?? (yield* queryRunner.allocateSessionId);\n",
+        "              const binding = operationBinding;\n",
+        "              const appendSystemPromptFileText = yield* readClaudeAppendSystemPromptFile({\n",
+        "                settings: adapterOptions.settings, cwd: input.runtimePolicy.cwd, fileSystem, path,\n",
+        "              });\n",
+        "              const permissionOwner = { nativeThreadId };\n",
+        "              activePermissionOwner = permissionOwner;\n",
+        "              const query = yield* queryRunner.open({\n",
+        "                threadId: input.threadId, providerSessionId: input.providerSessionId,\n",
+        "                options: makeClaudeQueryOptions({\n",
+        "                  modelSelection: input.modelSelection, nativeThreadId, resume: input.initialNativeThreadId !== undefined,\n",
+        "                  cwd: input.runtimePolicy.cwd, attachmentsDir, settings: adapterOptions.settings,\n",
+        "                  environment: adapterOptions.environment, ...claudeMcpQueryOverrides({ binding }),\n",
+        "                  permissionMode: input.runtimePolicy.interactionMode === \"plan\" ? \"plan\" : \"default\",\n",
+        "                  canUseTool: (...args) => runPromise(canUseToolEffect(...args, permissionOwner)),\n",
+        "                  onUserDialog: (request, options) => activePermissionOwner === permissionOwner\n",
+        "                    ? onUserDialog(request, options) : Promise.resolve({ behavior: \"cancelled\" }),\n",
+        "                  supportedDialogKinds: [\"resume_return\"],\n",
+        "                  ...(binding?.instructionText === undefined\n",
+        "                    ? {}\n",
+        "                    : { instructionText: binding.instructionText }),\n",
+        "                  ...(appendSystemPromptFileText === undefined ? {} : { appendSystemPromptFileText }),\n",
+        "                }),\n",
+        "              });\n",
+        "              preparedQuery = { nativeThreadId, query, consumed: false, owner: permissionOwner };\n",
+        "            }\n",
+        "            negotiatedProtocol = yield* (preparedQuery.query.negotiateProtocol\n",
+        "              ?? Effect.fail(queryRunnerError(\"The native query did not expose initialize evidence.\", \"initialize\")));\n",
+        "            return negotiatedProtocol;\n",
+        "          }).pipe(Effect.catchCause((cause) => Effect.fail(queryRunnerError(Cause.squash(cause), \"initialize\")))),\n",
+        "          readLegacy: (source, ensure) => Effect.gen(function* () {\n",
+        "            const metadata = yield* runClaudeWorker({\n",
+        "              method: \"readSession\", sessionId: source.sessionId,\n",
+        "              options: ensure.runtimePolicy.cwd === null ? {} : { dir: ensure.runtimePolicy.cwd },\n",
+        "              environment: { ...adapterOptions.environment, CLAUDE_CONFIG_DIR: homePath },\n",
+        "            }).pipe(\n",
+        "              Effect.flatMap(decodeClaudeNativeMetadata),\n",
+        "              Effect.mapError((cause) => queryRunnerError(cause, \"readSession\")),\n",
+        "            );\n",
+        "            if (metadata.sessionId !== source.sessionId || ensure.runtimePolicy.cwd === null\n",
+        "              || path.resolve(metadata.cwd) !== path.resolve(ensure.runtimePolicy.cwd)\n",
+        "              || metadata.messages.some((entry) => entry.sessionId !== source.sessionId)) {\n",
+        "              return yield* Effect.fail(queryRunnerError(\"Native Claude session identity or directory mismatch.\", \"readSession\"));\n",
+        "            }\n",
+        "            const completed = metadata.messages.filter((entry) => entry.type === \"assistant\"\n",
+        "              && !entry.synthetic && entry.parentToolUseId === null && isClaudeAssistantUuid(entry.uuid)\n",
+        "              && (entry.stopReason === \"end_turn\" || entry.stopReason === \"stop_sequence\"));\n",
+        "            const cursor = source.turnId ?? source.messageId;\n",
+        "            if (!completed.length || (cursor && !completed.some((entry) => entry.uuid === cursor))) {\n",
+        "              return yield* Effect.fail(queryRunnerError(\"No verified completed native assistant UUID matches this legacy cursor.\", \"readSession\"));\n",
+        "            }\n",
+        "            const providerThread = {\n",
+        "              ...makeProviderThread({ idAllocator, providerInstanceId: adapterOptions.instanceId,\n",
+        "                appThreadId: ensure.threadId, providerSessionId: input.providerSessionId,\n",
+        "                nativeThreadId: metadata.sessionId, now: yield* DateTime.now }),\n",
+        "              firstRunOrdinal: 1, lastRunOrdinal: completed.length,\n",
+        "            };\n",
+        "            const providerTurns: OrchestrationV2ProviderTurn[] = completed.map((entry, index) => ({\n",
+        "              id: idAllocator.derive.providerTurn({ driver: CLAUDE_PROVIDER, nativeTurnId: entry.uuid }),\n",
+        "              providerThreadId: providerThread.id,\n",
+        "              nodeId: idAllocator.derive.rootNode({ runId: idAllocator.derive.run({ threadId: ensure.threadId, ordinal: index + 1 }) }),\n",
+        "              runAttemptId: null,\n",
+        "              nativeTurnRef: { driver: CLAUDE_PROVIDER, nativeId: entry.uuid, strength: \"strong\" },\n",
+        "              ordinal: index + 1, status: \"completed\", startedAt: null, completedAt: null,\n",
+        "            }));\n",
+        "            return { providerThread, providerTurns, messages: [], runtimeRequests: [] };\n",
+        "          }).pipe(\n",
+        "            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),\n",
+        "            Effect.provideService(Path.Path, path),\n",
+        "          ),\n",
+        "          adoptBuffered: ({ request, turn, isCurrent }) => Effect.gen(function* () {\n",
+        "            const live = yield* Ref.get(queryContext);\n",
+        "            const nativeThreadId = turn.providerThread.nativeThreadRef?.nativeId;\n",
+        "            if (!(yield* isCurrent) || request.delivery === \"message_text\" || request.driver !== CLAUDE_PROVIDER\n",
+        "              || request.threadId !== turn.threadId || request.providerThreadId !== turn.providerThread.id\n",
+        "              || !nativeThreadId || !live || live.stopping || live.nativeThreadId !== nativeThreadId\n",
+        "              || (yield* Ref.get(activeTurn)) !== null || !(yield* Ref.get(requestedContinuations)).has(nativeThreadId)\n",
+        "              || !(yield* Ref.get(wakeBuffers)).get(nativeThreadId)?.messages.length) return false;\n",
+        "            const messageId = request.messageId ?? (yield* idAllocator.allocate.message({ threadId: turn.threadId, ordinal: turn.providerTurnOrdinal }));\n",
+        "            if (!(yield* isCurrent) || (yield* Ref.get(queryContext)) !== live) return false;\n",
+        "            const adopt = startTurn({ ...turn, message: { messageId, text: \"\", attachments: [],\n",
+        "              createdBy: \"agent\", creationSource: \"provider\" } });\n",
+        "            if (request.dispatchIfCurrent) return Option.isSome(yield* request.dispatchIfCurrent(adopt));\n",
+        "            yield* adopt;\n",
+        "            return true;\n",
+        "          }).pipe(Effect.catchCause((cause) => Effect.fail(queryRunnerError(Cause.squash(cause), \"adoptBuffered\")))),\n",
+        "        });\n"
+      ]
+    },
+    {
+      "start": 11111,
+      "before": [
+        "  | McpProviderSessions.McpProviderSessions\n"
+      ],
+      "after": [
+        "  | ProviderRuntimeHost\n"
+      ]
+    }
+  ]
+}

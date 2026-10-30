@@ -1,0 +1,106 @@
+.tray {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.tray button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.tray button svg {
+  flex: 0 0 auto;
+}
+
+.warning {
+  min-width: 0;
+  color: var(--warning);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 2px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.chipLabel {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chipId {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.chipTitle {
+  color: var(--text-secondary);
+}
+
+.chipState {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.chipState[data-state="stale"] {
+  color: var(--warning);
+}
+
+.chipState[data-state="forbidden"],
+.chipState[data-state="deleted"] {
+  color: var(--destructive);
+}
+
+.tray .remove {
+  color: var(--text-muted);
+}
+
+.tray .remove:hover:not(:disabled) {
+  color: var(--foreground);
+  background: var(--surface-hover);
+}
+
+.tray .clear {
+  color: var(--text-secondary);
+}
+
+.tray .clear:hover:not(:disabled) {
+  color: var(--foreground);
+  background: var(--surface-hover);
+}

@@ -1,0 +1,235 @@
+{
+  "version": 1,
+  "source": "packages/provider-acp/src/server/mcpOverAcpBridge.test.ts",
+  "beforeSha256": "78c0d6fb25bb1a852a160dfb507fc71453c42eb93ca618524d6479792fc281a1",
+  "afterSha256": "c9e98f8cc3680246e1bfe713f92e4bb0ef2c465f0720d55caf508ec2f7823fbe",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 0,
+      "before": [],
+      "after": [
+        "import { fileURLToPath } from \"node:url\";\n"
+      ]
+    },
+    {
+      "start": 3,
+      "before": [
+        "\n"
+      ],
+      "after": []
+    },
+    {
+      "start": 6,
+      "before": [
+        "describe(\"AcpMcpOverAcpBridge\", () => {\n",
+        "  it.effect(\"forwards authenticated MCP requests and closes the negotiated session\", () =>\n"
+      ],
+      "after": [
+        "const servers = [{ name: \"pm_tools\", transport: \"stdio\" as const, command: process.execPath,\n",
+        "  args: [fileURLToPath(new URL(\"./mcpOverAcpBridge.test-peer.ts\", import.meta.url))] }];\n",
+        "const initialize = { protocolVersion: \"2025-03-26\", capabilities: {}, clientInfo: { name: \"acp-native-fixture\", version: \"1\" } };\n",
+        "\n",
+        "describe(\"generation-owned MCP-over-ACP stdio bridge\", () => {\n",
+        "  it.effect(\"connects the actual PM-bound stdio process and invokes a typed native tool, without t3 HTTP authorization\", () =>\n"
+      ]
+    },
+    {
+      "start": 9,
+      "before": [
+        "      const requests: Array<{\n",
+        "        readonly method: string;\n",
+        "        readonly headers: Headers;\n",
+        "        readonly body: unknown;\n",
+        "      }> = [];\n",
+        "      const bridge = yield* makeAcpMcpOverAcpBridge({\n",
+        "        endpoint: \"http://127.0.0.1:1/mcp\",\n",
+        "        authorization: \"Bearer bridge-test\",\n",
+        "        allocateConnectionId: Effect.succeed(\"connection-1\"),\n",
+        "        fetchImplementation: async (_url, init) => {\n",
+        "          const method = init?.method ?? \"GET\";\n",
+        "          const headers = new Headers(init?.headers);\n",
+        "          const body = init?.body === undefined ? null : JSON.parse(String(init.body));\n",
+        "          requests.push({ method, headers, body });\n",
+        "          if (method === \"DELETE\") return new Response(null, { status: 204 });\n",
+        "          if (body === null || typeof body !== \"object\") return new Response(null, { status: 202 });\n",
+        "          const request = body as { readonly id?: unknown; readonly method?: unknown };\n",
+        "          if (request.method === \"notifications/initialized\") {\n",
+        "            return new Response(null, { status: 202 });\n",
+        "          }\n",
+        "          return new Response(\n",
+        "            JSON.stringify({\n",
+        "              jsonrpc: \"2.0\",\n",
+        "              id: request.id,\n",
+        "              result:\n",
+        "                request.method === \"initialize\"\n",
+        "                  ? { protocolVersion: \"2025-06-18\", capabilities: {}, serverInfo: {} }\n",
+        "                  : { tools: [] },\n",
+        "            }),\n",
+        "            {\n",
+        "              headers: { \"content-type\": \"application/json\", \"mcp-session-id\": \"session-42\" },\n",
+        "            },\n",
+        "          );\n",
+        "        },\n",
+        "      });\n",
+        "\n",
+        "      const connected = yield* bridge.connect({ serverId: \"t3-code\" });\n",
+        "      expect(connected).toEqual({ connectionId: \"connection-1\" });\n",
+        "      expect(\n",
+        "        yield* bridge.message({ connectionId: connected.connectionId, method: \"initialize\" }),\n",
+        "      ).toMatchObject({ protocolVersion: \"2025-06-18\" });\n",
+        "      expect(\n",
+        "        yield* bridge.message({ connectionId: connected.connectionId, method: \"tools/list\" }),\n",
+        "      ).toEqual({ tools: [] });\n",
+        "      yield* bridge.notification({\n",
+        "        connectionId: connected.connectionId,\n",
+        "        method: \"notifications/initialized\",\n",
+        "      });\n",
+        "      yield* bridge.disconnect({ connectionId: connected.connectionId });\n",
+        "\n",
+        "      expect(requests[0]?.headers.get(\"authorization\")).toBe(\"Bearer bridge-test\");\n",
+        "      expect(requests[1]?.headers.get(\"mcp-session-id\")).toBe(\"session-42\");\n",
+        "      expect(requests[1]?.headers.get(\"mcp-protocol-version\")).toBe(\"2025-06-18\");\n",
+        "      expect(requests.at(-1)?.method).toBe(\"DELETE\");\n",
+        "      expect(requests.at(-1)?.headers.get(\"mcp-session-id\")).toBe(\"session-42\");\n",
+        "    }),\n",
+        "  );\n",
+        "\n",
+        "  it.effect(\"aborts an in-flight HTTP request when the ACP call is interrupted\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const started = Promise.withResolvers<AbortSignal>();\n",
+        "      const bridge = yield* makeAcpMcpOverAcpBridge({\n",
+        "        endpoint: \"http://127.0.0.1:1/mcp\",\n",
+        "        authorization: \"Bearer bridge-test\",\n",
+        "        allocateConnectionId: Effect.succeed(\"connection-1\"),\n",
+        "        fetchImplementation: (_url, init) => {\n",
+        "          if (!init?.signal) throw new Error(\"Missing cancellation signal\");\n",
+        "          started.resolve(init.signal);\n",
+        "          return new Promise<Response>(() => {});\n",
+        "        },\n",
+        "      });\n",
+        "      const connected = yield* bridge.connect({ serverId: \"t3-code\" });\n",
+        "      const request = yield* bridge\n",
+        "        .message({ connectionId: connected.connectionId, method: \"tools/list\" })\n",
+        "        .pipe(Effect.forkChild);\n",
+        "      const signal = yield* Effect.promise(() => started.promise);\n",
+        "      yield* Fiber.interrupt(request);\n",
+        "      expect(signal.aborted).toBe(true);\n"
+      ],
+      "after": [
+        "      const bridge = yield* makeAcpMcpOverAcpBridge({ servers, cwd: process.cwd(), environment: { PATH: process.env.PATH },\n",
+        "        assertCurrent: Effect.void, allocateConnectionId: Effect.succeed(\"native-connection\") });\n",
+        "      yield* Effect.addFinalizer(() => bridge.dispose);\n",
+        "      const { connectionId } = yield* bridge.connect({ serverId: \"pm_tools\" });\n",
+        "      expect(yield* bridge.message({ connectionId, method: \"initialize\", params: initialize })).toMatchObject({ serverInfo: { name: \"pm-transport-fixture\" } });\n",
+        "      yield* bridge.notification({ connectionId, method: \"notifications/initialized\" });\n",
+        "      expect(yield* bridge.message({ connectionId, method: \"tools/list\" })).toMatchObject({ tools: [{ name: \"fixture_add\" }] });\n",
+        "      expect(yield* bridge.message({ connectionId, method: \"tools/call\", params: { name: \"fixture_add\", arguments: { a: 19, b: 23 } } }))\n",
+        "        .toEqual({ content: [{ type: \"text\", text: \"42\" }] });\n",
+        "      yield* bridge.disconnect({ connectionId });\n",
+        "      expect(yield* bridge.message({ connectionId, method: \"tools/list\" }).pipe(Effect.flip)).toMatchObject({ _tag: \"AcpMcpOverAcpError\" });\n"
+      ]
+    },
+    {
+      "start": 90,
+      "before": [
+        "  it.effect(\"rejects unknown servers, connections, and oversized messages\", () =>\n"
+      ],
+      "after": [
+        "  it.effect(\"rejects foreign server admission and revoked generations before another native request\", () =>\n"
+      ]
+    },
+    {
+      "start": 92,
+      "before": [
+        "      const bridge = yield* makeAcpMcpOverAcpBridge({\n",
+        "        endpoint: \"http://127.0.0.1:1/mcp\",\n",
+        "        authorization: \"Bearer bridge-test\",\n",
+        "        allocateConnectionId: Effect.succeed(\"connection-1\"),\n",
+        "        fetchImplementation: () => Promise.resolve(new Response(null, { status: 202 })),\n",
+        "      });\n"
+      ],
+      "after": [
+        "      let current = true;\n",
+        "      const bridge = yield* makeAcpMcpOverAcpBridge({ servers, cwd: process.cwd(), environment: {},\n",
+        "        assertCurrent: Effect.suspend(() => current ? Effect.void : Effect.fail(new Error(\"Generation revoked\"))),\n",
+        "        allocateConnectionId: Effect.succeed(\"revocable-connection\") });\n",
+        "      yield* Effect.addFinalizer(() => bridge.dispose);\n",
+        "      expect(yield* bridge.connect({ serverId: \"t3-code\" }).pipe(Effect.flip)).toMatchObject({ _tag: \"AcpMcpOverAcpError\" });\n",
+        "      const { connectionId } = yield* bridge.connect({ serverId: \"pm_tools\" });\n",
+        "      current = false;\n",
+        "      expect(yield* bridge.message({ connectionId, method: \"initialize\", params: initialize }).pipe(Effect.flip))\n",
+        "        .toMatchObject({ message: \"Generation revoked\" });\n",
+        "    }).pipe(Effect.scoped),\n",
+        "  );\n"
+      ]
+    },
+    {
+      "start": 99,
+      "before": [
+        "      expect(yield* bridge.connect({ serverId: \"other\" }).pipe(Effect.flip)).toMatchObject({\n",
+        "        _tag: \"AcpMcpOverAcpError\",\n",
+        "      });\n",
+        "      expect(\n",
+        "        yield* bridge.message({ connectionId: \"missing\", method: \"tools/list\" }).pipe(Effect.flip),\n",
+        "      ).toMatchObject({ _tag: \"AcpMcpOverAcpError\" });\n"
+      ],
+      "after": [
+        "  it.effect(\"interrupts an outstanding native MCP request and releases its owned process on disposal\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const bridge = yield* makeAcpMcpOverAcpBridge({ servers, cwd: process.cwd(), environment: {},\n",
+        "        assertCurrent: Effect.void, allocateConnectionId: Effect.succeed(\"cancelled-connection\") });\n",
+        "      yield* Effect.addFinalizer(() => bridge.dispose);\n",
+        "      const { connectionId } = yield* bridge.connect({ serverId: \"pm_tools\" });\n",
+        "      yield* bridge.message({ connectionId, method: \"initialize\", params: initialize });\n",
+        "      yield* bridge.notification({ connectionId, method: \"notifications/initialized\" });\n",
+        "      const request = yield* bridge.message({ connectionId, method: \"tools/call\", params: { name: \"fixture_wait\" } }).pipe(Effect.forkChild);\n",
+        "      yield* Effect.yieldNow;\n",
+        "      yield* Fiber.interrupt(request);\n",
+        "      yield* bridge.disconnect({ connectionId });\n",
+        "    }).pipe(Effect.scoped),\n",
+        "  );\n"
+      ]
+    },
+    {
+      "start": 106,
+      "before": [
+        "      const connected = yield* bridge.connect({ serverId: \"t3-code\" });\n",
+        "      const failure = yield* bridge\n",
+        "        .message({\n",
+        "          connectionId: connected.connectionId,\n",
+        "          method: \"tools/call\",\n",
+        "          params: { payload: \"x\".repeat(8 * 1024 * 1024) },\n",
+        "        })\n",
+        "        .pipe(Effect.flip);\n"
+      ],
+      "after": [
+        "  it.effect(\"rejects oversized MCP messages rather than sending them to the native host\", () =>\n",
+        "    Effect.gen(function* () {\n",
+        "      const bridge = yield* makeAcpMcpOverAcpBridge({ servers, cwd: process.cwd(), environment: {},\n",
+        "        assertCurrent: Effect.void, allocateConnectionId: Effect.succeed(\"bounded-connection\") });\n",
+        "      yield* Effect.addFinalizer(() => bridge.dispose);\n",
+        "      const { connectionId } = yield* bridge.connect({ serverId: \"pm_tools\" });\n",
+        "      const failure = yield* bridge.message({ connectionId, method: \"tools/call\", params: { payload: \"x\".repeat(8 * 1024 * 1024) } }).pipe(Effect.flip);\n"
+      ]
+    },
+    {
+      "start": 115,
+      "before": [
+        "    }),\n"
+      ],
+      "after": [
+        "    }).pipe(Effect.scoped),\n"
+      ]
+    }
+  ]
+}

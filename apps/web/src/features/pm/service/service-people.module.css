@@ -1,3 +1,22 @@
+.page[data-pm-people] > header {
+  padding: 20px 24px 0;
+}
+.page[data-pm-people] > header h1 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: var(--text-page);
+  line-height: var(--text-page--line-height);
+  font-weight: 600;
+}
+.page[data-pm-people] > header [role="tablist"] {
+  border-bottom: 0;
+}
+.page[data-pm-people] > header [role="tablist"] > button {
+  min-height: var(--control-height);
+  padding: 0 12px;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
 .page :global([data-pm-actions]) {
   min-width: 0;
   max-width: 100%;
@@ -20,7 +39,16 @@
 }
 
 @media (max-width: 767px) {
+  .page[data-pm-people] > header {
+    padding: 16px 16px 0;
+  }
   .page :global([data-pm-actions]) {
     padding: 12px 16px;
+  }
+}
+
+@media (pointer: coarse) {
+  .page[data-pm-people] > header [role="tablist"] > button {
+    min-height: var(--touch-target);
   }
 }

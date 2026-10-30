@@ -309,7 +309,7 @@
 .board [data-board-item]:hover [role="checkbox"], .board [data-board-item]:focus-within [role="checkbox"], .board [data-work-item][data-selected] [role="checkbox"] { opacity: 1; }
 .board [data-board-item]:hover [data-work-item] > div:first-child > span, .board [data-board-item]:focus-within [data-work-item] > div:first-child > span, .board [data-work-item][data-selected] > div:first-child > span { margin-left: 24px; }
 .board [data-work-item] > div:first-child > span { font-size: 12px; line-height: 16px; letter-spacing: 0.08em; }
-.board [data-work-item] > div:first-child > button { min-height: 0; height: auto; border: 0; font-size: 14px; line-height: 21px; font-weight: 600; padding: 0 36px 0 0; white-space: normal; }
+.board [data-work-item] > div:first-child > button { min-height: 0; height: auto; border: 0; font-size: 14px; line-height: 21px; font-weight: 500; padding: 0 36px 0 0; white-space: normal; }
 .board [data-work-item] > [data-layout="card"]:empty { display: none; }
 .board [data-board-item] > div:last-child:has([data-move-handle]) { position: absolute; top: 8px; right: 8px; padding: 0; gap: 0; }
 .board [data-move-handle] { width: 32px; opacity: 0; }

@@ -115,6 +115,10 @@ export function editCreationDraft(draft: CreationDraft, changes: Partial<Pick<Cr
 }
 export function creationRequest(kind: EntityKind, values: Record<string, unknown>, body: string, configuration: ProtocolConfiguration): Record<string, unknown> {
   const allowed = new Set([...fieldRegistry.filter(field => field.editable && field.name !== 'archived' && field.entities.includes(kind)).map(field => field.name), ...configuration.custom_fields.filter(field => field.entities.includes(kind)).map(field => field.name)]);
+  if (kind === 'project') {
+    allowed.add('x-pm-icon');
+    allowed.add('x-pm-color');
+  }
   const fields = Object.fromEntries(Object.entries(values).filter(([name, value]) => allowed.has(name) && value !== null && value !== undefined));
   return structuredClone({ ...fields, entity: kind, body });
 }
@@ -138,6 +142,12 @@ export function creationFieldIssues(kind: EntityKind, values: Record<string, unk
   }
   const start = values[kind === 'work_item' ? 'x-pm-start' : 'start'];
   if (typeof start === 'string' && typeof values.due === 'string' && start > values.due) issue('due', 'Due date cannot precede start date. / 截止日期不能早于开始日期。');
+  if (kind === 'project') {
+    const icon = values['x-pm-icon'];
+    const color = values['x-pm-color'];
+    if (icon != null && (typeof icon !== 'string' || icon.length > 40 || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(icon))) issue('x-pm-icon', 'Choose a valid project icon. / 请选择有效项目图标。');
+    if (color != null && (typeof color !== 'string' || !/^#[a-fA-F0-9]{6}$/.test(color))) issue('x-pm-color', 'Choose a six-digit project color. / 请选择六位十六进制项目颜色。');
+  }
   if (kind === 'work_item') {
     const points = values['x-pm-estimate'];
     if (points !== undefined && points !== null && (typeof points !== 'number' || !Number.isFinite(points) || points < 0 || points > 1_000_000)) issue('x-pm-estimate', 'Estimate must be between 0 and 1,000,000. / 估算范围为 0 至 1,000,000。');

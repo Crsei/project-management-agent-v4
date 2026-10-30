@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "source": "apps/server/src/provider/antigravityAuthSupport.test.ts",
+  "beforeSha256": "a3609f2c2bb1399879b373fa4dd7f4c6b030a0960abaf9fa575e8f8eae0be67c",
+  "afterSha256": "9b7d481332412cd5340f610c1a4278346dda95d004fdb97957319cfcffbc421b",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 21,
+      "before": [],
+      "after": [
+        "  AntigravityProfileDirectories,\n"
+      ]
+    },
+    {
+      "start": 659,
+      "before": [],
+      "after": [
+        "\n",
+        "it.effect(\"binds only the matching PM-owned profile without moving native account files\", () =>\n",
+        "  Effect.gen(function* () {\n",
+        "    const fs = yield* FileSystem.FileSystem;\n",
+        "    const path = yield* Path.Path;\n",
+        "    const root = yield* fs.makeTempDirectoryScoped({ prefix: \"pm-antigravity-profile-port-\" });\n",
+        "    const instanceId = ProviderInstanceId.make(\"existing-pm-account\");\n",
+        "    const directories = { profile: path.join(root, \"old-private-profile\"), runtimeTemp: path.join(root, \"old-private-profile\", \"antigravity-acp\", \"tmp\") };\n",
+        "    yield* fs.makeDirectory(directories.profile);\n",
+        "    yield* fs.writeFileString(path.join(directories.profile, \"owned-history-marker\"), \"unchanged\");\n",
+        "    const [own, other] = yield* Effect.all([\n",
+        "      resolveAntigravityInstanceDirectories(root, instanceId),\n",
+        "      resolveAntigravityInstanceDirectories(root, ProviderInstanceId.make(\"other-account\")),\n",
+        "    ]).pipe(Effect.provideService(AntigravityProfileDirectories, { instanceId, directories }));\n",
+        "    expect(own).toEqual(directories);\n",
+        "    expect(other.profile).not.toBe(directories.profile);\n",
+        "    expect(yield* fs.readFileString(path.join(directories.profile, \"owned-history-marker\"))).toBe(\"unchanged\");\n",
+        "  }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),\n",
+        ");\n"
+      ]
+    }
+  ]
+}

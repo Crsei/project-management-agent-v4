@@ -22,8 +22,10 @@ import { createTeamList1Fixtures, focusLabels } from "./team-list-1-fixtures"
 import { checkTeamResult, createTeamList1State, openTeamEditor, submitTeamDraft } from "./team-list-1-controller"
 import { createTeamList2State, departmentGroups, directoryMembers } from "./team-list-2-controller"
 import { createWorkloadState, departmentWorkload, taskPool, workloadSnapshot } from "./team-list-3-controller"
+import { teamFilterConditions, teamMatchesConditions } from "./team-filter"
 import { pmClock, type PmScenario } from "./model"
 import { MemberDirectoryView } from "./member-directory"
+import { matchesInvitationConditions, matchesMemberConditions } from "./member-directory-filters"
 import { TeamCollectionView } from "./team-collection"
 import type { ControlledInvitation, ControlledMember, ControlledPeopleDirectoryRow, ControlledTeam, MemberDirectoryInteraction, MemberDirectoryViewProps, TeamCollectionInteraction, TeamCollectionViewProps } from "./people-controlled-contracts"
 import type { ControlledIssueRecord, PmControlledData } from "./controlled-contracts"
@@ -53,7 +55,7 @@ export function MemberDirectoryFixture({ scenario, variant }: { scenario: PmScen
   const [readingPosition, setReadingPosition] = usePmScenarioState(`${variant}:reading-position`, () => 0)
   const canWrite = scenario !== "readonly" && scenario !== "loading"
   const trigger = useRef<HTMLElement | null>(null)
-  const [state, setState] = usePmScenarioState<MemberDirectoryInteraction>(`${variant}:controlled`, () => ({ query: "", roleFilter: null, roleFilters: variant === "member1" ? [] : undefined, presenceFilters: [], securityFilter: "any", activeFilter: "all", sort: "name", display: "grid", comfortable: false, hiddenColumns: [], tab: "members", selectedIds: [], selectedId: null, detailOpen: false }))
+  const [state, setState] = usePmScenarioState<MemberDirectoryInteraction>(`${variant}:controlled`, () => ({ query: "", roleFilter: null, roleFilters: variant === "member1" ? [] : undefined, presenceFilters: [], securityFilter: "any", activeFilter: "all", sort: "name", display: "grid", comfortable: false, hiddenColumns: [], tab: "members", selectedIds: [], selectedId: null, detailOpen: false, conditions: [] }))
   const [editor, setEditor] = usePmScenarioState(`${variant}:access-editor`, () => ({ roleId: null as string | null }))
   const [copyReceipt, setCopyReceipt] = usePmScenarioState<MemberDirectoryViewProps["readModel"]["copyReceipt"]>(`${variant}:contact-copy`, () => null)
   const [savedInvites, setInvites] = usePmScenarioState(`${variant}:invitation-controller`, createMemberList3State)
@@ -129,11 +131,12 @@ export function MemberDirectoryFixture({ scenario, variant }: { scenario: PmScen
     {feedback}
     <DialogFooter><Button type="button" variant="secondary" onClick={() => setSingle((previous) => ({ ...previous, inviteOpen: false }))}>{text("取消 · 保留草稿", "Cancel · keep draft")}</Button><Button type="submit" disabled={disabled}>{text("邀请", "Invite")}</Button></DialogFooter>
   </form>
-  const invitations = pendingRows(fixture.domain).map<ControlledInvitation>((invitation) => ({ id: invitation.id, email: invitation.email, role: roleValues[invitation.role], requestId: invitation.requestId ?? null, status: invitation.status === "checking" ? "unknown" : "confirmed", createdAt: invitation.invitedAt, error: null })).filter((invitation) => invitation.email.toLowerCase().includes(state.query.trim().toLowerCase()) && (state.roleFilter === null || invitation.role === state.roleFilter))
+  const invitations = pendingRows(fixture.domain).map<ControlledInvitation>((invitation) => ({ id: invitation.id, email: invitation.email, role: roleValues[invitation.role], requestId: invitation.requestId ?? null, status: invitation.status === "checking" ? "unknown" : "confirmed", createdAt: invitation.invitedAt, error: null })).filter((invitation) => invitation.email.toLowerCase().includes(state.query.trim().toLowerCase()) && matchesInvitationConditions(invitation, state.conditions))
   const candidates = suggestedRows({ ...invites, query: state.query, roleFilter: state.roleFilter === null ? "all" : roleKeys[state.roleFilter] }, fixture.domain, scenario === "empty")
   const visibleIds = new Set(directoryRows(fixture.domain).filter((row) => personMatchesQuery(fixture.domain, row, state.query, locale)).map((row) => row.member.id))
-  const members = fixture.members.filter((member) => visibleIds.has(member.userId) && (state.roleFilters ? !state.roleFilters.length || state.roleFilters.includes(member.role) : state.roleFilter === null || state.roleFilter === member.role) && (!state.presenceFilters?.length || !!member.presence && state.presenceFilters.includes(member.presence)) && (state.securityFilter === undefined || state.securityFilter === "any" || member.twoFactor === (state.securityFilter === "enrolled")) && (state.activeFilter === "all" || member.isActive === (state.activeFilter === "active"))).sort((a, b) => {
-    const teamCount = (member: ControlledMember) => fixture.teams.filter((team) => team.members.some((entry) => entry.userId === member.userId)).length
+  const memberTeams = (member: ControlledMember) => fixture.teams.filter((team) => team.members.some((entry) => entry.userId === member.userId)).map((team) => ({ id: team.id, name: team.name }))
+  const members = fixture.members.filter((member) => visibleIds.has(member.userId) && matchesMemberConditions({ ...member, teams: memberTeams(member) }, state.conditions)).sort((a, b) => {
+    const teamCount = (member: ControlledMember) => memberTeams(member).length
     if (state.sort === "role") return a.role - b.role
     if (state.sort === "joined" || state.sort === "joined-desc") return (a.joinedAt ?? "").localeCompare(b.joinedAt ?? "") * (state.sort === "joined-desc" ? -1 : 1)
     if (state.sort === "teams" || state.sort === "teams-desc") return (teamCount(a) - teamCount(b)) * (state.sort === "teams-desc" ? -1 : 1)
@@ -142,7 +145,7 @@ export function MemberDirectoryFixture({ scenario, variant }: { scenario: PmScen
   })
   const accessMember = fixture.members.find((member) => member.membershipId === editor.roleId)
   return <MemberDirectoryView variant={variant} interactive={interactive} readingPosition={readingPosition} onReadingPositionChange={setReadingPosition}
-    readModel={{ members, totalMemberCount: fixture.members.length, copyReceipt, sortOptions: ["name", "name-desc", "role", "joined", "joined-desc", "teams", "teams-desc", "presence"], selectedMember: fixture.members.find((member) => member.membershipId === state.selectedId), teams: fixture.teams, roles: fixture.roles, invitations, suggestedContacts: { items: candidates.map((candidate) => ({ ...candidate, role: roleValues[candidate.role] })), data: fixture.data }, data: fixture.data, sourceDescription: text("本地 Fixture · 不发送真实邮件", "Local fixture · no real email is sent") }}
+    readModel={{ members, totalMemberCount: fixture.members.length, copyReceipt, sortOptions: ["name", "name-desc", "role", "joined", "joined-desc", "teams", "teams-desc", "presence"], teamOptions: fixture.teams.map((team) => ({ id: team.id, name: team.name })), selectedMember: fixture.members.find((member) => member.membershipId === state.selectedId), teams: fixture.teams, roles: fixture.roles, invitations, suggestedContacts: { items: candidates.map((candidate) => ({ ...candidate, role: roleValues[candidate.role] })), data: fixture.data }, data: fixture.data, sourceDescription: text("本地 Fixture · 不发送真实邮件", "Local fixture · no real email is sent") }}
     interaction={state}
     capabilities={{ invite: canWrite && (variant !== "member3" || !unknown), editRole: () => canWrite, manageAccess: () => scenario !== "loading", memberOpen: () => scenario !== "loading", reconcileInvitation: canWrite, editPresence: () => canWrite, prepareSuggestedInvite: () => canWrite && !unknown, cancelInvitation: (invitation) => canWrite && fixture.domain.pending.some((pending) => pending.id === invitation.id), copyContact: (member, kind) => scenario !== "loading" && (kind === "email" ? !!member.email : kind === "phone" ? !!member.phone : !!member.email || !!member.phone), filterPresence: true, filterSecurity: true }}
     actions={{ setInteraction: setState, manageAccess: (member, element) => { trigger.current = element; setEditor({ roleId: member.membershipId }) }, memberOpen: (member, element) => { trigger.current = element; setState((previous) => ({ ...previous, selectedId: member.membershipId, detailOpen: true })) }, editRole: (member, element) => { trigger.current = element; setEditor({ roleId: member.membershipId }) }, invite: (element) => {
@@ -187,7 +190,9 @@ export function TeamCollectionFixture({ scenario, variant }: { scenario: PmScena
   const teamPage = { ...savedTeam, teams: fixture.domain.teams, memberships: fixture.domain.memberships }
   const locked = !canWrite || teamPage.result === "unknown"
   const [copyReceipt, setCopyReceipt] = usePmScenarioState<TeamCollectionViewProps["readModel"]["copyReceipt"]>(`${variant}:contact-copy`, () => null)
-  const teams = fixture.teams.filter((team) => (state.teamId === null || state.teamId === team.id) && `${team.name} ${team.identifier} ${team.description} ${team.members.map((entry) => fixture.members.find((member) => member.userId === entry.userId)?.name ?? "").join(" ")} ${team.projectIds.map((id) => fixture.projects.find((project) => project.id === id)?.title ?? id).join(" ")}`.toLowerCase().includes(state.query.trim().toLowerCase())).sort((a, b) => state.sort === "activity" ? (b.activityAt ?? "").localeCompare(a.activityAt ?? "") : state.sort === "members" ? b.members.length - a.members.length : a.name.localeCompare(b.name, locale) * (state.sort === "name-desc" ? -1 : 1))
+  const teamConditions = teamFilterConditions(state)
+  const teamPresence = new Map(fixture.members.map((member) => [member.userId, member]))
+  const teams = fixture.teams.filter((team) => teamMatchesConditions(team, teamConditions, teamPresence) && `${team.name} ${team.identifier} ${team.description} ${team.members.map((entry) => fixture.members.find((member) => member.userId === entry.userId)?.name ?? "").join(" ")} ${team.projectIds.map((id) => fixture.projects.find((project) => project.id === id)?.title ?? id).join(" ")}`.toLowerCase().includes(state.query.trim().toLowerCase())).sort((a, b) => state.sort === "activity" ? (b.activityAt ?? "").localeCompare(a.activityAt ?? "") : state.sort === "members" ? b.members.length - a.members.length : a.name.localeCompare(b.name, locale) * (state.sort === "name-desc" ? -1 : 1))
   const directoryState = { ...createTeamList2State(), query: state.query, teamId: state.teamId ?? "all", availabilityFilter: state.presenceFilter ?? "all" }
   const directoryRow = (memberId: string, groupTeamIds?: readonly string[]): ControlledPeopleDirectoryRow => {
     const member = fixture.members.find((member) => member.userId === memberId)!

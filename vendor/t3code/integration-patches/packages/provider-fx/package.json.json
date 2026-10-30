@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "source": "packages/provider-fx/package.json",
+  "beforeSha256": "68d1d12ed1a851440552fb231f9879c5d1654ded3de51047f116b9a19635dff6",
+  "afterSha256": "29c8d9a6c379c2a5ad4d3482cbb070d74fd8a04021890424bba147605af79a43",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 31,
+      "before": [
+        "    \"effect\": \"catalog:\"\n"
+      ],
+      "after": [
+        "    \"effect\": \"catalog:\",\n",
+        "    \"effect-acp\": \"workspace:*\"\n"
+      ]
+    },
+    {
+      "start": 37,
+      "before": [
+        "    \"effect-acp\": \"workspace:*\",\n"
+      ],
+      "after": []
+    }
+  ]
+}

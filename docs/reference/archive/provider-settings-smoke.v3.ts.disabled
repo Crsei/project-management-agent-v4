@@ -1,0 +1,28 @@
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { resolve } from "node:path";
+
+const root = "/data2-HDD-SATA-20T/Digital_avatar/haoweiyao/.tmp/provider-settings-smoke-c9xijh";
+process.env.AGENT_WORKSPACE_DATA_DIR = resolve(root, "data");
+process.env.AGENT_WORKSPACE_PROJECT_ROOT = root;
+delete process.env.AGENT_WORKSPACE_ACCESS_TOKEN;
+const { app } = await import("./src/app.ts");
+const { listStoredInstances, updateProviderInstance } = await import("./src/providers/instances.ts");
+const { closeStore } = await import("./src/durable/store.ts");
+for (const instance of listStoredInstances()) {
+  updateProviderInstance(instance.instanceId, { config: { binaryPath: resolve(root, `missing-${instance.driver}`) } }, instance.revision);
+}
+const web = resolve(root, "web");
+const gateway = new Hono();
+gateway.get("/api/v1/auth/me", c => c.json({ actor: { id: "provider-settings-smoke", name: "Provider settings smoke", email: "provider-smoke@example.invalid", type: "human" } }));
+gateway.get("/api/v1/workspaces", c => c.json({ items: [] }));
+gateway.all("/agent/api/*", c => {
+  const url = new URL(c.req.url); url.pathname = url.pathname.slice("/agent".length);
+  return app.fetch(new Request(url, c.req.raw));
+});
+gateway.get("/fonts/inter-latin-variable.woff2", serveStatic({ path: resolve("apps/web/public/fonts/inter-latin-variable.woff2") }));
+gateway.use("/agent/assets/*", serveStatic({ root: web, rewriteRequestPath: p => p.slice("/agent".length) }));
+gateway.get("/agent/*", serveStatic({ path: resolve(web, "index.html") }));
+const server = serve({ fetch: gateway.fetch, hostname: "127.0.0.1", port: 44595 }, () => console.log("PROVIDER_SETTINGS_SMOKE_READY http://127.0.0.1:44595/agent/settings/providers"));
+for (const signal of ["SIGTERM", "SIGINT"] as const) process.on(signal, () => { closeStore(); server.close(() => process.exit(0)); server.closeAllConnections(); });

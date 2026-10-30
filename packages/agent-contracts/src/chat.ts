@@ -1,14 +1,31 @@
 import { z } from "zod";
 import { responseStreamingModeSchema } from "./output.ts";
+import { pmReferenceInputSchema } from "./pm-references.ts";
+import type { PmReferenceResolution } from "./pm-references.ts";
+import type { ProviderOptionSelection } from "./provider.ts";
+
+export const providerOptionSelectionSchema = z.object({
+  id: z.string().trim().min(1).max(256),
+  value: z.union([z.string(), z.boolean()]),
+}).strict();
+export const interactionModeSchema = z.enum(["default", "plan"]);
 
 export const agentScopeSchema = z.object({
   workspaceId: z.string().trim().min(1).max(256),
   projectId: z.string().trim().min(1).max(256).nullable(),
 });
 export type AgentScope = z.infer<typeof agentScopeSchema>;
+/** A thread may be bound to one PM issue; both identifiers are IDs only, never bodies or credentials. */
+export const pmContextSchema = z
+  .strictObject({
+    taskId: z.string().trim().min(1).max(200).nullable().default(null),
+    entityId: z.string().trim().min(1).max(200).nullable().default(null),
+  });
+export type PmContext = z.infer<typeof pmContextSchema>;
 export const createThreadSchema = z.object({
   id: z.string().min(1).max(256),
   scope: agentScopeSchema.optional(),
+  pmContext: pmContextSchema.nullable().optional(),
 });
 
 export const threadSettingsSchema = z.object({
@@ -16,6 +33,8 @@ export const threadSettingsSchema = z.object({
   model: z.string().trim().min(1).max(256),
   systemPrompt: z.string().max(16000),
   temperature: z.number().finite().min(0).max(2),
+  modelOptions: z.array(providerOptionSelectionSchema).max(100).optional(),
+  interactionMode: interactionModeSchema.optional(),
 });
 export const messageContentSchema = z
   .object({
@@ -49,6 +68,8 @@ export const chatBodySchema = z.object({
     .object({
       providerInstanceId: z.string().optional(),
       modelName: z.string().optional(),
+      modelOptions: z.array(providerOptionSelectionSchema).max(100).optional(),
+      interactionMode: interactionModeSchema.optional(),
       threadSettingsRevision: z.number().int().nonnegative().optional(),
       responseStreamingMode: responseStreamingModeSchema.optional(),
     })
@@ -57,6 +78,7 @@ export const chatBodySchema = z.object({
   trigger: z.enum(["submit-message", "regenerate-message"]).default("submit-message"),
   messageId: z.string().optional(),
   idempotencyKey: z.string().max(256).optional(),
+  pmReferences: z.array(pmReferenceInputSchema).max(50).optional(),
 });
 export const threadPatchSchema = z.object({
   title: z.string().max(200).optional(),
@@ -64,6 +86,7 @@ export const threadPatchSchema = z.object({
   custom: z.record(z.string(), z.unknown()).optional(),
   settings: threadSettingsSchema.optional(),
   revision: z.number().int().nonnegative().optional(),
+  pmContext: pmContextSchema.nullable().optional(),
 });
 export const threadSidebarActionSchema = z.object({
   action: z.enum(["pin", "unpin", "settle", "unsettle", "snooze", "wake", "auto-settle", "mark-unread", "visit"]),
@@ -118,10 +141,13 @@ export type RemoteSettings = {
   model: string;
   systemPrompt: string;
   temperature: number;
+  modelOptions?: ProviderOptionSelection[];
+  interactionMode?: "default" | "plan";
 };
 export type RemoteThread = {
   remoteId: string;
   scope?: AgentScope;
+  pmContext?: PmContext;
   status: "regular" | "archived";
   title?: string;
   custom?: Record<string, unknown>;
@@ -147,4 +173,6 @@ export type ChatGenerationView = {
   continuationOf?: string;
   continuationId?: string;
   handoff?: { mode: "native" | "native-fork" | "portable"; reason: string };
+  /** Resolved IDs, titles, revisions and short reasons only; never PM bodies or credentials. */
+  pmReferences?: PmReferenceResolution[];
 };

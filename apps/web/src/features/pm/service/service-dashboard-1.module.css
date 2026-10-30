@@ -82,22 +82,15 @@
   font-size: 12px;
   line-height: 18px;
 }
-.status[data-status="ready"] { color: #0891a2; }
-.status[data-status="in_progress"] { color: #b86a00; }
-.status[data-status="in_review"] { color: #a325be; }
-.status[data-status="done"] { color: #158558; }
-:global(.dark) .status[data-status="ready"] { color: #67e8f9; }
-:global(.dark) .status[data-status="in_progress"] { color: #fbbf24; }
-:global(.dark) .status[data-status="in_review"] { color: #e879f9; }
-:global(.dark) .status[data-status="done"] { color: #6ee7b7; }
-.cover {
-  background-image: linear-gradient(135deg, #173b3c, #325452 55%, #667d76);
-}
+.status[data-status="ready"] { color: var(--info); }
+.status[data-status="in_progress"] { color: var(--warning); }
+.status[data-status="in_review"] { color: var(--agent); }
+.status[data-status="done"] { color: var(--success); }
 .agendaScope {
   margin-bottom: 12px;
   color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
 }
 .agendaOwner {
   margin-top: 10px;

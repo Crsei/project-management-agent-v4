@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react"
 import { Navigate, Outlet, Route, Routes } from "react-router"
 import { PmHome, PmLabLayout, PmProductLayout } from "@/features/pm/pm-shell"
 import { PmErrorRoute } from "@/routes/error-page"
@@ -26,6 +27,8 @@ import { AgentChatPage } from "@/features/pm/agent/agent-chat-page"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { PmServiceProvider, usePmService } from "@/features/pm/service/pm-service"
 import { ServiceGuard } from "@/features/pm/service/pm-ui"
+const AgentApp = lazy(() => import("@/features/agent/src/app").then(module => ({ default: module.App })))
+
 
 
 function WorkspaceStartRoute() {
@@ -39,6 +42,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/pm" replace />} />
+      <Route path="/agent/*" element={<Suspense fallback={<div role="status">正在加载工作区…</div>}><AgentApp /></Suspense>} />
       <Route path="/pm/invitations/accept" element={<PmInvitationAcceptPage />} />
       <Route path="/pm/account" element={<PmServiceProvider><Outlet /></PmServiceProvider>}>
         <Route index element={<Navigate to="security" replace />} />

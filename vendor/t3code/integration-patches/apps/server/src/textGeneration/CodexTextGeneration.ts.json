@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "source": "apps/server/src/textGeneration/CodexTextGeneration.ts",
+  "beforeSha256": "88db35e9f02ba381d5ca87e244e4a5a5321f72a84f89d6d627081c89cd8f1564",
+  "afterSha256": "9f88a44c74f6c7f82c85841f1a1b0195bdc68c6809644aaa69b2e314f9a9fe5f",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 17,
+      "before": [
+        "import { resolveAttachmentPath } from \"../attachmentStore.ts\";\n",
+        "import * as ServerConfig from \"../config.ts\";\n"
+      ],
+      "after": [
+        "import { resolveAttachmentPath } from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/attachments.ts\";\n",
+        "import * as ServerConfig from \"../../../../../../apps/server/agent/src/providers/t3code/upstream-services/server-config.ts\";\n"
+      ]
+    },
+    {
+      "start": 64,
+      "before": [
+        "  const resolvedEnvironment = environment ?? process.env;\n"
+      ],
+      "after": [
+        "  const resolvedEnvironment = environment ?? (yield* HostProcess.Environment);\n"
+      ]
+    },
+    {
+      "start": 183,
+      "before": [
+        "        yield* Effect.logWarning(\"codex mcp list failed; text generation keeps its MCP servers\", {\n",
+        "          reason: \"exit\",\n",
+        "          exitCode,\n",
+        "        });\n",
+        "        return [];\n"
+      ],
+      "after": [
+        "        return yield* Effect.fail(new Error(\"Codex could not enumerate MCP servers; isolated text generation was not started.\"));\n"
+      ]
+    },
+    {
+      "start": 189,
+      "before": [
+        "      const servers = yield* decodeCodexMcpServers(stdout).pipe(\n",
+        "        Effect.tapError(() =>\n",
+        "          Effect.logWarning(\"codex mcp list failed; text generation keeps its MCP servers\", {\n",
+        "            reason: \"decode\",\n",
+        "          }),\n",
+        "        ),\n",
+        "      );\n"
+      ],
+      "after": [
+        "      const servers = yield* decodeCodexMcpServers(stdout);\n"
+      ]
+    },
+    {
+      "start": 199,
+      "before": [
+        "    Effect.timeoutOption(CODEX_MCP_LIST_TIMEOUT_MS),\n",
+        "    Effect.flatMap(\n",
+        "      Option.match({\n",
+        "        onNone: () =>\n",
+        "          Effect.logWarning(\"codex mcp list failed; text generation keeps its MCP servers\", {\n",
+        "            reason: \"timeout\",\n",
+        "          }).pipe(Effect.as<ReadonlyArray<string>>([])),\n",
+        "        onSome: (names) => Effect.succeed(names),\n",
+        "      }),\n",
+        "    ),\n",
+        "    Effect.orElseSucceed((): ReadonlyArray<string> => []),\n"
+      ],
+      "after": [
+        "    Effect.timeout(CODEX_MCP_LIST_TIMEOUT_MS),\n",
+        "    Effect.mapError(cause => normalizeCliError(\"codex\", \"listMcpServers\", cause,\n",
+        "      \"Could not verify that native MCP tools are disabled for isolated text generation\")),\n"
+      ]
+    }
+  ]
+}

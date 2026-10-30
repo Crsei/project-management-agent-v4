@@ -1,0 +1,87 @@
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 0 8px;
+  text-align: center;
+}
+
+.welcomeTitle {
+  overflow-wrap: anywhere;
+}
+
+.alternate {
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 18px;
+  text-underline-offset: 3px;
+}
+
+.alternate:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+.alternate:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.controls {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.leftControls {
+  display: flex;
+  flex: 1 1 260px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rightControls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.historyError {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 16px;
+  border: 1px solid var(--destructive);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.historyError button {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.historyError button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.historyError button:disabled {
+  opacity: 0.6;
+}

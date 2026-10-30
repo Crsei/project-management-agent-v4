@@ -12,6 +12,7 @@ import { useAction, useText, string, allowed, writable, makeCommand, issueRecord
 import { ServiceMarkdown } from "../markdown/page"
 import { ServiceSettings } from "./pm-settings"
 import { ServiceNotifications as NotificationInboxPage } from "./service-notifications"
+import { ServiceWorkspaceActivity } from "./service-workspace-activity"
 import { ServiceDashboard1 } from "./service-dashboard-1"
 import { ServiceDashboard2 } from "./service-dashboard-2"
 import { ServiceDashboard3 } from "./service-dashboard-3"
@@ -216,6 +217,7 @@ export function ServiceNotifications() {
   const [params] = useSearchParams()
   const configured = usePmDisplaySetting(workspace?.id, "notificationView")
   const variant = resolveVariant(params.get("view"), configured, notificationViews)
+  if (params.get("section") !== "notifications") return <ServiceWorkspaceActivity />
   return <NotificationInboxPage variant={variant} />
 }
 

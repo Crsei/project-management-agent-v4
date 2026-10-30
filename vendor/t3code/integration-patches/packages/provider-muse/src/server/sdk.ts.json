@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "source": "packages/provider-muse/src/server/sdk.ts",
+  "beforeSha256": "47cf6fe89a96d467cc04651c119a8fe736f09d827108764f63f24d4f70714aeb",
+  "afterSha256": "d2b65be98aa4ce4b77fe678d37da300c619c3b52d8ff1cf48eab13e4b878678c",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 15,
+      "before": [],
+      "after": [
+        "import * as Option from \"effect/Option\";\n"
+      ]
+    },
+    {
+      "start": 28,
+      "before": [
+        "    Partial<Pick<SpawnedMspConnection[\"initializeResult\"], \"museHome\">>;\n"
+      ],
+      "after": [
+        "    Partial<Pick<SpawnedMspConnection[\"initializeResult\"], \"museHome\" | \"schema\">>;\n"
+      ]
+    },
+    {
+      "start": 208,
+      "before": [],
+      "after": [
+        "  const cwd = options.cwd ?? Option.getOrUndefined(yield* Effect.serviceOption(HostProcess.WorkingDirectory));\n"
+      ]
+    },
+    {
+      "start": 210,
+      "before": [
+        "    startup = createHost({ ...options, launch, signal });\n"
+      ],
+      "after": [
+        "    startup = createHost({ ...options, ...(cwd === undefined ? {} : { cwd }), launch, signal });\n"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,526 @@
+{
+  "version": 1,
+  "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
+  "hostContract": "pm-provider-host/1",
+  "owner": "T9",
+  "sourceCopies": [
+    {
+      "source_path": "apps/server/src/codexModelOptions.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/codexModelOptions.test.ts",
+      "upstream_sha256": "8bd0a07420da5292aa0d4489d7a544f26a7163b1030bf5e89ee20cef866869d0",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/codexModelOptions.ts",
+      "destination_path": "vendor/t3code/apps/server/src/codexModelOptions.ts",
+      "upstream_sha256": "76951ad559670f19253065f58ce4f8fc0e283a88b239aacbd4a7124d962bfab9",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.test.ts",
+      "upstream_sha256": "d369461f3873c17ed119a8aefa668f825fad9fb94084a95f0acce020b09fee49",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.testkit.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.testkit.ts",
+      "upstream_sha256": "48ee609b2db77e23be99e0419250ddfaa5f62ae74a8f177645b9d5d0ca473ec9",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
+      "destination_path": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
+      "upstream_sha256": "44f0cfba17c5ddf47cd5b75ab443d18c3a8080cc4638034b5b7e75c36a75e422",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexAuthCallbackPage.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexAuthCallbackPage.ts",
+      "upstream_sha256": "70ec402ce763122d560e3574bde39cfd6af19f7148c02c70bfee4d013720a097",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexChatGptAuth.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexChatGptAuth.test.ts",
+      "upstream_sha256": "0520862acc7a2cc1c138fb9c579d7ec3c9cd96853069f8a1cad1c38eaa922d25",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexChatGptAuth.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexChatGptAuth.ts",
+      "upstream_sha256": "fafdb335a6386f04881e469600b9c7968c44a718b729230f361c029633c45c03",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexChatGptHandoff.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexChatGptHandoff.ts",
+      "upstream_sha256": "edd5f2868c60ba4f38d99a0c3cf31a5614aa66fadd11c9bb1928291e188fe2b0",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexChatGptModels.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexChatGptModels.test.ts",
+      "upstream_sha256": "a45f2e16660563385e8fc0bbefc95edaec61b4ba087e9dd2c030a551130bcfca",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexChatGptModels.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexChatGptModels.ts",
+      "upstream_sha256": "7866793153f984643a8fea2ea601b11d8f00f9269260b5c959cd19708a56f189",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexChatGptSessionLock.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexChatGptSessionLock.test.ts",
+      "upstream_sha256": "4266a39bc26dcb23df6d757e8b3ddaa7b1aeb9acd782b20cc50cf2e6ac04610e",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexChatGptSessionLock.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexChatGptSessionLock.ts",
+      "upstream_sha256": "7004d46d0964d02fb73fb67441cf313f001e5ac52592bf4b068b50052decb723",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexDeveloperInstructions.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexDeveloperInstructions.test.ts",
+      "upstream_sha256": "6a257c7d8602b17ce2fddba0370efcb33c47053604ebd5ce654a8fcce1fc3c81",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexDeveloperInstructions.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexDeveloperInstructions.ts",
+      "upstream_sha256": "1fc109c65173d3391e2e1b81f6d22535b29a66dbce0789e5ebdcb5b5f13f9d4f",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexInstallation.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexInstallation.test.ts",
+      "upstream_sha256": "4b4835a77e93c320410d873fd4306a6323f483a3db6b9cfd805befa148c773e3",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexInstallation.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexInstallation.ts",
+      "upstream_sha256": "9a25f3a6440cb8685ff9971f290587e063166cd9a8ce48810c46e4dcd337a64b",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexManagedErrors.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexManagedErrors.test.ts",
+      "upstream_sha256": "dc594035e73aa2cacd233c911db23537168f606f11afb1c59ce4a7345f966544",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexManagedErrors.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexManagedErrors.ts",
+      "upstream_sha256": "a21ff29d4c7ed11e588da7cb70ce2946b23a57018bc82ea4eec7e1e7cf8000fb",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexManagedHome.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexManagedHome.ts",
+      "upstream_sha256": "a9452c10185733a11b7f124bce145a8beaaf286522baaad7e6c393ab84d4ff6d",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexManagedRuntime.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexManagedRuntime.test.ts",
+      "upstream_sha256": "8edd8a885fd36e3e6352824eb8b81244d2c25761a30c1f201309e4985d1db16e",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexManagedRuntime.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexManagedRuntime.ts",
+      "upstream_sha256": "1942eabb76a96e9399df89554b399fb094e309499582de26d6dd4f0cf7d57ec9",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexManagedTokenBroker.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexManagedTokenBroker.ts",
+      "upstream_sha256": "77b5957d484457712c0e08872d1a42493002e4af6a7cc59156f751795d78909c",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexManagedTokenProtocol.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexManagedTokenProtocol.ts",
+      "upstream_sha256": "5905c97928b846b3e6ee804bd2ad163c31a46c874c867a8adb2e305273e0d9f4",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexMcpElicitation.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexMcpElicitation.test.ts",
+      "upstream_sha256": "4420ac9f1087d69b1a26001c15e2f2e5007993426d36f720ac64c43d89afd7ed",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexMcpElicitation.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexMcpElicitation.ts",
+      "upstream_sha256": "a151ce5d704567bbca548cfd060f77e1dc642d5d24b51421840c368ad82a2b2e",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexProvider.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexProvider.test.ts",
+      "upstream_sha256": "81e8c902fd7df794f67ad29e4d5d79c672952d3ee8bf44fc4233d54c43cbb3f3",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexProvider.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexProvider.ts",
+      "upstream_sha256": "caf0ec1f08fae5c29f8ae1f1bda141d4873bd9ccd7d20eef72481b4fe209b429",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexThreadRevert.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexThreadRevert.test.ts",
+      "upstream_sha256": "b19efed8c58616245c2af6b4f92e489e9cfb53566fd3faa541aba604bb1aeaa6",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexThreadRevert.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexThreadRevert.ts",
+      "upstream_sha256": "215bd349533bd64255fde3417c279fb7f73fe3783340c8a336b114c2b60d44a7",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexToolPresentation.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexToolPresentation.ts",
+      "upstream_sha256": "9a21899fece14acb36bf7effe0b81a3568368513bb3a0feb4353b97a8e94c58b",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/CodexTurnTokenUsage.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/CodexTurnTokenUsage.ts",
+      "upstream_sha256": "9690cf549cbe2c69c21a8c2bcfea14166891c9cd06e62ff7b02a797300b41f19",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/Drivers/CodexDriver.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/Drivers/CodexDriver.test.ts",
+      "upstream_sha256": "eef1d7d312dacd5b25299e9ab193fcd981016f7ba4a405299fe305c91a4bf6df",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/Drivers/CodexDriver.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/Drivers/CodexDriver.ts",
+      "upstream_sha256": "2582b6be1b025bccd64d660ff9c85e12ed14a318098be77380b0cbf986821d19",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/Drivers/CodexHomeLayout.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/Drivers/CodexHomeLayout.test.ts",
+      "upstream_sha256": "05201bbb9f43d0ee9304f23661fd0dba8bea0e87761edc62c84d1d66ed503520",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/Drivers/CodexHomeLayout.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/Drivers/CodexHomeLayout.ts",
+      "upstream_sha256": "a946f1940ec378b8002a9dfa2365081acc01601d8e244523cd90d36d4a23c41b",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/Drivers/CodexManagedProvider.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/Drivers/CodexManagedProvider.ts",
+      "upstream_sha256": "ffbc09597c3c312984f26e8cf81c15c60752472358193d3281c34c226e04e68a",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/Drivers/codexUsage.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/Drivers/codexUsage.test.ts",
+      "upstream_sha256": "618f2e06db72ffa2ef7662cc6dcf5859b1ef763d6c1bf1a819adee30e94126e0",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/Drivers/codexUsage.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/Drivers/codexUsage.ts",
+      "upstream_sha256": "443d19e77c9a2f453afa410b55fb6c8f164375cb91329f6ee36685c1d0c32fcf",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/provider/codexLaunchArgs.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/codexLaunchArgs.test.ts",
+      "upstream_sha256": "933f35c35445e89f49662dc45031dbb455181a940521c730aa846d160e172bc4",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/codexLaunchArgs.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/codexLaunchArgs.ts",
+      "upstream_sha256": "21782cccf76b0102f6f36a41114422b83970cc09060f54e90e4c1ba43b138f08",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/codexModelCatalog.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/codexModelCatalog.test.ts",
+      "upstream_sha256": "e5c07b4e21e7916ebac775053762d38d53f238bfc11ab96bc9cbe36120d5c56a",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/codexModelCatalog.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/codexModelCatalog.ts",
+      "upstream_sha256": "1768e5da802c0cf852de28d3436995609249a1ee7eb79c42f390e3450ab4ece0",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/codexUsageLimits.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/codexUsageLimits.test.ts",
+      "upstream_sha256": "3faa7d92216aae2838f33ec1e2195c77e616f7280e189476b20cf0614877a781",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/codexUsageLimits.ts",
+      "destination_path": "vendor/t3code/apps/server/src/provider/codexUsageLimits.ts",
+      "upstream_sha256": "55dd66546fab984fe9b9765e56d8cbdd6ae5f1487e5bd03a47e3c684b81c225f",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/testFixtures/codexCollabMockPeer.mjs",
+      "destination_path": "vendor/t3code/apps/server/src/provider/testFixtures/codexCollabMockPeer.mjs",
+      "upstream_sha256": "b3c830634bb5bcecc767cfe78ee1bd5dcf3c3e1bb9fa58114f6c242559b8fd3f",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/testFixtures/codexCollabMockPeer.sh",
+      "destination_path": "vendor/t3code/apps/server/src/provider/testFixtures/codexCollabMockPeer.sh",
+      "upstream_sha256": "4130f9882c059af8c5d6a293b91364d83dfeedffbcb909a15e17babde357101b",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/provider/testFixtures/codexMultiAgentWire.json",
+      "destination_path": "vendor/t3code/apps/server/src/provider/testFixtures/codexMultiAgentWire.json",
+      "upstream_sha256": "13e0f3ce2155220f16ae6026716ac30cc7054a950c9c91ab445e71dd92f09cd1",
+      "action": "copy-verbatim"
+    },
+    {
+      "source_path": "apps/server/src/textGeneration/CodexTextGeneration.test.ts",
+      "destination_path": "vendor/t3code/apps/server/src/textGeneration/CodexTextGeneration.test.ts",
+      "upstream_sha256": "867fee1825c59db17cf084b003c70dcb94a9a62f3127fd2ce3d85e4ea2896ffc",
+      "action": "copy-then-patch"
+    },
+    {
+      "source_path": "apps/server/src/textGeneration/CodexTextGeneration.ts",
+      "destination_path": "vendor/t3code/apps/server/src/textGeneration/CodexTextGeneration.ts",
+      "upstream_sha256": "88db35e9f02ba381d5ca87e244e4a5a5321f72a84f89d6d627081c89cd8f1564",
+      "action": "copy-then-patch"
+    }
+  ],
+  "additionalClosure": [
+    {
+      "source_path": "apps/server/src/cli/managedChatGptToken.ts",
+      "destination_path": "vendor/t3code/apps/server/src/cli/managedChatGptToken.ts",
+      "sha256": "8abef3a4a2997d44431e51419de6354647a2a807606c6facd136060ad4e0dfca",
+      "reason": "Original managed auth.command lean private-token IPC process; parent must register source-manifest entry."
+    }
+  ],
+  "patches": [
+    {
+      "id": "PM-CODEX-HOST-CUTOVER",
+      "paths": [
+        "apps/server/src/provider/Drivers/CodexDriver.ts",
+        "apps/server/src/provider/CodexChatGptAuth.ts",
+        "apps/server/src/provider/CodexChatGptHandoff.ts",
+        "apps/server/src/provider/CodexManagedRuntime.ts",
+        "apps/server/src/provider/CodexManagedTokenBroker.ts",
+        "apps/server/src/provider/CodexInstallation.ts",
+        "apps/server/src/provider/Drivers/codexUsage.ts",
+        "apps/server/src/textGeneration/CodexTextGeneration.ts",
+        "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts"
+      ],
+      "reason": "Narrow imports bind PM config/settings/private secrets/environment/attachments/document text/history instead of t3 application or SQL services. Original account/config/catalog/native protocol/install/token refresh/fork/usage algorithms remain owned by their source modules. Disable optional foreign analytics instead of importing t3 telemetry."
+    },
+    {
+      "id": "PM-CODEX-ORIGINAL-RUNTIME-FACADE",
+      "paths": [
+        "../../apps/server/agent/src/providers/drivers/codex.ts",
+        "../../apps/server/agent/src/providers/drivers/codex-chatgpt-auth.ts",
+        "../../apps/server/agent/src/providers/drivers/codex-setup-routes.ts",
+        "../../apps/server/agent/src/providers/t3code/families/codex.ts"
+      ],
+      "reason": "Pure application-access facade delegates original management/execution. Existing public schema/instance identity remain. Profile list/select/remove use original CodexChatGptAuth schema/locks/revocation and controller invalidation with real PM ownership, not the removed local OAuth/runtime implementation."
+    },
+    {
+      "id": "PM-CODEX-OPERATION-NATIVE-EVIDENCE",
+      "paths": [
+        "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
+        "../../apps/server/agent/src/providers/t3code/families/codex.ts"
+      ],
+      "reason": "Scope-owned runtime WeakMap exposes same-connection typed initialize.codexHome/userAgent plus v2 thread/loaded/list evidence. No provider-name/version cache, second process or prompt probe. Legacy adoption reads actual schema-native thread ID/cwd/idle state and completed turn refs (paginated history supported) before resume. Native completed-turn historical fork continues through original inclusive lastTurnId API; sidecar remains current Chat records."
+    },
+    {
+      "id": "PM-CODEX-OWNED-MCP-AND-CONTEXT",
+      "paths": [
+        "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
+        "apps/server/src/provider/CodexDeveloperInstructions.ts"
+      ],
+      "reason": "Original ensure/resume/fork receive only generation-bound RuntimeHost stdio MCP entries. The original openSession host binding's threadId/executionId are captured once and included at both native background-command and child-subagent continuation offer sites, never replaced with a later binding; the continuation factory receives the same runtimeHost. Turn context contains generic native harness identity, never t3 orchestration/browser/device/PR tooling. PM permission/approval/revision/receipt authority remains unchanged; original native tool/output/subagent streams remain display/interaction events only."
+    },
+    {
+      "id": "PM-CODEX-HOME-AND-INSTALLER-CONTINUITY",
+      "paths": [
+        "apps/server/src/provider/Drivers/CodexHomeLayout.ts",
+        "apps/server/src/provider/CodexManagedHome.ts",
+        "apps/server/src/provider/CodexInstallation.ts",
+        "apps/server/src/provider/Drivers/CodexDriver.ts",
+        "../../apps/server/agent/src/providers/drivers/codex-persistence.ts"
+      ],
+      "reason": "Existing Home inherits CODEX_HOME and resolves relative paths against bound native cwd, not global process cwd. Managed Home retains existing PM-owned stateDirectory through CodexManagedHomePath; installer retains old .managed-codex/runtime. A source-instance WeakMap gives maintenance the same installer/leases held by the original managed runtime. Startup-only conversion of old application-private managed profiles preserves native registration/hostId, refuses divergent new records, writes a private marker and never reads/imports global credentials. No installation-pointer rewrite is needed because original source schemas accept the existing package metadata."
+    },
+    {
+      "id": "PM-CODEX-BOUND-ENV-AND-OWNED-PROCESS",
+      "paths": [
+        "apps/server/src/provider/CodexProvider.ts",
+        "apps/server/src/provider/Drivers/CodexDriver.ts",
+        "apps/server/src/textGeneration/CodexTextGeneration.ts",
+        "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts"
+      ],
+      "reason": "Use bound HostProcess environment/cwd for source probes/title/reset/native spawn. Retain actual issued AgentScope unit with the returned native command and register stop before spawn, so native handle cleanup precedes owned descendant-unit cleanup. No synthetic unit, process.env mutation, external service shutdown or raw event logging."
+    },
+    {
+      "id": "PM-CODEX-ISOLATED-TITLE",
+      "paths": [
+        "apps/server/src/textGeneration/CodexTextGeneration.ts",
+        "apps/server/src/textGeneration/CodexTextGeneration.test.ts"
+      ],
+      "reason": "Original ephemeral read-only structured title runner remains separate from Chat. Native MCP discovery must succeed before all enabled ambient MCP entries are disabled; failure/timeout aborts isolated generation rather than silently keeping tools. Plugins/apps remain disabled and no PM bridge is provided."
+    },
+    {
+      "id": "PM-CODEX-INTEGRATED-TYPE-BOUNDARIES",
+      "paths": [
+        "../../apps/server/agent/src/providers/drivers/codex-config.ts",
+        "../../apps/server/agent/src/providers/t3code/families/codex.ts",
+        "apps/server/src/provider/Drivers/CodexDriver.ts",
+        "apps/server/src/orchestration-v2/workflowFileRead.ts"
+      ],
+      "reason": "Keep the already validated explicit public setupMode instead of reintroducing an optional native-schema property. Map typed layer failures with Effect 4 Layer.catch plus a failing context effect, not nonexistent Layer.mapError. Map managed creation setup/secret failures to the original ProviderDriverError while retaining their cause/message and preserving existing driver failures. Narrow actual filesystem rejection results by defined failure value before constructing the typed workflow error, with no fallback reason or invented success. Parent integrated gate reported these errors; this slice did not rerun checks."
+    },
+    {
+      "id": "PM-CODEX-REAL-PROTOCOL-REGRESSIONS",
+      "paths": [
+        "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.test.ts",
+        "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.testkit.ts",
+        "apps/server/src/provider/CodexChatGptAuth.test.ts",
+        "apps/server/src/provider/CodexManagedRuntime.test.ts",
+        "apps/server/src/provider/Drivers/CodexDriver.test.ts",
+        "apps/server/src/provider/Drivers/CodexHomeLayout.test.ts",
+        "apps/server/src/textGeneration/CodexTextGeneration.test.ts",
+        "../../apps/server/agent/src/providers/drivers/codex-native.test.ts",
+        "../../apps/server/agent/src/providers/drivers/codex-managed.test.ts",
+        "../../apps/server/agent/src/providers/drivers/codex-protocol-fixture.mjs",
+        "../../apps/server/agent/src/durable/chat-runtime.test.ts"
+      ],
+      "reason": "Preserve native original protocol/install/Home/OAuth/model/usage suites and use the shared actual PM native-test host. Only two foreign Orchestrator projection tests, one inline foreign app-projection branch, unused app harness exports, and optional external telemetry-only assertions/case are reference-only. All native capacity retry/background command cases remain. Controlled Chat CLI now emits full pinned schema frames and stores actual native session/turn state; all original Chat scope/cwd/continuity assertions stay unchanged. Prepared scenarios cover same-session resume, metadata-only adoption, wrong Home/cwd/ref rejection, exact historical fork, tool/command/assistant channels, native information input, cancellation, EOF, usage and callback failure."
+    }
+  ],
+  "removedSupersededPaths": [
+    "../../apps/server/agent/src/providers/drivers/codex-rpc.ts",
+    "../../apps/server/agent/src/providers/drivers/codex-models.ts",
+    "../../apps/server/agent/src/providers/drivers/codex-discovery.ts",
+    "../../apps/server/agent/src/providers/drivers/codex-output.ts",
+    "../../apps/server/agent/src/providers/drivers/codex-usage.ts",
+    "../../apps/server/agent/src/providers/drivers/codex-managed-runtime.ts",
+    "../../apps/server/agent/src/providers/drivers/codex-installation.ts"
+  ],
+  "removedExports": [
+    "runCodexNative",
+    "codexEnvironment",
+    "codexLaunchArgs",
+    "CodexRpc",
+    "CodexOutput",
+    "CodexUsage",
+    "codexManagedAccess",
+    "authenticateCodexManaged",
+    "prepareCodexManagedRuntime",
+    "installCodexRuntime",
+    "removeCodexRuntime",
+    "resolveCodexInstallation"
+  ],
+  "familyExports": [
+    "codexDriver",
+    "makeCodexDriverLayer(context,runtimeHost)",
+    "codexProtocolResolver",
+    "codexCapabilities",
+    "codexInstallationMethods"
+  ],
+  "sourceBoundaryExports": [
+    "CodexSessionEvidence",
+    "readCodexSessionEvidence(runtime)",
+    "CodexManagedHomePath",
+    "readCodexInstanceInstallation(instance)"
+  ],
+  "startupExport": "../../apps/server/agent/src/providers/drivers/codex-persistence.ts#migrateCodexManagedState(context)",
+  "assembly": {
+    "originalPackages": [
+      "@pm/t3code-provider-server",
+      "@t3tools/provider-core",
+      "@t3tools/shared",
+      "@t3tools/contracts",
+      "effect-codex-app-server"
+    ],
+    "dependencies": {
+      "effect": "4.0.5",
+      "@effect/platform-node": "4.0.5",
+      "jose": "6.2.2",
+      "proper-lockfile": "4.1.2",
+      "@types/proper-lockfile": "4.1.4"
+    },
+    "layers": [
+      "PM platform + real upstream services + ProviderHost + same ProviderRuntimeHost",
+      "IdAllocator",
+      "ProviderContinuationRequests",
+      "ProviderLatestVersions",
+      "NoOpProviderEventLoggers",
+      "original ModelManifest.layer and layerModelCatalog",
+      "original layerAppServerClientFactory",
+      "original ResetCreditCoordinator.layer",
+      "original makeCodexInstallation with preserved native installation directory",
+      "original CodexManagedTokenBroker.layer"
+    ],
+    "helper": {
+      "source": "apps/server/src/cli/managedChatGptToken.ts",
+      "export": "runManagedChatGptTokenCli(args)",
+      "dispatcher": "__managed-chatgpt-token",
+      "arguments": [
+        "endpoint",
+        "instanceId",
+        "environmentId",
+        "profileKey"
+      ],
+      "requiresParent": "Early built-Agent dispatcher calls original helper with argv.slice(3) before ordinary server startup. Package native CodexManagedTokenProtocol and Effect. No token in argv/env/log; native auth.command consumes helper bare-token stdout."
+    }
+  },
+  "parentIntegration": [
+    "Register five exact family exports in production maps and retain source instance lifecycle.",
+    "Invoke startup-only migrateCodexManagedState for each existing managed Codex context before accepting operations.",
+    "Add helper source entry/hash and early built-Agent dispatcher; all manifests/lockfiles/build outputs parent-owned.",
+    "Supply agreed real upstream-services/mcp-app-snapshot.ts with the unchanged original snapshotMcpApp API; Codex import is already redirected. Real usage-history.ts is supplied by parent upstream-services layer.",
+    "Remove shared capabilities.ts generated-schema Codex probe/codexEnvironment/codexLaunchArgs imports; use original capabilities.",
+    "Migrate usage/limits/core.ts CodexRpc/object callers and mixed retired native-output/codex-claude-usage helper tests.",
+    "Shared Chat fixture application start/stop assembly remains parent-owned; scope/cwd assertions unchanged."
+  ],
+  "verification": {
+    "executed": [],
+    "notRun": [
+      "build",
+      "types",
+      "lint",
+      "tests",
+      "formatters",
+      "smoke",
+      "dependency installation",
+      "real account calls"
+    ],
+    "sourceCommands": [
+      "pnpm --dir vendor/t3code test Codex codex",
+      "node --conditions=development --test apps/server/agent/src/providers/drivers/codex-native.test.ts apps/server/agent/src/providers/drivers/codex-managed.test.ts apps/server/agent/src/durable/chat-runtime.test.ts"
+    ],
+    "actualSmoke": "node --conditions=development apps/server/agent/src/providers/drivers/codex-real-smoke.ts --authorize-native-account --model MODEL [--binary /absolute/codex] [--home /authorized/CODEX_HOME]",
+    "actualPrerequisites": [
+      "Already authorized native CLI/environment, supported app-server-v2 metadata/resume/completed-turn fork APIs and an explicitly selected real model with sufficient endpoint/quota access.",
+      "Existing native requiresOpenaiAuth=false remains runnable without asserting an account identity.",
+      "Managed flow additionally requires a PM-owned ChatGPT connection with chatgpt.tokens.use.direct, available pinned/local-compatible Codex installation, private broker and built early token-helper dispatcher. Prior OAuth403 is not current verification."
+    ],
+    "limits": "The smoke proves actual arithmetic, same-native-session continuation and historical completed-turn fork only when parent executes it; it does not claim HTTP/SSE/browser/PM business action validation."
+  },
+  "persistence": "Current Chat records/journal/history remain the persistence design. No unified Chat persistence redesign, new PM business completion authority, new permissions or receipt changes."
+}
