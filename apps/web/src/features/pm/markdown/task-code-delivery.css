@@ -1,0 +1,14 @@
+.task-code-delivery { margin-block: 1rem; border: 1px solid var(--border, #d4d4d8); border-radius: 8px; padding: 12px; }
+.task-code-delivery > summary { cursor: pointer; font-weight: 600; }
+.task-delivery-content { display: grid; gap: 10px; margin-top: 12px; }
+.task-delivery-content p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.task-delivery-content small { color: var(--muted-foreground, #71717a); }
+.task-delivery-content label { display: grid; gap: 4px; font-size: 13px; }
+.task-delivery-content input, .task-delivery-content select { padding: 7px 9px; border: 1px solid var(--border, #d4d4d8); border-radius: 5px; background: var(--background, transparent); min-width: 0; }
+.task-delivery-content button { width: fit-content; border: 1px solid var(--border, #d4d4d8); padding: 6px 10px; border-radius: 5px; }
+.task-delivery-content button:disabled { opacity: .45; cursor: not-allowed; }
+.task-delivery-content dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 12px; }
+.task-delivery-content dd { margin: 0; overflow-wrap: anywhere; }
+.task-delivery-content pre { max-height: 320px; overflow: auto; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-delivery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.task-delivery-content [role="alert"] { color: var(--destructive, #b91c1c); }

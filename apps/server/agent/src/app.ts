@@ -1,3 +1,5 @@
+import { taskWorkflowRoutes } from "./task-workflows/index.ts";
+import { taskDeliveryRoutes } from "./task-delivery/index.ts";
 import { Hono } from "hono";
 import { chatRoutes } from "./chat.ts";
 import { inspectorRoutes } from "./inspector/index.ts";
@@ -17,6 +19,8 @@ export const app = new Hono()
   .route("/api", accessRoutes)
   .use("/api/*", accessGuard)
   .route("/api", chatRoutes)
+  .route("/api", taskDeliveryRoutes)
+  .route("/api", taskWorkflowRoutes)
   .route("/api", pmToolRoutes)
   .route("/api", pmCoreChangesRoutes)
   .route("/api", pmCapabilityRoutes)

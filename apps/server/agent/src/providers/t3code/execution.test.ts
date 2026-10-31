@@ -732,3 +732,30 @@ test("preparation cancellation preserves terminal status alongside session Scope
     assert.equal(f.counts().closed, 1);
   } finally { f.releaseProbe(); }
 });
+
+
+test("confirmed Codex worktree uses bounded writes; no grant retains read-only and mismatches fail closed", async () => {
+  for (const grant of [undefined, "/workspace", "/outside"]) {
+    const f = await harness(finish);
+    try {
+      f.context.execution = { threadId: "delivery-thread", generationId: "delivery-generation", messageId: "delivery-message", scope: { workspaceId: "11111111-1111-4111-8111-111111111111", projectId: "PRJ-001" } };
+      f.context.authorizeExecution = async () => {};
+      f.context.authorizeWorktreeWrite = async () => grant;
+      const operation = f.service.run(f.context, { model: "explicit", prompt: "test" });
+      if (grant === "/outside") { await assert.rejects(operation, { code: "scope_required" }); assert.equal(f.starts.length, 0); }
+      else {
+        await operation;
+        assert.equal(f.starts[0].runtimePolicy.approvalPolicy, grant ? "on-request" : "untrusted");
+        assert.deepEqual(f.starts[0].runtimePolicy.sandboxPolicy, grant ? { type: "workspaceWrite", writableRoots: ["/workspace"], networkAccess: false, excludeTmpdirEnvVar: true, excludeSlashTmp: true } : { type: "readOnly" });
+      }
+    } finally { f.releaseProbe(); }
+  }
+});
+test("a technical caller cannot grant native worktree writes without live Chat identity", async () => {
+  const f = await harness(finish);
+  try {
+    f.context.authorizeWorktreeWrite = async () => "/workspace";
+    await assert.rejects(f.service.run(f.context, { model: "explicit", prompt: "test" }), { code: "scope_required" });
+    assert.equal(f.starts.length, 0);
+  } finally { f.releaseProbe(); }
+});

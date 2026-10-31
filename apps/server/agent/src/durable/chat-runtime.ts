@@ -1,3 +1,4 @@
+import { resolveChatExecutionScope } from "../task-delivery/binding.ts";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { workspaceRoot } from "../paths.ts";
@@ -49,7 +50,6 @@ import { makeAssistantStreamingFilter } from "./assistant-streaming.ts";
 import { DurableError } from "./errors.ts";
 import {
   agentContextIdentity,
-  resolveAgentScope,
   sameAgentScope,
   type AgentExecutionSnapshot,
 } from "./agent-scope.ts";
@@ -453,7 +453,7 @@ export async function submitChat(
       modelName: thread.settings.model,
     }));
   const modelOptions = validatedModelOptions(resolved.providerInstanceId, thread.settings.model, thread.settings.modelOptions);
-  const executionSnapshot = await resolveAgentScope(thread.scope, requestHeaders);
+  const executionSnapshot = await resolveChatExecutionScope(thread, requestHeaders);
   if (!idle && request.trigger !== "regenerate-message") {
     const candidate = idleCompactionCandidate(request.id, "onReturn");
     const last = request.messages.at(-1);
@@ -687,7 +687,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         assertLiveAuthorization();
         if (action === "tool" && generation.idleCompaction)
           throw new DurableError(412, "scope_required", "无工具的会话压缩不能获得 PM 工具权限。");
-        const resolved = await resolveAgentScope(snapshot.scope, requestHeaders);
+        const resolved = await resolveChatExecutionScope(requireRunnableThread(generation.threadId), requestHeaders);
         assertLiveAuthorization();
         if (!sameAgentScope(resolved.scope, snapshot.scope) || resolved.path !== snapshot.path)
           throw new DurableError(409, "scope_conflict", "本次执行的文件区域已更改，拒绝过期原生回调。");
@@ -813,6 +813,14 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
                 execution: { threadId: generation.threadId, generationId: generation.id,
                   messageId: generation.messageId, scope: snapshot.scope },
                 authorizeExecution,
+                authorizeWorktreeWrite: generation.idleCompaction || !snapshot.worktreeWriteConfirmed ? undefined : async () => {
+                  await authorizeExecution("tool");
+                  const current = await resolveChatExecutionScope(requireRunnableThread(generation.threadId), requestHeaders);
+                  assertLiveAuthorization();
+                  if (current.path !== snapshot.path) throw new DurableError(409, "scope_conflict", "Delivery worktree changed.");
+                  if (!current.worktreeWriteConfirmed) throw new DurableError(409, "scope_conflict", "Delivery write confirmation is no longer current.");
+                  return current.path;
+                },
                 signal: controller.signal,
                 session: plan.session,
                 modelOptions: generation.modelOptions,
@@ -1072,7 +1080,7 @@ export async function continueChat(
     }));
   const modelOptions = validatedModelOptions(runtime.providerInstanceId, thread.settings.model,
     unchangedSettings ? previous.modelOptions ?? thread.settings.modelOptions : thread.settings.modelOptions);
-  const executionSnapshot = await resolveAgentScope(thread.scope, requestHeaders);
+  const executionSnapshot = await resolveChatExecutionScope(thread, requestHeaders);
   if (!confirmSideEffects)
     throw new ThreadConflictError(
       "CLI 的外部副作用可能已发生。请核对后确认恢复。",

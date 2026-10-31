@@ -23,6 +23,8 @@ export type ProviderDriverContext = {
   pmToolBridge?: { command: string; args: string[] };
   execution?: PmExecutionIdentity;
   /** Request-local PM recheck; never persisted, passed in argv/env, or treated as native permission. */
+  /** Server-only callback; rechecks a confirmed delivery worktree, never a client cwd. */
+  authorizeWorktreeWrite?: () => Promise<string | undefined>;
   authorizeExecution?: (action: "compaction" | "tool") => Promise<void>;
 };
 

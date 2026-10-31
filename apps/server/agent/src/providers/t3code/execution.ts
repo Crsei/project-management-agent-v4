@@ -66,8 +66,16 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
       const rootNodeId = allocator.derive.rootNode({ runId });
       const attemptId = allocator.derive.runAttempt({ runId, attemptOrdinal: 1 });
       const modelSelection = yield* Schema.decodeUnknownEffect(ModelSelection)({ instanceId: context.instanceId, model: options.model, options: options.modelOptions });
+      if (context.authorizeWorktreeWrite && (!context.execution || !context.authorizeExecution))
+        throw pmExecutionError(412, "scope_required", "Worktree writes require a live server-owned execution authorization.");
+      const writableRoot = context.authorizeWorktreeWrite
+        ? yield* Effect.tryPromise({ try: () => context.authorizeWorktreeWrite!(), catch: error => error as Error }) : undefined;
+      if (writableRoot && (context.driver !== "codex" || writableRoot !== lease.cwd))
+        throw pmExecutionError(412, "scope_required", "The confirmed Codex worktree must match the live execution directory.");
       const runtimePolicy = { runtimeMode: "approval-required" as const, interactionMode: options.interactionMode ?? "default",
-        cwd: lease.cwd, approvalPolicy: "untrusted", sandboxPolicy: { type: "readOnly" } };
+        cwd: lease.cwd, approvalPolicy: writableRoot ? "on-request" : "untrusted",
+        sandboxPolicy: writableRoot ? { type: "workspaceWrite", writableRoots: [writableRoot], networkAccess: false,
+          excludeTmpdirEnvVar: true, excludeSlashTmp: true } : { type: "readOnly" } };
       const usageUpdates = yield* makePmUsageUpdates(lease);
       const runtime = yield* lease.instance.orchestrationAdapter.openSession({ threadId, providerSessionId, modelSelection, runtimePolicy,
         ...(saved ? { resumeFromSession: saved.session } : {}), ...(source ? { initialNativeThreadId: source.sessionId } : {}) }).pipe(

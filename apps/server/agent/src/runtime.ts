@@ -1,3 +1,4 @@
+import { startTaskWorkflows, stopTaskWorkflows } from "./task-workflows/runner.ts";
 import { startExecution, stopExecution } from "./durable/engine.ts";
 import { startChatRuntime, stopChatRuntime } from "./durable/chat-runtime.ts";
 import { closeStore, getDatabase } from "./durable/store.ts";
@@ -26,8 +27,10 @@ export function startRuntime(): Promise<void> {
       await startExecution();
       if (stopping) return;
       await startAutomation();
+      if (!stopping) startTaskWorkflows();
     } catch (error) {
       const maintenance = Promise.allSettled([stopPmProviderMaintenance()]);
+      await stopTaskWorkflows();
       const workers = await Promise.allSettled([stopAutomation(), stopExecution(), stopChatRuntime()]);
       const drained = await maintenance;
       const providers = await Promise.allSettled([stopPmProviderApplication()]);
@@ -48,6 +51,7 @@ export function stopRuntime(): Promise<void> {
   stopping = (async () => {
     if (starting) await starting.catch(() => undefined);
     try {
+      await stopTaskWorkflows();
       const automation = await Promise.allSettled([stopAutomation()]);
       const workers = await Promise.allSettled([stopExecution(), stopChatRuntime()]);
       const drained = await maintenance;

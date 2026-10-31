@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import os from "node:os";
 import test from "node:test";
 
-for (const held of ["chat", "execution"] as const) {
+for (const held of ["chat", "execution", "automation"] as const) {
   test(`shutdown during ${held} startup prevents later workers from admitting work`, () => {
     // An isolated process enables Node's module seam without changing the suite's loader.
     // The real runtime owns the start/stop race; worker dependencies expose controlled
@@ -24,6 +24,7 @@ for (const held of ["chat", "execution"] as const) {
       replace("durable/chat-runtime.ts", { startChatRuntime: () => start("chat"), stopChatRuntime: async () => {} });
       replace("durable/engine.ts", { startExecution: () => start("execution"), stopExecution: async () => {} });
       replace("automation/index.ts", { startAutomation: () => start("automation"), stopAutomation: async () => {} });
+      replace("task-workflows/runner.ts", { startTaskWorkflows: () => start("workflows"), stopTaskWorkflows: async () => {} });
       replace("durable/store.ts", { getDatabase: () => ({}), closeStore: () => {} });
       replace("providers/instances.ts", { migrateProviderStartupState: async () => {} });
       replace("providers/t3code/production.ts", { providerApplicationOptions: {} });

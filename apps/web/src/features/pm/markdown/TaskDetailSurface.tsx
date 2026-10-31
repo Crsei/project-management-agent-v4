@@ -1,3 +1,4 @@
+import { TaskWorkflowPanel } from '../workflows/TaskWorkflowPanel';
 import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { CalendarDays, Circle, CircleCheck, Flag, Folder, GitBranch, Repeat2, Tag, Timer, UserRound } from 'lucide-react';
 import { statusCategory, workflowFor } from '@pm-schema';
@@ -11,6 +12,7 @@ import { Properties } from './Properties';
 import { TaskTitleField } from './TaskDocumentFields';
 import { TaskBlockersField, TaskDetailRelated } from './TaskDetailRelated';
 import './task-detail.css';
+import { TaskCodeDeliveryPanel } from './TaskCodeDeliveryPanel';
 
 const ordinaryFields = ['title', 'status', 'priority', 'assignee', 'due', 'x-pm-start', 'project', 'labels', 'x-pm-estimate', 'blocked_by'];
 
@@ -86,6 +88,8 @@ export function TaskDetailSurface({ controller: c, en, onEditSource }: { control
     </dl>
     <section className="task-description" aria-labelledby={`${uid}-description`}><div className="task-section-heading"><h3 id={`${uid}-description`}>{t('Description', '描述')}</h3><button type="button" className="text-button" onClick={onEditSource}>{t('Edit Markdown', '编辑 Markdown')}</button></div><Preview raw={c.draftParseError ? c.selected.raw : c.raw} body={entity.body} hideTitle viewProps={{ ...c.viewProps, files: c.files, allFiles: c.files }} disabled={disabled} onToggle={c.toggleTaskChecklist} onLink={c.wikiLink} /><p className="task-field-note">{t('Markdown source is shared with this view. Checklist edits are drafts until Save; checklist items are not subtasks.', '此视图与 Markdown 源码共享草稿；检查项修改需显式保存，正文检查项不是正式子任务。')}</p></section>
     <TaskDetailRelated controller={c} en={en} />
+    {workspace && c.selected.entity.project && <TaskWorkflowPanel key={`workflow:${workspace.id}:${c.selected.id}:${c.selected.revision}`} workspaceId={workspace.id} projectId={c.selected.entity.project} taskId={c.selected.id} revision={c.selected.revision} disabled={disabled || !!c.draft || !!c.ahead || c.writesBlocked} />}
+    {workspace && c.selected.entity.project && <TaskCodeDeliveryPanel key={`${workspace.id}:${c.selected.id}:${c.selected.revision}`} workspaceId={workspace.id} projectId={c.selected.entity.project} taskId={c.selected.id} revision={c.selected.revision} disabled={disabled || !!c.draft || !!c.ahead || c.writesBlocked} en={en} />}
     <details className="task-advanced-properties"><summary>{t('Advanced properties & lifecycle', '高级属性与生命周期')}</summary><Properties file={c.selected} entity={entity} files={c.files} configuration={c.configuration} disabled={disabled} lifecycleDisabled={!c.canManageLifecycle(c.selectedId) || c.draftInvalid} dirty={!!c.draft} draftMode excludeFields={ordinaryFields} section="properties" en={en} onPatch={c.patchTaskDraft} onLink={c.wikiLink} onLifecycle={lifecycle} onContext={() => { void c.loadContext(); }} /></details>
   </article>;
 }
