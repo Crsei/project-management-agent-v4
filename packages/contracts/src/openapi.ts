@@ -1,3 +1,4 @@
+import { productRoadmapPaths } from './product-roadmap-openapi.ts';
 import { z } from 'zod';
 import type { CommandRegistry } from '../../application/src/ports.ts';
 import { projectAuditPageSchema } from '../../domain/src/project-audit.ts';
@@ -17,6 +18,7 @@ import { localProjectPaths } from './local-project-openapi.ts';
 import { agentFileAreaPaths } from './agent-file-area-openapi.ts';
 import { documentSourcePaths } from './document-source-openapi.ts';
 import { automationPaths } from './automation-openapi.ts';
+import { workflowTaskTransitionPaths } from './workflow-task-transition-openapi.ts';
 import { agentChatToolResultSchema } from '../../agent-contracts/src/pm-tool-result.ts';
 
 // Payload validators remain owned by application commands. This module only
@@ -262,6 +264,8 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     ...agentFileAreaPaths(),
     ...documentSourcePaths(),
     ...automationPaths(),
+    ...workflowTaskTransitionPaths(),
+    ...productRoadmapPaths(),
     '/health/live': { get: { operationId: 'getLiveness', summary: 'Process liveness only', security: [], responses: { 200: response('Process responds; no business-readiness guarantee.', object({ status: { const: 'alive' } })) } } },
     '/health/ready': { get: { operationId: 'getReadiness', summary: 'Database, storage, live Worker heartbeat and quarantined outbox readiness', security: [], responses: { 200: response('All readiness checks passed.', ref('Readiness')), 503: response('Backend is uninitialized or at least one readiness check failed.', ref('Readiness')) } } },
     '/api/v1/capabilities': { get: { operationId: 'getCapabilities', summary: 'Configured phase-one capabilities; enabled does not imply readiness', security: [], responses: { 200: response('Execution remains disabled. Check /health/ready before business traffic.', ref('Capabilities')) } } },

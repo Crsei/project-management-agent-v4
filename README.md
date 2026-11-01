@@ -24,7 +24,13 @@
 
 任务驱动 GitHub 代码交付第一版见[使用与边界说明](docs/implementation/task-code-delivery.zh.md)：独立分支、启动时选 Provider、显式验证/提交/推送、Draft PR 和手动刷新 CI/评审。2026-10-31 已在隔离仓库跑通真实 Codex 开发、10 项测试、Draft PR 与同版本 CI 成功回到任务；暂无人工评审，不代表全仓回归或完整 Runner 验收通过。会话持久化仍暂沿用 Agent Chat。
 
-任务详情新增[任务工作流与节点画布](docs/implementation/task-workflows.zh.md)：三套预制模板、项目级草稿/发布版本、受限节点连线与一次明确授权后的后台交付。工作流进度不改变任务业务状态；重启后需显式恢复，不重放未知副作用。
+任务详情新增[任务工作流与节点画布](docs/implementation/task-workflows.zh.md)：三套预制模板、项目级草稿/发布版本、受限节点连线与一次明确授权后的后台交付。支持[节点与任务状态联动](docs/implementation/workflow-task-state.zh.md)：开发前进入进行中、CI 通过后确认待审核，不自动完成任务；重启后需显式恢复，不重放未知副作用。
+
+投资人演示入口、5 分钟讲解脚本和本轮真实验收见[投资人 POC](docs/implementation/investor-poc.zh.md)。2026-11-01 已通过公共入口跑通工作流 v3：真实 Codex 开发 → 测试 → Draft PR #2 → 同 SHA 必需 CI → 人工确认待审核；不等于业务验收或全仓回归全绿。
+
+预置 [IdeaBoard App 场景与隔离预览](docs/implementation/app-scenario-preview.zh.md)：新建任务填入可编辑需求，由现有 Agent 工作流生成应用；提交后显式启动本机隔离预览，操作和重启核对数据，不自动合并、部署或完成任务。
+
+项目级[产品规划工作台](docs/implementation/product-roadmap.zh.md)：引导轻量 PRD、可编辑多任务 Roadmap、不可变发布版本、真实任务与依赖、前置代码基线校验及项目级集成预览。规则生成不冒充 AI 推理，发布计划不等于启动开发或完成项目。 2026-11-02 已在隔离仓库通过五个真实任务增量交付同一客户反馈 App：Draft PR #4～#8、同版本 CI、提交包含关系及浏览器跨功能/重启持久化均已核对；任务仍待审核，不代表完整 Runner 或生产验收。
 
 ## 当前状态
 

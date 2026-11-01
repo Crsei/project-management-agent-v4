@@ -13,6 +13,7 @@ import { projectArchived } from "./project-menu-model"
 import styles from "./service-project-layout.module.css"
 
 const projectViews = [
+  { key: "roadmap", path: "/roadmap", zh: "产品规划", en: "Product roadmap", icon: GitBranch },
   { key: "overview", path: "?tab=overview", zh: "概览", en: "Overview", icon: LayoutDashboard },
   { key: "kanban", path: "/issues?view=kanban", zh: "看板", en: "Board", icon: Columns3 },
   { key: "list", path: "/issues?view=list", zh: "列表", en: "List", icon: ListTodo },
@@ -68,6 +69,7 @@ function useActiveProjectView(base: string) {
     if (!params.get("view") && params.get("savedView")) return ""
     return issueViewKeys[params.get("view") || configuredView] || ""
   }
+  if (pathname === `${base}/roadmap`) return "roadmap"
   return pathname === `${base}/events` ? "calendar" : ""
 }
 

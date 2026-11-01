@@ -5,8 +5,8 @@ import { mkdtemp, rm, realpath, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { authorizeDelivery } from './authority.ts';
-import { deliveryStore, resolveChatExecutionScope } from './binding.ts';
-import { closeStore } from '../durable/store.ts';
+import { deliveryStore, deliveryTaskRevision, resolveChatExecutionScope } from './binding.ts';
+import { closeStore, writeRecord } from '../durable/store.ts';
 import type { TaskCodeDelivery } from '../../../../../packages/contracts/src/task-code-delivery.ts';
 import type { ThreadMetadata } from '../durable/threads.ts';
 
@@ -64,4 +64,16 @@ test('bound execution and Inspector use only the owned worktree, and publication
   record.pending = { action: 'commit', at: 'now' }; record.version++; deliveryStore.save(record);
   await assert.rejects(resolveChatExecutionScope(thread), /执行阶段/);
   assert.equal((await resolveChatExecutionScope(thread, undefined, 'inspect')).path, record.git.directory);
+});
+
+test('accepted workflow revision is scoped to the exact original delivery, not another task or manual flow', () => {
+  const delivery = deliveryStore.read('delivery')!;
+  assert.equal(deliveryTaskRevision(delivery), delivery.taskRevision);
+  const run = { id: delivery.id, input: { ...scope, taskRevision: delivery.taskRevision }, acceptedTaskRevision: 'owned-status-receipt' };
+  writeRecord('task-workflow-runs-v1', delivery.id, run);
+  assert.equal(deliveryTaskRevision(delivery), 'owned-status-receipt');
+  for (const mismatch of [{ taskId: 'TASK-999' }, { projectId: 'PRJ-999' }, { workspaceId: 'another-workspace' }, { taskRevision: 'different-requirement' }]) {
+    writeRecord('task-workflow-runs-v1', delivery.id, { ...run, input: { ...run.input, ...mismatch } });
+    assert.equal(deliveryTaskRevision(delivery), delivery.taskRevision);
+  }
 });

@@ -1,5 +1,5 @@
 import type { DeliveryScope, TaskCodeDelivery } from '../../contracts/src/task-code-delivery.ts';
-import { workflowProblems, workflowTemplates, type WorkflowDefinition, type WorkflowGraph, type WorkflowNode, type WorkflowRun, type WorkflowStart } from '../../contracts/src/task-workflow.ts';
+import { workflowProblems, workflowTemplates, workflowTaskRevision, type WorkflowDefinition, type WorkflowGraph, type WorkflowNode, type WorkflowRun, type WorkflowStart, type WorkflowTransitionRequest, type WorkflowTransitionResult } from '../../contracts/src/task-workflow.ts';
 import { DeliveryError, type DeliveryTask, type TaskCodeDeliveryService } from './task-code-delivery.ts';
 
 export interface WorkflowPorts {
@@ -11,9 +11,11 @@ export interface WorkflowPorts {
   saveRun(v: WorkflowRun): void;
   authorize(scope: DeliveryScope, write: boolean): Promise<DeliveryTask>;
   repository(root: string): Promise<string>;
+  defaultBase?(root: string, scope?: DeliveryScope): Promise<string | null>;
   provider(input: WorkflowStart): Promise<void>;
   delivery: TaskCodeDeliveryService;
   readDelivery(id: string): TaskCodeDelivery | null;
+  transition?(input: WorkflowTransitionRequest, reconcile: boolean): Promise<WorkflowTransitionResult>;
   now?: () => number;
 }
 const fail = (code: string, message: string): never => { throw new DeliveryError(code, message); };
@@ -33,7 +35,9 @@ export class TaskWorkflowService {
     const definitions = this.p.definitions().filter(v => sameProject(v, scope));
     let repository: string | null = null;
     try { repository = await this.p.repository(task.root); } catch { /* Template editing does not require Git readiness. */ }
-    return { definitions: [...structuredClone(workflowTemplates), ...definitions], runs: this.p.runs().filter(v => sameProject(v.input, scope) && v.input.taskId === scope.taskId), repository, hasManualDelivery: (await this.p.delivery.list(scope)).some(d => !this.p.readRun(d.id)) };
+    let defaultBase: string | null = null;
+    if (repository) try { defaultBase = await this.p.defaultBase?.(task.root, scope) ?? null; } catch { /* Explicit user selection remains available. */ }
+    return { definitions: [...structuredClone(workflowTemplates), ...definitions], runs: this.p.runs().filter(v => sameProject(v.input, scope) && v.input.taskId === scope.taskId), repository, defaultBase, hasManualDelivery: (await this.p.delivery.list(scope)).some(d => !this.p.readRun(d.id)) };
   }
   async saveDefinition(input: DeliveryScope & { id: string; expectedRevision: number; graph: WorkflowGraph; publish: boolean }) {
     await this.p.authorize(input, true);
@@ -56,6 +60,7 @@ export class TaskWorkflowService {
   private validateConsent(input: WorkflowStart, graph: WorkflowGraph) {
     const kinds = new Set(graph.nodes.map(n => n.kind));
     if (!input.consent.execute || (graph.nodes.some(n => n.kind === 'agent' && n.config.mode === 'develop') && !input.consent.worktreeWrite) || (kinds.has('commit') && !input.consent.commit) || (kinds.has('push') && !input.consent.push) || (kinds.has('pr') && !input.consent.draftPr)) fail('workflow_consent', '此图需要明确的执行、写入及发布授权；发布模板本身不是授权。');
+    if (graph.nodes.some(n => n.config.taskTransition) && input.consent.taskStatus !== true) fail('workflow_consent', '此图包含任务状态联动，需要单独确认授权。');
   }
   async start(input: WorkflowStart) {
     return this.lock(`${input.workspaceId}:${input.taskId}`, async () => {
@@ -81,15 +86,27 @@ export class TaskWorkflowService {
     const v = this.p.readRun(id) ?? fail('not_found', '工作流运行不可用。');
     await this.p.authorize(v.input, false); return v;
   }
-  async control(id: string, action: 'pause' | 'resume' | 'approve', version: number) {
+  async control(id: string, action: 'pause' | 'resume' | 'approve' | 'confirm-transition', version: number) {
     return this.lock(id, async () => {
-      const v = await this.read(id), task = await this.p.authorize(v.input, true);
+      const v = await this.read(id); let task = await this.p.authorize(v.input, true);
       if (v.version !== version) fail('workflow_conflict', '运行已更新，请刷新后操作。');
       if (['completed', 'failed'].includes(v.status)) fail('workflow_terminal', '运行已结束。');
       if (action === 'pause') { v.status = 'paused'; v.message = '已暂停后续步骤；在途 Agent / 命令不会因此取消。'; return this.save(v); }
-      if (task.revision !== v.input.taskRevision) fail('task_changed', '需求版本变化，不能恢复旧运行。');
       if (task.root !== v.projectRoot || await this.p.repository(task.root) !== v.input.repository) fail('repository_changed', '仓库已变化。');
-      if (action === 'approve') {
+      this.validateConsent(v.input, v.graph);
+      const transition = v.transitions?.[v.current];
+      if (action === 'resume' && transition?.state === 'requested' && transition.request && this.p.transition) {
+        const result = await this.p.transition(transition.request, true);
+        if (result.status !== 'applied') return fail('workflow_transition_unknown', '未查到已提交的原状态转换收据；不会重放或接纳人工状态变更。');
+        Object.assign(transition, { state: 'applied', revision: result.revision, commandId: result.commandId, appliedAt: this.time(), message: '已核对原业务状态转换收据。' });
+        v.acceptedTaskRevision = result.revision; this.save(v);
+        task = await this.p.authorize(v.input, true);
+      }
+      if (task.revision !== workflowTaskRevision(v)) fail('task_changed', '任务存在原状态转换之外的变化，不能恢复旧运行。');
+      if (action === 'confirm-transition') {
+        if (transition?.state !== 'awaiting' || transition.mode !== 'confirm' || !v.graph.nodes.find(n => n.id === v.current)?.config.taskTransition) fail('workflow_transition_missing', '当前没有待确认的任务状态转换。');
+        transition!.confirmedAt = this.time(); v.status = 'running'; delete v.message;
+      } else if (action === 'approve') {
         const node = v.graph.nodes.find(n => n.id === v.current)!;
         if (node.kind !== 'approval' || v.nodes[node.id]?.state !== 'waiting') fail('workflow_approval', '当前没有待确认节点。');
         this.complete(v, node, true, '用户确认继续；不代表业务审核通过。');
@@ -108,6 +125,31 @@ export class TaskWorkflowService {
   }
   private wait(v: WorkflowRun, node: WorkflowNode, message: string) { v.nodes[node.id]!.state = 'waiting'; v.nodes[node.id]!.message = message; v.status = 'waiting'; v.message = message; }
   private unknown(v: WorkflowRun, message: string) { v.status = 'paused'; v.message = message; }
+  private async transitionGate(v: WorkflowRun, node: WorkflowNode): Promise<boolean> {
+    const config = node.config.taskTransition;
+    if (!config) return true;
+    v.transitions ??= {};
+    const record = v.transitions[node.id] ??= { ...config, state: 'awaiting' };
+    if (record.state === 'applied') return true;
+    if (record.state === 'requested') { this.unknown(v, '状态转换结果未知，请显式核对并恢复；不会重复写入。'); return false; }
+    if (config.mode === 'confirm' && !record.confirmedAt) {
+      record.message = `等待确认任务${config.phase === 'start' ? '进入进行中' : '进入待审核'}；不是业务验收。`;
+      if (v.nodes[node.id]) { v.nodes[node.id]!.state = 'waiting'; v.nodes[node.id]!.message = record.message; }
+      v.status = 'waiting'; v.message = record.message; return false;
+    }
+    if (!this.p.transition) fail('workflow_transition_unavailable', '任务状态联动服务尚未就绪。');
+    record.request = { workspaceId: v.input.workspaceId, projectId: v.input.projectId, taskId: v.input.taskId, runId: v.id, nodeId: node.id, revision: workflowTaskRevision(v), phase: config.phase };
+    record.state = 'requested'; record.message = '已登记原状态转换请求，等待 PM 收据。'; this.save(v);
+    const result = await this.p.transition!(record.request, false);
+    if (result.status !== 'applied') { this.unknown(v, 'PM 状态转换未确认，请核对原收据。'); return false; }
+    Object.assign(record, { state: 'applied', revision: result.revision, commandId: result.commandId, appliedAt: this.time(), message: `任务状态已确认：${config.phase === 'start' ? '进行中' : '待审核'}。` });
+    v.acceptedTaskRevision = result.revision;
+    // Persist the exact receipt before allowing any subsequent Agent authorization.
+    this.save(v);
+    const task = await this.p.authorize(v.input, true);
+    if (task.revision !== workflowTaskRevision(v) || task.root !== v.projectRoot) fail('task_changed', '状态转换之后任务或目录又有变化，停止后续执行。');
+    return true;
+  }
   /** One durable node step. Re-entry reconciles receipts; it never blindly repeats effects. */
   async tick(id: string) {
     return this.lock(id, async () => {
@@ -115,12 +157,14 @@ export class TaskWorkflowService {
       if (v.status !== 'running' && v.status !== 'waiting') return v;
       try {
         const task = await this.p.authorize(v.input, true);
-        if (task.revision !== v.input.taskRevision) fail('task_changed', '任务版本已变化，原工作流已暂停。');
+        if (task.revision !== workflowTaskRevision(v)) fail('task_changed', '任务版本已变化，原工作流已暂停。');
         if (task.root !== v.projectRoot || await this.p.repository(task.root) !== v.input.repository) fail('repository_changed', '仓库身份变化，原工作流已暂停。');
         this.validateConsent(v.input, v.graph);
         const node = v.graph.nodes.find(n => n.id === v.current)!;
         if (!node) fail('workflow_invalid', '运行节点不存在。');
         if (v.status === 'waiting' && node.kind === 'approval') return v;
+        if (v.status === 'waiting' && v.transitions?.[node.id]?.state === 'awaiting' && !v.transitions[node.id]?.confirmedAt) return v;
+        if (node.kind === 'agent' && !await this.transitionGate(v, node)) return this.save(v);
         const existing = v.nodes[node.id];
         if (!existing) { v.nodes[node.id] = { state: 'running', startedAt: this.time() }; this.save(v); }
         let d = this.p.readDelivery(v.id);
@@ -169,10 +213,14 @@ export class TaskWorkflowService {
             const f = d?.feedback;
             if (f && f.head !== d?.head) { this.unknown(v, '远端 HEAD 已变化，本次验证不覆盖新版本。'); break; }
             const checks = f?.checks ?? [];
-            if (checks.length && checks.every(c => c.conclusion === 'success' && ['completed', 'success'].includes(c.status))) this.complete(v, node, true, '当前提交的全部已发现 CI 检查通过。');
+            const missing = (node.config.requiredChecks ?? []).filter(name => !checks.some(check => check.name === name));
+            if (!missing.length && checks.length && checks.every(c => c.conclusion === 'success' && ['completed', 'success'].includes(c.status))) {
+              if (node.config.taskTransition && (!d?.pr || !d.head || !d.test?.passed || f?.state !== 'open' || !f.draft)) fail('workflow_review_evidence', '进入待审核需要本次通过测试、同提交的开放 Draft PR 和 CI 证据。');
+              if (await this.transitionGate(v, node)) this.complete(v, node, true, node.config.requiredChecks?.length ? `当前提交的必需 CI 检查通过：${node.config.requiredChecks.join('、')}。` : '当前提交的全部已发现 CI 检查通过（旧模板未指定必需检查）。');
+            }
             else if (checks.some(c => c.conclusion !== null && !['success', 'pending'].includes(c.conclusion))) this.complete(v, node, false, 'CI 未通过（含 skipped / neutral），请人工处理。');
             else if (Date.parse(this.time()) - Date.parse(v.nodes[node.id]!.startedAt) > (node.config.timeoutMinutes ?? 15) * 60000) this.complete(v, node, false, '等待 CI 超时；没有检查不算通过。');
-            else this.wait(v, node, checks.length ? '等待 GitHub CI 结束。' : '尚未发现 CI，继续等待，不计通过。');
+            else this.wait(v, node, missing.length ? `等待必需 CI：${missing.join('、')}；已发现的其他成功检查不能替代。` : checks.length ? '等待 GitHub CI 结束。' : '尚未发现 CI，继续等待，不计通过。');
             break;
           }
           case 'condition': {
@@ -182,7 +230,7 @@ export class TaskWorkflowService {
             this.complete(v, node, outcome === 'pass', `选择 ${outcome} 分支`); break;
           }
           case 'approval': this.wait(v, node, node.config.instruction || '等待用户确认继续。'); break;
-          case 'end': this.complete(v, node, node.config.outcome === 'success', node.config.outcome === 'success' ? '工作流结束，成果待审查；任务状态未改变。' : '工作流以失败结束，请人工处理。'); break;
+          case 'end': this.complete(v, node, node.config.outcome === 'success', node.config.outcome === 'success' ? '工作流结束，成果待审查；未自动完成任务。' : '工作流以失败结束，请人工处理。'); break;
         }
       } catch (error) {
         // No raw subprocess output / request headers / secrets in durable workflow messages.

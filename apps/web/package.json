@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/features/pm/service src/features/pm/components src/features/pm/markdown src/features/pm/workflows src/features/pm/agent src/features/pm/pm-shell.tsx src/features/pm/pm-fixture-route.tsx src/features/pm/pm-session.tsx src/features/pm/pm-showcase-catalog.tsx src/views/pm/presentation-page.tsx src/views/pm/project-detail.tsx src/views/pm/issue-detail.tsx src/views/pm/project-collection-fixture.tsx src/views/pm/issue-collection-fixture.tsx src/routes src/routes.tsx vite.config.ts .storybook",
+    "lint": "eslint src/features/pm/product-roadmap src/features/pm/service src/features/pm/components src/features/pm/markdown src/features/pm/workflows src/features/pm/agent src/features/pm/pm-shell.tsx src/features/pm/pm-fixture-route.tsx src/features/pm/pm-session.tsx src/features/pm/pm-showcase-catalog.tsx src/views/pm/presentation-page.tsx src/views/pm/project-detail.tsx src/views/pm/issue-detail.tsx src/views/pm/project-collection-fixture.tsx src/views/pm/issue-collection-fixture.tsx src/routes src/routes.tsx vite.config.ts .storybook",
     "storybook": "storybook dev -p 6017 --host 127.0.0.1 --no-open --disable-telemetry",
     "build-storybook": "storybook build --disable-telemetry"
   },

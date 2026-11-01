@@ -1,3 +1,4 @@
+import { ProductRoadmapPage } from "@/features/pm/product-roadmap/ProductRoadmapPage"
 import { lazy, Suspense } from "react"
 import { Navigate, Outlet, Route, Routes } from "react-router"
 import { PmHome, PmLabLayout, PmProductLayout } from "@/features/pm/pm-shell"
@@ -58,6 +59,7 @@ export function AppRoutes() {
         <Route path=":workspaceSlug/projects" element={<ServiceProjects />} />
         <Route path=":workspaceSlug/projects/:projectId" element={<ServiceProjectLayout />}>
           <Route index element={<ServiceProjectDetail />} />
+          <Route path="roadmap" element={<ProductRoadmapPage />} />
           <Route path="issues" element={<ServiceIssues />} />
           <Route path="issues/new" element={<ServiceTaskCreationPage />} />
           <Route path="entities/:entityId" element={<ServiceEntityPage />} />

@@ -1,3 +1,4 @@
+import { ideaBoardScenario, scenarioFitsDraft } from './app-scenarios';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError as PmApiError, type MemberDirectory, type CommandReceipt } from '@contracts';
@@ -414,6 +415,10 @@ export function useEntityCreation(options: EntityCreationOptions) {
     localSettings, localPreview: localPreview && localPreview.directory === JSON.stringify(draft?.attempt?.localDirectory ?? draft?.localDirectory) ? localPreview.result : null,
     changeDirectory, previewDirectory,
     storageFailed: session.creationDrafts.persistenceError(),
+    applyAppScenario: () => edit(current => {
+      if (!scenarioFitsDraft(current) || !creationDraftEditable(current)) throw new Error('场景只可填入空白任务草稿，不覆盖已有标题、描述或已发送请求。');
+      return editCreationDraft(current, { values: { ...current.values, title: ideaBoardScenario.title }, body: ideaBoardScenario.body });
+    }),
     changeFields, changeKind, changeBody: (body: string) => edit(current => editCreationDraft(current, { body })),
     changeWatch: (watch: boolean) => edit(current => editCreationDraft(current, { watch })),
     addChild: () => edit(current => editCreationDraft(current, { children: [...current.children, { draftId: crypto.randomUUID(), values: initialCreationValues('work_item', sources.data!.configuration, { project: String(current.values.project ?? '') }), body: '' }] })),

@@ -130,3 +130,7 @@ Submission 创建即冻结，由服务端保存当时的工作范围和验收标
 UnassignMilestone 是单独的关系变更，允许从 planned 里程碑解除包括 done/cancelled 在内的未归档工作项，便于取消里程碑；只增加 version，不修改 contentRevision 或完成记录。已 achieved 的里程碑先重开再修改成员。解除与里程碑/项目关闭共用并发边界，不隐式重开工作项；已归档工作项先恢复归档。
 
 Project 归档要求 completed/cancelled；WorkItem 归档要求 done/cancelled。两者均须无活跃运行；项目归档使其下属业务对象只读，但允许授权读取历史。RestoreArchivedObject 只移除归档标记，不隐含重开。本版不提供其他对象的独立归档命令。
+
+## 节点驱动任务阶段（2026-11-01 实现增补）
+
+按已采纳的 [Markdown ADR](../implementation/markdown-integration-adr.zh.md)，执行工作流通过应用服务申请原生任务状态转换，而非执行回调直接决定业务完成（INV-15）。支持的开始开发、CI 通过后待审核边界、授权和原收据恢复见[实现说明](../implementation/workflow-task-state.zh.md)。不自动设置 done/canceled，不增加 Submission/Review 前置守卫；既有手动完成规则不变。

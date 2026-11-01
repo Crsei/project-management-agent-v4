@@ -1,3 +1,7 @@
+import { checkRoadmapBase, inspectRoadmapDelivery } from './roadmap.ts';
+import { roadmapDeliveryScopeSchema } from '../../../../../packages/contracts/src/product-roadmap.ts';
+import { appPreviews } from './app-preview.ts';
+import { appPreviewActionSchema } from '../../../../../packages/contracts/src/task-app-preview.ts';
 import { workflowStore } from "../task-workflows/store.ts";
 import { resolveProviderRuntime } from '../providers/runtime.ts';
 import { Hono } from 'hono';
@@ -9,7 +13,7 @@ import { DeliveryError, TaskCodeDeliveryService } from '../../../../../packages/
 import { DurableError } from '../durable/errors.ts';
 import { getActiveChat, listChatGenerations, submitChat } from '../durable/chat-runtime.ts';
 import { ensureThread, getThread, getThreadBranch, updateThread } from '../durable/threads.ts';
-import { deliveryStore } from './binding.ts';
+import { deliveryStore, deliveryTaskRevision } from './binding.ts';
 import { authorizeDelivery } from './authority.ts';
 import { git, preflightPrepare, reconcileCommit, commitTree, prepareWorktree, pushTree, readRemoteHead, readTree, testTree, verifyWorktree } from './git.ts';
 import { DeliveryGitHub } from './github.ts';
@@ -19,15 +23,24 @@ const github = new DeliveryGitHub();
 export function deliveryService(headers: Headers) {
   return new TaskCodeDeliveryService({
     ...deliveryStore,
+    expectedTaskRevision: deliveryTaskRevision,
     authorize: (scope, write) => authorizeDelivery(scope, write, headers),
     preflightPrepare, reconcileCommit,
+    preflightTask: (task, base) => checkRoadmapBase(task, base, headers),
     preflightAction: async (v, action) => {
-      if (action.action === 'develop') await resolveProviderRuntime({ providerInstanceId: action.providerInstanceId, modelName: action.model });
+      if (action.action === 'develop') {
+        await resolveProviderRuntime({ providerInstanceId: action.providerInstanceId, modelName: action.model });
+        await checkRoadmapBase(await authorizeDelivery(v, true, headers), v.baseBranch, headers, v.git?.baseSha);
+      }
       if (action.action === 'commit') { await git(v.git!.directory, 'config', 'user.name'); await git(v.git!.directory, 'config', 'user.email'); }
       if (action.action === 'push') await readRemoteHead(v);
       if (action.action === 'draft-pr') await github.find(v);
     },
-    prepare: prepareWorktree, verify: verifyWorktree, tree: v => readTree(v), test: testTree, commit: commitTree, push: pushTree, remoteHead: readRemoteHead,
+    prepare: async (value, root, base) => {
+      const binding = await prepareWorktree(value, root, base);
+      await checkRoadmapBase({ ...value, root, revision: value.taskRevision }, base, headers, binding.baseSha);
+      return binding;
+    }, verify: verifyWorktree, tree: v => readTree(v), test: testTree, commit: commitTree, push: pushTree, remoteHead: readRemoteHead,
     findPr: v => github.find(v), createPr: v => github.create(v), feedback: v => github.feedback(v),
     busy: v => !!getActiveChat(v.threadId),
     generation: v => { const generation = listChatGenerations(v.threadId).find(g => g.request.idempotencyKey === v.generationKey); return generation ? { id: generation.id, status: generation.status } : null; },
@@ -68,4 +81,44 @@ taskDeliveryRoutes.post('/task-deliveries/:id/actions', async c => {
     throw new DeliveryError('workflow_managed', '此交付由工作流管理，不能手动穿插修改。');
   }
   return c.json(await deliveryService(c.req.raw.headers).act(id, action));
+});
+
+async function authorizedPreview(id: string, write: boolean, headers: Headers, stopping = false) {
+  const value = deliveryStore.read(id);
+  if (!value) throw new DeliveryError('not_found', '交付记录不存在。');
+  const task = await authorizeDelivery(value, write, headers);
+  if (!stopping && (task.root !== value.git?.root || (write && task.revision !== deliveryTaskRevision(value)))) throw new DeliveryError('task_changed', '任务或项目目录已变化，请先核对。');
+  return value;
+}
+taskDeliveryRoutes.get('/task-deliveries/:id/preview', async c => {
+  const v = await authorizedPreview(z.uuid().parse(c.req.param('id')), false, c.req.raw.headers);
+  return c.json(await appPreviews.inspect(v.id, await appPreviews.supported(v)));
+});
+taskDeliveryRoutes.post('/task-deliveries/:id/preview', async c => {
+  const input = appPreviewActionSchema.parse(await c.req.json());
+  const v = await authorizedPreview(z.uuid().parse(c.req.param('id')), true, c.req.raw.headers, input.action === 'stop');
+  if (input.action === 'stop') { await appPreviews.stop(v.id); return c.json(appPreviews.state(v.id, await appPreviews.supported(v))); }
+  return c.json(await appPreviews.start(v, input.head));
+});
+
+// Project preview can only reuse a verified, committed integration candidate; never merge code here.
+taskDeliveryRoutes.get('/project-roadmap-deliveries', async c => {
+  const { refresh, ...query } = c.req.query();
+  return c.json(await inspectRoadmapDelivery(roadmapDeliveryScopeSchema.parse(query), c.req.raw.headers, refresh === '1'));
+});
+taskDeliveryRoutes.get('/project-app-previews/:id', async c => {
+  const scope = roadmapDeliveryScopeSchema.parse(c.req.query()), id = z.uuid().parse(c.req.param('id'));
+  const result = await inspectRoadmapDelivery(scope, c.req.raw.headers, false);
+  if (!result.eligible || result.candidate?.id !== id) throw new DeliveryError('project_not_integrated', result.reason);
+  const value = await authorizedPreview(id, false, c.req.raw.headers);
+  return c.json(await appPreviews.inspect(id, await appPreviews.supported(value)));
+});
+taskDeliveryRoutes.post('/project-app-previews/:id', async c => {
+  const scope = roadmapDeliveryScopeSchema.parse(c.req.query()), id = z.uuid().parse(c.req.param('id')), input = appPreviewActionSchema.parse(await c.req.json());
+  const value = await authorizedPreview(id, true, c.req.raw.headers, input.action === 'stop');
+  if (value.workspaceId !== scope.workspaceId || value.projectId !== scope.projectId) throw new DeliveryError('project_scope', '项目不一致。');
+  if (input.action === 'stop') { await appPreviews.stop(id); return c.json(appPreviews.state(id, await appPreviews.supported(value))); }
+  const result = await inspectRoadmapDelivery(scope, c.req.raw.headers, true);
+  if (!result.eligible || result.candidate?.id !== id || result.candidate.head !== input.head) throw new DeliveryError('project_not_integrated', '集成证据已变化，请重新核对；没有启动预览。');
+  return c.json(await appPreviews.start(value, input.head));
 });

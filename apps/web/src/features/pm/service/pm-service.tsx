@@ -6,6 +6,7 @@ import { PmCommandStore } from "./pm-command-store"
 import { pmKeys, readAllChanges, readAllEntities, refreshPmSnapshots } from "./pm-data"
 import { asPmError, isAccessError, PmCommandError, PmServiceError } from "./pm-errors"
 import { runPmStream, type PmStreamState } from "./pm-stream"
+import { pageVisibility } from "./page-visibility"
 import { ApiError as CoreApiError, createCoreClient } from "../markdown/api"
 
 export { pmErrorMessage, PmCommandError, PmServiceError } from "./pm-errors"
@@ -48,6 +49,7 @@ function useServiceContext(): ServiceContext {
 }
 
 export function PmServiceProvider({ children }: { children: ReactNode }) {
+  const pageVisible = useSyncExternalStore(pageVisibility.subscribe, pageVisibility.getSnapshot, pageVisibility.getServerSnapshot)
   const queryClient = useQueryClient()
   const { workspaceSlug } = useParams<{ workspaceSlug?: string }>()
   const [instance] = useState(() => window.location.origin)
@@ -128,12 +130,16 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
   const coreStreamKey = actor && workspace ? `${actor.id}:${actorEpoch}:${workspace.id}:${workspace.version}` : null
 
   useEffect(() => {
-    if (!workspace || !coreStreamKey) return
+    if (!pageVisible || !workspace || !coreStreamKey) { setCoreStream(null); return }
     const events = new EventSource(`/api/v1/workspaces/${workspace.id}/core/events`)
     setCoreStream({ key: coreStreamKey, events })
-    events.addEventListener('change', () => { void queryClient.invalidateQueries({ queryKey: pmKeys.private(instance) }) })
+    const refresh = () => { void queryClient.invalidateQueries({ queryKey: pmKeys.private(instance) }) }
+    // Native events are invalidations, not replayable business history. Re-read
+    // authoritative snapshots after every reconnect, including a hidden-tab gap.
+    events.addEventListener('ready', refresh)
+    events.addEventListener('change', refresh)
     return () => events.close()
-  }, [coreStreamKey, workspace?.id, instance, queryClient])
+  }, [pageVisible, coreStreamKey, workspace?.id, instance, queryClient])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -311,6 +317,7 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
     if (!scope) { setStreamState(blockedWorkspace ? "permission-denied" : "idle"); return }
     if (!capabilitiesQuery.data?.realtime.enabled) { setStreamState("disabled"); return }
     if (!scope.capabilities.includes("domain.read")) { setStreamState("permission-denied"); return }
+    if (!pageVisible) { setStreamState("idle"); return }
     // Server filters each workspace batch to authorized projects and actor-private
     // notifications while retaining the shared cursor's safe checkpoints.
     const projectId = undefined
@@ -388,13 +395,13 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
       },
     })
     return () => { controller.abort(); clearTimeout(invalidationTimer); streamOpened.current = null }
-  }, [actor?.id, actorEpoch, workspace?.id, workspace?.version, blockedWorkspace, capabilitiesQuery.data?.realtime.enabled, client, commands, endSession, instance, queryClient])
+  }, [pageVisible, actor?.id, actorEpoch, workspace?.id, workspace?.version, blockedWorkspace, capabilitiesQuery.data?.realtime.enabled, client, commands, endSession, instance, queryClient])
 
   const routeError = actor && workspaceSlug && !workspacesQuery.isPending && !selectedWorkspace && !workspacesQuery.error ? new ApiError(404, { error: { code: "not_found_or_forbidden" } }) : null
   const value: ServiceContext = {
     client, instance, actor, actorEpoch, commands, workspaces, workspace,
     capabilities: capabilitiesQuery.error ? undefined : capabilitiesQuery.data,
-    coreEvents: coreStream?.key === coreStreamKey ? coreStream.events : null,
+    coreEvents: pageVisible && coreStream?.key === coreStreamKey ? coreStream.events : null,
     loading: sessionLoading || capabilitiesQuery.isPending || (!!actor && workspacesQuery.isPending),
     error: sessionError ?? (actor ? workspacesQuery.error : null) ?? capabilitiesQuery.error ?? (blockedWorkspace && selectedWorkspace && blockedWorkspace.id === selectedWorkspace.id && blockedWorkspace.version === selectedWorkspace.version ? blockedWorkspace.error : null) ?? routeError,
     login, logout, clearSessionAfterPasswordReset, refresh, streamState, readFailures, reportReadFailure, reportCommandFailure, isCurrentSession, clearReadFailure,

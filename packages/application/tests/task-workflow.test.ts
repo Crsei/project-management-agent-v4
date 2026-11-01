@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { workflowProblems, workflowTemplates, workflowGraphSchema, workflowStartSchema, type WorkflowDefinition, type WorkflowGraph, type WorkflowRun, type WorkflowStart } from '../../contracts/src/task-workflow.ts';
+import { workflowProblems, workflowTemplates, workflowTaskRevision, workflowGraphSchema, workflowStartSchema, type WorkflowDefinition, type WorkflowGraph, type WorkflowRun, type WorkflowStart } from '../../contracts/src/task-workflow.ts';
 import type { TaskCodeDelivery, DeliveryTree } from '../../contracts/src/task-code-delivery.ts';
 import { TaskWorkflowService, type WorkflowPorts } from '../src/task-workflow.ts';
 import { TaskCodeDeliveryService, type DeliveryPorts } from '../src/task-code-delivery.ts';
@@ -10,12 +10,14 @@ const id = '11111111-1111-4111-8111-222222222222';
 function fixture(template = 'builtin-deliver') {
   const definitions = new Map<string, WorkflowDefinition>(), runs = new Map<string, WorkflowRun>(), deliveries = new Map<string, TaskCodeDelivery>();
   const calls: string[] = [];
+  let taskStatus = 'todo';
+  const receipts = new Map<string, { status: 'applied'; revision: string; commandId: string }>();
   let taskRevision = 'r1', allow = true, repo = 'owner/repo', generation = 'completed', testExit = 0, ci: 'success' | 'pending' | 'failure' | 'empty' = 'success', ciHead = 'b'.repeat(40), remote: string | null = null;
   let clock = Date.now();
   let tree: DeliveryTree = { head: 'a'.repeat(40), fingerprint: 'initial', files: [], diff: '' };
-  const authorize = async () => { if (!allow) throw new Error('denied'); return { ...scope, revision: taskRevision, title: 'Implement', description: 'Test it', root: '/repo' }; };
+  const authorize = async () => { if (!allow) throw new Error('denied'); return { ...scope, revision: taskRevision, title: 'Implement', description: 'Test it', root: '/repo', status: taskStatus }; };
   const dp: DeliveryPorts = {
-    read: key => structuredClone(deliveries.get(key) ?? null), list: () => structuredClone([...deliveries.values()]), save: v => deliveries.set(v.id, structuredClone(v)), authorize,
+    read: key => structuredClone(deliveries.get(key) ?? null), list: () => structuredClone([...deliveries.values()]), save: v => deliveries.set(v.id, structuredClone(v)), authorize, expectedTaskRevision: v => runs.has(v.id) ? workflowTaskRevision(runs.get(v.id)!) : v.taskRevision,
     prepare: async () => { calls.push('prepare'); return { root: '/repo', directory: '/worktree', directoryIdentity: '1:2', commonDirectory: '/repo/.git', remote: 'git@github.com:owner/repo.git', owner: 'owner', repo: 'repo', baseBranch: 'main', baseSha: 'a'.repeat(40), branch: 'codex/task-id' }; },
     verify: async () => {}, tree: async () => tree, busy: () => false,
     develop: async v => { calls.push('agent'); if (v.worktreeWriteConfirmed) tree = { ...tree, fingerprint: 'modified', files: ['src/a.js'], diff: '+a' }; return 'g1'; },
@@ -29,11 +31,20 @@ function fixture(template = 'builtin-deliver') {
   const delivery = new TaskCodeDeliveryService(dp);
   const p: WorkflowPorts = { readDefinition: key => structuredClone(definitions.get(key) ?? null), definitions: () => structuredClone([...definitions.values()]), saveDefinition: v => definitions.set(v.id, structuredClone(v)),
     readRun: key => structuredClone(runs.get(key) ?? null), runs: () => structuredClone([...runs.values()]), saveRun: v => { assert.equal(v.version, (runs.get(v.id)?.version ?? 0) + 1); runs.set(v.id, structuredClone(v)); },
+    transition: async (request, reconcile) => {
+      const key = `${request.runId}:${request.nodeId}`;
+      const prior = receipts.get(key); if (prior) return prior;
+      if (reconcile) return { status: 'not_found' };
+      assert.equal(request.revision, taskRevision);
+      assert.ok(request.phase === 'start' ? ['todo', 'in_progress'].includes(taskStatus) : taskStatus === 'in_progress');
+      calls.push(`state-${request.phase}`); taskStatus = request.phase === 'start' ? 'in_progress' : 'review'; taskRevision = `state-${receipts.size + 1}`;
+      const receipt = { status: 'applied' as const, revision: taskRevision, commandId: key }; receipts.set(key, receipt); return receipt;
+    },
     authorize, repository: async () => repo, provider: async () => {}, delivery, readDelivery: dp.read, now: () => clock };
   const service = new TaskWorkflowService(p);
-  const input: WorkflowStart = { ...scope, id, taskRevision: 'r1', definitionId: template, definitionVersion: 1, baseBranch: 'main', repository: 'owner/repo', providerInstanceId: 'codex', model: 'selected', consent: { execute: true, worktreeWrite: template !== 'builtin-analysis', commit: true, push: true, draftPr: true } };
+  const input: WorkflowStart = { ...scope, id, taskRevision: 'r1', definitionId: template, definitionVersion: 1, baseBranch: 'main', repository: 'owner/repo', providerInstanceId: 'codex', model: 'selected', consent: { execute: true, worktreeWrite: template !== 'builtin-analysis', commit: true, push: true, draftPr: true, taskStatus: true } };
   const stepUntil = async (predicate: (r: WorkflowRun) => boolean) => { for (let i = 0; i < 25; i++) { const r = await service.tick(id); if (predicate(r)) return r; } throw new Error('condition not reached'); };
-  return { service, p, dp, input, calls, runs, definitions, deliveries, stepUntil, set: { deny: () => { allow = false; }, revision: () => { taskRevision = 'r2'; }, repo: () => { repo = 'owner/other'; }, generation: (v: string) => { generation = v; }, test: (v: number) => { testExit = v; }, ci: (v: typeof ci) => { ci = v; }, ciHead: () => { ciHead = 'other'; }, advance: (ms: number) => { clock += ms; } } };
+  return { service, p, dp, input, calls, runs, definitions, deliveries, stepUntil, set: { deny: () => { allow = false; }, revision: () => { taskRevision = 'external-edit'; }, status: (v: string) => { taskStatus = v; taskRevision = 'external-state'; }, repo: () => { repo = 'owner/other'; }, generation: (v: string) => { generation = v; }, test: (v: number) => { testExit = v; }, ci: (v: typeof ci) => { ci = v; }, ciHead: () => { ciHead = 'other'; }, advance: (ms: number) => { clock += ms; } } };
 }
 
 test('three templates parse and validate; strict schemas reject unsupported inputs and reserved node IDs', () => {
@@ -46,7 +57,7 @@ test('validator rejects cycles, missing nodes, duplicate exits, disconnected nod
   const b = structuredClone(workflowTemplates[2]!.draft); b.edges[0]!.target = 'absent'; assert.ok(workflowProblems(b).length);
   const c = structuredClone(workflowTemplates[2]!.draft); c.edges.push({ ...c.edges[0]!, id: 'extra' }); assert.ok(workflowProblems(c).length);
   const d = structuredClone(workflowTemplates[2]!.draft); d.nodes.find(n => n.kind === 'test')!.kind = 'approval'; d.nodes.find(n => n.kind === 'approval')!.config = {}; assert.match(workflowProblems(d).join(','), /test/);
-  const e = structuredClone(workflowTemplates[2]!.draft); e.nodes.find(n => n.kind === 'agent')!.config.mode = 'analyze'; assert.match(workflowProblems(e).join(','), /develop/);
+  const e = structuredClone(workflowTemplates[2]!.draft); e.nodes.find(n => n.kind === 'agent')!.config = { mode: 'analyze' }; assert.match(workflowProblems(e).join(','), /develop/);
 });
 test('drafts may be incomplete; publish validates; published snapshots are immutable and CAS enforced', async () => {
   const f = fixture(); const graph = structuredClone(workflowTemplates[1]!.draft);
@@ -154,4 +165,105 @@ test('a success conclusion on an unfinished check is not CI success', async () =
   await f.service.start(f.input);
   const r = await f.stepUntil(v => v.current.startsWith('ci') && v.status === 'waiting');
   assert.equal(r.nodes[r.current]?.outcome, undefined);
+});
+
+test('v2 auto start and confirmed review keep input immutable and accept only owned revision receipts', async () => {
+  const f = fixture(); f.input.definitionVersion = 2;
+  await f.service.start(f.input);
+  const waiting = await f.stepUntil(r => r.transitions?.[r.current]?.state === 'awaiting');
+  assert.equal((await f.p.authorize(scope, false)).status, 'in_progress');
+  assert.equal(waiting.input.taskRevision, 'r1'); assert.equal(waiting.acceptedTaskRevision, 'state-1');
+  assert.ok(f.calls.indexOf('state-start') < f.calls.indexOf('agent'));
+  assert.equal((await f.p.delivery.inspect(id)).taskChanged, false);
+  await assert.rejects(f.service.control(id, 'confirm-transition', waiting.version - 1), /更新/);
+  await f.service.control(id, 'confirm-transition', waiting.version);
+  const done = await f.stepUntil(r => r.status === 'completed');
+  assert.equal((await f.p.authorize(scope, false)).status, 'review');
+  assert.equal(done.acceptedTaskRevision, 'state-2'); assert.equal(done.input.taskRevision, 'r1');
+  await f.service.tick(id); assert.equal(f.calls.filter(c => c.startsWith('state-')).length, 2);
+});
+test('state linkage requires separate consent and invalid nodes/targets cannot publish', async () => {
+  const f = fixture(); f.input.definitionVersion = 2; f.input.consent.taskStatus = false;
+  await assert.rejects(f.service.start(f.input), /单独确认/); assert.deepEqual(f.calls, []);
+  const graph = structuredClone(workflowTemplates[0]!.draft);
+  graph.nodes[2]!.config.taskTransition = { phase: 'start', mode: 'auto' };
+  assert.ok(workflowProblems(graph).some(p => p.includes('状态联动')));
+  assert.equal(workflowGraphSchema.safeParse({ ...graph, nodes: graph.nodes.map(n => ({ ...n, config: { taskTransition: { phase: 'done', mode: 'auto' } } })) }).success, false);
+});
+test('lost PM response is reconciled by original receipt without replaying transition or Agent', async () => {
+  const f = fixture(); f.input.definitionVersion = 2;
+  const transition = f.p.transition!; let writes = 0;
+  f.p.transition = async (input, reconcile) => { const result = await transition(input, reconcile); if (!reconcile) { writes++; throw new Error('lost response'); } return result; };
+  await f.service.start(f.input); const paused = await f.stepUntil(r => r.status === 'paused');
+  assert.equal(writes, 1); assert.ok(!f.calls.includes('agent'));
+  await f.service.control(id, 'resume', paused.version);
+  await f.stepUntil(r => r.transitions?.[r.current]?.state === 'awaiting');
+  assert.equal(writes, 1); assert.equal(f.calls.filter(c => c === 'agent').length, 1);
+});
+test('missing transition receipt never accepts a coincidental manual state or repeats the write', async () => {
+  const f = fixture(); f.input.definitionVersion = 2; let writes = 0;
+  f.p.transition = async (_input, reconcile) => { if (reconcile) return { status: 'not_found' }; writes++; throw new Error('before dispatch'); };
+  await f.service.start(f.input); const paused = await f.stepUntil(r => r.status === 'paused');
+  f.set.status('in_progress');
+  await assert.rejects(f.service.control(id, 'resume', paused.version), /收据/);
+  assert.equal(writes, 1); assert.ok(!f.calls.includes('agent'));
+});
+test('external edit or cancellation after owned status transition still stops later effects', async () => {
+  for (const cancel of [false, true]) {
+    const f = fixture(); f.input.definitionVersion = 2; await f.service.start(f.input);
+    await f.stepUntil(r => !!r.nodes.agent2);
+    if (cancel) f.set.status('canceled'); else f.set.revision();
+    assert.equal((await f.service.tick(id)).status, 'paused'); assert.ok(!f.calls.includes('test'));
+    assert.equal((await f.p.delivery.inspect(id)).taskChanged, true);
+  }
+});
+test('failed CI and stale remote head cannot advance task to review', async () => {
+  for (const mismatch of [false, true]) {
+    const f = fixture(); f.input.definitionVersion = 2; if (mismatch) f.set.ciHead(); else f.set.ci('failure');
+    await f.service.start(f.input); await f.stepUntil(r => r.status === 'paused' || r.status === 'failed');
+    assert.equal((await f.p.authorize(scope, false)).status, 'in_progress'); assert.ok(!f.calls.includes('state-review'));
+  }
+});
+
+test('manual development waits before dispatch; auto review works without a confirmation node', async () => {
+  const f = fixture(); const graph = structuredClone(workflowTemplates[2]!.draft);
+  graph.nodes.find(n => n.kind === 'agent')!.config.taskTransition!.mode = 'confirm';
+  graph.nodes.find(n => n.kind === 'ci')!.config.taskTransition!.mode = 'auto';
+  const definitionId = 'manual-start-auto-review';
+  f.definitions.set(definitionId, { id: definitionId, ...scope, revision: 1, draft: graph, versions: [{ version: 1, graph, publishedAt: new Date().toISOString() }] });
+  f.input.definitionId = definitionId; await f.service.start(f.input);
+  const waiting = await f.stepUntil(r => r.transitions?.[r.current]?.state === 'awaiting');
+  assert.ok(!f.calls.includes('agent')); assert.equal((await f.p.authorize(scope, false)).status, 'todo');
+  assert.equal((await f.service.tick(id)).version, waiting.version);
+  await f.service.control(id, 'confirm-transition', waiting.version);
+  await f.stepUntil(r => r.status === 'completed');
+  assert.equal((await f.p.authorize(scope, false)).status, 'review');
+});
+test('manual review confirmation rechecks current CI rather than accepting the earlier snapshot', async () => {
+  const f = fixture(); f.input.definitionVersion = 2; await f.service.start(f.input);
+  const waiting = await f.stepUntil(r => r.transitions?.[r.current]?.state === 'awaiting');
+  f.set.ciHead(); await f.service.control(id, 'confirm-transition', waiting.version);
+  assert.equal((await f.service.tick(id)).status, 'paused');
+  assert.equal((await f.p.authorize(scope, false)).status, 'in_progress'); assert.ok(!f.calls.includes('state-review'));
+});
+
+test('v3 waits for named required CI even if another discovered check succeeded', async () => {
+  const f = fixture(); f.input.definitionVersion = 3;
+  const original = f.dp.feedback;
+  f.dp.feedback = async value => ({ ...await original(value), checks: [{ name: 'lint', status: 'completed', conclusion: 'success' }] });
+  await f.service.start(f.input);
+  const waiting = await f.stepUntil(r => r.current === 'ci7' && r.status === 'waiting');
+  assert.match(waiting.message!, /test/); assert.ok(!waiting.transitions?.ci7);
+  assert.equal((await f.p.authorize(scope, false)).status, 'in_progress');
+  f.dp.feedback = original;
+  const confirm = await f.stepUntil(r => r.transitions?.ci7?.state === 'awaiting');
+  await f.service.control(id, 'confirm-transition', confirm.version);
+  assert.equal((await f.stepUntil(r => r.status === 'completed')).acceptedTaskRevision, 'state-2');
+});
+test('required CI never silently succeeds when a check is missing until timeout', async () => {
+  const f = fixture(); f.input.definitionVersion = 3; f.set.ci('empty');
+  await f.service.start(f.input); await f.stepUntil(r => r.current === 'ci7' && r.status === 'waiting');
+  f.set.advance(16 * 60_000);
+  assert.equal((await f.service.tick(id)).status, 'failed'); assert.ok(!f.calls.includes('state-review'));
+  assert.equal(workflowTemplates[2]!.versions[1]!.graph.nodes.find(n => n.kind === 'ci')!.config.requiredChecks, undefined);
 });

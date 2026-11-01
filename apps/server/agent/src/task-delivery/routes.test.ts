@@ -19,7 +19,18 @@ test('HTTP rejects cross-origin, extra cwd/actor fields and missing PM authentic
     assert.equal(extra.status, 400); assert.equal(pmCalls, 0);
     const unauthenticated = await app.request('http://127.0.0.1:4325/api/task-deliveries', { method: 'POST', headers, body: JSON.stringify(input) });
     assert.equal(unauthenticated.status, 401); assert.equal(pmCalls, 1);
+    const previewExtra = await app.request(`http://127.0.0.1:4325/api/task-deliveries/${input.id}/preview`, { method: 'POST', headers, body: JSON.stringify({ action: 'start', head: 'a'.repeat(40), confirm: true, cwd: '/root' }) });
+    assert.equal(previewExtra.status, 400); assert.equal(pmCalls, 1);
+    const previewCross = await app.request(`http://127.0.0.1:4325/api/task-deliveries/${input.id}/preview`, { method: 'POST', headers: { ...headers, origin: 'http://other.preview.localhost:4330' }, body: JSON.stringify({ action: 'stop', confirm: true }) });
+    assert.equal(previewCross.status, 403); assert.equal(pmCalls, 1);
     const missingConfirm = await app.request(`http://127.0.0.1:4325/api/task-deliveries/${input.id}/actions`, { method: 'POST', headers, body: JSON.stringify({ action: 'push', head: 'a'.repeat(40) }) });
     assert.equal(missingConfirm.status, 400); assert.equal(pmCalls, 1);
+    const projectQuery = new URLSearchParams({ workspaceId: input.workspaceId, projectId: input.projectId, releaseId: input.id }).toString();
+    const projectRead = await app.request(`http://127.0.0.1:4325/api/project-roadmap-deliveries?${projectQuery}`, { headers });
+    assert.equal(projectRead.status, 401); assert.equal(pmCalls, 2);
+    const projectCross = await app.request(`http://127.0.0.1:4325/api/project-app-previews/${input.id}?${projectQuery}`, { method: 'POST', headers: { ...headers, origin: 'https://other.example' }, body: JSON.stringify({ action: 'start', head: 'a'.repeat(40), confirm: true }) });
+    assert.equal(projectCross.status, 403); assert.equal(pmCalls, 2);
+    const projectExtra = await app.request(`http://127.0.0.1:4325/api/project-roadmap-deliveries?${projectQuery}&cwd=/root`, { headers });
+    assert.equal(projectExtra.status, 400); assert.equal(pmCalls, 2);
   } finally { globalThis.fetch = originalFetch; if (token === undefined) delete process.env.AGENT_WORKSPACE_ACCESS_TOKEN; else process.env.AGENT_WORKSPACE_ACCESS_TOKEN = token; }
 });

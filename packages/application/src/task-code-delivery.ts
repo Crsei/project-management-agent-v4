@@ -4,12 +4,14 @@ export class DeliveryError extends Error {
   readonly code: string;
   constructor(code: string, message: string) { super(message); this.code = code; }
 }
-export type DeliveryTask = DeliveryScope & { revision: string; title: string; description: string; root: string };
+export type DeliveryTask = DeliveryScope & { revision: string; title: string; description: string; root: string; status?: string };
 export interface DeliveryPorts {
   read(id: string): TaskCodeDelivery | null;
   list(): TaskCodeDelivery[];
   save(value: TaskCodeDelivery): void;
   authorize(scope: DeliveryScope, write: boolean): Promise<DeliveryTask>;
+  expectedTaskRevision?(value: TaskCodeDelivery): string;
+  preflightTask?(task: DeliveryTask, baseBranch: string): Promise<void>;
   preflightPrepare?(root: string, baseBranch: string): Promise<void>;
   preflightAction?(value: TaskCodeDelivery, action: DeliveryAction): Promise<void>;
   reconcileCommit?(value: TaskCodeDelivery): Promise<string | null>;
@@ -56,6 +58,7 @@ export class TaskCodeDeliveryService {
       }
       if (task.revision !== input.taskRevision) fail('task_changed', '任务已更新，请先重新读取需求。');
       if (this.ports.list().some(v => v.workspaceId === input.workspaceId && v.taskId === input.taskId)) fail('delivery_exists', '第一版每个任务只允许一条交付链，请继续或核对已有记录。');
+      await this.ports.preflightTask?.(task, input.baseBranch);
       await this.ports.preflightPrepare?.(task.root, input.baseBranch);
       const now = new Date().toISOString();
       const value: TaskCodeDelivery = { ...input, title: task.title, description: task.description, threadId: `delivery-${input.id}`, createdAt: now, updatedAt: now, version: 0, step: 'preparing', pending: { action: 'prepare', at: now } };
@@ -68,13 +71,13 @@ export class TaskCodeDeliveryService {
   async inspect(id: string): Promise<{ delivery: TaskCodeDelivery; tree: DeliveryTree | null; taskChanged: boolean }> {
     const value = this.ports.read(id) ?? fail('not_found', '交付记录不可用。');
     const task = await this.ports.authorize(value, false);
-    return { delivery: value, tree: value.git ? await this.ports.tree(value) : null, taskChanged: task.revision !== value.taskRevision };
+    return { delivery: value, tree: value.git ? await this.ports.tree(value) : null, taskChanged: task.revision !== (this.ports.expectedTaskRevision?.(value) ?? value.taskRevision) };
   }
   async act(id: string, input: DeliveryAction): Promise<TaskCodeDelivery> {
     return this.exclusive(id, async () => {
       const value = this.ports.read(id) ?? fail('not_found', '交付记录不可用。');
       const task = await this.ports.authorize(value, input.action !== 'refresh');
-      if (input.action !== 'refresh' && task.revision !== value.taskRevision) fail('task_changed', '任务版本已改变；不能使用旧需求继续执行或发布。');
+      if (input.action !== 'refresh' && task.revision !== (this.ports.expectedTaskRevision?.(value) ?? value.taskRevision)) fail('task_changed', '任务版本已改变；不能使用旧需求继续执行或发布。');
       if (!value.git) fail('prepare_unknown', '分支准备尚未确认，请人工核对原操作。');
       if (task.root !== value.git!.root) fail('project_directory_changed', '项目目录已重新绑定，停止原交付。');
       await this.ports.verify(value);

@@ -1,0 +1,93 @@
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import test from 'node:test';
+import Fastify from 'fastify';
+import { z } from 'zod';
+import { registerProductRoadmapRoutes } from '../apps/server/pm/src/product-roadmap-routes.ts';
+import { CoreWorkspacePool } from '../apps/server/pm/src/core-routes.ts';
+import { WorkspaceError } from '../packages/pm-core/index.ts';
+import { DomainError } from '../packages/domain/src/core.ts';
+import { createPool, migrate } from '../packages/infrastructure/src/database.ts';
+import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
+import { runCommand } from '../packages/application/src/kernel.ts';
+import { accessCommands } from '../packages/application/src/access.ts';
+import { feedbackScenario } from '../apps/web/src/features/pm/product-roadmap/model.ts';
+import { taskInput } from '../packages/application/src/product-roadmap.ts';
+import { ROADMAP_FIELD, type RoadmapRead } from '../packages/contracts/src/product-roadmap.ts';
+
+test('product roadmap: real SQL authorization/audit, CAS, immutable publication, native dependent tasks and restart recovery', async () => {
+  const url = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
+  assert.ok(url, 'Real PostgreSQL required; skipping is not acceptance');
+  const schema = `test_product_roadmap_${randomUUID().replaceAll('-', '')}`, bootstrap = createPool(url);
+  await bootstrap.query(`CREATE SCHEMA ${schema}`);
+  const scoped = new URL(url); scoped.searchParams.set('options', `-c search_path=${schema},public`);
+  const pool = createPool(scoped.toString()), root = await mkdtemp(join(tmpdir(), 'pm-product-roadmap-'));
+  const cores = new CoreWorkspacePool(root, pool), app = Fastify();
+  try {
+    await migrate(pool);
+    const owner = await createUser(pool, { email: `${randomUUID()}@example.test`, name: 'Roadmap fixture', password: 'isolated-roadmap-fixture-password' });
+    const limited = await createUser(pool, { email: `${randomUUID()}@example.test`, name: 'Limited fixture', password: 'isolated-roadmap-fixture-password' });
+    const ws = await createWorkspace(pool, owner.id, 'Roadmap fixture'), workspace = await cores.get(ws.id);
+    const project = await workspace.createEntity({ entity: 'project', title: 'Product' }), other = await workspace.createEntity({ entity: 'project', title: 'Other' });
+    await runCommand(pool, owner, ws.id, { commandId: randomUUID(), commandType: 'SetWorkspaceMember', payload: { userId: limited.id, capabilities: ['domain.read', 'planning.edit'], projectIds: [other.id] } }, accessCommands);
+    app.setErrorHandler((error, _request, reply) => reply.code(error instanceof DomainError || error instanceof WorkspaceError ? error.status : error instanceof z.ZodError ? 400 : 500).send({ error: error instanceof Error ? error.message : 'unknown' }));
+    registerProductRoadmapRoutes(app, { database: () => pool, actor: async request => request.headers['x-fixture-actor'] === 'limited' ? limited : owner, coreWorkspaces: cores });
+    const endpoint = `/api/v1/workspaces/${ws.id}/projects/${project.id}/product-roadmap`;
+    const read = async () => (await app.inject({ method: 'GET', url: endpoint })).json<RoadmapRead>();
+    const post = (payload: unknown, limitedActor = false) => app.inject({ method: 'POST', url: endpoint, payload: payload as object, ...(limitedActor ? { headers: { 'x-fixture-actor': 'limited' } } : {}) });
+    assert.equal((await app.inject({ method: 'GET', url: endpoint, headers: { 'x-fixture-actor': 'limited' } })).statusCode, 404);
+    const plan = feedbackScenario(randomUUID), save = { action: 'save', commandId: randomUUID(), revision: project.revision, plan };
+    assert.equal((await post(save, true)).statusCode, 404);
+    const saved = await post(save); assert.equal(saved.statusCode, 200, saved.body);
+    assert.equal((await post({ ...save, commandId: randomUUID() })).statusCode, 409);
+    assert.equal((await post(save)).statusCode, 200);
+    const releaseId = randomUUID(), publish = { action: 'publish', commandId: randomUUID(), revision: (await read()).revision, releaseId, confirm: true };
+    const published = await post(publish); assert.equal(published.statusCode, 200, published.body);
+    assert.equal((await post(publish)).statusCode, 200);
+    assert.equal(workspace.snapshot().files.filter(f => f.entity.entity === 'work_item').length, 0, 'publication never executes or creates tasks');
+    const make = (nodeId: string) => ({ action: 'materialize', releaseId, nodeId, confirm: true });
+    assert.equal((await post(make(plan.nodes[1]!.id))).statusCode, 409);
+    const first = await post(make(plan.nodes[0]!.id)); assert.equal(first.statusCode, 200, first.body);
+    assert.equal((await post(make(plan.nodes[0]!.id))).statusCode, 200);
+    const initial = await read(), initialTask = initial.tasks[releaseId]![0]!;
+    assert.ok(workspace.get(initialTask.taskId).entity.body.endsWith(String(taskInput(project.id, initial.store.releases[0]!, plan.nodes[0]!.id, []).body)));
+    assert.equal(initialTask.drifted, false);
+    const second = await post(make(plan.nodes[1]!.id)); assert.equal(second.statusCode, 200, second.body);
+    const current = await read(), tasks = current.tasks[releaseId]!;
+    assert.equal(tasks.length, 2); assert.equal(tasks.every(t => !t.drifted), true);
+    const parent = tasks.find(t => t.nodeId === plan.nodes[0]!.id)!, child = tasks.find(t => t.nodeId === plan.nodes[1]!.id)!;
+    assert.deepEqual(workspace.get(child.taskId).entity.blocked_by, [parent.taskId]);
+    assert.equal(workspace.get(parent.taskId).entity.status, 'todo');
+    // Different authorized actors have different command receipts, but still cannot duplicate a node.
+    await runCommand(pool, owner, ws.id, { commandId: randomUUID(), commandType: 'SetWorkspaceMember', payload: { userId: limited.id, capabilities: ['domain.read', 'planning.edit'], projectIds: [project.id] } }, accessCommands);
+    const concurrent = await Promise.all([post(make(plan.nodes[2]!.id)), post(make(plan.nodes[2]!.id), true)]);
+    assert.ok(concurrent.some(r => r.statusCode === 200));
+    assert.equal((await read()).tasks[releaseId]!.filter(t => t.nodeId === plan.nodes[2]!.id).length, 1);
+    const audit = await pool.query('SELECT count(*)::int AS count FROM project_audit WHERE workspace_id=$1', [ws.id]);
+    assert.ok(audit.rows[0].count >= 5);
+    const original = workspace.get(parent.taskId);
+    const edited = await workspace.save(parent.taskId, original.raw.replace('## 产品想法', '## Human changed requirements'), original.revision);
+    assert.ok((await read()).tasks[releaseId]!.find(t => t.taskId === edited.id)!.drifted);
+    assert.equal((await post({ ...save, commandId: randomUUID(), revision: (await read()).revision, plan: { ...plan, brief: { ...plan.brief, idea: 'New draft only' } } })).statusCode, 200);
+    assert.equal((await read()).store.releases[0]!.plan.brief.idea, plan.brief.idea);
+    // Revocation applies to reads and writes; archived project cannot publish/create.
+    await runCommand(pool, owner, ws.id, { commandId: randomUUID(), commandType: 'SetWorkspaceMember', payload: { userId: limited.id, capabilities: ['domain.read', 'planning.edit'], projectIds: [other.id] } }, accessCommands);
+    assert.equal((await app.inject({ method: 'GET', url: endpoint, headers: { 'x-fixture-actor': 'limited' } })).statusCode, 404);
+    assert.equal((await post(make(plan.nodes[3]!.id), true)).statusCode, 404);
+    await workspace.patch(project.id, { archived: true }, workspace.get(project.id).revision);
+    assert.equal((await post(make(plan.nodes[3]!.id))).statusCode, 409);
+    await workspace.patch(project.id, { archived: false }, workspace.get(project.id).revision);
+    await cores.close();
+    const restarted = new CoreWorkspacePool(root, pool), again = Fastify();
+    try {
+      registerProductRoadmapRoutes(again, { database: () => pool, actor: async () => owner, coreWorkspaces: restarted });
+      const recovered = (await again.inject({ method: 'GET', url: endpoint })).json<RoadmapRead>();
+      assert.equal(recovered.tasks[releaseId]!.length, 3); assert.equal(recovered.store.releases.length, 1);
+      assert.ok((await restarted.get(ws.id)).get(project.id).entity[ROADMAP_FIELD]);
+      assert.equal((await again.inject({ method: 'POST', url: endpoint, payload: make(plan.nodes[2]!.id) })).statusCode, 200);
+    } finally { await again.close(); await restarted.close(); }
+  } finally { await app.close(); await cores.close(); await pool.end(); await bootstrap.query(`DROP SCHEMA ${schema} CASCADE`); await bootstrap.end(); await rm(root, { recursive: true, force: true }); }
+});
