@@ -454,6 +454,29 @@
       "types": null
     },
     {
+      "name": "@t3tools/provider-omp",
+      "root": "vendor/t3code/packages/provider-omp",
+      "exports": {
+        "./client": {
+          "types": "./src/client.ts",
+          "import": "./src/client.ts"
+        },
+        "./settings": {
+          "types": "./src/settings.ts",
+          "import": "./src/settings.ts"
+        },
+        "./server": {
+          "types": "./src/server.ts",
+          "import": "./src/server.ts"
+        },
+        "./server/*": {
+          "types": "./src/server/*.ts",
+          "import": "./src/server/*.ts"
+        }
+      },
+      "types": null
+    },
+    {
       "name": "@t3tools/provider-opencode",
       "root": "vendor/t3code/packages/provider-opencode",
       "exports": {
@@ -21818,6 +21841,15 @@
     {
       "source": "vendor/t3code/packages/client-runtime/src/providerClients.ts",
       "line": 16,
+      "specifier": "@t3tools/provider-omp/client",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/client.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/client-runtime/src/providerClients.ts",
+      "line": 17,
       "specifier": "@t3tools/provider-pi/client",
       "kind": "import",
       "usage": "runtime",
@@ -45404,6 +45436,2140 @@
       "usage": "runtime",
       "disposition": "vendored-source",
       "target": "vendor/t3code/packages/provider-muse/src/server/maintenance.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/client.ts",
+      "line": 1,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/client.ts",
+      "line": 2,
+      "specifier": "@t3tools/provider-core/client",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/client.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/client.ts",
+      "line": 3,
+      "specifier": "./settings.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/settings.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server.ts",
+      "line": 1,
+      "specifier": "./server/driver.ts",
+      "kind": "export",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/driver.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server.ts",
+      "line": 2,
+      "specifier": "./server/adapter.ts",
+      "kind": "export",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/adapter.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 1,
+      "specifier": "node:fs",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 2,
+      "specifier": "@effect/vitest",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 3,
+      "specifier": "vite-plus/test",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 4,
+      "specifier": "@effect/platform-node/NodeServices",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 5,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 6,
+      "specifier": "effect/DateTime",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 7,
+      "specifier": "effect/Deferred",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 8,
+      "specifier": "effect/FileSystem",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 9,
+      "specifier": "effect/Layer",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 10,
+      "specifier": "effect/Queue",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 11,
+      "specifier": "effect/Stream",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 12,
+      "specifier": "effect/Schema",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 13,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 17,
+      "specifier": "@t3tools/provider-core/server/IdAllocator",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/IdAllocator.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 18,
+      "specifier": "@t3tools/provider-core/server/ProviderHost",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 19,
+      "specifier": "@t3tools/provider-core/server/ProviderAdapter",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderAdapter.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 20,
+      "specifier": "@t3tools/provider-core/server/ProviderRuntimeHost",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderRuntimeHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 21,
+      "specifier": "@t3tools/provider-testing/TestProviderHost",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-testing/src/TestProviderHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 22,
+      "specifier": "@t3tools/shared/HostProcess",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/HostProcess.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 23,
+      "specifier": "./adapter.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/adapter.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 24,
+      "specifier": "../settings.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/settings.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 25,
+      "specifier": "./sessionEvidence.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 26,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 27,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "line": 189,
+      "specifier": "./fixtures/native-18.13.2-stream.jsonl",
+      "kind": "import-meta-resource",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/fixtures/native-18.13.2-stream.jsonl"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 1,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 2,
+      "specifier": "node:util",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 3,
+      "specifier": "@t3tools/shared/HostProcess",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/HostProcess.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 4,
+      "specifier": "@t3tools/shared/AgentScope",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/AgentScope.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 5,
+      "specifier": "@t3tools/shared/model",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/model.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 6,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 14,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 15,
+      "specifier": "effect/Cause",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 16,
+      "specifier": "effect/DateTime",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 17,
+      "specifier": "effect/Deferred",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 18,
+      "specifier": "effect/Duration",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 19,
+      "specifier": "effect/FileSystem",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 20,
+      "specifier": "effect/Fiber",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 21,
+      "specifier": "effect/Queue",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 22,
+      "specifier": "effect/Schema",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 23,
+      "specifier": "effect/Semaphore",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 24,
+      "specifier": "effect/Stream",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 25,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 26,
+      "specifier": "@t3tools/provider-core/server/ProviderAdapter",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderAdapter.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 27,
+      "specifier": "@t3tools/provider-core/server/ProviderHost",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 28,
+      "specifier": "@t3tools/provider-core/server/IdAllocator",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/IdAllocator.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 29,
+      "specifier": "@t3tools/provider-core/server/ProviderRuntimeHost",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderRuntimeHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 30,
+      "specifier": "@t3tools/provider-core/server/ProviderContinuationRequests",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderContinuationRequests.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 31,
+      "specifier": "@t3tools/provider-core/server/attachmentPrompt",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/attachmentPrompt.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 32,
+      "specifier": "@t3tools/provider-core/server/instanceEnvironment",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/instanceEnvironment.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 33,
+      "specifier": "@t3tools/provider-core/server/mcpToolPresentation",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/mcpToolPresentation.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 34,
+      "specifier": "@t3tools/provider-core/server/failure",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/failure.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 35,
+      "specifier": "@t3tools/provider-core/server/selectionTransition",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/selectionTransition.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 36,
+      "specifier": "@t3tools/provider-core/server/adapterDriver",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/adapterDriver.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 37,
+      "specifier": "../settings.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/settings.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 38,
+      "specifier": "./launch.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/launch.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 39,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 41,
+      "specifier": "./permissions.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/permissions.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 42,
+      "specifier": "./hostTools.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/hostTools.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "line": 43,
+      "specifier": "./sessionEvidence.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/commands.ts",
+      "line": 1,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/commands.ts",
+      "line": 2,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 1,
+      "specifier": "@effect/platform-node/NodeServices",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 2,
+      "specifier": "@effect/vitest",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 3,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 4,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 5,
+      "specifier": "effect/Layer",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 6,
+      "specifier": "effect/Schema",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 7,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 8,
+      "specifier": "@t3tools/provider-core/server/IdAllocator",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/IdAllocator.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 9,
+      "specifier": "@t3tools/provider-core/server/ProviderRuntimeHost",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderRuntimeHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 10,
+      "specifier": "@t3tools/provider-testing/TestProviderHost",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-testing/src/TestProviderHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 11,
+      "specifier": "../settings.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/settings.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 12,
+      "specifier": "../client.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/client.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "line": 13,
+      "specifier": "./driver.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/driver.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 1,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 2,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 3,
+      "specifier": "effect/Schema",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 4,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 5,
+      "specifier": "@t3tools/provider-core/server/ProviderHost",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 6,
+      "specifier": "@t3tools/provider-core/server/errors",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/errors.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 7,
+      "specifier": "@t3tools/provider-core/server/driver",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/driver.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 8,
+      "specifier": "@t3tools/provider-core/server/instanceEnvironment",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/instanceEnvironment.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 9,
+      "specifier": "@t3tools/provider-core/server/managedProvider",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/managedProvider.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 10,
+      "specifier": "@t3tools/provider-core/server/snapshotSettings",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/snapshotSettings.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 11,
+      "specifier": "@t3tools/provider-core/server/snapshotProbe",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/snapshotProbe.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 12,
+      "specifier": "../settings.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/settings.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 13,
+      "specifier": "./adapter.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/adapter.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 14,
+      "specifier": "./status.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/status.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "line": 15,
+      "specifier": "./textGeneration.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/frame.test.ts",
+      "line": 1,
+      "specifier": "node:buffer",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/frame.test.ts",
+      "line": 2,
+      "specifier": "@effect/vitest",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/frame.test.ts",
+      "line": 3,
+      "specifier": "./frame.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/frame.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/frame.ts",
+      "line": 4,
+      "specifier": "node:buffer",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.test.ts",
+      "line": 1,
+      "specifier": "@effect/vitest",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.test.ts",
+      "line": 2,
+      "specifier": "node:http",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.test.ts",
+      "line": 3,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.test.ts",
+      "line": 4,
+      "specifier": "effect/Fiber",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.test.ts",
+      "line": 5,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.test.ts",
+      "line": 6,
+      "specifier": "@t3tools/provider-core/server/ProviderRuntimeHost",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderRuntimeHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.test.ts",
+      "line": 7,
+      "specifier": "./hostTools.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/hostTools.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.ts",
+      "line": 1,
+      "specifier": "@t3tools/provider-core/server/ProviderRuntimeHost",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderRuntimeHost.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.ts",
+      "line": 2,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/hostTools.ts",
+      "line": 3,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.test.ts",
+      "line": 1,
+      "specifier": "node:fs",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.test.ts",
+      "line": 2,
+      "specifier": "node:os",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.test.ts",
+      "line": 3,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.test.ts",
+      "line": 4,
+      "specifier": "@effect/vitest",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.test.ts",
+      "line": 5,
+      "specifier": "./launch.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/launch.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.test.ts",
+      "line": 6,
+      "specifier": "./startupPolicy.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/startupPolicy.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.ts",
+      "line": 3,
+      "specifier": "node:fs",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.ts",
+      "line": 4,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.ts",
+      "line": 5,
+      "specifier": "node:os",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.ts",
+      "line": 6,
+      "specifier": "./startupPolicy.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/startupPolicy.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/launch.ts",
+      "line": 7,
+      "specifier": "@t3tools/shared/cliArgs",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/cliArgs.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.test.ts",
+      "line": 1,
+      "specifier": "vite-plus/test",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.test.ts",
+      "line": 2,
+      "specifier": "node:fs/promises",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.test.ts",
+      "line": 3,
+      "specifier": "node:os",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.test.ts",
+      "line": 4,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.test.ts",
+      "line": 5,
+      "specifier": "./permissions.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/permissions.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.test.ts",
+      "line": 23,
+      "specifier": null,
+      "expression": "`data:text/javascript;base64,${Buffer.from(source).toString(\"base64\")}`",
+      "kind": "dynamic-import",
+      "usage": "runtime",
+      "disposition": "runtime-selected-resource",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.ts",
+      "line": 1,
+      "specifier": "node:crypto",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.ts",
+      "line": 2,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.ts",
+      "line": 3,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.ts",
+      "line": 4,
+      "specifier": "effect/FileSystem",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/permissions.ts",
+      "line": 5,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "line": 1,
+      "specifier": "@effect/vitest",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "line": 2,
+      "specifier": "effect/Deferred",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "line": 3,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "line": 4,
+      "specifier": "effect/Fiber",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "line": 5,
+      "specifier": "effect/Queue",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "line": 6,
+      "specifier": "effect/testing/TestClock",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "line": 7,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "line": 8,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "line": 9,
+      "specifier": "./transportTestHelpers.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 1,
+      "specifier": "effect/Cause",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 2,
+      "specifier": "effect/Clock",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 3,
+      "specifier": "effect/Deferred",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 4,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 5,
+      "specifier": "effect/Queue",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 6,
+      "specifier": "effect/Scope",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 7,
+      "specifier": "effect/Schema",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 8,
+      "specifier": "effect/Stream",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 9,
+      "specifier": "effect/process/ChildProcess",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 10,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 11,
+      "specifier": "@t3tools/shared/shell",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/shell.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 12,
+      "specifier": "@t3tools/shared/HostProcess",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/HostProcess.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 13,
+      "specifier": "@t3tools/provider-core/server/processGroup",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/processGroup.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "line": 14,
+      "specifier": "./frame.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/frame.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.test.ts",
+      "line": 1,
+      "specifier": "@effect/vitest",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.test.ts",
+      "line": 2,
+      "specifier": "@effect/platform-node/NodeServices",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.test.ts",
+      "line": 3,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.test.ts",
+      "line": 4,
+      "specifier": "effect/FileSystem",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.test.ts",
+      "line": 5,
+      "specifier": "./sessionEvidence.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.test.ts",
+      "line": 6,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts",
+      "line": 1,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts",
+      "line": 2,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts",
+      "line": 3,
+      "specifier": "effect/FileSystem",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts",
+      "line": 4,
+      "specifier": "effect/Option",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts",
+      "line": 5,
+      "specifier": "@t3tools/provider-core/server/ProviderAdapter",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/ProviderAdapter.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts",
+      "line": 9,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts",
+      "line": 10,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.test.ts",
+      "line": 1,
+      "specifier": "vite-plus/test",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.test.ts",
+      "line": 2,
+      "specifier": "node:fs",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.test.ts",
+      "line": 3,
+      "specifier": "node:os",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.test.ts",
+      "line": 4,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.test.ts",
+      "line": 5,
+      "specifier": "./startupPlugins.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.ts",
+      "line": 1,
+      "specifier": "node:fs",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.ts",
+      "line": 2,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPolicy.ts",
+      "line": 4,
+      "specifier": "node:fs",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPolicy.ts",
+      "line": 5,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPolicy.ts",
+      "line": 6,
+      "specifier": "./launch.ts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/launch.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/startupPolicy.ts",
+      "line": 7,
+      "specifier": "./startupPlugins.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 1,
+      "specifier": "node:fs",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 2,
+      "specifier": "node:os",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 3,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 4,
+      "specifier": "@effect/vitest",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 5,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 6,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 7,
+      "specifier": "effect/process/ChildProcess",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 8,
+      "specifier": "./status.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/status.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 9,
+      "specifier": "./transportTestHelpers.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "line": 10,
+      "specifier": "./commands.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/commands.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 1,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 2,
+      "specifier": "@t3tools/shared/model",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/model.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 3,
+      "specifier": "@t3tools/shared/shell",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/shell.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 4,
+      "specifier": "@t3tools/shared/semver",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/semver.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 5,
+      "specifier": "effect/DateTime",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 6,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 7,
+      "specifier": "effect/Option",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 8,
+      "specifier": "effect/Result",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 9,
+      "specifier": "effect/Stream",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 10,
+      "specifier": "effect/process/ChildProcess",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 11,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 12,
+      "specifier": "@t3tools/provider-core/server/snapshotProbe",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/snapshotProbe.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 20,
+      "specifier": "../settings.ts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/settings.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 21,
+      "specifier": "./launch.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/launch.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 22,
+      "specifier": "./commands.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/commands.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "line": 23,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 1,
+      "specifier": "node:fs",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 2,
+      "specifier": "node:os",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 3,
+      "specifier": "node:path",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 4,
+      "specifier": "@effect/vitest",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 5,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 6,
+      "specifier": "@t3tools/shared/model",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/shared/src/model.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 7,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 8,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 9,
+      "specifier": "./textGeneration.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 10,
+      "specifier": "./transportTestHelpers.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "line": 11,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 1,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 2,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 3,
+      "specifier": "effect/Queue",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 4,
+      "specifier": "effect/Schema",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 5,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 6,
+      "specifier": "@t3tools/provider-core/server/textGenerationOperations",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-core/src/server/textGenerationOperations.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 7,
+      "specifier": "../settings.ts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/settings.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 8,
+      "specifier": "./launch.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/launch.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 9,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "line": 10,
+      "specifier": "./status.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/status.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "line": 2,
+      "specifier": "effect/Cause",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "line": 3,
+      "specifier": "effect/Deferred",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "line": 4,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "line": 5,
+      "specifier": "effect/Queue",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "line": 6,
+      "specifier": "effect/Sink",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "line": 7,
+      "specifier": "effect/Stream",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "line": 8,
+      "specifier": "effect/process/ChildProcess",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "line": 9,
+      "specifier": "effect/process/ChildProcessSpawner",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "line": 10,
+      "specifier": "./rpc.ts",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/provider-omp/src/server/rpc.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/settings.ts",
+      "line": 2,
+      "specifier": "@t3tools/contracts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "vendor/t3code/packages/contracts/src/index.ts"
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/settings.ts",
+      "line": 8,
+      "specifier": "effect/Effect",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "vendor/t3code/packages/provider-omp/src/settings.ts",
+      "line": 9,
+      "specifier": "effect/Schema",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
     },
     {
       "source": "vendor/t3code/packages/provider-opencode/src/client.ts",

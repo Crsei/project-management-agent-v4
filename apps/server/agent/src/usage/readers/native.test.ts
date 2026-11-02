@@ -11,7 +11,7 @@ import { providerApplicationOptions } from "../../providers/t3code/production.ts
 import { scanNativeUsage } from "./native.ts";
 import type { UsageReadContext } from "../types.ts";
 
-test("all ten original readers preserve disabled history or explicitly disclose missing/unsupported sources without inference", async () => {
+test("all original readers preserve disabled history or explicitly disclose missing/unsupported sources without inference", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "original-usage-families-"));
   const previous = process.env.AGENT_WORKSPACE_DATA_DIR, previousFetch = globalThis.fetch;
   process.env.AGENT_WORKSPACE_DATA_DIR = path.join(root, "data");
@@ -42,7 +42,7 @@ test("all ten original readers preserve disabled history or explicitly disclose 
     assert.ok(scans.every(scan => scan.source.status === "ok" || scan.source.status === "missing"), JSON.stringify(scans.map(scan => scan.source)));
     const pi = scans.find(scan => scan.source.fingerprint.provider === "pi")!;
     assert.equal(pi.records[0]?.totals.uncachedInputTokens, 7); assert.equal(pi.records[0]?.reportedCostUsd, null);
-    for (const driver of ["fx", "acpRegistry"] as const) {
+    for (const driver of ["fx", "acpRegistry", "omp"] as const) {
       const unsupported = scans.find(scan => scan.source.fingerprint.provider === driver)!;
       assert.equal(unsupported.source.status, "missing"); assert.match(unsupported.source.message!, /does not support native usage history/);
     }

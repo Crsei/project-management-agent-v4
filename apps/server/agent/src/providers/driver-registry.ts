@@ -8,12 +8,13 @@ import { opencodeAdapter } from "./drivers/opencode.ts";
 import { antigravityAdapter } from "./drivers/antigravity.ts";
 import { museAdapter } from "./drivers/muse.ts";
 import { piAdapter } from "./drivers/pi.ts";
+import { ompAdapter } from "./drivers/omp.ts";
 import { acpRegistryAdapter } from "./drivers/acpRegistry.ts";
 
 /** Same native Agent inventory/order as t3code's provider client registry. */
 export const nativeProviderAdapters: readonly NativeProviderAdapter[] = [
   codexAdapter, claudeAdapter, cursorAdapter, grokAdapter, fxAdapter, opencodeAdapter,
-  antigravityAdapter, museAdapter, piAdapter, acpRegistryAdapter,
+  antigravityAdapter, museAdapter, piAdapter, ompAdapter, acpRegistryAdapter,
 ];
 const adaptersByDriver = new Map(nativeProviderAdapters.map((adapter) => [adapter.definition.driver, adapter]));
 export function getNativeProviderAdapter(driver: string): NativeProviderAdapter | null {

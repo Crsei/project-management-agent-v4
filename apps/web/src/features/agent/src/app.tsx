@@ -76,6 +76,7 @@ export function App() {
   <Route element={<ApplicationFrame />}>
     <Route index element={<Assistant />} />
     <Route path="workspace" element={<Assistant />} />
+    <Route path="automations/*" element={<Assistant />} />
     <Route path="usage" element={<UsageRedirect />} />
     <Route path="settings" element={<SettingsLayout />}>
       <Route index element={<SettingsIndex />} />

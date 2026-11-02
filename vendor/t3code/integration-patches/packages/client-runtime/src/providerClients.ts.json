@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "source": "packages/client-runtime/src/providerClients.ts",
+  "beforeSha256": "c6c92929a42c9172574546b942e4fd7df37ed0de8fc0f135027cae11fc1d4d6a",
+  "afterSha256": "8383731c3e4ea0387e7783dcc205020bc5abb9312388ce5ed516ea9f68d1af66",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 15,
+      "before": [],
+      "after": [
+        "import { ompClient } from \"@t3tools/provider-omp/client\";\n"
+      ]
+    },
+    {
+      "start": 45,
+      "before": [],
+      "after": [
+        "  ompClient,\n"
+      ]
+    }
+  ]
+}

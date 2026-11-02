@@ -49,12 +49,15 @@ export function makePmProviderRuntimeHost(): ProviderRuntimeHostService {
 
 /** Only server-constructed Chat context may grant access to the existing PM transport. */
 export function pmRuntimeBinding(context: ProviderDriverContext, threadId: ThreadId, executionId: string): ProviderRuntimeHostBinding {
-  if (context.pmToolBridge && (!context.execution || !context.authorizeExecution))
+  if ((context.pmToolBridge || context.mcpServers?.length) && (!context.execution || !context.authorizeExecution))
     throw Object.assign(new Error("PM tools require a trusted live Chat authorization."), { status: 412, code: "scope_required" });
   const bridge = context.pmToolBridge;
+  if (context.mcpServers?.some(server => server.name === "pm_tools"))
+    throw Object.assign(new Error("Execution connectors cannot replace the PM tool transport."), { status: 412, code: "scope_required" });
   return {
     providerInstanceId: ProviderInstanceId.make(context.instanceId), threadId, executionId,
+    ...(context.pmAnalysis || !context.execution && !bridge ? { promptAuthorization: "technical-no-tools" as const } : {}),
     cwd: context.cwd, nativePermissions: "deny-ungranted", instructionText: "",
-    mcpServers: bridge ? [{ name: "pm_tools", transport: "stdio", command: bridge.command, args: [...bridge.args, "mcp"] }] : [],
+    mcpServers: [...(bridge ? [{ name: "pm_tools", transport: "stdio" as const, command: bridge.command, args: [...bridge.args, "mcp"] }] : []), ...context.mcpServers ?? []],
   };
 }

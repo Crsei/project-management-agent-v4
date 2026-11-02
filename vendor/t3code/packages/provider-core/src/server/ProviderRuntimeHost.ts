@@ -8,6 +8,8 @@ export interface ProviderRuntimeHostBinding {
   readonly providerInstanceId: ProviderInstanceId;
   readonly threadId: ThreadId;
   readonly executionId: string;
+  /** Explicit host-only model/question execution; grants no native or PM tool authority. */
+  readonly promptAuthorization?: "technical-no-tools";
   readonly cwd: string;
   readonly mcpServers: ReadonlyArray<{
     readonly name: string;

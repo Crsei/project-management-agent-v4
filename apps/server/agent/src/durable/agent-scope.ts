@@ -4,6 +4,8 @@ import { agentScopeSchema, type AgentScope } from "@agent-workspace/contracts/ch
 import { DurableError } from "./errors.ts";
 
 export type AgentExecutionSnapshot = {
+  /** Resolved by PM, never inferred from a local thread or credentials. Legacy snapshots may lack it. */
+  actorId?: string;
   scope: AgentScope;
   workspaceName: string;
   projectName: string | null;
@@ -13,6 +15,7 @@ export const sameAgentScope = (a: AgentScope | undefined, b: AgentScope | undefi
   a?.workspaceId === b?.workspaceId && a?.projectId === b?.projectId;
 
 const resolvedScopeSchema = z.object({
+  actorId: z.uuid().optional(),
   scope: agentScopeSchema,
   workspaceName: z.string(),
   projectName: z.string().nullable(),
@@ -23,6 +26,7 @@ const resolvedScopeSchema = z.object({
 export async function resolveAgentScope(
   scope: AgentScope | undefined,
   requestHeaders?: Headers,
+  signal?: AbortSignal,
 ): Promise<AgentExecutionSnapshot> {
   if (!scope)
     throw new DurableError(412, "scope_required", "历史会话没有工作区归属；请先选择工作区或项目并新建会话。");
@@ -47,6 +51,7 @@ export async function resolveAgentScope(
       headers,
       body: JSON.stringify(scope),
       redirect: "error",
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
     });
   } catch {
     throw new DurableError(503, "scope_unavailable", "无法连接 PM，未接受本次执行。");

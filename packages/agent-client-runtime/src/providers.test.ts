@@ -9,7 +9,7 @@ import {
   resolveProviderModelSelection, shouldShowProviderInstanceBadge, withProviderClientMetadata,
 } from "./providers.ts";
 
-const drivers: ProviderDriver[] = ["codex", "claude", "cursor", "grok", "fx", "opencode", "antigravity", "muse", "pi", "acpRegistry"];
+const drivers: ProviderDriver[] = ["codex", "claude", "cursor", "grok", "fx", "opencode", "antigravity", "muse", "pi", "omp", "acpRegistry"];
 const model: ProviderModel = { id: "explicit", label: "Explicit", temperature: false, isDefault: true };
 const provider = (patch: Partial<ProviderInstance> = {}): ProviderInstance => ({
   instanceId: "kept-instance", driver: "codex", label: "Codex", enabled: true, config: {}, secretConfigKeys: [],
@@ -80,6 +80,19 @@ test("unselected, removed, disabled and historical model states are never replac
   assert.equal(selected.status, "selected");
   if (selected.status === "selected") assert.equal(selected.model.id, "explicit");
   assert.equal(entry.models[0]?.isDefault, true);
+});
+
+test("OMP uses existing settings and explicit model selection without adopting Pi defaults", () => {
+  assert.equal(getProviderDriverKind("omp"), "omp");
+  assert.deepEqual(getProviderSettingsFields("omp").map(field => field.key), ["binaryPath", "launchArgs"]);
+  assert.deepEqual(getProviderSecretConfigKeys("omp"), []);
+  const entry = provider({ instanceId: "omp-work", driver: "omp", label: "OMP", models: [
+    { id: "openai/gpt-6.1-sol", label: "GPT 6.1 Sol", temperature: false, isDefault: true },
+  ] });
+  assert.equal(resolveProviderModelSelection([entry], entry.instanceId, undefined).status, "unselected-model");
+  assert.equal(resolveProviderModelSelection([entry], entry.instanceId, "removed-pi-model").status, "missing-model");
+  assert.equal(resolveProviderModelSelection([entry], entry.instanceId, "openai/gpt-6.1-sol").status, "selected");
+  assert.notEqual(getProviderClient("omp"), getProviderClient("pi"));
 });
 
 test("source traits render native choices and retain explicit invalid option states", () => {

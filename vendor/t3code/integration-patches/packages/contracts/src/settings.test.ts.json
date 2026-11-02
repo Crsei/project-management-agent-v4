@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "source": "packages/contracts/src/settings.test.ts",
+  "beforeSha256": "d28d0f1f821c3a596da477cd4c107dc7f529e381f5834cd1661e3a57ab95e958",
+  "afterSha256": "cfe4e9da3920a3fc4505bb5b3c0335c47b9f3aae9a8e747930210adcc2a4d1bc",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 218,
+      "before": [],
+      "after": [
+        "    const omp = ProviderDriverKind.make(\"omp\");\n",
+        "    expect(resolveProviderInstanceEnabled({ driver: omp, config: {} })).toBe(false);\n",
+        "    expect(resolveProviderInstanceEnabled({ driver: omp, enabled: true, config: {} })).toBe(true);\n",
+        "    expect(resolveProviderInstanceEnabled({ driver: omp, enabled: true, config: { enabled: false } })).toBe(false);\n"
+      ]
+    }
+  ]
+}

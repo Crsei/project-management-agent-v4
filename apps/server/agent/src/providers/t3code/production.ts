@@ -7,6 +7,7 @@ import { antigravityDriver, makeAntigravityDriverLayer, antigravityProtocolResol
 import { cursorDriver, makeCursorDriverLayer, cursorProtocolResolver, cursorCapabilities, cursorInstallationMethods } from "./families/cursor.ts";
 import { museDriver, makeMuseDriverLayer, museProtocolResolver, museCapabilities, museInstallationMethods } from "./families/muse.ts";
 import { piDriver, makePiDriverLayer, piProtocolResolver, piCapabilities, piInstallationMethods } from "./families/pi.ts";
+import { ompDriver, makeOmpDriverLayer, ompProtocolResolver, ompCapabilities, ompInstallationMethods } from "./families/omp.ts";
 import { grokDriver, makeGrokDriverLayer, grokProtocolResolver, grokCapabilities, grokInstallationMethods } from "./families/grok.ts";
 import { fxDriver, makeFxDriverLayer, fxProtocolResolver, fxCapabilities, fxInstallationMethods } from "./families/fx.ts";
 import { acpRegistryDriver, makeAcpRegistryDriverLayer, acpRegistryProtocolResolver, acpRegistryCapabilities, acpRegistryInstallationMethods } from "./families/acp-registry.ts";
@@ -21,6 +22,7 @@ export const providerApplicationOptions: PmProviderApplicationOptions = {
     makePmProviderFamily(cursorDriver, makeCursorDriverLayer),
     makePmProviderFamily(museDriver, makeMuseDriverLayer),
     makePmProviderFamily(piDriver, makePiDriverLayer),
+    makePmProviderFamily(ompDriver, makeOmpDriverLayer),
     makePmProviderFamily(grokDriver, makeGrokDriverLayer),
     makePmProviderFamily(fxDriver, makeFxDriverLayer),
     makePmProviderFamily(acpRegistryDriver, makeAcpRegistryDriverLayer),
@@ -28,16 +30,16 @@ export const providerApplicationOptions: PmProviderApplicationOptions = {
   protocols: new Map([
     ["opencode", openCodeProtocolResolver], ["codex", codexProtocolResolver], ["claude", claudeProtocolResolver],
     ["antigravity", antigravityProtocolResolver], ["cursor", cursorProtocolResolver], ["muse", museProtocolResolver],
-    ["pi", piProtocolResolver], ["grok", grokProtocolResolver], ["fx", fxProtocolResolver], ["acpRegistry", acpRegistryProtocolResolver],
+    ["pi", piProtocolResolver], ["omp", ompProtocolResolver], ["grok", grokProtocolResolver], ["fx", fxProtocolResolver], ["acpRegistry", acpRegistryProtocolResolver],
   ]),
   capabilities: new Map([
     ["opencode", openCodeCapabilities], ["codex", codexCapabilities], ["claude", claudeCapabilities],
     ["antigravity", antigravityCapabilities], ["cursor", cursorCapabilities], ["muse", museCapabilities],
-    ["pi", piCapabilities], ["grok", grokCapabilities], ["fx", fxCapabilities], ["acpRegistry", acpRegistryCapabilities],
+    ["pi", piCapabilities], ["omp", ompCapabilities], ["grok", grokCapabilities], ["fx", fxCapabilities], ["acpRegistry", acpRegistryCapabilities],
   ]),
   installations: new Map([
     ["opencode", openCodeInstallationMethods], ["codex", codexInstallationMethods],
     ["antigravity", antigravityInstallationMethods], ["cursor", cursorInstallationMethods], ["muse", museInstallationMethods],
-    ["pi", piInstallationMethods], ["grok", grokInstallationMethods], ["fx", fxInstallationMethods], ["acpRegistry", acpRegistryInstallationMethods],
+    ["pi", piInstallationMethods], ["omp", ompInstallationMethods], ["grok", grokInstallationMethods], ["fx", fxInstallationMethods], ["acpRegistry", acpRegistryInstallationMethods],
   ]),
 };

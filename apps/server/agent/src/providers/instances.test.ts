@@ -358,7 +358,13 @@ test("native homes may be shared and overridden without weakening server environ
     assert.equal(context.env.AGENT_CLI_CREDENTIAL_STORE, "file");
     assert.equal(context.homeDirectory, path.join(home, "codex"));
     assert.throws(() => updateProviderInstance(a.instanceId, { driver: "claude" } as never), /cannot be changed/);
-    for (const name of ["AGENT_WORKSPACE_ACCESS_TOKEN", "DATABASE_URL", "NODE_OPTIONS"]) assert.throws(() => updateProviderInstance(a.instanceId, { environment: [{ name, value: "not-provider-config", sensitive: true }] }), /reserved/);
+    const serverOnlyNames = ["AGENT_WORKSPACE_ACCESS_TOKEN", "DATABASE_URL", "NODE_OPTIONS", "PM_AUTOMATION_SERVICE_SECRET", "PM_AUTOMATION_INTEGRATION_KEY", "pm_automation_git_key"];
+    for (const name of serverOnlyNames) {
+      process.env[name] = "server-only-fixture";
+      assert.throws(() => updateProviderInstance(a.instanceId, { environment: [{ name, value: "not-provider-config", sensitive: true }] }), /reserved/);
+    }
+    const isolatedEnvironment = providerEnvironment(explicit);
+    for (const name of serverOnlyNames) assert.equal(isolatedEnvironment[name], undefined, `${name} must not reach a native provider process`);
   });
 });
 

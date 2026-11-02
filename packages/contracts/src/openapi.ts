@@ -17,6 +17,9 @@ import { localProjectPaths } from './local-project-openapi.ts';
 import { agentFileAreaPaths } from './agent-file-area-openapi.ts';
 import { documentSourcePaths } from './document-source-openapi.ts';
 import { automationPaths } from './automation-openapi.ts';
+import { automationStudioPaths } from './automation-studio-openapi.ts';
+import { automationStudioHelperPaths } from './automation-studio-helpers-openapi.ts';
+import { automationPmPaths } from './automation-pm-openapi.ts';
 import { agentChatToolResultSchema } from '../../agent-contracts/src/pm-tool-result.ts';
 
 // Payload validators remain owned by application commands. This module only
@@ -262,6 +265,9 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     ...agentFileAreaPaths(),
     ...documentSourcePaths(),
     ...automationPaths(),
+    ...automationStudioPaths(),
+    ...automationStudioHelperPaths(),
+    ...automationPmPaths(),
     '/health/live': { get: { operationId: 'getLiveness', summary: 'Process liveness only', security: [], responses: { 200: response('Process responds; no business-readiness guarantee.', object({ status: { const: 'alive' } })) } } },
     '/health/ready': { get: { operationId: 'getReadiness', summary: 'Database, storage, live Worker heartbeat and quarantined outbox readiness', security: [], responses: { 200: response('All readiness checks passed.', ref('Readiness')), 503: response('Backend is uninitialized or at least one readiness check failed.', ref('Readiness')) } } },
     '/api/v1/capabilities': { get: { operationId: 'getCapabilities', summary: 'Configured phase-one capabilities; enabled does not imply readiness', security: [], responses: { 200: response('Execution remains disabled. Check /health/ready before business traffic.', ref('Capabilities')) } } },
@@ -393,6 +399,12 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     openapi: '3.1.0', jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
     info: { title: 'Project Management API', version: '0.1.0', description: 'Phase-one modular backend. Supersedes the historical bootstrap.openapi.yaml contract. Server-side sessions accept either pm_v4_session cookie or Authorization: Bearer; an Authorization header takes precedence. Origin must match configured PUBLIC_ORIGIN, cross-site writes are rejected, and this server does not enable cross-origin browser CORS. Disabled execution is not represented as available commands.' },
     servers: [{ url: '/' }], paths,
-    components: { schemas, securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'pm_v4_session' }, bearerAuth: { type: 'http', scheme: 'bearer', description: 'The same opaque server-side session token, not a JWT. Inject explicitly; never store in a generated client.' } } },
+    components: { schemas, securitySchemes: {
+      sessionCookie: { type: 'apiKey', in: 'cookie', name: 'pm_v4_session' },
+      bearerAuth: { type: 'http', scheme: 'bearer', description: 'The same opaque server-side session token, not a JWT. Inject explicitly; never store in a generated client.' },
+      automationExecutionBearer: { type: 'http', scheme: 'bearer', description: 'Dedicated signed and expiring automation execution/generation identity. Not a PM session and never accepted as general PM authority. The internal integration bridge requires automation-integrations audience; the native PM tool bridge only accepts the exact unfinished authorized project execution scope.' },
+      automationSignalSignature: { type: 'apiKey', in: 'header', name: 'x-pm-automation-signature', description: 'Internal producer HMAC over the exact method, path, timestamp and raw JSON body. Required together with automationSignalTimestamp; not a browser credential.' },
+      automationSignalTimestamp: { type: 'apiKey', in: 'header', name: 'x-pm-automation-timestamp', description: 'Timestamp bound to automationSignalSignature and checked for expiration.' },
+    } },
   };
 }

@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Pool } from 'pg';
 import { Workspace, WorkspaceError, type WorkspaceMutationGuard } from '../../../../packages/pm-core/index.ts';
-import { inspectFrontmatter, patchMarkdown, titleLineIndex } from '../../../../packages/pm-markdown/index.ts';
+import { descriptionOf, inspectFrontmatter, patchMarkdown, titleLineIndex } from '../../../../packages/pm-markdown/index.ts';
 import { MAX_WORK_ITEM_ESTIMATE_POINTS, ProtocolError, workflowFor, type FileRecord, type UnsupportedFile, type WorkflowDefinition } from '../../../../packages/pm-schema/index.ts';
 import { DomainError, type Actor, type Command, type CommandReceipt, type Entity } from '../../../../packages/domain/src/core.ts';
 import { authorizeCoreScope, type CoreScope } from './core-routes.ts';
@@ -164,10 +164,6 @@ function bodyLayout(record: FileRecord) {
   };
 }
 
-function descriptionOf(record: FileRecord): string {
-  const { bodyLines, titleIndex, checklistIndexes } = bodyLayout(record);
-  return bodyLines.filter((_, index) => index !== titleIndex && (record.entity.entity !== 'work_item' || !checklistIndexes.has(index))).join('\n').replace(/^\s*\n/, '').replace(/\s+$/, '');
-}
 
 function checklistTexts(entity: FileRecord['entity']): string[] {
   return entity.checklist.map(item => item.text);
@@ -804,7 +800,7 @@ export async function executeCoreCommand(context: CoreCommandContext, idempotenc
       const facts: CapturedServiceFact[] = [];
       result = await context.workspace.captureMutations(captureCoreFacts({ sql, workspaceId: scope.workspaceId, root: context.workspace.root,
         sourceKind: 'command', operationId: context.command.commandId, requestHash: requestHash(context.command as unknown as Record<string, unknown>),
-        actorId: context.principal.id, facts, reusePrepared: context.command.commandType === 'DuplicateProject' }), () => dispatch(guarded, idempotencyKey));
+        actorId: context.principal.id, facts, configuration: context.workspace.configuration().config, reusePrepared: context.command.commandType === 'DuplicateProject' }), () => dispatch(guarded, idempotencyKey));
       if (context.recoveringLocalProject) for (const entry of recoverPreparedCoreCreations(context.workspace.root, new CoreCommandJournal(context.workspace.root))) {
         if (entry.kind === 'fact_completed' && entry.commandId === context.command.commandId && entry.actorId === context.principal.id && !facts.some(fact => fact.fact.factId === entry.captured.fact.factId)) facts.push(entry.captured);
       }

@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { enhanceMarkdownTree, maskHiddenComments, wikiTarget } from './syntax.ts';
 export { enhanceMarkdownTree, headingSlug, imageDimensions, maskHiddenComments, wikiTarget, type SyntaxNode } from './syntax.ts';
-import { defaultConfiguration, entityKinds, entitySchemaFor, fieldRegistry, ProtocolError, validateTransition, viewConfigOf, viewSchema, workflowFor, type Diagnostic, type Entity, type ProtocolConfiguration, type ViewConfig } from '../pm-schema/index.ts';
+import { defaultConfiguration, entityKinds, entitySchemaFor, fieldRegistry, ProtocolError, validateTransition, viewConfigOf, viewSchema, workflowFor, type Diagnostic, type Entity, type FileRecord, type ProtocolConfiguration, type ViewConfig } from '../pm-schema/index.ts';
 import { validateView } from '../pm-schema/query.ts';
 
 interface MarkdownNode {
@@ -90,6 +90,15 @@ export function titleLineIndex(raw: string): number | undefined {
     if (!heading?.position) return undefined;
     return bodyLineOffset + heading.position.start.line - 1;
   } catch { return undefined; }
+}
+
+/** Native PM description excludes only the authoritative H1 and parser-indexed task checklist lines. */
+export function descriptionOf(record: FileRecord): string {
+  const { body, bodyLineOffset } = inspectFrontmatter(record.raw);
+  const heading = titleLineIndex(record.raw);
+  const titleIndex = heading === undefined ? 0 : heading - bodyLineOffset;
+  const checklistIndexes = new Set(record.entity.checklist.map(item => item.line - 1 - bodyLineOffset));
+  return body.split(/\r?\n/).filter((_, index) => index !== titleIndex && (record.entity.entity !== 'work_item' || !checklistIndexes.has(index))).join('\n').replace(/^\s*\n/, '').replace(/\s+$/, '');
 }
 
 export function inspectMarkdown(raw: string): { id?: string; schema?: string; title?: string } {

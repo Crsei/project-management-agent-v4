@@ -28,6 +28,8 @@ const result = await build({
     "cursor-sdk-worker": path.join(vendoredRoot, "packages/provider-cursor/src/server/CursorSdkWorker.ts"),
     "providers/t3code/document-text-worker": "src/providers/t3code/document-text-worker.ts",
     "pm-cli/pi-tools": fileURLToPath(new URL("../../../../packages/pm-cli/pi-tools.ts", import.meta.url)),
+    "pm-cli/automation-tools": fileURLToPath(new URL("../../../../packages/pm-cli/automation-tools.mjs", import.meta.url)),
+    "workspace-tools": "src/automation-execution/native-templates/workspace-tools.mjs",
   },
   outdir: temporaryOutput || "dist",
   outExtension: { ".js": ".mjs" },

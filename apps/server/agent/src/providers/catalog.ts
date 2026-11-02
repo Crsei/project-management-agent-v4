@@ -6,6 +6,7 @@ import type { ProviderDriverStatus } from "./driver-adapter.ts";
 import { sanitizeErrorText } from "./verify.ts";
 import { BUNDLED_CLAUDE_MODEL_CATALOG, resolveClaudeModelSlug } from "../../../../../vendor/t3code/apps/server/src/provider/ClaudeModelCatalog.ts";
 import { beginProviderStatus } from "./auth.ts";
+import { OMP_STATUS_TIMEOUT_MS } from "@t3tools/provider-omp/server/status";
 
 const observations = new Map<string, { revision: number; status: ProviderDriverStatus }>();
 const checks = new Map<string, { revision: number; promise: Promise<ProviderDriverStatus> }>();
@@ -95,7 +96,8 @@ export async function readNativeProviderStatus(instanceId: string, insideAccount
   const pending = checks.get(key);
   if (pending?.revision === instance.revision) return pending.promise;
   const release = beginProviderStatus(instanceId, insideAccountOperation);
-  const promise = Promise.resolve().then(() => adapter.check(providerContext(instance), AbortSignal.timeout(30_000))).then(status => {
+  const promise = Promise.resolve().then(() => adapter.check(providerContext(instance),
+    AbortSignal.timeout(instance.driver === "omp" ? OMP_STATUS_TIMEOUT_MS : 30_000))).then(status => {
     if (getStoredInstance(instanceId)?.revision !== instance.revision)
       throw Object.assign(new Error("Agent configuration changed during status inspection."), { status: 409 });
     const safe: ProviderDriverStatus = {

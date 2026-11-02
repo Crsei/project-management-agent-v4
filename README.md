@@ -159,9 +159,9 @@ v3 历史目录检查器验收与 inotify 故障记录见[任务记录](V3-AGENT
 | 历史与归档 | 归档保留历史，恢复到原工作区 / 项目；运行中不可归档。恢复 / 删除重新核验原范围，永久删除需明确确认 |
 | 诊断、数据与存储 | 展示实际版本、SQLite 所有权 / 完整性 / 计数、最近失败类别及私有目录；安全诊断下载采用状态白名单，不导出消息、提示词、凭据、目录或原始日志 |
 
-Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity、Muse Code、Pi、ACP Registry。初始化仍只持久创建 Codex / Claude；其他默认位仅在已配置、有效启用或定向访问时显示，浏览页面不创建实例。FX 位于“显示更多”，ACP Registry 为独立搜索 / 准备入口；Registry 先显式准备，再填写身份并按协议认证，local 命令走较短路径。实例 ID 固定、字母开头、最多64字符，显示名称可清空回退驱动名；默认实例可重置，额外实例可删除。普通字段失焦或 Enter 保存，环境变量和模型显式保存。非敏感环境变量可回显编辑，敏感值遮蔽且空值回传保留；旧环境变量默认按敏感值迁移。模型段统一管理隐藏、排序、收藏、自定义能力选项；Antigravity 不开放自定义模型。独立 OpenAI / Anthropic / DeepSeek API 卡片及新执行入口不恢复，原始历史和私有凭据不删除。
+Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity、Muse Code、Pi、OMP（Oh My Pi）、ACP Registry。初始化仍只持久创建 Codex / Claude；其他默认位仅在已配置、有效启用或定向访问时显示，浏览页面不创建实例。FX 位于“显示更多”，ACP Registry 为独立搜索 / 准备入口；Registry 先显式准备，再填写身份并按协议认证，local 命令走较短路径。实例 ID 固定、字母开头、最多64字符，显示名称可清空回退驱动名；默认实例可重置，额外实例可删除。普通字段失焦或 Enter 保存，环境变量和模型显式保存。非敏感环境变量可回显编辑，敏感值遮蔽且空值回传保留；旧环境变量默认按敏感值迁移。模型段统一管理隐藏、排序、收藏、自定义能力选项；Antigravity 不开放自定义模型。独立 OpenAI / Anthropic / DeepSeek API 卡片及新执行入口不恢复，原始历史和私有凭据不删除。
 
-适配以 `t3code@30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c` 为配置与协议基准；MIT 归属见 [LICENSE.t3code](LICENSE.t3code)。Codex 通过“使用现有 CLI”与“继续使用 ChatGPT”进入对应流程，不再展示模式下拉框。existing 复用原生配置 / 外部认证，可使用 API Key 或第三方服务，不强制 ChatGPT 登录；managed 使用受管运行时、ChatGPT 多账号 OAuth / token broker，私有状态保留在本副本 `provider-homes`。Claude 的四种 idle compaction 模式接入实际宿主调度并重新核验 PM 范围；Cursor 的 `CURSOR_API_KEY` 位于专属 Setup，填写密钥后隐藏浏览器登录，清除并保存后恢复该入口。Grok / FX / Muse / Pi 与 existing Codex / Claude / OpenCode 遵循来源的外部认证边界，不另造应用内登录 / 登出。
+适配以 `t3code@30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c` 为配置与协议基准；MIT 归属见 [LICENSE.t3code](LICENSE.t3code)。Codex 通过“使用现有 CLI”与“继续使用 ChatGPT”进入对应流程，不再展示模式下拉框。existing 复用原生配置 / 外部认证，可使用 API Key 或第三方服务，不强制 ChatGPT 登录；managed 使用受管运行时、ChatGPT 多账号 OAuth / token broker，私有状态保留在本副本 `provider-homes`。Claude 的四种 idle compaction 模式接入实际宿主调度并重新核验 PM 范围；Cursor 的 `CURSOR_API_KEY` 位于专属 Setup，填写密钥后隐藏浏览器登录，清除并保存后恢复该入口。Grok / FX / Muse / Pi / OMP 与 existing Codex / Claude / OpenCode 遵循来源的外部认证边界，不另造应用内登录 / 登出。
 
 安装、更新、取消与移除仅对实际支持的驱动开放；“继续使用 ChatGPT”先准备运行时，再发起登录，只读检查或发送消息不会自动下载。维护与认证 / 执行互斥。原生 Home 留空时继承宿主规则，显式 Home 和实例环境覆盖对应配置，不重写进程 HOME / XDG，也不清除宿主 Provider 凭据。应用自有状态与原生 Home 分离，重置、删除和备份不收集、创建或删除外部 Home。PM 作用域、审批与完成规则不变。
 
@@ -179,9 +179,19 @@ Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity�
 
 本机发布记录（2026-10-29）：`3224` 已使用新 Web / Agent，实际 Codex 检查成功。现有 PM `/health/ready` 仍返回503，只读核查为尚未应用的 `0039_document_sources.sql`；本轮未执行这项无关迁移，也未重启 PM API / Worker / 网关。Provider 可用不能替代整套 PM 的就绪判定。
 
+##### OMP（Oh My Pi）
+
+OMP 是新增的独立 `@t3tools/provider-omp`，不是 Pi 命令别名。协议基线为 OMP `18.13.2`；实施计划、来源与分层验收见 [OMP 适配记录](docs/implementation/omp-provider-adaptation-plan.zh.md)。本次未发布或重启 `3224` 常驻服务。
+
+- 在服务机器外部安装并认证 OMP；添加“OMP / Oh My Pi”，Runtime binary 默认 `omp`，也可填写实际可执行文件绝对路径。应用不代装、登录、更新或复制账号；保存后检查、明确选择发现的模型再发送消息。认证未知与运行可检查并不矛盾，也不代表推理成功。
+- 原生 Home / 实例 Environment 按 OMP 自身语义生效，支持 `OMP_PROFILE`、`PI_CODING_AGENT_DIR` 等原生目录变量；不使用 Pi 的 `~/.pi/agent`。Profile 不替代 PM scope、revision 或 session lease，也不能绕过启动预检。
+- stock OMP 无法通过一个开关关闭所有环境扩展 / 插件 / MCP。适配器启动前只检查相关路径元数据；存在无法证明安全的启动源时明确拒绝，含可能触发原生加载的 `.claude.json`。必要时明确指定无这些启动源的 Home / 项目目录，不通过启动参数绕过。该门禁不是操作系统沙箱，不读取或清除全局凭据。
+- 原生工具权限遵循现有 PM `deny-ungranted`；PM 工具通过 OMP Host Tools 进入既有授权和业务审批。技术性标题 / 压缩生成显式无工具；Fork、Rollback、主动子 Agent、Goal、原生历史 Usage 和账号额度读取未开放。
+- 已用真实 OMP + 受控模型验证流式、取消、多轮及重启恢复、真实 PM 查询与审批 / 拒绝，并在网页观察配置、选模、历史恢复与取消。真实模型验收尚未通过：本机 Ollama 返回 `unable to load model`，未改动该服务或读取供应商账号。运行事件 Usage 不等于历史扫描或订阅账单。
+
 #### Provider 运行输出
 
-十类原生驱动共用按 generation 排序的输出投影；前端按原生协议实际事件显示回复、可折叠思考、工具输入/结果、命令终端、文件 diff、搜索、计划、子代理、上下文压缩与失败状态，未报告的能力不补造。旧历史继续原有正文显示，新输出不会再重复显示一份纯文本回复。
+原生驱动共用按 generation 排序的输出投影；前端按原生协议实际事件显示回复、可折叠思考、工具输入/结果、命令终端、文件 diff、搜索、计划、子代理、上下文压缩与失败状态，未报告的能力不补造。旧历史继续原有正文显示，新输出不会再重复显示一份纯文本回复。
 
 - Composer“更多输入选项”中的“逐段 / 整轮”只改变显示时机。逐段按完整 Markdown 边界约 400ms 释放；整轮在结束时展示正文，工具过程仍实时显示；错误和取消保留已收到的内容。
 - 输出投影保存在 Agent SQLite，SSE 以序号和完整快照恢复；断开页面不取消原生执行。条目更新约 50ms 合并，慢消费者重置为快照，不无限积压。
@@ -193,8 +203,9 @@ Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity�
 #### Usage 用量与额度
 
 - Agent Chat 左下角侧栏的“用量”进入 `/agent/settings/usage`：紧凑顶栏、Cost / Tokens / Limits、24小时及7/30/90天、实例和 Provider 筛选。概览包含 Provider 汇总与平滑趋势、五项 Totals、缓存/速度费用分解，以及 Model / Day / Hour 明细。成本是 API 等价估算，不是订阅账单；未定价记录保留 token 并明确标记，不当成免费。旧的 `/agent/usage` 保留为跳转到该路由的兼容地址。
-- 历史读取 Codex、Claude、Grok、Pi JSONL，以及 OpenCode、Antigravity、Muse 的原生存储；Cursor 使用账号 Dashboard 数据，不从本地对话估算。目录依据生效的原生 Home / 环境变量定位，包含已停用实例的历史；ACP / FX 没有通用历史扫描格式，FX 不推测历史用量。扫描缓存支持重启、追加与文件身份失效，容量与保留期有界，不能恢复已被淘汰的原生历史。Codex 速度档位仅从匹配的原生记录或冻结启动记录补全，不拿当前会话选项改写历史。
+- 历史读取 Codex、Claude、Grok、Pi JSONL，以及 OpenCode、Antigravity、Muse 的原生存储；Cursor 使用账号 Dashboard 数据，不从本地对话估算。目录依据生效的原生 Home / 环境变量定位，包含已停用实例的历史；ACP / FX / OMP 没有已接入的通用历史扫描，FX / OMP 不推测历史用量。扫描缓存支持重启、追加与文件身份失效，容量与保留期有界，不能恢复已被淘汰的原生历史。Codex 速度档位仅从匹配的原生记录或冻结启动记录补全，不拿当前会话选项改写历史。
 - 公开价格缓存、自定义价格和模型别名在 `/agent/settings/usage/config` 配置；保存使 Usage 查询失效，revision 冲突保留草稿。Limits 展示真实账号/窗口快照、剩余额度、重置时间和支持的 reset credits。页面自动检查有5分钟间隔，显式刷新另行执行；失败保留旧数据及其原有效时间，不伪装成新快照或推测已补满。CLIProxyAPI Hub 的管理密钥只写入、不回显，使用重置 credit 必须明确确认；动作成功但回读失败与动作结果未知分开呈现，均不自动重复兑换。
+- OpenCode Go 由服务端使用原生 API Key，以 Bearer 调用 `https://opencode.ai/zen/go/v1/usage`，不以本地 token 估算订阅额度。SQLite 优先选中原生 `opencode-go` 连接，再考虑旧 `opencode` 别名；有效 v2 凭据不受旧 `auth.json` 损坏影响。保留内联认证、实例环境/Home及远程服务边界。5小时、每周、每月窗口沿用原百分比/重置时间模型，`rate-limited` 按额度耗尽显示；只有明确的 `EntitlementError` 才判定无订阅，其他403仍显示查询失败。本次修正仅更新源码，尚未部署或执行真实额度查询。
 - 输入框不再显示上下文 token / 进度、费用估算或本轮供应商用量，也不再轮询会话用量；后台原生记账和独立“用量”页保留。`/usage-limits` 仍可显式读取现有额度快照，不执行模型、不自动探测或隐藏刷新。
 - Cursor Keychain 只在明确启用、macOS 与对应原生认证条件满足时可用；不会自动导入全局账号。离线备份 `--secrets exclude` 清除 Hub 密钥、停用恢复的 Hub，并排除 Cursor 账号历史缓存；`include` 仍需显式离线授权。
 
@@ -220,7 +231,7 @@ pnpm agent:backup:verify --bundle <私有备份目录> --target <恢复目录> -
 
 PM 侧栏与完整 Chat 页共享会话、模型选择、生成订阅和草稿交接；会话列表、历史、取消、归档及删除全部归 Agent Chat。旧 `/pm/<workspace>/agent` 仅重定向到 Chat，不映射旧 PM 线程。模型统一使用 Chat Provider，不再读取 `AGENT_CHAT_BASE_URL/MODEL/API_KEY`。**会话与持久化尚未经过统一设计，当前暂沿用 Agent Chat。**
 
-17 个 PM 工具共用一个注册表和执行入口：查询/读取，项目与任务创建及普通字段修改，文档创建/保存，评论读取/创建，关系读取/添加/删除，以及任务归档、恢复、永久删除和状态转换。Codex、Claude、Cursor、Grok、OpenCode、Antigravity、Muse、Pi、ACP Registry 通过原生 MCP 或 Pi 工具扩展接入，同一代生成还提供统一 CLI。Provider 工具配置随生成建立，标题生成和空闲压缩不获得业务工具。接入源码不等于真实供应商账号已验收。
+17 个 PM 工具共用一个注册表和执行入口：查询/读取，项目与任务创建及普通字段修改，文档创建/保存，评论读取/创建，关系读取/添加/删除，以及任务归档、恢复、永久删除和状态转换。Codex、Claude、Cursor、Grok、OpenCode、Antigravity、Muse、Pi、ACP Registry 通过原生 MCP 或 Pi 工具扩展接入，OMP 使用原生 Host Tools 接入同一 PM 桥；同一代生成还提供统一 CLI。Provider 工具配置随生成建立，标题生成和空闲压缩不获得业务工具。接入源码不等于真实供应商账号已验收。
 
 PM API 的 `/api/v1/workspaces/:workspaceId/agent-tools` 提供注册表，`/call` 执行，`/result` 核对原结果。Chat 只在内存中转发本次 PM 请求认证信息，不创建第二套工具凭据，不把 Cookie/Authorization 保存进会话或放进 Provider 环境。PM 仍在服务端检查成员、项目 scope、原生能力、revision、幂等键、关系防环和领域规则；目录不是权限或沙箱。
 
@@ -230,17 +241,23 @@ Chat 的“PM 核心文件变更记录”保存已登记共享/独立核心目�
 
 开发阶段迁移 `0038_unified_agent_tools.sql` 定向移除旧 PM 聊天数据表，不迁移旧 PM 历史；PM 业务对象、审计、命令收据及原有 Agent Chat 历史保留。实施范围、文件合同和实际验收见[统一改造计划](docs/implementation/agent-chat-pm-unification-plan.zh.md)。候选提案、批量审核、业务 Run/审批与自动完成任务不在本次范围。
 
-### 自动化规则与报告
+### 自动化
 
-`/agent/workspace?workspace=<id>&view=automations` 从 Agent Chat 侧栏独立的“自动化”导航行进入；它不是会话记录，也不与对话组成双页签。支持本人规则的创建、编辑、删除、启停、只读测试、明确运行、搜索筛选及分页运行历史。项目必须显式选择；规则和不可变报告保存在 PostgreSQL，任务仍以 Markdown 为权威。新规则只保存为草稿；测试未保存配置不会创建运行、调用模型或修改任务。
+正式入口为 `/agent/automations?workspace=<id>&project=<PRJ-ID>`，从 Agent Chat 侧栏独立的“自动化”导航行进入；旧 `view=automations` 链接迁移到新入口。保留主侧栏，内容区提供 Dashboard、47 个模板（23 个 OpenHands 来源模板＋24 个 PM 原生场景）、创建/编辑、详情/历史、Git Sync 和集成配置；不是会话记录或第二套应用。实现分工、部署前提及验收状态见 [Automations 实施记录](docs/implementation/openhands-automations-replication-plan.zh.md)。
 
-支持手动或每日定时触发、IANA 时区、每日运行上限和冷却时间。实际动作是对未完成、逾期或受阻任务生成只读观测报告，保留当时配置、来源任务 ID/revision 和原对象链接。自动化不代表 Agent Session/Run，更不会改变任务完成状态；模型分析、Host 工具和外部通知/连接器仍明确禁用。
+页面管理执行类自动化，支持 Prompt、隔离 Custom Python、八个 OpenHands 来源的原生处理器及24个 PM 原生分析处理器，保留持久草稿、revision 冲突与原请求收据。执行类“试运行”会真正执行已保存快照；启用不会立即运行，暂停不取消已开始的运行。手动、一次性、五段 Cron/IANA 时区及签名事件使用同一授权队列，未知外部结果先查原操作，不以新键重发。
 
-规则编辑采用独立规则侧栏、报告内容与运行时间两步布局，限额设置默认折叠；运行历史按日期分组，可按规则筛选并在行内展开结果与运行配置。页面沿用 Agent Chat/PM 共用的语义色 token、12/14/20px 字号和 0.5px 边框，不再加载第二套 Radix 色阶；配色和字号只作用于该视图，不影响对话页。普通保存、暂停直接提交，启用、正式运行和删除保留确认；按实际面板宽度切换紧凑布局，窄屏与 PM 内嵌页的已保存规则列表默认折叠。未保存草稿、待核对请求及存储错误在切换会话、离开自动化、展开/关闭内嵌页和浏览器前进/后退时保留离页保护；同一路径的查询参数切换也受保护。
+原生模板的确定性筛选、当前 head/CI、去重与外部发布由宿主执行；模型阶段使用现有 Chat/Provider。Watchdog 与 Stale CI Closer 不需要模型；News Digest 不需要仓库工具；其余五个仓库模板要求所选 Provider 的实际工具通道支持。接口与界面按驱动明确阻塞不兼容的工具组合，不把“支持 MCP”当作无人值守权限，也不扩大现有 Provider 原生权限。仓库命令只经受限工具进入固定镜像的隔离容器；这不把整个 Provider 进程或文件区域宣称为新的安全沙箱。
 
-Worker 独立执行到期规则，关闭页面不停止调度。夏令时缺失时刻跳过、重复时刻使用第一次；跨日错过的检查记为跳过，不补发历史批次。预算按规则当地日期计算，手动与定时正式运行共同计入预算，测试不消耗预算。专用调度心跳与 API/普通 Worker 健康分开；旧 Worker 的存活不代表自动化就绪。
+PM 原生模板覆盖任务/依赖、执行协作、知识/需求变化、项目/规划四组场景；模板页可按来源、分类和触发方式筛选。16个确定性处理器无需 Provider 或项目文件区域；8个语义处理器必须显式选择已认证且支持 `pmAnalysis` 的 Provider，当前仅实现 Claude 的无工具通道，不以 Codex 的工具沙箱替代。任务、评论、活动、文档、Session、Run、PR、里程碑和访问区间均来自当前主体/项目的授权快照；缺少来源明确报告缺口，不能把“无发现”解释为验收通过。
 
-所有读写与后台执行重新检查当前主体和项目授权；更新携带 revision，未知响应保留原请求键并查询原收据，刷新不重发。删除规则保留不可变历史；项目归档后禁止启用与运行，但仍允许有权用户暂停、删除规则。部署需要迁移 `0034_automation.sql` 并更新本副本 API/Worker；不连接来源副本。实现与本次验收见[执行计划补充记录](EXECUTION-PLAN.zh.md#automation-page-delivery)。
+分析只持久化发现与类型化候选。用户在运行详情中编辑、预览、确认应用或忽略，实际写入复用现有 PM 服务、权限、版本检查与原操作收据；规划候选支持选择发布、既有任务复用及依赖闭包。来源变化需明确重基，结果未知先核对原收据，不自动重新执行。不会自动完成任务、合并/删除重复任务或启动调查执行；场景12目前生成共同假设与验证任务提案，不冒充尚不存在的执行审批单。
+
+GitHub/GitLab 可使用独立验证的原生 API 连接，无需无关的 MCP 服务；MCP 模板仍要求实际 MCP 工具验证。私有输入只写入受保护的服务端存储，连接器版本固定到执行快照。导入默认草稿；完整 PM bundle 保留原生动作和文本脚本包，来源 `.automation.json` 仅在无损可表达时交换，不支持的格式明确拒绝。Git Sync 使用独立受控裸仓库、远端 CAS 和原提交核对，不操作业务工作树。
+
+八个 OpenHands 来源处理器的已部署版本需要迁移 `0040`–`0042`、配套 PM/Worker/Agent/Web、受信服务密钥，以及实际使用的隔离镜像、连接账号或 Git 存储配置。2026-10-31 经用户明确授权，已备份并迁移本副本、构建和重启 `3224` 入口，见[历史部署记录](docs/implementation/openhands-automations-replication-plan.zh.md#12-当前入口部署2026-10-31-utc)。新增24场景另需 `0043_automation_pm.sql` 及本轮配套构建；本轮只在独立账号、数据库和临时端口联调，**未发布到3224或迁移生产数据库**，见[PM 场景实施记录](docs/implementation/openhands-automations-replication-plan.zh.md#14-pm-原生24场景2026-11-01-utc)。初始化健康检查不证明外部依赖就绪，不复制来源凭据或授权外部写入。**Run 成功不代表 WorkItem 完成；会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口。**
+
+**旧报告页面已移除：** 2026-11-01 按用户要求删除“原报告规则”页面、导航及控制台中的旧报告展示和跳转；旧 `/agent/automations/reports` 链接显示页面不存在，不再加载原规则接口。本次仅移除前端：后台报告 API、已保存规则、不可变历史及 Worker 调度保持不变，已有启用规则不会因删除页面而停止。原报告能力的历史记录见[执行计划](EXECUTION-PLAN.zh.md#automation-page-delivery)，当前变更与验收见[移除记录](docs/implementation/openhands-automations-replication-plan.zh.md#13-移除原报告规则页面2026-11-01-utc)。
 
 认证入口使用独立全窗口登录页，支持密码显隐、字段校验和本地化反馈；登录后进入授权工作区选择。登录响应未知时先检查当前会话，不自动重发。账号由管理员或有效邀请创建，未开放公开注册或第三方登录。`/pm/account/security`、`/pm/account/recovery` 和恢复邮箱确认页不依赖工作区；配置邮件能力且本人独立验证恢复邮箱后才可自助找回，历史登录邮箱/邀请不自动算可信证明。
 
@@ -274,7 +291,7 @@ PM 文档页右上角“文档来源设置”可为工作区或项目关联一�
 | `/pm/<workspace>/issues`、`/documents`、`/views` | PM 原生集合与共享详情：九类实体、原文/预览/草稿、属性/关系、看板/表格/树/图、嵌入 pm-view；文件浏览器和源码分栏按需打开，不再嵌入第二套应用 |
 | `/pm/<workspace>/issues?scope=mine` | 我的任务：替代侧栏独立的今天/即将到来入口，按 gr8r-studio My Tasks 展示当前登录人负责的真实任务。逾期、今天、即将到来（所有未来及未排期）、已完成四组；已完成默认折叠，取消任务不混入。统计、搜索、筛选及列表/日历共用同一集合；新建默认分派本人，完整创建页支持 `issues/new?scope=mine`，保留显式项目/负责人选择和恢复草稿。完成/重开按配置工作流和独立能力写回原生 Markdown，不以界面操作推断成功 |
 | `/pm/<workspace>/agent` | 旧入口仅跳转到统一 Agent Chat，不迁入旧 PM thread ID；PM 侧栏与完整 Chat 使用同一界面、Provider、会话及17个 PM 工具，沿用当前 PM 登录与业务权限 |
-| `/agent/workspace?view=automations` | Agent Chat 内的本人规则 CRUD、只读测试、启停、手动/每日后台报告、时区/预算/冷却/去重及不可变运行历史；仅观测真实 Markdown 任务，不执行模型/Host 或自动完成任务 |
+| `/agent/automations` | 本人执行定义；Dashboard/47模板/草稿/真实试运行、时间与事件触发、历史/日志、PM 来源快照与候选人工审阅、导入导出/Git Sync/集成配置。所选 Provider 及外部来源必须实际就绪，不自动完成任务；旧报告页面不恢复 |
 | `/pm/<workspace>/entities/<id>` | 与集合详情共用草稿和 revision 的完整对象页；任务默认连续展示标题、属性、依赖、Markdown 描述、真实子任务、成果证据与服务端评论；评论支持本人编辑、软删除/恢复及不可变历史，不改核心 Markdown。字段和源码双向更新并显式保存；保留高级属性/关联/关系图/业务/上下文。见[任务详情交付](docs/implementation/markdown-core-delivery.zh.md#task-detail) |
 | `/pm/<workspace>/views?view=graph` | 九类实体的力导向知识图谱；正式类型关系与正文双链、全局/一至三层局部图、关系筛选与搜索、缩放/拖动/邻居高亮；正式图只读已保存事实，嵌入图明确标记草稿预览 |
 | `/pm/<workspace>/settings` | 工作流与字段、本地项目目录、迁移与备份、诊断；`?section=local-storage` 管理本地目录，`?section=preferences` 保留 PM 展示偏好；Agent Provider 与聊天配置由 Chat 设置管理 |
@@ -289,7 +306,7 @@ PM 文档页右上角“文档来源设置”可为工作区或项目关联一�
 | `/errors/401`、`/errors/403`、`/errors/404`、`/errors/500`、`/errors/503` | 五个 HTTP 错误页；受保护 `/pm` 路由的 401/403/404/5xx 与会话异常复用同一表面，重试只调用真实会话刷新 |
 | Storybook | 11 个独立组件 stories；明确样例数据，不作为真实业务验收 |
 | 核心写入语义 | 任务完成按配置工作流直接转换，不要求先提交审核；审核是独立交付流程，不自动改写核心状态 |
-| 未支持 | 外部邮箱同步、邮件/Push 通知、Agent Host/Runner、业务 Session/Run、主动发现、模型或外部动作自动化（Chat 工具成功和自动化报告均不代表工作项完成）；MFA/SSO、自动 GC、协作白板及供应商连接器；团队不授予项目权限。邮件/S3/Webhook 缺少真实配置或启用前提时保持禁用 |
+| 未支持 | 外部邮箱同步、邮件/Push 通知、通用业务 Agent Host/Runner、业务 Session/Run、主动发现与自动判定工作项完成；MFA/SSO、自动 GC、协作白板；团队不授予项目权限。邮件/S3/Webhook、自动化执行与连接器缺少真实配置或启用前提时保持禁用；Chat 工具成功、执行成功与观测报告均不代表工作项完成 |
 
 完整变体目录、首选/备选库、已安装组件与日期契约见 [前端移植与接入清单](docs/frontend-porting-manifest.md)。浏览器人工闭环、响应丢失核对和双会话冲突证据见 [交付记录](docs/implementation/backend-delivery.md)。
 

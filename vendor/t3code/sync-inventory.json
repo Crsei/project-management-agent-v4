@@ -1,17 +1,17 @@
 {
   "version": 1,
   "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
-  "sourceManifestSha256": "be9a2465b4bd0b4f220571f442cfcfe451a9c2b6fae1c381a413be15187741af",
+  "sourceManifestSha256": "77b77eec62ad94d53a7a92cfa3578026e8561701d0a1e47253a7143aa9d3b622",
   "scope": "Exact current selected upstream + explicit existing local adaptations/resources. No runtime, PM host persistence or source repository is copied wholesale.",
   "patchFormat": "integration-patches/*.json exact original-line splices with whole-file SHA256 preconditions and postconditions",
   "verification": "Static inventory authoring only; no check/build/test/install/smoke/service executed by T18. Parent M6 gate remains open.",
   "summary": {
     "upstreamInputs": 959,
     "upstreamSelected": 861,
-    "upstreamPristine": 704,
-    "upstreamPatched": 157,
-    "existingAdditionalAssets": 301,
-    "outputFilesExcludingSelf": 1162
+    "upstreamPristine": 699,
+    "upstreamPatched": 162,
+    "existingAdditionalAssets": 339,
+    "outputFilesExcludingSelf": 1200
   },
   "files": [
     {
@@ -2335,8 +2335,8 @@
     {
       "destination": "vendor/t3code/integration-patches.json",
       "asset": "vendor/t3code/integration-patches.json",
-      "sha256": "1495982e59e45e8d4e986bc72b34503ecad51580eddf4c01b210fa3fba5f7d0b",
-      "bytes": 50271,
+      "sha256": "8489655e65f6e58c8a7cf34e0fdd838895adcbd5e5a4a43221a5c4157d853748",
+      "bytes": 55308,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3145,8 +3145,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/client-runtime/package.json.json",
       "asset": "vendor/t3code/integration-patches/packages/client-runtime/package.json.json",
-      "sha256": "08ad27f84acbc64939caebfb26e25b667b6568cfe2f177957046f999fbda9760",
-      "bytes": 25917,
+      "sha256": "64e17e2bcf7f3c039d405ec1cbeab2f37cca5a0247013f0b682cc7dc39ca88a9",
+      "bytes": 26055,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3161,10 +3161,46 @@
       "rationaleLedger": "vendor/t3code/integration-patches.json"
     },
     {
+      "destination": "vendor/t3code/integration-patches/packages/client-runtime/src/providerClients.ts.json",
+      "asset": "vendor/t3code/integration-patches/packages/client-runtime/src/providerClients.ts.json",
+      "sha256": "d337d6d5842fbaea97fc26606d6dde29dfcdc94887a0a19311510021f10cd24a",
+      "bytes": 971,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
       "destination": "vendor/t3code/integration-patches/packages/contracts/package.json.json",
       "asset": "vendor/t3code/integration-patches/packages/contracts/package.json.json",
       "sha256": "9abf16e7931f82d21b960d7cf64d5da5144374936ce3cac93d3f1d0937206a9f",
       "bytes": 829,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/integration-patches/packages/contracts/src/settings.test.ts.json",
+      "asset": "vendor/t3code/integration-patches/packages/contracts/src/settings.test.ts.json",
+      "sha256": "504c9eb81f460d603815eb4fb124c8fa09068486b642e12aa9481514aba57f84",
+      "bytes": 1192,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/integration-patches/packages/contracts/src/settings.ts.json",
+      "asset": "vendor/t3code/integration-patches/packages/contracts/src/settings.ts.json",
+      "sha256": "fb8d5856716e9a9f05078932ef39b79fb0fee3f568647960beac35e51f8ae538",
+      "bytes": 1023,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/integration-patches/packages/contracts/src/usage.ts.json",
+      "asset": "vendor/t3code/integration-patches/packages/contracts/src/usage.ts.json",
+      "sha256": "2d25455517bc9eaf53427fc6eb745a83cccad75b816120a2e08702270fb4a54c",
+      "bytes": 805,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3541,8 +3577,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/status.test.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/status.test.ts.json",
-      "sha256": "60bceaf61572523d49523aac9f717914f0d993962b7d02870b5d9b7714d8200d",
-      "bytes": 1040,
+      "sha256": "1f733e5f3ca6f04dac2ddf019ff449c92b6dfc1d3aa3aa3ba9a745ae4e113b85",
+      "bytes": 3702,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3561,6 +3597,15 @@
       "asset": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/usage.test.ts.json",
       "sha256": "0cda70d3311d71b06db34f1c2622a82dadc82c8c89f5f8a7bda10ec071f93152",
       "bytes": 1804,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/usageLimits.ts.json",
+      "asset": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/usageLimits.ts.json",
+      "sha256": "82b8c2b570570f3d9369362a3cf12bf67e9c39e503fb23bd424a962330700c5f",
+      "bytes": 7863,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3755,6 +3800,15 @@
       "rationaleLedger": "vendor/t3code/integration-patches.json"
     },
     {
+      "destination": "vendor/t3code/omp-source.json",
+      "asset": "vendor/t3code/omp-source.json",
+      "sha256": "270025f876b24dfaf5380f63cd25c813aef5e15b840f6fa99eceba806d208018",
+      "bytes": 14202,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
       "destination": "vendor/t3code/opencode-patches.json",
       "asset": "vendor/t3code/opencode-patches.json",
       "sha256": "38abda742d74e5634f77cd1ddfd0a7821f1778bed757fc893eaf4e16ba485b3c",
@@ -3776,13 +3830,13 @@
       "destination": "vendor/t3code/packages/client-runtime/package.json",
       "source": "packages/client-runtime/package.json",
       "upstreamSha256": "feffb3b9ed66ba3d1d7d90b37b372e846988da1a38721344835b7f045af2eb50",
-      "sha256": "167f7d3e67c2f7c63acf863e6e344e3dc71211d306682aa2cb1eda0e04d58b2a",
-      "bytes": 1027,
+      "sha256": "2cf69280f81be37ced4753934215492e55eca4c00a7477defa937031eab0f616",
+      "bytes": 1071,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/client-runtime/package.json.json",
-        "sha256": "08ad27f84acbc64939caebfb26e25b667b6568cfe2f177957046f999fbda9760"
+        "sha256": "64e17e2bcf7f3c039d405ec1cbeab2f37cca5a0247013f0b682cc7dc39ca88a9"
       }
     },
     {
@@ -3811,10 +3865,14 @@
       "destination": "vendor/t3code/packages/client-runtime/src/providerClients.ts",
       "source": "packages/client-runtime/src/providerClients.ts",
       "upstreamSha256": "c6c92929a42c9172574546b942e4fd7df37ed0de8fc0f135027cae11fc1d4d6a",
-      "sha256": "c6c92929a42c9172574546b942e4fd7df37ed0de8fc0f135027cae11fc1d4d6a",
-      "bytes": 2040,
+      "sha256": "8383731c3e4ea0387e7783dcc205020bc5abb9312388ce5ed516ea9f68d1af66",
+      "bytes": 2111,
       "mode": 420,
-      "provenance": "pristine-upstream"
+      "provenance": "patched-upstream",
+      "patch": {
+        "path": "vendor/t3code/integration-patches/packages/client-runtime/src/providerClients.ts.json",
+        "sha256": "d337d6d5842fbaea97fc26606d6dde29dfcdc94887a0a19311510021f10cd24a"
+      }
     },
     {
       "destination": "vendor/t3code/packages/client-runtime/src/providerSettingsFields.ts",
@@ -4652,19 +4710,27 @@
       "destination": "vendor/t3code/packages/contracts/src/settings.test.ts",
       "source": "packages/contracts/src/settings.test.ts",
       "upstreamSha256": "d28d0f1f821c3a596da477cd4c107dc7f529e381f5834cd1661e3a57ab95e958",
-      "sha256": "d28d0f1f821c3a596da477cd4c107dc7f529e381f5834cd1661e3a57ab95e958",
-      "bytes": 14476,
+      "sha256": "cfe4e9da3920a3fc4505bb5b3c0335c47b9f3aae9a8e747930210adcc2a4d1bc",
+      "bytes": 14824,
       "mode": 420,
-      "provenance": "pristine-upstream"
+      "provenance": "patched-upstream",
+      "patch": {
+        "path": "vendor/t3code/integration-patches/packages/contracts/src/settings.test.ts.json",
+        "sha256": "504c9eb81f460d603815eb4fb124c8fa09068486b642e12aa9481514aba57f84"
+      }
     },
     {
       "destination": "vendor/t3code/packages/contracts/src/settings.ts",
       "source": "packages/contracts/src/settings.ts",
       "upstreamSha256": "99b570f1792fc044d2e6bf6ba36925d55272c888ddefe7a8efada4d569cddf15",
-      "sha256": "99b570f1792fc044d2e6bf6ba36925d55272c888ddefe7a8efada4d569cddf15",
-      "bytes": 75256,
+      "sha256": "49f55f067c35974fff729e47acb0b87a5a0d9b201cb7b96ff3ce8873098e227f",
+      "bytes": 75263,
       "mode": 420,
-      "provenance": "pristine-upstream"
+      "provenance": "patched-upstream",
+      "patch": {
+        "path": "vendor/t3code/integration-patches/packages/contracts/src/settings.ts.json",
+        "sha256": "fb8d5856716e9a9f05078932ef39b79fb0fee3f568647960beac35e51f8ae538"
+      }
     },
     {
       "destination": "vendor/t3code/packages/contracts/src/sourceControl.ts",
@@ -4760,10 +4826,14 @@
       "destination": "vendor/t3code/packages/contracts/src/usage.ts",
       "source": "packages/contracts/src/usage.ts",
       "upstreamSha256": "46f32ee9218330a47626c382b268144ab96bdffb5e06b0549af657fc351f428c",
-      "sha256": "46f32ee9218330a47626c382b268144ab96bdffb5e06b0549af657fc351f428c",
-      "bytes": 5157,
+      "sha256": "6578fe1cbd42de2cfc41faa24e6b9dc4668b03917ea8a11125eef04ea40351a4",
+      "bytes": 5166,
       "mode": 420,
-      "provenance": "pristine-upstream"
+      "provenance": "patched-upstream",
+      "patch": {
+        "path": "vendor/t3code/integration-patches/packages/contracts/src/usage.ts.json",
+        "sha256": "2d25455517bc9eaf53427fc6eb745a83cccad75b816120a2e08702270fb4a54c"
+      }
     },
     {
       "destination": "vendor/t3code/packages/contracts/src/usageLimitSourceId.ts",
@@ -5761,8 +5831,8 @@
     {
       "destination": "vendor/t3code/packages/provider-core/src/server/ProviderRuntimeHost.ts",
       "asset": "vendor/t3code/packages/provider-core/src/server/ProviderRuntimeHost.ts",
-      "sha256": "354165a1fde7a69e373e8d6fc4cc8740c3921a33fe3d9221df0c40bd15686669",
-      "bytes": 1747,
+      "sha256": "e16b300239fad1ad5e7d2cde5e0e8a7d9fef965bf1198c26c51e269d063fe129",
+      "bytes": 1895,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -7394,6 +7464,285 @@
       "provenance": "pristine-upstream"
     },
     {
+      "destination": "vendor/t3code/packages/provider-omp/package.json",
+      "asset": "vendor/t3code/packages/provider-omp/package.json",
+      "sha256": "8f0c3d1d7db982bb4951c700d71354919fc2a15d7107382e14205699ba0aeaf7",
+      "bytes": 938,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/client.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/client.ts",
+      "sha256": "f15a7192b75457b4d06dcd4dfc22633e2ec667527b80e2f6db36c0dbe775eefc",
+      "bytes": 596,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server.ts",
+      "sha256": "976aec60e2c94db8946d7d241a1bf2ee55bceba6592773bdceab17c69f4718ea",
+      "bytes": 171,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/adapter.test.ts",
+      "sha256": "5a2c62c36be89817e0207709424bdabb42465a911bca47eb6eb3803f4a0e4e84",
+      "bytes": 36234,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
+      "sha256": "281677bf997497e626a7568ad944793e1a95b1fd490248b4ae8661a7c2577c3d",
+      "bytes": 78063,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/commands.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/commands.ts",
+      "sha256": "1fd7bf71a0ad9755a9f3a065c9768d4194f1449ff5d4efbf3dc7f875c7107cdd",
+      "bytes": 2220,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/driver.test.ts",
+      "sha256": "3feb78ef3964e69140151c8b9cdfb6720d9f0dfa80fc4b77bf654436513040cc",
+      "bytes": 2901,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/driver.ts",
+      "sha256": "ce00ae294904b00fb927c0215edee4e8f03617b96a88a03cba267f0d4673f4cd",
+      "bytes": 4759,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/fixtures/native-18.13.2-stream.jsonl",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/fixtures/native-18.13.2-stream.jsonl",
+      "sha256": "9de922b4233ec5c6fd173f58c1ba35d68372b77a2f9b4771b673b766ee23cc50",
+      "bytes": 10067,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/frame.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/frame.test.ts",
+      "sha256": "843208b48c00f9c714e592697653c1c513019cab3c2b64737ed36707783c3837",
+      "bytes": 4659,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/frame.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/frame.ts",
+      "sha256": "3e999efacedd2af670dc8b177652bf5cbb4b981f1d09b3b22154d871292aea8f",
+      "bytes": 6746,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/hostTools.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/hostTools.test.ts",
+      "sha256": "eae3c47ef6cc78cb12c3af519cd60b7d39801efb6f7c008faba3a94f1978706b",
+      "bytes": 6478,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/hostTools.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/hostTools.ts",
+      "sha256": "2a3f81d48ab6b040a29039796b8ebde098ff07df117a3b0a944b8bfe48ef8533",
+      "bytes": 6563,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/launch.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/launch.test.ts",
+      "sha256": "7b7bee35dbb21bb6dbeb49af13629cf2cb371e2e5d5c1e35b0a05160f5609699",
+      "bytes": 9093,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/launch.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/launch.ts",
+      "sha256": "c1d315a3559fb9bd5b268f067a5b47514343c46d3ae3ba3c7bb35ed5b7d4314d",
+      "bytes": 8094,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/permissions.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/permissions.test.ts",
+      "sha256": "9aad5a770229f9c9c8e01988c08441ebb94373a1b56e7b5c0b2995c00388cfe1",
+      "bytes": 4632,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/permissions.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/permissions.ts",
+      "sha256": "bdc15f53f41e60a37ea86d65bd6cc29f72cd81299adb237fada72b9dbea3a134",
+      "bytes": 6823,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/rpc.test.ts",
+      "sha256": "9acc90f69fa473eb7750928023d7ee21c97152429d59ef38447a0ede05d41ecd",
+      "bytes": 8278,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/rpc.ts",
+      "sha256": "de6ad61b902dfeb287ba504563836a40b6d05ffae16e5bd5eb62b9ea21a8c2b0",
+      "bytes": 14818,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.test.ts",
+      "sha256": "2a8ddbe252f25b9d6b358f3fbdf539c804810d86aaa4cbfaf77666ae9261b9dd",
+      "bytes": 5209,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/sessionEvidence.ts",
+      "sha256": "a38cf927f302194f16dc27b67e96c3dd19151d4f2d5062d763e4087bb3d0de6c",
+      "bytes": 7779,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.test.ts",
+      "sha256": "796daba7c5848c192234ac23fe3c10663580d586ea64528afd979022b0250c95",
+      "bytes": 5402,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/startupPlugins.ts",
+      "sha256": "4f5d545d388b73c78f212171c6c425d46746173ff304e1f58f2bfd3ed0838786",
+      "bytes": 5568,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/startupPolicy.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/startupPolicy.ts",
+      "sha256": "41b08bbef33abefc8be71239d7a83f18b134da84b52e35ab60ab328f7da4836d",
+      "bytes": 6814,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/status.test.ts",
+      "sha256": "2b999e26f693fd093115a1eb5dcb4453363d4c17a59cf4c9ea6a1a12f92cc96a",
+      "bytes": 6234,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/status.ts",
+      "sha256": "b8dff667094343877bcfc0e4a7904b8e8ce6c4d33543dcd3ac2e5441a785482e",
+      "bytes": 12513,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/textGeneration.test.ts",
+      "sha256": "1fb751704f4857f2c117a225875675fb6baef80744bc7e2df5ecd9b6fe3cc526",
+      "bytes": 6424,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/textGeneration.ts",
+      "sha256": "7542bf23f9dc5574d011a0b7839e28564c9a310e152b4c0be91ead0347e962c7",
+      "bytes": 6889,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/server/transportTestHelpers.ts",
+      "sha256": "3a74fef651a3d38c763b2b1261dd505979e5c446d74205600ae5a792bac3f015",
+      "bytes": 3995,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/src/settings.ts",
+      "asset": "vendor/t3code/packages/provider-omp/src/settings.ts",
+      "sha256": "e0ce742068545e7a39e7b4971ba4aa03a814955c019fd9ebe3ba95d4a9d8152b",
+      "bytes": 1563,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-omp/tsconfig.json",
+      "asset": "vendor/t3code/packages/provider-omp/tsconfig.json",
+      "sha256": "8a5e49bba080af749930a56abcaa53d9e096dacf1719d78fc6c8c8dac1a38113",
+      "bytes": 110,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
       "destination": "vendor/t3code/packages/provider-opencode/package.json",
       "source": "packages/provider-opencode/package.json",
       "upstreamSha256": "8a5795dd0000eb9d30c7380418c340d9b8cff6370bd8b780da26fd4a89b4ea66",
@@ -7597,13 +7946,13 @@
       "destination": "vendor/t3code/packages/provider-opencode/src/server/status.test.ts",
       "source": "packages/provider-opencode/src/server/status.test.ts",
       "upstreamSha256": "d8dd45f90d64bc131fa4153df5ed44958461d80484f1ff694781ed5d08664320",
-      "sha256": "e35e165c1de1424dbaf3e8fed233d193f115445619ac967ffca8d4a002586a07",
-      "bytes": 36660,
+      "sha256": "f6482cd24603de0a152a580e63965fd07e15a9327c71caf54c923cd62652f56e",
+      "bytes": 37237,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/status.test.ts.json",
-        "sha256": "60bceaf61572523d49523aac9f717914f0d993962b7d02870b5d9b7714d8200d"
+        "sha256": "1f733e5f3ca6f04dac2ddf019ff449c92b6dfc1d3aa3aa3ba9a745ae4e113b85"
       }
     },
     {
@@ -7672,10 +8021,14 @@
       "destination": "vendor/t3code/packages/provider-opencode/src/server/usageLimits.ts",
       "source": "packages/provider-opencode/src/server/usageLimits.ts",
       "upstreamSha256": "014ef5f0fe7a61e533e6a684371a2b8bb42e5d736e367c8ff9bc9538227a0f57",
-      "sha256": "014ef5f0fe7a61e533e6a684371a2b8bb42e5d736e367c8ff9bc9538227a0f57",
-      "bytes": 7055,
+      "sha256": "8be2b267284bf83972f3b2da3aebadd0ba2a7c3992db7edda125f9730ba90c5d",
+      "bytes": 8368,
       "mode": 420,
-      "provenance": "pristine-upstream"
+      "provenance": "patched-upstream",
+      "patch": {
+        "path": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/usageLimits.ts.json",
+        "sha256": "82b8c2b570570f3d9369362a3cf12bf67e9c39e503fb23bd424a962330700c5f"
+      }
     },
     {
       "destination": "vendor/t3code/packages/provider-opencode/src/server/v2/OpenCode2Client.test.ts",
@@ -10186,8 +10539,8 @@
     {
       "destination": "vendor/t3code/source-manifest.json",
       "asset": "vendor/t3code/source-manifest.json",
-      "sha256": "be9a2465b4bd0b4f220571f442cfcfe451a9c2b6fae1c381a413be15187741af",
-      "bytes": 3517482,
+      "sha256": "77b77eec62ad94d53a7a92cfa3578026e8561701d0a1e47253a7143aa9d3b622",
+      "bytes": 3517492,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10195,8 +10548,17 @@
     {
       "destination": "vendor/t3code/sync-imports.json",
       "asset": "vendor/t3code/sync-imports.json",
-      "sha256": "725552c09ca7fd86a28cb7fdf713b94b8132a9d61a73b071b3e22194a79350a7",
-      "bytes": 1958810,
+      "sha256": "154090b98b0b051eea71832a804014fb66c46837b9bacde2fbcee1886482ea60",
+      "bytes": 2028562,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/third-party-licenses/oh-my-pi.txt",
+      "asset": "vendor/t3code/third-party-licenses/oh-my-pi.txt",
+      "sha256": "16c45f9d667442781f03fa198914cc39abcaa48ec5ed8f644643e554ca2fbf63",
+      "bytes": 1144,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -11122,6 +11484,14 @@
       {
         "source": "packages/pm-cli/pi-tools.ts",
         "artifact": "apps/server/agent/dist/pm-cli/pi-tools.mjs"
+      },
+      {
+        "source": "packages/pm-cli/automation-tools.mjs",
+        "artifact": "apps/server/agent/dist/pm-cli/automation-tools.mjs"
+      },
+      {
+        "source": "apps/server/agent/src/automation-execution/native-templates/workspace-tools.mjs",
+        "artifact": "apps/server/agent/dist/workspace-tools.mjs"
       }
     ],
     "modelCatalog": "vendor/t3code/apps/server/src/provider/model-manifest.json (bundled JSON; raw source hash retained)",
@@ -11140,7 +11510,7 @@
     "hostBuildInputs": [
       {
         "path": "apps/server/agent/scripts/build.mjs",
-        "sha256": "fbd20cfb27d8dcb0f8d11eb66c9ab3693dd581ac7e046a24944321ad625089c5"
+        "sha256": "b4874a8c8a4b563a8c564e91c80aee8b8672d10844b6c55db91b7536b263875d"
       },
       {
         "path": "apps/server/agent/scripts/package.mjs",

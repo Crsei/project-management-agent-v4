@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/client-runtime/package.json",
   "beforeSha256": "feffb3b9ed66ba3d1d7d90b37b372e846988da1a38721344835b7f045af2eb50",
-  "afterSha256": "167f7d3e67c2f7c63acf863e6e344e3dc71211d306682aa2cb1eda0e04d58b2a",
+  "afterSha256": "2cf69280f81be37ced4753934215492e55eca4c00a7477defa937031eab0f616",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -556,6 +556,13 @@
         "    \"@t3tools/provider-core\": \"workspace:*\",\n"
       ],
       "after": []
+    },
+    {
+      "start": 520,
+      "before": [],
+      "after": [
+        "    \"@t3tools/provider-omp\": \"workspace:*\",\n"
+      ]
     },
     {
       "start": 522,

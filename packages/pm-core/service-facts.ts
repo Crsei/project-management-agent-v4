@@ -9,7 +9,7 @@ import remarkMath from 'remark-math';
 import { maskHiddenComments, type SyntaxNode } from '../pm-markdown/syntax.ts';
 const bodyParser=unified().use(remarkParse).use(remarkGfm).use(remarkMath);
 const kinds=['created','metadata_changed','content_changed','lifecycle_changed'] as const;
-export const summarySchema=z.strictObject({id:z.string(),kind:z.enum(['project','work_item','milestone']),projectId:z.string().nullable(),revision:z.string(),metadata:z.string(),content:z.string(),lifecycle:z.string()});
+export const summarySchema=z.strictObject({id:z.string(),kind:z.enum(['project','work_item','milestone']),projectId:z.string().nullable(),revision:z.string(),metadata:z.string(),content:z.string(),lifecycle:z.string(),dependencies:z.string().optional()});
 export type CoreFactSummary=z.infer<typeof summarySchema>;
 const observationSchema=z.strictObject({factId:z.uuid(),sequence:z.number().int().positive(),before:summarySchema.nullable(),after:summarySchema.nullable(),observedAt:z.iso.datetime(),reason:z.string(),changeKinds:z.array(z.enum(kinds))});
 export type CoreFactObservation=z.infer<typeof observationSchema>;
@@ -26,7 +26,7 @@ export function coreFactSummary(file:FileRecord):CoreFactSummary|null {
  const semantic=(node:SyntaxNode):unknown=>Object.fromEntries(Object.entries(node).filter(([key])=>!['position','data'].includes(key)).map(([key,value])=>
   [key,key==='children'?(value as SyntaxNode[]).map(semantic):key==='value'&&node.type==='text'?String(value).replace(/\s+/g,' '):value]));
  return {id:file.id,kind:e.entity as CoreFactSummary['kind'],projectId:e.entity==='project'?file.id:typeof e.project==='string'?e.project:null,revision:file.revision,
- metadata:revisionOf(JSON.stringify(fields)),content:revisionOf(JSON.stringify(semantic(tree))),lifecycle:revisionOf(JSON.stringify([e.status??null,e.archived]))};
+ metadata:revisionOf(JSON.stringify(fields)),content:revisionOf(JSON.stringify(semantic(tree))),lifecycle:revisionOf(JSON.stringify([e.status??null,e.archived])),dependencies:revisionOf(JSON.stringify(e.blocked_by))};
 }
 export function coreChangeKinds(before:CoreFactSummary|null,after:CoreFactSummary|null):CoreFactObservation['changeKinds'] {
  if(!before) return ['created'];

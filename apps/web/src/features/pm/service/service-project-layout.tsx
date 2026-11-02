@@ -11,6 +11,7 @@ import { QueryNotice, ServiceGuard, string, useText } from "./pm-ui"
 import { ProjectIdentityIcon, ProjectMenuButton, useProjectMenuActions } from "./project-menu"
 import { projectArchived } from "./project-menu-model"
 import styles from "./service-project-layout.module.css"
+import { usePmAutomationVisit } from "./use-pm-automation-visit"
 
 const projectViews = [
   { key: "overview", path: "?tab=overview", zh: "概览", en: "Overview", icon: LayoutDashboard },
@@ -218,16 +219,19 @@ function ProjectLayoutContent({ projectId, workspaceSlug }: { projectId: string;
   const base = `${root}/projects/${encodeURIComponent(projectId)}`
   const permitted = !!workspace && (workspace.projectIds === null || workspace.projectIds.includes(projectId))
   const unavailable = !permitted || !query.isPending && !query.error && query.data?.kind !== "project"
+  const visit = usePmAutomationVisit(projectId, permitted && !query.error && query.data?.kind === "project")
+  const visitNotice = visit.error ? <div role="status" className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-xs"><span>{t("项目访问记录未确认；离开后摘要不会猜测缺失时间。", "Project visit is unconfirmed; since-last-visit analysis will not invent a missing boundary.")} {visit.error}</span><Button variant="ghost" size="sm" onClick={visit.retry}>{t("核对原访问记录", "Reconcile original visit")}</Button></div> : null
   if (unavailable) return <div role="alert" className="space-y-3 p-6"><p>{t("项目不存在或不可访问。", "Project not found or unavailable.")}</p><Link to={`${root}/projects`} className="underline">{t("返回项目列表", "Back to projects")}</Link></div>
   if (query.isPending) return <p role="status" className="p-6">{t("正在加载项目…", "Loading project…")}</p>
   if (query.error) return <div role="alert" className="space-y-3 p-6"><p>{query.error.message}</p><Button onClick={() => { void query.refetch() }}>{t("重试读取", "Retry read")}</Button><Link to={`${root}/projects`} className="block underline">{t("返回项目列表", "Back to projects")}</Link></div>
   if (!query.data) return null
   // The existing detail variants already own their heading and project tabs.
-  if (location.pathname.replace(/\/$/, "") === base) return <Outlet />
+  if (location.pathname.replace(/\/$/, "") === base) return <>{visitNotice}<Outlet /></>
   const name = string(query.data.data.name) || projectId
   // The right task panel owns the vertical space; keep the project nav out of that surface.
   const inspectingEntity = !!new URLSearchParams(location.search).get("entity")
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-pm-project-workspace={projectId}>
+    {visitNotice}
     {!inspectingEntity && <header className="shrink-0 border-b bg-surface px-3 pt-2 sm:px-5">
       <div className="mb-1 flex min-w-0 items-center justify-between gap-2"><h1 className="min-w-0 break-words text-base font-semibold leading-6" title={projectId}>{name}</h1><ProjectMenuButton projectId={projectId} /></div>
       <ProjectViewNavigation base={base} />

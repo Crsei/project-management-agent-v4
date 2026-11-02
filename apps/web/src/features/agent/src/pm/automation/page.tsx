@@ -1,252 +1,218 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeft, CalendarClock, Check, ChevronRight, CirclePause, FileClock, LockKeyhole, Play, Plus, RefreshCw, Search, Trash2, Workflow, Zap } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, FileClock, GitBranch, LayoutDashboard, LockKeyhole, Plug, RefreshCw, Shapes } from "lucide-react";
 import { Button } from "@agent/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@agent/components/ui/dialog";
-import { Input } from "@agent/components/ui/input";
-import { AutomationClient } from "../../../../../../../../packages/contracts/src/automation-client";
-import { automationCapabilitiesSchema, automationPreviewSchema, type AutomationConfig, type AutomationRule } from "../../../../../../../../packages/contracts/src/automation";
+import { StudioClient, StudioApiError } from "../../../../../../../../packages/contracts/src/automation-studio-client";
+import { studioDefinitionSchema, type StudioConfig, type StudioDefinition, type StudioExecution } from "../../../../../../../../packages/contracts/src/automation-studio";
 import type { Entity, EntityPage, Workspace } from "../../../../../../../../packages/contracts/src/client";
 import { pmJson, PmApiError } from "../state";
-import { readAllRules, readAutomation } from "./data";
-import { createAutomationJournal, emptyConfig, isDirty, type PendingRequest, type RuleDraft } from "./journal";
-import { useAutomationActions } from "./actions";
-import { useAutomationLeaveProtection } from "./leave-protection";
-import { useAutomationQuery } from "./query";
-import { RuleEditor } from "./editor";
-import { AutomationHistory } from "./history";
-import { automationDateTime } from "./format";
 import { useAgentText } from "../../i18n";
-import styles from "./automation.module.css";
+import { useAutomationQuery } from "./query";
+import { useAutomationLeaveProtection } from "./leave-protection";
+import { StudioDashboard, type DashboardAction, type DashboardFilters } from "./studio-dashboard";
+import { StudioActivity, StudioDetail } from "./studio-detail";
+import { useStudioActions, type StudioCommand } from "./studio-actions";
+import { StudioEditor, type StudioAssistCallback } from "./studio-editor";
+import { StudioTemplates } from "./studio-templates";
+import { StudioGitSync } from "./studio-git-sync";
+import { StudioImport, downloadStudioDefinition } from "./studio-import";
+import { StudioIntegrations } from "./studio-integrations";
+import { parseStudioDraftRoute, studioExecutionNeedsRefresh } from "./studio-view";
+import { clearStudioRecovery } from "./studio-setup";
+import { redactPmReviewDrafts } from "./studio-pm-review";
+import styles from "./studio.module.css";
 import "./theme.css";
 
-type Confirmation = { kind: "remove" | "run"; rule: AutomationRule } | { kind: "status"; rule: AutomationRule; status: "enabled" } | { kind: "reset" | "rebase"; rule: AutomationRule | null };
-
+export type AutomationPageProps = { workspace: Workspace; actorId: string; onExit: () => void; onRecheckAccess: () => void; onLeaveGuardChange?: (guard: (() => boolean) | null) => void; embedded?: boolean; onAssist?: StudioAssistCallback; onOpenThread?: (threadId: string) => void | Promise<void> };
+type Confirmation = { command: StudioCommand; name: string };
+const featureKeys = ["automationId", "templateId", "draftId", "run", "cursor"];
 async function readProjects(workspaceId: string, signal: AbortSignal): Promise<Entity[]> {
-  const items = new Map<string, Entity>();
-  const seen = new Set<string>();
-  let after: string | undefined;
+  const projects = new Map<string, Entity>(); const seen = new Set<string>(); let after: string | undefined;
   do {
-    signal.throwIfAborted();
-    const query = new URLSearchParams({ kind: "project", limit: "100" });
-    if (after) query.set("after", after);
-    const page = await pmJson<EntityPage>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/entities?${query.toString()}`, { signal });
-    for (const item of page.items) items.set(item.id, item);
+    const query = new URLSearchParams({ kind: "project", limit: "100" }); if (after) query.set("after", after);
+    const page = await pmJson<EntityPage>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/entities?${query}`, { signal });
+    for (const item of page.items) projects.set(item.id, item);
     after = page.nextCursor ?? undefined;
     if (after && seen.has(after)) throw new Error("invalid_pagination_cursor");
     if (after) seen.add(after);
   } while (after);
-  return [...items.values()];
+  return [...projects.values()];
 }
+function StudioLeaveBoundary({ active, message }: { active: boolean; message: string }) { useAutomationLeaveProtection(active, message); return null; }
 
-type AutomationPageProps = { workspace: Workspace; actorId: string; root: string; onExit: () => void; onRecheckAccess: () => void; onLeaveGuardChange?: (guard: (() => boolean) | null) => void };
-
-/** PM-owned automation rules and run history, hosted inside the Agent Chat shell. */
-export function AutomationPage({ workspace, actorId, root, onExit, onRecheckAccess, onLeaveGuardChange }: AutomationPageProps) {
-  const t = useAgentText();
-  const [api] = useState(() => new AutomationClient(workspace.id));
-  const [journal] = useState(() => createAutomationJournal(actorId, workspace.id, workspace.version, true));
-  const snapshot = useSyncExternalStore(journal.subscribe, journal.getSnapshot, journal.getSnapshot);
-  const [dataVersion, setDataVersion] = useState(0);
-  const [accessLost, setAccessLost] = useState(false);
-  const accessLostRef = useRef(false);
-  const [view, setView] = useState<"rules" | "history">("rules");
-  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
-  const [historyRuleId, setHistoryRuleId] = useState("");
-  const [runId, setRunId] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [savedNavigationOpen, setSavedNavigationOpen] = useState(() => window.matchMedia("(min-width: 761px)").matches);
-  const pageRef = useRef<HTMLDivElement>(null);
-  const compactNavigation = useRef<boolean | null>(null);
-  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  const [initialConfig] = useState(emptyConfig);
-
-  const revoke = useCallback(() => {
-    if (accessLostRef.current) return;
-    accessLostRef.current = true;
-    journal.revoke();
-    setConfirmation(null);
-    setAccessLost(true);
-  }, [journal]);
-
-  const capabilities = useAutomationQuery(`capabilities:${dataVersion}`, signal => readAutomation(async () => automationCapabilitiesSchema.parse(await api.capabilities({ signal })), revoke), !accessLost);
-  const rules = useAutomationQuery(`rules:${dataVersion}`, signal => readAutomation(() => readAllRules(api, signal), revoke), !accessLost);
-  const projects = useAutomationQuery(`projects:${dataVersion}`, signal => readProjects(workspace.id, signal).catch((error: unknown) => {
-    if (error instanceof PmApiError && [401, 403, 404].includes(error.status)) revoke();
-    throw error;
-  }), !accessLost);
-  const allRules = rules.data ?? [];
+/** One PM-authorized execution automation shell. */
+export function AutomationPage({ workspace, actorId, onExit, onRecheckAccess, onLeaveGuardChange, embedded = false, onAssist, onOpenThread }: AutomationPageProps) {
+  const t = useAgentText(); const location = useLocation(); const navigate = useNavigate();
+  const params = new URLSearchParams(location.search);
+  const route = embedded ? params.get("automationPage") ?? "dashboard" : location.pathname.replace(/^\/agent\/automations\/?/, "") || "dashboard";
+  const page = route.startsWith("detail/") ? "detail" : route;
+  const localDraft = parseStudioDraftRoute(params.get("draftId"));
+  const localDraftId = localDraft ? params.get("draftId") ?? undefined : undefined;
+  const templateId = params.get("templateId") ?? localDraft?.templateId ?? null;
+  const definitionId = page === "detail" ? route.slice(7) : params.get("automationId") ?? (localDraft ? "" : params.get("draftId") ?? "");
+  const projectId = params.get("project") || localDraft?.projectId || "";
+  const runId = params.get("run"); const cursor = params.get("cursor") || undefined;
+  const [api] = useState(() => new StudioClient(workspace.id));
+  const [version, setVersion] = useState(0); const [accessLost, setAccessLost] = useState(false); const [notice, setNotice] = useState("");
+  const [definitions, setDefinitions] = useState<StudioDefinition[]>([]); const [definitionCursor, setDefinitionCursor] = useState<string>();
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null); const [importOpen, setImportOpen] = useState(false);
+  const editorKey = `${actorId}:${workspace.id}:${workspace.version}:${definitionId || "new"}:${localDraftId ?? ""}:${templateId ?? ""}:${projectId}`;
+  const [draftState, setDraftState] = useState({ key: "", dirty: false });
+  const studioDirty = page === "setup" && draftState.key === editorKey && draftState.dirty;
+  const surfaceKey = `${page}:${projectId}:${importOpen ? "import" : "page"}`;
+  const [surfaceState, setSurfaceState] = useState({ key: "", dirty: false });
+  const surfaceDirty = surfaceState.key === surfaceKey && surfaceState.dirty;
+  const scopeCurrent = useRef(true);
+  useEffect(() => { scopeCurrent.current = true; return () => { scopeCurrent.current = false; }; }, []);
+  useEffect(() => { setConfirmation(null); }, [page, projectId]);
+  const accessFailure = useCallback((cause: unknown) => {
+    const status = cause instanceof StudioApiError || cause instanceof PmApiError ? cause.status : 0;
+    if (![401, 403].includes(status)) return;
+    scopeCurrent.current = false;
+    try { clearStudioRecovery(actorId, workspace.id); } catch { /* Keep unreadable request identities; no new writes are allowed. */ }
+    try { redactPmReviewDrafts(actorId, workspace.id); } catch { /* Hide private data even if its recovery journal needs manual reconciliation. */ }
+    setAccessLost(true); setDefinitions([]); setConfirmation(null); setImportOpen(false);
+  }, [actorId, workspace.id]);
+  const revoke = useCallback(() => accessFailure(new StudioApiError(403, "access_revoked", "Access revoked")), [accessFailure]);
+  const refresh = useCallback(() => { setDefinitionCursor(undefined); setDefinitions([]); setVersion(value => value + 1); }, []);
+  const studioActions = useStudioActions(api, actorId, workspace.id, result => {
+    setConfirmation(null); refresh();
+    if (result.execution) selectExecution(result.execution);
+    else if (result.command.kind === "remove") setNotice(t("定义已删除；授权历史保留。", "Definition deleted; authorized history retained."));
+    else setNotice(t("定义已保存。启停不影响已开始的运行。", "Definition saved. Status changes do not cancel runs already started."));
+  }, revoke);
+  const pending = !!studioActions.pending;
+  const leaveActive = studioDirty || surfaceDirty || pending || studioActions.storageError;
+  const leaveMessage = t("有未保存修改或待核对请求。离开后不会取消运行，确定离开？", "There are unsaved changes or unreconciled requests. Leaving does not cancel runs. Leave anyway?");
+  const leaveRef = useRef({ active: leaveActive, message: leaveMessage }); leaveRef.current = { active: leaveActive, message: leaveMessage };
+  const canLeave = useCallback(() => !leaveRef.current.active || window.confirm(leaveRef.current.message), []);
+  useEffect(() => { onLeaveGuardChange?.(canLeave); return () => onLeaveGuardChange?.(null); }, [onLeaveGuardChange, canLeave]);
+  function setQuery(patch: Record<string, string | undefined>, replace = true) {
+    const next = new URLSearchParams(location.search);
+    for (const [key, value] of Object.entries(patch)) { if (value) next.set(key, value); else next.delete(key); }
+    navigate({ pathname: location.pathname, search: next.toString() }, { replace });
+  }
+  function go(destination: string, query: Record<string, string | undefined> = {}, bypass = false) {
+    if (!bypass && !canLeave()) return;
+    const next = new URLSearchParams(location.search); for (const key of featureKeys) next.delete(key);
+    next.delete("view"); next.delete("thread"); next.set("workspace", workspace.id);
+    for (const [key, value] of Object.entries(query)) if (value) next.set(key, value);
+    if (embedded) next.set("automationPage", destination); else next.delete("automationPage");
+    navigate({ pathname: embedded ? location.pathname : `/agent/automations${destination === "dashboard" ? "" : `/${destination}`}`, search: next.toString() });
+  }
+  function selectExecution(execution: StudioExecution) { go(`detail/${execution.definitionId}`, { run: execution.id }, true); }
+  const projects = useAutomationQuery(`studio-projects:${version}`, async signal => { try { return await readProjects(workspace.id, signal); } catch (cause) { accessFailure(cause); throw cause; } }, !accessLost);
+  const list = useAutomationQuery(`studio-definitions:${definitionCursor ?? ""}:${version}`, async signal => {
+    try { const result = await api.definitions(definitionCursor, { signal }); return { ...result, items: result.items.map(item => studioDefinitionSchema.parse(item)) }; } catch (cause) { accessFailure(cause); throw cause; }
+  }, !accessLost);
+  useEffect(() => { const data = list.data; if (!data || list.error || list.loading || accessLost) return; setDefinitions(current => { const next = new Map(current.map(item => [item.id, item])); for (const item of data.items) next.set(item.id, item); return [...next.values()]; }); }, [list.data, list.error, list.loading, accessLost]);
+  const recent = useAutomationQuery(`studio-recent:${version}`, async signal => { try { return await api.executions(undefined, undefined, { signal }); } catch (cause) { accessFailure(cause); throw cause; } }, !accessLost, page => page.items.some(studioExecutionNeedsRefresh));
+  const capabilities = useAutomationQuery(`studio-capabilities:${projectId}:${version}`, async signal => { try { return await api.capabilities(projectId, { signal }); } catch (cause) { accessFailure(cause); throw cause; } }, !!projectId && !accessLost);
+  const detail = useAutomationQuery(`studio-definition:${definitionId}:${version}`, async signal => { try { return studioDefinitionSchema.parse(await api.definition(definitionId, { signal })); } catch (cause) { accessFailure(cause); throw cause; } }, !!definitionId && ["detail", "setup"].includes(page) && !accessLost);
   const allProjects = projects.data ?? [];
-  const availableProjects = allProjects.filter(item => !item.data.archivedAt && !["completed", "cancelled"].includes(typeof item.data.status === "string" ? item.data.status : ""));
-  const editorId = selectedRuleId ?? "new";
-  const selectedRule = allRules.find(rule => rule.id === editorId) ?? null;
-  const draft: RuleDraft | null = editorId === "new"
-    ? snapshot.drafts.new ?? { config: initialConfig, baseline: initialConfig, expectedRevision: null }
-    : selectedRule ? snapshot.drafts[selectedRule.id] ?? { config: selectedRule.config, baseline: selectedRule.config, expectedRevision: selectedRule.revision } : null;
-  const ready = !accessLost && !!capabilities.data && !!rules.data && !!projects.data && !capabilities.error && !rules.error && !projects.error;
-  const reportReady = capabilities.data?.actions.some(action => action.id === "report" && action.available) === true;
-  const allowed = (capability: string, projectId?: string | null) => workspace.capabilities.includes(capability) && (workspace.projectIds === null || (!!projectId && workspace.projectIds.includes(projectId)));
-  const manageableFor = (projectId: string) => ready && capabilities.data?.canWrite === true && allowed("planning.edit", projectId);
-  const writableFor = (projectId: string) => manageableFor(projectId) && availableProjects.some(item => item.id === projectId);
-
-  const actions = useAutomationActions(api, journal, result => {
-    setConfirmation(null);
-    setDataVersion(value => value + 1);
-    if (result.run) { setView("history"); setRunId(result.run.id); setHistoryRuleId(result.run.ruleId); }
-    else if (result.kind === "create" && result.rule) { setSelectedRuleId(result.rule.id); setView("rules"); setRunId(null); }
-    else if (result.kind === "remove" && selectedRuleId === result.ruleId) setSelectedRuleId(null);
-  }, revoke, () => !accessLostRef.current);
-
-  const locked = actions.busy || rules.loading || !!snapshot.pending || snapshot.storageError;
-  const hasDrafts = Object.values(snapshot.drafts).some(isDirty);
-  const needsLeaveConfirmation = hasDrafts || !!snapshot.pending || snapshot.storageError;
-  const leaveMessage = t("有未保存草稿或待核对请求，确定离开？", "You have unsaved drafts or an unverified request. Leave anyway?");
-  useAutomationLeaveProtection(needsLeaveConfirmation, leaveMessage);
-  const leaveState = useRef({ active: needsLeaveConfirmation, message: leaveMessage });
-  leaveState.current = { active: needsLeaveConfirmation, message: leaveMessage };
-  useEffect(() => {
-    onLeaveGuardChange?.(() => !leaveState.current.active || window.confirm(leaveState.current.message));
-    return () => onLeaveGuardChange?.(null);
-  }, [onLeaveGuardChange]);
-
-  useEffect(() => {
-    const page = pageRef.current;
-    if (!page) return;
-    const syncNavigation = () => {
-      const compact = page.clientWidth <= 760;
-      if (compactNavigation.current === compact) return;
-      compactNavigation.current = compact;
-      setSavedNavigationOpen(!compact);
-    };
-    syncNavigation();
-    const observer = new ResizeObserver(syncNavigation);
-    observer.observe(page);
-    return () => observer.disconnect();
-  }, []);
-
-  function openRule(id: string) {
-    setConfirmation(null);
-    if (compactNavigation.current) setSavedNavigationOpen(false);
-    setSelectedRuleId(id === "new" ? null : id);
-    setView("rules");
-    setRunId(null);
+  const availableProjects = allProjects.filter(item => !item.data.archivedAt && !["completed", "cancelled"].includes(String(item.data.status ?? "")));
+  const writableFor = (id: string) => !accessLost && workspace.capabilities.includes("planning.edit") && (workspace.projectIds === null || workspace.projectIds.includes(id)) && availableProjects.some(project => project.id === id) && (!projectId || projectId === id);
+  const reviewProjectIds = workspace.capabilities.includes("domain.read") ? allProjects.filter(item => (workspace.projectIds === null || workspace.projectIds.includes(item.id)) && (!projectId || projectId === item.id)).map(item => item.id) : [];
+  const planningProjectIds = availableProjects.filter(item => reviewProjectIds.includes(item.id) && writableFor(item.id)).map(item => item.id);
+  const commentProjectIds = workspace.capabilities.includes("intent.propose") ? availableProjects.filter(item => reviewProjectIds.includes(item.id)).map(item => item.id) : [];
+  const ready = !!projects.data && !projects.error && !!list.data && !list.error;
+  const locked = !ready || list.loading || studioActions.busy || pending || studioActions.storageError;
+  const selectedDefinition = detail.error ? null : detail.data?.id === definitionId ? detail.data : definitions.find(item => item.id === definitionId) ?? null;
+  const definitionScopeMismatch = !!projectId && !!selectedDefinition && selectedDefinition.config.projectId !== projectId;
+  const queryFilters: DashboardFilters = { search: params.get("q") ?? "", status: params.get("status") ?? "", trigger: params.get("trigger") ?? "", tag: params.get("tag") ?? "", sort: params.get("sort") ?? "updated", view: params.get("mode") ?? "grid" };
+  function onFilters(patch: Partial<DashboardFilters>) { setQuery(Object.fromEntries(Object.entries(patch).map(([key, value]) => [key === "search" ? "q" : key === "view" ? "mode" : key, value || undefined]))); }
+  function confirmCommand(command: StudioCommand, name = selectedDefinition?.config.name ?? command.id) { if (!locked) setConfirmation({ command, name }); }
+  async function exportDefinition(id: string, format: "bundle" | "source" = "bundle") { try { await downloadStudioDefinition(workspace.id, id, format); } catch (cause) { accessFailure(cause); setNotice(cause instanceof Error ? cause.message : String(cause)); } }
+  function itemAction(action: DashboardAction, item: StudioDefinition) {
+    if (action === "view") go(`detail/${item.id}`);
+    else if (action === "edit") go("setup", { automationId: item.id });
+    else if (action === "export") void exportDefinition(item.id);
+    else if (action === "status") confirmCommand({ kind: "status", id: item.id, expectedRevision: item.revision, status: item.status === "enabled" ? "paused" : "enabled" }, item.config.name);
+    else confirmCommand({ kind: action, id: item.id, expectedRevision: item.revision }, item.config.name);
   }
-  function openHistory(rule = historyRuleId, run: string | null = null) {
-    setHistoryRuleId(rule);
-    setRunId(run);
-    setView("history");
-  }
-  function refresh() { capabilities.refetch(); rules.refetch(); projects.refetch(); }
-  function confirm() {
+  function submitConfirmation() {
     if (!confirmation || locked) return;
-    if (confirmation.kind === "reset") {
-      const id = confirmation.rule?.id ?? "new";
-      journal.removeDraft(id); setConfirmation(null); return;
-    }
-    if (confirmation.kind === "rebase") {
-      if (draft && confirmation.rule) journal.setDraft(confirmation.rule.id, { ...draft, baseline: confirmation.rule.config, expectedRevision: confirmation.rule.revision });
-      setConfirmation(null); return;
-    }
-    const rule = confirmation.rule;
-    if (!rule) return;
-    if (!(confirmation.kind === "remove" ? manageableFor(rule.config.projectId) : writableFor(rule.config.projectId))) return;
-    const input: Omit<PendingRequest, "requestId" | "startedAt"> = { kind: confirmation.kind, ruleId: rule.id, expectedRevision: rule.revision, config: null, status: confirmation.kind === "status" ? confirmation.status : null };
+    void studioActions.execute(confirmation.command);
     setConfirmation(null);
-    void actions.execute(input);
   }
-  const filtered = allRules.filter(rule => `${rule.config.name} ${rule.config.description} ${rule.config.projectId}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  const changedDraft = (rule: AutomationRule) => !!snapshot.drafts[rule.id] && isDirty(snapshot.drafts[rule.id]!);
-  const enableReady = !!selectedRule && reportReady && (selectedRule.config.trigger.kind !== "daily" || capabilities.data?.scheduler.ready === true);
-  function saveDraft(config: AutomationConfig) {
-    if (locked || !draft || !writableFor(config.projectId)) return;
-    if (selectedRule) {
-      if (draft.expectedRevision === null || draft.expectedRevision !== selectedRule.revision || !writableFor(selectedRule.config.projectId)) return;
-      void actions.execute({ kind: "update", ruleId: selectedRule.id, expectedRevision: draft.expectedRevision, config, status: null });
-    } else if (editorId === "new") void actions.execute({ kind: "create", ruleId: null, expectedRevision: null, config, status: null });
+  function debug(config: StudioConfig, execution?: StudioExecution) {
+    if (!onAssist) return;
+    const context = t(`请协助调试自动化「${config.name}」。仅分析配置与已有结果，未经我明确要求不要运行或产生外部副作用。\n${execution ? `运行 ${execution.id}：${execution.status}\n${execution.error ?? execution.summary}` : ""}`, `Help debug automation “${config.name}”. Analyze its configuration and existing results only; do not execute or cause external effects without my explicit request.\n${execution ? `Execution ${execution.id}: ${execution.status}\n${execution.error ?? execution.summary}` : ""}`);
+    void Promise.resolve().then(() => onAssist({ projectId: config.projectId, definitionId: execution?.definitionId ?? selectedDefinition?.id, templateId: config.templateId ?? undefined, config, prompt: `${context}\n\n${JSON.stringify(config, null, 2)}` })).catch(cause => { if (scopeCurrent.current) setNotice(cause instanceof Error ? cause.message : String(cause)); });
   }
-  function pauseRule(rule: AutomationRule) {
-    if (locked || !manageableFor(rule.config.projectId)) return;
-    void actions.execute({ kind: "status", ruleId: rule.id, expectedRevision: rule.revision, config: null, status: "paused" });
-  }
-  const savedRuleActions = selectedRule && <>
-    <Button type="button" variant="ghost" size="sm" aria-label={t("查看规则历史", "View rule history")} onClick={() => openHistory(selectedRule.id)}><FileClock size={14} aria-hidden="true" /></Button>
-    <Button type="button" variant="ghost" size="sm" disabled={locked || !manageableFor(selectedRule.config.projectId)} aria-label={t("删除规则", "Delete rule")} onClick={() => setConfirmation({ kind: "remove", rule: selectedRule })}><Trash2 size={14} aria-hidden="true" /></Button>
-    <Button type="button" variant="ghost" size="sm" disabled={locked || !manageableFor(selectedRule.config.projectId) || (selectedRule.status !== "enabled" && (!writableFor(selectedRule.config.projectId) || changedDraft(selectedRule) || !enableReady))} title={selectedRule.status !== "enabled" && !enableReady ? t("报告或后台调度未就绪。", "Reports or the background scheduler are not ready.") : changedDraft(selectedRule) && selectedRule.status !== "enabled" ? t("请先保存或放弃修改。", "Save or discard your changes first.") : undefined} onClick={() => selectedRule.status === "enabled" ? pauseRule(selectedRule) : setConfirmation({ kind: "status", rule: selectedRule, status: "enabled" })}>
-      {selectedRule.status === "enabled" ? <CirclePause size={14} aria-hidden="true" /> : <Zap size={14} aria-hidden="true" />}{selectedRule.status === "enabled" ? t("暂停", "Pause") : t("启用", "Enable")}
-    </Button>
-    <Button type="button" variant="ghost" size="sm" disabled={locked || !writableFor(selectedRule.config.projectId) || changedDraft(selectedRule) || !reportReady} title={changedDraft(selectedRule) ? t("请先保存或放弃修改。", "Save or discard your changes first.") : undefined} onClick={() => setConfirmation({ kind: "run", rule: selectedRule })}><Play size={14} aria-hidden="true" />{t("运行", "Run")}</Button>
-  </>;
-
-  return <div ref={pageRef} className={`pm-automation ${styles.page} ${view === "history" ? styles.historyPage : ""}`}>
-    {view === "rules" && <aside className={styles.navigation} aria-label={t("自动化导航", "Automation navigation")}>
-      <div className={styles.navigationHeading}><span>{t("自动化", "Automation")}</span><Button variant="ghost" size="sm" aria-label={t("新建规则", "New rule")} disabled={!ready || locked || !availableProjects.some(item => writableFor(item.id))} onClick={() => openRule("new")}><Plus size={16} aria-hidden="true" /></Button></div>
-      <nav className={styles.viewNavigation} aria-label={t("自动化视图", "Automation views")}>
-        <button type="button" className={styles.activeNavigation} aria-current="page" onClick={() => { setView("rules"); setRunId(null); }}><Workflow size={15} aria-hidden="true" /><span>{t("自动化", "Automation")}</span></button>
-        <button type="button" onClick={() => openHistory()}><FileClock size={15} aria-hidden="true" /><span>{t("运行历史", "Run history")}</span></button>
-      </nav>
-      <details className={styles.savedNavigation} open={savedNavigationOpen} onToggle={event => setSavedNavigationOpen(event.currentTarget.open)}>
-        <summary>{t("已保存规则", "Saved rules")}</summary>
-        {ready && <>
-          {!!allRules.length && <label className={styles.search}><Search size={14} aria-hidden="true" /><Input aria-label={t("搜索规则", "Search rules")} value={query} onChange={event => setQuery(event.target.value)} placeholder={t("搜索规则", "Search rules")} /></label>}
-          <ul className={styles.savedRules}>{filtered.map(rule => <li key={rule.id}><button type="button" className={editorId === rule.id ? styles.activeNavigation : ""} aria-current={editorId === rule.id ? "page" : undefined} title={rule.config.name} onClick={() => openRule(rule.id)}>{rule.config.trigger.kind === "daily" ? <CalendarClock size={15} aria-hidden="true" /> : <Zap size={15} aria-hidden="true" />}<span>{rule.config.name}</span>{changedDraft(rule) && <small>{t("草稿", "Draft")}</small>}</button></li>)}</ul>
-          {!filtered.length && <p className={styles.navigationEmpty}>{allRules.length ? t("没有匹配规则", "No matching rules") : t("暂无规则", "No rules yet")}</p>}
-          {!!snapshot.drafts.new && isDirty(snapshot.drafts.new) && <button type="button" className={styles.unsavedNavigation} onClick={() => openRule("new")}><Plus size={15} aria-hidden="true" />{t("未保存草稿", "Unsaved draft")}</button>}
-        </>}
-      </details>
-      <span className={styles.privateLabel}><LockKeyhole size={12} aria-hidden="true" />{t("仅本人可见", "Visible only to you")}</span>
-    </aside>}
-    <section className={styles.content} aria-label={view === "history" ? t("运行历史", "Run history") : t("规则编辑", "Rule editing")}>
-      <header className={styles.contentHeader}>
-        <nav className={styles.breadcrumb} aria-label={t("当前位置", "Breadcrumb")}>
-          <Button variant="ghost" size="sm" onClick={onExit}><ArrowLeft size={14} aria-hidden="true" />{t("对话", "Chat")}</Button>
-          {view === "history" ? <button type="button" aria-label={t("返回自动化", "Back to automation")} onClick={() => { setView("rules"); setRunId(null); }}>{t("自动化", "Automation")}</button> : <span>{t("自动化", "Automation")}</span>}
-          <ChevronRight size={12} aria-hidden="true" />
-          <span aria-current="page">{view === "history" ? t("运行历史", "Run history") : selectedRule?.config.name || (editorId === "new" ? t("新建规则", "New rule") : t("规则不可用", "Rule unavailable"))}</span>
-        </nav>
-        {view === "rules" && <Button variant="ghost" size="sm" aria-label={t("刷新自动化", "Refresh automation")} disabled={capabilities.loading || rules.loading || projects.loading} onClick={refresh}><RefreshCw size={14} aria-hidden="true" /></Button>}
-      </header>
-      <div className={view === "history" ? styles.historyContent : styles.editorContent}>
-        {ready && capabilities.data?.canWrite === false && <p className={styles.notice}><LockKeyhole size={14} aria-hidden="true" />{t("只读模式", "Read-only mode")}</p>}
-        {snapshot.storageError && <section className={styles.warning} role="alert"><p>{t("恢复存储不可用，写入已暂停。原请求仍保留。", "Recovery storage is unavailable; writes are paused. The original request is kept.")}</p><Button variant="outline" size="sm" onClick={() => journal.retryStorage()}>{t("重试恢复", "Retry recovery")}</Button></section>}
-        {snapshot.pending && !accessLost && <section className={styles.warning} aria-live="polite"><strong>{actions.busy ? t("正在提交或核对…", "Submitting or verifying…") : t("原请求待核对", "Original request awaiting verification")}</strong><p>{t("只查询原收据，不会重复保存或运行。", "Only the original receipt is queried; nothing is saved or run again.")}</p><code className={styles.breakAll}>{snapshot.pending.requestId}</code><Button variant="outline" size="sm" disabled={actions.busy} onClick={() => { void actions.reconcile(); }}>{t("查询原收据", "Check original receipt")}</Button></section>}
-        {!accessLost && actions.error && <p role="alert" className={styles.errorBlock}>{actions.error}</p>}
-        {!accessLost && actions.notice && <p role="status" className={styles.successNotice}><Check size={15} aria-hidden="true" />{actions.notice}</p>}
-        {accessLost ? <section className={styles.empty} role="alert"><LockKeyhole size={24} aria-hidden="true" /><h1>{t("来源或授权已不可用", "Source or authorization is no longer available")}</h1><p>{t("私有数据与草稿已清空，原请求 ID 保留。", "Private data and drafts were cleared; the original request ID is kept.")}</p><Button variant="outline" onClick={() => { onRecheckAccess(); accessLostRef.current = false; setAccessLost(false); setDataVersion(value => value + 1); }}>{t("重新读取授权", "Recheck authorization")}</Button></section> : <>
-          {(capabilities.loading || rules.loading || projects.loading) && <p className={styles.loading} role="status">{t("正在读取自动化…", "Loading automation…")}</p>}
-          {(capabilities.error || rules.error || projects.error) && <section className={styles.errorBlock} role="alert"><p>{t("读取失败，写入已暂停，草稿版本未变。", "Loading failed; writes are paused and draft revisions are unchanged.")}</p><Button variant="outline" size="sm" onClick={refresh}>{t("重试", "Retry")}</Button></section>}
-          {ready && view === "history" && <AutomationHistory api={api} rules={allRules} root={root} ruleId={historyRuleId} runId={runId} reloadKey={dataVersion} onFilter={openHistory} onSelect={id => openHistory(historyRuleId, id)} onRule={openRule} onAccessFailure={revoke} />}
-          {ready && view === "rules" && (draft ? <>
-            <RuleEditor
-              key={editorId}
-              draft={draft}
-              rule={selectedRule}
-              projects={allProjects.filter(item => !item.data.archivedAt)}
-              capabilities={capabilities.data}
-              writable={writableFor(draft.config.projectId) && (!selectedRule || writableFor(selectedRule.config.projectId))}
-              readable={allowed("domain.read", draft.config.projectId)}
-              locked={locked}
-              root={root}
-              actions={savedRuleActions}
-              onClose={() => { if (isDirty(draft)) setConfirmation({ kind: "reset", rule: selectedRule }); else { setSelectedRuleId(null); setRunId(null); } }}
-              onChange={next => journal.setDraft(editorId, next)}
-              onSave={saveDraft}
-              onReset={() => setConfirmation({ kind: "reset", rule: selectedRule })}
-              onRebase={() => setConfirmation({ kind: "rebase", rule: selectedRule })}
-              test={(config, signal) => readAutomation(async () => automationPreviewSchema.parse(await api.test(config, { signal })), revoke)}
-            />
-            {selectedRule && <dl className={styles.ruleTiming}><div><dt>{t("上次运行", "Last run")}</dt><dd>{selectedRule.lastRunAt ? <time dateTime={selectedRule.lastRunAt}>{automationDateTime(selectedRule.lastRunAt)}</time> : t("尚未运行", "Not run yet")}</dd></div><div><dt>{t("下次检查", "Next check")}</dt><dd>{selectedRule.nextDueAt ? <time dateTime={selectedRule.nextDueAt}>{automationDateTime(selectedRule.nextDueAt)}</time> : selectedRule.config.trigger.kind === "manual" ? t("仅手动", "Manual only") : t("未安排", "Not scheduled")}</dd></div></dl>}
-          </> : <section className={styles.empty}><LockKeyhole size={24} aria-hidden="true" /><h1>{t("规则不存在或不可访问", "Rule does not exist or is not accessible")}</h1><p>{!!snapshot.drafts[editorId] && isDirty(snapshot.drafts[editorId]!) ? t("未保存草稿已保留，当前不能保存。", "The unsaved draft is kept but cannot be saved right now.") : t("未切换到其他规则。", "No other rule was selected.")}</p><Button variant="outline" onClick={() => openHistory(editorId)}>{t("查看原规则历史", "View original rule history")}</Button></section>)}
-        </>}
-      </div>
-    </section>
-    <Dialog open={!!confirmation} onOpenChange={open => { if (!open && !locked) setConfirmation(null); }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className={styles.confirmTitle}>{confirmation?.kind === "remove" ? t("删除规则？", "Delete rule?") : confirmation?.kind === "run" ? t("运行一次？", "Run once?") : confirmation?.kind === "status" ? t("启用规则？", "Enable rule?") : confirmation?.kind === "reset" ? t("放弃未保存修改？", "Discard unsaved changes?") : t("采用当前版本？", "Adopt current version?")}</DialogTitle>
-          <DialogDescription className={styles.confirmDescription}>{confirmation?.kind === "remove" ? t("停止调度并删除规则，运行历史保留。", "Scheduling stops and the rule is deleted; run history is kept.") : confirmation?.kind === "run" ? t("按已保存配置生成只读报告，计入运行预算。", "Generates a read-only report from the saved configuration and counts toward the run budget.") : confirmation?.kind === "status" ? t("启用不会立即运行。每日规则将在下次到期时检查。", "Enabling does not run immediately. Daily rules check at the next due time.") : confirmation?.kind === "reset" ? t("未保存修改将被丢弃。", "Unsaved changes will be discarded.") : t("保留草稿内容，采用当前版本后仍按新版本保存。", "Draft content is kept; saving afterwards uses the new revision.")}</DialogDescription>
-        </DialogHeader>
-        {confirmation?.rule && <div className={styles.confirmScope}><strong>{confirmation.rule.config.name}</strong><span>{confirmation.rule.config.projectId} / v{confirmation.rule.revision}</span></div>}
-        <DialogFooter className={styles.confirmActions}><Button variant="outline" disabled={locked} onClick={() => setConfirmation(null)}>{t("取消", "Cancel")}</Button><Button variant={confirmation?.kind === "remove" ? "destructive" : "default"} disabled={locked} onClick={confirm}>{confirmation?.kind === "remove" ? t("删除规则", "Delete rule") : confirmation?.kind === "run" ? t("运行一次", "Run once") : confirmation?.kind === "status" ? t("启用", "Enable") : t("确认", "Confirm")}</Button></DialogFooter>
+  const onDirtyChange = useCallback((dirty: boolean) => setDraftState({ key: editorKey, dirty }), [editorKey]);
+  const onSurfaceDirtyChange = useCallback((dirty: boolean) => setSurfaceState({ key: surfaceKey, dirty }), [surfaceKey]);
+  const nav = [{ id: "dashboard", label: t("控制台", "Dashboard"), Icon: LayoutDashboard }, { id: "templates", label: t("模板", "Templates"), Icon: Shapes }, { id: "history", label: t("全部运行历史", "All run history"), Icon: FileClock }, { id: "git-sync", label: "Git Sync", Icon: GitBranch }, { id: "integrations", label: t("连接与事件", "Connections & events"), Icon: Plug }];
+  const selectedProjectUnavailable = !!projectId && !!projects.data && !allProjects.some(project => project.id === projectId);
+  const confirmationKind = confirmation?.command.kind;
+  const enabling = confirmation?.command.kind === "status" && confirmation.command.status === "enabled";
+  const confirmationTitle = confirmationKind === "remove" ? t("删除自动化？", "Delete automation?") : confirmationKind === "run" ? t("立即运行一次？", "Run once now?") : confirmationKind === "cancel" ? t("请求取消此运行？", "Request cancellation?") : enabling ? t("启用自动化？", "Turn on automation?") : t("暂停自动化？", "Turn off automation?");
+  return <div className={`pm-automation ${styles.shell}`} onClickCapture={event => {
+    const target = event.target instanceof Element ? event.target : null;
+    const clicked = target?.closest("details");
+    event.currentTarget.querySelectorAll(`details.${styles.menu}[open]`).forEach(item => { if (item !== clicked || target?.closest("button")) item.removeAttribute("open"); });
+  }} onKeyDown={event => { if (event.key === "Escape") event.currentTarget.querySelectorAll("details[open]").forEach(item => item.removeAttribute("open")); }}>
+    <div className={styles.frame}>
+    <StudioLeaveBoundary active={leaveActive} message={leaveMessage} />
+    <aside className={styles.secondaryNav}><div className={styles.navHeading}>{t("自动化", "Automate")}</div><nav aria-label={t("自动化导航", "Automation navigation")}>{nav.map(item => <button type="button" key={item.id} aria-current={page === item.id ? "page" : undefined} onClick={() => go(item.id)}><item.Icon size={16} /><span>{item.label}</span></button>)}</nav><div className={styles.navFooter}><LockKeyhole size={13} />{t("当前主体与项目授权", "Current actor & project access")}</div><Button variant="ghost" size="sm" onClick={() => { if (canLeave()) onExit(); }}><ArrowLeft size={14} />{t("返回对话", "Back to Chat")}</Button></aside>
+    <main className={styles.main}><div className={styles.body}>
+      <div className={styles.scopeBar}><label>{t("项目范围", "Project scope")}<select aria-label={t("自动化项目范围", "Automation project scope")} value={projectId} disabled={projects.loading} onChange={event => { if (canLeave()) { setQuery({ project: event.target.value || undefined }, false); } }}><option value="">{t("工作区 / 选择项目配置", "Workspace / choose project to configure")}</option>{projectId && !allProjects.some(item => item.id === projectId) && <option value={projectId}>{projectId}</option>}{allProjects.map(item => <option value={item.id} key={item.id}>{String(item.data.name ?? item.data.title ?? item.id)}</option>)}</select></label><Button variant="ghost" size="sm" aria-label={t("刷新自动化", "Refresh automations")} disabled={list.loading || projects.loading} onClick={refresh}><RefreshCw size={15} /></Button></div>
+      {accessLost ? <section className={styles.empty} role="alert"><LockKeyhole size={28} /><h1>{t("授权已失效", "Access is no longer available")}</h1><p>{t("私有页面数据已隐藏。重新读取当前授权后继续。", "Private page data is hidden. Recheck current authorization to continue.")}</p><Button variant="outline" onClick={() => { onRecheckAccess(); scopeCurrent.current = true; setAccessLost(false); refresh(); }}>{t("重新读取授权", "Recheck access")}</Button></section> : <>
+        {(projects.loading || (list.loading && !list.data)) && <div className={styles.skeleton} role="status">{t("正在读取自动化…", "Loading automations…")}</div>}
+        {(!!projects.error || !!list.error) && <div className={styles.error} role="alert"><h2>{t("无法读取自动化", "Could not load automations")}</h2><p>{t("写入已暂停；原请求和草稿版本不会重置。", "Writes are paused; original request identities and draft revisions are preserved.")}</p><Button variant="outline" onClick={refresh}>{t("重试", "Retry")}</Button></div>}
+        {selectedProjectUnavailable && <p role="alert" className={styles.error}>{t("URL 中的项目不在当前可访问范围。请重新选择，不会静默替换项目。", "The URL project is outside current access. Select a project; it will not be silently replaced.")}</p>}
+        {!workspace.capabilities.includes("planning.edit") && <p className={styles.notice} role="status"><LockKeyhole size={14} /> {t("自动化为只读模式。历史和模板仍按当前授权可见；保存、启停和运行需要现有项目编辑权限。", "Read-only automation access. History and templates remain subject to current authorization; saving, status changes, and dispatch require the existing project edit permission.")}</p>}
+        {projectId && allProjects.some(item => item.id === projectId) && !availableProjects.some(item => item.id === projectId) && <p className={styles.notice}>{t("此项目已归档或结束；配置和历史仍可查看，但不能新建或派发执行。", "This project is archived or closed. Configuration and history remain readable, but new definitions and dispatch are not allowed.")}</p>}
+        {studioActions.storageError && <div className={styles.warning} role="alert"><p>{t("恢复存储不可用，所有新写入暂停。不会丢弃未知请求。", "Recovery storage is unavailable. New writes are paused; unknown request identities are not discarded.")}</p><Button variant="outline" size="sm" onClick={studioActions.retryStorage}>{t("重试恢复存储", "Retry recovery storage")}</Button></div>}
+        {studioActions.pending && <div className={styles.warning} role="status"><strong>{t("原请求待核对", "Original request awaiting reconciliation")}</strong><p>{t("只查询原收据，不重复保存、删除或运行。", "Only the original receipt is queried; no save, delete, or run is repeated.")}</p><code>{studioActions.pending.requestId}</code><Button variant="outline" size="sm" disabled={studioActions.busy} onClick={() => void studioActions.reconcile()}>{t("核对原收据", "Check original receipt")}</Button></div>}
+        {studioActions.error && <p className={styles.error} role="alert">{studioActions.error}</p>}{notice && <p className={styles.notice} role="status">{notice}<button type="button" onClick={() => setNotice("")}>{t("关闭", "Dismiss")}</button></p>}
+        {page === "dashboard" && ready && <StudioDashboard definitions={definitions.filter(item => !projectId || item.config.projectId === projectId)} executions={recent.data?.items.filter(item => !projectId || item.configSnapshot.projectId === projectId)} executionError={!!recent.error} api={api} filters={queryFilters} onFilters={onFilters} onAction={itemAction} onNew={() => go("setup")} onTemplates={() => go("templates")} onImport={() => setImportOpen(true)} onGit={() => go("git-sync")} onHistory={() => go("history")} onMore={() => setDefinitionCursor(list.data?.nextCursor ?? undefined)} hasMore={!!list.data?.nextCursor} loadingMore={list.loading} writableFor={writableFor} locked={locked} onAccessFailure={accessFailure} />}
+        {page === "templates" && <StudioTemplates key={projectId} workspaceId={workspace.id} projectId={projectId || undefined} onSelect={templateId => go("setup", { templateId })} onAssist={onAssist} onIntegrations={() => go("integrations")} />}
+        {definitionScopeMismatch && ["setup", "detail"].includes(page) && <div className={styles.error} role="alert"><h2>{t("定义与当前项目不一致", "Definition does not match the current project")}</h2><p>{t("不会在另一个项目范围中打开或修改此定义。", "This definition will not be opened or edited under another project scope.")}</p><Button variant="outline" onClick={() => { if (canLeave()) setQuery({ project: selectedDefinition?.config.projectId, cursor: undefined, run: undefined }, false); }}>{t("切换到定义所属项目", "Switch to the definition's project")}</Button></div>}
+        {page === "setup" && !definitionScopeMismatch && projects.data && (!definitionId || (!detail.loading && !detail.error && selectedDefinition)) && <StudioEditor key={editorKey}
+          workspaceId={workspace.id} actorId={actorId} membershipVersion={workspace.version} projectId={projectId || undefined}
+          projects={allProjects.filter(item => !item.data.archivedAt)} definition={selectedDefinition} templateId={templateId} draftId={localDraftId}
+          writable={!locked && workspace.capabilities.includes("planning.edit") && !selectedProjectUnavailable}
+          onSaved={definition => { refresh(); go(`detail/${definition.id}`, {}, true); }} onExecution={selectExecution} onCancel={() => go("dashboard")}
+          onDirtyChange={onDirtyChange} onAssist={onAssist} onIntegrations={() => go("integrations")} onAccessLost={revoke} />}
+        {page === "setup" && !!definitionId && !!detail.error && <div className={styles.error} role="alert"><h2>{t("定义无法读取，未创建空白替代项", "Definition unavailable; no blank replacement created")}</h2><Button variant="outline" onClick={detail.refetch}>{t("重试", "Retry")}</Button></div>}
+        {page === "detail" && !!detail.error && !(detail.error instanceof StudioApiError && detail.error.status === 404) && <div className={styles.error} role="alert"><h2>{t("定义详情读取失败", "Could not load definition details")}</h2><p>{detail.error instanceof Error ? detail.error.message : t("网络或服务返回异常。历史仍单独按当前授权读取。", "A network or service error occurred. History is read separately under current authorization.")}</p><Button variant="outline" onClick={detail.refetch}>{t("重试详情", "Retry details")}</Button></div>}
+        {page === "detail" && !definitionScopeMismatch && (detail.loading && detail.data?.id !== definitionId ? <div className={styles.skeleton} role="status">{t("读取详情…", "Loading detail…")}</div> : <StudioDetail key={`${actorId}:${workspace.id}:${workspace.version}:${definitionId}:${projectId}`}
+          definition={selectedDefinition} definitionId={definitionId} api={api} reloadKey={version} runId={runId} cursor={cursor} projectId={projectId || undefined}
+          pmContext={{ actorId, workspaceId: workspace.id, membershipVersion: workspace.version, reviewProjectIds, planningProjectIds, commentProjectIds, onDirtyChange: onSurfaceDirtyChange }}
+          onCursor={cursor => setQuery({ cursor })} onRunSelect={run => setQuery({ run: run ?? undefined })} onBack={() => go("dashboard")}
+          onEdit={() => go("setup", { automationId: definitionId })} onExport={format => void exportDefinition(definitionId, format)} onCommand={confirmCommand}
+          onDebug={onAssist ? debug : undefined} onOpenThread={onOpenThread}
+          writable={selectedDefinition ? writableFor(selectedDefinition.config.projectId) : workspace.capabilities.includes("planning.edit")} locked={locked} onAccessFailure={accessFailure} />)}
+        {page === "history" && <div className={styles.stack}><header className={styles.heading}><div><h1>{t("全部运行历史", "All execution history")}</h1><p>{t("保留已删除定义的授权执行记录。", "Authorized execution records survive definition deletion.")}</p></div></header>
+          <StudioActivity key={`history:${actorId}:${workspace.id}:${workspace.version}:${projectId}`} api={api} pmContext={{ actorId, workspaceId: workspace.id, membershipVersion: workspace.version, reviewProjectIds, planningProjectIds, commentProjectIds, onDirtyChange: onSurfaceDirtyChange }} projectId={projectId || undefined} reloadKey={version} runId={runId} cursor={cursor}
+            onCursor={cursor => setQuery({ cursor })} onRunSelect={run => setQuery({ run: run ?? undefined })} onCommand={confirmCommand}
+            onDefinition={execution => go(`detail/${execution.definitionId}`, { run: execution.id })}
+            onDebug={onAssist ? debug : undefined} onOpenThread={onOpenThread} writable={workspace.capabilities.includes("planning.edit")} locked={locked} onAccessFailure={accessFailure} /></div>}
+        {(["git-sync", "integrations"].includes(page)) && (!projectId || selectedProjectUnavailable
+          ? <div className={styles.empty}><Plug size={26} /><h1>{t("先选择项目", "Choose a project first")}</h1><p>{t("连接、事件与 Git Sync 均明确归属当前项目。", "Connections, events, and Git Sync belong to an explicit project.")}</p></div>
+          : page === "git-sync" ? <StudioGitSync key={projectId} workspaceId={workspace.id} actorId={actorId} membershipVersion={workspace.version} projectId={projectId} canWrite={writableFor(projectId)} onDirtyChange={onSurfaceDirtyChange} onBack={() => go("dashboard")} />
+          : <StudioIntegrations key={projectId} workspaceId={workspace.id} actorId={actorId} membershipVersion={workspace.version} projectId={projectId} canWrite={writableFor(projectId)} onDirtyChange={onSurfaceDirtyChange} />)}
+        {projectId && capabilities.data && page === "dashboard" && <div className={styles.capabilityNotice}>{capabilities.data.actions.filter(action => !action.available).map(action => <p key={action.id}>{action.id}: {action.reason ?? t("未配置", "Not configured")}</p>)}{!capabilities.data.scheduler.ready && <p>{t("后台调度：", "Background scheduler: ")}{capabilities.data.scheduler.reason ?? t("未就绪", "Not ready")}</p>}</div>}
+        {projectId && !!capabilities.error && page === "dashboard" && <p className={styles.warning} role="alert">{t("当前项目的执行能力读取失败，未假定 Provider 或调度已配置。", "Execution capabilities could not be read for this project; Provider and scheduler readiness are not assumed.")}</p>}
+        {!nav.some(item => item.id === page) && !["setup", "detail"].includes(page) && <div className={styles.empty}><h1>{t("自动化页面不存在", "Automation page not found")}</h1><Button onClick={() => go("dashboard")}>{t("返回 Dashboard", "Back to dashboard")}</Button></div>}
+      </>}
+    </div></main>
+    {importOpen && !accessLost && (projectId ? <StudioImport key={projectId} workspaceId={workspace.id} actorId={actorId} membershipVersion={workspace.version} projectId={projectId}
+      onDirtyChange={onSurfaceDirtyChange} onClose={() => { if (canLeave()) setImportOpen(false); }}
+      onImported={definition => { setImportOpen(false); refresh(); go(`detail/${definition.id}`, {}, true); }} />
+      : <Dialog open onOpenChange={open => setImportOpen(open)}><DialogContent><DialogHeader><DialogTitle>{t("选择导入项目", "Choose an import project")}</DialogTitle><DialogDescription>{t("请在页面顶部选择项目后导入。导入只会创建持久草稿，不会启用。", "Choose a project at the top before importing. Import creates only a persistent draft; it never enables execution.")}</DialogDescription></DialogHeader><Button onClick={() => setImportOpen(false)}>{t("关闭", "Close")}</Button></DialogContent></Dialog>)}
+    <Dialog open={!!confirmation} onOpenChange={open => { if (!open) setConfirmation(null); }}>
+      <DialogContent><DialogHeader><DialogTitle>{confirmationTitle}</DialogTitle>
+        <DialogDescription>{confirmationKind === "remove" ? t("停止未来调度并删除定义，授权运行历史保留。不可撤销。", "Stops future scheduling and deletes the definition. Authorized execution history is retained. This cannot be undone.")
+          : confirmationKind === "cancel" ? t("请求取消原执行；外部服务确认前仍显示待核对，不会假定已经停止。", "Requests cancellation of the original execution. It remains pending until confirmed by the runtime; stopping is not assumed.")
+          : confirmationKind === "status" ? enabling ? t("按当前保存版本启用。启用本身不会立即运行；后续定时/事件可触发实际执行。", "Enables the current saved revision. Enabling does not run immediately; later schedule/events can trigger real execution.") : t("只停止新的自动触发。已开始的运行不会因此取消。", "Stops new automatic dispatch only. Runs already started are not cancelled.")
+          : t("使用已保存版本执行，可能调用模型、计费、使用连接器或运行脚本。不是只读验证。", "Executes the saved revision and may invoke a model, incur cost, use integrations, or run a script. This is not read-only validation.")}</DialogDescription>
+      </DialogHeader><strong>{confirmation?.name}</strong>
+        <DialogFooter><Button variant="outline" onClick={() => setConfirmation(null)}>{t("取消", "Cancel")}</Button><Button variant={confirmationKind === "remove" ? "destructive" : "default"} disabled={locked} onClick={submitConfirmation}>{t("确认", "Confirm")}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
+    </div>
   </div>;
 }

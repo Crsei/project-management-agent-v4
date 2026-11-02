@@ -65,7 +65,7 @@ it.effect("reads Go limits with the instance's XDG credentials and preserves res
               Response.json({
                 usage: {
                   rolling: { percent: 0, resetsAt },
-                  weekly: { percent: 10, resetsAt },
+                  weekly: { status: "rate-limited", percent: 10, resetsAt },
                   monthly: { percent: 125, resetsAt },
                 },
               }),
@@ -88,7 +88,7 @@ it.effect("reads Go limits with the instance's XDG credentials and preserves res
       })),
       [
         { kind: "session", usedPercent: 0, reset: resetsAt },
-        { kind: "weekly", usedPercent: 10, reset: resetsAt },
+        { kind: "weekly", usedPercent: 100, reset: resetsAt },
         { kind: "monthly", usedPercent: 100, reset: resetsAt },
       ],
     );
@@ -127,6 +127,8 @@ it.effect(
         consoleStatus = 200,
         inline = false,
         databaseFile,
+        integrationId = "opencode",
+        malformedLegacy = false,
         requested,
       } of [
         {
@@ -155,16 +157,18 @@ it.effect(
         { databaseFile: "selected.db", requested: ["console-key"] },
         { databaseFile: ":memory:", requested: ["go-key"] },
         { active: null, requested: ["console-key"] },
+        { integrationId: "opencode-go", requested: ["console-key"] },
+        { integrationId: "opencode-go", malformedLegacy: true, requested: ["console-key"] },
       ]) {
         database.exec("DELETE FROM credential");
-        insert.run("cred_selected", "opencode", JSON.stringify(consoleRow), active, 2, 2);
+        insert.run("cred_selected", integrationId, JSON.stringify(consoleRow), active, 2, 2);
         // Legacy selections follow creation order, even when an older key was updated later.
         insert.run(
           "cred_older",
           "opencode",
           JSON.stringify({ type: "key", key: "old-key" }),
-          active === null ? null : 0,
-          1,
+          integrationId === "opencode-go" ? 1 : active === null ? null : 0,
+          integrationId === "opencode-go" ? 3 : 1,
           9,
         );
         insert.run("cred_other", "other", JSON.stringify(consoleKey), 1, 10, 10);
@@ -176,6 +180,9 @@ it.effect(
           database
             .prepare("UPDATE credential SET value = ? WHERE id = 'cred_selected'")
             .run(JSON.stringify({ type: "key", key: "old-key" }));
+        }
+        if (malformedLegacy) {
+          yield* fs.writeFileString(`${dataHome}/opencode/auth.json`, "malformed legacy auth");
         }
         const before = yield* fs.readFile(`${dataHome}/opencode/opencode.db`);
         const authorizations: string[] = [];
@@ -252,10 +259,11 @@ it.effect("does not read local credentials for external or disabled OpenCode ins
 
 it.effect("keeps Go entitlement absence distinct from failed or malformed usage responses", () =>
   Effect.gen(function* () {
-    for (const [status, reason] of [
-      [403, "unsupported"],
-      [401, "probeFailed"],
-      [200, "probeFailed"],
+    for (const [status, reason, body] of [
+      [403, "unsupported", { type: "error", error: { type: "EntitlementError" } }],
+      [403, "probeFailed", {}],
+      [401, "probeFailed", {}],
+      [200, "probeFailed", {}],
     ] as const) {
       const limits = yield* readOpenCodeGoUsageLimits({
         enabled: true,
@@ -273,7 +281,7 @@ it.effect("keeps Go entitlement absence distinct from failed or malformed usage 
         Effect.provideService(
           HttpClient.HttpClient,
           HttpClient.make((request) =>
-            Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({}, { status }))),
+            Effect.succeed(HttpClientResponse.fromWeb(request, Response.json(body, { status }))),
           ),
         ),
         Effect.provide(NodeServices.layer),

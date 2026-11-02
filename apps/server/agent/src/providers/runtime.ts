@@ -87,10 +87,12 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
   modelOptions?: ProviderOptionSelection[];
   interactionMode?: "default" | "plan";
   pmToolBridge?: { command: string; args: string[] };
+  mcpServers?: ProviderDriverContext["mcpServers"];
   execution?: PmExecutionIdentity;
   authorizeExecution?: ProviderDriverContext["authorizeExecution"];
+  pmAnalysis?: true;
 }): Promise<CliChatResult> {
-  if (options.pmToolBridge && (!options.execution || !options.authorizeExecution))
+  if ((options.pmToolBridge || options.mcpServers?.length) && (!options.execution || !options.authorizeExecution))
     throw new ProviderRuntimeError(412, "scope_required", "PM tools require a trusted live Chat authorization.");
   const instance = getStoredInstance(runtime.providerInstanceId);
   if (!instance || !instance.enabled || instance.revision !== runtime.instanceRevision)
@@ -100,6 +102,8 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
   const adapter = getNativeProviderAdapter(instance.driver);
   if (!adapter) throw new ProviderRuntimeError(400, "unknown_provider", "Unsupported native Agent.");
   const modelOptions = resolveProviderModelOptions(runtime.providerInstanceId, runtime.modelId, options.modelOptions);
+  if (options.pmAnalysis && (instance.driver !== "claude" || options.pmToolBridge || options.mcpServers?.length || options.session?.resume || options.session?.fork))
+    throw new ProviderRuntimeError(412, "analysis_tools_forbidden", "PM analysis requires the selected Provider's no-tools transport and a fresh immutable Chat generation.");
   if (options.session?.resume && options.session.fork)
     throw new ProviderRuntimeError(400, "invalid_session", "Choose resume or fork, not both.");
   let resume = options.session?.resume;
@@ -125,7 +129,8 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
     if (getStoredInstance(instance.instanceId)?.revision !== instance.revision)
       throw new ProviderRuntimeError(409, "session_mismatch", "Agent configuration changed during native session preparation.");
     const result = await adapter.run({ ...providerContext(instance, cwd), pmToolBridge: options.pmToolBridge,
-      execution: options.execution, authorizeExecution: options.authorizeExecution }, {
+      mcpServers: options.mcpServers, execution: options.execution, authorizeExecution: options.authorizeExecution,
+      ...(options.pmAnalysis ? { pmAnalysis: true as const } : {}) }, {
       model: runtime.modelId, prompt: options.prompt, signal: options.signal,
       modelOptions, interactionMode: options.interactionMode ?? "default",
       onText: options.onText, onEvent: options.onEvent, onRequest: options.onRequest, resume, onSession: publishSession,

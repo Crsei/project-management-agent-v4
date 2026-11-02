@@ -95,8 +95,8 @@ test("actual store ownership/counts and revision-bound Provider observations are
   assert.equal(collectAgentDiagnostics().recentFailures.items.length, 10);
 }));
 
-test("all nine native kinds retain revision-bound status while arbitrary obsolete kinds stay inert", () => isolated((directory) => {
-  const drivers = ["codex", "claude", "cursor", "grok", "opencode", "antigravity", "muse", "pi", "acpRegistry"];
+test("all native kinds retain revision-bound status while arbitrary obsolete kinds stay inert", () => isolated((directory) => {
+  const drivers = ["codex", "claude", "cursor", "grok", "fx", "opencode", "antigravity", "muse", "pi", "omp", "acpRegistry"];
   const configuration = JSON.stringify({ version: 1, instances: [
     ...drivers.map((driver, index) => ({ instanceId: `native-${index}`, driver, label: driver, enabled: true, revision: 2,
       config: {}, observations: { instanceRevision: 2, lastConnectionTest: { ok: true, instanceRevision: 2,
@@ -106,7 +106,7 @@ test("all nine native kinds retain revision-bound status while arbitrary obsolet
   writeFileSync(path.join(directory, "provider-instances.json"), configuration);
   const report = collectAgentDiagnostics();
   assert.equal(report.providers.configuration, "ok");
-  assert.deepEqual([report.providers.total, report.providers.native, report.providers.inactive], [10, 9, 1]);
+  assert.deepEqual([report.providers.total, report.providers.native, report.providers.inactive], [drivers.length + 1, drivers.length, 1]);
   assert.deepEqual(report.providers.observations.map((entry) => entry.driver), drivers);
   assert.equal(report.providers.observations.every((entry) => entry.authentication === "authenticated"), true);
   assert.doesNotMatch(JSON.stringify(report), /do-not-return|unrecognized-old-extension/);

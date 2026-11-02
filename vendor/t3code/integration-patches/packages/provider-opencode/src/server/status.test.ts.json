@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-opencode/src/server/status.test.ts",
   "beforeSha256": "d8dd45f90d64bc131fa4153df5ed44958461d80484f1ff694781ed5d08664320",
-  "afterSha256": "e35e165c1de1424dbaf3e8fed233d193f115445619ac967ffca8d4a002586a07",
+  "afterSha256": "f6482cd24603de0a152a580e63965fd07e15a9327c71caf54c923cd62652f56e",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -14,6 +14,94 @@
     "vendor/t3code/opencode-patches.json"
   ],
   "splices": [
+    {
+      "start": 67,
+      "before": [
+        "                  weekly: { percent: 10, resetsAt },\n"
+      ],
+      "after": [
+        "                  weekly: { status: \"rate-limited\", percent: 10, resetsAt },\n"
+      ]
+    },
+    {
+      "start": 90,
+      "before": [
+        "        { kind: \"weekly\", usedPercent: 10, reset: resetsAt },\n"
+      ],
+      "after": [
+        "        { kind: \"weekly\", usedPercent: 100, reset: resetsAt },\n"
+      ]
+    },
+    {
+      "start": 129,
+      "before": [],
+      "after": [
+        "        integrationId = \"opencode\",\n",
+        "        malformedLegacy = false,\n"
+      ]
+    },
+    {
+      "start": 157,
+      "before": [],
+      "after": [
+        "        { integrationId: \"opencode-go\", requested: [\"console-key\"] },\n",
+        "        { integrationId: \"opencode-go\", malformedLegacy: true, requested: [\"console-key\"] },\n"
+      ]
+    },
+    {
+      "start": 159,
+      "before": [
+        "        insert.run(\"cred_selected\", \"opencode\", JSON.stringify(consoleRow), active, 2, 2);\n"
+      ],
+      "after": [
+        "        insert.run(\"cred_selected\", integrationId, JSON.stringify(consoleRow), active, 2, 2);\n"
+      ]
+    },
+    {
+      "start": 165,
+      "before": [
+        "          active === null ? null : 0,\n",
+        "          1,\n"
+      ],
+      "after": [
+        "          integrationId === \"opencode-go\" ? 1 : active === null ? null : 0,\n",
+        "          integrationId === \"opencode-go\" ? 3 : 1,\n"
+      ]
+    },
+    {
+      "start": 178,
+      "before": [],
+      "after": [
+        "        }\n",
+        "        if (malformedLegacy) {\n",
+        "          yield* fs.writeFileString(`${dataHome}/opencode/auth.json`, \"malformed legacy auth\");\n"
+      ]
+    },
+    {
+      "start": 254,
+      "before": [
+        "    for (const [status, reason] of [\n",
+        "      [403, \"unsupported\"],\n",
+        "      [401, \"probeFailed\"],\n",
+        "      [200, \"probeFailed\"],\n"
+      ],
+      "after": [
+        "    for (const [status, reason, body] of [\n",
+        "      [403, \"unsupported\", { type: \"error\", error: { type: \"EntitlementError\" } }],\n",
+        "      [403, \"probeFailed\", {}],\n",
+        "      [401, \"probeFailed\", {}],\n",
+        "      [200, \"probeFailed\", {}],\n"
+      ]
+    },
+    {
+      "start": 275,
+      "before": [
+        "            Effect.succeed(HttpClientResponse.fromWeb(request, Response.json({}, { status }))),\n"
+      ],
+      "after": [
+        "            Effect.succeed(HttpClientResponse.fromWeb(request, Response.json(body, { status }))),\n"
+      ]
+    },
     {
       "start": 549,
       "before": [

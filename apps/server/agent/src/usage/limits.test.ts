@@ -12,6 +12,7 @@ import { startPmProviderApplication, stopPmProviderApplication } from "../provid
 import { makePmProviderFamily } from "../providers/t3code/registration.ts";
 import { piDriver, makePiDriverLayer } from "../providers/t3code/families/pi.ts";
 import { museDriver, makeMuseDriverLayer } from "../providers/t3code/families/muse.ts";
+import { ompDriver, makeOmpDriverLayer } from "../providers/t3code/families/omp.ts";
 
 test("hub configuration, account snapshots, sparse windows, failed probes and pinned credit redemption", async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "usage-hub-"));
@@ -88,12 +89,14 @@ test("runtime sparse updates merge per instance and an unsupported probe clears 
   writeFileSync(path.join(root, "provider-instances.json"), JSON.stringify({ version: 1, instances: [
     { instanceId: "pi-a", driver: "pi", label: "Pi", enabled: true, revision: 1 },
     { instanceId: "muse-a", driver: "muse", label: "Muse", enabled: true, revision: 1 },
+    { instanceId: "omp-a", driver: "omp", label: "OMP", enabled: true, revision: 1 },
     { instanceId: "pi-disabled", driver: "pi", label: "Disabled Pi", enabled: false, revision: 1 },
   ].map(instance => ({ ...instance, env: { HOME: root }, config: { binaryPath: path.join(root, "missing-native-binary") } })) }));
   try {
     await startPmProviderApplication({ families: new Map([
       [piDriver.driverKind, makePmProviderFamily(piDriver, makePiDriverLayer)],
       [museDriver.driverKind, makePmProviderFamily(museDriver, makeMuseDriverLayer)],
+      [ompDriver.driverKind, makePmProviderFamily(ompDriver, makeOmpDriverLayer)],
     ]), protocols: new Map() });
     const unprobed = getUsageLimitsReport();
     assert.deepEqual(unprobed.accounts, []);
@@ -110,6 +113,13 @@ test("runtime sparse updates merge per instance and an unsupported probe clears 
     ingestUsageLimits("pi-a", { windows: [{ id: "new", kind: "other", label: "Native", usedPercent: 17 }] });
     limits = getUsageLimitsReport().accounts.find((a) => a.instanceId === "pi-a")!.limits;
     assert.equal(limits.unavailable?.reason, "unsupported"); assert.deepEqual(limits.windows, []);
+    const omp = (await refreshUsageLimits(["omp-a"])).accounts.find(account => account.instanceId === "omp-a")!;
+    assert.equal(omp.driver, "omp");
+    assert.equal(omp.limits.unavailable?.reason, "unsupported");
+    assert.deepEqual(omp.limits.windows, []);
+    assert.equal(omp.resetCreditInput, undefined);
+    ingestUsageLimits("omp-a", { windows: [{ id: "invented-quota", kind: "weekly", label: "Unavailable", usedPercent: 42 }] });
+    assert.deepEqual(getUsageLimitsReport().accounts.find(account => account.instanceId === "omp-a")!.limits.windows, []);
     await refreshUsageLimits(["muse-a"]);
     ingestUsageLimits("muse-a", { windows: [{ id: "week", kind: "weekly", label: "Weekly", usedPercent: 42 }] });
     const muse = (await refreshUsageLimits(["muse-a"])).accounts.find((a) => a.instanceId === "muse-a")!.limits;

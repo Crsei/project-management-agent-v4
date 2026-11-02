@@ -9,7 +9,7 @@ import type { ProviderIcon, ProviderEnvironmentField } from "@t3tools/provider-c
 
 export type ProviderDriver =
   | "codex" | "claude" | "cursor" | "grok" | "opencode"
-  | "antigravity" | "muse" | "pi" | "acpRegistry" | "fx";
+  | "antigravity" | "muse" | "pi" | "omp" | "acpRegistry" | "fx";
 
 export type ProviderConfig = Record<string, string | number | boolean | string[]>;
 export type ProviderConfigInput = Record<string, string | number | boolean | string[] | null>;

@@ -33,14 +33,32 @@ test("identical nested bindings retain ownership until the final scope closes; c
   }
 });
 
-test("stdio binding appends only the MCP subcommand and never grants a no-identity caller PM tools", () => {
-  const binding = pmRuntimeBinding(context, ThreadId.make("chat"), "generation");
-  assert.deepEqual(binding.mcpServers[0], { name: "pm_tools", transport: "stdio", command: "/node", args: [...context.pmToolBridge!.args, "mcp"] });
-  assert.equal(binding.nativePermissions, "deny-ungranted");
-  assert.equal(binding.instructionText, "");
+test("PM tool transport requires both Chat identity and a live authorization callback", () => {
   assert.throws(() => pmRuntimeBinding({ ...context, execution: undefined }, ThreadId.make("technical"), "run"), { code: "scope_required", status: 412 });
   assert.throws(() => pmRuntimeBinding({ ...context, authorizeExecution: undefined }, ThreadId.make("chat"), "generation"), { code: "scope_required", status: 412 });
-  assert.deepEqual(pmRuntimeBinding({ ...context, execution: undefined, pmToolBridge: undefined }, ThreadId.make("technical"), "run").mcpServers, []);
+  const connector = { name: "automation_github", transport: "stdio" as const, command: "/node", args: ["/scoped-broker.mjs"] };
+  assert.throws(() => pmRuntimeBinding({ ...context, pmToolBridge: undefined, mcpServers: [connector], execution: undefined }, ThreadId.make("technical"), "run"), { code: "scope_required", status: 412 });
+  assert.throws(() => pmRuntimeBinding({ ...context, pmToolBridge: undefined, mcpServers: [connector], authorizeExecution: undefined }, ThreadId.make("chat"), "generation"), { code: "scope_required", status: 412 });
+  assert.throws(() => pmRuntimeBinding({ ...context, mcpServers: [{ ...connector, name: "pm_tools" }] }, ThreadId.make("chat"), "generation"), { code: "scope_required", status: 412 });
+});
+
+test("an explicit technical model caller gains neither tool nor compaction authority", async () => {
+  const host = makePmProviderRuntimeHost();
+  const binding = pmRuntimeBinding({
+    ...context, execution: undefined, pmToolBridge: undefined, authorizeExecution: undefined,
+  }, ThreadId.make("technical"), "technical-run");
+  await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+    yield* host.bind(binding);
+    for (const action of ["tool", "compaction"] as const) {
+      yield* Effect.tryPromise({
+        try: () => assert.rejects(Effect.runPromise(host.authorize({
+          threadId: binding.threadId, providerInstanceId: binding.providerInstanceId,
+          executionId: binding.executionId, action,
+        })), { code: "stale_execution", status: 409 }),
+        catch: error => error,
+      });
+    }
+  })));
 });
 
 test("authorization requires a live captured execution and revocable callback; callbacks never enter transport bindings", async () => {

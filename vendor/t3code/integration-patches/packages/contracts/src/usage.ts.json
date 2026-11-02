@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "source": "packages/contracts/src/usage.ts",
+  "beforeSha256": "46f32ee9218330a47626c382b268144ab96bdffb5e06b0549af657fc351f428c",
+  "afterSha256": "6578fe1cbd42de2cfc41faa24e6b9dc4668b03917ea8a11125eef04ea40351a4",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 17,
+      "before": [],
+      "after": [
+        "  \"omp\",\n"
+      ]
+    }
+  ]
+}

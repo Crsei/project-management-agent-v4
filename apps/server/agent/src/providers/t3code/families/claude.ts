@@ -8,7 +8,7 @@ import { ProviderEventLoggers, NoOpProviderEventLoggers } from "@t3tools/provide
 import { ProviderRuntimeHost, type ProviderRuntimeHostService } from "@t3tools/provider-core/server/ProviderRuntimeHost";
 import { ProviderContinuationRequests } from "@t3tools/provider-core/server/ProviderContinuationRequests";
 import { ClaudeDriver } from "../../../../../../../vendor/t3code/apps/server/src/provider/Drivers/ClaudeDriver.ts";
-import { layerQueryRunner, readClaudeSessionEvidence } from "../../../../../../../vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts";
+import { ClaudeAgentSdkQueryRunner, layerQueryRunner, readClaudeSessionEvidence } from "../../../../../../../vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts";
 import * as ModelManifest from "../../../../../../../vendor/t3code/apps/server/src/provider/ModelManifest.ts";
 import { makePmResetCreditCoordinatorLayer } from "../upstream-services/reset-credit-coordinator.ts";
 import type { ProviderDriverContext } from "../../driver-adapter.ts";
@@ -18,6 +18,8 @@ import { makePmProviderContinuationRequests, pmExecutionError, type PmProviderPr
 import type { PmProviderCapabilitiesProjector } from "../management.ts";
 import { pmAdapterBoundaryError } from "../events.ts";
 import * as AgentLifecycle from "../upstream-services/port-discovery.ts";
+import { restrictPmAnalysisQueries } from "../../../automation-execution/native-templates/pm-analysis-policy.ts";
+import { ProviderInstanceId } from "@t3tools/contracts";
 
 export const claudeDriver = ClaudeDriver;
 
@@ -26,7 +28,11 @@ export function makeClaudeDriverLayer(context: ProviderDriverContext, runtimeHos
   const platform = makePmProviderPlatformLayer(context);
   const host = makePmProviderUpstreamServicesLayer(context);
   const logging = Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers);
-  const queryRunner = layerQueryRunner.pipe(Layer.provide(Layer.mergeAll(platform, logging, AgentLifecycle.layer)));
+  const originalQueryRunner = layerQueryRunner.pipe(Layer.provide(Layer.mergeAll(platform, logging, AgentLifecycle.layer)));
+  const queryRunner = Layer.effect(ClaudeAgentSdkQueryRunner, Effect.gen(function* () {
+    const original = yield* ClaudeAgentSdkQueryRunner;
+    return restrictPmAnalysisQueries(original, runtimeHost, ProviderInstanceId.make(context.instanceId));
+  })).pipe(Layer.provide(originalQueryRunner));
   const catalog = ModelManifest.layerModelCatalog.pipe(Layer.provide(ModelManifest.layer.pipe(Layer.provide(Layer.mergeAll(platform, host)))));
   return Layer.mergeAll(
     makePmProviderHostLayer(context, makePmProviderHostServices(context, runtimeHost)), host,

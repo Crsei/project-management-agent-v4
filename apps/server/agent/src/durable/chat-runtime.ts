@@ -33,6 +33,11 @@ import { getStoredInstance } from "../providers/instances.ts";
 import { listRuns, withThreadExecution } from "./engine.ts";
 import { consumeTransfers, getThreadFork, TRANSFERS } from "./transfers.ts";
 import type { ChatRecoveryCandidate } from "../automation/service.ts";
+import { openAutomationGenerationConnectors, type AutomationGenerationConnectors } from "../automation-execution/connectors.ts";
+import { resolveNativeTemplateChatSnapshot, assertNativeTemplateChatSnapshot } from "../automation-execution/native-templates/repository.ts";
+import { automationRequestForNativeGeneration, isPmAnalysisGeneration } from "../automation-execution/context.ts";
+import { queuePmAgentTerminal, startPmAgentSignals, stopPmAgentSignals } from "../automation-execution/pm-signals.ts";
+import { resolvePmAnalysisChatSnapshot } from "../automation-execution/native-templates/pm-analysis-chat.ts";
 import { boundedContext } from "./context.ts";
 import { forkChatSnapshot } from "./forks.ts";
 import { listRecords, readRecord, transaction, writeRecord } from "./store.ts";
@@ -434,9 +439,17 @@ export async function submitChat(
   // The bound issue is re-checked, and pinned references are resolved against the
   // authoritative core before acceptance; anything inaccessible rejects the turn.
   if (thread.pmContext) await resolvePmContextBinding(thread.pmContext, thread.scope, requestHeaders);
-  const pmReferences = request.pmReferences?.length
-    ? await resolvePmReferences(thread.scope!.workspaceId, request.pmReferences, requestHeaders)
+  const boundTaskId = thread.pmContext?.taskId ?? (/^TASK-\d+$/.test(thread.pmContext?.entityId ?? "") ? thread.pmContext?.entityId : undefined);
+  const referenceInputs = [...request.pmReferences ?? []];
+  if (boundTaskId && referenceInputs.length < 50 && !referenceInputs.some(reference => reference.kind === "issue" && reference.id === boundTaskId))
+    referenceInputs.push({ kind: "issue", id: boundTaskId, projectId: thread.scope!.projectId ?? null, revision: null });
+  let pmReferences = referenceInputs.length
+    ? await resolvePmReferences(thread.scope!.workspaceId, referenceInputs, requestHeaders)
     : undefined;
+  if (boundTaskId && !referenceInputs.some(reference => reference.kind === "issue" && reference.id === boundTaskId)) {
+    const bound = await resolvePmReferences(thread.scope!.workspaceId, [{ kind: "issue", id: boundTaskId, projectId: thread.scope!.projectId ?? null, revision: null }], requestHeaders);
+    pmReferences = [...pmReferences ?? [], ...bound];
+  }
   if (pmReferences) assertResolvedReferences(pmReferences);
   if (
     (request.config?.providerInstanceId !== undefined &&
@@ -453,7 +466,8 @@ export async function submitChat(
       modelName: thread.settings.model,
     }));
   const modelOptions = validatedModelOptions(resolved.providerInstanceId, thread.settings.model, thread.settings.modelOptions);
-  const executionSnapshot = await resolveAgentScope(thread.scope, requestHeaders);
+  const analysisSnapshot = await resolvePmAnalysisChatSnapshot(request.id, request.idempotencyKey, thread.scope);
+  const executionSnapshot = analysisSnapshot ?? await resolveNativeTemplateChatSnapshot(request.id, request.idempotencyKey, await resolveAgentScope(thread.scope, requestHeaders));
   if (!idle && request.trigger !== "regenerate-message") {
     const candidate = idleCompactionCandidate(request.id, "onReturn");
     const last = request.messages.at(-1);
@@ -687,16 +701,28 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         assertLiveAuthorization();
         if (action === "tool" && generation.idleCompaction)
           throw new DurableError(412, "scope_required", "无工具的会话压缩不能获得 PM 工具权限。");
-        const resolved = await resolveAgentScope(snapshot.scope, requestHeaders);
-        assertLiveAuthorization();
-        if (!sameAgentScope(resolved.scope, snapshot.scope) || resolved.path !== snapshot.path)
-          throw new DurableError(409, "scope_conflict", "本次执行的文件区域已更改，拒绝过期原生回调。");
-        if (threadSnapshot?.pmContext) {
-          await resolvePmContextBinding(threadSnapshot.pmContext, snapshot.scope, requestHeaders);
+        try {
+          const analysis = await resolvePmAnalysisChatSnapshot(generation.threadId, generation.request.idempotencyKey, snapshot.scope, controller.signal);
+          const resolved = analysis ?? await resolveAgentScope(snapshot.scope, requestHeaders, controller.signal);
           assertLiveAuthorization();
+          if (!sameAgentScope(resolved.scope, snapshot.scope))
+            throw new DurableError(409, "scope_conflict", "本次执行的文件区域归属已更改，拒绝过期原生回调。");
+          if (analysis) {
+            if (resolved.path !== snapshot.path) throw new DurableError(409, "scope_conflict", "PM analysis scratch identity changed.");
+          } else await assertNativeTemplateChatSnapshot(generation, resolved);
+          assertLiveAuthorization();
+          if (threadSnapshot?.pmContext) {
+            await resolvePmContextBinding(threadSnapshot.pmContext, snapshot.scope, requestHeaders, controller.signal);
+            assertLiveAuthorization();
+          }
+        } catch (error) {
+          // Cancellation or a revision cutover wins even when it aborts the in-flight PM request.
+          assertLiveAuthorization();
+          throw error;
         }
       };
-      const bridge = generation.idleCompaction ? undefined : await openPmToolBridge({
+      const templateChild = automationRequestForNativeGeneration(generation)?.config.action.kind === "template";
+      const bridge = generation.idleCompaction || templateChild ? undefined : await openPmToolBridge({
         scope: snapshot.scope, threadId: generation.threadId, messageId: generation.messageId,
         generationId: generation.id, headers: requestHeaders, authorizeExecution,
       });
@@ -708,10 +734,12 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
           emitNativeOutput(generation.id, { type: "item.upsert", item: { id: `pm-core-observation:${phase}`, type: "notification", status: "failed", title: "PM core observation unavailable", text: "Could not observe PM core files." } });
         }
       };
+      let automationConnectors: AutomationGenerationConnectors | undefined;
       try {
       await observe("before");
       saveGeneration({ ...getChatGeneration(generation.id)!, status: "running" });
       setNativeOutputStatus(generation.id, "running");
+      automationConnectors = await openAutomationGenerationConnectors(generation, requestHeaders, authorizeExecution);
       let failed: unknown;
       let source: ReadableStream<UIMessageChunk>;
         const plan = nativePlan(generation, runtime);
@@ -808,8 +836,9 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
                   plan.session?.fork?.boundary?.turnId].filter((id): id is string => Boolean(id)),
               });
               const result = await runNativeRuntime(runtime, {
-                prompt: generation.idleCompaction ? "/compact" : `${plan.prompt}\n\nPM tools are available through the generation-scoped CLI. List: ${[process.execPath, path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge!.url, "tools", "list"].map((part) => `'${part.replaceAll("'", "'\\''")}'`).join(" ")}. For calls or reconciliation use the same command replacing list with call or result and supply JSON on stdin: {"operationId":"UUID","name":"pm_...","arguments":{...}}. Keep the same operationId and arguments to reconcile an unknown outcome; never redispatch an unknown write with a new ID. Tool results are authoritative; shell exit status or model text alone is not proof of a write.`,
+                prompt: generation.idleCompaction ? "/compact" : !bridge ? plan.prompt : `${plan.prompt}\n\nPM tools are available through the generation-scoped CLI. List: ${[process.execPath, path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url, "tools", "list"].map((part) => `'${part.replaceAll("'", "'\\''")}'`).join(" ")}. For calls or reconciliation use the same command replacing list with call or result and supply JSON on stdin: {"operationId":"UUID","name":"pm_...","arguments":{...}}. Keep the same operationId and arguments to reconcile an unknown outcome; never redispatch an unknown write with a new ID. Tool results are authoritative; shell exit status or model text alone is not proof of a write.`,
                 pmToolBridge: bridge ? { command: process.execPath, args: [path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url] } : undefined,
+                mcpServers: automationConnectors?.mcpServers,
                 execution: { threadId: generation.threadId, generationId: generation.id,
                   messageId: generation.messageId, scope: snapshot.scope },
                 authorizeExecution,
@@ -818,6 +847,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
                 modelOptions: generation.modelOptions,
                 interactionMode: generation.interactionMode,
                 cwd: snapshot.path,
+                ...(isPmAnalysisGeneration(generation) ? { pmAnalysis: true as const } : {}),
                 onText: (delta) => {
                   if (hasAssistantItem) return;
                   legacyText += delta;
@@ -917,7 +947,8 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
       if (failed) throw failed;
       } finally {
         await observe("after");
-        await bridge?.close();
+        try { await automationConnectors?.close(); }
+        finally { await bridge?.close(); }
       }
     },
     controller.signal,
@@ -1017,6 +1048,7 @@ function settleChat(id: string, status: ChatGeneration["status"], error?: unknow
     saveGeneration({ ...next, seq: getChatGeneration(id)!.seq });
     if (getNativeOutput(id) && !isChatActive(next))
       endNativeOutput(id, status as "completed" | "failed" | "cancelled" | "interrupted");
+    queuePmAgentTerminal(getChatGeneration(id)!);
   });
 }
 export async function cancelChat(id: string): Promise<void> {
@@ -1180,9 +1212,11 @@ export async function startChatRuntime(): Promise<void> {
       );
     settleChat(generation.id, "interrupted");
   }
+  startPmAgentSignals();
 }
 export async function stopChatRuntime(): Promise<void> {
   state.stopping = true;
+  await stopPmAgentSignals();
   for (const timer of compactionTimers.values()) clearTimeout(timer);
   compactionTimers.clear();
   for (const controller of controllers.values()) controller.abort("server-shutdown");

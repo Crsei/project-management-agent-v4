@@ -7,6 +7,8 @@ import { requestHash } from '../../../../packages/application/src/kernel.ts';
 import { agentChatToolDefinitions } from '../../../../packages/application/src/agent-chat-tools.ts';
 import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
 import { agentChatToolResultSchema } from '../../../../packages/agent-contracts/src/pm-tool-result.ts';
+import { verifyAutomationServiceBearer } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
+import { withPmAutomationOrigin } from '../../../../packages/application/src/automation-pm-signals.ts';
 import { WorkspaceError } from '../../../../packages/pm-core/index.ts';
 import { CoreScope, type CoreWorkspacePool } from './core-routes.ts';
 import type { AgentChatTools, AgentChatToolContext } from './agent-chat-tools.ts';
@@ -89,6 +91,9 @@ export function registerAgentToolRoutes(app: FastifyInstance, options: {
   async function dispatch(request: FastifyRequest, reconcile: boolean) {
     const { workspaceId } = z.object({ workspaceId: z.uuid().toLowerCase() }).parse(request.params);
     const actor = await options.actor(request), input = requestSchema.parse(request.body);
+    const credential = request.headers.authorization?.startsWith('Bearer ') ? request.headers.authorization.slice(7) : '';
+    const automation = credential.startsWith('pm-automation-v1.') ? verifyAutomationServiceBearer(credential) : null;
+    const originated = <T>(operation: () => Promise<T>): Promise<T> => automation ? withPmAutomationOrigin(automation.executionId, operation) : operation();
     const { tools } = getTools();
     const scope = await scopeFor(actor, workspaceId, input.scope, options.database(), input.name);
     const hash = requestHash({ ...input, workspaceId, actorId: actor.id });
@@ -106,7 +111,7 @@ export function registerAgentToolRoutes(app: FastifyInstance, options: {
             const current = await scopeFor(actor, workspaceId, input.scope, sql, input.name);
             if (scope.projectIds.some(id => !current.projectIds.includes(id))) throw new DomainError('agent_authorization_changed', 'The authorized project scope changed before the operation was committed', 403);
           } };
-        try { row = await finish(row, 'succeeded', agentChatToolResultSchema.parse(await tools.execute(input.name, input.arguments, context)), null); }
+        try { row = await finish(row, 'succeeded', agentChatToolResultSchema.parse(await originated(() => tools.execute(input.name, input.arguments, context))), null); }
         catch (error) { const outcome = failure(error, tools.registry.find(tool => tool.name === input.name)?.write ?? false); row = await finish(row, outcome.status, null, outcome.error); }
         finally { active.delete(input.operationId); }
         return record(row);
@@ -117,7 +122,7 @@ export function registerAgentToolRoutes(app: FastifyInstance, options: {
     if (row.status === 'running' || row.status === 'unknown') {
       const context: AgentChatToolContext = { actor, workspaceId, threadId: input.threadId, messageId: input.messageId, operationId: input.operationId, scope };
       try {
-        const recovered = await tools.recover(input.name, input.arguments, context);
+        const recovered = await originated(() => tools.recover(input.name, input.arguments, context));
         if (recovered) row = await finish(row, 'succeeded', agentChatToolResultSchema.parse(recovered), null);
         else row = await finish(row, 'unknown', null, { code: 'agent_tool_outcome_unknown', message: 'The original outcome is not yet confirmed; it was not redispatched.' });
       } catch (error) {

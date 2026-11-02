@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type { FileRecord } from '../../../../packages/pm-schema/index.ts';
+import type { FileRecord, ProtocolConfiguration } from '../../../../packages/pm-schema/index.ts';
 import { Workspace, type WorkspaceMutationCapture } from '../../../../packages/pm-core/index.ts';
 import { coreFactSummary,coreChangeKinds,type CoreFactSummary,type ServiceFactObservations } from '../../../../packages/pm-core/service-facts.ts';
 import { freezeTaskWatchCandidates,type CapturedServiceFact } from '../../../../packages/application/src/service-facts.ts';
 import { validateNewMentions } from '../../../../packages/application/src/notification-mentions.ts';
 import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
 import { CoreCommandJournal } from './core-journal.ts';
+import { capturePmAutomationEvents } from '../../../../packages/application/src/automation-pm-signals.ts';
 /** Runs within the file serial queue and the caller's workspace authorization transaction. */
-export function captureCoreFacts(options:{sql:SqlExecutor;workspaceId:string;root:string;sourceKind:'command'|'core_http';operationId:string;requestHash:string;actorId:string;facts:CapturedServiceFact[];reusePrepared?:boolean}):WorkspaceMutationCapture {
+export function captureCoreFacts(options:{sql:SqlExecutor;workspaceId:string;root:string;sourceKind:'command'|'core_http';operationId:string;requestHash:string;actorId:string;facts:CapturedServiceFact[];reusePrepared?:boolean;configuration?:ProtocolConfiguration}):WorkspaceMutationCapture {
  let ordinal=0;
  const pending=new Map<string,{captured:CapturedServiceFact;boundary:{before:CoreFactSummary|null;after:CoreFactSummary|null}}>();
  const journal=new CoreCommandJournal(options.root);
@@ -29,6 +30,7 @@ export function captureCoreFacts(options:{sql:SqlExecutor;workspaceId:string;roo
     entityKind:target.kind,entityId:target.id,beforeRevision:previous?.revision??null,afterRevision:next?.revision??null,changeKinds,
     occurredAt:null,observedAt:null,safetyClass:scoped?'project_fact':'restricted_internal'},
     input:route?{actorId:options.actorId,taskId:target.id,originalProjectId:projectId,commentId:null,commentVersion:null,watchCandidates:watch,newMentionIds:mentions}:null};
+   prepared.pmSignals=capturePmAutomationEvents({eventId:prepared.fact.factId,actorId:options.actorId,workspaceId:options.workspaceId,before,after,configuration:options.configuration});
    journal.fact('fact_prepared',options.operationId,options.requestHash,options.actorId,prepared,boundary);
    pending.set(target.id,{captured:prepared,boundary});
   },

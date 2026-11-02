@@ -1,0 +1,446 @@
+{
+  "sourceRepository": "/data2-HDD-SATA-20T/Digital_avatar/haoweiyao/OpenHands",
+  "sourceCommit": "b4a3f45a28f6b6c387a8deb3dc7c18b4393c59c1",
+  "agentCanvas": {
+    "name": "@openhands/agent-canvas",
+    "version": "1.34.0",
+    "license": "MIT"
+  },
+  "extensions": {
+    "name": "@openhands/extensions",
+    "version": "0.36.0",
+    "license": "MIT"
+  },
+  "catalogIds": [
+    "github-pr-reviewer",
+    "custom-automation",
+    "github-repo-monitor",
+    "github-issue-to-pr",
+    "slack-standup-digest",
+    "slack-channel-monitor",
+    "linear-triage-assistant",
+    "linear-issue-to-github-pr",
+    "gitlab-issue-to-mr",
+    "linear-issue-to-gitlab-mr",
+    "linear-issue-to-bitbucket-pr",
+    "jira-issue-to-pr",
+    "qa-changes",
+    "jira-issue-to-gitlab-mr",
+    "research-brief-writer",
+    "jira-issue-to-bitbucket-pr",
+    "github-agents-md-maintainer",
+    "github-delivery-watchdog",
+    "github-issue-triage",
+    "upstream-fork-sync",
+    "incident-retrospective-drafter",
+    "news-digest",
+    "github-stale-ci-pr-closer"
+  ],
+  "featuredIds": [
+    "github-pr-reviewer",
+    "github-agents-md-maintainer",
+    "news-digest",
+    "github-issue-to-pr",
+    "slack-channel-monitor",
+    "custom-automation"
+  ],
+  "bundleIds": [
+    "github-pr-reviewer",
+    "github-issue-to-pr",
+    "gitlab-issue-to-mr",
+    "github-agents-md-maintainer",
+    "github-delivery-watchdog",
+    "github-issue-triage",
+    "news-digest",
+    "github-stale-ci-pr-closer"
+  ],
+  "sourceWorktreeHashes": [
+    {
+      "path": "src/routes/automation-templates.tsx",
+      "sha256": "27035a5d54ef445916c56f2bf6159009f20886700218d6b8eee147894d1be21f",
+      "bytes": 2003
+    },
+    {
+      "path": "src/routes/automation-setup-new.tsx",
+      "sha256": "7a1b3b90759644d6282505de9f2326065b70c2f4a22bbbd5246ba37cef1ce551",
+      "bytes": 6604
+    },
+    {
+      "path": "src/routes/automation-setup-route.tsx",
+      "sha256": "7a4ad5fb66a298d4de1c7c1d8ef2171594795b91688ae4c08f82a05731e09f75",
+      "bytes": 1749
+    },
+    {
+      "path": "src/routes/automations-list.tsx",
+      "sha256": "ab75083e50f39de8bdc0c67c20ae0adf8a34a7b1041453d6646b8c7b419c84b7",
+      "bytes": 33691
+    },
+    {
+      "path": "src/routes/automation-detail.tsx",
+      "sha256": "8032de5b76f06ea28df3133d5293e982529e7148be11fe31d14ecc1188323246",
+      "bytes": 10855
+    },
+    {
+      "path": "src/routes/automation-git-sync.tsx",
+      "sha256": "f7b84ce0d13d731c573aefcd8d2e6c81b638d9c4da66291fe80c3066aa7fd61b",
+      "bytes": 8481
+    },
+    {
+      "path": "src/utils/automation-catalog.ts",
+      "sha256": "c33b6ac6a78fdeea90efdadc9e0e66c608ab3c734a60c6c92ede3263d0117c1a",
+      "bytes": 17393
+    },
+    {
+      "path": "src/components/features/automations/recommended-automations-launcher.tsx",
+      "sha256": "e53ad4ff2f0460b3c3ea760decb9eb87f3f94e7f2a6d303d91550cda02389e22",
+      "bytes": 17988
+    },
+    {
+      "path": "src/components/features/automations/recommended-automations-section.tsx",
+      "sha256": "2d6e9990d3abe2cb379fa62df5ce5924fd7f166aa2b846a37483e90febfb4ebc",
+      "bytes": 18274
+    }
+  ],
+  "files": [
+    {
+      "source": "node_modules/@openhands/extensions/automations/interface.json",
+      "path": "vendor/openhands-automations/interface.json",
+      "sha256": "e58372686f7c765e27946187843a292d9dab7742a07431b7568a1f263dba336d",
+      "bytes": 5431
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/interface.schema.json",
+      "path": "vendor/openhands-automations/interface.schema.json",
+      "sha256": "2a3bfb95a1ec242c234730a4cacb4bbb0f472dd8e11e9aeda21bf6e517bc45c0",
+      "bytes": 22307
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog.schema.json",
+      "path": "vendor/openhands-automations/catalog.schema.json",
+      "sha256": "d360c828dfe876c0903d4b4eb64abc8246efe3bc6b872d369ad9e01caea81d7d",
+      "bytes": 23620
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog-index.js",
+      "path": "vendor/openhands-automations/catalog-index.js",
+      "sha256": "1776495d66aa91d3edc4a24c5ea2b29c3247a2509182186aea6b0c75ca3758af",
+      "bytes": 2573
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js",
+      "path": "vendor/openhands-automations/bundle-index.js",
+      "sha256": "d33fe5e51b665de46e82f989873fa748715ecc709c97484124d6117f1f4d6696",
+      "bytes": 625414
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/index.d.ts",
+      "path": "vendor/openhands-automations/index.d.ts",
+      "sha256": "edddd188ec5ab4eaa8552de5f201cf873050a47bc3b41e08deea658b43d3bddb",
+      "bytes": 16908
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/github-pr-reviewer/manifest.json",
+      "path": "vendor/openhands-automations/catalog/github-pr-reviewer/manifest.json",
+      "sha256": "112f14226de0617bf7d54cfdfb84eb4929fdf4a74e6a39cdc9c8507ae71a3632",
+      "bytes": 8308
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/custom-automation/manifest.json",
+      "path": "vendor/openhands-automations/catalog/custom-automation/manifest.json",
+      "sha256": "a4fd614b39386c3ef0c6ad80549839fd79b054bec72816df5fd18d1ac6bb9c5a",
+      "bytes": 8307
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/github-repo-monitor/manifest.json",
+      "path": "vendor/openhands-automations/catalog/github-repo-monitor/manifest.json",
+      "sha256": "6eb75712dad487722d43b745c15fb68f00a4b6f69666b4013e747957713c35b5",
+      "bytes": 6476
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/github-issue-to-pr/manifest.json",
+      "path": "vendor/openhands-automations/catalog/github-issue-to-pr/manifest.json",
+      "sha256": "d43b155589d5e0dd90a4eb3712b232928e55a931cae457f3212ed607b69a3f3f",
+      "bytes": 4237
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/slack-standup-digest/manifest.json",
+      "path": "vendor/openhands-automations/catalog/slack-standup-digest/manifest.json",
+      "sha256": "edcefc416a142a97a1ecf0c7b952b010f8cda125236267e384bd41683274886c",
+      "bytes": 896
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/slack-channel-monitor/manifest.json",
+      "path": "vendor/openhands-automations/catalog/slack-channel-monitor/manifest.json",
+      "sha256": "bffa1dc9851e1546ce5d4c46d93478362f93ef63deea0285173a85c154dfbc5b",
+      "bytes": 1211
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/linear-triage-assistant/manifest.json",
+      "path": "vendor/openhands-automations/catalog/linear-triage-assistant/manifest.json",
+      "sha256": "6f08a28c830216fb2841aae3b67e5a27a04ace6d2a6fdad8682e5f36291f0f54",
+      "bytes": 944
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/linear-issue-to-github-pr/manifest.json",
+      "path": "vendor/openhands-automations/catalog/linear-issue-to-github-pr/manifest.json",
+      "sha256": "704f0d437f9413c92a4b1dbe594de959cd3938708d3ee25c9193167320635675",
+      "bytes": 1429
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/gitlab-issue-to-mr/manifest.json",
+      "path": "vendor/openhands-automations/catalog/gitlab-issue-to-mr/manifest.json",
+      "sha256": "dc4c188ce25d883d47f96794b75bcb0e72b8a2cfe0dedabd7a984fb1095b91f9",
+      "bytes": 6032
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/linear-issue-to-gitlab-mr/manifest.json",
+      "path": "vendor/openhands-automations/catalog/linear-issue-to-gitlab-mr/manifest.json",
+      "sha256": "570c2444af931f86bff76696903c54d18ed100a480b5ebe6680303baf31d7467",
+      "bytes": 1433
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/linear-issue-to-bitbucket-pr/manifest.json",
+      "path": "vendor/openhands-automations/catalog/linear-issue-to-bitbucket-pr/manifest.json",
+      "sha256": "c0556fc6e1ec584dab48d24797190e0d259bf0674ab997c0b48d57af025a407a",
+      "bytes": 1447
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/jira-issue-to-pr/manifest.json",
+      "path": "vendor/openhands-automations/catalog/jira-issue-to-pr/manifest.json",
+      "sha256": "7b5f4e6f61233019c40d6d43bf1f5e64f5a5cc4991730492ddb5f9fcbebba5b6",
+      "bytes": 2135
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/qa-changes/manifest.json",
+      "path": "vendor/openhands-automations/catalog/qa-changes/manifest.json",
+      "sha256": "655b7a36b4eae299d8f88ebe26360f0ac8f4955add4e6903944ea04669655a51",
+      "bytes": 5539
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/jira-issue-to-gitlab-mr/manifest.json",
+      "path": "vendor/openhands-automations/catalog/jira-issue-to-gitlab-mr/manifest.json",
+      "sha256": "cc9bc1df5dd6dbdc40cbe4c8fd8c59c8d3ac0f80160d14b83d4fcfee42a859e7",
+      "bytes": 2866
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/research-brief-writer/manifest.json",
+      "path": "vendor/openhands-automations/catalog/research-brief-writer/manifest.json",
+      "sha256": "81b0095cdbc9f0afde37d81841240984163706543fceb53128d8120e11f32721",
+      "bytes": 980
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/jira-issue-to-bitbucket-pr/manifest.json",
+      "path": "vendor/openhands-automations/catalog/jira-issue-to-bitbucket-pr/manifest.json",
+      "sha256": "e85e8bcd86860d41af488cc2020c936256130eec284a7fa024db18fa542aad34",
+      "bytes": 2461
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/github-agents-md-maintainer/manifest.json",
+      "path": "vendor/openhands-automations/catalog/github-agents-md-maintainer/manifest.json",
+      "sha256": "e21957c6d108bf354a11ff1591340823149f77a2472ab9158204ff9810a1aa5b",
+      "bytes": 4667
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/github-delivery-watchdog/manifest.json",
+      "path": "vendor/openhands-automations/catalog/github-delivery-watchdog/manifest.json",
+      "sha256": "20994d591da78ab9d6d892dcb1575aea0b126ff46bccf9bd51bd15a4b80d40f2",
+      "bytes": 2731
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/github-issue-triage/manifest.json",
+      "path": "vendor/openhands-automations/catalog/github-issue-triage/manifest.json",
+      "sha256": "1a9b80a9c8865d99c3971bd5c8045d07e5c26685cb60962be40500d970118ef7",
+      "bytes": 2389
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/upstream-fork-sync/manifest.json",
+      "path": "vendor/openhands-automations/catalog/upstream-fork-sync/manifest.json",
+      "sha256": "c9cbf72837cc121a20254416a7a4db9362064597f1d18cbb9ab0e19021869c16",
+      "bytes": 3732
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/incident-retrospective-drafter/manifest.json",
+      "path": "vendor/openhands-automations/catalog/incident-retrospective-drafter/manifest.json",
+      "sha256": "2a834807b009dbbb34fd8b1510cf3081853316a79867e4bec0277c467f422d75",
+      "bytes": 3966
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/news-digest/manifest.json",
+      "path": "vendor/openhands-automations/catalog/news-digest/manifest.json",
+      "sha256": "a57f359aeef0bca0f6eec2ca2db81d77536429ee58d100374bbda1ca3b9ac4c2",
+      "bytes": 4463
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/catalog/github-stale-ci-pr-closer/manifest.json",
+      "path": "vendor/openhands-automations/catalog/github-stale-ci-pr-closer/manifest.json",
+      "sha256": "574ca7d924cd72c276336df85524b5675d58b2271a82209db769df31e9cb556d",
+      "bytes": 2318
+    },
+    {
+      "source": "node_modules/@openhands/extensions/LICENSE",
+      "path": "vendor/openhands-automations/LICENSE.extensions",
+      "sha256": "fe425248fc51d1d1805ab1442ba8add98d770ad8a132051eaac8c93d7eee3ebe",
+      "bytes": 1066
+    },
+    {
+      "source": "LICENSE",
+      "path": "vendor/openhands-automations/LICENSE.agent-canvas",
+      "sha256": "e1d1fa9f3a8d7bef24449d488fcd8f00f8f272cac297bb9bed161eb6175b876a",
+      "bytes": 1096
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-pr-reviewer/agent_conversation.py",
+      "path": "vendor/openhands-automations/bundles/github-pr-reviewer/agent_conversation.py",
+      "sha256": "c5937b58f91921bd7c3c73afcbb0ad8f45a0bdc724be48cb472fdc4e407c21e7",
+      "bytes": 26365
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-pr-reviewer/github_client.py",
+      "path": "vendor/openhands-automations/bundles/github-pr-reviewer/github_client.py",
+      "sha256": "7959665555b5178631799f9c8260ffea748e4e589dcc58613befb578255df0f3",
+      "bytes": 15091
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-pr-reviewer/main.py",
+      "path": "vendor/openhands-automations/bundles/github-pr-reviewer/main.py",
+      "sha256": "54ecfa2d0856c2fcffbcd6b71eba9450605cd37ad4cd0ff1be5024dc6ecd9fc9",
+      "bytes": 53534
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-pr-reviewer/maintainer_handoff.py",
+      "path": "vendor/openhands-automations/bundles/github-pr-reviewer/maintainer_handoff.py",
+      "sha256": "90009af76daff937ebc0fecca4755b33e2492ffe412495b30ad47af8c659e9e8",
+      "bytes": 5120
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-pr-reviewer/publication.py",
+      "path": "vendor/openhands-automations/bundles/github-pr-reviewer/publication.py",
+      "sha256": "632b750921e4029a3b17e1e7bb5ac0a806ae2cd4ff0b64f857a83c2bfeba9d7d",
+      "bytes": 11709
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-pr-reviewer/worker.py",
+      "path": "vendor/openhands-automations/bundles/github-pr-reviewer/worker.py",
+      "sha256": "50c4f8bdcf84d656d0fea5fde6cba2ca749693391b86d416ed52599762039730",
+      "bytes": 66248
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-issue-to-pr/agent_conversation.py",
+      "path": "vendor/openhands-automations/bundles/github-issue-to-pr/agent_conversation.py",
+      "sha256": "c5937b58f91921bd7c3c73afcbb0ad8f45a0bdc724be48cb472fdc4e407c21e7",
+      "bytes": 26365
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-issue-to-pr/github_client.py",
+      "path": "vendor/openhands-automations/bundles/github-issue-to-pr/github_client.py",
+      "sha256": "7959665555b5178631799f9c8260ffea748e4e589dcc58613befb578255df0f3",
+      "bytes": 15091
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-issue-to-pr/main.py",
+      "path": "vendor/openhands-automations/bundles/github-issue-to-pr/main.py",
+      "sha256": "c0b0cdec04df9db9f946efc005f6277ebceb638cd4ad0e71384f6f11582812bc",
+      "bytes": 49682
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-issue-to-pr/worker.py",
+      "path": "vendor/openhands-automations/bundles/github-issue-to-pr/worker.py",
+      "sha256": "e46e32537bdd904ec77f8d2bc12985351d206784d194c248f7eecbf2f2971173",
+      "bytes": 6879
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#gitlab-issue-to-mr/main.py",
+      "path": "vendor/openhands-automations/bundles/gitlab-issue-to-mr/main.py",
+      "sha256": "c70578af5c90e25956b8c1cd664bd237d0b3284b863f9ba868a294d8af01a3bb",
+      "bytes": 78046
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-agents-md-maintainer/github_client.py",
+      "path": "vendor/openhands-automations/bundles/github-agents-md-maintainer/github_client.py",
+      "sha256": "7959665555b5178631799f9c8260ffea748e4e589dcc58613befb578255df0f3",
+      "bytes": 15091
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-agents-md-maintainer/main.py",
+      "path": "vendor/openhands-automations/bundles/github-agents-md-maintainer/main.py",
+      "sha256": "f8a87328b7af7653b9d5daf2f33c8b05534aed0593c3101c5cd75383929bd586",
+      "bytes": 52460
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-delivery-watchdog/github_client.py",
+      "path": "vendor/openhands-automations/bundles/github-delivery-watchdog/github_client.py",
+      "sha256": "7959665555b5178631799f9c8260ffea748e4e589dcc58613befb578255df0f3",
+      "bytes": 15091
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-delivery-watchdog/worker.py",
+      "path": "vendor/openhands-automations/bundles/github-delivery-watchdog/worker.py",
+      "sha256": "961e7dbdec6ad8dc9ead7d2bd9c101b40f0e33ce6957883fb23a7c1d41017c38",
+      "bytes": 3893
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-issue-triage/agent_conversation.py",
+      "path": "vendor/openhands-automations/bundles/github-issue-triage/agent_conversation.py",
+      "sha256": "c5937b58f91921bd7c3c73afcbb0ad8f45a0bdc724be48cb472fdc4e407c21e7",
+      "bytes": 26365
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-issue-triage/github_client.py",
+      "path": "vendor/openhands-automations/bundles/github-issue-triage/github_client.py",
+      "sha256": "7959665555b5178631799f9c8260ffea748e4e589dcc58613befb578255df0f3",
+      "bytes": 15091
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-issue-triage/triage_publication.py",
+      "path": "vendor/openhands-automations/bundles/github-issue-triage/triage_publication.py",
+      "sha256": "fecf86fd86ad480f89bf1abf064707fdd8de47e749c5d161354689fab866d7ed",
+      "bytes": 11144
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-issue-triage/worker.py",
+      "path": "vendor/openhands-automations/bundles/github-issue-triage/worker.py",
+      "sha256": "90aebc0347537f3e0e6f453ed978761747905a7b9d50b6707a8b99f4319405f2",
+      "bytes": 13180
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#news-digest/main.py",
+      "path": "vendor/openhands-automations/bundles/news-digest/main.py",
+      "sha256": "75fbfe5a20e222c12e204eefdb9049699ba65991a611fc0745f0eb5a889104df",
+      "bytes": 54670
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-stale-ci-pr-closer/github_client.py",
+      "path": "vendor/openhands-automations/bundles/github-stale-ci-pr-closer/github_client.py",
+      "sha256": "7959665555b5178631799f9c8260ffea748e4e589dcc58613befb578255df0f3",
+      "bytes": 15091
+    },
+    {
+      "source": "node_modules/@openhands/extensions/automations/bundle-index.js#github-stale-ci-pr-closer/worker.py",
+      "path": "vendor/openhands-automations/bundles/github-stale-ci-pr-closer/worker.py",
+      "sha256": "18f91ca6b46d8fbfcb673ceee5203452816cd58325cc991275e3215fd6280aeb",
+      "bytes": 19676
+    }
+  ],
+  "derivedAssets": [
+    { "path": "vendor/openhands-automations/launch-commands.json", "sha256": "b66072d7c0c8cd971635298c89b1e9354656035cbf35fded3614a4801225b236", "bytes": 1132 },
+    { "path": "vendor/openhands-automations/bundles/github-pr-reviewer/files.json", "sha256": "9111232c29d14519c2c56c7f6fa23078a60b9921007d51b93c0c1db162e6436c", "bytes": 186148 },
+    { "path": "vendor/openhands-automations/bundles/github-issue-to-pr/files.json", "sha256": "8e546c8f02b1297b821c16787b1c99bf2a0812047ff083661e4a2c3f32d2eee1", "bytes": 102756 },
+    { "path": "vendor/openhands-automations/bundles/gitlab-issue-to-mr/files.json", "sha256": "a89f450dbcbd10873e1e852e93907fcfa036b2ef80494faa2d9613e6a5a09f86", "bytes": 82001 },
+    { "path": "vendor/openhands-automations/bundles/github-agents-md-maintainer/files.json", "sha256": "abfd1e376d98a06ec36714463b6a147a9931d6815b273d9153d6b5f01534e53c", "bytes": 70927 },
+    { "path": "vendor/openhands-automations/bundles/github-delivery-watchdog/files.json", "sha256": "47230ceabb84185f3880db2c368157b1781a757c3b143ae5fa9c79637c08263f", "bytes": 20028 },
+    { "path": "vendor/openhands-automations/bundles/github-issue-triage/files.json", "sha256": "941b3b2596b5a4423060717de8ca4102db47ba534e93b06a1fbda6b80db6cea0", "bytes": 69100 },
+    { "path": "vendor/openhands-automations/bundles/news-digest/files.json", "sha256": "d324eec6a8860596967d650db51213833438583043db1ebc4a8b972086a22b4f", "bytes": 57143 },
+    { "path": "vendor/openhands-automations/bundles/github-stale-ci-pr-closer/files.json", "sha256": "d2e65cf1706e1b78684efcd642d5c3f18c9bb5ce8f359e7f92fe81898efd436d", "bytes": 36650 }
+  ],
+  "additionalSourceWorktreeHashes": [
+    { "path": "src/manifests/automation-setup.ts", "sha256": "88e78cb4e829a2be9953b2a24cd2d483fbf4b53f3c76ac5d2dd1ff7117f64c8e", "bytes": 23622 },
+    { "path": "src/manifests/manifest-template.ts", "sha256": "924b95cda0da7cab5666b4e2aa0e7df0bf338a5c869ae8046e309138f1aec776", "bytes": 3653 },
+    { "path": "node_modules/@openhands/extensions/skills/index.js", "sha256": "b4d080038cd04d9581f06b53e9c1095dda36f02e024c0a940b5016ffe5fa76bb", "bytes": 561954 }
+  ],
+  "notes": [
+    "Only production catalog-index entries are pinned; testing fixtures and the unindexed organization manifest are excluded.",
+    "Hashes cover actual local production files, not an assumption that worktree equals commit.",
+    "Bundles are immutable source provenance. Native template workflows use PM-owned adapters; selecting custom Python is a distinct execution type, never an implicit source fallback.",
+    "Launch commands are source provenance, not permission to invoke source global APIs or automatically send Chat."
+  ]
+}

@@ -30481,7 +30481,7 @@
       "git_mode": "100644",
       "bytes": 2040,
       "category": "selected-client-helper",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T14",
       "role": "runtime-or-build-input"
     },
@@ -31659,7 +31659,7 @@
       "git_mode": "100644",
       "bytes": 14476,
       "category": "behavior-test",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T3",
       "role": "test-only"
     },
@@ -31671,7 +31671,7 @@
       "git_mode": "100644",
       "bytes": 75256,
       "category": "package-source",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T3",
       "role": "runtime-or-build-input"
     },
@@ -31803,7 +31803,7 @@
       "git_mode": "100644",
       "bytes": 5157,
       "category": "package-source",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T3",
       "role": "runtime-or-build-input"
     },
@@ -35279,7 +35279,7 @@
       "git_mode": "100644",
       "bytes": 7055,
       "category": "package-source",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T4",
       "role": "runtime-or-build-input"
     },

@@ -7,6 +7,7 @@ import type { CliChatResult } from "../agents/cli-chat.ts";
 import type { NativeOutputEvent, NativeInteractionRequest, NativeInteractionResponse } from "@agent-workspace/contracts/output";
 import type { NativeUsageUpdate } from "@agent-workspace/contracts/usage";
 import type { PmExecutionIdentity } from "./t3code/contract.ts";
+import type { ProviderRuntimeHostBinding } from "@t3tools/provider-core/server/ProviderRuntimeHost";
 
 export type ProviderDriverContext = {
   instanceId: string;
@@ -21,9 +22,13 @@ export type ProviderDriverContext = {
   revision: number;
   customModels?: ProviderCustomModel[];
   pmToolBridge?: { command: string; args: string[] };
+  /** Server-issued, execution-scoped connectors; never accepted from browser/provider configuration. */
+  mcpServers?: ProviderRuntimeHostBinding["mcpServers"];
   execution?: PmExecutionIdentity;
   /** Request-local PM recheck; never persisted, passed in argv/env, or treated as native permission. */
   authorizeExecution?: (action: "compaction" | "tool") => Promise<void>;
+  /** Host-issued frozen-evidence analysis; never accepted from browser/native configuration. */
+  pmAnalysis?: true;
 };
 
 export type ProviderDriverStatus = {

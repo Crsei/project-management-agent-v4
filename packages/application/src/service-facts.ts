@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { DomainError } from '../../domain/src/core.ts';
 import type { SqlExecutor } from './ports.ts';
+import { pmAutomationEventSchema } from '../../contracts/src/automation-pm.ts';
+import { insertPmAutomationSignal } from './automation-pm-signals.ts';
 
 export const serviceFactSchema = z.strictObject({
  factId: z.uuid(), schemaVersion: z.literal(1), sourceKind: z.enum(['command','core_http','core_observation','legacy_activity']),
@@ -19,7 +21,7 @@ export const notificationInputSchema = z.strictObject({
  newMentionIds: z.array(z.uuid()).max(50),
 });
 export type NotificationFactInput = z.infer<typeof notificationInputSchema>;
-export const capturedServiceFactSchema = z.strictObject({ fact: serviceFactSchema, input: notificationInputSchema.nullable() });
+export const capturedServiceFactSchema = z.strictObject({ fact: serviceFactSchema, input: notificationInputSchema.nullable(), pmSignals: z.array(pmAutomationEventSchema).max(4).optional() });
 export type CapturedServiceFact = z.infer<typeof capturedServiceFactSchema>;
 export function factDigest(value: unknown): string { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
 
@@ -43,6 +45,11 @@ export async function insertServiceFact(sql: SqlExecutor, workspaceId: string, c
    VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,[workspaceId,fact.factId,input.actorId,input.taskId,input.originalProjectId,input.commentId,input.commentVersion,JSON.stringify(input.watchCandidates),input.newMentionIds]);
   if(input.taskId && input.originalProjectId && fact.changeKinds.length && fact.sourceKind!=='legacy_activity') await sql.query(`INSERT INTO notification_route_jobs(workspace_id,fact_id)
    SELECT $1,$2 FROM notification_activations WHERE workspace_id=$1 AND activation_fact_sequence<$3::bigint`,[workspaceId,fact.factId,head.rows[0].sequence]);
+ }
+ for (const event of parsed.pmSignals ?? []) {
+  if (event.workspaceId !== workspaceId || event.projectId !== fact.projectId || event.sourceRef.id !== fact.entityId)
+   throw new DomainError('automation_signal_scope_mismatch', 'Captured signal does not belong to its committed fact', 403);
+  await insertPmAutomationSignal(sql, event);
  }
  return fact.factId;
 }

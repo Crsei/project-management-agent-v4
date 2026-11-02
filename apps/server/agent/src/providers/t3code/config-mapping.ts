@@ -26,6 +26,7 @@ export function fromT3DriverKind(driver: ProviderDriverKind): ProviderDriver | u
     case "antigravity": return "antigravity";
     case "muse": return "muse";
     case "pi": return "pi";
+    case "omp": return "omp";
     case "acpRegistry": return "acpRegistry";
     case "fx": return "fx";
     default: return undefined;

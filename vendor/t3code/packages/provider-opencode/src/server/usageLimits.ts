@@ -20,7 +20,10 @@ import {
 } from "@t3tools/provider-core/server/usageLimits";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
-const AuthFile = Schema.Struct({ "opencode-go": Schema.optionalKey(Schema.Unknown) });
+const AuthFile = Schema.Struct({
+  "opencode-go": Schema.optionalKey(Schema.Unknown),
+  opencode: Schema.optionalKey(Schema.Unknown),
+});
 const ApiAuth = Schema.Struct({ type: Schema.Literal("api"), key: Schema.String });
 const decodeAuthFile = Schema.decodeEffect(Schema.fromJsonString(AuthFile));
 const decodeApiAuth = Schema.decodeUnknownOption(ApiAuth);
@@ -34,16 +37,25 @@ const StoredKey = Schema.Struct({
 });
 const decodeStoredKey = Schema.decodeOption(Schema.fromJsonString(StoredKey));
 const UsageWindow = Schema.Struct({
+  status: Schema.optionalKey(Schema.Literals(["ok", "rate-limited"])),
   percent: Schema.Finite,
   resetsAt: Schema.DateTimeUtcFromString,
 });
 const UsageResponse = Schema.Struct({
   usage: Schema.Struct({ rolling: UsageWindow, weekly: UsageWindow, monthly: UsageWindow }),
 });
+const decodeEntitlementError = Schema.decodeUnknownOption(
+  Schema.Struct({
+    type: Schema.Literal("error"),
+    error: Schema.Struct({ type: Schema.Literal("EntitlementError") }),
+  }),
+);
+const usedPercent = (window: typeof UsageWindow.Type) =>
+  window.status === "rate-limited" ? 100 : clampPercent(window.percent);
 
 // Select before decoding so an OAuth or self-hosted connection cannot fall
 // through to another stored account. NULL-active rows predate the selection flag.
-const readConsoleApiKey = (databasePath: string) =>
+const readStoredApiKey = (databasePath: string) =>
   Effect.try(() => {
     const database = new NodeSqlite.DatabaseSync(databasePath, { readOnly: true });
     try {
@@ -51,8 +63,9 @@ const readConsoleApiKey = (databasePath: string) =>
       const row = database
         .prepare(
           `SELECT value FROM credential
-           WHERE integration_id = 'opencode' AND active IS NOT 0
-           ORDER BY active DESC, time_created DESC, id DESC LIMIT 1`,
+           WHERE integration_id IN ('opencode-go', 'opencode') AND active IS NOT 0
+           ORDER BY CASE integration_id WHEN 'opencode-go' THEN 0 ELSE 1 END,
+                    active DESC, time_created DESC, id DESC LIMIT 1`,
         )
         .get();
       const stored =
@@ -92,27 +105,30 @@ export const readOpenCodeGoUsageLimits = Effect.fn("readOpenCodeGoUsageLimits")(
         ".local",
         "share",
       );
-    const authPath = path.join(dataHome, "opencode", "auth.json");
-    const contents =
-      env.OPENCODE_AUTH_CONTENT ||
-      (yield* fs.readFileString(authPath).pipe(
-        Effect.catchTags({
-          PlatformError: (error) =>
-            error.reason._tag === "NotFound" ? Effect.succeed("{}") : Effect.fail(error),
-        }),
-      ));
-    const auth = yield* decodeAuthFile(contents);
-    const apiAuth = decodeApiAuth(auth["opencode-go"]);
-    // OpenCode overlays stored API credentials after environment credentials.
-    const goKey = (Option.isSome(apiAuth) ? apiAuth.value.key : env.OPENCODE_API_KEY)?.trim();
-    // Console supplies Go credentials in OpenCode 2. Inline auth explicitly
-    // overrides local credentials, including the Console connection.
+    // Read legacy credentials only when needed. A stale/malformed auth.json must
+    // not block a valid selected OpenCode 2 connection.
+    const readLegacyKey = Effect.gen(function* () {
+      const contents =
+        env.OPENCODE_AUTH_CONTENT ||
+        (yield* fs.readFileString(path.join(dataHome, "opencode", "auth.json")).pipe(
+          Effect.catchTags({
+            PlatformError: (error) =>
+              error.reason._tag === "NotFound" ? Effect.succeed("{}") : Effect.fail(error),
+          }),
+        ));
+      const auth = yield* decodeAuthFile(contents);
+      const apiAuth = decodeApiAuth(auth["opencode-go"] ?? auth.opencode);
+      // Preserve OpenCode's stored-over-environment credential precedence.
+      return (Option.isSome(apiAuth) ? apiAuth.value.key : env.OPENCODE_API_KEY)?.trim();
+    });
+    // Inline auth explicitly overrides the local database. Native Go entries
+    // precede the legacy public Console alias; never enumerate other accounts.
     const databaseFile = env.OPENCODE_DB ?? "opencode.db";
-    const consoleKey =
+    const storedKey =
       env.OPENCODE_AUTH_CONTENT || databaseFile === ":memory:"
         ? undefined
-        : yield* readConsoleApiKey(path.resolve(dataHome, "opencode", databaseFile));
-    let apiKey = consoleKey || goKey;
+        : yield* readStoredApiKey(path.resolve(dataHome, "opencode", databaseFile));
+    let apiKey = storedKey || (yield* readLegacyKey);
     if (!apiKey) return unsupported;
 
     const client = yield* HttpClient.HttpClient;
@@ -120,15 +136,28 @@ export const readOpenCodeGoUsageLimits = Effect.fn("readOpenCodeGoUsageLimits")(
       client.execute(
         HttpClientRequest.get("https://opencode.ai/zen/go/v1/usage").pipe(
           HttpClientRequest.bearerToken(key),
+          HttpClientRequest.setHeader("Accept", "application/json"),
         ),
       );
     let response = yield* readUsage(apiKey);
-    if ((response.status === 401 || response.status === 403) && goKey && goKey !== apiKey) {
-      apiKey = goKey;
-      response = yield* readUsage(apiKey);
+    if ((response.status === 401 || response.status === 403) && storedKey) {
+      const legacyKey = yield* readLegacyKey;
+      if (legacyKey && legacyKey !== apiKey) {
+        apiKey = legacyKey;
+        response = yield* readUsage(apiKey);
+      }
     }
-    // A valid Zen key can exist without a Go subscription.
-    if (response.status === 403) return unsupported;
+    // Only an explicit entitlement response proves the absence of a Go plan.
+    if (response.status === 403) {
+      const errorBody = yield* response.json.pipe(Effect.orElseSucceed(() => undefined));
+      if (Option.isSome(decodeEntitlementError(errorBody))) return unsupported;
+    }
+    if (response.status < 200 || response.status >= 300)
+      return makeUnavailableUsageLimits({
+        checkedAt,
+        reason: "probeFailed",
+        message: `OpenCode Go usage request failed (HTTP ${response.status}).`,
+      });
     const body = yield* HttpClientResponse.filterStatusOk(response).pipe(
       Effect.flatMap(HttpClientResponse.schemaBodyJson(UsageResponse)),
     );
@@ -138,7 +167,7 @@ export const readOpenCodeGoUsageLimits = Effect.fn("readOpenCodeGoUsageLimits")(
         kind: "session",
         label: "Go · Session",
         windowDurationMins: 5 * 60,
-        usedPercent: clampPercent(body.usage.rolling.percent),
+        usedPercent: usedPercent(body.usage.rolling),
         resetsAt: DateTime.formatIso(body.usage.rolling.resetsAt),
       },
       {
@@ -146,14 +175,14 @@ export const readOpenCodeGoUsageLimits = Effect.fn("readOpenCodeGoUsageLimits")(
         kind: "weekly",
         label: "Go · Weekly",
         windowDurationMins: 7 * 24 * 60,
-        usedPercent: clampPercent(body.usage.weekly.percent),
+        usedPercent: usedPercent(body.usage.weekly),
         resetsAt: DateTime.formatIso(body.usage.weekly.resetsAt),
       },
       {
         id: "go_monthly",
         kind: "monthly",
         label: "Go · Monthly",
-        usedPercent: clampPercent(body.usage.monthly.percent),
+        usedPercent: usedPercent(body.usage.monthly),
         resetsAt: DateTime.formatIso(body.usage.monthly.resetsAt),
       },
     ];
@@ -167,7 +196,7 @@ export const readOpenCodeGoUsageLimits = Effect.fn("readOpenCodeGoUsageLimits")(
       credentialFingerprint,
     };
   }).pipe(
-    Effect.timeout("5 seconds"),
+    Effect.timeout("10 seconds"),
     Effect.orElseSucceed(() =>
       makeUnavailableUsageLimits({
         checkedAt,

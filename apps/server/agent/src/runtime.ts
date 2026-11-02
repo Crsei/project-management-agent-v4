@@ -5,6 +5,8 @@ import { startAutomation, stopAutomation } from "./automation/index.ts";
 import { startPmProviderApplication, stopPmProviderApplication, stopPmProviderMaintenance } from "./providers/t3code/application.ts";
 import { providerApplicationOptions } from "./providers/t3code/production.ts";
 import { migrateProviderStartupState } from "./providers/instances.ts";
+import { startAutomationExecutionRuntime, stopAutomationExecutionRuntime } from "./automation-execution/index.ts";
+import { recoverAutomationGenerationConnectors } from "./automation-execution/connectors.ts";
 
 let starting: Promise<void> | null = null;
 let stopping: Promise<void> | null = null;
@@ -23,17 +25,22 @@ export function startRuntime(): Promise<void> {
       if (stopping) return;
       await startChatRuntime();
       if (stopping) return;
+      await recoverAutomationGenerationConnectors();
+      if (stopping) return;
       await startExecution();
       if (stopping) return;
       await startAutomation();
+      if (stopping) return;
+      await startAutomationExecutionRuntime();
     } catch (error) {
       const maintenance = Promise.allSettled([stopPmProviderMaintenance()]);
+      const automationExecutions = await Promise.allSettled([stopAutomationExecutionRuntime()]);
       const workers = await Promise.allSettled([stopAutomation(), stopExecution(), stopChatRuntime()]);
       const drained = await maintenance;
       const providers = await Promise.allSettled([stopPmProviderApplication()]);
       closeStore();
       starting = null;
-      const cleanupFailures = [...workers, ...drained, ...providers].flatMap(result => result.status === "rejected" ? [result.reason] : []);
+      const cleanupFailures = [...automationExecutions, ...workers, ...drained, ...providers].flatMap(result => result.status === "rejected" ? [result.reason] : []);
       if (cleanupFailures.length) throw new AggregateError([error, ...cleanupFailures], "工作区启动失败且后台清理失败。");
       throw error;
     }
@@ -48,7 +55,7 @@ export function stopRuntime(): Promise<void> {
   stopping = (async () => {
     if (starting) await starting.catch(() => undefined);
     try {
-      const automation = await Promise.allSettled([stopAutomation()]);
+      const automation = await Promise.allSettled([stopAutomation(), stopAutomationExecutionRuntime()]);
       const workers = await Promise.allSettled([stopExecution(), stopChatRuntime()]);
       const drained = await maintenance;
       const providers = await Promise.allSettled([stopPmProviderApplication()]);

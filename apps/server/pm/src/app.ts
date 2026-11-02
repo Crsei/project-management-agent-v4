@@ -60,6 +60,15 @@ import { registerAgentCapabilityRoutes } from './agent-capability-routes.ts';
 import { registerAgentIssueSearchRoutes } from './agent-issue-search-routes.ts';
 import { registerAgentPreviewRoutes } from './agent-preview-routes.ts';
 import { registerAutomationRoutes } from './automation-routes.ts';
+import { registerAutomationStudioRoutes } from './automation-studio-routes.ts';
+import { registerAutomationGitSyncRoutes } from './automation-git-sync-routes.ts';
+import { registerAutomationEventsRoutes } from './automation-events-routes.ts';
+import { registerPmAutomationRoutes } from './automation-pm-routes.ts';
+import { createPmAutomationMutationPort } from './automation-pm-mutations.ts';
+import { createAutomationStudioService } from '../../../../packages/application/src/automation-studio.ts';
+import { authorizeAutomationStudioService } from '../../../../packages/application/src/automation-studio-auth.ts';
+import { createConfiguredAutomationExecutionPort, verifyAutomationServiceBearer } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
+import type { StudioExecutionPort } from '../../../../packages/contracts/src/automation-studio.ts';
 import { registerAgentFileAreaRoutes } from './agent-file-area-routes.ts';
 import { registerDocumentSourceRoutes } from './document-source-routes.ts';
 import { createAgentChatTools } from './agent-chat-tools.ts';
@@ -98,7 +107,7 @@ function browserOriginAllowed(origin: string, configured: string): boolean {
   } catch { return false; }
 }
 
-export function buildApp(options: { logger?: boolean; databaseUrl?: string; blobStore?: BlobStorageProvider; blobStorageLocator?: BlobStorageLocator | null; coreWorkspaceRoot?: string; chatSpaceRoot?: string; localProjects?: Omit<LocalProjectConfiguration, 'coreRoot'> & { coreRoot?: string }; publicOrigin?: string; cookieSecure?: boolean; invitationMail?: InvitationMailConfig; accountRecoveryMail?: AccountRecoveryMailConfig; webhooks?: WebhookConfig; signal?: AbortSignal } = {}) {
+export function buildApp(options: { logger?: boolean; databaseUrl?: string; blobStore?: BlobStorageProvider; blobStorageLocator?: BlobStorageLocator | null; coreWorkspaceRoot?: string; chatSpaceRoot?: string; localProjects?: Omit<LocalProjectConfiguration, 'coreRoot'> & { coreRoot?: string }; publicOrigin?: string; cookieSecure?: boolean; invitationMail?: InvitationMailConfig; accountRecoveryMail?: AccountRecoveryMailConfig; webhooks?: WebhookConfig; automationRuntime?: StudioExecutionPort; signal?: AbortSignal } = {}) {
   if ((options.blobStore === undefined) !== (options.blobStorageLocator === undefined)) throw new Error('Blob provider and locator must be supplied together');
   // Bound receiving a request, not durable work after its body has arrived.
   // A socket idle timer otherwise cuts off valid slow commits as unknown.
@@ -130,6 +139,8 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);
     return coreWorkspaces.rootFor(workspaceId);
   });
+  const automationRuntime = options.automationRuntime ?? createConfiguredAutomationExecutionPort();
+  const automationStudio = createAutomationStudioService({ database, core: notificationCore, runtime: automationRuntime });
   const controller = new AbortController();
   const abort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', abort, { once: true });
@@ -213,7 +224,15 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     if (!request.cookies.pm_v4_session) throw new DomainError('unauthenticated', undefined, 401);
     return request.cookies.pm_v4_session;
   }
-  async function actor(request: FastifyRequest) { return authenticate(database(), token(request)); }
+  async function actor(request: FastifyRequest) {
+    const credential = token(request);
+    if (credential.startsWith('pm-automation-v1.')) {
+      const identity = verifyAutomationServiceBearer(credential);
+      if (!identity) throw new DomainError('unauthenticated', 'Automation service identity is invalid or expired', 401);
+      return authorizeAutomationStudioService(database(), notificationCore, identity, { method: request.method, url: request.url, body: request.body });
+    }
+    return authenticate(database(), credential);
+  }
   function params(request: FastifyRequest) { return z.object({ workspaceId: uuid, id: z.string().min(1).max(80).optional(), commandId: uuid.optional() }).parse(request.params); }
   async function validateInvitationProjects(sql: SqlExecutor, principal: Actor, workspaceId: string, projectIds: string[]): Promise<void> {
     await requireCapability(sql, principal, workspaceId, 'access.manage');
@@ -368,11 +387,15 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   registerWorkspaceIdentityRoutes(app, { database, actor });
   registerArtifactFilesRoutes(app, { database, actor, coreAccessFor });
   registerAutomationRoutes(app, { database, actor, core: notificationCore });
+  registerAutomationStudioRoutes(app, { database, actor, core: notificationCore, runtime: automationRuntime, studio: automationStudio });
+  registerAutomationGitSyncRoutes(app, { database, actor, core: notificationCore, studio: automationStudio });
+  registerAutomationEventsRoutes(app, { database, actor, core: notificationCore, ...(options.publicOrigin ? { publicOrigin: options.publicOrigin } : {}) });
   const chatTools = coreWorkspaces ? createAgentChatTools({
     database, coreWorkspaces, executeCommand: executeNativeCommand, readCommandReceipt: readNativeCommandReceipt,
     readComments: (principal, workspaceId, taskId, input) => applicationRead(principal, workspaceId, ctx => readTaskComments(ctx, taskId, input)),
     localProjects: { enabled: localProjects.enabled, defaultParent: localProjects.defaultParent },
   }) : undefined;
+  registerPmAutomationRoutes(app, { database, actor, core: notificationCore, ...(coreWorkspaces && chatTools ? { mutations: createPmAutomationMutationPort({ database, coreWorkspaces, tools: chatTools }) } : {}) });
   registerAgentToolRoutes(app, { database, actor, coreWorkspaces, tools: chatTools });
   registerAgentCoreFilesRoutes(app, { database, actor, coreWorkspaces });
   registerAgentReferenceRoutes(app, { database, actor, coreWorkspaces });

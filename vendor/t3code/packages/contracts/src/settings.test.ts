@@ -216,6 +216,10 @@ describe("provider enabled defaults", () => {
     const codex = ProviderDriverKind.make("codex");
     expect(resolveProviderInstanceEnabled({ driver: grok, config: {} })).toBe(false);
     expect(resolveProviderInstanceEnabled({ driver: codex, config: {} })).toBe(true);
+    const omp = ProviderDriverKind.make("omp");
+    expect(resolveProviderInstanceEnabled({ driver: omp, config: {} })).toBe(false);
+    expect(resolveProviderInstanceEnabled({ driver: omp, enabled: true, config: {} })).toBe(true);
+    expect(resolveProviderInstanceEnabled({ driver: omp, enabled: true, config: { enabled: false } })).toBe(false);
     expect(
       resolveProviderInstanceEnabled({ driver: ProviderDriverKind.make("ollama"), config: {} }),
     ).toBe(true);

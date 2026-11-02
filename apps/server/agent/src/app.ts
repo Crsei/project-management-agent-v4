@@ -11,9 +11,11 @@ import { usageRoutes } from "./usage/routes.ts";
 import { pmToolRoutes } from "./pm-tools.ts";
 import { pmCoreChangesRoutes } from "./pm-core-changes/index.ts";
 import { pmCapabilityRoutes } from "./pm-capability-routes.ts";
+import { automationExecutionRoutes } from "./automation-execution/index.ts";
 
 /** API application; imports alone never start listeners or background workers. */
 export const app = new Hono()
+  .route("/internal/automation-executions", automationExecutionRoutes)
   .route("/api", accessRoutes)
   .use("/api/*", accessGuard)
   .route("/api", chatRoutes)

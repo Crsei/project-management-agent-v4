@@ -6,7 +6,7 @@ const count = z.number().int().nonnegative().safe();
 const amount = z.number().finite().nonnegative();
 const id = z.string().trim().min(1).max(512);
 export const USAGE_CONTRACT_VERSION = 6 as const;
-export const usageProviderKindSchema = z.enum(["codex", "claude", "grok", "fx", "cursor", "opencode", "antigravity", "pi", "muse", "acpRegistry"]);
+export const usageProviderKindSchema = z.enum(["codex", "claude", "grok", "fx", "cursor", "opencode", "antigravity", "pi", "omp", "muse", "acpRegistry"]);
 export type UsageProviderKind = z.infer<typeof usageProviderKindSchema>;
 export type UsageSpeed = "standard" | "fast" | "ultrafast";
 /** Input categories are disjoint. Reasoning is a subset of output, not extra tokens. */

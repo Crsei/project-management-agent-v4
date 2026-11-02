@@ -1,0 +1,211 @@
+{
+  "version": 1,
+  "source": "packages/provider-opencode/src/server/usageLimits.ts",
+  "beforeSha256": "014ef5f0fe7a61e533e6a684371a2b8bb42e5d736e367c8ff9bc9538227a0f57",
+  "afterSha256": "8be2b267284bf83972f3b2da3aebadd0ba2a7c3992db7edda125f9730ba90c5d",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 22,
+      "before": [
+        "const AuthFile = Schema.Struct({ \"opencode-go\": Schema.optionalKey(Schema.Unknown) });\n"
+      ],
+      "after": [
+        "const AuthFile = Schema.Struct({\n",
+        "  \"opencode-go\": Schema.optionalKey(Schema.Unknown),\n",
+        "  opencode: Schema.optionalKey(Schema.Unknown),\n",
+        "});\n"
+      ]
+    },
+    {
+      "start": 36,
+      "before": [],
+      "after": [
+        "  status: Schema.optionalKey(Schema.Literals([\"ok\", \"rate-limited\"])),\n"
+      ]
+    },
+    {
+      "start": 42,
+      "before": [],
+      "after": [
+        "const decodeEntitlementError = Schema.decodeUnknownOption(\n",
+        "  Schema.Struct({\n",
+        "    type: Schema.Literal(\"error\"),\n",
+        "    error: Schema.Struct({ type: Schema.Literal(\"EntitlementError\") }),\n",
+        "  }),\n",
+        ");\n",
+        "const usedPercent = (window: typeof UsageWindow.Type) =>\n",
+        "  window.status === \"rate-limited\" ? 100 : clampPercent(window.percent);\n"
+      ]
+    },
+    {
+      "start": 45,
+      "before": [
+        "const readConsoleApiKey = (databasePath: string) =>\n"
+      ],
+      "after": [
+        "const readStoredApiKey = (databasePath: string) =>\n"
+      ]
+    },
+    {
+      "start": 53,
+      "before": [
+        "           WHERE integration_id = 'opencode' AND active IS NOT 0\n",
+        "           ORDER BY active DESC, time_created DESC, id DESC LIMIT 1`,\n"
+      ],
+      "after": [
+        "           WHERE integration_id IN ('opencode-go', 'opencode') AND active IS NOT 0\n",
+        "           ORDER BY CASE integration_id WHEN 'opencode-go' THEN 0 ELSE 1 END,\n",
+        "                    active DESC, time_created DESC, id DESC LIMIT 1`,\n"
+      ]
+    },
+    {
+      "start": 94,
+      "before": [
+        "    const authPath = path.join(dataHome, \"opencode\", \"auth.json\");\n",
+        "    const contents =\n",
+        "      env.OPENCODE_AUTH_CONTENT ||\n",
+        "      (yield* fs.readFileString(authPath).pipe(\n",
+        "        Effect.catchTags({\n",
+        "          PlatformError: (error) =>\n",
+        "            error.reason._tag === \"NotFound\" ? Effect.succeed(\"{}\") : Effect.fail(error),\n",
+        "        }),\n",
+        "      ));\n",
+        "    const auth = yield* decodeAuthFile(contents);\n",
+        "    const apiAuth = decodeApiAuth(auth[\"opencode-go\"]);\n",
+        "    // OpenCode overlays stored API credentials after environment credentials.\n",
+        "    const goKey = (Option.isSome(apiAuth) ? apiAuth.value.key : env.OPENCODE_API_KEY)?.trim();\n",
+        "    // Console supplies Go credentials in OpenCode 2. Inline auth explicitly\n",
+        "    // overrides local credentials, including the Console connection.\n"
+      ],
+      "after": [
+        "    // Read legacy credentials only when needed. A stale/malformed auth.json must\n",
+        "    // not block a valid selected OpenCode 2 connection.\n",
+        "    const readLegacyKey = Effect.gen(function* () {\n",
+        "      const contents =\n",
+        "        env.OPENCODE_AUTH_CONTENT ||\n",
+        "        (yield* fs.readFileString(path.join(dataHome, \"opencode\", \"auth.json\")).pipe(\n",
+        "          Effect.catchTags({\n",
+        "            PlatformError: (error) =>\n",
+        "              error.reason._tag === \"NotFound\" ? Effect.succeed(\"{}\") : Effect.fail(error),\n",
+        "          }),\n",
+        "        ));\n",
+        "      const auth = yield* decodeAuthFile(contents);\n",
+        "      const apiAuth = decodeApiAuth(auth[\"opencode-go\"] ?? auth.opencode);\n",
+        "      // Preserve OpenCode's stored-over-environment credential precedence.\n",
+        "      return (Option.isSome(apiAuth) ? apiAuth.value.key : env.OPENCODE_API_KEY)?.trim();\n",
+        "    });\n",
+        "    // Inline auth explicitly overrides the local database. Native Go entries\n",
+        "    // precede the legacy public Console alias; never enumerate other accounts.\n"
+      ]
+    },
+    {
+      "start": 110,
+      "before": [
+        "    const consoleKey =\n"
+      ],
+      "after": [
+        "    const storedKey =\n"
+      ]
+    },
+    {
+      "start": 113,
+      "before": [
+        "        : yield* readConsoleApiKey(path.resolve(dataHome, \"opencode\", databaseFile));\n",
+        "    let apiKey = consoleKey || goKey;\n"
+      ],
+      "after": [
+        "        : yield* readStoredApiKey(path.resolve(dataHome, \"opencode\", databaseFile));\n",
+        "    let apiKey = storedKey || (yield* readLegacyKey);\n"
+      ]
+    },
+    {
+      "start": 122,
+      "before": [],
+      "after": [
+        "          HttpClientRequest.setHeader(\"Accept\", \"application/json\"),\n"
+      ]
+    },
+    {
+      "start": 125,
+      "before": [
+        "    if ((response.status === 401 || response.status === 403) && goKey && goKey !== apiKey) {\n",
+        "      apiKey = goKey;\n",
+        "      response = yield* readUsage(apiKey);\n"
+      ],
+      "after": [
+        "    if ((response.status === 401 || response.status === 403) && storedKey) {\n",
+        "      const legacyKey = yield* readLegacyKey;\n",
+        "      if (legacyKey && legacyKey !== apiKey) {\n",
+        "        apiKey = legacyKey;\n",
+        "        response = yield* readUsage(apiKey);\n",
+        "      }\n"
+      ]
+    },
+    {
+      "start": 129,
+      "before": [
+        "    // A valid Zen key can exist without a Go subscription.\n",
+        "    if (response.status === 403) return unsupported;\n"
+      ],
+      "after": [
+        "    // Only an explicit entitlement response proves the absence of a Go plan.\n",
+        "    if (response.status === 403) {\n",
+        "      const errorBody = yield* response.json.pipe(Effect.orElseSucceed(() => undefined));\n",
+        "      if (Option.isSome(decodeEntitlementError(errorBody))) return unsupported;\n",
+        "    }\n",
+        "    if (response.status < 200 || response.status >= 300)\n",
+        "      return makeUnavailableUsageLimits({\n",
+        "        checkedAt,\n",
+        "        reason: \"probeFailed\",\n",
+        "        message: `OpenCode Go usage request failed (HTTP ${response.status}).`,\n",
+        "      });\n"
+      ]
+    },
+    {
+      "start": 140,
+      "before": [
+        "        usedPercent: clampPercent(body.usage.rolling.percent),\n"
+      ],
+      "after": [
+        "        usedPercent: usedPercent(body.usage.rolling),\n"
+      ]
+    },
+    {
+      "start": 148,
+      "before": [
+        "        usedPercent: clampPercent(body.usage.weekly.percent),\n"
+      ],
+      "after": [
+        "        usedPercent: usedPercent(body.usage.weekly),\n"
+      ]
+    },
+    {
+      "start": 155,
+      "before": [
+        "        usedPercent: clampPercent(body.usage.monthly.percent),\n"
+      ],
+      "after": [
+        "        usedPercent: usedPercent(body.usage.monthly),\n"
+      ]
+    },
+    {
+      "start": 169,
+      "before": [
+        "    Effect.timeout(\"5 seconds\"),\n"
+      ],
+      "after": [
+        "    Effect.timeout(\"10 seconds\"),\n"
+      ]
+    }
+  ]
+}

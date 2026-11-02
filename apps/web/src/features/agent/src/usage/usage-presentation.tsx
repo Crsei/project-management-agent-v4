@@ -13,6 +13,7 @@ const PRESENTATION = {
   opencode: { label: "OpenCode", color: "#5b9bbd" },
   antigravity: { label: "Antigravity", color: "#8c7bd1" },
   pi: { label: "Pi", color: "#4d9f8a" },
+  omp: { label: "OMP", color: "#c17b36" },
   muse: { label: "Muse Code", color: "#0866ff" },
   acpRegistry: { label: "ACP Registry", color: "#b36b9f" },
 } satisfies Record<UsageProviderKind, { label: string; color: string }>;

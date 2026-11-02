@@ -4,6 +4,7 @@ import test from "node:test";
 import * as Schema from "effect/Schema";
 import { ClaudeSettings, CodexSettings } from "@t3tools/contracts";
 import { OpenCodeSettings } from "@t3tools/provider-opencode/settings";
+import { OmpSettings } from "@t3tools/provider-omp/settings";
 import type { StoredProviderInstance } from "../instances.ts";
 import type { ProviderDriverContext } from "../driver-adapter.ts";
 import { projectProviderInstance, toT3DriverKind, fromT3DriverKind } from "./config-mapping.ts";
@@ -72,4 +73,23 @@ test("Claude explicit Home projection matches the bound lease while inherited li
   assert.equal(Schema.decodeUnknownSync(ClaudeSettings)(projectProviderInstance(inherited, inheritedContext).config).homePath, "");
   assert.deepEqual(current.env, originalEnvironment);
   assert.equal(current.config.homePath, "~/.claude-profile");
+});
+
+test("OMP keeps its independent native environment and requires no default model migration", () => {
+  const omp: StoredProviderInstance = { ...instance, driver: "omp", label: "OMP",
+    config: { binaryPath: "bin/omp", launchArgs: "" } };
+  const current: ProviderDriverContext = { ...context(omp.config), driver: "omp",
+    env: { HOME: "/native/user", PI_CODING_AGENT_DIR: "/pi-native-only", OMP_CWD: "/native/workspace" } };
+  const before = { ...current.env };
+  const mapped = projectProviderInstance(omp, current);
+  const config = Schema.decodeUnknownSync(OmpSettings)(mapped.config);
+  assert.equal(mapped.driver, "omp");
+  assert.equal(fromT3DriverKind(toT3DriverKind("omp")), "omp");
+  assert.equal(config.binaryPath, path.resolve(current.cwd, "bin/omp"));
+  assert.equal(config.launchArgs, "");
+  assert.equal(config.customModels.length, 1);
+  assert.deepEqual(current.env, before);
+  assert.equal(current.homeDirectory, omp.homeDirectory);
+  assert.equal(Object.hasOwn(mapped.config as object, "model"), false);
+  assert.equal(fromT3DriverKind(toT3DriverKind("pi")), "pi");
 });

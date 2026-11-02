@@ -8,7 +8,7 @@ import { dataDirectory, workspaceRoot } from "../paths.ts";
 
 const storeKey = Symbol.for("agent-workspace.durable-store");
 type ExistingStore = { database: DatabaseSync; directory: string; token: string };
-const DRIVERS: ProviderDriver[] = ["codex", "claude", "cursor", "grok", "fx", "opencode", "antigravity", "muse", "pi", "acpRegistry"];
+const DRIVERS: ProviderDriver[] = ["codex", "claude", "cursor", "grok", "fx", "opencode", "antigravity", "muse", "pi", "omp", "acpRegistry"];
 const FAILURE_CLASSES = ["usage_limit", "authentication", "cancelled", "unsupported", "provider_error", "interrupted"] as const;
 function safeTimestamp(value: unknown): string | null {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)

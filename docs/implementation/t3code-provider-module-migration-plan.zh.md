@@ -323,3 +323,10 @@ draft:T20 depends_on draft:T17,draft:T18
 - 实际项目 `PRJ-001` 的内嵌Chat明确保持项目scope，原OpenCode工具调用 `pm_read` 成功，收据 `0bfb711c-1755-4fdf-88ba-4a8d18f97954` 为succeeded，并得到 **M7_PROJECT=657**；没有写生产业务对象。全页/内嵌、桌面/390px、原生历史Usage及Storage均实际观察；390px无横向溢出，Usage明确标记部分覆盖，不把缺失数据当零。OpenCode Go额度读取失败仍保留，未用模型调用通过代替额度验收。
 - 最终仓库外独立产物 `release-complete-agent` 为 **157包、21706文件、280内部链接**；从 `/tmp` 执行随包验证器，哈希/内部链接、磁盘SDK、原生PTY、单Effect、文档worker、生产Claude历史分发和实际API-only HTTP均通过，仅证明linux-x64资源闭包。最终脱敏证据为 `.local/provider-m7-5nbevc_e/release-evidence.json`。两个自有Chat测试会话已删除，原生供应商会话及审计记录按所有权保留；浏览器、临时认证控制器/脚本/Socket和过期自有构建已撤除，临时登录注销后实际返回401。没有commit或push。
 - **会话与持久化仍暂沿用Agent Chat保存方式，统一设计尚未收口。** 真实账号、额度、平台前提及Pi既有间歇失败限制继续保留；不宣称全仓库后端检查全绿。
+
+### OpenCode Go 额度查询后续修正（源码完成，真实验证暂缓）
+
+- 用户确认另一个会话通过 Bearer API Key 调用 `https://opencode.ai/zen/go/v1/usage` 成功，并要求本轮写完先不测试。本轮不重复请求真实接口，不读取真实凭据，不启动或重启服务，不提交或推送。
+- 原模块已使用同一接口；修正 SQLite 只选旧 `opencode`、遗漏原生 `opencode-go` 连接，以及旧 `auth.json` 提前解析阻断有效v2凭据的问题。数据库选择保持当前连接和只读访问，不遍历其他账号；保留实例Home/环境、内联认证优先、外部服务隔离及仅认证拒绝时的旧凭据回退。
+- 请求明确携带JSON Accept，整个读取保留10秒截止；窗口 `rate-limited` 映射为耗尽，重置时间仍来自远端。普通HTTP403与明确 `EntitlementError` 分开，不把拒绝访问误报为无订阅；不回显响应体或凭据。实现参考 [opencode-quota API适配](https://github.com/slkiser/opencode-quota/blob/main/src/lib/opencode-go.ts)及[原生Go凭据选择](https://github.com/mellena1/opencode-go-usage/blob/main/src/index.ts)，不引入插件或第二套Provider适配层。
+- 已用自有临时SQLite和内存HTTP进行最小离线核对：修改前重现旧文件阻断，修改后原生Go选择、耗尽窗口与403分类成立，实际网络请求为0；两份修改源码的LSP诊断无问题。补齐现有回归用例但未运行测试套件、构建、真实账号查询或浏览器验收；不能沿用阶段7通过数宣称此增量已通过这些门槛。会话与持久化统一设计仍未收口。

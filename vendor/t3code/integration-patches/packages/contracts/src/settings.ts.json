@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "source": "packages/contracts/src/settings.ts",
+  "beforeSha256": "99b570f1792fc044d2e6bf6ba36925d55272c888ddefe7a8efada4d569cddf15",
+  "afterSha256": "49f55f067c35974fff729e47acb0b87a5a0d9b201cb7b96ff3ce8873098e227f",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 1328,
+      "before": [
+        "  [\"cursor\", \"grok\", \"fx\", \"muse\", \"pi\", \"opencode\", \"antigravity\"].map((driver) =>\n"
+      ],
+      "after": [
+        "  [\"cursor\", \"grok\", \"fx\", \"muse\", \"pi\", \"omp\", \"opencode\", \"antigravity\"].map((driver) =>\n"
+      ]
+    }
+  ]
+}

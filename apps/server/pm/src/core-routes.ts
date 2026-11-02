@@ -383,7 +383,7 @@ export async function executeAuditedCoreMutation(options: CoreMutationOptions): 
       const facts: CapturedServiceFact[] = [];
       let result: FileRecord | { id: string; deleted: true };
       try { result = await workspace.captureMutations(captureCoreFacts({ sql, workspaceId: scope.workspaceId, root: workspace.root,
-        sourceKind: 'core_http', operationId: commandId, requestHash: hash, actorId: principal.id, facts }),
+        sourceKind: 'core_http', operationId: commandId, requestHash: hash, actorId: principal.id, facts, configuration: workspace.configuration().config }),
         () => mutate(isCreation ? coreKey : headerKey, guard, prepared)); }
       catch (error) {
         const uncertain = !!local && workspace.projectLocations().some(location => location.initialization.key === coreKey) || error instanceof WorkspaceError && error.diagnostics.some(item => ['TRANSACTION_FAILED', 'PERSISTENT_STATE_INVALID', 'FILE_UNWRITABLE', 'PROJECT_INITIALIZATION_PENDING'].includes(item.code));

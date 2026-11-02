@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "repository": "https://github.com/can1357/oh-my-pi",
+  "tag": "v18.13.2",
+  "commit": "e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e",
+  "license": "MIT",
+  "licenseFile": "vendor/t3code/third-party-licenses/oh-my-pi.txt",
+  "classification": "Reference protocol/source inputs for the PM-owned local-addition provider-omp; not files from the pinned t3code commit.",
+  "inputs": [
+{"path":"packages/coding-agent/src/cli/args.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/cli/args.ts","sha256":"893b124cc88d56b4b190e2ad525237ecbd4fba5db9527e7e373980536fa813a0","gitBlobSha1":"fb3da527b3bcdd6420751f460c25cc5a7a43336a","bytes":21496},
+{"path":"packages/coding-agent/src/cli/flag-tables.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/cli/flag-tables.ts","sha256":"96452c69abfa38f39f0ea54d9fb14f34ea9803f57fb5635fa23c1b99111f32f9","gitBlobSha1":"187c857757fa9999b973d698433c5d9d281fd0f1","bytes":16742},
+{"path":"packages/coding-agent/src/discovery/builtin.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/builtin.ts","sha256":"124eac92a1898b350f1db3c421e033a40da93dc411d02023e855163179eab04b","gitBlobSha1":"e68600459d5d76d36c53b82e60c155640d81bbc3","bytes":32268},
+{"path":"packages/coding-agent/src/discovery/claude.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/claude.ts","sha256":"ca0df6f09cb889ea85490f53b2791b247716acc532a34484ddcc2aac8cc53fe6","gitBlobSha1":"a1dbe02bc986b4528a8a724f19c7601ad333172c","bytes":21001},
+{"path":"packages/coding-agent/src/discovery/cline.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/cline.ts","sha256":"14e74c468120bab7571e02dbb01362853a68e872b8c53f052724fb9549c719b8","gitBlobSha1":"4f7d1727fb6ee19c79c45b6cfef9bf6427e4d89f","bytes":2587},
+{"path":"packages/coding-agent/src/discovery/codex.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/codex.ts","sha256":"ce1958981a1895b9b1df1e040a7178c1b64e22664b15f4a737a8099f92af6bd4","gitBlobSha1":"646c5863b2f9270da76cae64dc91521fac048cc8","bytes":21804},
+{"path":"packages/coding-agent/src/discovery/cursor.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/cursor.ts","sha256":"985bf71e2330f682d895500726e06aa737970646fb473902c8708daa1b7947c0","gitBlobSha1":"803c1f195a755f87aa75d23ceb660afb5b7160e7","bytes":7298},
+{"path":"packages/coding-agent/src/discovery/gemini.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/gemini.ts","sha256":"2d635a7fba0091c58f74e67fecf4d1a458074ffcf20b8c014d0323021147675e","gitBlobSha1":"9593428b1e31b01be7ff4739fa5bbd382e052c58","bytes":12356},
+{"path":"packages/coding-agent/src/discovery/helpers.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/helpers.ts","sha256":"6192ce381b4a15d7f5cfc6336cf09d80203539a352ee8eaa9791c47b4923633b","gitBlobSha1":"e514d84e6bfde4704656a6a63dcdf5fefeb17c75","bytes":61877},
+{"path":"packages/coding-agent/src/discovery/mcp-json.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/mcp-json.ts","sha256":"83dc21376d024fa69d9c118a426d0fde8503afca5e4a8b4fbd8c7bf79aeddb5f","gitBlobSha1":"a8d579bf2631cc5d5e40d3b87aa1fcc6446c8687","bytes":5629},
+{"path":"packages/coding-agent/src/discovery/omp-plugins.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/omp-plugins.ts","sha256":"4e66819cf706b81c6f31bd71e6de8892083a284525ab151948642faea00cb1b4","gitBlobSha1":"c4cee136d81b6878aeb466f6be3b253e96dc8a11","bytes":15362},
+{"path":"packages/coding-agent/src/discovery/opencode.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/opencode.ts","sha256":"08ed52dbb379cb2b2d9f865c08831374ac1996fcc182c86127e47d3e7e799e67","gitBlobSha1":"bb40f4a1daa35bcae01a6cfae19a22b8f55022ac","bytes":19108},
+{"path":"packages/coding-agent/src/discovery/plugin-dir-roots.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/plugin-dir-roots.ts","sha256":"8eea3c48e8d8dfddc7ab7fc8a103b8cf7b91bd85fbde79de1d73b71b29b777f7","gitBlobSha1":"d7a173ad69a197aeb2df617c532121280133cacd","bytes":866},
+{"path":"packages/coding-agent/src/discovery/vscode.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/vscode.ts","sha256":"2aeac395e72d292f11c821700fa9e116616a61098e9055f5390b0b64ebd6e3b2","gitBlobSha1":"83d0076bc1a4452c9e60f88f100b6bc03c4c66e6","bytes":3763},
+{"path":"packages/coding-agent/src/discovery/windsurf.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/discovery/windsurf.ts","sha256":"f4004fde3cc782be610e1bae417c7d03c714d36a4a705eebc7d160029e4df3ea","gitBlobSha1":"da84afe20c53d6b33a307496c50b0c0c9845ae6e","bytes":5294},
+{"path":"packages/coding-agent/src/extensibility/custom-tools/loader.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/extensibility/custom-tools/loader.ts","sha256":"75d049cb4e848faa2b2b25f4b25bd3d1dd2fade06b3360fd62be1c41380c7efa","gitBlobSha1":"a1b3c80ecdcb560575adf5a25b2d3a235ec29322","bytes":11804},
+{"path":"packages/coding-agent/src/extensibility/custom-tools/wrapper.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/extensibility/custom-tools/wrapper.ts","sha256":"cf8b2d495658074bf8c822784e73336c539fe9cd0a887ab8f26d1db404c7f7c7","gitBlobSha1":"fffa7e7ca6b9f75f1e47f454578d84f37fc6200b","bytes":1764},
+{"path":"packages/coding-agent/src/extensibility/extensions/loader.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/extensibility/extensions/loader.ts","sha256":"4c5a669f4b12039c4f26d3933f634f15f81693e30f660b828d17d7871bf032bc","gitBlobSha1":"4d3ba4eda4a302e0898aa6a7142292678f7b382c","bytes":22720},
+{"path":"packages/coding-agent/src/extensibility/extensions/runner.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/extensibility/extensions/runner.ts","sha256":"597bfb8c8ceee7bd34c36b25abb5b2c5c0345cf50f350eda84e11d6f54337a18","gitBlobSha1":"a8e6184a0933395c568f7d93d7d41d40ea540c33","bytes":90288},
+{"path":"packages/coding-agent/src/extensibility/extensions/types.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/extensibility/extensions/types.ts","sha256":"ab05f29e8e20d7d250a78e7cce5eb7d87cf26312cdb6c5e555f0c6653095ffde","gitBlobSha1":"36455df9f24afaf528ca494206ae43483b554660","bytes":94849},
+{"path":"packages/coding-agent/src/extensibility/extensions/wrapper.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/extensibility/extensions/wrapper.ts","sha256":"29491a9e637a83e6d996b45743d4971e1d74a16a836fcafcd54e5429af707b44","gitBlobSha1":"43a8445f78cc8f30a2c45f080796dc9515fde040","bytes":23309},
+{"path":"packages/coding-agent/src/extensibility/plugins/loader.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/extensibility/plugins/loader.ts","sha256":"d759c4661cdd13b7081d2005463e8ab0bbeb28a745992b998f986ebe971e5a1d","gitBlobSha1":"6f20fc18fe452aa6cff4d673437ead64ce7cd485","bytes":17785},
+{"path":"packages/coding-agent/src/modes/rpc/host-tools.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/modes/rpc/host-tools.ts","sha256":"505b0a1b3d077c04847ffca3f8eee0242876e22c2896e7f7952d6803896688ed","gitBlobSha1":"62be077ca0c693155dd399ec1a2be53b3285a212","bytes":6071},
+{"path":"packages/coding-agent/src/modes/rpc/rpc-mode.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/modes/rpc/rpc-mode.ts","sha256":"d3cd404e676690e544cda57365810250adb2e5fd3bec81beb50bb2539bb3117d","gitBlobSha1":"f5e63e6920cd2a029a20607582e7b3877ad0f203","bytes":112633},
+{"path":"packages/coding-agent/src/sdk.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/sdk.ts","sha256":"b33ec3e08893d17cc27ae821c9fe052993786f599e1ca5aac4b7a299a035ea87","gitBlobSha1":"388006c09aa1011559653ab5d793643920fae0d6","bytes":259572},
+{"path":"packages/coding-agent/src/session/exit-diagnostics.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/session/exit-diagnostics.ts","sha256":"ec82b03212c993286624cb4b5de1125700fc5a6bbfd1a1039a157693a498db43","gitBlobSha1":"fa75c9daa51b8f4f4e8e0f1c1a458dedc9b589b4","bytes":16046},
+{"path":"packages/coding-agent/src/session/session-entries.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/session/session-entries.ts","sha256":"c8851df7fef6c73f2fb4559d8954114c91fde4cd32b924d615031e9ecd75feff","gitBlobSha1":"7c5caa4c25e0f65e9a29456c3652dba97833547f","bytes":16186},
+{"path":"packages/coding-agent/src/session/runtime-identity.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/session/runtime-identity.ts","sha256":"1048e6806b0e5717872f715ea1fb3cd266a613c75559ddcb9c6a85ca036198a4","gitBlobSha1":"0909bafb8cb7ff3e75db09063a88aa9832a94359","bytes":6082},
+{"path":"packages/coding-agent/src/session/session-manager.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/session/session-manager.ts","sha256":"192dd436c1547324ad71c32906b5490443682059f0018a398f933b1f3a163ec3","gitBlobSha1":"67c284c75f3892fea2b12af3120317ebab79017d","bytes":179731},
+{"path":"packages/coding-agent/src/session/session-tools.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/session/session-tools.ts","sha256":"3135ac5f54f27359b03850454f8d04c45ba993ad138225dc59ec582a06fd0892","gitBlobSha1":"df0a460b116b626f47b964d137179f5ba0553f8d","bytes":115905},
+{"path":"packages/coding-agent/src/tools/approval.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/tools/approval.ts","sha256":"42ed24e428c69186fca3be0eb5b825620ec5d802dc55eb63eab3adcdc161cc9b","gitBlobSha1":"37597e09ae43bbaa4d184ed4529725dd64e70457","bytes":36052},
+{"path":"packages/utils/src/dirs.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/utils/src/dirs.ts","sha256":"2d423f4f18e5ed0c25cd4887c68cf2fea704f1615ad4c85846ae5c10d3207f24","gitBlobSha1":"883cd89fde4ab3b3768d06ff7f3805b6a7a271d2","bytes":52434},
+{"path":"packages/utils/src/env.ts","url":"https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/utils/src/env.ts","sha256":"8f759aada1bd1d619cec02020a1d7be50ac43f453ad051a0439b6f6f4eaba11c","gitBlobSha1":"1b54d644f6754525ed646110c813ba8811cde9f7","bytes":18655},
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/LICENSE",
+      "sha256": "16c45f9d667442781f03fa198914cc39abcaa48ec5ed8f644643e554ca2fbf63",
+      "bytes": 1144
+    },
+    {
+      "path": "docs/rpc.md",
+      "url": "https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/docs/rpc.md",
+      "sha256": "43f316f8d5bb940fbeae83e0b805bdd1dbedf3bd28ce960ed8763a551dccaf34",
+      "bytes": 100984
+    },
+    {
+      "path": "docs/approval-mode.md",
+      "url": "https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/docs/approval-mode.md",
+      "sha256": "90b234ceda1148c104a1d3e1ad4b3731dd5ef7da407ad5dc5c2d4311f5ebfa29",
+      "bytes": 20677
+    },
+    {
+      "path": "packages/coding-agent/src/modes/rpc/rpc-client.ts",
+      "url": "https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/modes/rpc/rpc-client.ts",
+      "sha256": "bcbbc8b5257190f294bdfa9f8a86719dc0f1c927dfb5d2c0110f0695eceab3f7",
+      "bytes": 62560
+    },
+    {
+      "path": "packages/coding-agent/src/modes/rpc/rpc-frame.ts",
+      "url": "https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/modes/rpc/rpc-frame.ts",
+      "sha256": "9592c30c7bf12660584f67860f7abd64b752aeea15d1ce58430cfa3e5795bef3",
+      "bytes": 14802
+    },
+    {
+      "path": "packages/coding-agent/src/modes/rpc/rpc-types.ts",
+      "url": "https://raw.githubusercontent.com/can1357/oh-my-pi/e996e1c7ac476f60e02b8ed9764cf30fa8c00a8e/packages/coding-agent/src/modes/rpc/rpc-types.ts",
+      "sha256": "18a8af93d30b6d555e4dad6ee15bab9447289d4d34558dedf571da0eb380dfcf",
+      "bytes": 36168
+    }
+  ],
+  "verification": "Source hashes only; implementation, native inference and safety acceptance recorded separately in docs/implementation/omp-provider-adaptation-plan.zh.md."
+}

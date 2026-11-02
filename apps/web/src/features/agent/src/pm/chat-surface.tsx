@@ -1,5 +1,5 @@
-import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAui, useAuiState, ThreadListPrimitive, type AssistantRuntime } from "@assistant-ui/react";
 import { Menu } from "@base-ui/react/menu";
 import { ArchiveIcon, ArrowLeftIcon, ChartNoAxesCombinedIcon, FileTextIcon, KeyboardIcon, ListFilterIcon, Loader2Icon, Maximize2Icon, PanelBottomIcon, PanelLeftIcon, PanelRightIcon, PlusIcon, SearchIcon, SettingsIcon, XIcon, ZapIcon } from "lucide-react";
@@ -118,6 +118,8 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
   const drawerSidebar = !!entry || mobile;
   const sidebarId = useId();
   const [routeParams, setParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const params = entry ?? routeParams;
   const initialScope = useRef(requestedScope(params));
   const [entryObject, setEntryObject] = useState(() => ({ task: params.get("task"), entity: params.get("entity") }));
@@ -178,10 +180,20 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
   const title = threadItems.find((item) => item.id === localId)?.title;
   const scope = threadScope(localId, remoteId);
   const context = scopeContext(state.catalog, scope);
-  const displayScope = scope ?? (!remoteId ? selectedScope : undefined);
+  const automationsView = entry ? embeddedAutomationsView : /^\/agent\/automations(?:\/|$)/.test(location.pathname) || params.get("view") === "automations";
+  const automationScope = useMemo(() => requestedScope(params), [params]);
+  const displayScope = automationsView ? automationScope ?? selectedScope : scope ?? (!remoteId ? selectedScope : undefined);
   const displayContext = scopeContext(state.catalog, displayScope);
-  const automationsView = entry ? embeddedAutomationsView : params.get("view") === "automations";
   const automationWorkspace = state.identity?.workspaces.find((workspace) => workspace.id === displayScope?.workspaceId);
+  const automationReturn = useMemo(() => {
+    const value = params.get("automationReturn");
+    if (!value?.startsWith("/agent/automations/setup?")) return null;
+    try {
+      const url = new URL(value, window.location.origin);
+      return url.origin === window.location.origin && url.pathname === "/agent/automations/setup" && url.searchParams.get("workspace") === displayScope?.workspaceId
+        ? `${url.pathname}${url.search}` : null;
+    } catch { return null; }
+  }, [params, displayScope?.workspaceId]);
   const { protect, storageError } = useChatDrafts(runtime, displayScope);
   const initialize = useCallback(async () => (await aui.threads.item({ id: localId }).initialize()).remoteId, [aui, localId]);
   const { settings, setSettings, ready: settingsReady, settingsLoaded, loading: settingsLoading, saving: settingsSaving, error: settingsError, retry } = useChatSettings(remoteId, initialize, localId);
@@ -252,7 +264,7 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
     if (!remoteId && !scope && selectedScope && scopeContext(state.catalog, selectedScope)) bindDraftScope(localId, selectedScope);
   }, [localId, remoteId, scope, selectedScope, state.catalog]);
   useEffect(() => {
-    if (entry || threadsLoading || state.loading) return;
+    if (entry || automationsView || threadsLoading || state.loading) return;
     const next = new URLSearchParams(params);
     if (displayScope) {
       try { sessionStorage.setItem("pm-v3:agent-scope", JSON.stringify(displayScope)); } catch { /* URL remains authoritative for this mounted view. */ }
@@ -261,7 +273,14 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
     } else { next.delete("workspace"); next.delete("project"); }
     if (remoteId) next.set("thread", remoteId); else next.delete("thread");
     if (next.toString() !== params.toString()) setParams(next, { replace: true });
-  }, [displayScope, remoteId, threadsLoading, state.loading, params, setParams, entry]);
+  }, [displayScope, remoteId, threadsLoading, state.loading, params, setParams, entry, automationsView]);
+  useEffect(() => {
+    if (entry || params.get("view") !== "automations") return;
+    const next = new URLSearchParams(params);
+    next.delete("view");
+    next.delete("thread");
+    navigate({ pathname: "/agent/automations", search: next.toString() }, { replace: true });
+  }, [entry, params, navigate]);
 
   const act = async (action: () => Promise<void>) => {
     if (pending) return;
@@ -274,8 +293,15 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
   const setAutomationView = (open: boolean) => {
     if (entry) { setEmbeddedAutomationsView(open); return; }
     const next = new URLSearchParams(params);
-    if (open) next.set("view", "automations"); else next.delete("view");
-    setParams(next, { replace: false });
+    next.delete("view");
+    if (open) {
+      next.delete("thread");
+      if (displayScope) {
+        next.set("workspace", displayScope.workspaceId);
+        if (displayScope.projectId) next.set("project", displayScope.projectId); else next.delete("project");
+      }
+    }
+    navigate({ pathname: open ? "/agent/automations" : "/agent/workspace", search: next.toString() });
   };
   const openAutomation = () => {
     if (!automationsView && !protect()) return;
@@ -293,8 +319,10 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
     } else if (params.has("task") || params.has("entity") || exitView) {
       const next = new URLSearchParams(params);
       next.delete("task"); next.delete("entity");
-      if (exitView) next.delete("view");
-      setParams(next, { replace: true });
+      if (exitView) {
+        next.delete("view");
+        navigate({ pathname: "/agent/workspace", search: next.toString() }, { replace: true });
+      } else setParams(next, { replace: true });
     }
   };
   const selectScope = (target: AgentScope, create = false) => {
@@ -335,6 +363,39 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
     }
     clearEntryObject(automationsView);
     void act(async () => { await runtime.threads.switchToThread(id); setFreshThreadId(undefined); setSidebarOpen(false); });
+  };
+  const openAutomationThread = (threadId: string) => {
+    if (!canLeaveAutomation() || !protect() || !displayScope) return;
+    const workspaceId = displayScope.workspaceId;
+    void act(async () => {
+      const { thread } = await workspaceClient.json<{ thread: RemoteThread }>(`/api/chat/threads/${encodeURIComponent(threadId)}`);
+      if (thread.scope?.workspaceId !== workspaceId) throw new Error(t("运行会话不属于当前工作区。", "The execution thread does not belong to this workspace."));
+      acceptRemoteThread(thread);
+      await refreshThreadList();
+      await runtime.threads.switchToThread(thread.remoteId);
+      setFreshThreadId(undefined);
+      setSelectedScope(thread.scope);
+      clearEntryObject(true);
+    });
+  };
+  const assistAutomation = async (request: { prompt: string; projectId: string; definitionId?: string; draftId?: string }) => {
+    if (!canLeaveAutomation() || !protect() || !displayScope) return;
+    const target = { workspaceId: displayScope.workspaceId, projectId: request.projectId };
+    if (!scopeContext(state.catalog, target)) throw new Error(t("自动化项目当前不可访问。", "The automation project is no longer accessible."));
+    const returnParams = new URLSearchParams({ workspace: target.workspaceId, project: target.projectId });
+    if (request.definitionId) returnParams.set("automationId", request.definitionId);
+    else if (request.draftId) returnParams.set("draftId", request.draftId);
+    const returnPath = `/agent/automations/setup?${returnParams}`;
+    const id = crypto.randomUUID();
+    bindDraftScope(id, target);
+    await initializeScopedThread(id, null);
+    await refreshThreadList();
+    await runtime.threads.switchToThread(id);
+    setSelectedScope(target);
+    setFreshThreadId(id);
+    aui.composer().setText(`${request.prompt}\n\n${t("返回自动化配置", "Return to automation setup")}: ${returnPath}`);
+    if (entry) setEmbeddedAutomationsView(false);
+    else navigate({ pathname: "/agent/workspace", search: new URLSearchParams({ workspace: target.workspaceId, project: target.projectId, thread: id, automationReturn: returnPath }).toString() });
   };
   const openAction = (id: string, sessionName: string, kind: "rename" | "delete") => {
     setSessionAction({ id, title: sessionName, kind }); setSessionTitle(sessionName);
@@ -555,6 +616,7 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
         <button ref={sidebarToggle} type="button" className="pm-agent-icon pm-agent-sidebar-toggle" aria-label={t("切换会话侧栏", "Toggle session sidebar")} aria-controls={sidebarId} aria-expanded={drawerSidebar ? sidebarOpen : !sidebarCollapsed} title={t("切换会话侧栏", "Toggle session sidebar")} onClick={toggleSidebar}><PanelLeftIcon /></button>
         <nav className="pm-agent-context-title" aria-label={t("当前位置", "Current location")}><div>{displayContext ? <><span>{displayContext.workspace.name}</span><span aria-hidden> / </span><span>{displayContext.project?.name ?? t("工作区会话", "Workspace session")}</span><span aria-hidden> / </span></> : null}<strong>{automationsView ? t("自动化", "Automations") : title ?? (remoteId ? t("历史会话", "Past session") : t("新会话", "New session"))}</strong></div></nav>
         {!automationsView && <>
+          {!entry && automationReturn && <Button variant="outline" size="sm" onClick={() => { if (protect()) navigate(automationReturn); }}><ZapIcon />{t("返回自动化配置", "Return to automation setup")}</Button>}
           <button type="button" className="pm-agent-icon" aria-label={t("切换会话详情", "Toggle session details")} aria-pressed={detailsOpen} title={t("切换会话详情 (Ctrl / ⌘ + Shift + B)", "Toggle session details (Ctrl / ⌘ + Shift + B)")} onClick={() => setDetailsOpen((open) => !open)}><FileTextIcon /></button>
           <button type="button" className="pm-agent-icon" aria-label={t("切换终端抽屉", "Toggle terminal drawer")} aria-pressed={terminalOpen} title={t("切换终端抽屉 (Ctrl / ⌘ + J)", "Toggle terminal drawer (Ctrl / ⌘ + J)")} disabled={inspectorDisabled} onClick={toggleTerminalDrawer}><PanelBottomIcon /></button>
           <button type="button" className="pm-agent-icon" aria-label={t("切换右侧面板", "Toggle right panel")} aria-pressed={!!inspectorPanel} title={t("切换右侧面板 (Ctrl / ⌘ + Alt + B)", "Toggle right panel (Ctrl / ⌘ + Alt + B)")} disabled={inspectorDisabled} onClick={toggleRightPanel}><PanelRightIcon /></button>
@@ -562,7 +624,7 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
         {entry ? <><button type="button" className="pm-agent-back" aria-label={t("展开完整 Chat", "Open full Chat")} title={t("展开完整 Chat", "Open full Chat")} onClick={() => { if (protectNavigation()) onExpand?.(handoffParams); }}><Maximize2Icon /><span>{t("展开完整 Chat", "Open full Chat")}</span></button><button type="button" className="pm-agent-icon" onClick={() => { if (protectNavigation()) onClose?.(); }} aria-label={t("关闭 Agent 面板", "Close Agent panel")}><XIcon /></button></> : <Link className="pm-agent-back" data-automation-leave-guarded="true" to={pmHref} aria-label={t("返回 PM", "Back to PM")} title={t("返回 PM", "Back to PM")} onClick={(event) => { if (!protectNavigation()) event.preventDefault(); }} state={params.get("panel") === "1" && displayScope ? { agentPanelReturn: { workspaceId: displayScope.workspaceId, projectId: displayScope.projectId ?? undefined, taskId: entryObject.task ?? undefined, entityId: entryObject.entity ?? undefined, returnTo: pmHref, threadId: remoteId ?? null } } : undefined}><ArrowLeftIcon /><span>{t("返回 PM", "Back to PM")}</span></Link>}
       </header>
       {automationsView ? (automationWorkspace && displayScope
-        ? <Suspense fallback={<div className="pm-agent-automation-empty" role="status">{t("正在加载自动化…", "Loading automations…")}</div>}><AutomationPage key={automationWorkspace.id} workspace={automationWorkspace} actorId={state.identity!.actor.id} root={`/pm/${encodeURIComponent(automationWorkspace.id)}`} onExit={exitAutomation} onLeaveGuardChange={setAutomationLeaveGuard} onRecheckAccess={() => { void refreshIdentity(); }} /></Suspense>
+        ? <Suspense fallback={<div className="pm-agent-automation-empty" role="status">{t("正在加载自动化…", "Loading automations…")}</div>}><AutomationPage key={`${state.identity!.actor.id}:${automationWorkspace.id}:${automationWorkspace.version}`} workspace={automationWorkspace} actorId={state.identity!.actor.id} embedded={!!entry} onAssist={assistAutomation} onOpenThread={openAutomationThread} onExit={exitAutomation} onLeaveGuardChange={setAutomationLeaveGuard} onRecheckAccess={() => { void refreshIdentity(); }} /></Suspense>
         : <section className="pm-agent-automation-empty"><ZapIcon /><h1>{t("需要先选择工作区", "Select a workspace first")}</h1><Button variant="outline" onClick={exitAutomation}>{t("返回对话", "Back to chat")}</Button></section>) : <>
       {(noScope || !context || context.fileArea.status !== "available" || state.error) && <p className="pm-agent-notice">{remoteId && noScope ? t("此历史会话没有绑定作用域。", "This past session has no scope bound.") : initialScope.current && !scopeContext(state.catalog, initialScope.current) && !state.loading ? t("入口工作区或项目不可访问，请从左侧重新选择。", "The entry workspace or project is unavailable; choose another on the left.") : t("请先选择工作区或项目，并配置可用的文件区域。", "Select a workspace or project and configure an available file area first.")}</p>}
       {settingsError && <div role="alert" className="pm-agent-notice">{t("会话设置未保存，输入已保留：", "Session settings were not saved; your input is kept: ")}{settingsError}<Button size="sm" variant="outline" onClick={() => void retry().catch(() => {})}>{t("重试保存设置", "Retry saving settings")}</Button></div>}

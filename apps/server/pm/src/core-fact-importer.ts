@@ -8,6 +8,7 @@ import { CoreCommandJournal } from './core-journal.ts';
 import type { CoreWorkspacePool } from './core-routes.ts';
 import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
 import { recoverPreparedCoreCreations } from './core-facts.ts';
+import { insertPmAutomationObservationSignals } from '../../../../packages/application/src/automation-pm-signals.ts';
 
 async function observationCapture(sql:SqlExecutor,workspaceId:string,observation:CoreFactObservation):Promise<CapturedServiceFact> {
  const target=observation.after??observation.before!;
@@ -88,7 +89,11 @@ export class CoreFactImporter {
    const checkpoint=await sql.query<{observation_sequence:string}>('SELECT observation_sequence::text FROM service_fact_import_checkpoints WHERE workspace_id=$1',[workspaceId]);
    if(Number(checkpoint.rows[0]!.observation_sequence)>observations.sequence) throw new DomainError('fact_checkpoint_ahead','SQL and core observation ledger require a consistent restore checkpoint',409);
    const pending=observations.observations.filter(value=>value.sequence>Number(checkpoint.rows[0]!.observation_sequence)).slice(0,limit);
-   for(const observation of pending) {await insertServiceFact(sql,workspaceId,await observationCapture(sql,workspaceId,observation));count++;}
+   for(const observation of pending) {
+    await insertServiceFact(sql,workspaceId,await observationCapture(sql,workspaceId,observation));
+    await insertPmAutomationObservationSignals(sql,workspaceId,observation);
+    count++;
+   }
    await sql.query(`UPDATE service_fact_import_checkpoints SET observation_sequence=$2::bigint,observed_at=$3,imported_count=imported_count+$7,status=CASE WHEN $4::text IS NOT NULL THEN 'error' WHEN journal_offset<$5::bigint OR $2::bigint<$6::bigint THEN 'pending' ELSE 'current' END,last_error_code=$4 WHERE workspace_id=$1`,
     [workspaceId,pending.at(-1)?.sequence??checkpoint.rows[0]!.observation_sequence,observations.lastObservedAt,observations.gap,journalLength,observations.sequence,pending.length]);
    await sql.query('COMMIT');
