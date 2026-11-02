@@ -26,6 +26,8 @@ export type ProviderDriverContext = {
   mcpServers?: ProviderRuntimeHostBinding["mcpServers"];
   execution?: PmExecutionIdentity;
   /** Request-local PM recheck; never persisted, passed in argv/env, or treated as native permission. */
+  /** Server-only callback; rechecks a confirmed delivery worktree, never a client cwd. */
+  authorizeWorktreeWrite?: () => Promise<string | undefined>;
   authorizeExecution?: (action: "compaction" | "tool") => Promise<void>;
   /** Host-issued frozen-evidence analysis; never accepted from browser/native configuration. */
   pmAnalysis?: true;

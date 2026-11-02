@@ -53036,6 +53036,1023 @@ paths:
         "503":
           description: Invalid input, unavailable source, authorization or revision conflict. An uncertain mutation must be
             reconciled with its original requestId; never submit a replacement operation.
+  /api/v1/workspaces/{workspaceId}/workflow-task-transitions:
+    post:
+      operationId: applyWorkflowTaskTransition
+      description: Workflow-originated start/review only. Requires current planning.edit, project scope, exact task revision
+        and a permitted native workflow edge. Never completes, cancels or reopens a task. Stable run/node/phase identity
+        is immutable and journaled.
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                workspaceId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                projectId:
+                  type: string
+                  pattern: ^PRJ-\d+$
+                taskId:
+                  type: string
+                  pattern: ^TASK-\d+$
+                runId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                nodeId:
+                  type: string
+                  pattern: ^[a-zA-Z][a-zA-Z0-9_-]{0,63}$
+                revision:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                phase:
+                  type: string
+                  enum:
+                    - start
+                    - review
+              required:
+                - workspaceId
+                - projectId
+                - taskId
+                - runId
+                - nodeId
+                - revision
+                - phase
+              additionalProperties: false
+      responses:
+        "200":
+          description: Original transition receipt or unresolved result
+          content:
+            application/json:
+              schema:
+                $schema: https://json-schema.org/draft/2020-12/schema
+                anyOf:
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        const: applied
+                      revision:
+                        type: string
+                      commandId:
+                        type: string
+                    required:
+                      - status
+                      - revision
+                      - commandId
+                    additionalProperties: false
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - not_found
+                          - pending
+                    required:
+                      - status
+                    additionalProperties: false
+        "400":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/workflow-task-transitions/reconcile:
+    post:
+      operationId: reconcileWorkflowTaskTransition
+      description: Recover only the original actor/run/node/phase receipt; never replay a task mutation or adopt a later revision.
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                workspaceId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                projectId:
+                  type: string
+                  pattern: ^PRJ-\d+$
+                taskId:
+                  type: string
+                  pattern: ^TASK-\d+$
+                runId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                nodeId:
+                  type: string
+                  pattern: ^[a-zA-Z][a-zA-Z0-9_-]{0,63}$
+                revision:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                phase:
+                  type: string
+                  enum:
+                    - start
+                    - review
+              required:
+                - workspaceId
+                - projectId
+                - taskId
+                - runId
+                - nodeId
+                - revision
+                - phase
+              additionalProperties: false
+      responses:
+        "200":
+          description: Original transition receipt or unresolved result
+          content:
+            application/json:
+              schema:
+                $schema: https://json-schema.org/draft/2020-12/schema
+                anyOf:
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        const: applied
+                      revision:
+                        type: string
+                      commandId:
+                        type: string
+                    required:
+                      - status
+                      - revision
+                      - commandId
+                    additionalProperties: false
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - not_found
+                          - pending
+                    required:
+                      - status
+                    additionalProperties: false
+        "400":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Validation, authorization, revision, state or recovery rejection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/projects/{projectId}/product-roadmap:
+    get:
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current authoritative project plan and real task mappings. No execution or integration is implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - projectId
+                  - title
+                  - revision
+                  - archived
+                  - store
+                  - tasks
+                properties:
+                  projectId:
+                    type: string
+                  title:
+                    type: string
+                  revision:
+                    type: string
+                  archived:
+                    type: boolean
+                  store:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      schema:
+                        type: string
+                        const: pm/product-roadmap/v1
+                      draft:
+                        type: object
+                        properties:
+                          brief:
+                            type: object
+                            properties:
+                              idea:
+                                type: string
+                                maxLength: 6000
+                              audience:
+                                type: string
+                                maxLength: 6000
+                              problem:
+                                type: string
+                                maxLength: 6000
+                              journey:
+                                type: string
+                                maxLength: 6000
+                              success:
+                                type: string
+                                maxLength: 6000
+                              nonGoals:
+                                type: string
+                                maxLength: 6000
+                              sharedContract:
+                                type: string
+                                maxLength: 6000
+                              assumptions:
+                                type: string
+                                maxLength: 6000
+                            required:
+                              - idea
+                              - audience
+                              - problem
+                              - journey
+                              - success
+                              - nonGoals
+                              - sharedContract
+                              - assumptions
+                            additionalProperties: false
+                          nodes:
+                            maxItems: 24
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  format: uuid
+                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                title:
+                                  type: string
+                                  maxLength: 160
+                                outcome:
+                                  type: string
+                                  maxLength: 6000
+                                acceptance:
+                                  type: string
+                                  maxLength: 6000
+                                nonGoals:
+                                  type: string
+                                  maxLength: 6000
+                                stage:
+                                  type: string
+                                  maxLength: 80
+                                dependsOn:
+                                  maxItems: 24
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: uuid
+                                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                x:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 6000
+                                y:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 6000
+                              required:
+                                - id
+                                - title
+                                - outcome
+                                - acceptance
+                                - nonGoals
+                                - stage
+                                - dependsOn
+                                - x
+                                - y
+                              additionalProperties: false
+                        required:
+                          - brief
+                          - nodes
+                        additionalProperties: false
+                      releases:
+                        maxItems: 20
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            plan:
+                              type: object
+                              properties:
+                                brief:
+                                  type: object
+                                  properties:
+                                    idea:
+                                      type: string
+                                      maxLength: 6000
+                                    audience:
+                                      type: string
+                                      maxLength: 6000
+                                    problem:
+                                      type: string
+                                      maxLength: 6000
+                                    journey:
+                                      type: string
+                                      maxLength: 6000
+                                    success:
+                                      type: string
+                                      maxLength: 6000
+                                    nonGoals:
+                                      type: string
+                                      maxLength: 6000
+                                    sharedContract:
+                                      type: string
+                                      maxLength: 6000
+                                    assumptions:
+                                      type: string
+                                      maxLength: 6000
+                                  required:
+                                    - idea
+                                    - audience
+                                    - problem
+                                    - journey
+                                    - success
+                                    - nonGoals
+                                    - sharedContract
+                                    - assumptions
+                                  additionalProperties: false
+                                nodes:
+                                  maxItems: 24
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      id:
+                                        type: string
+                                        format: uuid
+                                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                      title:
+                                        type: string
+                                        maxLength: 160
+                                      outcome:
+                                        type: string
+                                        maxLength: 6000
+                                      acceptance:
+                                        type: string
+                                        maxLength: 6000
+                                      nonGoals:
+                                        type: string
+                                        maxLength: 6000
+                                      stage:
+                                        type: string
+                                        maxLength: 80
+                                      dependsOn:
+                                        maxItems: 24
+                                        type: array
+                                        items:
+                                          type: string
+                                          format: uuid
+                                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                      x:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 6000
+                                      y:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 6000
+                                    required:
+                                      - id
+                                      - title
+                                      - outcome
+                                      - acceptance
+                                      - nonGoals
+                                      - stage
+                                      - dependsOn
+                                      - x
+                                      - y
+                                    additionalProperties: false
+                              required:
+                                - brief
+                                - nodes
+                              additionalProperties: false
+                            publishedAt:
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            publishedBy:
+                              type: string
+                          required:
+                            - id
+                            - plan
+                            - publishedAt
+                            - publishedBy
+                          additionalProperties: false
+                    required:
+                      - schema
+                      - draft
+                      - releases
+                    additionalProperties: false
+                  tasks:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          nodeId:
+                            type: string
+                          taskId:
+                            type: string
+                          title:
+                            type: string
+                          status:
+                            type: string
+                          revision:
+                            type: string
+                          archived:
+                            type: boolean
+                          drifted:
+                            type: boolean
+        "400":
+          description: Authorization, validation, conflict or unknown outcome
+        "401":
+          description: Authorization, validation, conflict or unknown outcome
+        "403":
+          description: Authorization, validation, conflict or unknown outcome
+        "404":
+          description: Authorization, validation, conflict or unknown outcome
+        "409":
+          description: Authorization, validation, conflict or unknown outcome
+        "503":
+          description: Authorization, validation, conflict or unknown outcome
+      operationId: readProductRoadmap
+    post:
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current authoritative project plan and real task mappings. No execution or integration is implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - projectId
+                  - title
+                  - revision
+                  - archived
+                  - store
+                  - tasks
+                properties:
+                  projectId:
+                    type: string
+                  title:
+                    type: string
+                  revision:
+                    type: string
+                  archived:
+                    type: boolean
+                  store:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      schema:
+                        type: string
+                        const: pm/product-roadmap/v1
+                      draft:
+                        type: object
+                        properties:
+                          brief:
+                            type: object
+                            properties:
+                              idea:
+                                type: string
+                                maxLength: 6000
+                              audience:
+                                type: string
+                                maxLength: 6000
+                              problem:
+                                type: string
+                                maxLength: 6000
+                              journey:
+                                type: string
+                                maxLength: 6000
+                              success:
+                                type: string
+                                maxLength: 6000
+                              nonGoals:
+                                type: string
+                                maxLength: 6000
+                              sharedContract:
+                                type: string
+                                maxLength: 6000
+                              assumptions:
+                                type: string
+                                maxLength: 6000
+                            required:
+                              - idea
+                              - audience
+                              - problem
+                              - journey
+                              - success
+                              - nonGoals
+                              - sharedContract
+                              - assumptions
+                            additionalProperties: false
+                          nodes:
+                            maxItems: 24
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                  format: uuid
+                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                title:
+                                  type: string
+                                  maxLength: 160
+                                outcome:
+                                  type: string
+                                  maxLength: 6000
+                                acceptance:
+                                  type: string
+                                  maxLength: 6000
+                                nonGoals:
+                                  type: string
+                                  maxLength: 6000
+                                stage:
+                                  type: string
+                                  maxLength: 80
+                                dependsOn:
+                                  maxItems: 24
+                                  type: array
+                                  items:
+                                    type: string
+                                    format: uuid
+                                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                x:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 6000
+                                y:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 6000
+                              required:
+                                - id
+                                - title
+                                - outcome
+                                - acceptance
+                                - nonGoals
+                                - stage
+                                - dependsOn
+                                - x
+                                - y
+                              additionalProperties: false
+                        required:
+                          - brief
+                          - nodes
+                        additionalProperties: false
+                      releases:
+                        maxItems: 20
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            plan:
+                              type: object
+                              properties:
+                                brief:
+                                  type: object
+                                  properties:
+                                    idea:
+                                      type: string
+                                      maxLength: 6000
+                                    audience:
+                                      type: string
+                                      maxLength: 6000
+                                    problem:
+                                      type: string
+                                      maxLength: 6000
+                                    journey:
+                                      type: string
+                                      maxLength: 6000
+                                    success:
+                                      type: string
+                                      maxLength: 6000
+                                    nonGoals:
+                                      type: string
+                                      maxLength: 6000
+                                    sharedContract:
+                                      type: string
+                                      maxLength: 6000
+                                    assumptions:
+                                      type: string
+                                      maxLength: 6000
+                                  required:
+                                    - idea
+                                    - audience
+                                    - problem
+                                    - journey
+                                    - success
+                                    - nonGoals
+                                    - sharedContract
+                                    - assumptions
+                                  additionalProperties: false
+                                nodes:
+                                  maxItems: 24
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      id:
+                                        type: string
+                                        format: uuid
+                                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                      title:
+                                        type: string
+                                        maxLength: 160
+                                      outcome:
+                                        type: string
+                                        maxLength: 6000
+                                      acceptance:
+                                        type: string
+                                        maxLength: 6000
+                                      nonGoals:
+                                        type: string
+                                        maxLength: 6000
+                                      stage:
+                                        type: string
+                                        maxLength: 80
+                                      dependsOn:
+                                        maxItems: 24
+                                        type: array
+                                        items:
+                                          type: string
+                                          format: uuid
+                                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                      x:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 6000
+                                      y:
+                                        type: integer
+                                        minimum: 0
+                                        maximum: 6000
+                                    required:
+                                      - id
+                                      - title
+                                      - outcome
+                                      - acceptance
+                                      - nonGoals
+                                      - stage
+                                      - dependsOn
+                                      - x
+                                      - y
+                                    additionalProperties: false
+                              required:
+                                - brief
+                                - nodes
+                              additionalProperties: false
+                            publishedAt:
+                              type: string
+                              format: date-time
+                              pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                            publishedBy:
+                              type: string
+                          required:
+                            - id
+                            - plan
+                            - publishedAt
+                            - publishedBy
+                          additionalProperties: false
+                    required:
+                      - schema
+                      - draft
+                      - releases
+                    additionalProperties: false
+                  tasks:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          nodeId:
+                            type: string
+                          taskId:
+                            type: string
+                          title:
+                            type: string
+                          status:
+                            type: string
+                          revision:
+                            type: string
+                          archived:
+                            type: boolean
+                          drifted:
+                            type: boolean
+        "400":
+          description: Authorization, validation, conflict or unknown outcome
+        "401":
+          description: Authorization, validation, conflict or unknown outcome
+        "403":
+          description: Authorization, validation, conflict or unknown outcome
+        "404":
+          description: Authorization, validation, conflict or unknown outcome
+        "409":
+          description: Authorization, validation, conflict or unknown outcome
+        "503":
+          description: Authorization, validation, conflict or unknown outcome
+      operationId: changeProductRoadmap
+      description: Save with project CAS; publish immutable reviewed plan; materialize one node through native audited
+        creation. Does not execute, merge or complete tasks. Reconcile with a read before another attempt.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              oneOf:
+                - type: object
+                  properties:
+                    action:
+                      type: string
+                      const: save
+                    commandId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    revision:
+                      type: string
+                      minLength: 1
+                    plan:
+                      type: object
+                      properties:
+                        brief:
+                          type: object
+                          properties:
+                            idea:
+                              type: string
+                              maxLength: 6000
+                            audience:
+                              type: string
+                              maxLength: 6000
+                            problem:
+                              type: string
+                              maxLength: 6000
+                            journey:
+                              type: string
+                              maxLength: 6000
+                            success:
+                              type: string
+                              maxLength: 6000
+                            nonGoals:
+                              type: string
+                              maxLength: 6000
+                            sharedContract:
+                              type: string
+                              maxLength: 6000
+                            assumptions:
+                              type: string
+                              maxLength: 6000
+                          required:
+                            - idea
+                            - audience
+                            - problem
+                            - journey
+                            - success
+                            - nonGoals
+                            - sharedContract
+                            - assumptions
+                          additionalProperties: false
+                        nodes:
+                          maxItems: 24
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              title:
+                                type: string
+                                maxLength: 160
+                              outcome:
+                                type: string
+                                maxLength: 6000
+                              acceptance:
+                                type: string
+                                maxLength: 6000
+                              nonGoals:
+                                type: string
+                                maxLength: 6000
+                              stage:
+                                type: string
+                                maxLength: 80
+                              dependsOn:
+                                maxItems: 24
+                                type: array
+                                items:
+                                  type: string
+                                  format: uuid
+                                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              x:
+                                type: integer
+                                minimum: 0
+                                maximum: 6000
+                              y:
+                                type: integer
+                                minimum: 0
+                                maximum: 6000
+                            required:
+                              - id
+                              - title
+                              - outcome
+                              - acceptance
+                              - nonGoals
+                              - stage
+                              - dependsOn
+                              - x
+                              - y
+                            additionalProperties: false
+                      required:
+                        - brief
+                        - nodes
+                      additionalProperties: false
+                  required:
+                    - action
+                    - commandId
+                    - revision
+                    - plan
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    action:
+                      type: string
+                      const: publish
+                    commandId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    revision:
+                      type: string
+                      minLength: 1
+                    releaseId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    confirm:
+                      type: boolean
+                      const: true
+                  required:
+                    - action
+                    - commandId
+                    - revision
+                    - releaseId
+                    - confirm
+                  additionalProperties: false
+                - type: object
+                  properties:
+                    action:
+                      type: string
+                      const: materialize
+                    releaseId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    nodeId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    confirm:
+                      type: boolean
+                      const: true
+                  required:
+                    - action
+                    - releaseId
+                    - nodeId
+                    - confirm
+                  additionalProperties: false
   /health/live:
     get:
       operationId: getLiveness

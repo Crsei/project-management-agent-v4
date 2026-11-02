@@ -1,3 +1,4 @@
+import { startTaskWorkflows, stopTaskWorkflows } from "./task-workflows/runner.ts";
 import { startExecution, stopExecution } from "./durable/engine.ts";
 import { startChatRuntime, stopChatRuntime } from "./durable/chat-runtime.ts";
 import { closeStore, getDatabase } from "./durable/store.ts";
@@ -32,15 +33,18 @@ export function startRuntime(): Promise<void> {
       await startAutomation();
       if (stopping) return;
       await startAutomationExecutionRuntime();
+      if (stopping) return;
+      startTaskWorkflows();
     } catch (error) {
       const maintenance = Promise.allSettled([stopPmProviderMaintenance()]);
+      const workflows = await Promise.allSettled([stopTaskWorkflows()]);
       const automationExecutions = await Promise.allSettled([stopAutomationExecutionRuntime()]);
       const workers = await Promise.allSettled([stopAutomation(), stopExecution(), stopChatRuntime()]);
       const drained = await maintenance;
       const providers = await Promise.allSettled([stopPmProviderApplication()]);
       closeStore();
       starting = null;
-      const cleanupFailures = [...automationExecutions, ...workers, ...drained, ...providers].flatMap(result => result.status === "rejected" ? [result.reason] : []);
+      const cleanupFailures = [...workflows, ...automationExecutions, ...workers, ...drained, ...providers].flatMap(result => result.status === "rejected" ? [result.reason] : []);
       if (cleanupFailures.length) throw new AggregateError([error, ...cleanupFailures], "工作区启动失败且后台清理失败。");
       throw error;
     }
@@ -55,11 +59,12 @@ export function stopRuntime(): Promise<void> {
   stopping = (async () => {
     if (starting) await starting.catch(() => undefined);
     try {
+      const workflows = await Promise.allSettled([stopTaskWorkflows()]);
       const automation = await Promise.allSettled([stopAutomation(), stopAutomationExecutionRuntime()]);
       const workers = await Promise.allSettled([stopExecution(), stopChatRuntime()]);
       const drained = await maintenance;
       const providers = await Promise.allSettled([stopPmProviderApplication()]);
-      const failures = [...automation, ...workers, ...drained, ...providers].flatMap((result) =>
+      const failures = [...workflows, ...automation, ...workers, ...drained, ...providers].flatMap((result) =>
         result.status === "rejected" ? [result.reason] : [],
       );
       if (failures.length) throw new AggregateError(failures, "工作区后台任务关闭失败。");

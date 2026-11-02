@@ -1,3 +1,4 @@
+import { appPreviews } from './task-delivery/app-preview.ts';
 import "./environment.ts";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -60,7 +61,7 @@ function shutdown(): void {
   shuttingDown = true;
   const deadline = setTimeout(() => process.exit(1), 15_000);
   deadline.unref();
-  void stopRuntime().then(
+  void Promise.all([stopRuntime(), appPreviews.close()]).then(
     () => {
       server.close(() => process.exit(0));
       if ("closeAllConnections" in server) server.closeAllConnections();

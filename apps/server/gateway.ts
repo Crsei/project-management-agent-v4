@@ -114,6 +114,11 @@ export function createGateway(options: GatewayOptions = {}) {
       else void serveFile(req, res).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
     } catch { res.writeHead(400).end(); }
   });
+  const connections = new Set<Duplex>();
+  server.on('connection', socket => {
+    connections.add(socket);
+    socket.once('close', () => connections.delete(socket));
+  });
   server.on('upgrade', (req, socket: Duplex, head) => {
     let destination: Destination | undefined;
     try { destination = route(req.url ?? '/'); } catch { socket.destroy(); return; }
@@ -128,6 +133,7 @@ export function createGateway(options: GatewayOptions = {}) {
       if (head.length) upstreamSocket.write(head);
       upstreamSocket.on('error', () => socket.destroy());
       socket.on('error', () => upstreamSocket.destroy());
+      socket.once('close', () => upstreamSocket.destroy());
       upstreamSocket.pipe(socket).pipe(upstreamSocket);
     });
     outgoing.on('response', (response) => {
@@ -140,7 +146,17 @@ export function createGateway(options: GatewayOptions = {}) {
     socket.on('close', () => outgoing.destroy());
     outgoing.end();
   });
-  return server;
+  let stopping: Promise<void> | undefined;
+  return Object.assign(server, {
+    shutdown(graceMs = 5000): Promise<void> {
+      stopping ??= new Promise<void>(resolve => {
+        const timer = setTimeout(() => { for (const socket of connections) socket.destroy(); }, graceMs);
+        timer.unref();
+        server.close(() => { clearTimeout(timer); resolve(); });
+      });
+      return stopping;
+    },
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
@@ -150,5 +166,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   if (!/^\d+$/.test(rawPort) || !Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PUBLIC_PORT must be an integer between 1 and 65535');
   const server = createGateway();
   server.listen(port, host, () => console.log(`public gateway listening on http://${host.includes(':') ? `[${host}]` : host}:${port}`));
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => server.close());
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => { void server.shutdown(); });
 }

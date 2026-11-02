@@ -1,3 +1,4 @@
+import { scenarioFitsDraft } from './app-scenarios';
 import { useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { stringify as stringifyYaml } from 'yaml';
@@ -164,6 +165,13 @@ export function EntityCreationSurface({ mode, initial, projectId, draftId, onCre
       {!c.canWrite && <p className="creation-alert" role="status">{t('当前只读；草稿已保留，未发送写入。', 'Read-only. Your draft is retained; no write was sent.')}</p>}
       {c.directory.error && task && <div className="creation-alert" role="alert"><p>{t('成员目录读取失败，不会将读取失败当作没有成员。', 'Member directory failed to load; this is not an empty directory.')}</p><button type="button" className="secondary-button" onClick={() => { void c.directory.refetch(); }}>{t('重新读取成员', 'Read members again')}</button></div>}
       {!task && !projectCreation && <label>{t('对象类型', 'Entity type')}<select aria-label="New entity type" data-testid="new-entity-type" value={draft.kind} disabled={!editable} onChange={event => c.changeKind(event.target.value as EntityKind)}>{entityKinds.filter(kind => !projectId || kind !== 'project').map(kind => <option key={kind} value={kind}>{en ? kind === 'cycle' ? 'Sprint (cycle)' : entityDefinitions[kind].label : zhKind[kind]}</option>)}</select></label>}
+      {task && <aside className="app-scenario-card" aria-label={t('预置 App 场景', 'App scenario')}>
+        <div><strong>IdeaBoard</strong><span>{t('用户反馈与路线图 App', 'Feedback & roadmap app')}</span>
+        <p>{t('提交反馈、投票、路线图与数据持久化。预置需求，由 Agent 真正开发成品。', 'Feedback, votes, roadmap and persistence. Seed requirements; let the Agent build the app.')}</p>
+        <small>{t('只填入可编辑草稿，不自动创建任务或运行；保存后选择「开发并交付」。', 'Fills an editable draft only. Save, then choose Develop and deliver.')}</small></div>
+        <button type="button" className="secondary-button" disabled={!editable || !scenarioFitsDraft(draft)} onClick={c.applyAppScenario}>{t('使用这个场景', 'Use this scenario')}</button>
+        {!scenarioFitsDraft(draft) && <small>{t('已有标题或描述不会被覆盖。新建空白任务可再次使用。', 'Existing content is never overwritten. Use a blank task to apply this scenario.')}</small>}
+      </aside>}
       {projectCreation ? <>
         <ProjectCreationFields values={draft.values} body={draft.body} disabled={!editable} en={en} errors={Object.fromEntries(issues.filter(issue => issue.field).map(issue => [issue.field!, issue.message]))} onChange={c.changeFields} onBodyChange={c.changeBody} />
         <div className="project-creation-location"><LocalProjectCreationFields controller={c} /></div>

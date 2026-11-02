@@ -1,3 +1,4 @@
+import { resolveChatExecutionScope } from "../task-delivery/binding.ts";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { workspaceRoot } from "../paths.ts";
@@ -54,7 +55,6 @@ import { makeAssistantStreamingFilter } from "./assistant-streaming.ts";
 import { DurableError } from "./errors.ts";
 import {
   agentContextIdentity,
-  resolveAgentScope,
   sameAgentScope,
   type AgentExecutionSnapshot,
 } from "./agent-scope.ts";
@@ -467,7 +467,7 @@ export async function submitChat(
     }));
   const modelOptions = validatedModelOptions(resolved.providerInstanceId, thread.settings.model, thread.settings.modelOptions);
   const analysisSnapshot = await resolvePmAnalysisChatSnapshot(request.id, request.idempotencyKey, thread.scope);
-  const executionSnapshot = analysisSnapshot ?? await resolveNativeTemplateChatSnapshot(request.id, request.idempotencyKey, await resolveAgentScope(thread.scope, requestHeaders));
+  const executionSnapshot = analysisSnapshot ?? await resolveNativeTemplateChatSnapshot(request.id, request.idempotencyKey, await resolveChatExecutionScope(thread, requestHeaders));
   if (!idle && request.trigger !== "regenerate-message") {
     const candidate = idleCompactionCandidate(request.id, "onReturn");
     const last = request.messages.at(-1);
@@ -703,7 +703,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
           throw new DurableError(412, "scope_required", "无工具的会话压缩不能获得 PM 工具权限。");
         try {
           const analysis = await resolvePmAnalysisChatSnapshot(generation.threadId, generation.request.idempotencyKey, snapshot.scope, controller.signal);
-          const resolved = analysis ?? await resolveAgentScope(snapshot.scope, requestHeaders, controller.signal);
+          const resolved = analysis ?? await resolveChatExecutionScope(requireRunnableThread(generation.threadId), requestHeaders, "execute", controller.signal);
           assertLiveAuthorization();
           if (!sameAgentScope(resolved.scope, snapshot.scope))
             throw new DurableError(409, "scope_conflict", "本次执行的文件区域归属已更改，拒绝过期原生回调。");
@@ -842,6 +842,14 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
                 execution: { threadId: generation.threadId, generationId: generation.id,
                   messageId: generation.messageId, scope: snapshot.scope },
                 authorizeExecution,
+                authorizeWorktreeWrite: generation.idleCompaction || !snapshot.worktreeWriteConfirmed ? undefined : async () => {
+                  await authorizeExecution("tool");
+                  const current = await resolveChatExecutionScope(requireRunnableThread(generation.threadId), requestHeaders, "execute", controller.signal);
+                  assertLiveAuthorization();
+                  if (current.path !== snapshot.path) throw new DurableError(409, "scope_conflict", "Delivery worktree changed.");
+                  if (!current.worktreeWriteConfirmed) throw new DurableError(409, "scope_conflict", "Delivery write confirmation is no longer current.");
+                  return current.path;
+                },
                 signal: controller.signal,
                 session: plan.session,
                 modelOptions: generation.modelOptions,
@@ -1104,7 +1112,7 @@ export async function continueChat(
     }));
   const modelOptions = validatedModelOptions(runtime.providerInstanceId, thread.settings.model,
     unchangedSettings ? previous.modelOptions ?? thread.settings.modelOptions : thread.settings.modelOptions);
-  const executionSnapshot = await resolveAgentScope(thread.scope, requestHeaders);
+  const executionSnapshot = await resolveChatExecutionScope(thread, requestHeaders);
   if (!confirmSideEffects)
     throw new ThreadConflictError(
       "CLI 的外部副作用可能已发生。请核对后确认恢复。",

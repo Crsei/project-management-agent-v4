@@ -1,3 +1,4 @@
+import { assertRoadmapMetadata } from './product-roadmap.ts';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { DomainError, type Capability } from '../../domain/src/core.ts';
@@ -42,6 +43,7 @@ const protectedMetadata = ['x-pm-created-by', 'x-pm-created-at', 'x-pm-updated-a
 
 /** Native clients may retain server facts, never forge, replace or remove them. */
 export function assertCoreProtectedMetadata(after: Entity, before?: Entity): void {
+  assertRoadmapMetadata(after, before);
   for (const field of protectedMetadata) {
     if (!isDeepStrictEqual(after[field], before?.[field]))
       throw new DomainError('protected_metadata', `Server metadata ${field} cannot be changed`, 400, { field });

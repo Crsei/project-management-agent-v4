@@ -59,3 +59,10 @@
   .task-creation :where(input, textarea, select) { font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .task-creation *, .task-creation *::before, .task-creation *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+.app-scenario-card { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 18px; margin: 12px 0 24px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--primary) 5%, transparent); }
+.app-scenario-card > div { flex: 1 1 250px; }
+.app-scenario-card strong { display: inline-block; margin-right: 10px; }
+.app-scenario-card p { margin: 6px 0; font-size: 13px; }
+.app-scenario-card small { color: var(--muted-foreground); font-size: 12px; }
+.app-scenario-card > small { flex-basis: 100%; }

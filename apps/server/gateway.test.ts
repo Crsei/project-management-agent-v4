@@ -95,3 +95,43 @@ test('gateway forwards WebSocket upgrades and Vite dev traffic without changing 
   assert.match(result, /hello$/);
   assert.deepEqual(agentRequest, { url: '/api/terminal?x=1', host: address.host, origin: url });
 });
+
+test('gateway shutdown drains then closes persistent SSE connections within its own grace period', async t => {
+  const upstream = http.createServer((_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write('data: ready\n\n'); });
+  const upstreamUrl = await listen(upstream);
+  const gateway = createGateway({ pmUrl: upstreamUrl });
+  const url = await listen(gateway);
+  t.after(() => { gateway.closeAllConnections(); upstream.closeAllConnections(); upstream.close(); });
+  const response = await fetch(url + '/api/v1/events');
+  const reader = response.body!.getReader();
+  await reader.read();
+  const ended = reader.read().catch(() => ({ done: true }));
+  const stop = gateway.shutdown(20);
+  assert.equal(gateway.shutdown(20), stop, 'shutdown is idempotent');
+  await stop;
+  assert.equal((await ended).done, true);
+  assert.equal(gateway.listening, false);
+});
+
+test('gateway shutdown also releases upgraded WebSocket sockets and their upstream', async t => {
+  const upstream = http.createServer();
+  let upgraded: import('node:stream').Duplex | undefined;
+  upstream.on('upgrade', (_req, socket) => {
+    upgraded = socket;
+    socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');
+  });
+  const upstreamUrl = await listen(upstream);
+  const gateway = createGateway({ agentUrl: upstreamUrl });
+  const url = new URL(await listen(gateway));
+  const client = net.connect(Number(url.port), url.hostname);
+  t.after(() => { client.destroy(); upgraded?.destroy(); upstream.close(); gateway.close(); });
+  const connected = once(client, 'data');
+  client.write('GET /agent/api/ws HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');
+  await connected;
+  assert.ok(upgraded);
+  const closed = once(client, 'close');
+  const upstreamEnded = once(upgraded, 'end');
+  await gateway.shutdown(20);
+  await Promise.all([closed, upstreamEnded]);
+  assert.equal(gateway.listening, false);
+});

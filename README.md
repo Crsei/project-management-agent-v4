@@ -22,6 +22,18 @@
 - Chromium 实际访问 PM 项目与 Agent 会话分组、自动化页面、390px 窄屏，项目 scope resolve 返回 v4 项目目录。终端 `pwd` 返回该目录；PM SSE 收到 `ready`，受控原生 CLI 的 Agent SSE 返回该目录并完成。受控 CLI 不是商业模型或真实供应商账号验收。
 - 四角色本机服务组重启后项目和验证会话仍可读；桌面进程管理器实际启动 PM、Worker、Agent、网关并在退出后清理自身子进程。本机没有图形显示，未验收 Electron GUI、安装包、签名、公证或其他平台。
 
+任务驱动 GitHub 代码交付第一版见[使用与边界说明](docs/implementation/task-code-delivery.zh.md)：独立分支、启动时选 Provider、显式验证/提交/推送、Draft PR 和手动刷新 CI/评审。2026-10-31 已在隔离仓库跑通真实 Codex 开发、10 项测试、Draft PR 与同版本 CI 成功回到任务；暂无人工评审，不代表全仓回归或完整 Runner 验收通过。会话持久化仍暂沿用 Agent Chat。
+
+任务详情新增[任务工作流与节点画布](docs/implementation/task-workflows.zh.md)：三套预制模板、项目级草稿/发布版本、受限节点连线与一次明确授权后的后台交付。支持[节点与任务状态联动](docs/implementation/workflow-task-state.zh.md)：开发前进入进行中、CI 通过后确认待审核，不自动完成任务；重启后需显式恢复，不重放未知副作用。
+
+投资人演示入口、5 分钟讲解脚本和本轮真实验收见[投资人 POC](docs/implementation/investor-poc.zh.md)。2026-11-01 已通过公共入口跑通工作流 v3：真实 Codex 开发 → 测试 → Draft PR #2 → 同 SHA 必需 CI → 人工确认待审核；不等于业务验收或全仓回归全绿。
+
+预置 [IdeaBoard App 场景与隔离预览](docs/implementation/app-scenario-preview.zh.md)：新建任务填入可编辑需求，由现有 Agent 工作流生成应用；提交后显式启动本机隔离预览，操作和重启核对数据，不自动合并、部署或完成任务。
+
+项目级[产品规划工作台](docs/implementation/product-roadmap.zh.md)：引导轻量 PRD、可编辑多任务 Roadmap、不可变发布版本、真实任务与依赖、前置代码基线校验及项目级集成预览。规则生成不冒充 AI 推理，发布计划不等于启动开发或完成项目。 2026-11-02 已在隔离仓库通过五个真实任务增量交付同一客户反馈 App：Draft PR #4～#8、同版本 CI、提交包含关系及浏览器跨功能/重启持久化均已核对；任务仍待审核，不代表完整 Runner 或生产验收。
+
+2026-11-02 分支整合：任务交付、工作流及产品规划与自动化 Studio / OMP 共存。执行目录保留 PM 分析快照、原生模板及服务端任务 worktree 的各自校验；任务工作流和自动化执行器纳入同一启停生命周期。合并后临时端口 HTTP 检查确认 OpenAPI 同时提供两组接口，未登录的自动化及产品规划请求返回 401；此检查不代表真实 Provider、业务流程或全仓回归通过。会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口。
+
 ## 当前状态
 
 已实现正式命令与 Markdown 核心接口；当前命令清单以生成合同为准。`project`、`work_item`、`milestone` 的读写进入 `/api/v1/workspaces/{workspaceId}/core`。本地模式的新项目写入所选目录的 `.pm/core/`，未迁移旧项目仍在共享工作区根；配置、统一 ID 和恢复台账继续归工作区所有。对话/意图/决策、成员能力、上传元数据/成果/证据/提交/审核及 Dashboard/项目协作附加记录使用 PostgreSQL，附件字节另存。核心命令收据同样写入 `command_receipts`，创建以 `commandId` 幂等。当前服务为本机后端部署，不将此结果等同于完整生产发布验收。

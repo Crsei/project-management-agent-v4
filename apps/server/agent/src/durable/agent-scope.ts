@@ -10,6 +10,8 @@ export type AgentExecutionSnapshot = {
   workspaceName: string;
   projectName: string | null;
   path: string;
+  /** Only a verified, server-owned delivery receipt can supply this grant. */
+  worktreeWriteConfirmed?: boolean;
 };
 export const sameAgentScope = (a: AgentScope | undefined, b: AgentScope | undefined): boolean =>
   a?.workspaceId === b?.workspaceId && a?.projectId === b?.projectId;

@@ -91,6 +91,7 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
   execution?: PmExecutionIdentity;
   authorizeExecution?: ProviderDriverContext["authorizeExecution"];
   pmAnalysis?: true;
+  authorizeWorktreeWrite?: ProviderDriverContext["authorizeWorktreeWrite"];
 }): Promise<CliChatResult> {
   if ((options.pmToolBridge || options.mcpServers?.length) && (!options.execution || !options.authorizeExecution))
     throw new ProviderRuntimeError(412, "scope_required", "PM tools require a trusted live Chat authorization.");
@@ -130,6 +131,7 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
       throw new ProviderRuntimeError(409, "session_mismatch", "Agent configuration changed during native session preparation.");
     const result = await adapter.run({ ...providerContext(instance, cwd), pmToolBridge: options.pmToolBridge,
       mcpServers: options.mcpServers, execution: options.execution, authorizeExecution: options.authorizeExecution,
+      authorizeWorktreeWrite: options.authorizeWorktreeWrite,
       ...(options.pmAnalysis ? { pmAnalysis: true as const } : {}) }, {
       model: runtime.modelId, prompt: options.prompt, signal: options.signal,
       modelOptions, interactionMode: options.interactionMode ?? "default",

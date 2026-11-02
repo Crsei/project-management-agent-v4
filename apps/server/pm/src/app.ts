@@ -1,3 +1,4 @@
+import { registerProductRoadmapRoutes } from './product-roadmap-routes.ts';
 import { lstatSync, mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
@@ -71,6 +72,7 @@ import { createConfiguredAutomationExecutionPort, verifyAutomationServiceBearer 
 import type { StudioExecutionPort } from '../../../../packages/contracts/src/automation-studio.ts';
 import { registerAgentFileAreaRoutes } from './agent-file-area-routes.ts';
 import { registerDocumentSourceRoutes } from './document-source-routes.ts';
+import { registerWorkflowTaskTransitionRoutes } from './workflow-task-transition-routes.ts';
 import { createAgentChatTools } from './agent-chat-tools.ts';
 import { artifactVisibilitySchema, type ArtifactVisibility } from '../../../../packages/contracts/src/artifact-files.ts';
 import { createProjectBlobStore, initializeProjectBlobStorage, checkProjectBlobStorage } from '../../../../packages/infrastructure/src/project-blobs.ts';
@@ -402,6 +404,8 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   registerAgentCapabilityRoutes(app, { database, actor, coreWorkspaces, tools: chatTools });
   registerAgentIssueSearchRoutes(app, { database, actor, coreWorkspaces });
   registerAgentPreviewRoutes(app, { database, actor, coreWorkspaces });
+  registerWorkflowTaskTransitionRoutes(app, { database, actor, coreWorkspaces });
+  registerProductRoadmapRoutes(app, { database, actor, coreWorkspaces });
   registerNotificationRoutes(app, { database, actor, core: notificationCore });
   registerWebhookRoutes(app, { database, actor, ...(options.webhooks ? { config: options.webhooks } : {}) });
   app.get('/api/v1/workspaces/:workspaceId/dashboard/personal', async request => dashboard(request, readPersonalDashboard));

@@ -4,6 +4,7 @@ const defaultLabels: Record<string, readonly [en: string, zh: string]> = {
   todo: ['To do', '待办'],
   in_progress: ['In progress', '进行中'],
   in_review: ['In review', '审核中'],
+  review: ['Awaiting review', '待审核'],
   done: ['Completed', '已完成'],
   canceled: ['Canceled', '已取消'],
 };

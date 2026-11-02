@@ -15,7 +15,7 @@ import { createProviderInstance, getStoredInstance, updateProviderInstance } fro
 import { pmRuntimeBinding } from "../providers/t3code/runtime-host.ts";
 import { ThreadId } from "@t3tools/contracts";
 import { cancelChat, getChatGeneration, stopChatRuntime, submitChat, type ChatGeneration } from "./chat-runtime.ts";
-import { closeStore, listRecords } from "./store.ts";
+import { closeStore, listRecords, writeRecord } from "./store.ts";
 import { ensureThread, getThread, getThreadBranch, updateThread } from "./threads.ts";
 
 const scope: AgentScope = { workspaceId: "00000000-0000-4000-8000-000000000001", projectId: null };
@@ -188,6 +188,30 @@ test("revoked PM access and a changed resolved directory reject a live native ca
   resolvedPath = join(directory, "replacement");
   await assert.rejects(context.authorizeExecution!("compaction"), { status: 409, code: "scope_conflict" });
 });
+
+for (const during of [false, true]) {
+  test(`an incomplete delivery binding ${during ? "during execution" : "at admission"} cannot fall back to the PM root`, async () => {
+    const running = during ? await start() : undefined;
+    // A server-owned delivery that has not acquired its worktree is not an ordinary Chat.
+    writeRecord("task-code-delivery-v1", "pending-delivery", {
+      id: "pending-delivery", threadId: "authorization-chat", workspaceId: scope.workspaceId,
+      projectId: "PRJ-001", taskId: "TASK-001", step: "preparing",
+      pending: { action: "prepare", at: new Date().toISOString() },
+    });
+    if (running) {
+      await assert.rejects(running.context.authorizeExecution!("tool"), { code: "delivery_binding_changed" });
+      await assert.rejects(running.context.authorizeExecution!("compaction"), { code: "delivery_binding_changed" });
+      assert.equal(running.context.authorizeWorktreeWrite, undefined);
+    } else {
+      await assert.rejects(submitChat({
+        id: "authorization-chat",
+        messages: [{ id: "pending-delivery-user", role: "user", parts: [{ type: "text", text: "Do not use the project root." }] }],
+      }, undefined, headers), { code: "delivery_binding_changed" });
+      assert.deepEqual(listRecords("chat:generations"), []);
+    }
+    await assertNoNativeEffects();
+  });
+}
 
 for (const during of [false, true]) {
   for (const mutation of ["provider-revision", "thread-revision", "thread-archive", "pm-context"] as const) {
