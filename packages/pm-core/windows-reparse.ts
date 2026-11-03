@@ -136,8 +136,17 @@ export function cacheWindowsPathAttributes(filenames: readonly string[]): void {
 export function assertNoWindowsReparsePath(filename: string, stat: BigIntStats): void {
   if (process.platform !== 'win32') return;
   const key = path.resolve(filename).toLowerCase();
-  if (attributes.get(key)?.stamp !== stamp(stat)) cacheWindowsPathAttributes([filename]);
+  const cached = attributes.get(key), suppliedStamp = stamp(stat);
+  let currentStamp = suppliedStamp;
+  if (cached?.stamp === suppliedStamp) {
+    // A cache hit must not certify a path replaced after the caller took its stat.
+    const current = lstatSync(filename, { bigint: true });
+    currentStamp = stamp(current);
+    if (identity(current) !== identity(stat) || (!stat.isDirectory() && currentStamp !== suppliedStamp))
+      throw new Error('Windows storage path changed during attribute verification');
+  }
+  if (cached?.stamp !== currentStamp) cacheWindowsPathAttributes([filename]);
   const result = attributes.get(key);
-  if (!result || (stat.isDirectory() ? result.identity !== identity(stat) : result.stamp !== stamp(stat))) throw new Error('Windows storage path changed during attribute verification');
+  if (!result || (stat.isDirectory() ? result.identity !== identity(stat) : result.stamp !== suppliedStamp)) throw new Error('Windows storage path changed during attribute verification');
   if (result.reparse) throw Object.assign(new Error('Windows reparse points are not allowed in storage paths'), { code: 'EPERM' });
 }
