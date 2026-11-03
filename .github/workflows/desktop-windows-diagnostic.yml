@@ -23,11 +23,12 @@ jobs:
           const selected=keys=>Object.fromEntries(keys.flatMap(key=>process.env[key]===undefined?[]:[[key,process.env[key]]]));
           const service={...minimal,...selected(['PATH','TEMP','TMP','TMPDIR'])};
           const profile={...service,...selected(['USERPROFILE','APPDATA','LOCALAPPDATA','HOMEDRIVE','HOMEPATH','PSModulePath'])};
+          const script="$ErrorActionPreference='Stop'; [Console]::Out.WriteLine('before-item'); $item=Get-Item -LiteralPath $env:PM_DIAGNOSTIC_PATH; [Console]::Out.WriteLine('before-acl'); $acl=Get-Acl -LiteralPath $env:PM_DIAGNOSTIC_PATH; [Console]::Out.WriteLine('before-compile'); Add-Type -TypeDefinition 'public static class Probe { public static int Value() {return 1;} }'; [Console]::Out.WriteLine('modules-ready')";
           for(const [name,env] of [['minimal',minimal],['service',service],['profile',profile],['inherited',process.env]]){
             for(const closeInput of [false,true]){
               const started=Date.now();
               await new Promise(resolve=>{
-                const child=execFile(executable,['-NoLogo','-NoProfile','-NonInteractive','-Command',"[Console]::Out.WriteLine('ps-ready')"],{env,windowsHide:true,timeout:5000},(error,stdout,stderr)=>{
+                const child=execFile(executable,['-NoLogo','-NoProfile','-NonInteractive','-Command',script],{env:{...env,PM_DIAGNOSTIC_PATH:process.cwd()},windowsHide:true,timeout:10000},(error,stdout,stderr)=>{
                   console.log(JSON.stringify({name,closeInput,elapsedMs:Date.now()-started,code:error?.code,killed:error?.killed,signal:error?.signal,stdout:stdout.trim(),stderr:stderr.trim()}));resolve();
                 });
                 if(closeInput)child.stdin.end();
