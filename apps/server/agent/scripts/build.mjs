@@ -48,6 +48,8 @@ const result = await build({
         }
       });
       context.onResolve({ filter: /^[^./]/ }, (args) => {
+        // Drive-qualified native entry points/imports are files, not package specifiers.
+        if (path.isAbsolute(args.path)) return;
         if (isBuiltin(args.path)) return { path: args.path, external: true };
         if (args.path.startsWith("@t3tools/provider-testing")) {
           throw new Error("Provider test support must not enter a production artifact.");

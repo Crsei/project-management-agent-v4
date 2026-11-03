@@ -11629,7 +11629,7 @@
     "hostBuildInputs": [
       {
         "path": "apps/server/agent/scripts/build.mjs",
-        "sha256": "cc3959c016590c39ce5d5f541d4145396f5d97775d51cc7750fd9769d748366a"
+        "sha256": "1532145b03fb1b4371fa4e193e6e77d63ef4b216f5e61658012dd526cc5fda46"
       },
       {
         "path": "apps/server/agent/scripts/package.mjs",

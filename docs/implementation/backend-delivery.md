@@ -454,5 +454,6 @@ backend剩余环境／无关阻塞保留：guard只接受55444，拒绝自有临
 - 回归使用自有 PostgreSQL、独立网络命名空间、Git/完整 PG 客户端及私有临时目录；命名空间内部55444只用于满足既有测试防护，未连接宿主55444。只读源码挂载下的 `.local` 写入通过独立临时挂载隔离，不向仓库原测试/审计目录写入。已清理自有 GUI 账号/数据、临时脚本/构建目录、验证容器和命名镜像；仅保留证据与开发运行时缓存。
 - 全仓根类型检查仍被无关 Web/测试合同错误阻塞：notification-inbox、project-files、agent-file-areas 测试 actorId、artifact filter、document-sources fixture exactOptionalPropertyTypes、graph-flow 可空值。未覆盖并行改动，不把局部检查记为全仓 `pnpm check` 通过。
 - 用户已授权并执行全部项目更新的 commit/push，首批提交为 `4bcf7f276f1fe5ec55a35348adeec592edf01207`（504 个文件）；后续原生 CI 修复单独提交。[GitHub Actions](../../.github/workflows/desktop.yml) 使用 Windows 2025、macOS 15 Intel/arm64 原生 runner，显式构建 unsigned 测试包、执行真实 PG/文件权限回归及打包资源的登录/停止/重连冒烟；产物含 SHA256 清单，保留14天，不自动创建 GitHub Release。
+- Agent bundler 先识别原生绝对文件路径，再处理外部包，避免 Windows 盘符入口被误标为 external。构建脚本变更仅重采集已审阅的对应 `hostBuildInputs` SHA256；保留 SDK/Effect 外部依赖边界、测试支持拒绝规则与构建输入的严格校验。
 - 原生构建和服务冒烟不等于已完成目标系统的安装/卸载、GUI 人工验收或真实 Provider 推理。正式 Windows Authenticode、macOS Developer ID 签名与公证仍需发布者材料及受保护的 `desktop-signing` 环境；signed 缺少材料时失败，不退化为 unsigned。macOS ad-hoc 测试签名不算正式签名或公证。
 - 会话与持久化尚未统一设计收口，仍沿用 Agent Chat 保存方式；桌面备份不消除尚未确认客户端操作的未知副作用。Linux descriptor-relative 保证不等同于 macOS/Windows 路径校验，Windows 目录元数据断电持久性受 Node 能力限制；不宣称新增同用户文件系统安全沙箱。
