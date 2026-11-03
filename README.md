@@ -58,6 +58,8 @@ CI 在桌面类型检查前依次构建 `@agent-workspace/contracts` 与 `@agent
 
 Windows 权限、reparse 检查和进程监督脚本显式加载系统 PowerShell 模块，不依赖 runner 的模块分析缓存或完整用户环境。打包 staging 目录创建后转为真实路径，兼容 macOS 的 `/var` 临时目录别名，同时保留产物目录的符号链接拒绝规则。
 
+Windows 使用随包 `pg_ctl` 创建 PostgreSQL 的受限令牌进程，兼容以管理员令牌运行的宿主；通过数据库身份校验、实际 PID 与持久认证连接监督服务器，关机仍执行可重试的正常停止。macOS 签名工具使用[固定补丁](patches/@electron__osx-sign@1.3.3.patch)：只遍历真实文件、跳过符号链接并顺序检查二进制，避免依赖别名循环及大资源树的 `EMFILE`。
+
 ## v4 本机验证
 
 以下是桌面独立运行时交付前的基线记录；当前桌面交付边界以上节为准。

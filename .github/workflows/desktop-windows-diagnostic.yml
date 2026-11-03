@@ -20,35 +20,8 @@ jobs:
           run_install: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform win32 --arch x64
-      - name: Observe private PostgreSQL startup under the native runner token
+      - name: Verify native PostgreSQL lifecycle and restored services
         shell: bash
         run: |
-          node --input-type=module <<'NODE'
-          import cp from 'node:child_process';
-          import {syncBuiltinESMExports} from 'node:module';
-          import {mkdtemp,realpath,rm} from 'node:fs/promises';
-          import {tmpdir} from 'node:os';
-          import {join,basename,resolve} from 'node:path';
-          let instance;
-          const original=cp.spawn;
-          cp.spawn=(command,args,options)=>{
-            if(basename(command).toLowerCase()!=='postgres.exe'||options.stdio!=='ignore')return original(command,args,options);
-            const child=original(command,args,{...options,stdio:['ignore','ignore','pipe']});
-            let diagnostic='';child.stderr.on('data',chunk=>{diagnostic=(diagnostic+chunk).slice(-16384)});
-            child.on('exit',code=>console.log(JSON.stringify({postgresExit:code,diagnostic:diagnostic.replaceAll(instance?.state?.password??'not-a-generated-password','[REDACTED]')})));
-            return child;
-          };
-          syncBuiltinESMExports();
-          const {ManagedPostgres}=await import('./apps/desktop/src/managed-postgres.mjs');
-          const root=await realpath(await mkdtemp(join(tmpdir(),'desktop-pg-diagnostic-')));
-          instance=new ManagedPostgres({dataDir:join(root,'instance'),binariesDir:resolve('apps/desktop/.runtime/desktop-runtime/postgres')});
-          try{
-            try{await instance.start();console.log(JSON.stringify({directStart:true}));}
-            catch(error){
-              console.log(JSON.stringify({directStart:false,error:error.message}));
-              await instance.command('pg_ctl',['start','-D',instance.clusterDir,'-o',`-h 127.0.0.1 -p ${instance.state.port} -c unix_socket_directories=`, '-w','-t','15','-l',join(root,'postgres.log')]);
-              await instance.identify();console.log(JSON.stringify({controlStart:true}));
-              await instance.command('pg_ctl',['stop','-D',instance.clusterDir,'-m','fast','-w','-t','15']);
-            }
-          }finally{await instance.stop();await rm(root,{recursive:true,force:true});}
-          NODE
+          export PM_DESKTOP_TEST_POSTGRES_ROOT="$(node -p "require('node:path').resolve('apps/desktop/.runtime/desktop-runtime/postgres')")"
+          node --test apps/desktop/src/managed-postgres.test.mjs apps/desktop/src/backend/bootstrap.test.ts apps/desktop/src/local-server.test.mjs

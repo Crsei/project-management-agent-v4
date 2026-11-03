@@ -127,7 +127,8 @@ test("real PG16 unexpected exit after readiness is reported without credentials"
   const pg = new ManagedPostgres({ dataDir, binariesDir, onExit: report });
   processes.push(pg);
   const started = await pg.start();
-  pg.child.kill("SIGKILL");
+  const pid = Number((await readFile(join(dataDir, "postgres", "postmaster.pid"), "utf8")).split(/\r?\n/)[0]);
+  process.kill(pid, "SIGKILL");
   const event = await Promise.race([exited, new Promise((_, reject) => { const timer = setTimeout(() => reject(new Error("PostgreSQL exit not reported")), 10_000); timer.unref(); })]);
   assert.equal(event.role, "postgres");
   assert.equal(pg.ready, false);

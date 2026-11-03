@@ -1,0 +1,60 @@
+diff --git a/dist/cjs/util.js b/dist/cjs/util.js
+index 77e64b56872bc65bcb0f60ecfbec84eb3da02c6f..37ed1cabdbb1f4c1ec36c9f6e6f8ee74bff71519 100644
+--- a/dist/cjs/util.js
++++ b/dist/cjs/util.js
+@@ -151,9 +151,9 @@ async function walkAsync(dirPath) {
+     (0, exports.debugLog)('Walking... ' + dirPath);
+     async function _walkAsync(dirPath) {
+         const children = await fs.readdir(dirPath);
+-        return await Promise.all(children.map(async (child) => {
++        const walkChild = async (child) => {
+             const filePath = path.resolve(dirPath, child);
+-            const stat = await fs.stat(filePath);
++            const stat = await fs.lstat(filePath);
+             if (stat.isFile()) {
+                 switch (path.extname(filePath)) {
+                     case '.cstemp': // Temporary file generated from past codesign
+@@ -174,7 +174,12 @@ async function walkAsync(dirPath) {
+                 return walkResult;
+             }
+             return null;
+-        }));
++        };
++        // Bound open descriptors and never traverse dependency or framework aliases.
++        const results = [];
++        for (const child of children)
++            results.push(await walkChild(child));
++        return results;
+     }
+     const allPaths = await _walkAsync(dirPath);
+     return compactFlattenedList(allPaths);
+diff --git a/dist/esm/util.js b/dist/esm/util.js
+index d3f66d54b1a88e7410d78affe17de87302db02a3..d0d4133d5a85f690240dfd41412702e441753651 100644
+--- a/dist/esm/util.js
++++ b/dist/esm/util.js
+@@ -115,9 +115,9 @@ export async function walkAsync(dirPath) {
+     debugLog('Walking... ' + dirPath);
+     async function _walkAsync(dirPath) {
+         const children = await fs.readdir(dirPath);
+-        return await Promise.all(children.map(async (child) => {
++        const walkChild = async (child) => {
+             const filePath = path.resolve(dirPath, child);
+-            const stat = await fs.stat(filePath);
++            const stat = await fs.lstat(filePath);
+             if (stat.isFile()) {
+                 switch (path.extname(filePath)) {
+                     case '.cstemp': // Temporary file generated from past codesign
+@@ -138,7 +138,12 @@ export async function walkAsync(dirPath) {
+                 return walkResult;
+             }
+             return null;
+-        }));
++        };
++        // Bound open descriptors and never traverse dependency or framework aliases.
++        const results = [];
++        for (const child of children)
++            results.push(await walkChild(child));
++        return results;
+     }
+     const allPaths = await _walkAsync(dirPath);
+     return compactFlattenedList(allPaths);

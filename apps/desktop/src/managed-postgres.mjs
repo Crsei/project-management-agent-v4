@@ -56,6 +56,9 @@ export class ManagedPostgres {
     this.onProgress = onProgress;
     this.child = null;
     this.children = new Set();
+    this.windowsPid = null;
+    this.windowsMonitor = null;
+    this.windowsLaunchPending = false;
     this.ready = false;
     this.cancelled = false;
     this.starting = null;
@@ -63,8 +66,8 @@ export class ManagedPostgres {
     this.lock = null;
     this.state = null;
   }
-  get running() { return this.children.size > 0; }
-  get ownedProcessCount() { return this.children.size; }
+  get running() { return this.ownedProcessCount > 0; }
+  get ownedProcessCount() { return this.children.size + (this.windowsPid !== null || this.windowsLaunchPending ? 1 : 0); }
   binary(name) { return join(this.binariesDir, "bin", `${name}${process.platform === "win32" ? ".exe" : ""}`); }
   environment() {
     // Do not honor a shell's PG*, dynamic-loader injection or user pgpass settings.
@@ -212,17 +215,20 @@ export class ManagedPostgres {
     url.username = this.state.username; url.password = this.state.password;
     return url.toString();
   }
-  async identify() {
-    const client = new Client({ connectionString: this.databaseUrl(), ssl: false, options: "", connectionTimeoutMillis: 1_000, query_timeout: 1_000, application_name: "pm-desktop-owner" });
-    client.on("error", () => undefined);
+  createClient() {
+    return new Client({ connectionString: this.databaseUrl(), ssl: false, options: "", connectionTimeoutMillis: 1_000, query_timeout: 1_000, application_name: "pm-desktop-owner" });
+  }
+  async identify(existingClient = null) {
+    const client = existingClient ?? this.createClient();
+    if (!existingClient) client.on("error", () => undefined);
     try {
-      await client.connect();
+      if (!existingClient) await client.connect();
       const result = await client.query("SELECT current_setting('data_directory') AS directory,current_setting('server_version_num') AS version");
       const row = result.rows[0];
       if (resolve(row.directory) !== this.clusterDir || Math.floor(Number(row.version) / 10_000) !== 16) throw new Error("Managed PostgreSQL server identity mismatch");
-    } finally { await client.end().catch(() => undefined); }
+    } finally { if (!existingClient) await client.end().catch(() => undefined); }
   }
-  async recoverOwnedServer() {
+  async recoverOwnedServer({ cancelable = true } = {}) {
     const pidFile = join(this.clusterDir, "postmaster.pid");
     let bytes;
     try {
@@ -238,12 +244,78 @@ export class ManagedPostgres {
     let identified = false;
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline && alive(pid)) {
-      this.checkCancelled();
+      if (cancelable) this.checkCancelled();
       try { await this.identify(); identified = true; break; }
       catch { await delay(100); }
     }
     if (!identified) throw new Error("An active foreign or unverifiable PostgreSQL server occupies this cluster");
-    await this.command("pg_ctl", ["stop", "-D", this.clusterDir, "-m", "fast", "-w", "-t", String(shutdownSeconds)], { timeout: (shutdownSeconds + 5) * 1000 });
+    await this.command("pg_ctl", ["stop", "-D", this.clusterDir, "-m", "fast", "-w", "-t", String(shutdownSeconds)], { timeout: (shutdownSeconds + 5) * 1000, cancelable });
+  }
+  async readWindowsPid() {
+    const file = join(this.clusterDir, "postmaster.pid");
+    const stat = await lstat(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096) throw new Error("Unsafe PostgreSQL process state");
+    const lines = (await readFile(file, "utf8")).split(/\r?\n/);
+    const pid = Number(lines[0]);
+    if (!Number.isInteger(pid) || pid < 1 || resolve(lines[1] ?? "") !== this.clusterDir || Number(lines[3]) !== this.state.port) throw new Error("PostgreSQL process ownership mismatch");
+    return pid;
+  }
+  async closeWindowsMonitor() {
+    const client = this.windowsMonitor;
+    this.windowsMonitor = null;
+    await client?.end().catch(() => undefined);
+  }
+  async startWindows(serverOptions) {
+    // pg_ctl uses PostgreSQL's restricted-token launcher on Windows. Direct
+    // postgres.exe rejects an elevated desktop/runner token; never run it as admin.
+    this.windowsLaunchPending = true;
+    await this.command("pg_ctl", ["start", "-D", this.clusterDir, "-o", serverOptions.join(" "), "-l", "NUL", "-w", "-t", "30"], { timeout: 35_000 });
+    this.windowsPid = await this.readWindowsPid();
+    this.windowsLaunchPending = false;
+    this.checkCancelled();
+    const client = this.createClient();
+    this.windowsMonitor = client;
+    let failure = null;
+    const disconnected = () => {
+      if (this.windowsMonitor !== client) return;
+      failure = new Error("Managed PostgreSQL ownership connection closed");
+      const unexpected = this.ready && !this.cancelled;
+      this.ready = false;
+      if (this.windowsPid !== null && !alive(this.windowsPid)) this.windowsPid = null;
+      if (unexpected) this.onExit?.({ role: "postgres", code: null, signal: null });
+    };
+    client.on("error", disconnected);
+    client.on("end", disconnected);
+    await client.connect();
+    await this.identify(client);
+    this.checkCancelled();
+    if (failure) throw failure;
+    this.ready = true;
+    return { databaseUrl: this.databaseUrl(), port: this.state.port, instanceId: this.state.instanceId };
+  }
+  async stopWindowsOwnedProcess() {
+    if (this.windowsLaunchPending) {
+      // Let an in-flight pg_ctl start settle, then reconcile any uncertain launch
+      // using the private pid file and authenticated database identity.
+      if ([...this.children].some(child => child.spawnargs?.[0] === this.binary("pg_ctl") && child.spawnargs?.[1] === "start")) return;
+      await this.recoverOwnedServer({ cancelable: false });
+      this.windowsLaunchPending = false;
+    }
+    const pid = this.windowsPid;
+    if (pid !== null && alive(pid)) {
+      if (await this.readWindowsPid() !== pid) throw new Error("PostgreSQL shutdown ownership changed");
+      await this.identify();
+      try {
+        await this.command("pg_ctl", ["stop", "-D", this.clusterDir, "-m", "fast", "-w", "-t", String(shutdownSeconds)], { timeout: (shutdownSeconds + 5) * 1000, cancelable: false });
+      } catch {
+        if (alive(pid)) throw new Error("Managed PostgreSQL is still shutting down. Ownership and data are retained; retry Stop instead of removing the instance.");
+      }
+      const deadline = Date.now() + 5_000;
+      while (alive(pid) && Date.now() < deadline) await delay(50);
+      if (alive(pid)) throw new Error("Managed PostgreSQL is still shutting down. Ownership and data are retained; retry Stop instead of removing the instance.");
+    }
+    this.windowsPid = null;
+    await this.closeWindowsMonitor();
   }
   async start() {
     if (this.ready) return { databaseUrl: this.databaseUrl(), port: this.state.port, instanceId: this.state.instanceId };
@@ -262,7 +334,9 @@ export class ManagedPostgres {
       await this.initialize(); this.checkCancelled();
       await this.recoverOwnedServer(); await assertPortFree(this.state.port); this.checkCancelled();
       this.progress("Starting private PostgreSQL 16 database");
-      const child = spawn(this.binary("postgres"), ["-D", this.clusterDir, "-h", "127.0.0.1", "-p", String(this.state.port), "-c", "unix_socket_directories=", "-c", "password_encryption=scram-sha-256", "-c", "logging_collector=off", "-c", "log_statement=none", "-c", "log_min_error_statement=panic", "-c", "log_connections=off", "-c", "log_disconnections=off"], { cwd: this.dataDir, env: this.environment(), windowsHide: true, stdio: "ignore" });
+      const serverOptions = ["-h", "127.0.0.1", "-p", String(this.state.port), "-c", "unix_socket_directories=", "-c", "password_encryption=scram-sha-256", "-c", "logging_collector=off", "-c", "log_statement=none", "-c", "log_min_error_statement=panic", "-c", "log_connections=off", "-c", "log_disconnections=off"];
+      if (process.platform === "win32") return await this.startWindows(serverOptions);
+      const child = spawn(this.binary("postgres"), ["-D", this.clusterDir, ...serverOptions], { cwd: this.dataDir, env: this.environment(), windowsHide: true, stdio: "ignore" });
       this.child = child; this.children.add(child);
       let failure = null;
       child.once("error", () => { failure = new Error("Managed PostgreSQL process could not start"); this.children.delete(child); if (this.child === child) this.child = null; });
@@ -288,12 +362,14 @@ export class ManagedPostgres {
       throw new Error("Managed PostgreSQL did not become ready within 30 seconds");
     } catch (error) {
       this.ready = false;
-      await this.stopOwnedProcess().catch(() => undefined);
-      await this.releaseLock().catch(() => undefined);
+      try { await this.stopOwnedProcess(); }
+      catch (cleanupError) { throw new AggregateError([error, cleanupError], "Managed PostgreSQL startup failed and owned shutdown is not confirmed"); }
+      await this.releaseLock();
       throw error;
     }
   }
   async stopOwnedProcess() {
+    if (process.platform === "win32") return this.stopWindowsOwnedProcess();
     const child = this.child;
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
     // pg_ctl addresses only our marker-verified cluster, never a shared service or arbitrary PID.
