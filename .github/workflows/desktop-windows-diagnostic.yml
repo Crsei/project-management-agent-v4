@@ -24,6 +24,17 @@ jobs:
         shell: bash
         run: |
           node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import {syncBuiltinESMExports} from 'node:module';
+          const snapshots=new Map(),originalStat=fs.lstatSync;
+          fs.lstatSync=(filename,options)=>{
+            const value=originalStat(filename,options);
+            const snapshot=Object.fromEntries(['dev','ino','mode','nlink','size','birthtimeNs','mtimeNs','ctimeNs'].map(key=>[key,String(value[key])]));
+            const previous=snapshots.get(filename);
+            if(previous&&JSON.stringify(previous)!==JSON.stringify(snapshot))console.log(JSON.stringify({path:filename,changed:Object.keys(snapshot).filter(key=>previous[key]!==snapshot[key]),previous,current:snapshot}));
+            snapshots.set(filename,snapshot);return value;
+          };
+          syncBuiltinESMExports();
           import {mkdtemp,realpath,rm} from 'node:fs/promises';
           import {tmpdir} from 'node:os';
           import {join} from 'node:path';
