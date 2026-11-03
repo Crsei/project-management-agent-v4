@@ -27,9 +27,12 @@ jobs:
           import cp from 'node:child_process';
           import {syncBuiltinESMExports} from 'node:module';
           const originalExec=cp.execFileSync;
+          const queries=new Map(),started=Date.now();let nativeCalls=0,nativeMilliseconds=0;
           cp.execFileSync=(file,args,options)=>{
+            const native=args?.some(value=>value.includes('class PmNativePathAttributes')),start=Date.now();
             try{return originalExec(file,args,options);}
             catch(error){if(args?.some(value=>value.includes('class PmNativePathAttributes')))console.error(String(error.stderr));throw error;}
+            finally{if(native){nativeCalls++;nativeMilliseconds+=Date.now()-start;for(const filename of JSON.parse(options.input))queries.set(filename,(queries.get(filename)??0)+1);}}
           };
           syncBuiltinESMExports();
           import {mkdtemp,realpath,rm} from 'node:fs/promises';
@@ -47,7 +50,7 @@ jobs:
             const store=new LocalBlobStore(blobs);await store.init();
             const saved=await store.put(Buffer.from('native blob boundary'));
             if((await store.read(saved.key)).toString()!=='native blob boundary')throw new Error('Blob content mismatch');
-            console.log(JSON.stringify({nativeBlobRoundTrip:true}));
+            console.log(JSON.stringify({nativeBlobRoundTrip:true,elapsedMilliseconds:Date.now()-started,nativeCalls,nativeMilliseconds,queries:[...queries]}));
           }finally{await rm(root,{recursive:true,force:true});}
           NODE
       - name: Verify native file identity and blob storage regressions

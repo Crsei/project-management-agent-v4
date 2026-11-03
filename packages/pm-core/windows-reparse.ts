@@ -1,6 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { lstatSync, type BigIntStats } from 'node:fs';
+import { lstatSync, mkdtempSync, rmSync, type BigIntStats } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { makePrivatePath } from './private-path.ts';
 
 // Node exposes junction/symlink mode, but not arbitrary Windows reparse tags.
 // Read attributes and their timestamps from a non-following handle, bound to its file ID.
@@ -77,6 +79,23 @@ function isNativeAttribute(value: unknown): value is NativeAttribute {
   return typeof item.reparse === 'boolean' && nativeAttributeKeys.every(key => typeof item[key] === 'string' && integerText.test(item[key] as string));
 }
 
+let helperScratch: string | undefined;
+function helperEnvironment(): NodeJS.ProcessEnv {
+  if (!helperScratch) {
+    const scratch = mkdtempSync(path.join(tmpdir(), 'pm-native-attributes-'));
+    try { makePrivatePath(scratch); }
+    catch (error) { rmSync(scratch, { recursive: true, force: true }); throw error; }
+    helperScratch = scratch;
+    process.once('exit', () => {
+      try { rmSync(scratch, { recursive: true, force: true }); }
+      catch { /* A crashed/terminating process may leave only private compiler scratch. */ }
+    });
+  }
+  // PowerShell's compiler must not mutate the shared Temp ancestor on every query:
+  // those self-induced timestamps would invalidate every checked storage lineage.
+  return { ...process.env, TEMP: helperScratch, TMP: helperScratch };
+}
+
 /** Batch a directory listing so a Markdown scan never starts one PowerShell per
  * file. Cache entries remain valid only for that exact filesystem identity/stamp. */
 export function cacheWindowsPathAttributes(filenames: readonly string[]): void {
@@ -96,6 +115,7 @@ export function cacheWindowsPathAttributes(filenames: readonly string[]): void {
     result = JSON.parse(execFileSync(path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
       ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', attributeScript], {
         input: JSON.stringify(paths.map(item => item.filename)), encoding: 'utf8', windowsHide: true,
+        env: helperEnvironment(),
         stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000, maxBuffer: 64 * 1024 * 1024,
       }));
   } catch { throw new Error('Windows storage path attributes could not be verified'); }
