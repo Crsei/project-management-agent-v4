@@ -20,6 +20,28 @@ jobs:
           run_install: false
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform win32 --arch x64
+      - name: Diagnose native blob directory boundary
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {mkdtemp,realpath,rm} from 'node:fs/promises';
+          import {tmpdir} from 'node:os';
+          import {join} from 'node:path';
+          import {SafeDirectory} from './packages/infrastructure/src/portable-directory.ts';
+          import {LocalBlobStore} from './packages/infrastructure/src/blobs.ts';
+          import {ensurePrivateDirectory} from './apps/desktop/src/private-state.mjs';
+          const root=await realpath(await mkdtemp(join(tmpdir(),'desktop-blob-diagnostic-')));
+          try{
+            await ensurePrivateDirectory(root,{newlyCreated:true});
+            const blobs=join(root,'blobs');await ensurePrivateDirectory(blobs);
+            const directory=await SafeDirectory.open(blobs,true);
+            await directory.identity();await directory.close();
+            const store=new LocalBlobStore(blobs);await store.init();
+            const saved=await store.put(Buffer.from('native blob boundary'));
+            if((await store.read(saved.key)).toString()!=='native blob boundary')throw new Error('Blob content mismatch');
+            console.log(JSON.stringify({nativeBlobRoundTrip:true}));
+          }finally{await rm(root,{recursive:true,force:true});}
+          NODE
       - name: Verify native PostgreSQL lifecycle and restored services
         shell: bash
         run: |
