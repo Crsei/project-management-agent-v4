@@ -6,6 +6,9 @@ import { execFile } from "node:child_process";
 
 const windowsAclScript = String.raw`
 $ErrorActionPreference = 'Stop'
+$PSModuleAutoLoadingPreference = 'None'
+Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Management\Microsoft.PowerShell.Management.psd1')
+Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1')
 $p = $env:PM_DESKTOP_PRIVATE_PATH
 $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
 $me = $identity.User

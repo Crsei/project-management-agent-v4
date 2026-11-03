@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { desktopBuilderConfig } from "../electron-builder.config.mjs";
@@ -47,7 +47,7 @@ for (let current = output; ; current = dirname(current)) {
     throw new Error("Installer output must be a new directory with real directory ancestors; previous artifacts are never overwritten.");
   if (dirname(current) === current) break;
 }
-const staging = await mkdtemp(join(tmpdir(), "pm-agent-v4-desktop-"));
+const staging = await realpath(await mkdtemp(join(tmpdir(), "pm-agent-v4-desktop-")));
 try {
   await buildWorkspace();
   const application = join(staging, "application");

@@ -6,6 +6,10 @@ import path from 'node:path';
 // command. A protected DACL grants the current user's SID, not a localized name.
 const windowsAcl = String.raw`
 $ErrorActionPreference = 'Stop'
+$PSModuleAutoLoadingPreference = 'None'
+Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Management\Microsoft.PowerShell.Management.psd1')
+Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1')
+Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1')
 $item = Get-Item -Force -LiteralPath $env:PM_PRIVATE_PATH
 if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Reparse path refused' }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()

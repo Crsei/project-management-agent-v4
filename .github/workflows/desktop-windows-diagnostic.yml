@@ -8,41 +8,11 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: '24.21.0'
-      - name: Isolate environment and stdin startup requirements
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          import {execFile} from 'node:child_process';
-          import {join} from 'node:path';
-          const root=process.env.SystemRoot;
-          const executable=join(root,'System32','WindowsPowerShell','v1.0','powershell.exe');
-          const minimal={SystemRoot:root,WINDIR:root};
-          const selected=keys=>Object.fromEntries(keys.flatMap(key=>process.env[key]===undefined?[]:[[key,process.env[key]]]));
-          const service={...minimal,...selected(['PATH','TEMP','TMP','TMPDIR'])};
-          const profile={...service,...selected(['USERPROFILE','APPDATA','LOCALAPPDATA','HOMEDRIVE','HOMEPATH','PSModulePath'])};
-          const script="$ErrorActionPreference='Stop'; [Console]::Out.WriteLine('before-item'); $item=Get-Item -LiteralPath $env:PM_DIAGNOSTIC_PATH; [Console]::Out.WriteLine('before-acl'); $acl=Get-Acl -LiteralPath $env:PM_DIAGNOSTIC_PATH; [Console]::Out.WriteLine('before-compile'); Add-Type -TypeDefinition 'public static class Probe { public static int Value() {return 1;} }'; [Console]::Out.WriteLine('modules-ready')";
-          const trustedImports="$PSModuleAutoLoadingPreference='None'; Import-Module ($PSHOME+'\\Modules\\Microsoft.PowerShell.Management\\Microsoft.PowerShell.Management.psd1'); Import-Module ($PSHOME+'\\Modules\\Microsoft.PowerShell.Security\\Microsoft.PowerShell.Security.psd1'); Import-Module ($PSHOME+'\\Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1'); ";
-          async function probe(name,env,code=script){
-            const started=Date.now();
-            return new Promise(resolve=>{
-              const child=execFile(executable,['-NoLogo','-NoProfile','-NonInteractive','-Command',code],{env:{...env,PM_DIAGNOSTIC_PATH:process.cwd()},windowsHide:true,timeout:10000},(error,stdout,stderr)=>{
-                console.log(JSON.stringify({name,elapsedMs:Date.now()-started,code:error?.code,killed:error?.killed,signal:error?.signal,stdout:stdout.trim(),stderr:stderr.trim()}));resolve(!error&&stdout.includes('modules-ready'));
-              });
-              child.stdin.end();
-            });
-          }
-          await probe('minimal-explicit-modules',minimal,trustedImports+script);
-          await probe('service-explicit-modules',service,trustedImports+script);
-          await probe('service-analysis-cache',{...service,...selected(['PSModuleAnalysisCachePath'])});
-          let keys=Object.keys(process.env).filter(key=>!Object.keys(profile).some(known=>known.toLowerCase()===key.toLowerCase()));
-          while(keys.length>1){
-            const middle=Math.ceil(keys.length/2), first=keys.slice(0,middle),second=keys.slice(middle);
-            if(await probe('first-half-'+keys.length,{...profile,...selected(first)})){keys=first;continue;}
-            if(await probe('second-half-'+keys.length,{...profile,...selected(second)})){keys=second;continue;}
-            console.log(JSON.stringify({interactingEnvironmentKeys:keys}));break;
-          }
-          console.log(JSON.stringify({candidateRequiredKeys:keys}));
-          NODE
+      - name: Exercise real private metadata and owned process lifecycle
+        run: node --test apps/desktop/src/private-state.test.mjs apps/desktop/src/local-process.test.mjs

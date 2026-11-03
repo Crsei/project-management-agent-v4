@@ -76,7 +76,7 @@ export async function stageWorkspace(output, application, {
   const target = requireNativeTarget();
   const previous = await lstat(output).catch((error) => { if (error.code === "ENOENT") return null; throw error; });
   if (previous) throw new Error("Workspace runtime output must be a new directory.");
-  const staging = await mkdtemp(join(tmpdir(), "pm-desktop-staging-"));
+  const staging = await realpath(await mkdtemp(join(tmpdir(), "pm-desktop-staging-")));
   try {
     const workspace = join(staging, "workspace");
     const agentArtifact = join(staging, "agent-artifact");

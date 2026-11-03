@@ -6,6 +6,8 @@ import path from 'node:path';
 // Query the native attribute without evaluating caller-controlled PowerShell code.
 const attributeScript = String.raw`
 $ErrorActionPreference = 'Stop'
+$PSModuleAutoLoadingPreference = 'None'
+Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1')
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 $paths = ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd())
 $result = foreach ($item in $paths) {

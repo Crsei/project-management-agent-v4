@@ -114,7 +114,7 @@ export function spawnOwned(executable, args, { cwd, env }) {
     command = join(process.env.SystemRoot || "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe");
     const encode = (value) => Buffer.from(value, "utf8").toString("base64");
     const decode = (value) => `[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(value)}'))`;
-    const script = `$ErrorActionPreference='Stop'; try { Add-Type -TypeDefinition (${decode(windowsJob)}); $result=[DesktopProcessJob]::Run((${decode(executable)}),(${decode([executable, ...args].map(windowsArgument).join(" "))}),(${decode(cwd)})); exit $result } catch { [Console]::Error.WriteLine('Cannot start owned desktop process: '+$_.Exception.Message); exit 1 }`;
+    const script = `$ErrorActionPreference='Stop'; $PSModuleAutoLoadingPreference='None'; try { Import-Module ($PSHOME+'\\Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1'); Add-Type -TypeDefinition (${decode(windowsJob)}); $result=[DesktopProcessJob]::Run((${decode(executable)}),(${decode([executable, ...args].map(windowsArgument).join(" "))}),(${decode(cwd)})); exit $result } catch { [Console]::Error.WriteLine('Cannot start owned desktop process: '+$_.Exception.Message); exit 1 }`;
     arguments_ = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")];
   }
   const child = spawn(command, arguments_, {
