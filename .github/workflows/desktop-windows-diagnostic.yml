@@ -24,8 +24,10 @@ jobs:
           const service={...minimal,...selected(['PATH','TEMP','TMP','TMPDIR'])};
           const profile={...service,...selected(['USERPROFILE','APPDATA','LOCALAPPDATA','HOMEDRIVE','HOMEPATH','PSModulePath'])};
           const script="$ErrorActionPreference='Stop'; [Console]::Out.WriteLine('before-item'); $item=Get-Item -LiteralPath $env:PM_DIAGNOSTIC_PATH; [Console]::Out.WriteLine('before-acl'); $acl=Get-Acl -LiteralPath $env:PM_DIAGNOSTIC_PATH; [Console]::Out.WriteLine('before-compile'); Add-Type -TypeDefinition 'public static class Probe { public static int Value() {return 1;} }'; [Console]::Out.WriteLine('modules-ready')";
-          for(const [name,env] of [['minimal',minimal],['service',service],['profile',profile],['inherited',process.env]]){
-            for(const closeInput of [false,true]){
+          const modules=join(root,'System32','WindowsPowerShell','v1.0','Modules');
+          const windows={...profile,...selected(['ComSpec','PATHEXT','SystemDrive','ProgramFiles','ProgramFiles(x86)','ProgramW6432','CommonProgramFiles','CommonProgramFiles(x86)','CommonProgramW6432','ALLUSERSPROFILE','ProgramData','OS','PROCESSOR_ARCHITECTURE','NUMBER_OF_PROCESSORS','USERNAME','USERDOMAIN','COMPUTERNAME','HOME'])};
+          for(const [name,env] of [['minimal-system-modules',{...minimal,PSModulePath:modules}],['service-system-modules',{...service,PSModulePath:modules}],['windows',windows],['inherited',process.env]]){
+            for(const closeInput of [true]){
               const started=Date.now();
               await new Promise(resolve=>{
                 const child=execFile(executable,['-NoLogo','-NoProfile','-NonInteractive','-Command',script],{env:{...env,PM_DIAGNOSTIC_PATH:process.cwd()},windowsHide:true,timeout:10000},(error,stdout,stderr)=>{
