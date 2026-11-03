@@ -81,3 +81,18 @@ if (process.platform === 'win32') test('Windows native attribute batches refuse 
     assert.throws(() => assertNoWindowsReparsePath(directory, lstatSync(directory, { bigint: true })), /reparse/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+if (process.platform === 'win32') test('Windows directory membership changes preserve identity, but replacement and changed file snapshots fail', () => {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'pm-native-directory-change-')));
+  try {
+    const directory = path.join(root, 'directory'); mkdirSync(directory);
+    const before = lstatSync(directory, { bigint: true });
+    const child = path.join(directory, 'child.md'); writeFileSync(child, 'original');
+    assertNoWindowsReparsePath(directory, before);
+    const fileBefore = lstatSync(child, { bigint: true });
+    writeFileSync(child, 'changed content');
+    assert.throws(() => assertNoWindowsReparsePath(child, fileBefore), /changed/);
+    renameSync(directory, path.join(root, 'old')); mkdirSync(directory);
+    assert.throws(() => assertNoWindowsReparsePath(directory, before), /changed/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

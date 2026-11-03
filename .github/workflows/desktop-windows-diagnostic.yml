@@ -24,15 +24,12 @@ jobs:
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          import fs from 'node:fs';
+          import cp from 'node:child_process';
           import {syncBuiltinESMExports} from 'node:module';
-          const snapshots=new Map(),originalStat=fs.lstatSync;
-          fs.lstatSync=(filename,options)=>{
-            const value=originalStat(filename,options);
-            const snapshot=Object.fromEntries(['dev','ino','mode','nlink','size','birthtimeNs','mtimeNs','ctimeNs'].map(key=>[key,String(value[key])]));
-            const previous=snapshots.get(filename);
-            if(previous&&JSON.stringify(previous)!==JSON.stringify(snapshot))console.log(JSON.stringify({path:filename,changed:Object.keys(snapshot).filter(key=>previous[key]!==snapshot[key]),previous,current:snapshot}));
-            snapshots.set(filename,snapshot);return value;
+          const originalExec=cp.execFileSync;
+          cp.execFileSync=(file,args,options)=>{
+            try{return originalExec(file,args,options);}
+            catch(error){if(args?.some(value=>value.includes('class PmNativePathAttributes')))console.error(String(error.stderr));throw error;}
           };
           syncBuiltinESMExports();
           import {mkdtemp,realpath,rm} from 'node:fs/promises';
@@ -53,6 +50,8 @@ jobs:
             console.log(JSON.stringify({nativeBlobRoundTrip:true}));
           }finally{await rm(root,{recursive:true,force:true});}
           NODE
+      - name: Verify native file identity and blob storage regressions
+        run: pnpm exec node --conditions=development --test packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
       - name: Verify native PostgreSQL lifecycle and restored services
         shell: bash
         run: |
