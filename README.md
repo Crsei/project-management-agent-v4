@@ -54,7 +54,7 @@ pnpm --filter @agent-workspace/desktop package
 
 [原生 CI](.github/workflows/desktop.yml) 仅手动触发，分别运行 Windows x64、macOS x64/arm64，执行真实 PG 回归和打包资源的初始化、登录、停止与重连冒烟；signed 模式使用受保护的 `desktop-signing` 环境。当前本机已验证实际生产依赖闭包、完整受管服务组、项目/文档/附件的备份与独立恢复，以及身份、origin 和权限边界；这不代替原生平台或真实 Provider 执行验收。
 
-CI 在桌面类型检查前依次构建 `@agent-workspace/contracts` 与 `@agent-workspace/client-runtime`，生成包导出的类型声明；全新检出不能依赖开发机已有的 `dist` 缓存。
+CI 在桌面类型检查前依次构建 `@agent-workspace/contracts` 与 `@agent-workspace/client-runtime`，生成包导出的类型声明；全新检出不能依赖开发机已有的 `dist` 缓存。完整 Web 类型检查超出托管 macOS 默认堆上限，工作流显式设置 `NODE_OPTIONS=--max-old-space-size=4096`，保留全部类型检查。
 
 ## v4 本机验证
 

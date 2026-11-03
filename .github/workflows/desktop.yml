@@ -19,6 +19,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # The complete Web type graph exceeds the 2 GiB default on hosted macOS.
+  NODE_OPTIONS: --max-old-space-size=4096
   DESKTOP_ARTIFACT_DIR: ${{ github.workspace }}/apps/desktop/releases/ci-${{ github.run_id }}-${{ github.run_attempt }}
   PM_DESKTOP_TEST_POSTGRES_ROOT: ${{ github.workspace }}/apps/desktop/.runtime/desktop-runtime/postgres
 
