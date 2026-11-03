@@ -59,6 +59,8 @@ jobs:
         run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
       - name: Execute bundled runtime tools without ambient PATH
         run: pnpm --filter @agent-workspace/desktop runtime:smoke
+      - name: Build shared workspace type declarations
+        run: pnpm --filter @agent-workspace/contracts build && pnpm --filter @agent-workspace/client-runtime build
       - name: Typecheck desktop backend helpers
         run: pnpm --filter @agent-workspace/desktop typecheck
       - name: Desktop contracts and real PostgreSQL bootstrap tests
@@ -135,6 +137,8 @@ jobs:
         run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
       - name: Execute bundled runtime tools without ambient PATH
         run: pnpm --filter @agent-workspace/desktop runtime:smoke
+      - name: Build shared workspace type declarations
+        run: pnpm --filter @agent-workspace/contracts build && pnpm --filter @agent-workspace/client-runtime build
       - name: Typecheck desktop backend helpers
         run: pnpm --filter @agent-workspace/desktop typecheck
       - name: Desktop contracts and real PostgreSQL bootstrap tests
