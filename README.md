@@ -1,4 +1,4 @@
-# Project Management Agent v4
+# Dovspace
 
 统一 PM + Agent Chat 仓库。PM 保留项目/任务/文档与业务保护；PM 详情侧栏和 `/agent/workspace` 使用同一套 Agent Chat 界面、Provider 与会话运行时，不再运行第二个 PM 模型助手。Agent 展示 Session 侧栏、对话和 Composer，右侧按需展开 Files / Git / Terminal / Browser。工作区/项目来自真实 PM 授权目录，文件区域在服务端解析为本次 CLI 执行目录快照。没有新增角色/权限、业务 Session/Run/审批或自动完成任务规则。
 
@@ -13,9 +13,50 @@
 - `apps/desktop`：Electron 宿主与本地服务组生命周期；`tools/marketing` 保留营销站源码。
 - `packages` 保留领域、应用、基础设施、合同和 Agent 客户端运行时的既有职责。
 
-桌面开发入口：完成下述依赖安装和本地 PostgreSQL、迁移及存储配置后，运行 `pnpm build:v4 && pnpm build:desktop`，再运行 `pnpm --filter @agent-workspace/desktop start`。桌面本地模式启动自己的完整服务组并等待实际就绪，不打包 PostgreSQL。安装包、签名、公证和其他平台尚未验收。
+### Desktop：Windows / macOS
+
+桌面复用现有 Web，通过独立 Node **24.21.0** 启动 PM、Worker、Agent 和同源网关，并管理私有 PostgreSQL **16.15**。安装后的本地模式不依赖用户预装 Docker、Node 或 PostgreSQL；Git、Provider CLI、账号和外部集成仍按对应能力显式配置。远程模式连接已有 HTTPS 服务，HTTP 仅允许显式回环地址。
+
+| 构建目标 | 产物 | 边界 |
+| --- | --- | --- |
+| Windows x64 | NSIS `.exe` | 不提供 Windows ARM64 或跨平台构建 |
+| macOS Apple Silicon | `.dmg`、`.zip` | arm64；最低 macOS 15 |
+| macOS Intel | `.dmg`、`.zip` | x64；最低 macOS 15 |
+
+这是交付目标，不是原生验收结论。本机为 Linux；Windows/macOS 安装、卸载、签名、公证、原生 ACL 与进程监督仍需相应平台验证。Linux 仅用于隔离冒烟，不发布 Linux 安装包。
+
+**首次使用与数据**
+
+- 选择 Local，输入首次账号、密码及工作区名称；默认数据位于 Electron 用户数据目录 `PM Agent v4/workspace`，默认项目父目录由应用创建。自定义项目父目录必须已存在。不会读取开发实例的 `.env`、`.local/access.json`，也不会自动导入 v3/v4 开发数据库或复制全局 CLI 凭据。
+- PostgreSQL 凭据、实例身份、存储绑定与服务端状态保存在私有实例目录；账号初始密码不写入连接配置。Windows 使用当前用户 ACL，Unix 使用私有权限。目录必须是本地规范路径；不能用符号链接、目录联接或无法确认身份的目录替代。
+- 公共 origin 保持稳定；被占用时拒绝接管，不改 origin 绕过冲突。仅停止本次拥有的进程；数据库正常关机允许完成检查点，超时保留所有权并显示错误，不把它伪报为已退出。PostgreSQL 大版本不会自动升级。
+- 同一实例和 origin 复用浏览器持久化分区，断开不会清空客户端日志。会话与持久化仍暂沿用 Agent Chat，**尚未经过统一设计收口**；不得把 Run 成功或恢复成功解释为业务工作项完成。
+
+**备份与恢复**
+
+连接窗口仅在本地服务停止后允许备份/恢复。备份包含 PostgreSQL 逻辑快照、登记项目的 `.pm` 核心文件、附件、应用拥有的聊天文件，以及显式包含私密数据的 Agent 离线备份；选择前会提示其包含凭据和会话。备份不加密，必须安全保存。恢复仅写入新的空实例目录，重新绑定存储及实例身份，不覆盖已有实例。目前仅接受相同操作系统的备份。
+
+不复制项目的完整外部源码树、外部文档目录、原生外部 Provider Home、浏览器 Cookie/localStorage 或尚未确认的客户端操作日志。恢复后外部文件区域/文档来源需重新关联，Provider 账号按原生策略重新核对，MCP 授权需重新批准；未知副作用先查询。Linux 保留描述符相对遍历及目录 fsync；macOS/Windows 使用路径、身份、链接及内容校验，不承诺对恶意同用户进程的等价文件系统沙箱。Node 无法刷新 Windows 目录句柄，不能保证目录元数据在突然断电时的持久性。
+
+**原生构建**
+
+在对应 OS/CPU 的独立构建检出中使用 Node 24.21.0、pnpm 11.9.0：
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter @agent-workspace/desktop runtime:prepare
+pnpm --filter @agent-workspace/desktop package
+```
+
+运行时下载固定版本并校验归档及文件清单，保留完整 PostgreSQL 客户端、库、share 与许可证；不在应用启动时下载。代理环境需要为 Node 设置 `NODE_USE_ENV_PROXY=1`。开发调试另需 `pnpm --filter @agent-workspace/desktop runtime:install`，再执行 `pnpm build:v4 && pnpm build:desktop` 和 `pnpm --filter @agent-workspace/desktop start`；Electron 安装脚本不会在依赖安装时自动执行。
+
+`package` 明确生成 unsigned 测试包；macOS ad-hoc 不等于 Developer ID 签名或公证。正式构建用 `package:signed`，需显式提供证书及 macOS 公证材料，缺失时失败而不降级。默认输出 `apps/desktop/releases/<version>/<platform>-<arch>/<unsigned|signed>/`，`desktop-package.json` 记录产物 SHA256 与资源位置。没有自动更新源，也不自动发布 GitHub Release。
+
+[原生 CI](.github/workflows/desktop.yml) 仅手动触发，分别运行 Windows x64、macOS x64/arm64，执行真实 PG 回归和打包资源的初始化、登录、停止与重连冒烟；signed 模式使用受保护的 `desktop-signing` 环境。当前本机已验证实际生产依赖闭包、完整受管服务组、项目/文档/附件的备份与独立恢复，以及身份、origin 和权限边界；这不代替原生平台或真实 Provider 执行验收。
 
 ## v4 本机验证
+
+以下是桌面独立运行时交付前的基线记录；当前桌面交付边界以上节为准。
 
 - v3 完成后的提交 `2f21c0769de35f414d983fc3393e5b2feb44e03d` 是本副本源码基线。独立 PostgreSQL 中复制了账号和工作区；示例项目 34 个文件与来源一致，原数据库中项目附件对象路由数为 0。v4 CLI 读取到 `PRJ-001` 的 13 项任务。
 - 统一 Web 的 lint、TypeScript 与 Vite 构建通过；Agent server 440 项、client runtime 11 项、desktop 5 项、网关及 Worker 隔离 4 项通过，均无跳过。文档与 OpenAPI 检查通过；具体完整后端回归结果以最终执行记录为准。
@@ -109,6 +150,10 @@ PM Cookie 为 `pm_v4_session`，Agent Cookie 为 `agent_v4_access`；原 same-or
 
 ### 浏览器应用与组件展示
 
+Web 产品名称为 **Dovspace**（工程目录与包标识仍为 `project-management-agent-v4`）。PM / Agent 侧栏分为独立品牌头部、应用选择器与常规导航：56px 品牌行使用黑底白色 D 图标、22px 粗体字标与右侧折叠按钮，品牌链接返回 `/pm`；60px 浅中性色应用卡片显示当前应用及描述，与导航间隔 12px。PM 折叠栏保留独立品牌和应用图标，手机抽屉在品牌右侧关闭。菜单分为“切换应用”和“管理”，选中项仅保留勾选，刷新工作区藏于可展开的“更多操作”，读取异常时仍可直接重试。登录页保留左上 22px、表单顶部 30px 居中字标；浏览器标题、favicon、认证与错误页页脚同步使用 Dovspace。
+
+品牌是产品标识；工作区仍以真实 `workspaceId` 约束数据、成员和权限；Project Management / Agent Chat 是同一工作区内的应用入口，不创建第二套数据工作区。切换应用保留当前工作区，Agent 中过期的跨工作区返回地址不会被应用选择器沿用；真实工作区切换仍单独列出。此次仅调整导航与展示，不改业务数据、路径、Cookie、桌面安装标识或授权规则。会话与持久化仍暂沿用 Agent Chat 保存方式，尚未统一设计收口。
+
 后端启动后，在根目录另开终端：
 
 ```bash
@@ -124,7 +169,9 @@ PM 左侧栏底部在账号上方提供“设置”入口，展开、折叠图�
 
 `/pm/<workspace>/settings/design-system` 为设置内的“设计系统”，桌面导航和窄屏页面选择器均可进入。参考 gr8r-studio 的顺序展示颜色、状态与优先级、字体、间距 / 圆角 / 阴影、按钮、输入、导航、数据展示、反馈和图标，复用本仓真实主题令牌及组件。示例交互只改变页面局部状态，不创建任务、删除项目或发出业务写请求，离页重置；主题切换沿用全站 PM 浏览器偏好。此次未改会话与持久化设计，仍暂沿用 Agent Chat 保存方式，尚待统一设计收口。
 
-本轮在临时 Web 4337 对接本副本服务，已验证正式 Design System 路由刷新、2560×1440 / 1440×900 / 390×844 布局、主题切换、示例菜单 / 校验 / 对话框 / 抽屉 / 确认 / 命令菜单及侧栏设置入口。Lint 与新增页面的 LSP 诊断通过；完整类型检查和独立 Vite 打包被未修改的 `provider-instance-dialog.tsx:365` JSX 语法错误阻断，尚未更新常驻 Web 产物。
+此前设计系统接入在临时 Web 4337 对接本副本服务，已验证正式 Design System 路由刷新、2560×1440 / 1440×900 / 390×844 布局、主题切换、示例菜单 / 校验 / 对话框 / 抽屉 / 确认 / 命令菜单及侧栏设置入口。该批 Lint 与新增页面的 LSP 诊断通过；当时完整类型检查和独立 Vite 打包被 `provider-instance-dialog.tsx:365` JSX 语法错误阻断，未更新常驻 Web 产物。
+
+2026-11-02 统一移除 PM、Agent、共享组件及展示页的界面文字下划线（含悬停态），导航选中底线改为主题选中背景与文字颜色 / 字重。保留普通分隔线、键盘焦点框、删除线及正文主动设置的下划线格式，不改变链接、路由或业务操作。`pnpm check:web` 的 lint、TypeScript、Vite 构建通过，公共入口已读取新产物；额外 shared / views / Agent oxlint 无错误，有 6 条未修改文件中的既有警告。浏览器在临时 Web 4338 验证项目详情 Tab 点击、成员 Tab 方向键 / Enter 与焦点环；公共入口验证登录与 Usage 链接无下划线，以及 390px Provider 选中项无底线且保留背景。未逐页验证所有登录后业务状态。
 
 ### Agent Chat
 
@@ -200,6 +247,34 @@ OMP 是新增的独立 `@t3tools/provider-omp`，不是 Pi 命令别名。协议
 - stock OMP 无法通过一个开关关闭所有环境扩展 / 插件 / MCP。适配器启动前只检查相关路径元数据；存在无法证明安全的启动源时明确拒绝，含可能触发原生加载的 `.claude.json`。必要时明确指定无这些启动源的 Home / 项目目录，不通过启动参数绕过。该门禁不是操作系统沙箱，不读取或清除全局凭据。
 - 原生工具权限遵循现有 PM `deny-ungranted`；PM 工具通过 OMP Host Tools 进入既有授权和业务审批。技术性标题 / 压缩生成显式无工具；Fork、Rollback、主动子 Agent、Goal、原生历史 Usage 和账号额度读取未开放。
 - 已用真实 OMP + 受控模型验证流式、取消、多轮及重启恢复、真实 PM 查询与审批 / 拒绝，并在网页观察配置、选模、历史恢复与取消。真实模型验收尚未通过：本机 Ollama 返回 `unable to load model`，未改动该服务或读取供应商账号。运行事件 Usage 不等于历史扫描或订阅账单。
+
+#### MCP、原生 Skills 与交互 Apps
+
+本轮实现与逐项验收账见 [MCP / Skills 复制与宿主适配计划](docs/implementation/t3code-mcp-skills-replication-plan.zh.md)。源码接入不等于常驻实例已更新；本轮未获生产部署／重启、真实凭据导入授权，未执行这些操作。
+
+- **外部连接：** `/agent/settings/mcp-clients` 提供连接地址与已授权客户端撤销；外部 HTTP MCP 客户端经 `/connect-agent` 完成 PM 登录主体同意、授权码与 S256 交换，再访问 `/mcp`。默认只读，明确选择工作区／项目和线程；full 只是权限上限，不绕过既有审批。外部 token 不可登录普通 PM／Agent API，也不能枚举同项目的全部历史。
+- **原生工具：** PM 工具继续经 Provider 的 MCP／ACP／SDK／Host Tools 注入，复用现有 scope、当前成员能力、审批、revision、幂等与结果核对。不是新权限系统；Chat 成功不会完成 WorkItem。OpenCode 的单 transport、Pi 的 generation-owned 扩展、OMP 的单 `pm_tools` Host Tools 桥仍有各自限制，不承诺任意多个 Server。
+- **Skills：** 全页和 PM 内嵌 Chat 共用 Composer 的 `$` 搜索、原生 `/` commands、引用 chip、刷新目录及显式重启 Agent session。目录绑定 Provider 实例／revision 和 PM 核验的 cwd；失败、pending、空目录分别展示，禁用及不可由用户调用的条目不能选。原生安装／修改仍在各 Provider 支持的位置进行；刷新不安装插件，重启保留 Chat 历史但废弃原生 continuation。既有 WorkspaceSkill 指令块独立保留，不是通用 Skill 协议。
+- **Provider 差异：** Codex 使用 `skills/list` 与原生 mention；Claude 保留 frontmatter／最后一个 Skill 展开；OpenCode 1.x 文本／命令与 2.x 结构化 IDs 不混同，目录只借用当前已授权且匹配的 live session，不为刷新启动插件／MCP；Grok／Pi 使用 leading mention，Cursor／FX／Antigravity 按各自发现和分派语义。Muse 只公布原生 commands，ACP Registry 只调用当前会话实际公布的 commands（虚拟 skill URI 不当作文件）；OMP 目录可见不等于可调用，Skill 调用禁用，命令仅开放既有 `session` 白名单。逐家真实账号／Skill 行为尚未全部验收。
+- **MCP Apps：** 当前原生交互能力由 Codex adapter 提供；其他 Provider 保留真实工具结果，不假造 App 支持。类型化 producing item 绑定原 Server／thread／session；成功工具结果结束后可保留 live session，停止、配置／范围变化、显式重启、撤权或服务关闭使相应能力失效。历史可读不代表仍可交互，打开 App 不隐式启动新模型轮次。frame 使用 `sandbox="allow-scripts allow-forms"`，不含 `allow-same-origin`；工具确认不能替代服务端授权。App 模型上下文按产生项替换／清除，仅在匹配的有效范围／session 内送入后续轮次。
+
+**部署前提：** Agent 配置固定可信 `MCP_PUBLIC_ORIGIN`，用于 OAuth issuer／公开地址，不从任意 Host／Forwarded 猜测。PM 配置私有 `PM_MCP_AGENT_URL` 指向可达 Agent；仅可回退已有 `PM_AUTOMATION_AGENT_URL`，没有猜测 localhost 的默认值。PM 与 Agent 使用既有服务端 `PM_AUTOMATION_SERVICE_SECRET`，MCP 委托采用独立 `pm-mcp-service-v1` 域／audience，不能把秘密放入 `VITE_*`、iframe 或外部 token。网关需显式代理 `/mcp`、OAuth 发现／授权端点及连接页，不能公开 `/internal`；公网客户端还需可信 HTTPS 与可达地址。本轮不自动配置公网，也不将单操作者 Chat 宣称为多用户隔离产品。
+
+撤销会拒绝后续访问并使相应 live 能力失效，但不承诺 Agent SQLite 与 PM PostgreSQL 跨存储原子撤销，也不把取消视作已提交动作回滚。离线备份的 `--secrets exclude` **和** `include` 都会使导出副本中的 MCP grants／tokens／consent 与 App model context 失效，不修改源数据库；恢复后须重新授权，不能恢复 live App 会话。
+
+截至2026-11-04，隔离浏览器已观察 OAuth 显式同意／PKCE callback200、MCP session200→UI撤销200→同session401；Skills 菜单／选择／显式重启保留草稿和历史且无额外 turn，内嵌菜单白色对比度修复已有截图核对。真实安装的 codex-cli0.163.0 在隔离 HOME 通过 `skills/list` 发现实际 `SKILL.md`，未启动 MCP 或模型；原 Codex adapter＋受控协议 CLI 的 App 已完成 SDK 初始化、资源／工具／上下文操作。同 opaque origin、同 WindowProxy 导航且移除 pagehide/unload 通知后，fresh-port attestation 约2秒失效，三类攻击请求均未到后端、无迟到回复／额外原生调用；正常 pagehide 亦立即失效。新建内嵌App此前持续409，修正后隔离fixture6已观察选Skill、POST/chat200、原生turn完成、snapshot GET200及无需刷新初始化，trace无失败／取消请求；后续交互结果如下。
+
+另已用认证浏览器API核对原始App grant撤销：撤销前对应SQLite context namespace恰有一条匹配grant／sentinel的revision1记录，当前CSRF撤销200后该namespace为0条，证明保存的model context被清除。内嵌lifecycle的lease与generation完成UI gating修正已有上述限定浏览器证据；execution＋App requests定向55/55通过，包括取消保留仍获授权的lease、取消仍撤销已拒绝的authority，不代表完整Agent suite重跑通过。
+
+内嵌App后续浏览器核对已收到原生tool的`structuredContent.clicked=true`及文本、原session资源数据，Set model context返回`{}`；全屏／退出全屏已实看。显式关闭→“重新读取 App”→重新初始化通过，native fixture日志中`rpc.method === 'turn/start'`计数前后均为2，没有额外原生turn。此前409不能确定单独由readiness还是取消授权检查丢失lease导致；两处均已修正并有回归覆盖。
+
+另一次真实迟到响应攻击验证扣留原App的resources/read HTTP200响应，移除原pagehide/unload通知后导航同一iframe；替换页沿用同WindowProxy，在image阻塞load期间发送三类请求及伪造port。原200在攻击开始后、frame失效前释放：替换页收到0条JSON-RPC回复，后端仅原合法resource请求1次，无攻击者context/tool/read请求，frame失效且load未触发。未替换认证或伪造HTTP响应。
+
+内嵌390×844浏览器实测document.scrollWidth390，无横向溢出且Composer／Skills控件可见；`$`菜单ArrowDown＋Enter选中Smoke Skill chip，Escape关闭，原生turn仍2。Chromium CDP原生IME composition产生Enter／keyCode229／isComposing=true，中文草稿保留、POST/chat为0；不等于全部scope／实例组合或实体输入法设备验收。迟到响应攻击后context仍为revision1 sentinel，native日志共2 turns／4 resource reads／1合法tool call。
+
+工程证据：post-lifecycle bg42的Agent typecheck／lint、Web tsc／隔离Vite build通过，PM定向ESLint退出0；此前lint15项既有warnings、client-runtime18/18、合同112命令／143路径、文档150份Markdown／27计划通过。完整Agent bg43为996项：994通过／0失败／1取消／1跳过，628.6秒、exit1；Claude compaction测试deadline10→30秒后仅定向2/2通过，不改写完整结果。backend1027项为967通过／6失败／7跳过／47取消，本轮断言修正后仅定向6/6通过。最终imports1295文件／7715 edges／18 packages、离线重建／拒绝检查、linux-x64包167 packages／22001 files／292 links及bg46迁址七项验证通过，T13完成。bg49官方MCP SDK1.32.2 Client／StreamableHTTP互操作通过，但使用预批准synthetic grant与受控PM catalog，不等于真实PM浏览器OAuth或完整SDK OAuth流程；bg43有界自动化安全回归亦通过，完整范围见计划E3。生产未触及。**这些证据不等于付费模型／逐Provider账号验收或生产部署，M5／M6不关闭。** 会话与持久化仍暂沿用Agent Chat，统一设计未收口。
+
+交付产物保留于`.local/mcp-skills-artifact-HWjm8O/agent`（仅Agent＋Web，不是整套PM／DB部署），从已迁址验证的包保留相对symlink复制；保留副本bg50在cwd `/tmp`、linux-x64下七项runtime验证全部通过。最终docs／contract／import检查通过：150份Markdown／27计划、112命令／143路径、1295文件／7715 imports／18 packages。T1—T13按有界证据完成，T14仍受真实Provider／账号／平台矩阵及backend环境／无关失败阻塞，T15未授权、未执行。自有smoke脚本5个及服务／临时数据库／浏览器已清理；这只是源码＋产物交付，不是M5／M6签收。
 
 #### Provider 运行输出
 
@@ -281,31 +356,50 @@ GitHub/GitLab 可使用独立验证的原生 API 连接，无需无关的 MCP �
 
 项目内“新建任务”（含看板分组和日历日期入口）直接进入 `/projects/<id>/issues/new` 的 Markdown 编辑页，不先创建空任务。正文使用 Markdown 编辑器和预览，同页维护标题、状态、负责人、日期、优先级、标签及高级关系；当前项目固定，已有恢复草稿优先保留原输入。“保存并创建”后进入同一任务的源码/实时视图继续编辑。工作区快速创建仍保留。
 
-文档“内容”页默认直接可编辑，提供 Markdown 正文、实时预览、格式工具栏、三级右键菜单、查找替换、命令搜索、大纲与块操作；正文、属性、关联和高级源码共用原文/revision 草稿，显式保存。授权双链按对象类型跳转项目或任务页面；选区转任务和附件上传使用真实服务及原请求恢复。插件技术参考、语法、安全边界和验收见 [Markdown 编辑补全计划](docs/implementation/markdown-editor-completion-plan.zh.md)。Agent/Session 执行与多人逐键合编仍未启用。
+文档“内容”页默认直接可编辑，提供 Markdown 正文、实时预览、格式工具栏、三级右键菜单、查找替换、命令搜索、大纲与块操作；正文、属性、关联和高级源码共用原文/revision 草稿，支持显式保存。授权双链按对象类型跳转项目或任务页面；选区转任务和附件上传使用真实服务及原请求恢复。插件技术参考、语法、安全边界和验收见 [Markdown 编辑补全计划](docs/implementation/markdown-editor-completion-plan.zh.md)。Agent/Session 执行与多人逐键合编仍未启用。
+
+### 多文档工作台
+
+打开普通 PM文档或外部文档后进入 `/pm/<workspace>/documents?workbench=1` 工作台；任务 Markdown 仍进入任务详情。PM 主导航在工作台临时折叠为图标栏，退出后恢复原来的展开状态与宽度；旧文档对象链接和项目 Files 的文档入口沿用同一工作台并保留返回位置，不嵌套第二层项目导航。
+
+- **文件范围：** 当前账号有权读取的PM文档（核心文件），加上工作区及各项目已配置的外部文档来源；不是任意磁盘浏览器。原生文件按项目与类型分组，非文档对象跳转既有对象页；外部来源自动加载全部可用分页，扫描排除、限制和失败明确显示，不冒充完整结果。
+- **浏览与切换：** 左侧文件树支持搜索、定位当前文件、刷新、独立滚动和调宽；窄屏改为抽屉。顶部标签去重、切换、关闭，提供溢出菜单与方向键 / Home / End / Delete 操作。外部标签用来源、revision 和相对路径区分身份，同名文件显示来源与相对路径。关闭最后一页保留空工作台。
+- **保存保护：** 原生正文编辑后约 800ms 自动保存，也保留显式保存。保存按文档 ID 与 revision 提交；快速切换、关闭及卸载不会把旧稿写到新文档。未保存关闭可选择保存后关闭、保留草稿关闭或取消。结果未知时保留原始恢复记录并暂停写入，先读取权威版本核对，再显式采用核对版本；不盲目重发。
+- **状态边界：** 原生标签身份沿用账号 / 工作区隔离的浏览器存储，正文草稿沿用现有恢复机制；编辑位置与外部标签仅保存在当前会话内存。外部文档默认按现有权限开放编辑及文件操作，草稿仅存内存，切换标签保留、刷新前提示保存；未决操作只持久化安全的操作身份，不持久化外部正文。来源或权限变化清除无权读取的正文，文件删除不静默抹去仍有权恢复的未保存草稿。
+
+2026-11-02：三个 `gpt-6.1-sol:xhigh` 子代理并行实现，隔离数据库 / 临时 API 与 Web 的 Chromium 实测覆盖跨项目浏览、超过一页的来源扫描、同名外部文件、快速切换保存、丢响应后的核对恢复、保留草稿关闭、长文滚动恢复、旧项目链接与返回上下文、错误项目拒绝、工作区切换、关闭末页、主侧栏恢复及 390px 抽屉。相关 50 项测试无跳过通过，Web lint 与独立 Vite 构建通过；最终全量类型检查被并行修改的 `packages/pm-views/KnowledgeGraphCanvas.tsx` 中 5 个类型错误阻断。此记录不代表全仓后端回归或常驻 3224 已更新。
+
+**会话与持久化尚未经过统一设计，当前仍暂沿用 Agent Chat；本次文档标签与草稿接入不代表统一设计收口。**
 
 ### 目录型 Markdown 文档来源
 
-PM 文档页右上角“文档来源设置”可为工作区或项目关联一个 **PM 后端机器上的已有目录**。输入绝对路径，先“预检目录”再保存；目录必须在现有本地项目允许根内且通过身份与权限检查。可以复用 Agent 或原生项目目录，也允许与它们存在父子关系；不会修改 Agent cwd。只有多个已配置的文档来源之间不能相同或互为父子目录，以免重复收录；同一来源更新自己的路径不与旧配置冲突。部署需要迁移 `0039_document_sources.sql` 及配套 API/Web。
+PM 文档页右上角“文档来源设置”默认使用当前工作区，选择项目或“工作区公共文档”，通过服务端文件夹浏览器关联一个或多个 **PM 后端机器上的已有目录**，空目录也可选择。一次“确认”完成目录检查及整组原子保存，不再单独预检。同一路径可关联多个项目或工作区；仅同一关联范围内拒绝重复或互为父子的目录。选择器禁用已选目录及其子目录，移除关联不会删除磁盘文件，也不影响其他范围的关联。目录仍须位于允许根内并通过身份与权限检查，不改变 Agent cwd。多来源需要迁移 `0045_document_source_associations.sql`（以及之前的 `0039`、`0044`）和配套 API/Web，不能只发布前端。
 
-“外部目录 · 只读”按来源范围递归列出普通 `.md` / `.MD` 文件，不要求 frontmatter 或 PM ID；相对路径区分同名文件，“继续加载”可穷尽分页。选择文件从后端读取正文，外部新增、修改、删除后使用“刷新来源”。它不导入原生 PM 实体，也不上传、改写、移动或删除源文件；“解除关联”只清除配置并保留 revision。原有“原生 PM 文档”创建、编辑与保存不变。
+外部来源递归列出普通 `.md` / `.MD` 文件，不要求 frontmatter 或 PM ID；前端以有界并发读完各来源分页，显示安全排除或扫描失败，不混合旧游标。有当前来源读取及 `planning.edit` 权限时，**编辑、新建、移动、重命名和删除默认可用，没有另设启用开关**。正文使用 CodeMirror，点击“保存”或 Ctrl/⌘+S 显式写回真实文件；新建和移动可在来源内建立缺少的父目录，不能重建丢失的来源根。支持在同一工作区的授权来源之间移动，重名目标拒绝覆盖；删除须确认且会永久删除磁盘文件，不是关闭标签。文件操作不转成 PM 文档对象、不插入 frontmatter，也不改变 Agent cwd。多个关联引用同一实际文件时，编辑和删除会影响所有引用。
 
-内容读取沿用当前工作区/项目授权；仅项目成员不能读取工作区或其他项目来源。父目录来源不会整体拒绝，但会过滤当前成员无权读取的原生项目子树及其他工作区的已登记项目/Agent 区域，直接请求被过滤文件也拒绝，问题列表不泄漏这些路径。主机路径只向已有路径查看权限的管理者披露，配置修改另需现有规划编辑能力。私有存储、路径穿越、软链接、硬链接和特殊文件仍被拒绝；`.pm` 不进入外部文档，避免重复展示原生 PM 文档。正文最多 4 MiB，不静默截断。扫描限制为 100,000 个条目、128 层目录和 1,000 条问题；遇到排除或限制会明确显示“不完整”，不能当成空目录或完整结果。预览禁用原始 HTML、相对资源与 PM 实体嵌入。
+工作区和项目导航的“文档”入口统一进入 `/pm/<workspace>/documents`。默认在一张表中显示当前账号有权读取的任务 Markdown、普通 PM 文档及工作区内所有授权项目／公共来源的外部文档；PM文档排在外部文档之前。外部文件按工作区内不透明物理位置键去重，显示其授权关联项目，不按同名或相同正文合并；项目筛选和文件操作使用对应项目的来源权限。来源名称统一为“PM文档”和“外部文档”，可按项目、类型（含“任务”）、来源、名称或 ID 筛选。已完成、已取消及已归档的任务文件仍可列出，不沿用任务页的状态或归档过滤。任务点击进入原任务详情，普通文档和外部文档进入文档工作台，不转换实体类型或复制文件。外部来源失败或扫描不完整明确提示，不冒充空集合。
 
-配置使用 revision 防止覆盖他人修改；保存响应未知时先查询核对，不自动重试。实施清单、并行分工及实际验收见[目录文档来源计划](docs/implementation/directory-document-sources-plan.zh.md)。
+内容读取沿用当前工作区/项目授权；仅项目成员不能借关联读取其他项目或工作区实体。明确关联的普通目录可以跨范围共享，但宽泛父目录不会隐式开放未授权的登记项目子树；私有目录和凭据始终排除，问题列表不泄漏受限路径。主机绝对路径仅向可管理该关联范围的主体披露。私有存储、路径穿越、软链接、硬链接和特殊文件仍被拒绝；`.pm` 不进入外部文档，避免重复展示 PM 文档。正文最多 4 MiB，不静默截断。扫描限制为 100,000 个条目、128 层目录和 1,000 条问题；遇到排除或限制会明确显示“不完整”，不能当成空目录或完整结果。预览禁用原始 HTML、相对资源与 PM 实体嵌入。
+
+关联集合 revision、来源 revision 与文件 revision 分别防止覆盖他人的配置、来源重定向及覆盖外部编辑。配置保存响应未知时先 GET 比较整组目录和版本，不能盲重发。文件冲突保留草稿，须核对最新正文并显式采用版本；未决操作保留原 operationId，刷新后使用“核对原操作”，不盲目重发。跨来源移动先发布目标再删除源文件；若中途出错，状态保持未知，不声称数据库回滚已撤销磁盘副作用。缺少可信完成证据时，服务端阻止跨工作区、跨来源别名的重叠物理目录写入；解除关联不清除未决记录。迁移保留历史请求／收据及证据哈希，旧来源标识只作为不透明 sourceId 保留，不保留旧配置 API。实施与分批验证见[目录文档来源计划](docs/implementation/directory-document-sources-plan.zh.md)。
 
 | 入口/能力 | 当前范围 |
 | --- | --- |
 | `/pm` | 真实会话、工作区与能力；项目/任务/里程碑/依赖、人工对话与意图、成员授权、成果上传下载/证据/提交/审核；侧栏账户菜单（本人资料、账号设置、主题、快捷键、退出） |
 | `/pm/<workspace>/home` | 工作区首页：真实姓名/个人时区问候、权限快捷入口、活跃项目/开放任务/已完成/逾期、我的任务三分组、项目进度、即将截止与最近动态；参考 gr8r-studio Home 布局，仅聚合授权范围内的已保存事实。新浏览器默认进入首页，保留已保存启动偏好；工作区根路径按该偏好跳转，Dashboard 独立保留 |
 | `/pm/<workspace>/projects` | 正式项目列表四种布局；`?view=list1..4` 显式覆盖工作区显示偏好。真实个人收藏/筛选、授权图片封面、团队/身份、里程碑摘要和独立人工健康度；工作区管理员可从“团队管理”维护已有成员的团队 |
-| `/pm/<workspace>/projects/<id>` | `?view=detail1`、`detail2`：概览/看板/列表/表格/日历/时间线/关系图/文件/动态；共享项目身份与任务工具栏，真实范围、健康、预算、团队和分页审计。Files 按 artifact 聚合不可变版本，支持真实内容预览、上传/下载、显示名修改、软隐藏/恢复及指定版本独立复制；来源按双侧当前权限读取，不改变历史 filename/Evidence 或删除字节。任务/日期仍写回同一 Markdown revision。见[项目补齐计划](docs/implementation/project-backend-completion.md)、[Files 生命周期](docs/implementation/service-files-lifecycle-plan.zh.md)与[视图顶栏](docs/implementation/project-view-arrangement.zh.md) |
+| `/pm/<workspace>/projects/<id>` | 入口不再渲染项目详情 Tab 页；按旧 `?tab=`/默认任务布局重定向到 `/issues?view=...`。项目标题与 `ProjectViewNavigation` 由项目布局统一提供，概览/任务/文档/文件/活动共享同一顶栏 |
+| `/pm/<workspace>/projects/<id>/overview` | 项目概览：任务指标、项目简报、目标成果、范围、里程碑、健康/预算、团队与封面；不是旧详情 Tab 页面 |
+| `/pm/<workspace>/projects/<id>/files` | 项目文件页：按 artifact 聚合不可变版本，真实内容预览、上传/下载、显示名修改、软隐藏/恢复及指定版本独立复制；来源按双侧当前权限读取，不改变历史 filename/Evidence 或删除字节 |
+| `/pm/<workspace>/projects/<id>/activity` | 项目活动页：真实受控业务审计历史，复用 `audit.read` 与 `domain.read` 权限 |
+| `/pm/<workspace>/projects/<id>/documents` | 经项目访问校验后重定向到工作区统一文档页，显示 PM文档与外部文档 |
 | `/pm/<workspace>/projects/<id>/issues` | 项目作用域内的任务列表、看板、表格、日历、甘特图；侧栏保留稳定工作区分组和项目树，内容区保留完整项目视图。`/issues/new` 创建及 `/entities/<entityId>` 全页详情沿用该项目；路由项目优先于查询参数和保存视图，工作区“全部任务”仍跨授权项目汇总 |
 | `/pm/<workspace>/issues`、`/documents`、`/views` | PM 原生集合与共享详情：九类实体、原文/预览/草稿、属性/关系、看板/表格/树/图、嵌入 pm-view；文件浏览器和源码分栏按需打开，不再嵌入第二套应用 |
 | `/pm/<workspace>/issues?scope=mine` | 我的任务：替代侧栏独立的今天/即将到来入口，按 gr8r-studio My Tasks 展示当前登录人负责的真实任务。逾期、今天、即将到来（所有未来及未排期）、已完成四组；已完成默认折叠，取消任务不混入。统计、搜索、筛选及列表/日历共用同一集合；新建默认分派本人，完整创建页支持 `issues/new?scope=mine`，保留显式项目/负责人选择和恢复草稿。完成/重开按配置工作流和独立能力写回原生 Markdown，不以界面操作推断成功 |
 | `/pm/<workspace>/agent` | 旧入口仅跳转到统一 Agent Chat，不迁入旧 PM thread ID；PM 侧栏与完整 Chat 使用同一界面、Provider、会话及17个 PM 工具，沿用当前 PM 登录与业务权限 |
 | `/agent/automations` | 本人执行定义；Dashboard/47模板/草稿/真实试运行、时间与事件触发、历史/日志、PM 来源快照与候选人工审阅、导入导出/Git Sync/集成配置。所选 Provider 及外部来源必须实际就绪，不自动完成任务；旧报告页面不恢复 |
 | `/pm/<workspace>/entities/<id>` | 与集合详情共用草稿和 revision 的完整对象页；任务默认连续展示标题、属性、依赖、Markdown 描述、真实子任务、成果证据与服务端评论；评论支持本人编辑、软删除/恢复及不可变历史，不改核心 Markdown。字段和源码双向更新并显式保存；保留高级属性/关联/关系图/业务/上下文。见[任务详情交付](docs/implementation/markdown-core-delivery.zh.md#task-detail) |
-| `/pm/<workspace>/views?view=graph` | 九类实体的力导向知识图谱；正式类型关系与正文双链、全局/一至三层局部图、关系筛选与搜索、缩放/拖动/邻居高亮；正式图只读已保存事实，嵌入图明确标记草稿预览 |
+| `/pm/<workspace>/views?view=graph` | 九类实体的 React Flow + ELK 关系图；实体卡片、自环/双向/多类型边、全局/一至三层局部图、搜索与筛选、横纵布局、缩放/拖动/邻域高亮及缩略图；正式图只读已保存事实，嵌入图明确标记草稿预览，坐标不持久化 |
 | `/pm/<workspace>/settings` | 工作流与字段、本地项目目录、迁移与备份、诊断；`?section=local-storage` 管理本地目录，`?section=preferences` 保留 PM 展示偏好；Agent Provider 与聊天配置由 Chat 设置管理 |
 | `/pm/<workspace>/settings/:page` | 24 页、7 分组设置中心；真实个人资料、本人改密/会话撤销、独立可信邮箱管理、工作区名称/安全图标/颜色及原请求恢复；浏览器和任务/项目偏好。MFA/SSO、工作区删除/自定义URL、支付/OAuth、外部通知偏好仍禁用。见[设置清单](docs/implementation/settings-completion-plan.zh.md)与[实际边界](docs/implementation/service-completion-and-acceptance.zh.md) |
 | `/pm/<workspace>/settings/plugins` | 内置能力目录、搜索和详情；真实 SMTP 邀请状态，以及批准目标下的 Webhook 创建/暂停/启用、投递状态与原投递核对。未配置时明确禁用；其他供应商连接器/OAuth/动态插件不因此可用。见[Webhook 合同](docs/implementation/service-webhook-plan.zh.md) |
@@ -381,7 +475,7 @@ Worker 事件发布达到 10 次失败后保留原事件并隔离该工作区。
 - [Markdown 能力台账](docs/implementation/markdown-capability-ledger.zh.md)：L01–L30 与 E01–E12 的入口和状态。
 - [Markdown PM 能力移植计划与取舍说明](docs/implementation/markdown-porting-plan.zh.md)：Lab 全部能力必做，共有业务以 Lab 语义和文件权威为准；PM 独有能力逐项列明，可暂保留原存储。含完整能力对照、D01–D11 易读解释、阶段与验收；旧数据已按 D11 丢弃，Markdown 核心已接入。
 - [Markdown 能力全量移植专项](docs/implementation/markdown-full-port-plan.zh.md)：主移植计划的强制组成部分，列出 C01–C12 源码复制清单、独立模块及宿主接口、MD01–MD24 完整能力和真实验收。优先直接复制 Lab 实现/行为测试再适配接口；实现与证据见 [Markdown 核心交付记录](docs/implementation/markdown-core-delivery.zh.md)。
-- [知识关系图谱实施计划与验收](docs/implementation/knowledge-graph-plan.zh.md)：授权图数据、Canvas 力导向组件、共享详情、草稿与正式关系边界及真实运行证据；与 React Flow 任务依赖图分离。
+- [知识关系图谱合同与历史验收](docs/implementation/knowledge-graph-plan.zh.md)、[xyflow 重构计划与交付](docs/implementation/xyflow-relationship-graph-plan.zh.md)：复用授权图数据、共享详情和草稿边界，展示已切换为固定版 React Flow + ELK；含隔离浏览器证据、共享画布回归及 SSE 测试超时说明，与任务依赖业务语义保持分离。
 - [任务五页与 Markdown 工作台统一创建：计划与交付](docs/implementation/task-creation-adaptation-plan.zh.md)：已实现后端统一规则与原生恢复、前端五入口与共享创建草稿，保留九类对象和源码工作台；含真实浏览器故障验收及 466 项零跳过数据库测试证据。
 - [Markdown 内容直接编辑与功能补全](docs/implementation/markdown-editor-completion-plan.zh.md)：gpt-6.1-sol / xhigh 五包实施，React/CodeMirror 原生编辑、结构命令、丰富渲染、授权对象与附件联动；保留 Markdown 权威和明确能力边界。
 - [侧栏底部头像用户菜单复刻计划](docs/implementation/sidebar-user-menu-replication-plan.zh.md)：按参考站拆解触发区、账户卡片、主题切换、资料/设置/快捷键/退出映射；正式 `/pm` 已实现并保留真实数据、视觉规格与浏览器验收记录。

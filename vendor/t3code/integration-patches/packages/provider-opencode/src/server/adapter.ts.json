@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-opencode/src/server/adapter.ts",
   "beforeSha256": "1c347f923077aa12af6a0497a70ae68ff558f4d7ba9951680fd30da5bfaf0703",
-  "afterSha256": "cf4d5a7abccc5ece3e20bfdb71cbe86665437e1eed206f66b1829ba9d4cca996",
+  "afterSha256": "090183ec598a2d7dab0543939980a1a904e13d456c015b4d1bf3c9ce065a1882",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -44,6 +44,14 @@
         "import { buildRuntimeInstructions } from \"@t3tools/provider-core/server/runtimeInstructions\";\n"
       ],
       "after": []
+    },
+    {
+      "start": 82,
+      "before": [],
+      "after": [
+        "import { registerLiveOpenCodeInventory } from \"./liveWorkspace.ts\";\n",
+        "import { openCodeCommandsToServerProviderSlashCommands, openCodeSkillsToServerProviderSkills } from \"./status.ts\";\n"
+      ]
     },
     {
       "start": 274,
@@ -115,10 +123,7 @@
         "        const hasT3Mcp = mcpSession !== undefined && !connection.external;\n",
         "        const orchestrationSystemPrompt = t3OrchestrationSystemPrompt(\n",
         "          hasT3Mcp,\n",
-        "          mcpSession?.capabilities?.has(\"device\") === true,\n",
-        "        );\n",
-        "        if (hasT3Mcp) {\n",
-        "          yield* OpenCodeRuntime.runOpenCodeSdk(\"mcp.add\", () =>\n"
+        "          mcpSession?.capabilities?.has(\"device\") === true,\n"
       ],
       "after": [
         "        const binding = yield* runtimeHost.read({\n",
@@ -129,6 +134,24 @@
         "            driver: OPENCODE_PROVIDER, detail: \"The host transport belongs to another directory.\",\n",
         "          });\n",
         "        }\n",
+        "        const unregisterInventory = binding && registerLiveOpenCodeInventory(options.instanceId, input.threadId, binding.executionId, cwd, () =>\n",
+        "          Effect.all({\n",
+        "            skills: runtime.loadOpenCodeSkills(client),\n",
+        "            commands: OpenCodeRuntime.loadOpenCodeCommands(client),\n",
+        "          }).pipe(Effect.map(({ skills, commands }) => ({\n",
+        "            skills: openCodeSkillsToServerProviderSkills(skills),\n",
+        "            commands: openCodeCommandsToServerProviderSlashCommands(commands),\n",
+        "          }))),\n"
+      ]
+    },
+    {
+      "start": 954,
+      "before": [
+        "        if (hasT3Mcp) {\n",
+        "          yield* OpenCodeRuntime.runOpenCodeSdk(\"mcp.add\", () =>\n"
+      ],
+      "after": [
+        "        if (unregisterInventory) yield* Effect.addFinalizer(() => Effect.sync(unregisterInventory));\n",
         "        const mcpServerName = binding?.mcpServers.length ? `pm_${randomBytes(12).toString(\"hex\")}` : undefined;\n",
         "        if (binding && binding.mcpServers.length > 1) {\n",
         "          return yield* new ProviderAdapter.ProviderAdapterProtocolError({\n",
@@ -412,10 +435,35 @@
       ]
     },
     {
+      "start": 2941,
+      "before": [],
+      "after": [
+        "          userMessageText?: string,\n"
+      ]
+    },
+    {
+      "start": 2947,
+      "before": [
+        "          const match = text?.match(/^\\/([^\\s/]+)(?:\\s+([\\s\\S]*))?$/);\n"
+      ],
+      "after": [
+        "          const match = (userMessageText ?? text)?.trim().match(/^\\/([^\\s/]+)(?:\\s+([\\s\\S]*))?$/);\n"
+      ]
+    },
+    {
       "start": 2954,
       "before": [],
       "after": [
         "          yield* recheckHostTools;\n"
+      ]
+    },
+    {
+      "start": 2972,
+      "before": [
+        "            arguments: match?.[2] ?? \"\",\n"
+      ],
+      "after": [
+        "            arguments: userMessageText === undefined ? match?.[2] ?? \"\" : text ?? \"\",\n"
       ]
     },
     {
@@ -458,6 +506,15 @@
       ]
     },
     {
+      "start": 3145,
+      "before": [
+        "                turnInput.message.text.trim() === \"/compact\" &&\n"
+      ],
+      "after": [
+        "                (turnInput.userMessageText ?? turnInput.message.text).trim() === \"/compact\" &&\n"
+      ]
+    },
+    {
       "start": 3196,
       "before": [],
       "after": [
@@ -487,6 +544,13 @@
       "after": [
         "              const systemPrompt = [\"<runtime_info>You are running through the OpenCode harness.</runtime_info>\",\n",
         "                binding?.instructionText].filter(Boolean).join(\"\\n\\n\");\n"
+      ]
+    },
+    {
+      "start": 3283,
+      "before": [],
+      "after": [
+        "                turnInput.userMessageText,\n"
       ]
     },
     {

@@ -272,8 +272,7 @@
   cursor: pointer;
 }
 .viewAll:not(:disabled):hover {
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  color: var(--primary);
 }
 .railProject {
   display: flex;

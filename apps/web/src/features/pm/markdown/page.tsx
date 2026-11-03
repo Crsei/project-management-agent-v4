@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
-import { entityKinds, workflowFor, type EntityKind, type ProtocolConfiguration } from '@pm-schema';
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
+import { entityKinds, workflowFor, type EntityKind, type FileRecord, type ProtocolConfiguration } from '@pm-schema';
 import { useI18n } from '@/lib/i18n-provider';
 import { useWorkspaceStore } from '@/providers/app-providers';
 import { usePersonalDashboard, usePmService } from '@/features/pm/service/pm-service';
@@ -12,6 +12,10 @@ import type { CollectionLayout } from './controller';
 import { TaskCreationSurface } from './TaskCreationSurface';
 import { safeWorkspaceReturn, taskScope } from './task-collection-model';
 import { useTaskScopeClock } from './task-scope-clock';
+
+import { DocumentWorkbench } from './DocumentWorkbench';
+import type { DocumentTarget } from './document-workbench-state';
+import { documentWorkbenchLocation, documentWorkbenchReturn, documentWorkbenchUrl } from './document-workbench-navigation';
 import './markdown.css';
 import './document-scope.css';
 import './views-scope.css';
@@ -54,14 +58,14 @@ export function ServiceMarkdown({ mode = 'collection', entityKind = 'work_item',
   const projectRoot = projectId ? `${root}/projects/${encodeURIComponent(projectId)}` : root;
   const state = location.state as NavigationState | null;
   const returnTo = params.get('returnTo') || state?.returnTo;
-  const safeReturnTo = safeWorkspaceReturn(returnTo, mode === 'entity' ? root : projectRoot, `${projectRoot}/${projectId || entityKind === 'work_item' ? 'issues' : 'views'}`);
+  const safeReturnTo = safeWorkspaceReturn(returnTo, mode === 'entity' ? root : projectRoot, `${projectRoot}/${entityKind === 'document' ? 'documents' : projectId || entityKind === 'work_item' ? 'issues' : 'views'}`);
   const requestedKind = params.get('kind');
   const kind = entityKind === '' && requestedKind && (entityKinds as readonly string[]).includes(requestedKind) ? requestedKind as EntityKind : entityKind;
   const scope = projectId ? 'all' : taskScope(params.get('scope'));
   const personalRoute = mode === 'collection' && kind === 'work_item' && !projectId && scope === 'mine';
   const view = params.get('view') || '';
   const savedViewId = params.get('savedView') || undefined;
-  const layout = view ? presentationLayouts[view] : savedViewId ? undefined : kind === 'work_item' ? personalRoute ? 'list' : presentationLayouts[issuePresentation] : kind === 'document' ? 'list' : undefined;
+  const layout = mode === 'collection' && kind === 'document' ? 'list' : view ? presentationLayouts[view] : savedViewId ? undefined : kind === 'work_item' ? personalRoute ? 'list' : presentationLayouts[issuePresentation] : undefined;
   const sectionParam = params.get('section');
   const section = settingsSection || (sectionParam === 'migrations' || sectionParam === 'diagnostics' ? sectionParam : 'configuration');
   const selectedId = mode === 'entity' ? entityId || '' : mode === 'collection' ? params.get('entity') || '' : '';
@@ -69,6 +73,26 @@ export function ServiceMarkdown({ mode = 'collection', entityKind = 'work_item',
   const canLifecycle = !!actor && capabilities?.business.enabled === true && workspace.capabilities.includes('planning.lifecycle');
   const needsPersonal = scope !== 'all' || params.get('overdue') === '1';
   const taskContext = mode === 'collection' && kind === 'work_item' ? { scope, actorId: actor.id, today, watched, pending: needsPersonal && (personal.isPending || !today && !personal.error), error: needsPersonal ? personal.error?.message || '' : '' } : undefined;
+  const documentRoute = mode === 'collection' && kind === 'document';
+  const documentLocation = documentWorkbenchLocation(params);
+  const isDocumentWorkbench = documentRoute && documentLocation.enabled;
+  const documentBackParams = new URLSearchParams(params);
+  documentBackParams.delete('entity'); documentBackParams.delete('create');
+  const documentBack = documentWorkbenchReturn(returnTo || `${location.pathname}${documentBackParams.size ? `?${documentBackParams}` : ''}${location.hash}`, root, `${projectRoot}/documents`);
+  function openDocument(target: DocumentTarget, options?: { replace?: boolean; anchor?: string }) {
+    let anchor = options?.anchor;
+    if (anchor === undefined && options?.replace && location.hash) {
+      try { anchor = decodeURIComponent(location.hash.slice(1)); } catch { anchor = location.hash.slice(1); }
+    }
+    navigate(documentWorkbenchUrl(root, target, documentBack, anchor), { replace: options?.replace, state: { ...state, returnTo: documentBack } });
+  }
+  function navigateEntity(file: FileRecord, anchor?: string) {
+    if (file.entity.entity === 'document') { openDocument({ kind: 'native', id: file.id }, { anchor }); return; }
+    if (file.entity.entity === 'project') { navigate(`${root}/projects/${encodeURIComponent(file.id)}`); return; }
+    const targetRoot = file.entity.entity === 'work_item' && file.entity.project ? `${root}/projects/${encodeURIComponent(file.entity.project)}` : root;
+    const back = isDocumentWorkbench ? documentBack : mode === 'entity' ? safeReturnTo : `${location.pathname}${location.search}${location.hash}`;
+    navigate(`${targetRoot}/entities/${encodeURIComponent(file.id)}?${new URLSearchParams({ returnTo: back })}${anchor ? `#${encodeURIComponent(anchor)}` : ''}`, { state: { returnTo: back, collectionContext: state?.collectionContext } });
+  }
   function expandCreation(draftId: string) {
     const backParams = new URLSearchParams(params); backParams.delete('create');
     const back = `${location.pathname}${backParams.size ? `?${backParams}` : ''}${location.hash}`;
@@ -82,6 +106,7 @@ export function ServiceMarkdown({ mode = 'collection', entityKind = 'work_item',
     setParams(next, { replace: !id || selectedId === id, state: location.state });
   }
   function select(id: string) {
+    if (documentRoute && id && !id.startsWith('source:')) { openDocument({ kind: 'native', id }); return; }
     if (mode === 'collection' && kind === 'work_item' && id && !id.startsWith('source:') && taskOpenMode === 'page') {
       const next = new URLSearchParams({ returnTo: `${location.pathname}${location.search}${location.hash}` });
       navigate(`${projectRoot}/entities/${encodeURIComponent(id)}?${next}`, { state: { returnTo: next.get('returnTo'), collectionContext: state?.collectionContext } });
@@ -98,18 +123,21 @@ export function ServiceMarkdown({ mode = 'collection', entityKind = 'work_item',
       navigate(`${projectRoot}/entities/${encodeURIComponent(id)}?${next}`, { state: { returnTo: next.get('returnTo'), collectionContext: state?.collectionContext } });
     }
   }
+  if (isDocumentWorkbench && projectId) return <Navigate to={`${root}/documents${location.search}${location.hash}`} replace state={location.state} />;
   return <div className="markdown-workbench" data-pm-route-page data-pm-task-collection={kind === 'work_item' ? '' : undefined}>
     <CoreSessionProvider key={`${workspace.id}:${actor.id}:${workspace.version}:${actorEpoch}`} hostNamespace={window.location.origin} workspaceId={workspace.id} actorId={actor.id} membershipVersion={workspace.version} actorEpoch={actorEpoch} onAccessFailure={refresh}>
+      {isDocumentWorkbench ? <DocumentWorkbench target={documentLocation.target} invalidTarget={documentLocation.invalid} en={en} canWrite={canWrite} canLifecycle={canLifecycle}
+        onTargetChange={(target, options) => navigate(documentWorkbenchUrl(root, target, documentBack, options?.anchor), { replace: options?.replace, state: { ...state, returnTo: documentBack } })}
+        onExit={() => navigate(documentBack, { state: { collectionContext: state?.collectionContext } })}
+        onNavigateEntity={navigateEntity}
+        onSettings={() => navigate(`${root}/settings?section=configuration`)}
+        renderBusiness={file => <fieldset disabled={capabilities?.business.enabled !== true}><CoreBusinessSections file={file} /></fieldset>}
+      /> :
       <Workspace key={`${mode}:${kind}:${projectId || ''}`} mode={mode} entityKind={kind} projectId={projectId} selectedId={selectedId} onSelect={select} onInspect={inspect} layout={layout} viewId={savedViewId} state={mode === 'collection' ? params.get('state') || undefined : undefined} mapStatus={coreStatus} overdue={mode === 'collection' && params.get('overdue') === '1'} initialCreate={mode === 'collection' && (initialCreate || params.get('create') === '1')} canWrite={canWrite} canLifecycle={canLifecycle} en={en} settingsSection={section} collectionContext={mode === 'collection' ? state?.collectionContext : undefined} taskContext={taskContext}
-        onNavigateEntity={(file, anchor) => {
-          if (file.entity.entity === 'project') {
-            navigate(`${root}/projects/${encodeURIComponent(file.id)}`);
-            return;
-          }
-          const targetRoot = file.entity.entity === 'work_item' && file.entity.project ? `${root}/projects/${encodeURIComponent(file.entity.project)}` : root;
-          const back = mode === 'entity' ? safeReturnTo : `${location.pathname}${location.search}${location.hash}`;
-          navigate(`${targetRoot}/entities/${encodeURIComponent(file.id)}?${new URLSearchParams({ returnTo: back })}${anchor ? `#${encodeURIComponent(anchor)}` : ''}`, { state: { returnTo: back, collectionContext: state?.collectionContext } });
-        }}
+
+        onDocumentScope={project => navigate(`${project ? `${root}/projects/${encodeURIComponent(project)}` : root}/documents`)}
+        onOpenDocument={openDocument}
+        onNavigateEntity={navigateEntity}
         onScope={scope => { const next = new URLSearchParams(params); next.set('scope', scope); next.delete('entity'); setParams(next, { state: location.state }); }}
         onRetryPersonal={() => { void personal.refetch(); }}
         onCreatePage={initial => {
@@ -154,7 +182,7 @@ export function ServiceMarkdown({ mode = 'collection', entityKind = 'work_item',
             ? <p role="status">{en ? 'Reading your time zone…' : '正在读取个人时区…'}</p>
             : <CoreScheduleView {...schedule} showProject={!projectId} today={today} />}
         renderBusiness={file => <fieldset disabled={capabilities?.business.enabled !== true}><CoreBusinessSections file={file} /></fieldset>}
-      />
+      />}
     </CoreSessionProvider>
   </div>;
 }

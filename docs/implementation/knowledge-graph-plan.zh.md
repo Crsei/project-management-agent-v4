@@ -1,6 +1,6 @@
 # PM 知识关系图谱实施计划
 
-状态：已实现并完成本轮隔离验收。范围依据：现有 Markdown 核心上的 Obsidian 风格图谱；不迁移存储权威、不接入真实 Agent、不导入任意 Obsidian Vault。
+状态：本文件记录初次 Canvas 力导向实现及其历史隔离验收。2026-11-02 展示层已迁移为 React Flow + ELK，当前实现与新批次证据见 [xyflow 关系图重构交付](xyflow-relationship-graph-plan.zh.md)；下述旧引擎、截图和测试结果不代表当前渲染器。授权、已保存事实、草稿隔离等数据合同继续有效。范围依据：现有 Markdown 核心上的 Obsidian 风格图谱；不迁移存储权威、不接入真实 Agent、不导入任意 Obsidian Vault。
 
 ## 1. 目标与边界
 

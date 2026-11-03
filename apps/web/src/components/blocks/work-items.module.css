@@ -30,7 +30,7 @@
   padding: 4px 0;
 }
 a.title:hover {
-  text-decoration: underline;
+  color: var(--primary);
 }
 a.title:focus-visible,
 a.identifier:focus-visible {
@@ -456,8 +456,8 @@ a.identifier:focus-visible {
   align-items: center;
   gap: 4px;
 }
-.batch select,
-.display select {
+.batch [data-slot="select-trigger"],
+.display [data-slot="select-trigger"] {
   min-height: 32px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -495,8 +495,8 @@ a.identifier:focus-visible {
   contain-intrinsic-block-size: auto 152px;
 }
 @media (pointer: coarse) {
-  .batch select,
-  .display select {
+  .batch [data-slot="select-trigger"],
+  .display [data-slot="select-trigger"] {
     min-height: 44px;
   }
 }
@@ -695,6 +695,10 @@ a.identifier:focus-visible {
   cursor: pointer;
 }
 .sortOption:hover {
+  background: var(--surface-hover);
+}
+.sortOption:focus-visible {
+  outline: none;
   background: var(--surface-hover);
 }
 .sortOption[data-selected] {

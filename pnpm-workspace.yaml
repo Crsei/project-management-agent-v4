@@ -9,6 +9,10 @@ packages:
   - vendor/t3code/packages/*
   - vendor/t3code/apps/server
 allowBuilds:
+  # Explicit runtime:install prepares development Electron; installers use electron-builder.
+  electron: false
+  # Desktop ships NSIS, not Squirrel; do not run its unrelated native installer build.
+  electron-winstaller: false
   esbuild: true
   sharp: true
 patchedDependencies:

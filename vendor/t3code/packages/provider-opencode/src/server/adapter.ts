@@ -80,6 +80,8 @@ import {
   subagentThreadTitle,
 } from "@t3tools/provider-core/server/subagentProjection";
 import { openCodeToolTurnItem } from "./toolItems.ts";
+import { registerLiveOpenCodeInventory } from "./liveWorkspace.ts";
+import { openCodeCommandsToServerProviderSlashCommands, openCodeSkillsToServerProviderSkills } from "./status.ts";
 
 export const OPENCODE_PROVIDER = ProviderDriverKind.make("opencode");
 export const OPENCODE_DEFAULT_INSTANCE_ID = defaultInstanceIdForDriver(OPENCODE_PROVIDER);
@@ -965,6 +967,16 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
             driver: OPENCODE_PROVIDER, detail: "The host transport belongs to another directory.",
           });
         }
+        const unregisterInventory = binding && registerLiveOpenCodeInventory(options.instanceId, input.threadId, binding.executionId, cwd, () =>
+          Effect.all({
+            skills: runtime.loadOpenCodeSkills(client),
+            commands: OpenCodeRuntime.loadOpenCodeCommands(client),
+          }).pipe(Effect.map(({ skills, commands }) => ({
+            skills: openCodeSkillsToServerProviderSkills(skills),
+            commands: openCodeCommandsToServerProviderSlashCommands(commands),
+          }))),
+        );
+        if (unregisterInventory) yield* Effect.addFinalizer(() => Effect.sync(unregisterInventory));
         const mcpServerName = binding?.mcpServers.length ? `pm_${randomBytes(12).toString("hex")}` : undefined;
         if (binding && binding.mcpServers.length > 1) {
           return yield* new ProviderAdapter.ProviderAdapterProtocolError({
@@ -3061,13 +3073,14 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
             sessionID: string;
           },
           abortController: AbortController,
+          userMessageText?: string,
         ) {
           const text = payload.parts
             ?.filter((part) => part.type === "text")
             .map((part) => part.text)
             .join("\n")
             .trim();
-          const match = text?.match(/^\/([^\s/]+)(?:\s+([\s\S]*))?$/);
+          const match = (userMessageText ?? text)?.trim().match(/^\/([^\s/]+)(?:\s+([\s\S]*))?$/);
           const command = match
             ? (yield* OpenCodeRuntime.loadOpenCodeCommands(client).pipe(
                 Effect.timeout("10 seconds"),
@@ -3093,7 +3106,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
             sessionID: payload.sessionID,
             messageID: payload.messageID,
             command: command.name,
-            arguments: match?.[2] ?? "",
+            arguments: userMessageText === undefined ? match?.[2] ?? "" : text ?? "",
             ...(payload.model
               ? { model: `${payload.model.providerID}/${payload.model.modelID}` }
               : {}),
@@ -3284,7 +3297,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
               yield* installHostTransport;
               yield* applyPermissionRules(state, turnInput.runtimePolicy);
               const isCompaction =
-                turnInput.message.text.trim() === "/compact" &&
+                (turnInput.userMessageText ?? turnInput.message.text).trim() === "/compact" &&
                 turnInput.message.attachments.length === 0;
               const parts = isCompaction ? [] : yield* resolvePromptParts(turnInput);
               const startedAt = yield* DateTime.now;
@@ -3417,6 +3430,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
                   parts,
                 },
                 admissionAbortController!,
+                turnInput.userMessageText,
               ).pipe(
                 Effect.tapError((cause) =>
                   admissionAbortController!.signal.aborted

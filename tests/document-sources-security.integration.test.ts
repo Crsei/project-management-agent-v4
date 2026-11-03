@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import type { DocumentSourceFiles } from '../packages/contracts/src/document-sources.ts';
 import { createWorkspace } from '../packages/infrastructure/src/auth.ts';
 import { createLocalProjectFixture, localProjectCaseTimeout } from './local-project-fixture.ts';
-import { assertDocumentSourceFailure, collectDocumentFiles, createDocumentProject, documentSourcesPath, readDocumentSources, readSourceContent, saveDocumentSource } from './document-sources-fixture.ts';
+import { assertDocumentSourceFailure, collectDocumentFiles, configureDocumentSource, configureDocumentSources, createDocumentProject, documentSourceConfigurationPath, documentSourcesPath, readDocumentSourceCatalog, readDocumentSources, readSourceContent, type DocumentSourceConfiguration } from './document-sources-fixture.ts';
 
 const execute = promisify(execFile);
 const contentPath = (base: string, path: string) => `${base}/content?${new URLSearchParams({ path })}`;
@@ -25,14 +25,14 @@ describe('directory document sources: filesystem identities and isolation', { co
     const intermediate = join(f.parents[1], 'intermediate-link'); await symlink(f.parents[1], intermediate, 'dir');
     const forbiddenRoots = [rootLink, join(intermediate, 'safe-source'), f.root, f.coreRoot, f.blobRoot, '/etc'];
     for (const path of forbiddenRoots) {
-      const preview = await f.request(`${documentSourcesPath(f)}/preview`, { method: 'POST', body: { projectId: null, path } });
-      assertDocumentSourceFailure(preview, [400, 403, 409]);
-      const save = await f.request(documentSourcesPath(f, 'workspace'), { method: 'PUT', body: { path, expectedRevision: 0 } });
+      const browse = await f.request(`${documentSourcesPath(f)}/directories?${new URLSearchParams({ path })}`);
+      assertDocumentSourceFailure(browse, [400, 403, 409]);
+      const save = await f.request(documentSourceConfigurationPath(f), { method: 'PUT', body: { projectId: null, paths: [path], expectedRevision: 0 } });
       assertDocumentSourceFailure(save, [400, 403, 409]);
     }
-    assert.equal((await readDocumentSources(f)).find(source => source.projectId === null)?.revision, 0);
-    await saveDocumentSource(f, 'workspace', root, 0);
-    const base = documentSourcesPath(f, 'workspace');
+    assert.equal((await readDocumentSourceCatalog(f)).scopes.find(scope => scope.projectId === null)?.revision, 0);
+    const { sourceId: workspaceSourceId } = await configureDocumentSource(f, null, root, 0);
+    const base = documentSourcesPath(f, workspaceSourceId);
     for (const path of ['../outside-source/secret.md', '../../outside-source/secret.md', join(outside, 'secret.md'), '/etc/passwd', 'nested/../../outside-source/secret.md', 'nested/../regular.md', '..\\outside-source\\secret.md', 'C:\\outside-source\\secret.md']) {
       const rejected = await f.request(contentPath(base, path));
       assertDocumentSourceFailure(rejected, [403], 'document_source_path_forbidden');
@@ -51,7 +51,7 @@ describe('directory document sources: filesystem identities and isolation', { co
       assert.equal(JSON.stringify(rejected.body).includes('SECRET_OUTSIDE_SOURCE'), false);
     }
     assertDocumentSourceFailure(await f.request(contentPath(base, 'oversized.md')), [413], 'document_source_file_too_large');
-    const scanned = await collectDocumentFiles(f, 'workspace');
+    const scanned = await collectDocumentFiles(f, workspaceSourceId);
     assert.equal(scanned.scanComplete, false, 'Excluded unsafe filesystem entries cannot produce a supposedly complete scan');
     assert.ok(scanned.issues.length > 0);
     for (const path of ['leaf-link.md', 'internal-link.md', 'linked-directory', 'hard-link.md', 'special-pipe.md']) {
@@ -60,7 +60,7 @@ describe('directory document sources: filesystem identities and isolation', { co
     }
     assert.ok(scanned.entries.some(entry => entry.path === 'regular.md'));
     assert.ok(scanned.entries.some(entry => entry.path === 'oversized.md') || scanned.issues.some(issue => issue.path === 'oversized.md'), 'Large files are either listed or explicitly reported, never silently omitted');
-    assert.equal((await readSourceContent(f, 'workspace', 'regular.md')).content, '# Ordinary source\n');
+    assert.equal((await readSourceContent(f, workspaceSourceId, 'regular.md')).content, '# Ordinary source\n');
     assert.deepEqual(await readFile(join(outside, 'secret.md')), outsideBytes);
     assert.equal((await lstat(join(root, 'special-pipe.md'))).isFIFO(), true);
     assert.equal((await lstat(huge)).size, 4 * 1024 * 1024 + 1, 'Oversized sources are neither truncated nor rewritten');
@@ -71,15 +71,15 @@ describe('directory document sources: filesystem identities and isolation', { co
     t.after(() => f.close());
     const root = join(f.parents[1], 'identity-source'); await mkdir(join(root, 'nested'), { recursive: true });
     await writeFile(join(root, 'nested', 'read.md'), '# Original identity\n');
-    await saveDocumentSource(f, 'workspace', root, 0);
-    const base = documentSourcesPath(f, 'workspace');
-    assert.equal((await readSourceContent(f, 'workspace', 'nested/read.md')).content, '# Original identity\n');
+    const { sourceId: workspaceSourceId } = await configureDocumentSource(f, null, root, 0);
+    const base = documentSourcesPath(f, workspaceSourceId);
+    assert.equal((await readSourceContent(f, workspaceSourceId, 'nested/read.md')).content, '# Original identity\n');
     const other = join(f.parents[1], 'other-private'); await mkdir(other);
     await writeFile(join(other, 'read.md'), '# Replacement must not be followed\n');
     await rename(join(root, 'nested'), join(root, 'nested-original'));
     await symlink(other, join(root, 'nested'), 'dir');
     assertDocumentSourceFailure(await f.request(contentPath(base, 'nested/read.md')), [403], 'document_source_path_forbidden');
-    const partial = await collectDocumentFiles(f, 'workspace');
+    const partial = await collectDocumentFiles(f, workspaceSourceId);
     assert.equal(partial.scanComplete, false); assert.ok(partial.issues.some(issue => issue.path === 'nested'));
     await rm(join(root, 'nested'));
     await rename(join(root, 'nested-original'), join(root, 'nested'));
@@ -102,7 +102,7 @@ describe('directory document sources: filesystem identities and isolation', { co
     assertDocumentSourceFailure(denied, [409], 'document_source_unavailable');
     assert.equal(denied.body.error.details?.reason, 'directory_identity_changed');
     assertDocumentSourceFailure(await f.request(`${base}/files`), [409], 'document_source_unavailable');
-    await saveDocumentSource(f, 'workspace', null, 1);
+    await configureDocumentSources(f, null, [], 1);
     assert.equal(await readFile(join(root, 'replacement.md'), 'utf8'), '# A different directory at the original path\n');
   });
 
@@ -114,27 +114,27 @@ describe('directory document sources: filesystem identities and isolation', { co
     await writeFile(join(root, 'visible.md'), '# Visible\n');
     await writeFile(join(root, 'no-read.md'), '# Not readable\n');
     await writeFile(join(hidden, 'secret.md'), '# Hidden by permissions\n');
-    await saveDocumentSource(f, 'workspace', root, 0);
-    const base = documentSourcesPath(f, 'workspace');
+    const { sourceId: workspaceSourceId } = await configureDocumentSource(f, null, root, 0);
+    const base = documentSourcesPath(f, workspaceSourceId);
     try {
       await chmod(hidden, 0); await chmod(join(root, 'no-read.md'), 0);
-      const scan = await collectDocumentFiles(f, 'workspace');
+      const scan = await collectDocumentFiles(f, workspaceSourceId);
       assert.equal(scan.scanComplete, false);
       assert.ok(scan.issues.some(issue => issue.path === 'no-access'));
       assert.ok(scan.issues.some(issue => issue.path === 'no-read.md'));
       assert.equal(scan.entries.some(entry => entry.path.startsWith('no-access/')), false);
       assertDocumentSourceFailure(await f.request(contentPath(base, 'no-access/secret.md')), [403, 409]);
       assertDocumentSourceFailure(await f.request(contentPath(base, 'no-read.md')), [403, 409]);
-      assert.equal((await readSourceContent(f, 'workspace', 'visible.md')).content, '# Visible\n');
+      assert.equal((await readSourceContent(f, workspaceSourceId, 'visible.md')).content, '# Visible\n');
       await chmod(root, 0);
       assert.equal((await readDocumentSources(f)).find(source => source.projectId === null)?.status, 'unavailable');
       assertDocumentSourceFailure(await f.request(`${base}/files`), [403, 409]);
       assertDocumentSourceFailure(await f.request(contentPath(base, 'visible.md')), [403, 409]);
-      assertDocumentSourceFailure(await f.request(`${documentSourcesPath(f)}/preview`, { method: 'POST', body: { projectId: null, path: root } }), [403, 409]);
+      assertDocumentSourceFailure(await f.request(documentSourceConfigurationPath(f), { method: 'PUT', body: { projectId: null, paths: [root], expectedRevision: 1 } }), [403, 409]);
     } finally {
       await chmod(root, 0o700); await chmod(hidden, 0o700); await chmod(join(root, 'no-read.md'), 0o600);
     }
-    const restored = await collectDocumentFiles(f, 'workspace');
+    const restored = await collectDocumentFiles(f, workspaceSourceId);
     assert.equal(restored.scanComplete, true); assert.deepEqual(restored.issues, []);
     assert.deepEqual(restored.entries.map(entry => entry.path).sort(), ['no-access/secret.md', 'no-read.md', 'visible.md']);
   });
@@ -149,25 +149,23 @@ describe('directory document sources: filesystem identities and isolation', { co
     assert.equal(agent.status, 200);
     await writeFile(join(f.parents[0], 'shared.md'), '# Workspace shared file\n');
     await writeFile(join(a.location.path!, 'same.md'), '# Project A file\n');
-    const preview = await f.request(`${documentSourcesPath(f)}/preview`, { method: 'POST', body: { projectId: null, path: f.parents[0] } });
-    assert.equal(preview.status, 200);
-    await saveDocumentSource(f, 'workspace', f.parents[0], 0);
-    assert.deepEqual((await collectDocumentFiles(f, 'workspace', { limit: 1 })).entries.map(entry => entry.path), ['native-a/same.md', 'shared.md']);
-    assert.equal((await readSourceContent(f, 'workspace', 'native-a/same.md')).content, '# Project A file\n');
+    const { sourceId: workspaceSourceId } = await configureDocumentSource(f, null, f.parents[0], 0);
+    assert.deepEqual((await collectDocumentFiles(f, workspaceSourceId, { limit: 1 })).entries.map(entry => entry.path), ['native-a/same.md', 'shared.md']);
+    assert.equal((await readSourceContent(f, workspaceSourceId, 'native-a/same.md')).content, '# Project A file\n');
     const b = await createDocumentProject(f, 'Project registered after source configuration', 'native-b');
     await writeFile(join(b.location.path!, 'same.md'), '# Project B file\n');
     assert.equal((await readDocumentSources(f)).find(source => source.projectId === null)?.status, 'available');
-    const refreshed = await collectDocumentFiles(f, 'workspace', { limit: 1 });
+    const refreshed = await collectDocumentFiles(f, workspaceSourceId, { limit: 1 });
     assert.deepEqual(refreshed.entries.map(entry => entry.path), ['native-a/same.md', 'native-b/same.md', 'shared.md']);
     assert.equal(refreshed.entries.some(entry => entry.path.includes('/.pm/')), false);
-    await saveDocumentSource(f, 'workspace', null, 1);
-    await saveDocumentSource(f, a.record.id, a.location.path!, 0);
-    assert.deepEqual((await collectDocumentFiles(f, a.record.id)).entries.map(entry => entry.path), ['same.md']);
-    assert.equal((await readSourceContent(f, a.record.id, 'same.md')).content, '# Project A file\n');
+    await configureDocumentSources(f, null, [], 1);
+    const { sourceId: aSourceId } = await configureDocumentSource(f, a.record.id, a.location.path!, 0);
+    assert.deepEqual((await collectDocumentFiles(f, aSourceId)).entries.map(entry => entry.path), ['same.md']);
+    assert.equal((await readSourceContent(f, aSourceId, 'same.md')).content, '# Project A file\n');
     assert.deepEqual((await f.pool.query("SELECT path,revision FROM agent_file_areas WHERE workspace_id=$1 AND project_key=''", [f.workspaceId])).rows, [{ path: f.parents[0], revision: 1 }]);
   });
 
-  it('rejects only equal or nested configured source roots, permits siblings, and serializes overlapping saves', { timeout: localProjectCaseTimeout }, async t => {
+  it('atomically rejects same-scope equal/ancestor/descendant sets, serializes CAS, and intentionally allows the same root across scopes and workspaces', { timeout: localProjectCaseTimeout }, async t => {
     const f = await createLocalProjectFixture({ signal: t.signal });
     t.after(() => f.close());
     const a = await createDocumentProject(f, 'Distinct source project', 'native-source');
@@ -175,34 +173,48 @@ describe('directory document sources: filesystem identities and isolation', { co
     await mkdir(child, { recursive: true }); await mkdir(sibling);
     await writeFile(join(child, 'same.md'), '# Nested file\n');
     await writeFile(join(sibling, 'same.md'), '# Separate file with the same name\n');
-    const raced = await Promise.all([
-      f.request(documentSourcesPath(f, 'workspace'), { method: 'PUT', body: { path: parent, expectedRevision: 0 } }),
-      f.request(documentSourcesPath(f, a.record.id), { method: 'PUT', body: { path: child, expectedRevision: 0 } }),
-    ]);
-    assert.deepEqual(raced.map(response => response.status).sort(), [200, 409]);
-    assertDocumentSourceFailure(raced.find(response => response.status === 409)!, [409], 'document_source_overlap');
-    const configured = (await readDocumentSources(f)).find(source => source.status === 'available')!;
-    await saveDocumentSource(f, configured.projectId ?? 'workspace', null, configured.revision);
-    const workspaceRevision = (await readDocumentSources(f)).find(source => source.projectId === null)!.revision;
-    const projectRevision = (await readDocumentSources(f)).find(source => source.projectId === a.record.id)!.revision;
-    await saveDocumentSource(f, 'workspace', child, workspaceRevision);
-    for (const candidate of [child, parent]) {
-      const preview = await f.request(`${documentSourcesPath(f)}/preview`, { method: 'POST', body: { projectId: a.record.id, path: candidate } });
-      assertDocumentSourceFailure(preview, [409], 'document_source_overlap');
-      const save = await f.request(documentSourcesPath(f, a.record.id), { method: 'PUT', body: { path: candidate, expectedRevision: projectRevision } });
-      assertDocumentSourceFailure(save, [409], 'document_source_overlap');
+    for (const paths of [[parent, child], [child, parent], [child, child]]) {
+      const invalid = await f.request(documentSourceConfigurationPath(f), { method: 'PUT', body: { projectId: null, paths, expectedRevision: 0 } });
+      assertDocumentSourceFailure(invalid, [409], 'document_source_overlap');
+      const unchanged = await readDocumentSourceCatalog(f);
+      assert.deepEqual(unchanged.sources, []);
+      assert.equal(unchanged.scopes.find(scope => scope.projectId === null)!.revision, 0, 'A rejected set commits no rows and consumes no CAS');
     }
-    await saveDocumentSource(f, a.record.id, sibling, projectRevision);
-    assert.deepEqual((await collectDocumentFiles(f, 'workspace')).entries.map(entry => entry.path), ['same.md']);
-    assert.deepEqual((await collectDocumentFiles(f, a.record.id)).entries.map(entry => entry.path), ['same.md']);
-    assert.equal((await readSourceContent(f, a.record.id, 'same.md')).content, '# Separate file with the same name\n');
+    const raced = await Promise.all([[parent, sibling], [child, sibling]].map(paths => f.request<DocumentSourceConfiguration>(documentSourceConfigurationPath(f), { method: 'PUT', body: { projectId: null, paths, expectedRevision: 0 } })));
+    assert.deepEqual(raced.map(response => response.status).sort(), [200, 409]);
+    assertDocumentSourceFailure(raced.find(response => response.status === 409)!, [409], 'document_source_revision_conflict');
+    const winner = raced.find(response => response.status === 200)!.body;
+    assert.equal(winner.sources.length, 2);
+    const catalog = await readDocumentSourceCatalog(f);
+    assert.deepEqual(catalog.sources, winner.sources, 'The losing transaction leaves no partial source set');
+    const transactionA = join(f.parents[1], 'transaction-first'), transactionB = join(f.parents[1], 'transaction-reject');
+    await mkdir(transactionA); await mkdir(transactionB);
+    const beforeRows = (await f.pool.query('SELECT * FROM document_sources ORDER BY source_id')).rows;
+    const beforeScopes = (await f.pool.query('SELECT * FROM document_source_scopes ORDER BY project_key')).rows;
+    await f.pool.query(`CREATE FUNCTION reject_later_source_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.path LIKE '%/transaction-reject' THEN RAISE EXCEPTION 'isolated later source insert failure' USING ERRCODE='40001'; END IF;
+      RETURN NEW; END $$`);
+    await f.pool.query('CREATE TRIGGER reject_later_source_insert BEFORE INSERT ON document_sources FOR EACH ROW EXECUTE FUNCTION reject_later_source_insert()');
+    try {
+      const failed = await f.request(documentSourceConfigurationPath(f), { method: 'PUT', body: { projectId: null, paths: [transactionA, transactionB], expectedRevision: 1 } });
+      assertDocumentSourceFailure(failed, [409], 'document_source_unavailable');
+    } finally {
+      await f.pool.query('DROP TRIGGER reject_later_source_insert ON document_sources');
+      await f.pool.query('DROP FUNCTION reject_later_source_insert()');
+    }
+    assert.deepEqual((await f.pool.query('SELECT * FROM document_sources ORDER BY source_id')).rows, beforeRows, 'A real later SQL failure rolls back prior inserts, removals and source identities');
+    assert.deepEqual((await f.pool.query('SELECT * FROM document_source_scopes ORDER BY project_key')).rows, beforeScopes, 'The failed set never advances association CAS');
+    assert.deepEqual(await readDocumentSourceCatalog(f), catalog);
+    const shared = await configureDocumentSource(f, a.record.id, child, 0);
+    assert.equal((await readSourceContent(f, shared.sourceId, 'same.md')).content, '# Nested file\n');
     const anotherWorkspace = await createWorkspace(f.pool, f.owner.id, 'Other source workspace');
-    const foreignOverlap = await f.request(documentSourcesPath(f, 'workspace', anotherWorkspace.id), { method: 'PUT', body: { path: child, expectedRevision: 0 } });
-    assertDocumentSourceFailure(foreignOverlap, [409], 'document_source_overlap');
-    await saveDocumentSource(f, 'workspace', null, workspaceRevision + 1);
-    await saveDocumentSource(f, a.record.id, parent, projectRevision + 1);
-    const nested = await f.request(documentSourcesPath(f, 'workspace'), { method: 'PUT', body: { path: child, expectedRevision: workspaceRevision + 2 } });
-    assertDocumentSourceFailure(nested, [409], 'document_source_overlap');
+    const foreign = await configureDocumentSources(f, null, [child], 0, { workspaceId: anotherWorkspace.id });
+    const foreignContent = await f.request(`${documentSourcesPath(f, foreign.sources[0]!.sourceId, anotherWorkspace.id)}/content?path=same.md`);
+    assert.equal(foreignContent.status, 200, 'An explicitly associated safe physical root can be reused across workspaces');
+    await configureDocumentSources(f, null, [], 1);
+    assert.equal((await readSourceContent(f, shared.sourceId, 'same.md')).content, '# Nested file\n', 'Unlinking workspace-common references leaves the project association intact');
+    assert.equal((await f.request(`${documentSourcesPath(f, foreign.sources[0]!.sourceId, anotherWorkspace.id)}/content?path=same.md`)).status, 200);
+    assert.equal(await readFile(join(child, 'same.md'), 'utf8'), '# Nested file\n');
   });
 
   it('filters unauthorized project subtrees without rejecting the parent source or leaking names, and invalidates visible pagination after a membership change', { timeout: localProjectCaseTimeout }, async t => {
@@ -213,33 +225,33 @@ describe('directory document sources: filesystem identities and isolation', { co
     await writeFile(join(a.location.path!, 'same.md'), '# Allowed body\n');
     await writeFile(join(b.location.path!, 'secret.md'), '# PRIVATE_PROJECT_BODY\n');
     await writeFile(join(f.parents[0], 'shared.md'), '# Shared source body\n');
-    await saveDocumentSource(f, a.record.id, f.parents[0], 0);
+    const { sourceId: aSourceId } = await configureDocumentSource(f, a.record.id, f.parents[0], 0);
     const reader = await f.member('Only project A');
     const membership = await f.command<{ version: number }>('SetWorkspaceMember', { userId: reader.user.id, capabilities: ['domain.read'], projectIds: [a.record.id, b.record.id] });
-    const first = await f.request<DocumentSourceFiles>(`${documentSourcesPath(f, a.record.id)}/files?limit=1`, { cookie: reader.cookie });
+    const first = await f.request<DocumentSourceFiles>(`${documentSourcesPath(f, aSourceId)}/files?limit=1`, { cookie: reader.cookie });
     assert.equal(first.status, 200); assert.ok(first.body.nextCursor);
     await f.command('SetWorkspaceMember', { userId: reader.user.id, capabilities: ['domain.read'], projectIds: [a.record.id] }, { expectedVersions: { [reader.user.id]: membership.version } });
-    const stale = await f.request(`${documentSourcesPath(f, a.record.id)}/files?${new URLSearchParams({ limit: '1', cursor: first.body.nextCursor! })}`, { cookie: reader.cookie });
+    const stale = await f.request(`${documentSourcesPath(f, aSourceId)}/files?${new URLSearchParams({ limit: '1', cursor: first.body.nextCursor! })}`, { cookie: reader.cookie });
     assertDocumentSourceFailure(stale, [409], 'document_source_cursor_invalid');
-    const visible = await collectDocumentFiles(f, a.record.id, { cookie: reader.cookie, limit: 1 });
+    const visible = await collectDocumentFiles(f, aSourceId, { cookie: reader.cookie, limit: 1 });
     assert.deepEqual(visible.entries.map(entry => entry.path), ['allowed/same.md', 'shared.md']);
     assert.equal(visible.scanComplete, false);
     assert.ok(visible.issues.some(issue => issue.code === 'scope_excluded' && issue.path === ''));
     assert.equal(JSON.stringify(visible).includes('hidden-project'), false);
-    assert.equal((await readSourceContent(f, a.record.id, 'allowed/same.md', reader.cookie)).content, '# Allowed body\n');
-    const denied = await f.request(contentPath(documentSourcesPath(f, a.record.id), 'hidden-project/secret.md'), { cookie: reader.cookie });
+    assert.equal((await readSourceContent(f, aSourceId, 'allowed/same.md', reader.cookie)).content, '# Allowed body\n');
+    const denied = await f.request(contentPath(documentSourcesPath(f, aSourceId), 'hidden-project/secret.md'), { cookie: reader.cookie });
     assertDocumentSourceFailure(denied, [404], 'not_found_or_forbidden');
     assert.equal(JSON.stringify(denied.body).includes('PRIVATE_PROJECT_BODY'), false);
-    assert.equal((await readSourceContent(f, a.record.id, 'hidden-project/secret.md')).content, '# PRIVATE_PROJECT_BODY\n');
-    await saveDocumentSource(f, a.record.id, null, 1);
+    assert.equal((await readSourceContent(f, aSourceId, 'hidden-project/secret.md')).content, '# PRIVATE_PROJECT_BODY\n');
+    await configureDocumentSources(f, a.record.id, [], 1);
     const other = await createWorkspace(f.pool, f.owner.id, 'Foreign workspace source');
-    const saved = await f.request(documentSourcesPath(f, 'workspace', other.id), { method: 'PUT', body: { path: f.parents[0], expectedRevision: 0 } });
-    assert.equal(saved.status, 200);
-    const foreignFiles = await f.request<DocumentSourceFiles>(`${documentSourcesPath(f, 'workspace', other.id)}/files`);
+    const saved = await configureDocumentSources(f, null, [f.parents[0]], 0, { workspaceId: other.id });
+    const foreignSourceId = saved.sources[0]!.sourceId;
+    const foreignFiles = await f.request<DocumentSourceFiles>(`${documentSourcesPath(f, foreignSourceId, other.id)}/files`);
     assert.equal(foreignFiles.status, 200);
     assert.deepEqual(foreignFiles.body.entries.map(entry => entry.path), ['shared.md']);
     assert.equal(JSON.stringify(foreignFiles.body).includes('hidden-project'), false);
-    assertDocumentSourceFailure(await f.request(contentPath(documentSourcesPath(f, 'workspace', other.id), 'allowed/same.md')), [404]);
+    assertDocumentSourceFailure(await f.request(contentPath(documentSourcesPath(f, foreignSourceId, other.id), 'allowed/same.md')), [404]);
     assert.equal(await readFile(join(b.location.path!, 'secret.md'), 'utf8'), '# PRIVATE_PROJECT_BODY\n');
   });
 });

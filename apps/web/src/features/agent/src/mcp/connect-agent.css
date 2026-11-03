@@ -1,0 +1,13 @@
+.mcp-consent { width: min(100%, 680px); margin: 0 auto; display: grid; gap: 14px; overflow-wrap: anywhere; }
+.mcp-consent h1 { font-size: 25px; font-weight: 600; }
+.mcp-consent p { font-size: 13px; line-height: 1.6; }
+.mcp-consent form > fieldset { display: grid; gap: 18px; }
+.mcp-consent label { display: grid; gap: 6px; font-size: 13px; }
+.mcp-access-options, .mcp-thread-options { display: grid; gap: 8px; max-height: 35dvh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.mcp-access-options legend, .mcp-thread-options legend { padding: 0 5px; font-size: 13px; font-weight: 600; }
+.mcp-access-options label, .mcp-thread-options label, .mcp-consent label.mcp-full-warning { display: flex; align-items: flex-start; gap: 8px; padding: 6px; }
+.mcp-consent input[type=checkbox], .mcp-consent input[type=radio] { margin-top: 3px; flex-shrink: 0; }
+.mcp-consent small { display: block; margin-top: 4px; color: var(--muted-foreground); line-height: 1.5; }
+.mcp-full-warning { border: 1px solid var(--destructive); border-radius: 8px; }
+.mcp-consent-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.mcp-consent a { font-size: 13px; text-decoration: underline; }

@@ -1,6 +1,11 @@
 import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { z } from "zod";
+import { agentScopeSchema } from "@agent-workspace/contracts/chat";
+import { resolveAgentScope } from "../durable/agent-scope.ts";
+import { getPmProviderApplication } from "./t3code/application-access.ts";
+import { closeMcpAppSessionsForInstance } from "../mcp-apps/live.ts";
 import type {
   ProviderAuthState,
   ProviderAuthStreamEvent,
@@ -31,7 +36,7 @@ import {
   createProviderInstance,
   updateProviderInstance,
   deleteProviderInstance,
-  providerContext,
+  providerContext, getStoredInstance,
   prepareProviderInstance, resetProviderInstance, getProviderSettings, updateProviderSettings,
 } from "./instances.ts";
 
@@ -174,6 +179,34 @@ providerRoutes.get("/providers", async (c) => {
   }
 });
 
+const skillsRefreshSchema = z.strictObject({
+  scope: agentScopeSchema.strict(),
+  fresh: z.boolean().optional(),
+});
+providerRoutes.post("/providers/:instanceId/skills/refresh", async c => {
+  try {
+    const body = skillsRefreshSchema.safeParse(await readJsonObject(c.req.raw));
+    if (!body.success) throw new RouteError(400, "Expected a PM scope and optional fresh boolean; cwd is not accepted.");
+    const instanceId = c.req.param("instanceId");
+    requireDefinition(instanceId);
+    const instance = getStoredInstance(instanceId);
+    if (!instance) throw new RouteError(404, "Provider instance not found.");
+    if (!instance.enabled || instance.config.enabled === false) throw new RouteError(409, "Provider instance is disabled.");
+    const resolved = await resolveAgentScope(body.data.scope, c.req.raw.headers, c.req.raw.signal);
+    const snapshot = await getPmProviderApplication().management.refreshSkills(
+      providerContext(instance, resolved.path), body.data.scope, resolved.actorId, body.data.fresh, c.req.raw.signal,
+    );
+    // Reauthorize after native I/O: neither a changed mapping nor revoked access may publish a stale inventory.
+    const current = await resolveAgentScope(body.data.scope, c.req.raw.headers, c.req.raw.signal);
+    if (current.path !== resolved.path || current.actorId !== resolved.actorId)
+      throw new RouteError(409, "PM scope or file area changed during native discovery.");
+    const latest = getStoredInstance(instanceId);
+    if (!latest || !latest.enabled || latest.config.enabled === false || latest.revision !== instance.revision)
+      throw new RouteError(409, "Provider instance changed during native discovery.");
+    return c.json(snapshot);
+  } catch (error) { return respondError(c, error); }
+});
+
 providerRoutes.get("/providers/acp-registry/search", async (c) => {
   try {
     const query = c.req.query("q") ?? "";
@@ -218,6 +251,9 @@ providerRoutes.post("/providers/:instanceId/maintenance", async c => {
     const body = await readJsonObject(c.req.raw);
     if (Object.keys(body).some(key => key !== "action" && key !== "revision") || !Number.isInteger(body.revision) || (body.action !== "install" && body.action !== "update" && body.action !== "remove"))
       throw new RouteError(400, "A revision and supported maintenance action are required.");
+    const instance = getStoredInstance(c.req.param("instanceId"));
+    if (!instance || instance.revision !== body.revision) throw new RouteError(409, "Provider instance or revision changed.");
+    await closeMcpAppSessionsForInstance(instance.instanceId);
     return c.json(startProviderMaintenance(c.req.param("instanceId"), body.action, body.revision as number));
   } catch (error) { return respondError(c, error); }
 });
@@ -229,6 +265,9 @@ providerRoutes.post("/providers/:instanceId/reset", async c => {
     const id = c.req.param("instanceId");
     const body = await readJsonObject(c.req.raw);
     if (Object.keys(body).some(key => key !== "revision") || !Number.isInteger(body.revision)) throw new RouteError(400, "A revision is required.");
+    const current = getStoredInstance(id);
+    if (!current || current.revision !== body.revision) throw new RouteError(409, "Provider instance or revision changed.");
+    await closeMcpAppSessionsForInstance(id);
     requireAccountIdle(id);
     const instance = resetProviderInstance(id, body.revision as number);
     resetAuthState(id);
@@ -316,11 +355,13 @@ providerRoutes.put("/providers/:instanceId", async (c) => {
   const instanceId = c.req.param("instanceId");
   try {
     requireDefinition(instanceId);
-    requireAccountIdle(instanceId);
     const body = await readJsonObject(c.req.raw);
     if (!Number.isInteger(body.revision) || Number(body.revision) < 1)
       throw new RouteError(400, "A valid configuration revision is required.");
     const input = instanceInput(body, false);
+    if (getStoredInstance(instanceId)?.revision !== body.revision) throw new RouteError(409, "Provider instance or revision changed.");
+    await closeMcpAppSessionsForInstance(instanceId);
+    requireAccountIdle(instanceId);
     try {
       updateProviderInstance(
         instanceId,
@@ -346,6 +387,7 @@ providerRoutes.delete("/providers/:instanceId", async (c) => {
   const instanceId = c.req.param("instanceId");
   try {
     requireDefinition(instanceId);
+    await closeMcpAppSessionsForInstance(instanceId);
     requireAccountIdle(instanceId);
     resetAuthState(instanceId);
     deleteProviderInstance(instanceId);
@@ -396,6 +438,7 @@ providerRoutes.post("/providers/:instanceId/auth/start", async (c) => {
         values[name] = value;
       }
     }
+    await closeMcpAppSessionsForInstance(instanceId);
     const state = await startProviderAuth(instanceId, {
       ...(typeof body.methodId === "string" ? { methodId: body.methodId } : {}), ...(values ? { values } : {}),
     });
@@ -524,6 +567,7 @@ providerRoutes.post("/providers/:instanceId/logout", async (c) => {
   const instanceId = c.req.param("instanceId");
   try {
     requireDefinition(instanceId);
+    await closeMcpAppSessionsForInstance(instanceId);
     return c.json(await logoutProvider(instanceId));
   } catch (error) {
     return respondError(c, error);

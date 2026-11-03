@@ -48,10 +48,10 @@
 .provider-setting-label, .provider-setting-row label { font-size: 13px; font-weight: 500; }
 .provider-setting-label, .provider-setting-row > div:first-child > label { display: block; }
 .provider-setting-row p, .provider-danger-zone p { margin-top: 4px; font-size: 11px; line-height: 1.6; color: var(--muted-foreground); overflow-wrap: anywhere; }
-.provider-setting-control input, .provider-setting-control select { width: 100%; height: 30px; border: 1px solid var(--input); border-radius: 6px; background: var(--background); padding: 0 9px; font-size: 12px; box-shadow: none; }
+.provider-setting-control input, .provider-setting-control [data-slot="select-trigger"] { width: 100%; height: 30px; border: 1px solid var(--input); border-radius: 6px; background: var(--background); padding: 0 9px; font-size: 12px; box-shadow: none; }
 .provider-setting-control { min-width: 0; }
 .provider-setting-control textarea { display: block; width: 100%; min-height: 90px; padding: 8px 9px; border: 1px solid var(--input); border-radius: 6px; background: var(--background); font-size: 12px; resize: vertical; }
-.provider-setting-control input:focus-visible, .provider-setting-control select:focus-visible, .provider-setting-control textarea:focus-visible, .provider-wizard-tile:focus-visible, .provider-registry-results > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.provider-setting-control input:focus-visible, .provider-setting-control [data-slot="select-trigger"]:focus-visible, .provider-setting-control textarea:focus-visible, .provider-wizard-tile:focus-visible, .provider-registry-results > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .provider-setting-control input[type="checkbox"] { width: 16px; height: 16px; padding: 0; accent-color: var(--ring); vertical-align: middle; }
 .provider-setting-control input[type="color"] { width: 34px; min-width: 34px; padding: 3px; }
 .provider-identity-control { display: flex; align-items: center; gap: 8px; }
@@ -98,8 +98,8 @@
 .provider-model-row label { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .provider-model-row small { color: var(--muted-foreground); }
 .provider-model-option { margin-top: 6px; font-size: 11px; }
-.provider-model-option select, .provider-custom-option select { border: 1px solid var(--input); border-radius: 6px; padding: 4px; background: var(--background); }
-.provider-model-option select { min-width: 0; max-width: 100%; }
+.provider-model-option [data-slot="select-trigger"], .provider-custom-option [data-slot="select-trigger"] { border: 1px solid var(--input); border-radius: 6px; padding: 4px; background: var(--background); }
+.provider-model-option [data-slot="select-trigger"] { min-width: 0; max-width: 100%; }
 .provider-model-metadata { display: block; }
 .provider-model-invalid-option { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; color: var(--destructive); }
 .provider-model-invalid-option code { color: inherit; }
@@ -158,8 +158,8 @@
   .provider-master-detail { display: block; height: auto; max-height: none; }
   .provider-list-pane { border-right: 0; border-bottom: 1px solid var(--border); }
   .provider-instance-list { display: flex; overflow-x: auto; overflow-y: hidden; }
-  .provider-list-item { flex: 0 0 205px; border-right: 1px solid var(--border); border-bottom: 2px solid transparent; }
-  .provider-list-item[data-selected] { border-bottom-color: var(--ring); }
+  .provider-list-item { flex: 0 0 205px; border-right: 1px solid var(--border); border-bottom: 0; }
+  .provider-list-item[data-selected] { background: var(--selection); color: var(--foreground); font-weight: 600; }
   .provider-list-select { padding-left: 12px; }
   .provider-list-add { flex: 0 0 150px; }
   .provider-detail-pane { overflow: visible; }
@@ -171,7 +171,7 @@
   .provider-health-setting span { order: 1; flex-basis: 100%; }
   .provider-auth-actions button { padding-left: 8px; padding-right: 8px; }
   .provider-setting-row { padding: 12px; }
-  .provider-setting-control input:not([type="checkbox"]):not([type="color"]), .provider-setting-control select, .provider-registry-search input, .provider-environment-draft > input { min-width: 0; max-width: 100%; }
+  .provider-setting-control input:not([type="checkbox"]):not([type="color"]), .provider-setting-control [data-slot="select-trigger"], .provider-registry-search input, .provider-environment-draft > input { min-width: 0; max-width: 100%; }
   .provider-model-row { gap: 8px; }
   .provider-custom-model-fields input, .provider-custom-option input { min-width: min(130px, 100%); max-width: 100%; }
   .provider-technical-details dl { grid-template-columns: minmax(0, 1fr); gap: 4px; }
@@ -185,4 +185,7 @@
   .provider-section-heading h3 { margin-bottom: 4px; }
   .provider-create-dialog .provider-setting-row { grid-template-columns: 1fr; }
   .provider-create-dialog .provider-wizard-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (forced-colors: active) and (max-width: 767px) {
+  .provider-list-item[data-selected] { outline: 2px solid Highlight; outline-offset: -2px; }
 }

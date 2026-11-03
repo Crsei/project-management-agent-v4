@@ -1,16 +1,20 @@
 import path from 'node:path';
 import { homedir } from 'node:os';
-import { constants, closeSync, fstatSync, openSync, readFileSync } from 'node:fs';
+import { constants, closeSync, fstatSync, readFileSync } from 'node:fs';
 import type { LocalProjectConfiguration } from '../../application/src/local-projects.ts';
+import { checkedFileOpen, directoryIdentity } from '../../pm-core/platform.ts';
+import { assertPrivatePath } from '../../pm-core/private-path.ts';
 
 function localProjectConfiguration(env: NodeJS.ProcessEnv): LocalProjectConfiguration {
   let trusted: Record<string, unknown> = {};
   const file = path.resolve(env.LOCAL_PROJECT_CONFIG ?? '.local/local-projects.json');
   try {
-    const descriptor = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+    directoryIdentity(path.dirname(file));
+    const descriptor = checkedFileOpen(file, constants.O_RDONLY);
     try {
       const stat = fstatSync(descriptor);
-      if (!stat.isFile() || stat.nlink !== 1 || stat.size > 65_536 || (stat.mode & 0o022) !== 0) throw new Error('Invalid local project configuration');
+      if (!stat.isFile() || stat.nlink !== 1 || stat.size > 65_536 || process.platform !== 'win32' && (stat.mode & 0o022) !== 0) throw new Error('Invalid local project configuration');
+      if (process.platform === 'win32') assertPrivatePath(file);
       trusted = JSON.parse(readFileSync(descriptor, 'utf8')) as Record<string, unknown>;
     } finally { closeSync(descriptor); }
   } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }

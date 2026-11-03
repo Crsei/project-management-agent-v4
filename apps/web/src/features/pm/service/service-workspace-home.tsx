@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router';
 import { ApiError as PmApiError, type ChangeNotification } from '@contracts';
 import { workflowFor, type FileRecord } from '@pm-schema';
-import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, CheckCheck, CircleCheck, CircleDashed, Clock3, FolderKanban, FolderPlus, History, LoaderCircle, Plus, RefreshCw, Users } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, CheckCheck, CircleCheck, CircleDashed, Clock3, FolderKanban, FolderPlus, History, Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CountUp } from '@/components/ui/count-up';
 import { useI18n } from '@/lib/i18n-provider';
@@ -12,6 +12,7 @@ import { CoreSessionProvider, useCoreSession, useSessionDrafts } from '../markdo
 import { useTaskScopeClock } from '../markdown/task-scope-clock';
 import { usePersonalDashboard, usePmChanges, usePmService, usePrivateQuery } from './pm-service';
 import { allowed, ServiceGuard, useText } from './pm-ui';
+import { usePmNoticeCenter } from './pm-notice-center';
 import { teamTaskCreateProjectProblem } from './team-task-actions-model';
 import { workspaceHomeModel, type HomeTaskTab } from './workspace-home-model';
 import styles from './service-workspace-home.module.css';
@@ -161,9 +162,16 @@ function WorkspaceHomeContent() {
 }
 
 function HomeReadNotice({ label, pending, error, stale, retry }: { label: string; pending: boolean; error: Error | null; stale: boolean; retry: () => void }) {
-  const t = useText();
-  if (error) return <div className={styles.readNotice} role="alert"><div><strong>{label}{t('读取失败', ' read failed')}</strong><p>{error.message}</p>{stale && <p>{t('保留上次快照，可能已过期。', 'The previous snapshot is retained and may be stale.')}</p>}</div><Button size="sm" variant="outline" onClick={retry}><RefreshCw size={13} aria-hidden="true" />{t('重试读取', 'Retry read')}</Button></div>;
-  if (pending) return <p className={styles.loading} role="status"><LoaderCircle size={14} aria-hidden="true" />{t(`正在加载${label}…`, `Loading ${label.toLowerCase()}…`)}</p>;
+  const en = useI18n().locale === 'en';
+  const { upsert, resolve } = usePmNoticeCenter();
+  const retryRef = useRef(retry); retryRef.current = retry;
+  const key = `home-read:${label}`;
+  useEffect(() => {
+    if (pending) upsert({ key: `${key}:pending`, severity: 'info', title: `${label} · ${en ? 'Loading…' : '正在读取…'}`, source: 'read', silent: true, transient: true });
+    else resolve(`${key}:pending`);
+    if (error) upsert({ key: `${key}:error`, severity: 'error', title: `${label} · ${en ? 'Read failed' : '读取失败'}`, detail: `${error.message}${stale ? (en ? ' The previous snapshot is retained and may be stale.' : ' 已保留上次快照，可能已过期。') : ''}`, source: 'read', sticky: true, action: { label: en ? 'Retry read' : '重试读取', run: () => retryRef.current() } });
+    else resolve(`${key}:error`);
+  }, [en, error, key, label, pending, resolve, stale, upsert]);
   return null;
 }
 

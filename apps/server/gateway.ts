@@ -41,6 +41,15 @@ export function createGateway(options: GatewayOptions = {}) {
     const rawPath = url.split('?', 1)[0]!;
     if (/%2f|%5c/i.test(rawPath)) throw new Error('Encoded path separator');
     const pathname = decodeURIComponent(new URL(url, 'http://gateway.invalid').pathname);
+    // Only the external MCP protocol and OAuth discovery/handshake are public.
+    // Grant introspection stays on the private service transport, never this gateway.
+    if (pathname === '/mcp' ||
+        pathname === '/.well-known/oauth-protected-resource' ||
+        pathname === '/.well-known/oauth-protected-resource/mcp' ||
+        pathname === '/.well-known/oauth-authorization-server' ||
+        /^\/oauth\/mcp\/(?:register|authorize|approval|decision|token)$/.test(pathname)) {
+      return { target: agent, path: url };
+    }
     if (pathname === '/agent/api' || pathname.startsWith('/agent/api/')) {
       if (!rawPath.startsWith('/agent/')) throw new Error('Invalid agent path');
       return { target: agent, path: url.slice('/agent'.length) };
@@ -95,7 +104,7 @@ export function createGateway(options: GatewayOptions = {}) {
       'x-content-type-options': 'nosniff',
       'cache-control': pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
     };
-    if (pathname === '/pm/account' || pathname.startsWith('/pm/account/')) {
+    if (pathname === '/connect-agent' || pathname === '/pm/account' || pathname.startsWith('/pm/account/')) {
       headers['cache-control'] = 'no-store';
       headers['referrer-policy'] = 'no-referrer';
       headers['content-security-policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";

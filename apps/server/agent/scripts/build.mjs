@@ -30,6 +30,7 @@ const result = await build({
     "pm-cli/pi-tools": fileURLToPath(new URL("../../../../packages/pm-cli/pi-tools.ts", import.meta.url)),
     "pm-cli/automation-tools": fileURLToPath(new URL("../../../../packages/pm-cli/automation-tools.mjs", import.meta.url)),
     "workspace-tools": "src/automation-execution/native-templates/workspace-tools.mjs",
+    "desktop-agent-maintenance": fileURLToPath(new URL("../../../desktop/src/backend/agent-maintenance.ts", import.meta.url)),
   },
   outdir: temporaryOutput || "dist",
   outExtension: { ".js": ".mjs" },

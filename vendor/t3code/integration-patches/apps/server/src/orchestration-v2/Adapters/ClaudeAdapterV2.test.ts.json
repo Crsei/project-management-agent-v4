@@ -2,7 +2,7 @@
   "version": 1,
   "source": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts",
   "beforeSha256": "6f0bd45c713fd0f12ead8ac992d87346e5af112660192623ada348d8d735dc73",
-  "afterSha256": "2dc7ad1e70c5eb092d26f06b7dcefc13a1aa7698fbffc8c4a87e8950c4d40629",
+  "afterSha256": "5ea9de339ee87231915d202550d09e4fe0d25195b190af2c3b326aedb4d468bd",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -1667,12 +1667,63 @@
       ]
     },
     {
+      "start": 4250,
+      "before": [],
+      "after": [
+        "      const fixture = yield* PmNativeTestHost;\n",
+        "      let toolAuthorizations = 0;\n",
+        "      yield* fixture.bindGeneration({\n",
+        "        threadId: ThreadId.make(\"thread-claude-wake\"),\n",
+        "        executionId: \"run-mcp-presentation\",\n",
+        "        actions: [\"tool\"],\n",
+        "        mcpServers: [{ name: \"weather\", transport: \"stdio\", command: \"fixture-weather-mcp\", args: [] }],\n",
+        "        authorize: () => Effect.sync(() => { toolAuthorizations++; }),\n",
+        "      });\n"
+      ]
+    },
+    {
+      "start": 4263,
+      "before": [],
+      "after": [
+        "      const authorizationsBeforeCall = toolAuthorizations;\n",
+        "      const denied = yield* Effect.promise(() => harness.getOpenedOptions()!.canUseTool!(\n",
+        "        \"mcp__unbound_weather__get_weather\", { city: \"Berlin\" },\n",
+        "        { signal: new AbortController().signal, toolUseID: \"unbound-weather-call\", requestId: \"unbound-weather-request\" },\n",
+        "      ));\n",
+        "      assert.equal(denied.behavior, \"deny\");\n",
+        "      assert.equal(toolAuthorizations, authorizationsBeforeCall);\n"
+      ]
+    },
+    {
+      "start": 4273,
+      "before": [
+        "      ).pipe(Effect.forkScoped);\n",
+        "      const request = yield* Queue.take(harness.runtimeRequestReceipts);\n",
+        "      yield* harness.runtime.respondToRuntimeRequest({\n",
+        "        requestId: request.runtimeRequest.id,\n",
+        "        decision: \"accept\",\n",
+        "      });\n",
+        "      yield* Fiber.join(permission);\n"
+      ],
+      "after": [
+        "      );\n",
+        "      assert.equal(permission.behavior, \"allow\");\n",
+        "      assert.isAbove(toolAuthorizations, authorizationsBeforeCall);\n",
+        "      yield* harness.until(() => harness.events.some(event =>\n",
+        "        event.type === \"turn_item.updated\" && event.turnItem.type === \"dynamic_tool\"));\n",
+        "      assert.isFalse(harness.events.some(event => event.type === \"runtime_request.updated\"));\n"
+      ]
+    },
+    {
       "start": 4355,
       "before": [
         "        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),\n"
       ],
       "after": [
-        "        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),\n"
+        "        Layer.mergeAll(IdAllocator.layer, layerPmNativeTestHost({\n",
+        "          driver: \"claude\", instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,\n",
+        "          cwd: \"/workspace\", prefix: \"pm-claude-mcp-presentation-\",\n",
+        "        }), NodeServices.layer),\n"
       ]
     },
     {

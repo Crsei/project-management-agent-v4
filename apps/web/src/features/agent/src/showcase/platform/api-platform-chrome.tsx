@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@easyuse-ui/ui/components/ui/button";
 import { ThemeBoundary } from "@easyuse-ui/ui/components/ui/theme-boundary";
-import { Popover, PopoverTrigger, PopoverContent } from "@easyuse-ui/ui/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useI18n } from "@easyuse-ui/ui/lib/i18n-provider";
 import { apScenarios, type ApScenario } from "@easyuse-ui/agent-workspace-views/api-platform/model";
 import { useShowcasePreferences } from "../preferences";

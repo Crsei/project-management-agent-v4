@@ -7,13 +7,14 @@
 .results :is(p,span,small,code,a,dt,dd,summary) { overflow-wrap: anywhere; }
 .results small, .candidate > header > span { color: var(--text-muted); font-size: 11px; }
 .results :is(p,blockquote,.summary) { white-space: pre-wrap; }
-.results a { text-decoration: underline; color: var(--foreground); }
+.results a { text-decoration: none; color: var(--foreground); }
+.results a:hover { background: var(--selection); }
 .results pre { overflow: auto; max-width: 100%; max-height: 440px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; line-height: 1.65; background: var(--surface-raised); }
 .results fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
-.results :is(select,textarea) { width: 100%; max-width: 100%; background: var(--surface-raised); color: var(--foreground); border: 1px solid var(--border); border-radius: 6px; font: inherit; padding: 8px 10px; }
+.results :is([data-slot="select-trigger"],textarea) { width: 100%; max-width: 100%; background: var(--surface-raised); color: var(--foreground); border: 1px solid var(--border); border-radius: 6px; font: inherit; padding: 8px 10px; }
 .results textarea { resize: vertical; }
 .results input[type="checkbox"] { accent-color: var(--ring); width: 14px; height: 14px; flex-shrink: 0; }
-.results :is(button,a,input,textarea,select):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.results :is(button,a,input,textarea,[data-slot="select-trigger"]):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
 .results details { margin: 0; min-width: 0; }
 .results summary { cursor: pointer; margin: 0 0 10px; }
 .candidate, .finding { display: flex; flex-direction: column; gap: 12px; min-width: 0; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-top: 12px; }

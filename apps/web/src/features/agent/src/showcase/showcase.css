@@ -20,7 +20,7 @@
   white-space: nowrap;
 }
 .showcase-topbar a:hover {
-  text-decoration: underline;
+  color: var(--ring);
 }
 .showcase-disclosure {
   flex: 1;
@@ -37,7 +37,7 @@
   background: var(--card);
 }
 .showcase-app button,
-.showcase-app select {
+.showcase-app [data-slot="select-trigger"] {
   cursor: pointer;
 }
 .showcase-app :focus-visible {
@@ -85,8 +85,8 @@
   font-size: 12px;
   white-space: nowrap;
 }
-.showcase-scenarios select,
-.showcase-filters select,
+.showcase-scenarios [data-slot="select-trigger"],
+.showcase-filters [data-slot="select-trigger"],
 .showcase-filters input {
   min-height: 32px;
   border: 1px solid var(--border);
@@ -180,7 +180,11 @@
   font-weight: 600;
 }
 .showcase-notice a {
-  text-decoration: underline;
+  color: var(--ring);
+  text-decoration: none;
+}
+.showcase-notice a:hover {
+  background: var(--selection);
 }
 .showcase-deferred {
   padding: 4px 16px;

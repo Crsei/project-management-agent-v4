@@ -8,11 +8,12 @@ import type { SqlExecutor } from './ports.ts';
 import { getMembership } from './access.ts';
 import { ProjectLocations } from '../../pm-core/project-locations.ts';
 import { workflowFor } from '../../pm-schema/index.ts';
+import { assertCanonicalAbsolute, pathContains, safePathComponent, samePath, systemStoragePath } from '../../pm-core/platform.ts';
+import { assertNoWindowsReparsePath } from '../../pm-core/windows-reparse.ts';
 
 export type LocalProjectConfiguration = { enabled: boolean; dataRoot: string; defaultParent: string | null; allowedRoots: string[]; backupRoot: string; coreRoot: string };
 export type LocalProjectOperation = { workspace_id: string; actor_id: string; request_key: string; operation: 'initialize' | 'migrate' | 'relocate'; transport: 'native' | 'command'; request_hash: string; request: Record<string, unknown>; project_id: string | null; status: 'pending' | 'ready' | 'rejected'; error_code: string | null };
-const deniedRoots = ['/proc', '/sys', '/dev', '/etc', '/boot', '/run', '/bin', '/sbin', '/lib', '/lib64', '/usr', '/root'];
-const contains = (root: string, candidate: string) => candidate === root || candidate.startsWith(root + path.sep);
+const contains = pathContains;
 function invalid(message: string): never { throw new DomainError('local_directory_forbidden', message, 403); }
 
 export async function requireLocalManagement(sql: SqlExecutor, actor: Actor, workspaceId: string, write = false): Promise<void> {
@@ -27,19 +28,20 @@ export function requireLocalProjects(config: LocalProjectConfiguration): void {
 function inspectDirectory(candidate: string): string {
   if (!path.isAbsolute(candidate) || candidate.includes('\0')) invalid('An absolute directory is required');
   const normalized = path.resolve(candidate);
+  try { assertCanonicalAbsolute(normalized); } catch { invalid('A canonical local directory is required'); }
   let current = path.parse(normalized).root;
-  for (const part of normalized.slice(current.length).split(path.sep).filter(Boolean)) {
-    current = path.join(current, part);
-    const stat = lstatSync(current);
-    if (stat.isSymbolicLink() || !stat.isDirectory()) invalid('Symlinks and non-directories are not permitted');
+  for (const part of ['', ...normalized.slice(current.length).split(path.sep).filter(Boolean)]) {
+    if (part) current = path.join(current, part);
+    const stat = lstatSync(current, { bigint: true });
+    if (stat.isSymbolicLink() || !stat.isDirectory() || !samePath(realpathSync(current), current)) invalid('Symlinks, reparse aliases and non-directories are not permitted');
+    assertNoWindowsReparsePath(current, stat);
   }
-  if (realpathSync(normalized) !== normalized) invalid('Directory identity changed');
   return normalized;
 }
 export function allowedDirectory(config: LocalProjectConfiguration, candidate: string): string {
   requireLocalProjects(config);
   const normalized = path.resolve(candidate);
-  if (!path.isAbsolute(candidate) || normalized === path.parse(normalized).root || deniedRoots.some(root => contains(root, normalized))) invalid('This host path cannot be used for project storage');
+  if (!path.isAbsolute(candidate) || systemStoragePath(normalized)) invalid('This host path cannot be used for project storage');
   const configured = config.allowedRoots.find(root => contains(path.resolve(root), normalized));
   if (!configured) invalid('Directory is outside the trusted local roots');
   try { inspectDirectory(path.resolve(configured)); return inspectDirectory(normalized); }
@@ -50,7 +52,7 @@ export function resolveLocalDirectory(config: LocalProjectConfiguration, directo
   if (directory.mode === 'existing') return { root: allowedDirectory(config, directory.path), mode: 'existing' };
   const parent = allowedDirectory(config, directory.parentPath);
   const root = path.join(parent, directory.folderName);
-  if (path.dirname(root) !== parent) invalid('Folder name must be a single path component');
+  if (!safePathComponent(directory.folderName) || !samePath(path.dirname(root), parent)) invalid('Folder name must be a single ordinary path component');
   try { lstatSync(root); throw new DomainError('local_directory_exists', 'Choose an unused folder name or existing-directory mode', 409); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   accessSync(parent, constants.W_OK | constants.X_OK);
@@ -58,8 +60,10 @@ export function resolveLocalDirectory(config: LocalProjectConfiguration, directo
 }
 /** Recovery may use its already-created final directory, but only within the original trusted parent. */
 export function resolveLocalRecoveryDirectory(config: LocalProjectConfiguration, directory: LocalDirectory): { root: string; mode: 'existing' | 'new' } {
+  directory = localDirectorySchema.parse(directory);
   if (directory.mode === 'existing') return resolveLocalDirectory(config, directory);
   const parent = allowedDirectory(config, directory.parentPath), root = path.join(parent, directory.folderName);
+  if (!safePathComponent(directory.folderName) || !samePath(path.dirname(root), parent)) invalid('Folder name must be a single ordinary path component');
   try { allowedDirectory(config, root); return { root, mode: 'new' }; }
   catch (error) { if (error instanceof DomainError && error.code !== 'local_directory_unavailable') throw error; return resolveLocalDirectory(config, directory); }
 }
@@ -69,7 +73,7 @@ export function listLocalDirectories(config: LocalProjectConfiguration, candidat
   const current = allowedDirectory(config, candidate);
   const root = config.allowedRoots.find(root => contains(path.resolve(root), current))!;
   const directories = readdirSync(current, { withFileTypes: true }).filter(entry => entry.isDirectory() && !entry.isSymbolicLink() && !entry.name.startsWith('.')).map(entry => ({ name: entry.name, path: path.join(current, entry.name) })).sort((a, b) => a.name.localeCompare(b.name));
-  return { path: current, parentPath: current === path.resolve(root) ? null : path.dirname(current), roots: config.allowedRoots, directories };
+  return { path: current, parentPath: samePath(current, root) ? null : path.dirname(current), roots: config.allowedRoots, directories };
 }
 export function previewLocalProject(config: LocalProjectConfiguration, directory: LocalDirectory): LocalProjectPreview {
   const { root, mode } = resolveLocalDirectory(config, directory);
@@ -134,7 +138,7 @@ export async function assertLocalProjectTargetAvailable(sql: SqlExecutor, worksp
     if (!entry.isDirectory() || entry.isSymbolicLink() || !/^[a-f0-9-]{36}$/.test(entry.name)) continue;
     const root = path.join(coreRoot, entry.name);
     for (const location of new ProjectLocations(root).list()) {
-      if (root === workspaceRoot && (location.initialization.key === key || location.projectId === projectId)) continue;
+      if (samePath(root, workspaceRoot) && (location.initialization.key === key || location.projectId === projectId)) continue;
       if (contains(location.root, targetRoot) || contains(targetRoot, location.root)) throw new DomainError('local_directory_registered', 'The selected directory overlaps registered project storage', 409);
     }
   }

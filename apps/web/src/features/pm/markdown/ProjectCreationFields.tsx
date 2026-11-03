@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type InputHTMLA
 import { Briefcase, Check, Code, File, Folder, Globe, Heart, Layers, Megaphone, Palette, Rocket, Target } from 'lucide-react';
 import { useMemberDirectory } from '../service/pm-member-hooks';
 import { PROJECT_COLORS, PROJECT_ICONS } from '../service/project-menu-model';
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const projectIcons = { folder: Folder, briefcase: Briefcase, layers: Layers, rocket: Rocket, globe: Globe, target: Target, code: Code, palette: Palette };
 const iconLabels: Record<typeof PROJECT_ICONS[number], [string, string]> = {
@@ -108,12 +109,12 @@ export function ProjectCreationFields({ values, body, disabled, en, errors, onCh
       </fieldset>
     </div>
     <div className="project-creation-metadata">
-      <label htmlFor={`${uid}-team`}>{t('团队', 'Team')}<select id={`${uid}-team`} disabled aria-describedby={`${uid}-team-hint`}><option>{t('创建后关联', 'Link after creation')}</option></select></label>
-      <label htmlFor={`${uid}-owner`}>{t('负责人', 'Lead')}<select id={`${uid}-owner`} name="owner" data-testid="field-owner" aria-label={t('项目负责人', 'Project lead')} {...errorProps('owner')} value={owner} disabled={disabled || !!directory.error || !directory.data} onChange={event => onChange({ owner: event.target.value || null })}>
+      <label htmlFor={`${uid}-team`}>{t('团队', 'Team')}<RadixSelect id={`${uid}-team`} disabled aria-describedby={`${uid}-team-hint`}><option>{t('创建后关联', 'Link after creation')}</option></RadixSelect></label>
+      <label htmlFor={`${uid}-owner`}>{t('负责人', 'Lead')}<RadixSelect id={`${uid}-owner`} name="owner" data-testid="field-owner" aria-label={t('项目负责人', 'Project lead')} {...errorProps('owner')} value={owner} disabled={disabled || !!directory.error || !directory.data} onChange={event => onChange({ owner: event.target.value || null })}>
         <option value="">{t('未分配', 'Unassigned')}</option>
         {owner && !members.some(member => member.userId === owner) && <option value={owner} disabled>{t('草稿负责人待确认', 'Draft lead unavailable')} · {owner}</option>}
         {members.map(member => <option key={member.userId} value={member.userId}>{member.name}</option>)}
-      </select>{fieldError('owner')}</label>
+      </RadixSelect>{fieldError('owner')}</label>
       <label htmlFor={`${uid}-due`}>{t('目标日期', 'Target date')}<ProjectInput id={`${uid}-due`} name="due" data-testid="field-due" aria-label={t('项目目标日期', 'Project target date')} type="date" {...errorProps('due')} value={String(values.due ?? '')} disabled={disabled} onChange={event => onChange({ due: event.target.value || null })} />{fieldError('due')}</label>
     </div>
     <p className="project-creation-hint" id={`${uid}-team-hint`}>{t('团队关联需独立保存，请在创建后的项目设置中关联；关联不会授予访问权限。', 'Link teams in project settings after creation. Team assignments are saved separately and do not grant access.')}</p>

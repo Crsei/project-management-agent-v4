@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useLocation, useSearchParams } from 'react-router';
 import { defaultConfiguration, statusCategory, workflowFor, validateTransition, diagnosticsOf, type Diagnostic, type FileRecord, type UnsupportedFile, type ProtocolConfiguration, type WorkspaceSnapshot, type ViewConfig, type Status, type Entity, type EntityKind, type SavedView } from '@pm-schema';
@@ -17,11 +17,13 @@ import { collectTasks, taskScopes, type TaskCollection, type TaskScope, type Tas
 import { splitTaskFilterView, taskFilterWhere, type TaskFilterCondition } from './task-filter';
 import { patchTaskDraftRaw, toggleTaskChecklistRaw } from './task-detail-model';
 import { patchDocumentDraftRaw } from './document-body';
+import { adoptDocumentSave, completeDocumentSave, documentSaveRecovery, hasUncertainDocumentSave, observeDocumentSave, type DocumentWriteStatus } from './document-save-model';
 
 export type CollectionLayout = ViewConfig['layout'] | 'list' | 'calendar' | 'gantt';
 export interface Preferences { entity: EntityKind | ''; layout: CollectionLayout; project: string; priority: string; status: string; sort: string; sortDirection: 'asc' | 'desc'; archived: ArchiveFilter; editorWidth: number; groupBy: 'status' | 'priority'; conditions: TaskFilterCondition[] }
 export interface ControllerOptions {
   mode?: 'collection' | 'entity' | 'settings';
+  documentWorkbench?: boolean;
   en: boolean;
   entityKind: EntityKind | '';
   projectId?: string;
@@ -45,6 +47,7 @@ export interface RevisionConflict { id: string; current: FileRecord; local: stri
 export interface WorkspaceController {
   session: CoreSession; query: UseQueryResult<WorkspaceSnapshot, Error>;
   projectId?: string;
+  documentWorkbench?: boolean;
   accessError: Error | null;
   handleAccessError: (error: unknown) => void;
   files: FileRecord[]; unsupportedFiles: UnsupportedFile[]; configuration: ProtocolConfiguration; configurationInvalid: boolean;
@@ -66,6 +69,8 @@ export interface WorkspaceController {
   activity: string[]; canWrite: boolean;
   select: (id: string) => void; updateDraft: (raw: string) => void; acceptRecord: (file: FileRecord) => void; removeDraft: (id: string) => void;
   save: (background?: boolean) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; patch: (id: string, changes: Record<string, unknown>) => Promise<void>;
+  saveDocument: (id: string, background?: boolean) => Promise<boolean>;
+  reconcileDocument: (id: string) => Promise<void>; adoptDocumentRevision: (id: string) => void;
   canEditSourceDraft: boolean; canEditTaskDraft: boolean; draftParseError: boolean;
   patchTaskDraft: (changes: Record<string, unknown>) => void; toggleTaskChecklist: (line: number) => void;
   patchDocumentDraft: (changes: Record<string, unknown>) => void;
@@ -77,6 +82,7 @@ export interface WorkspaceController {
   loadContext: () => Promise<void>; refresh: () => Promise<void>;
 }
 const defaults: Preferences = { entity: 'work_item', layout: 'list', project: '', priority: '', status: '', sort: '', sortDirection: 'asc', archived: 'exclude', editorWidth: 43, groupBy: 'status', conditions: [] };
+const documentSaveFlights = new Map<string, Promise<boolean>>();
 function message(error: unknown) { return error instanceof Error ? error.message : String(error); }
 function parseDraftSource(file: FileRecord | undefined, raw: string, configuration: ProtocolConfiguration): { entity?: Entity; diagnostics: Diagnostic[] } {
   try {
@@ -166,7 +172,9 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
   const prefs = useMemo(() => ({ ...storedPrefs, sort: storedPrefs.sort || (options.taskContext?.scope === 'mine' && !options.projectId ? 'due' : 'id'), ...(options.projectId ? { project: options.projectId } : projectFilter !== null ? { project: projectFilter } : {}), ...(taskCollectionMode ? { entity: 'work_item' as const } : {}) }), [storedPrefs, options.projectId, projectFilter, taskCollectionMode, options.taskContext?.scope]);
   const selectedId = options.selectedId;
   const [drafts, updateSessionDrafts] = useSessionDrafts();
+  const documentWrites = useSyncExternalStore(session.documentWrites.subscribe, session.documentWrites.getSnapshot, session.documentWrites.getSnapshot);
   const nativeWriteUncertain = hasUncertainProjectTaskDraft(drafts);
+  const documentRecoveryNeeded = Object.entries(drafts).some(([id, value]) => documentSaveRecovery(value) && documentWrites[id]?.phase !== 'saving');
   const [creationDrafts] = useCreationDrafts();
   const command = usePmCommand();
   const creationWriteUncertain = hasUncertainCreationDrafts(creationDrafts);
@@ -229,7 +237,7 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
   const config = useMemo<ViewConfig>(() => ({
     ...advancedView, entity: options.taskContext ? 'work_item' : prefs.entity || undefined, project: prefs.project || undefined,
     layout: ['list', 'calendar', 'gantt'].includes(prefs.layout) ? 'table' : prefs.layout as ViewConfig['layout'],
-    ...(prefs.layout === 'list' ? { columns: prefs.entity === 'work_item' ? ['status', 'priority', 'assignee', 'due'] : prefs.entity === 'document' ? ['document_kind'] : prefs.entity ? ['status', 'due'] : ['entity'] } : {}),
+    ...(prefs.layout === 'list' ? { columns: prefs.entity === 'work_item' ? ['status', 'priority', 'assignee', 'due'] : prefs.entity === 'document' ? prefs.project ? ['document_kind'] : ['document_kind', 'project'] : prefs.entity ? ['status', 'due'] : ['entity'] } : {}),
     group_by: advancedView?.group_by || (prefs.entity === 'work_item' ? prefs.groupBy || 'status' : prefs.entity === 'document' ? 'document_kind' : 'status'),
     filter: { ...advancedView?.filter, ...(!options.taskContext && prefs.priority ? { priority: prefs.priority } : {}), ...(!options.taskContext && prefs.status ? { status: prefs.status } : {}), ...(stateFilter ? { status: stateFilter } : {}) }, sort: prefs.sort,
     ...(sortRules.length ? { order_by: sortRules } : {}),
@@ -254,7 +262,7 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
   const graphQuery = useMemo<GraphQuery>(() => {
     let scoped: QueryExpression | undefined;
     if (options.taskContext) {
-      const ids = scopeError || scopePending ? [] : taskCollection?.open.map(file => file.id) || [];
+      const ids = scopeError || scopePending ? [] : taskCollection?.files.map(file => file.id) || [];
       const chunks: QueryExpression[] = [];
       for (let index = 0; index < ids.length; index += 256) chunks.push({ field: 'id', op: 'in', value: ids.slice(index, index + 256) });
       scoped = { any: chunks };
@@ -334,14 +342,17 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     rejectedTaskFieldsRef.current = next;
     setRejectedTaskFields(next);
   }
+  const sourcePermission = options.documentWorkbench ? !!selected && selected.entity.entity === 'document' && allowed(workspace, 'planning.edit', selected.entity.project) : options.canWrite;
   function sourceDraftWritable() {
-    return !!selected && !unsupported && options.canWrite && !selected.entity.archived && !busy && !accessError && !query.isError && !configurationInvalid && !ahead && conflict?.id !== selected.id && !writesBlocked && !hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) && !hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) && !command.pending && !command.unknownCommand;
+    const savingDocumentId = selected?.entity.entity === 'document' && documentSaveFlights.has(JSON.stringify([session.scope, selected.id])) ? selected.id : undefined;
+    return session.isCurrent() && !!selected && !unsupported && sourcePermission && !selected.entity.archived && !busy && !accessError && !query.isError && !configurationInvalid && !ahead && conflict?.id !== selected.id && !hasUncertainProjectTaskDraft(session.drafts.getSnapshot(), savingDocumentId) && !hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) && !command.pending && !command.unknownCommand;
   }
   const canEditSourceDraft = sourceDraftWritable();
   function updateDraft(value: string) {
     if (!selected || !sourceDraftWritable()) return;
-    setDrafts(old => { const next = { ...old }; if (value === selected.raw) delete next[selected.id]; else next[selected.id] = { raw: value, revision: old[selected.id]?.revision || selected.revision }; return next; });
+    setDrafts(old => { const next = { ...old }; if (value === selected.raw && !old[selected.id]?.documentSave) delete next[selected.id]; else next[selected.id] = { raw: value, revision: old[selected.id]?.revision || selected.revision }; return next; });
     if (selected.entity.entity === 'work_item') taskPatchIssues(selected.id);
+    if (selected.entity.entity === 'document' && session.documentWrites.getSnapshot()[selected.id]?.phase !== 'saving') documentWriteStatus(selected.id);
     setError(''); setRequestDiagnostics([]);
   }
   function acceptRecord(file: FileRecord) { client.setQueryData<WorkspaceSnapshot>(queryKey, old => old ? { ...old, files: old.files.some(f => f.id === file.id) ? old.files.map(f => f.id === file.id ? file : f) : [...old.files, file], unsupportedFiles: old.unsupportedFiles.filter(f => f.path !== file.path) } : { files: [file], errors: [], views: [], unsupportedFiles: [], configuration, configurationRevision: 'absent', configurationErrors: [] }); }
@@ -361,7 +372,109 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
       } catch (fetchError) { reportError(fetchError); }
     }
   }
+  function documentWriteStatus(id: string, status?: DocumentWriteStatus) {
+    session.documentWrites.update(previous => { const next = { ...previous }; if (status) next[id] = status; else delete next[id]; return next; });
+  }
+  function saveDocument(id: string, background = false): Promise<boolean> {
+    if (!session.isCurrent()) return Promise.resolve(false);
+    const flightKey = JSON.stringify([session.scope, id]);
+    const existing = documentSaveFlights.get(flightKey);
+    if (existing) return existing;
+    const run = async () => {
+      const savingDraft = session.drafts.getSnapshot()[id];
+      if (!savingDraft) return true;
+      if (background && session.documentWrites.getSnapshot()[id] && session.documentWrites.getSnapshot()[id].phase !== 'saving') return false;
+      const current = client.getQueryData<WorkspaceSnapshot>(queryKey);
+      const file = current?.files.find(candidate => candidate.id === id && candidate.entity.entity === 'document');
+      const blocked = !current || !file || (!options.documentWorkbench && !options.canWrite) || !allowed(workspace, 'planning.edit', file.entity.project) || (!!options.projectId && file.entity.project !== options.projectId) || busy || accessError || query.isError || command.pending || !!command.unknownCommand || hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) || hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) || current.configurationErrors.some(issue => issue.severity === 'error') || file.entity.archived || current.unsupportedFiles.some(source => source.id === id || source.path === file.path);
+      if (blocked || !current || !file) {
+        documentWriteStatus(id, { phase: 'error', message: documentSaveRecovery(savingDraft)?.message || 'Saving is locked. The scoped draft is retained; resolve permission, pending-write or source diagnostics before retrying.' });
+        return false;
+      }
+      if (savingDraft.revision !== file.revision) {
+        setRebaseReviewed(false); setConflict({ id, current: file, local: savingDraft.raw });
+        documentWriteStatus(id, { phase: 'conflict', message: 'The source revision changed. Compare versions before saving; your draft is retained.' });
+        return false;
+      }
+      const parsed = parseDraftSource(file, savingDraft.raw, current.configuration);
+      const diagnostics = [...parsed.diagnostics, ...(parsed.entity ? validateDraftSource(file, savingDraft.raw, parsed.entity, current.files, current.configuration) : [])];
+      if (diagnostics.some(issue => issue.severity === 'error')) {
+        setRequestDiagnostics(diagnostics); setError('Repair the Markdown draft before saving.');
+        documentWriteStatus(id, { phase: 'error', message: 'Repair the Markdown draft before saving. Your draft is retained.' });
+        return false;
+      }
+      // Journal the uncertain native write before dispatch. No automatic replay on lost responses.
+      session.drafts.update(previous => ({ ...previous, [id]: { ...savingDraft, documentSave: { phase: 'unknown', message: 'The native save result is unknown. Read the authoritative source before any replacement write.' } } }));
+      if (session.drafts.persistenceError()) {
+        session.drafts.update(previous => ({ ...previous, [id]: savingDraft }));
+        documentWriteStatus(id, { phase: 'error', message: 'Local draft backup is unavailable. No write was sent. Keep this page open.' });
+        return false;
+      }
+      documentWriteStatus(id, { phase: 'saving', message: 'Saving Markdown…' });
+      if (!background) setBusy(id);
+      setError(''); setRequestDiagnostics([]);
+      try {
+        const saved = await api.save(id, savingDraft.raw, savingDraft.revision);
+        acceptRecord(saved);
+        session.drafts.update(previous => {
+          const next = { ...previous };
+          const retained = completeDocumentSave(next[id], savingDraft.raw, saved.revision);
+          if (retained) next[id] = retained; else delete next[id];
+          return next;
+        });
+        documentWriteStatus(id);
+        if (!background) setNotice(`${id} saved to Markdown`);
+        return !session.drafts.getSnapshot()[id];
+      } catch (cause) {
+        const definite = cause instanceof ApiError && cause.status < 500 && cause.status !== 408;
+        if (definite) session.drafts.update(previous => {
+          if (!previous[id]) return previous;
+          const next = { ...previous }; const { documentSave: _recovery, ...retained } = previous[id]; next[id] = retained; return next;
+        });
+        documentWriteStatus(id, { phase: cause instanceof ApiError && cause.status === 409 ? 'conflict' : 'error', message: message(cause) });
+        await handleError(cause, id, savingDraft.raw);
+        return false;
+      } finally {
+        if (!background) setBusy(null);
+      }
+    };
+    const pending = run().finally(() => documentSaveFlights.delete(flightKey));
+    documentSaveFlights.set(flightKey, pending);
+    return pending;
+  }
+  async function reconcileDocument(id: string): Promise<void> {
+    const draft = session.drafts.getSnapshot()[id];
+    if (!session.isCurrent() || !draft || !documentSaveRecovery(draft) || session.documentWrites.getSnapshot()[id]?.phase === 'saving' || documentSaveFlights.has(JSON.stringify([session.scope, id]))) return;
+    documentWriteStatus(id, { phase: 'saving', message: 'Reading authoritative source…' });
+    try {
+      const observed = await api.file(id);
+      if (!('entity' in observed) || observed.entity.entity !== 'document') throw new Error('The authoritative document is unavailable or unsupported. The unknown save remains locked.');
+      acceptRecord(observed);
+      session.drafts.update(previous => previous[id] === draft ? { ...previous, [id]: observeDocumentSave(draft, observed) } : previous);
+      documentWriteStatus(id);
+      setError('');
+    } catch (cause) {
+      documentWriteStatus(id, { phase: 'error', message: message(cause) });
+      reportError(cause);
+    }
+  }
+  function adoptDocumentRevision(id: string) {
+    const file = client.getQueryData<WorkspaceSnapshot>(queryKey)?.files.find(candidate => candidate.id === id && candidate.entity.entity === 'document');
+    if (!session.isCurrent() || !file || session.documentWrites.getSnapshot()[id]?.phase === 'saving' || documentSaveFlights.has(JSON.stringify([session.scope, id]))) return;
+    try {
+      session.drafts.update(previous => {
+        if (!previous[id]) return previous;
+        const retained = adoptDocumentSave(previous[id], file);
+        const next = { ...previous }; if (retained) next[id] = retained; else delete next[id]; return next;
+      });
+      documentWriteStatus(id);
+      setConflict(previous => previous?.id === id ? null : previous);
+      setRebaseReviewed(false);
+      setError(''); setRequestDiagnostics([]);
+    } catch (cause) { reportError(cause); }
+  }
   async function save(background = false) {
+    if (selected?.entity.entity === 'document' && !unsupported) { await saveDocument(selected.id, background); return; }
     if (!selected || unsupported || busy || autosaving.current || !options.canWrite || writesBlocked || accessError || query.isError || hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) || hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) || command.pending || command.unknownCommand) return;
     const current = client.getQueryData<WorkspaceSnapshot>(queryKey);
     const file = current?.files.find(file => file.id === selected.id);
@@ -371,7 +484,7 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     const parsed = parseDraftSource(file, savingDraft.raw, current.configuration);
     const diagnostics = [...(file.entity.entity === 'work_item' ? Object.values(rejectedTaskFieldsRef.current[file.id] || {}).flat() : []), ...parsed.diagnostics, ...(parsed.entity ? validateDraftSource(file, savingDraft.raw, parsed.entity, current.files, current.configuration) : [])];
     if (diagnostics.some(issue => issue.severity === 'error')) { setRequestDiagnostics(diagnostics); setError('Repair the Markdown draft before saving.'); return; }
-    autosaving.current = background;
+    autosaving.current = true;
     if (!background) setBusy(file.id);
     setError(''); setRequestDiagnostics([]);
     const saving = savingDraft.raw;
@@ -465,10 +578,11 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
         const patched = patchDocumentDraftRaw(file, base, changes, current.configuration);
         if (patched === base) return old;
         const next = { ...old };
-        if (patched === file.raw) delete next[file.id];
+        if (patched === file.raw && !latest?.documentSave) delete next[file.id];
         else next[file.id] = { raw: patched, revision: latest?.revision ?? file.revision };
         return next;
       });
+      if (session.documentWrites.getSnapshot()[file.id]?.phase !== 'saving') documentWriteStatus(file.id);
       setError(''); setRequestDiagnostics([]);
     } catch (error) { reportError(error); }
   }
@@ -592,14 +706,15 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
   async function refresh() { setBlockedAccess(null); await client.invalidateQueries({ queryKey }); }
   return {
     projectId: options.projectId,
+    documentWorkbench: options.documentWorkbench,
     session, query, accessError, handleAccessError, files, unsupportedFiles, configuration, configurationInvalid, prefs, setPrefs, preference,
     selectedId, selected, unsupported, source, draft, drafts, setDrafts, raw, entity, projects, projected, draftIds,
     draftDiagnostics, draftInvalid, ahead, config, advancedView, matching, matchingResult, viewProps, taskCollection, scopeCounts, scopeError, scopePending, writesBlocked, graphSource, graphQuery, graphRefreshKey, search, setSearch,
-    connection, notice, setNotice, error: nativeWriteUncertain ? 'A project task write has an uncertain result. Return to its project to read the authoritative source, then deliberately adopt or discard the retained fields. Writes and editing are locked until recovery; local drafts are retained.' : error, setError, busy, requestDiagnostics, setRequestDiagnostics,
+    connection, notice, setNotice, error: documentRecoveryNeeded ? 'A document save result needs recovery. Read the authoritative source and explicitly adopt the observed revision before replacing it. Local drafts are retained.' : nativeWriteUncertain && !hasUncertainDocumentSave(drafts) ? 'A project task write has an uncertain result. Return to its project to read the authoritative source, then deliberately adopt or discard the retained fields. Writes and editing are locked until recovery; local drafts are retained.' : error, setError, busy, requestDiagnostics, setRequestDiagnostics,
     creationOutsideScope: creationFeedback?.message === notice ? creationFeedback.id : null,
     deleteTarget, setDeleteTarget, deleteConfirmation, setDeleteConfirmation, conflict, setConflict, rebaseReviewed, setRebaseReviewed,
-    createStatus, creationScope, saveViewOpen, setSaveViewOpen, activeView, context, setContext, activity, canWrite: options.canWrite && selectedTaskAttempt?.phase !== 'unknown' && selectedTaskAttempt?.phase !== 'observed',
-    select, updateDraft, acceptRecord, removeDraft, save, canEdit, canManageLifecycle, patch, toggleChecklist, wikiLink,
+    createStatus, creationScope, saveViewOpen, setSaveViewOpen, activeView, context, setContext, activity, canWrite: sourcePermission && selectedTaskAttempt?.phase !== 'unknown' && selectedTaskAttempt?.phase !== 'observed',
+    select, updateDraft, acceptRecord, removeDraft, save, saveDocument, reconcileDocument, adoptDocumentRevision, canEdit, canManageLifecycle, patch, toggleChecklist, wikiLink,
     canEditSourceDraft, canEditTaskDraft, draftParseError, patchTaskDraft, toggleTaskChecklist, patchDocumentDraft,
     openCreate, acceptCreated, lifecycle, useView, acceptView, clearView, loadContext, refresh,
   };

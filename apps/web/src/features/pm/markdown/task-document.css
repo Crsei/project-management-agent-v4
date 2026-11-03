@@ -194,9 +194,10 @@
   text-align: left;
 }
 .doc-option:hover { background: var(--surface-hover); }
+.doc-option:focus-visible { outline: none; background: var(--surface-hover); }
 .doc-option[data-selected="true"] { background: var(--selection); font-weight: 500; }
 .doc-option[data-muted="true"] { color: var(--muted-foreground); }
-.doc-option:focus-visible, .doc-popover-field input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.doc-popover-field input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .doc-option:disabled { cursor: not-allowed; opacity: .5; }
 .doc-option-check { margin-left: auto; opacity: .9; }
 .doc-option-meta { margin-left: auto; color: var(--muted-foreground); font-size: 10px; font-family: var(--font-mono, monospace); }
@@ -316,7 +317,7 @@
 }
 .task-creation.task-document .doc-prose code { padding: .1em .3em; border-radius: 4px; background: var(--surface); font-family: var(--font-mono, monospace); font-size: .92em; }
 .task-creation.task-document .doc-prose pre code { padding: 0; background: transparent; }
-.task-creation.task-document .doc-prose a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.task-creation.task-document .doc-prose a { color: var(--accent); }
 .task-creation.task-document .doc-prose hr { border: 0; border-top: 1px solid var(--border); margin: 1em 0; }
 .task-creation.task-document .doc-prose strong { font-weight: 650; }
 
@@ -415,7 +416,7 @@
 }
 .task-creation.task-document .doc-subtask-field { display: grid; gap: 4px; color: var(--muted-foreground); font-size: 11px; }
 .task-creation.task-document .doc-subtask-field textarea,
-.task-creation.task-document .doc-subtask-field select {
+.task-creation.task-document .doc-subtask-field [data-slot="select-trigger"] {
   width: 100%;
   min-height: 32px;
   padding: 5px 8px;
@@ -455,7 +456,7 @@
 .task-creation.task-document .doc-advanced > summary { padding: 4px 0; color: var(--muted-foreground); font-size: 12px; }
 .task-creation.task-document .doc-advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding-top: 6px; }
 .task-creation.task-document .doc-advanced label { display: grid; gap: 5px; font-size: 12px; color: var(--muted-foreground); }
-.task-creation.task-document .doc-advanced :where(input, select, textarea) {
+.task-creation.task-document .doc-advanced :where(input, [data-slot="select-trigger"], textarea) {
   width: 100%;
   min-height: 34px;
   padding: 6px 8px;

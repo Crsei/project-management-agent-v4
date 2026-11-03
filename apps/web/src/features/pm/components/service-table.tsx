@@ -5,10 +5,10 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react"
 import type { Entity } from "@contracts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { NativeSelect } from "@/components/ui/native-select"
 import { useI18n } from "@/lib/i18n-provider"
 import { itemDates, itemStatus, itemText, itemTitle, statusLabel, workItemStatuses } from "./service-collection-shared"
 import styles from "./service-collections.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export function ServiceTable({ items, onOpen }: { items: Entity[]; onOpen: (item: Entity) => void }) {
   const { locale } = useI18n()
@@ -39,10 +39,10 @@ export function ServiceTable({ items, onOpen }: { items: Entity[]; onOpen: (item
   return <div className={styles.root}>
     <div className={styles.toolbar}>
       <label className={styles.selector}>{en ? "Filter work items" : "筛选工作项"}<Input type="search" value={filter} placeholder={en ? "Search title, ID, status, dates…" : "搜索标题、ID、状态、日期…"} onChange={(event) => { setFilter(event.target.value); scroll.current?.scrollTo({ top: 0 }) }} /></label>
-      <label className={styles.statusFilter}>{en ? "Status" : "状态"}<NativeSelect value={(table.getColumn("status")?.getFilterValue() as string) ?? ""} onChange={(event) => { table.getColumn("status")?.setFilterValue(event.target.value || undefined); scroll.current?.scrollTo({ top: 0 }) }}>
+      <label className={styles.statusFilter}>{en ? "Status" : "状态"}<RadixSelect value={(table.getColumn("status")?.getFilterValue() as string) ?? ""} onChange={(event) => { table.getColumn("status")?.setFilterValue(event.target.value || undefined); scroll.current?.scrollTo({ top: 0 }) }}>
         <option value="">{en ? "All statuses" : "全部状态"}</option>
         {states.map((state) => <option key={state} value={state}>{statusLabel(state, locale)}</option>)}
-      </NativeSelect></label>
+      </RadixSelect></label>
       <details className={styles.columnMenu}><summary>{en ? "Columns" : "列显示"}</summary><div>{table.getAllLeafColumns().filter((column) => column.getCanHide()).map((column) => <label key={column.id}><input type="checkbox" checked={column.getIsVisible()} onChange={column.getToggleVisibilityHandler()} />{String(column.columnDef.header)}</label>)}</div></details>
       {(filter || columnFilters.length > 0 || sorting.length > 0) && <Button variant="ghost" onClick={() => { setFilter(""); setColumnFilters([]); setSorting([]); scroll.current?.scrollTo({ top: 0 }) }}>{en ? "Reset filters & sorting" : "重置筛选和排序"}</Button>}
       <span className={styles.hint} role="status">{en ? `${rows.length} of ${items.length} items` : `${rows.length} / ${items.length} 项`}</span>

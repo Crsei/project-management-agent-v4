@@ -140,6 +140,8 @@ const makePiDiscoveryConnection = Effect.fnUntraced(function* (
     runtimeBinding: undefined,
     extensionPath: undefined,
     ephemeral: true,
+    disableExtensions: true,
+    disableTools: true,
   });
   const connection = yield* makePiRpcConnection({
     command: piSettings.binaryPath || "pi",

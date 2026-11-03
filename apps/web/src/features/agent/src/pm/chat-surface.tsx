@@ -1,8 +1,9 @@
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAui, useAuiState, ThreadListPrimitive, type AssistantRuntime } from "@assistant-ui/react";
-import { Menu } from "@base-ui/react/menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ArchiveIcon, ArrowLeftIcon, ChartNoAxesCombinedIcon, FileTextIcon, KeyboardIcon, ListFilterIcon, Loader2Icon, Maximize2Icon, PanelBottomIcon, PanelLeftIcon, PanelRightIcon, PlusIcon, SearchIcon, SettingsIcon, XIcon, ZapIcon } from "lucide-react";
+import { DovspaceBrandLink } from "@/components/dovspace-brand";
 import { Button } from "@agent/components/ui/button";
 import { Input } from "@agent/components/ui/input";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@agent/components/ui/dialog";
@@ -32,6 +33,7 @@ import { agentText } from "../i18n-text.ts";
 import type { RemoteThread } from "@agent-workspace/contracts/chat";
 import SessionSettingsDialog from "../settings/session-settings-dialog";
 import { ShortcutCatalog } from "../settings/input-preferences";
+import { InstructionBlocksAction } from "../workspace/instruction-blocks-dialog";
 import { useChatAppearance, useChatBrowserPreferences } from "../settings/browser-preferences";
 import { acceptRemoteThread, availableProviderModel, bindDraftScope, canSendThread, refreshCatalog, refreshIdentity, refreshProviders, sameScope, scopeContext, scopeKey, threadScope, usePmChatState, type AgentScope, type AgentFileArea } from "./state";
 import pmTheme from "@/views/pm/dashboards-views.module.css";
@@ -534,23 +536,24 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
     {sidebarOpen && <button type="button" className="pm-agent-sidebar-backdrop" aria-label={t("关闭会话侧栏", "Close session sidebar")} onClick={closeSidebarDrawer} />}
     <aside id={sidebarId} className="pm-agent-sidebar" data-open={sidebarOpen} data-collapsed={sidebarCollapsed} aria-label={t("工作区与会话", "Workspaces and sessions")}>
       <header className="pm-agent-product">
-        <ProductSwitcher scope={displayScope} pending={pending} canLeave={protectNavigation} pmHref={pmHref} onSelectScope={selectScope} />
-        <button type="button" className="pm-agent-icon pm-agent-mobile-close" aria-label={t("关闭侧栏", "Close sidebar")} onClick={closeSidebarDrawer}><XIcon /></button>
+        <DovspaceBrandLink canLeave={protectNavigation} />
+        <button type="button" className="pm-agent-icon" aria-label={drawerSidebar ? t("关闭侧栏", "Close sidebar") : t("折叠侧栏", "Collapse sidebar")} aria-controls={sidebarId} aria-expanded onClick={() => { toggleSidebar(); requestAnimationFrame(() => sidebarToggle.current?.focus()); }}>{drawerSidebar ? <XIcon /> : <PanelLeftIcon />}</button>
       </header>
+      <div className="pm-agent-app-selector"><ProductSwitcher scope={displayScope} pending={pending} canLeave={protectNavigation} pmHref={pmHref} onSelectScope={selectScope} /></div>
       <div className="pm-agent-sidebar-controls">
         <div className="pm-agent-toolbar">
           <label className="pm-agent-search"><SearchIcon /><Input ref={searchInput} type="search" aria-label={t("搜索会话", "Search sessions")} placeholder={t("搜索会话…", "Search sessions…")} value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-          <Menu.Root>
-            <Menu.Trigger className="pm-agent-icon" aria-label={t("筛选会话作用域", "Filter session scope")} title={t("筛选会话作用域", "Filter session scope")} data-active={!!projectFilter}><ListFilterIcon /></Menu.Trigger>
-            <Menu.Portal><Menu.Positioner className="pm-session-positioner" side="bottom" align="start" sideOffset={6}><Menu.Popup className="pm-session-menu-popup">
-              <Menu.Item className="pm-session-menu-item" onClick={() => setProjectFilter(undefined)}>{!projectFilter ? "✓ " : ""}{t("所有会话", "All sessions")}</Menu.Item>
-              {state.catalog?.workspaces.map((workspace) => <Menu.Group key={workspace.id}>
-                <Menu.GroupLabel className="pm-agent-menu-label">{workspace.name}</Menu.GroupLabel>
-                <Menu.Item className="pm-session-menu-item" onClick={() => setProjectFilter({ workspaceId: workspace.id, projectId: null })}>{sameScope(projectFilter, { workspaceId: workspace.id, projectId: null }) ? "✓ " : ""}{t("工作区会话", "Workspace sessions")}</Menu.Item>
-                {workspace.projects.map((project) => <Menu.Item key={project.id} className="pm-session-menu-item" onClick={() => setProjectFilter({ workspaceId: workspace.id, projectId: project.id })}>{sameScope(projectFilter, { workspaceId: workspace.id, projectId: project.id }) ? "✓ " : ""}{project.name}</Menu.Item>)}
-              </Menu.Group>)}
-            </Menu.Popup></Menu.Positioner></Menu.Portal>
-          </Menu.Root>
+          <DropdownMenu>
+            <DropdownMenuTrigger className="pm-agent-icon" aria-label={t("筛选会话作用域", "Filter session scope")} title={t("筛选会话作用域", "Filter session scope")} data-active={!!projectFilter}><ListFilterIcon /></DropdownMenuTrigger>
+            <DropdownMenuContent className="pm-session-menu-popup" side="bottom" align="start" sideOffset={6}>
+              <DropdownMenuItem className="pm-session-menu-item" onClick={() => setProjectFilter(undefined)}>{!projectFilter ? "✓ " : ""}{t("所有会话", "All sessions")}</DropdownMenuItem>
+              {state.catalog?.workspaces.map((workspace) => <DropdownMenuGroup key={workspace.id}>
+                <DropdownMenuLabel className="pm-agent-menu-label">{workspace.name}</DropdownMenuLabel>
+                <DropdownMenuItem className="pm-session-menu-item" onClick={() => setProjectFilter({ workspaceId: workspace.id, projectId: null })}>{sameScope(projectFilter, { workspaceId: workspace.id, projectId: null }) ? "✓ " : ""}{t("工作区会话", "Workspace sessions")}</DropdownMenuItem>
+                {workspace.projects.map((project) => <DropdownMenuItem key={project.id} className="pm-session-menu-item" onClick={() => setProjectFilter({ workspaceId: workspace.id, projectId: project.id })}>{sameScope(projectFilter, { workspaceId: workspace.id, projectId: project.id }) ? "✓ " : ""}{project.name}</DropdownMenuItem>)}
+              </DropdownMenuGroup>)}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <SidebarProjectChooser catalog={state.catalog} identity={state.identityLoading || state.identityError ? null : state.identity} scope={displayScope} pending={pending || state.loading} loading={state.loading} error={state.error} canLeave={protectNavigation} onSelect={selectScope} onConfigure={setDirectory} onRefresh={() => void refreshCatalog().catch(() => {})} />
           <button type="button" className="pm-agent-icon" disabled={pending || state.loading || !displayScope || !displayContext || !!state.error} aria-label={t("新建当前作用域会话", "New session in current scope")} title={t("新建当前作用域会话 (Ctrl / ⌘ + Shift + O)", "New session in current scope (Ctrl / ⌘ + Shift + O)")} onClick={() => { if (displayScope) selectScope(displayScope, true); }}><PlusIcon /></button>
         </div>
@@ -613,7 +616,7 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
     </aside>
     <main className="pm-agent-main">
       <header className="pm-agent-context-header">
-        <button ref={sidebarToggle} type="button" className="pm-agent-icon pm-agent-sidebar-toggle" aria-label={t("切换会话侧栏", "Toggle session sidebar")} aria-controls={sidebarId} aria-expanded={drawerSidebar ? sidebarOpen : !sidebarCollapsed} title={t("切换会话侧栏", "Toggle session sidebar")} onClick={toggleSidebar}><PanelLeftIcon /></button>
+        {(drawerSidebar || sidebarCollapsed) && <button ref={sidebarToggle} type="button" className="pm-agent-icon pm-agent-sidebar-toggle" aria-label={t("切换会话侧栏", "Toggle session sidebar")} aria-controls={sidebarId} aria-expanded={drawerSidebar ? sidebarOpen : !sidebarCollapsed} title={t("切换会话侧栏", "Toggle session sidebar")} onClick={() => { toggleSidebar(); if (!drawerSidebar) requestAnimationFrame(() => document.getElementById(sidebarId)?.querySelector<HTMLButtonElement>(".pm-agent-product button")?.focus()); }}><PanelLeftIcon /></button>}
         <nav className="pm-agent-context-title" aria-label={t("当前位置", "Current location")}><div>{displayContext ? <><span>{displayContext.workspace.name}</span><span aria-hidden> / </span><span>{displayContext.project?.name ?? t("工作区会话", "Workspace session")}</span><span aria-hidden> / </span></> : null}<strong>{automationsView ? t("自动化", "Automations") : title ?? (remoteId ? t("历史会话", "Past session") : t("新会话", "New session"))}</strong></div></nav>
         {!automationsView && <>
           {!entry && automationReturn && <Button variant="outline" size="sm" onClick={() => { if (protect()) navigate(automationReturn); }}><ZapIcon />{t("返回自动化配置", "Return to automation setup")}</Button>}
@@ -651,7 +654,7 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
         onRetry={retry}
         sendUnavailableReason={!settingsReady ? t("会话设置尚未就绪或有待保存的更改。", "Session settings are not ready or have unsaved changes.") : !canSendThread(localId, remoteId, settings.providerInstanceId, settings.model, settings.modelOptions) ? t("工作区、文件区域、Provider、模型或模型选项当前不可用。", "The workspace, file area, provider, model, or model options are currently unavailable.") : undefined}
         composerLeading={<PmComposerReferences />}
-        composerActions={<PmComposerReferenceAction />}
+        composerActions={<><PmComposerReferenceAction /><InstructionBlocksAction settings={settings} disabled={!scope || !settingsReady || pending || threadRunning || threadLoading || threadsLoading} /></>}
         welcome={{
           title: displayContext ? t(`想在 ${displayContext.project?.name ?? displayContext.workspace.name} 中做什么？`, `What do you want to do in ${displayContext.project?.name ?? displayContext.workspace.name}?`) : t("你想做什么？", "What do you want to do?"),
           freshlyCreated: (!!remoteId && freshThreadId === remoteId) || draftOrigin.current.wasNew,

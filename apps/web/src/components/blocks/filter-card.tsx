@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react"
 import { ChevronDown, Plus, Trash2 } from "lucide-react"
 import { useI18n } from "@/lib/i18n-provider"
 import styles from "./filter-card.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export type FilterOperator = "is" | "isNot"
 export type FilterCondition = { field: string; operator: FilterOperator; values: string[] }
@@ -100,19 +101,19 @@ export function FilterCard({
             <div className={styles.row} data-condition>
               <span className={styles.conjunction}>{index === 0 ? whereLabel : andLabel}</span>
               <label className={styles.controlGroup}>
-                <select className={styles.select} aria-label={english ? "Field" : "字段"} value={condition.field} disabled={disabled} onChange={event => patch(index, { field: event.target.value, values: [] })}>
+                <RadixSelect className={styles.select} aria-label={english ? "Field" : "字段"} value={condition.field} disabled={disabled} onChange={event => patch(index, { field: event.target.value, values: [] })}>
                   {!fields.some(option => option.id === condition.field) && <option value={condition.field}>{condition.field}</option>}
                   {fields.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-                </select>
-                <select className={styles.select} aria-label={english ? "Operator" : "操作符"} value={condition.operator} disabled={disabled} onChange={event => patch(index, { operator: event.target.value as FilterOperator })}>
+                </RadixSelect>
+                <RadixSelect className={styles.select} aria-label={english ? "Operator" : "操作符"} value={condition.operator} disabled={disabled} onChange={event => patch(index, { operator: event.target.value as FilterOperator })}>
                   <option value="is">{isLabel}</option>
                   <option value="isNot">{isNotLabel}</option>
-                </select>
+                </RadixSelect>
                 {field.single
-                  ? <select className={styles.select} aria-label={`${field.label} value`} value={condition.values[0] ?? ""} disabled={disabled} onChange={event => patch(index, { values: event.target.value ? [event.target.value] : [] })}>
+                  ? <RadixSelect className={styles.select} aria-label={`${field.label} value`} value={condition.values[0] ?? ""} disabled={disabled} onChange={event => patch(index, { values: event.target.value ? [event.target.value] : [] })}>
                       <option value="">{anyLabel}</option>
                       {field.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
+                    </RadixSelect>
                   : <button type="button" className={styles.value} aria-expanded={expanded === index} disabled={disabled} onClick={() => setExpanded(expanded === index ? null : index)}>
                       <span>{value}</span>
                       <ChevronDown size={12} aria-hidden="true" />

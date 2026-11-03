@@ -2,7 +2,7 @@
   "version": 1,
   "source": "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
   "beforeSha256": "44f0cfba17c5ddf47cd5b75ab443d18c3a8080cc4638034b5b7e75c36a75e422",
-  "afterSha256": "d123d510381feccfc93233a6a5c0a9f8c24499c3fc4ce96773c533c35d39f24d",
+  "afterSha256": "9eee00ba839d6b57b5d3888336525fa5aa2868471545df5e6af03a2b2c1fffdf",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -252,6 +252,55 @@
       "before": [],
       "after": [
         "                Effect.tap(response => Effect.sync(() => { nativeInitialization = response; })),\n"
+      ]
+    },
+    {
+      "start": 3136,
+      "before": [
+        "          >,\n"
+      ],
+      "after": [
+        "          > & { readonly userMessageText?: string },\n"
+      ]
+    },
+    {
+      "start": 3139,
+      "before": [],
+      "after": [
+        "          const raw = turnInput.message.text;\n",
+        "          const suffix = turnInput.userMessageText?.trim();\n",
+        "          const prompt = turnInput.userMessageText === undefined ? codexSkillMentionText(raw)\n",
+        "            : suffix && raw.endsWith(suffix)\n",
+        "              ? raw.slice(0, -suffix.length) + codexSkillMentionText(suffix) : raw;\n"
+      ]
+    },
+    {
+      "start": 3140,
+      "before": [
+        "            text: codexSkillMentionText(turnInput.message.text),\n"
+      ],
+      "after": [
+        "            text: prompt,\n"
+      ]
+    },
+    {
+      "start": 3715,
+      "before": [],
+      "after": [
+        "          // Completed-only native notifications need the same active-item marker as\n",
+        "          // item/started. Keep this stable row running until the captured App payload\n",
+        "          // lands, even after pending capture is cleared before its node/item pair.\n",
+        "          const pendingArtifacts = yield* buildDynamicToolArtifacts(context, item);\n",
+        "          yield* emitProviderEvent({\n",
+        "            type: \"node.updated\",\n",
+        "            driver: CODEX_PROVIDER,\n",
+        "            node: { ...pendingArtifacts.node, status: \"running\", completedAt: null },\n",
+        "          });\n",
+        "          yield* emitProviderEvent({\n",
+        "            type: \"turn_item.updated\",\n",
+        "            driver: CODEX_PROVIDER,\n",
+        "            turnItem: { ...pendingArtifacts.turnItem, status: \"running\", completedAt: null },\n",
+        "          });\n"
       ]
     },
     {

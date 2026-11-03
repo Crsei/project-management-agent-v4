@@ -28,6 +28,7 @@ import { getStoredInstance, providerUsageContext, providerDataDirectory, subscri
 import type { ProviderDriverContext } from "../driver-adapter.ts";
 import type { PmProviderBoundaryError, PmProviderHostService, PmProviderPurpose, PmProviderLease, PmProviderUsageLease } from "./contract.ts";
 import { projectProviderInstance, providerBoundaryError, toT3DriverKind } from "./config-mapping.ts";
+import { closeMcpAppSessionsForInstance } from "../../mcp-apps/live.ts";
 
 export type PmProviderPlatformServices =
   | ChildProcessSpawner.ChildProcessSpawner | Crypto | FileSystem | Path | Stdio | HttpClient.HttpClient | DocumentText;
@@ -231,6 +232,10 @@ export function makePmProviderHostService(input: {
     const service: PmProviderHostService = {
       acquire,
       invalidate: instanceId => Effect.gen(function* () {
+        yield* Effect.tryPromise({
+          try: () => closeMcpAppSessionsForInstance(instanceId),
+          catch: () => providerBoundaryError("MCP App session cleanup failed."),
+        });
         const owned = [...entries.values()].filter(entry => entry.context.instanceId === instanceId);
         const results = yield* Effect.forEach(owned, entry => Effect.gen(function* () {
           const current = yield* checkContext(entry.context, entry.root, entry.identity, true).pipe(Effect.result);

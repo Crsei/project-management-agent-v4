@@ -2,12 +2,12 @@ import type { ReactNode } from "react"
 import { Link } from "react-router"
 import {
   LockKeyhole,
-  PanelsTopLeft,
   SearchX,
   ServerCrash,
   ShieldX,
   Wrench,
 } from "lucide-react"
+import { DovspaceWordmark } from "@/components/dovspace-brand"
 import { Alert } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n-provider"
@@ -166,8 +166,7 @@ export function ErrorPageScreen({
           to="/pm"
           className="inline-flex items-center gap-2 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
-          <PanelsTopLeft size={22} aria-hidden="true" />
-          Project Management
+          <DovspaceWordmark />
         </Link>
         {toolbar}
       </header>
@@ -178,7 +177,7 @@ export function ErrorPageScreen({
         <ErrorPage code={code} actions={resolvedActions} {...props} />
       </main>
       <footer className="flex min-h-12 items-center border-t px-8 py-3 text-xs leading-5 text-muted-foreground max-sm:px-4">
-        <span>© Project Management</span>
+        <span>© Dovspace</span>
       </footer>
     </div>
   )

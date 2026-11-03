@@ -13,6 +13,7 @@ import { FilterCard, type FilterCondition, type FilterField } from "@/components
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { usePmCommand, usePmEntities, usePmService, useProjectDirectory } from "../pm-service"
+import { usePmNoticeCenter } from "../pm-notice-center"
 import { allowed, entitySchema, makeCommand, useDraftState, useText } from "../pm-ui"
 import { PmCommandError, PmServiceError, pmErrorMessage } from "../pm-errors"
 import { downloadProjectAttachment } from "../service-project-detail-panels"
@@ -23,6 +24,7 @@ import { FileLifecycleOperations, type FileLifecycleAction } from "./LifecycleDi
 import { useFileHistory } from "./hooks"
 import { allFileKinds, artifactKindFor, buildFileEntries, classifyFile, entryForFile, fileProjectWritable, fileUpdatedValues, filterAndSort, formatFileSize, formatRelativeTime, kindLabel, type FileEntry, type FileKind, type FileSort, type FileView } from "./model"
 import styles from "./project-files.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
@@ -138,7 +140,7 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
   const [sort, setSort] = useDraftState<FileSort>(scope, "sort", "newest")
   const [view, setView] = useDraftState<FileView>(scope, "view", "grid")
   const [queue, setQueue] = useDraftState<UploadQueueItem[]>(scope, "uploadQueue", () => restoreUpload(recoveryKey))
-  const [notice, setNotice] = useState<string | null>(null)
+  const { push } = usePmNoticeCenter()
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [lifecycleAction, setLifecycleAction] = useState<(FileLifecycleAction & { scope: string }) | null>(null)
@@ -180,12 +182,6 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
   const history = useFileHistory(fileParam, project.id)
   const previewMatch = fileParam ? history.data ?? (!history.error ? entryForFile(entries, fileParam) : null) : null
   const missingFile = !!fileParam && !previewMatch && !history.isPending && !loading
-
-  useEffect(() => {
-    if (!notice) return
-    const timer = window.setTimeout(() => setNotice(null), 2600)
-    return () => window.clearTimeout(timer)
-  }, [notice, setNotice])
 
   useEffect(() => {
     setQueue(previous => {
@@ -354,7 +350,7 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
   function handleFiles(files: File[], targetArtifactId = "", artifactKind = "", targetArtifactVersion: number | null = null) {
     if (!files.length) return
     if (!canWrite || locked) {
-      setNotice(t("当前项目或权限不允许上传。", "This project or your capabilities do not allow uploads."))
+      push({ severity: "warning", title: t("当前项目或权限不允许上传。", "This project or your capabilities do not allow uploads."), source: "project-files" })
       return
     }
     enqueue(queueItemsForFiles(files, targetArtifactId, artifactKind, targetArtifactVersion))
@@ -391,7 +387,7 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
         ? await command.reconcile()
         : await client.getCommandReceipt(workspace.id, item.pendingCommandId)
       if (receipt) applyRecoveredReceipt(item, receipt)
-    } catch (error) { setNotice(describeError(error, locale)) }
+    } catch (error) { push({ severity: "error", title: t("原上传请求核对失败", "Upload reconciliation failed"), detail: describeError(error, locale), source: "project-files" }) }
   }
 
   function retry(item: UploadQueueItem) {
@@ -414,7 +410,7 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
       if (current.kind !== "artifact" || current.projectId !== project.id || current.data.hiddenAt !== null) throw new Error(t("目标已隐藏或不可用；请先恢复目标成果。", "The target is hidden or unavailable; restore it first."))
       if (!window.confirm(t(`明确采用当前成果基线 v${current.version}（${String(current.data.title)}）？保留已暂存文件，不会重新上传。`, `Explicitly adopt artifact baseline v${current.version} (${String(current.data.title)})? The staged file is retained and will not be uploaded again.`))) return
       updateQueueItem(item.id, { targetArtifactVersion: current.version, error: t("当前基线已明确确认。点击重试继续登记原暂存。", "Current baseline explicitly confirmed. Retry to register the original staged upload.") })
-    } catch (error) { setNotice(error instanceof Error ? error.message : describeError(error, locale)) }
+    } catch (error) { push({ severity: "error", title: t("无法确认文件基线", "Could not confirm file baseline"), detail: error instanceof Error ? error.message : describeError(error, locale), source: "project-files" }) }
   }
 
   function openPreview(entry: FileEntry, versionId: string) {
@@ -438,16 +434,16 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
   }
 
   function copyLink(version: Entity) {
-    void copyLinkText(version).then(copied => setNotice(copied ? t("链接已复制", "Link copied") : t("无法复制链接", "Unable to copy link")))
+    void copyLinkText(version).then(copied => push({ severity: copied ? "success" : "error", title: copied ? t("链接已复制", "Link copied") : t("无法复制链接", "Unable to copy link"), source: "project-files" }))
   }
 
   async function download(version: Entity) {
     if (!client || !workspace) return
     try {
       await downloadProjectAttachment(client, workspace.id, version)
-      setNotice(t("已开始下载", "Download started"))
+      push({ severity: "success", title: t("已开始下载", "Download started"), source: "project-files" })
     } catch (error) {
-      setNotice(describeError(error, locale))
+      push({ severity: "error", title: t("下载失败", "Download failed"), detail: describeError(error, locale), source: "project-files" })
     }
   }
 
@@ -457,9 +453,9 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
         <Search size={13} className={styles.searchIcon} aria-hidden="true" />
         <input className={styles.search} type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t("搜索文件", "Search files")} aria-label={t("搜索文件", "Search files")} />
       </div>
-      <select className={styles.select} value={visibility} onChange={event => setVisibility(event.target.value as ArtifactVisibility)} aria-label={t("文件可见性", "File visibility")}>
+      <RadixSelect className={styles.select} value={visibility} onChange={event => setVisibility(event.target.value as ArtifactVisibility)} aria-label={t("文件可见性", "File visibility")}>
         <option value="visible">{t("可见文件", "Visible files")}</option><option value="hidden">{t("已隐藏", "Hidden")}</option><option value="all">{t("全部", "All")}</option>
-      </select>
+      </RadixSelect>
       <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
         <PopoverTrigger render={<Button variant="outline" size="sm" data-pm-file-filter aria-label={t("筛选文件", "Filter files")} />}>
           <ListFilter size={14} aria-hidden="true" />{t("筛选", "Filter")}
@@ -481,11 +477,11 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
           />
         </PopoverContent>
       </Popover>
-      <select className={styles.select} value={sort} onChange={event => setSort(event.target.value as FileSort)} aria-label={t("排序", "Sort")}>
+      <RadixSelect className={styles.select} value={sort} onChange={event => setSort(event.target.value as FileSort)} aria-label={t("排序", "Sort")}>
         <option value="newest">{t("最新", "Newest")}</option>
         <option value="name">{t("名称", "Name")}</option>
         <option value="type">{t("类型", "Type")}</option>
-      </select>
+      </RadixSelect>
       <span className={styles.spacer} />
       <div className={styles.segmented} role="group" aria-label={t("文件布局", "File layout")}>
         <button type="button" className={styles.segmentButton} aria-pressed={view === "grid"} aria-label={t("网格视图", "Grid view")} onClick={() => setView("grid")}><LayoutGrid size={14} /></button>
@@ -494,7 +490,6 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
       <Button size="sm" disabled={!canWrite || locked} onClick={() => onOpenChange(true)} title={!canWrite ? t("当前项目或权限不允许上传。", "This project or your capabilities do not allow uploads.") : undefined}><Upload size={14} />{t("上传", "Upload")}</Button>
     </div>
 
-    {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {readError && <div role="alert" className={styles.errorPanel}>
       <p>{readError.message}{hasSnapshot ? ` ${t("显示上次快照。", "Showing the previous snapshot.")}` : ""}</p>
       <Button variant="outline" size="sm" onClick={() => { void versions.refetch(); void artifacts.refetch() }}>{t("重试读取", "Retry read")}</Button>

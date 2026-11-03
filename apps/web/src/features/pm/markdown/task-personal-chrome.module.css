@@ -101,23 +101,8 @@
   min-width: 0;
 }
 
-.workbench:global(.native-workbench) :global(.task-filter-panel) select {
+.workbench:global(.native-workbench) :global(.task-filter-panel) [data-slot="select-trigger"] {
   max-width: 100%;
-}
-
-.workbench:global(.native-workbench) :global(.collection-meta) {
-  flex-wrap: wrap;
-  min-width: 0;
-  min-height: 32px;
-  padding: 6px 24px;
-  background: var(--background);
-  font-size: var(--text-meta);
-  line-height: var(--text-meta--line-height);
-}
-
-.workbench:global(.native-workbench) :global(.collection-meta) > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 @media (max-width: 560px) {

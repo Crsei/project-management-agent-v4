@@ -18,6 +18,7 @@ import { settingsGroups, settingsPages, workspaceSettingsPages, type SettingsPag
 import type { SettingsPageProps } from "./settings-shared"
 import { SettingsAgent } from "../../agent/agent-settings-overview"
 import { SettingsDesignSystem } from "./settings-design-system"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const components: Record<SettingsPageSlug, ComponentType<SettingsPageProps>> = {
   general: SettingsGeneral,
@@ -81,12 +82,12 @@ function SettingsLayout({ mode }: SettingsPageProps) {
         <aside className="min-w-0">
           <label className="grid gap-2 text-sm md:hidden">
             <span className="sr-only">{t("设置页面", "Settings page")}</span>
-            <select aria-label={t("设置页面", "Settings page")} value={page?.slug ?? ""} onChange={event => navigate(`${root}/${event.target.value}`)} className="h-11 w-full rounded-control border bg-surface px-3 focus-visible:ring-2 focus-visible:ring-ring">
+            <RadixSelect aria-label={t("设置页面", "Settings page")} value={page?.slug ?? ""} onChange={event => navigate(`${root}/${event.target.value}`)} className="h-11 w-full rounded-control border bg-surface px-3 focus-visible:ring-2 focus-visible:ring-ring">
               {!page && <option value="" disabled>{t("选择页面", "Choose page")}</option>}
               {settingsGroups.map(group => <optgroup key={group.id} label={t(group.zh, group.en)}>
                 {settingsPages.filter(item => item.group === group.id).map(item => <option key={item.slug} value={item.slug}>{t(item.zh, item.en)}</option>)}
               </optgroup>)}
-            </select>
+            </RadixSelect>
           </label>
           <div className="md:sticky md:top-0 md:max-h-[calc(100dvh-7rem)] md:overflow-y-auto md:pr-2">
             <nav aria-label={t("设置导航", "Settings navigation")} className="hidden space-y-5 md:block">
@@ -108,7 +109,7 @@ function SettingsLayout({ mode }: SettingsPageProps) {
           </div>
         </aside>
         <main className="w-full min-w-0 max-w-[1160px]" key={`${mode}:${workspaceSlug}:${settingsPage}`}>
-          {Page ? <Page mode={mode} /> : <div role="alert" className="space-y-3"><h2 className="text-lg font-semibold">{t("设置页面不存在", "Settings page not found")}</h2><Link to={`${root}/general`} className="underline">{t("返回设置概览", "Return to settings overview")}</Link></div>}
+          {Page ? <Page mode={mode} /> : <div role="alert" className="space-y-3"><h2 className="text-lg font-semibold">{t("设置页面不存在", "Settings page not found")}</h2><Link to={`${root}/general`} className="text-primary hover:text-foreground">{t("返回设置概览", "Return to settings overview")}</Link></div>}
         </main>
       </div>
     </div>

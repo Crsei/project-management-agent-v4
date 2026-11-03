@@ -4,6 +4,7 @@ import { getStoredInstance, listStoredInstances, providerContext, providerDataDi
 import { getNativeProviderAdapter } from "./driver-registry.ts";
 import { probeProviderInstance, sanitizeProviderMessage } from "./catalog.ts";
 import type { ProviderAuthController } from "@t3tools/provider-core/server/auth";
+import { closeMcpAppSessionsForInstance } from "../mcp-apps/live.ts";
 
 const TIMEOUT_MS = 5 * 60_000;
 const MAX_OUTPUT = 16_384;
@@ -209,6 +210,7 @@ export async function getAuthState(instanceId: string): Promise<ProviderAuthStat
 export async function startProviderAuth(instanceId: string, input: ProviderAuthStartInput = {}): Promise<ProviderAuthState> {
   const { instance, adapter } = instanceAndAdapter(instanceId);
   const flowKey = key(instanceId);
+  await closeMcpAppSessionsForInstance(instanceId);
   requireAccountIdle(instanceId);
   const initial = await getAuthState(instanceId);
   requireAccountIdle(instanceId);
@@ -358,6 +360,7 @@ export async function* subscribeAuth(instanceId: string, signal?: AbortSignal): 
 export async function logoutProvider(instanceId: string): Promise<{ ok: boolean; message?: string }> {
   const { instance, adapter } = instanceAndAdapter(instanceId);
   const flowKey = key(instanceId);
+  await closeMcpAppSessionsForInstance(instanceId);
   requireAccountIdle(instanceId);
   logoutOperations.add(flowKey);
   try {

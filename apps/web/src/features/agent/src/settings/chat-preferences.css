@@ -7,10 +7,10 @@ html[data-pm-motion="reduce"] *, html[data-pm-motion="reduce"] *::before, html[d
 .agent-preferences-page { display: grid; gap: 24px; min-width: 0; }
 .agent-preference-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 62px; padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .agent-preference-row label { min-width: 100px; font-weight: 500; }
-.agent-preference-row select, .agent-session-fields select, .agent-session-fields textarea, .agent-session-fields input { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; background: var(--background); color: var(--foreground); font: inherit; }
-.agent-preference-row select { width: min(290px, 60%); }
+.agent-preference-row [data-slot="select-trigger"], .agent-session-fields [data-slot="select-trigger"], .agent-session-fields textarea, .agent-session-fields input { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; background: var(--background); color: var(--foreground); font: inherit; }
+.agent-preference-row [data-slot="select-trigger"] { width: min(290px, 60%); }
 .agent-preference-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--ring); }
-.agent-preference-row select:focus-visible, .agent-session-fields :is(select, textarea, input):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.agent-preference-row [data-slot="select-trigger"]:focus-visible, .agent-session-fields :is([data-slot="select-trigger"], textarea, input):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .agent-shortcuts { padding: 16px 0 4px; }
 .agent-shortcuts dl { display: grid; gap: 12px; }
 .agent-shortcuts dl > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
@@ -29,7 +29,7 @@ html[data-agent-chat-code-wrap="true"] .agent-appearance-preview pre { white-spa
 .agent-session-fields :disabled { opacity: .55; }
 @media (max-width: 540px) {
   .agent-preference-row { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
-  .agent-preference-row select { width: 100%; }
+  .agent-preference-row [data-slot="select-trigger"] { width: 100%; }
   .agent-preference-row input[type="checkbox"] { margin-left: auto; }
   .agent-shortcuts dl > div { align-items: flex-start; }
   .agent-shortcuts dt { flex: 1; min-width: 0; }

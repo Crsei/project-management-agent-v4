@@ -8,6 +8,8 @@ import type { NativeOutputEvent, NativeInteractionRequest, NativeInteractionResp
 import type { NativeUsageUpdate } from "@agent-workspace/contracts/usage";
 import type { PmExecutionIdentity } from "./t3code/contract.ts";
 import type { ProviderRuntimeHostBinding } from "@t3tools/provider-core/server/ProviderRuntimeHost";
+import type { McpAppProducingIdentity } from "@agent-workspace/contracts/mcp-apps";
+import type { McpInvocationIdentity } from "../mcp/identity.ts";
 
 export type ProviderDriverContext = {
   instanceId: string;
@@ -29,6 +31,10 @@ export type ProviderDriverContext = {
   /** Server-only callback; rechecks a confirmed delivery worktree, never a client cwd. */
   authorizeWorktreeWrite?: () => Promise<string | undefined>;
   authorizeExecution?: (action: "compaction" | "tool") => Promise<void>;
+  /** Ordinary Chat only. The caller supplies fresh browser headers, never the producing turn's credentials. */
+  authorizeMcpApp?: (requestHeaders: Headers, producing: McpAppProducingIdentity) => Promise<void>;
+  /** Nonsecret originating grant lineage; never a bearer or a replacement browser authority. */
+  originatingMcpGrant?: Pick<McpInvocationIdentity, "grantId" | "actorId" | "scope" | "access" | "version">;
   /** Host-issued frozen-evidence analysis; never accepted from browser/native configuration. */
   pmAnalysis?: true;
 };
@@ -68,6 +74,7 @@ export type ProviderDriverRunOptions = {
   modelOptions?: ProviderOptionSelection[];
   interactionMode?: "default" | "plan";
   prompt: string;
+  userMessageText?: string;
   signal?: AbortSignal;
   onText?: (delta: string) => void;
   onEvent?: (event: NativeOutputEvent) => void;

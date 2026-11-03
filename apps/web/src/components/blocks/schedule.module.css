@@ -15,7 +15,7 @@
 .controls input[type="date"] {
   width: 144px;
 }
-.controls select {
+.controls [data-slot="select-trigger"] {
   height: 32px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -84,7 +84,7 @@
   color: var(--muted-foreground);
 }
 @media (pointer: coarse) {
-  .controls select,
+  .controls [data-slot="select-trigger"],
   .queue summary {
     min-height: 44px;
   }

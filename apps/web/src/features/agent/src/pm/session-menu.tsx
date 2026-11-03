@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Menu } from "@base-ui/react/menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontalIcon } from "lucide-react";
 import type { RemoteThread } from "@agent-workspace/contracts/chat";
 import type { GitStatusResponse } from "@agent-workspace/contracts/inspector";
@@ -56,26 +56,26 @@ export function SessionMenu({ thread, title, path, disabled, running, filtered, 
     return () => controller.abort();
   }, [open, thread.remoteId, thread.scope?.workspaceId, thread.scope?.projectId, path]);
   const copy = (value: string) => { void (async () => { try { await navigator.clipboard.writeText(value); } catch (error) { onError(error instanceof Error ? error.message : String(error)); } })(); };
-  const item = (label: string, action: () => void, unavailable = false) => <Menu.Item className="pm-session-menu-item" disabled={disabled || unavailable} onClick={action}>{label}</Menu.Item>;
-  const submenu = (label: string, children: ReactNode, unavailable = false) => <Menu.SubmenuRoot><Menu.SubmenuTrigger className="pm-session-menu-item pm-session-sub-trigger" disabled={disabled || unavailable}>{label}<span aria-hidden>›</span></Menu.SubmenuTrigger><Menu.Portal><Menu.Positioner className="pm-session-sub-positioner" side="right" align="start" sideOffset={3}><Menu.Popup className="pm-session-menu-popup">{children}</Menu.Popup></Menu.Positioner></Menu.Portal></Menu.SubmenuRoot>;
-  return <Menu.Root open={open} onOpenChange={setOpen}>
-    <Menu.Trigger className="pm-agent-session-menu-trigger" aria-label={t(`${title}的操作`, `${title} actions`)} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setOpen(true); }}><MoreHorizontalIcon /></Menu.Trigger>
-    <Menu.Portal><Menu.Positioner className="pm-session-positioner" side="bottom" align="end" sideOffset={3}><Menu.Popup className="pm-session-menu-popup">
+  const item = (label: string, action: () => void, unavailable = false) => <DropdownMenuItem className="pm-session-menu-item" disabled={disabled || unavailable} onClick={action}>{label}</DropdownMenuItem>;
+  const submenu = (label: string, children: ReactNode, unavailable = false) => <DropdownMenuSub><DropdownMenuSubTrigger className="pm-session-menu-item pm-session-sub-trigger" disabled={disabled || unavailable}>{label}</DropdownMenuSubTrigger><DropdownMenuSubContent className="pm-session-menu-popup" sideOffset={3}>{children}</DropdownMenuSubContent></DropdownMenuSub>;
+  return <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenuTrigger className="pm-agent-session-menu-trigger" aria-label={t(`${title}的操作`, `${title} actions`)} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setOpen(true); }}><MoreHorizontalIcon /></DropdownMenuTrigger>
+    <DropdownMenuContent className="pm-session-menu-popup" side="bottom" align="start" sideOffset={6}>
       {item(sidebar.pinnedAt ? t("取消置顶", "Unpin") : t("置顶", "Pin"), () => onSidebar(sidebar.pinnedAt ? "unpin" : "pin"))}
       {item(sidebar.settledAt ? t("取消归置", "Un-settle") : t("归置", "Settle"), () => onSidebar(sidebar.settledAt ? "unsettle" : "settle"))}
-      {sidebar.snoozedAt ? item(t("唤醒", "Wake"), () => onSidebar("wake")) : submenu(t("稍后提醒", "Snooze"), <>{presets(new Date(), t).map(({ label, date }) => <Menu.Item key={label} className="pm-session-menu-item" onClick={() => onSidebar("snooze", { snoozedUntil: date.toISOString() })}>{label} ({date.toLocaleString()})</Menu.Item>)}<Menu.Separator className="pm-agent-menu-separator" />{item(t("自定义时间…", "Custom…"), onCustomSnooze)}</>, !sidebar.canSnooze)}
-      <Menu.Separator className="pm-agent-menu-separator" />
+      {sidebar.snoozedAt ? item(t("唤醒", "Wake"), () => onSidebar("wake")) : submenu(t("稍后提醒", "Snooze"), <>{presets(new Date(), t).map(({ label, date }) => <DropdownMenuItem key={label} className="pm-session-menu-item" onClick={() => onSidebar("snooze", { snoozedUntil: date.toISOString() })}>{label} ({date.toLocaleString()})</DropdownMenuItem>)}<DropdownMenuSeparator className="pm-agent-menu-separator" />{item(t("自定义时间…", "Custom…"), onCustomSnooze)}</>, !sidebar.canSnooze)}
+      <DropdownMenuSeparator className="pm-agent-menu-separator" />
       {item(t("重命名", "Rename"), onRename)}
       {item(t("重新生成标题", "Regenerate title"), onRegenerate)}
       {item(t("标为未读", "Mark unread"), () => onSidebar("mark-unread"))}
       {thread.scope?.projectId && item(filtered ? t("显示所有项目", "Show all projects") : t("仅显示此项目", "Filter by project"), onFilter)}
       {submenu(t("自动归置", "Auto-settle"), <>{item(`${sidebar.autoSettle ? "✓ " : ""}${t("启用", "Enabled")}`, () => onSidebar("auto-settle", { enabled: true }))}{item(`${!sidebar.autoSettle ? "✓ " : ""}${t("停用", "Disabled")}`, () => onSidebar("auto-settle", { enabled: false }))}</>)}
-      <Menu.Separator className="pm-agent-menu-separator" />
+      <DropdownMenuSeparator className="pm-agent-menu-separator" />
       {submenu(t("复制", "Copy"), <>{path && item(t("路径", "Path"), () => copy(path))}{branch && item(t("分支", "Branch"), () => copy(branch))}{item(t("会话 ID", "Thread ID"), () => copy(thread.remoteId))}</>)}
       {item(t("项目设置", "Project settings"), onSettings, !thread.scope)}
-      <Menu.Separator className="pm-agent-menu-separator" />
+      <DropdownMenuSeparator className="pm-agent-menu-separator" />
       {item(t("归档会话", "Archive"), onArchive, running || sidebar.running)}
-      <Menu.Item className="pm-session-menu-item pm-session-menu-danger" disabled={disabled} onClick={onDelete}>{t("删除会话", "Delete")}</Menu.Item>
-    </Menu.Popup></Menu.Positioner></Menu.Portal>
-  </Menu.Root>;
+      <DropdownMenuItem className="pm-session-menu-item pm-session-menu-danger" disabled={disabled} onClick={onDelete}>{t("删除会话", "Delete")}</DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>;
 }

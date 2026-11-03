@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-opencode/src/server/v2/adapter.ts",
   "beforeSha256": "329e7537054566cbdf4e2aaac1db5fa781334bd6a23a076dba72fbcfe3acee22",
-  "afterSha256": "89a55f31b1472041c8711d738b3059034a6282711d3f9fd6ebd32260629cf4fd",
+  "afterSha256": "94c1a3b0761f6d2ff8a6c7052efc5a766d0a5ebf73b42e1431b9efdc37208094",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -53,6 +53,8 @@
         "import { t3OrchestrationSystemPrompt } from \"@t3tools/provider-core/server/orchestrationInstructions\";\n"
       ],
       "after": [
+        "import { registerLiveOpenCodeInventory } from \"../liveWorkspace.ts\";\n",
+        "import { openCode2CommandsToServerProviderSlashCommands, openCode2SkillsToServerProviderSkills } from \"../status.ts\";\n",
         "import * as ProviderRuntimeHost from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n"
       ]
     },
@@ -273,6 +275,18 @@
         "        driver: OPENCODE_PROVIDER, detail: \"The host transport does not match this native operation.\",\n",
         "      });\n",
         "    }\n",
+        "    const inventoryCwd = directoryOf(input.runtimePolicy.cwd);\n",
+        "    const unregisterInventory = binding && registerLiveOpenCodeInventory(instanceId, input.threadId, binding.executionId, inventoryCwd, () =>\n",
+        "      Effect.all({\n",
+        "        skills: client.skill.list({ location: { directory: inventoryCwd } }).pipe(Effect.map(result => result.data)),\n",
+        "        commands: client.command.list({ location: { directory: inventoryCwd } }).pipe(Effect.map(result => result.data)),\n",
+        "      }).pipe(Effect.map(({ skills, commands }) => ({\n",
+        "        skills: openCode2SkillsToServerProviderSkills(skills),\n",
+        "        commands: openCode2CommandsToServerProviderSlashCommands(commands),\n",
+        "        pending: commands.length === 0,\n",
+        "      }))),\n",
+        "    );\n",
+        "    if (unregisterInventory) yield* Effect.addFinalizer(() => Effect.sync(unregisterInventory));\n",
         "    // Reuse only this operation's admitted owner, never a later binding for the same thread.\n",
         "    const authorizeHostTools = binding?.mcpServers.length\n",
         "      ? runtimeHost.authorize({ threadId: binding.threadId, providerInstanceId: binding.providerInstanceId,\n",
@@ -712,10 +726,22 @@
       ]
     },
     {
-      "start": 3287,
-      "before": [],
+      "start": 3286,
+      "before": [
+        "      if (bare && text === \"/compact\") {\n"
+      ],
       "after": [
+        "      if (bare && (turnInput.userMessageText ?? text).trim() === \"/compact\") {\n",
         "        yield* recheckHostTools;\n"
+      ]
+    },
+    {
+      "start": 3291,
+      "before": [
+        "      const command = bare ? commandOf(text) : undefined;\n"
+      ],
+      "after": [
+        "      const command = bare ? commandOf(turnInput.userMessageText ?? text) : undefined;\n"
       ]
     },
     {
@@ -723,6 +749,35 @@
       "before": [],
       "after": [
         "          yield* recheckHostTools;\n"
+      ]
+    },
+    {
+      "start": 3303,
+      "before": [
+        "          return yield* client.session.command({ sessionID, ...command });\n"
+      ],
+      "after": [
+        "          return yield* client.session.command({ sessionID, ...command,\n",
+        "            text: turnInput.userMessageText === undefined ? command.text : text });\n"
+      ]
+    },
+    {
+      "start": 3306,
+      "before": [
+        "      const skills = SKILL_MENTION.test(text)\n"
+      ],
+      "after": [
+        "      const selectedText = turnInput.userMessageText ?? text;\n",
+        "      const skills = SKILL_MENTION.test(selectedText)\n"
+      ]
+    },
+    {
+      "start": 3308,
+      "before": [
+        "            text,\n"
+      ],
+      "after": [
+        "            selectedText,\n"
       ]
     },
     {

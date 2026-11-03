@@ -6,6 +6,7 @@ import { inspectMarkdown } from '../../../../packages/pm-markdown/index.ts';
 import { FileRepository } from '../../../../packages/pm-core/repository.ts';
 import { ProjectLocations } from '../../../../packages/pm-core/project-locations.ts';
 import { authorizeCoreScope, type CoreWorkspacePool } from './core-routes.ts';
+import { recheckMcpRequest } from '../../../../packages/application/src/mcp-service-auth.ts';
 
 type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; coreWorkspaces: CoreWorkspacePool | undefined };
 const params = z.strictObject({ workspaceId: z.uuid().toLowerCase() });
@@ -56,6 +57,7 @@ export function registerAgentCoreFilesRoutes(app: FastifyInstance, options: Opti
       return bytes <= 32 * 1024 * 1024;
     }).slice(0, 10000);
     if (bounded.length !== files.length) incomplete = true;
+    await recheckMcpRequest(options.database(), request);
     return { files: bounded, complete: !incomplete, ...(incomplete ? { error: 'Some core files could not be read, assigned safely, or exceeded the observation limit; deletion detection is suspended.' } : {}) };
   });
 }

@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router"
 import { useI18n } from "@/lib/i18n-provider"
-import { NativeSelect } from "@/components/ui/native-select"
 import { Field } from "@/components/ui/field"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export function PmVariantSelect<T extends string>({
   value,
@@ -19,7 +19,7 @@ export function PmVariantSelect<T extends string>({
       className="flex shrink-0 items-center gap-2 whitespace-nowrap"
     >
       {(control) => (
-        <NativeSelect
+        <RadixSelect
           {...control}
           className="w-auto min-w-40 max-w-60"
           aria-label={locale === "en" ? "View variant" : "视图变体"}
@@ -31,7 +31,7 @@ export function PmVariantSelect<T extends string>({
               {option.label}
             </option>
           ))}
-        </NativeSelect>
+        </RadixSelect>
       )}
     </Field>
   )

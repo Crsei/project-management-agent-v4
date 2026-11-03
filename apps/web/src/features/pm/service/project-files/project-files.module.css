@@ -188,8 +188,6 @@
 
 .browse {
   color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 .queue {

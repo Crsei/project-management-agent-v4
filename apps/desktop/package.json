@@ -7,15 +7,26 @@
   "main": "dist/main.mjs",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
     "runtime:install": "node scripts/ensure-electron.mjs",
     "start": "node scripts/launch.mjs",
     "dev": "pnpm run build && pnpm run start",
-    "package": "node scripts/package.mjs",
-    "test": "node --test src/policy.test.mjs src/local-server.test.mjs"
+    "runtime:prepare": "node scripts/prepare-runtime.mjs",
+    "runtime:smoke": "node scripts/smoke-runtime.mjs",
+    "stage:workspace": "node scripts/stage-workspace.mjs",
+    "smoke:managed": "node scripts/smoke-managed.mjs",
+    "package": "node scripts/package.mjs --unsigned",
+    "package:signed": "node scripts/package.mjs --signed",
+    "test": "node --test \"src/*.test.mjs\" \"src/backend/*.test.mjs\" \"src/backend/*.test.ts\" \"scripts/*.test.mjs\""
+  },
+  "dependencies": {
+    "pg": "8.23.1"
   },
   "devDependencies": {
-    "@electron/packager": "20.3.0",
-    "electron": "45.0.0"
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0",
+    "extract-zip": "2.0.1",
+    "tar": "7.5.17"
   },
   "engines": {
     "node": ">=24 <25"

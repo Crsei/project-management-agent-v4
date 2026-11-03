@@ -42,6 +42,29 @@ test("PM tool transport requires both Chat identity and a live authorization cal
   assert.throws(() => pmRuntimeBinding({ ...context, mcpServers: [{ ...connector, name: "pm_tools" }] }, ThreadId.make("chat"), "generation"), { code: "scope_required", status: 412 });
 });
 
+test("technical analysis rejects descriptor injection and ordinary descriptors remain generation-bound", () => {
+  const connector = { name: "authorized_connector", transport: "stdio" as const, command: "/node", args: ["/scoped-broker.mjs"] };
+  assert.throws(() => pmRuntimeBinding({ ...context, pmAnalysis: true }, ThreadId.make("chat"), "generation"), { code: "scope_required" });
+  assert.throws(() => pmRuntimeBinding({ ...context, pmToolBridge: undefined, pmAnalysis: true, mcpServers: [connector] }, ThreadId.make("chat"), "generation"), { code: "scope_required" });
+  assert.throws(() => pmRuntimeBinding({ ...context, mcpServers: [connector, connector] }, ThreadId.make("chat"), "generation"), { code: "scope_required" });
+  const binding = pmRuntimeBinding({ ...context, mcpServers: [connector] }, ThreadId.make("chat"), "generation");
+  assert.equal(binding.nativePermissions, "deny-ungranted");
+  assert.deepEqual(binding.mcpServers.map(server => server.name), ["pm_tools", "authorized_connector"]);
+});
+
+test("a permissive callback cannot elevate an explicit technical binding into tool authority", async () => {
+  const host = makePmProviderRuntimeHost();
+  const binding = pmRuntimeBinding({ ...context, pmToolBridge: undefined, pmAnalysis: true }, ThreadId.make("analysis"), "analysis-generation");
+  let calls = 0;
+  await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+    yield* host.bind(binding, () => Effect.sync(() => { calls++; }));
+    yield* Effect.tryPromise({ try: () => assert.rejects(Effect.runPromise(host.authorize({
+      providerInstanceId: binding.providerInstanceId, threadId: binding.threadId, executionId: binding.executionId, action: "tool",
+    })), { code: "scope_required", status: 403 }), catch: error => error });
+  })));
+  assert.equal(calls, 0);
+});
+
 test("an explicit technical model caller gains neither tool nor compaction authority", async () => {
   const host = makePmProviderRuntimeHost();
   const binding = pmRuntimeBinding({

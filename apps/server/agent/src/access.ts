@@ -54,6 +54,10 @@ export function sameOrigin(headers: Headers): boolean {
 
 /** Also used for PTY upgrades, which do not pass through Hono middleware. */
 export function authorizeHeaders(headers: Headers): boolean {
+  // MCP credentials are never an Agent HTTP/PTY credential, including on an
+  // otherwise anonymous loopback installation or alongside an access cookie.
+  const authorization = headers.get("authorization") ?? "";
+  if (/^Bearer pm-mcp-(?:access|service)-v1\./.test(authorization)) return false;
   const token = accessToken();
   if (!token) return localHost(headers);
   if (token.length < 32) return false;

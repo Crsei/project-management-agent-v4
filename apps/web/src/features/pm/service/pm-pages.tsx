@@ -53,8 +53,9 @@ export function ServiceEntityPage() {
 }
 
 export function ServiceDocuments() {
+  const { projectId } = useParams()
   const [params] = useSearchParams()
-  return <ServiceMarkdown entityKind="document" initialCreate={params.get("create") === "1"} />
+  return <ServiceMarkdown entityKind="document" projectId={projectId} initialCreate={params.get("create") === "1"} />
 }
 
 export function ServiceViews() {

@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field } from "@/components/ui/field"
-import { NativeSelect } from "@/components/ui/native-select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Alert } from "@/components/ui/alert"
 import {
@@ -24,6 +23,7 @@ import type {
   HourCalendarInteraction,
   HourCalendarReadModel,
 } from "./hour-calendar-contracts"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const day = (offset: number) =>
   new Date(Date.parse(pmClock) + offset * 86400000).toISOString()
@@ -428,7 +428,7 @@ function ScheduleEditorSheet({
               </Field>
               <Field label={en ? "Time zone" : "时区"}>
                 {(control) => (
-                  <NativeSelect
+                  <RadixSelect
                     {...control}
                     value={zone}
                     onChange={(event) => onZone(event.target.value)}
@@ -440,7 +440,7 @@ function ScheduleEditorSheet({
                         </option>
                       ),
                     )}
-                  </NativeSelect>
+                  </RadixSelect>
                 )}
               </Field>
             </div>

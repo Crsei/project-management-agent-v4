@@ -137,7 +137,7 @@ small {
   display: flex;
   gap: 8px;
 }
-input:not([type="radio"]) {
+input:not([type="radio"]):not([type="checkbox"]) {
   width: 100%;
   min-width: 0;
   height: 36px;
@@ -187,6 +187,7 @@ summary:focus-visible {
 }
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 24px 0;
 }
@@ -248,4 +249,64 @@ footer button {
 .muted {
   color: var(--secondary);
   font-weight: 400;
+}
+.setup-fields {
+  margin: 20px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.setup-fields legend {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 6px;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.check-row input {
+  accent-color: var(--accent);
+}
+#account-fields {
+  margin-top: 16px;
+}
+#account-fields .field:last-child {
+  margin-bottom: 0;
+}
+#development-runtime {
+  margin: 16px 0;
+}
+#development-runtime .field {
+  margin-top: 12px;
+}
+progress {
+  width: 100%;
+  height: 5px;
+  accent-color: var(--accent);
+  margin-bottom: 12px;
+}
+.maintenance-panel {
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
+}
+.small-note {
+  font-size: 12px;
+  color: var(--secondary);
+}
+#maintenance-root {
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+.maintenance-panel .actions {
+  margin: 12px 0;
+}
+.folder-actions button {
+  font-size: 12px;
+}
+@media (max-width: 660px) {
+  main { padding: 20px; }
+  .mode-picker { flex-direction: column; }
 }

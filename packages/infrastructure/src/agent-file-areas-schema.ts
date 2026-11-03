@@ -14,7 +14,7 @@ export const agentFileAreas = pgTable('agent_file_areas', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 }, table => [
   primaryKey({ columns: [table.workspaceId, table.projectKey] }),
-  check('agent_file_areas_path_check', sql`length(${table.path}) BETWEEN 1 AND 4096 AND left(${table.path},1)='/'`),
+  check('agent_file_areas_path_check', sql`length(${table.path}) BETWEEN 1 AND 4096 AND (left(${table.path},1)='/' OR (left(${table.path},1) ~ '^[A-Za-z]$' AND substring(${table.path},2,1)=':' AND substring(${table.path},3,1) IN ('/',chr(92))))`),
   check('agent_file_areas_source_check', sql`${table.source} IN ('explicit','default')`),
   check('agent_file_areas_directory_device_check', sql`${table.directoryDevice} ~ '^[0-9]+$'`),
   check('agent_file_areas_directory_inode_check', sql`${table.directoryInode} ~ '^[0-9]+$'`),
@@ -29,6 +29,6 @@ export const agentStorageSettings = pgTable('agent_storage_settings', {
   updatedBy: uuid('updated_by').notNull().references(() => users.id),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 }, table => [
-  check('agent_storage_settings_root_check', sql`length(${table.defaultRoot}) BETWEEN 1 AND 4096 AND left(${table.defaultRoot},1)='/'`),
+  check('agent_storage_settings_root_check', sql`length(${table.defaultRoot}) BETWEEN 1 AND 4096 AND (left(${table.defaultRoot},1)='/' OR (left(${table.defaultRoot},1) ~ '^[A-Za-z]$' AND substring(${table.defaultRoot},2,1)=':' AND substring(${table.defaultRoot},3,1) IN ('/',chr(92))))`),
   check('agent_storage_settings_revision_check', sql`${table.revision}>0`),
 ]);

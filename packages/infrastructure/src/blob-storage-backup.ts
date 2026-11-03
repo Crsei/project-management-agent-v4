@@ -1,7 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { constants } from 'node:fs';
-import { mkdir, open } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { Pool } from 'pg';
 import { DomainError } from '../../domain/src/core.ts';
@@ -11,6 +9,8 @@ import { blobInventoryEntrySchema, inventorySha256, verifyInventoryObjects } fro
 import { collectBlobInventory, restoreRebindStorage, type StorageEndpoint } from './blob-storage-maintenance.ts';
 import type { BlobInventoryEntry } from './blob-storage-inventory.ts';
 import { locatorSha256 } from './blob-storage-config.ts';
+import { SafeDirectory, exclusiveFileFlags } from './portable-directory.ts';
+import { assertIndependentStorageRoots } from './project-storage-checkpoint.ts';
 
 const sha = z.string().regex(/^[a-f0-9]{64}$/);
 export const blobBackupManifestSchema = z.strictObject({
@@ -21,7 +21,8 @@ export const blobBackupManifestSchema = z.strictObject({
 export type BlobBackupManifest = z.infer<typeof blobBackupManifestSchema>;
 export function blobBackupManifestSha256(manifest: BlobBackupManifest): string { return createHash('sha256').update(JSON.stringify(blobBackupManifestSchema.parse(manifest))).digest('hex'); }
 export async function readBlobBackupManifest(directory: string): Promise<BlobBackupManifest> {
-  const file = await open(join(directory, 'manifest.json'), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  const directoryHandle = await SafeDirectory.open(directory);
+  const file = await directoryHandle.openFile('manifest.json').catch(async error => { await directoryHandle.close(); throw error; });
   try {
     const stat = await file.stat();
     if (!stat.isFile() || stat.nlink !== 1 || stat.size > 64 * 1024 * 1024) throw new DomainError('blob_backup_manifest_invalid');
@@ -29,32 +30,38 @@ export async function readBlobBackupManifest(directory: string): Promise<BlobBac
     let offset = 0;
     while (offset < bytes.length) { const read = await file.read(bytes, offset, bytes.length - offset, offset); if (!read.bytesRead) throw new DomainError('blob_backup_manifest_invalid'); offset += read.bytesRead; }
     if ((await file.read(Buffer.alloc(1), 0, 1, bytes.length)).bytesRead) throw new DomainError('blob_backup_manifest_invalid');
+    await directoryHandle.assertFile('manifest.json', file);
     return blobBackupManifestSchema.parse(JSON.parse(bytes.toString('utf8')));
-  } finally { await file.close(); }
+  } finally { await file.close(); await directoryHandle.close(); }
 }
 /** pool must be the isolated database restored from the same stopped dump, never a later live DB. */
 export async function exportBlobBackup(options: { pool: Pool; source: StorageEndpoint; directory: string; databaseDumpSha256: string; coreManifestSha256: string; stopped: boolean; readObject?: (entry: BlobInventoryEntry) => Promise<Buffer> }): Promise<{ manifest: BlobBackupManifest; manifestSha256: string }> {
   if (!options.stopped) throw new DomainError('blob_maintenance_requires_stop');
+  assertIndependentStorageRoots([resolve(options.directory), ...(options.source.locator.provider === 'local' ? [resolve(options.source.locator.root)] : [])]);
   const source = await readStorageBinding(options.pool);
   if (!source) throw new DomainError('blob_storage_binding_mismatch');
   assertStorageMarker(source, options.source.locator, await readStorageMarker(options.source.provider));
   const entries = await collectBlobInventory(options.pool);
   const manifest = blobBackupManifestSchema.parse({ formatVersion: 1, backupSetId: randomUUID(), createdAt: new Date().toISOString(), source, databaseDumpSha256: options.databaseDumpSha256, coreManifestSha256: options.coreManifestSha256, entries });
-  await mkdir(options.directory, { mode: 0o700 });
-  const archive = new LocalBlobStore(join(options.directory, 'objects'));
-  await archive.init();
-  for (const entry of entries) {
-    const bytes = options.readObject ? await options.readObject(entry) : await options.source.provider.read(entry.key);
-    if (bytes.length !== entry.size || createHash('sha256').update(bytes).digest('hex') !== entry.sha256) throw new DomainError('blob_integrity_error', 'Backup source differs from frozen SQL reference', 503);
-    await archive.importVerifiedObject(entry.key, bytes);
-  }
-  await verifyInventoryObjects(archive, entries);
-  const file = await open(join(options.directory, 'manifest.json'), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
-  try { await file.writeFile(JSON.stringify(manifest)); await file.sync(); }
-  finally { await file.close(); }
-  const directory = await open(options.directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-  try { await directory.sync(); } finally { await directory.close(); }
-  return { manifest, manifestSha256: blobBackupManifestSha256(manifest) };
+  const parent = await SafeDirectory.open(dirname(resolve(options.directory)));
+  let directory: SafeDirectory;
+  try { await parent.mkdir(basename(options.directory)); directory = await parent.child(basename(options.directory)); }
+  finally { await parent.close(); }
+  try {
+    const archive = new LocalBlobStore(join(options.directory, 'objects'));
+    await archive.init();
+    for (const entry of entries) {
+      const bytes = options.readObject ? await options.readObject(entry) : await options.source.provider.read(entry.key);
+      if (bytes.length !== entry.size || createHash('sha256').update(bytes).digest('hex') !== entry.sha256) throw new DomainError('blob_integrity_error', 'Backup source differs from frozen SQL reference', 503);
+      await archive.importVerifiedObject(entry.key, bytes);
+    }
+    await verifyInventoryObjects(archive, entries);
+    const file = await directory.openFile('manifest.json', exclusiveFileFlags);
+    try { await file.writeFile(JSON.stringify(manifest)); await file.sync(); await directory.assertFile('manifest.json', file); }
+    finally { await file.close(); }
+    await directory.sync();
+    return { manifest, manifestSha256: blobBackupManifestSha256(manifest) };
+  } finally { await directory.close(); }
 }
 export async function verifyBlobBackup(options: { pool: Pool; directory: string; expectedManifestSha256: string; databaseDumpSha256: string; coreManifestSha256: string }): Promise<BlobBackupManifest> {
   const manifest = await readBlobBackupManifest(options.directory);
@@ -67,6 +74,7 @@ export async function verifyBlobBackup(options: { pool: Pool; directory: string;
 export type BlobBackupImportOptions = { pool: Pool; target: StorageEndpoint; directory: string; expectedManifestSha256: string; databaseDumpSha256: string; coreManifestSha256: string; stopped: boolean; targetStoreId: string };
 export async function importBlobBackup(options: BlobBackupImportOptions): Promise<BlobBackupManifest> {
   if (!options.stopped) throw new DomainError('blob_maintenance_requires_stop');
+  assertIndependentStorageRoots([resolve(options.directory), ...(options.target.locator.provider === 'local' ? [resolve(options.target.locator.root)] : [])]);
   const manifest = await verifyBlobBackup(options);
   if (manifest.source.storeId === options.targetStoreId || manifest.source.locatorSha256 === locatorSha256(options.target.locator)) throw new DomainError('blob_restore_requires_new_store');
   z.uuid().parse(options.targetStoreId);
@@ -89,6 +97,8 @@ export async function importBlobBackup(options: BlobBackupImportOptions): Promis
   return manifest;
 }
 export async function restoreBlobBackup(options: BlobBackupImportOptions & { expectedEpoch: string; operationId: string }): Promise<StorageBinding> {
+  if (!options.stopped) throw new DomainError('blob_maintenance_requires_stop');
+  assertIndependentStorageRoots([resolve(options.directory), ...(options.target.locator.provider === 'local' ? [resolve(options.target.locator.root)] : [])]);
   let manifest = await readBlobBackupManifest(options.directory);
   if (blobBackupManifestSha256(manifest) !== options.expectedManifestSha256 || manifest.databaseDumpSha256 !== options.databaseDumpSha256 || manifest.coreManifestSha256 !== options.coreManifestSha256) throw new DomainError('blob_backup_set_mismatch');
   const accepted = await readStorageBinding(options.pool);

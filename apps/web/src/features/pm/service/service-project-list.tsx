@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router"
 import { Archive, ArrowDown, ArrowUp, ChevronsUpDown, Filter, Plus, SlidersHorizontal } from "lucide-react"
 import type { Entity } from "@contracts"
@@ -14,6 +14,8 @@ import { PmSearch } from "@/views/pm/presentation-page"
 import familyStyles from "@/views/pm/projects-views.module.css"
 import { projectListViewAliases, projectListViews, projectListToCollection, resolveVariant, usePmDisplaySetting } from "./pm-display-settings"
 import { usePmEntities, usePmService, usePortfolioDashboard, useProjectDirectory, useProjectExtras } from "./pm-service"
+import { useI18n } from "@/lib/i18n-provider"
+import { usePmNoticeCenter } from "./pm-notice-center"
 import { allowed, CommandNotice, issueRecord, projectRecord, queryData, ServiceGuard, string, today, useText, writable, type QueryState } from "./pm-ui"
 import { ProjectCoverImage } from "./project-extras"
 import { ProjectAgentAction } from "../agent/project-entry"
@@ -270,7 +272,7 @@ function ServiceProjectList() {
     readModel={{
       projects: visible,
       selectedProject: selected,
-      selectedIssueSummary: selected ? <><div className="px-6 py-3"><Button variant="outline" size="sm" disabled={!canStar(selected.id)} aria-pressed={selected.starred ?? undefined} onClick={() => star(selected.id)}>{selected.starred ? t("取消收藏", "Unfavorite") : t("收藏项目", "Favorite project")}</Button></div><ProjectReadNotice query={items} label={t("项目任务", "Project tasks")} /><ProjectSummaryIssues project={selected} issues={selectedIssues} onOpenProject={() => openProject(selected.id)} onOpenIssues={() => navigate(`${root}/projects/${encodeURIComponent(selected.id)}/issues`)} onOpenIssue={id => navigate(taskOpenMode === "panel" ? `${root}/issues?${new URLSearchParams({ entity: id, returnTo: currentUrl })}` : `${root}/entities/${encodeURIComponent(id)}?${new URLSearchParams({ returnTo: currentUrl })}`, { state: { returnTo: currentUrl } })} emptyLabel={items.data ? t("当前项目暂无关联任务。", "No tasks belong to this project.") : t("任务快照不可用。", "Task snapshot unavailable.")} /></> : undefined,
+      selectedIssueSummary: selected ? <><div className="px-6 py-3"><Button variant="outline" size="sm" disabled={!canStar(selected.id)} aria-pressed={selected.starred ?? undefined} onClick={() => star(selected.id)}>{selected.starred ? t("取消收藏", "Unfavorite") : t("收藏项目", "Favorite project")}</Button></div><ProjectSummaryIssues project={selected} issues={selectedIssues} onOpenProject={() => openProject(selected.id)} onOpenIssues={() => navigate(`${root}/projects/${encodeURIComponent(selected.id)}/issues`)} onOpenIssue={id => navigate(taskOpenMode === "panel" ? `${root}/issues?${new URLSearchParams({ entity: id, returnTo: currentUrl })}` : `${root}/entities/${encodeURIComponent(id)}?${new URLSearchParams({ returnTo: currentUrl })}`, { state: { returnTo: currentUrl } })} emptyLabel={items.data ? t("当前项目暂无关联任务。", "No tasks belong to this project.") : t("任务快照不可用。", "Task snapshot unavailable.")} /></> : undefined,
       data: queryData(projects, visible.length),
       defaultArchiveScope: "all",
       statusOptions,
@@ -304,19 +306,49 @@ function ServiceProjectList() {
       rowActions: project => <ProjectMenuButton projectId={project.id} />,
     } : undefined}
     feedback={<div className={`space-y-2 text-xs text-muted-foreground ${variant === "table" ? "px-6 py-3 max-sm:px-4" : "mb-3"}`}>
-      <ProjectReadNotice query={items} label={t("项目任务", "Project tasks")} />
-      <ProjectReadNotice query={milestones} label={t("里程碑", "Milestones")} />
-      <ProjectReadNotice query={extras} label={t("收藏与封面", "Favorites and covers")} />
-      <ProjectReadNotice query={directory} label={t("项目身份与团队", "Project identities and teams")} />
-      <ProjectReadNotice query={portfolio} label={t("健康评估", "Health assessments")} />
+      <ProjectReadNotices entries={[
+        { label: t("项目任务", "Project tasks"), query: items },
+        { label: t("里程碑", "Milestones"), query: milestones },
+        { label: t("收藏与封面", "Favorites and covers"), query: extras },
+        { label: t("项目身份与团队", "Project identities and teams"), query: directory },
+        { label: t("健康评估", "Health assessments"), query: portfolio },
+      ]} />
       {selectedHidden && <div role="status" className="flex flex-wrap items-center gap-2"><span>{t("所选项目被筛选隐藏，选择与任务侧栏仍按真实 ID 保留。", "The selected project is filtered out. Its selection and task rail remain attached to its real ID.")}</span><Button variant="outline" size="sm" onClick={clearFilters}>{t("清除筛选", "Clear filters")}</Button></div>}
     </div>}
   />
 }
 
-function ProjectReadNotice({ query, label }: { query: Pick<QueryState, "isPending" | "error" | "refetch"> & { data: unknown }; label: string }) {
-  const t = useText()
-  return <>{query.isPending && !query.data && <p role="status">{label} · {t("正在读取…", "Loading…")}</p>}{query.error && <div role="alert" className="flex flex-wrap items-center gap-2"><span>{label} · {query.data ? t("刷新失败，保留上次快照，可能已过期：", "Refresh failed; the retained snapshot may be stale: ") : t("读取失败：", "Read failed: ")}{query.error.message}</span><Button variant="outline" size="sm" onClick={() => { void query.refetch() }}>{t("重试读取", "Retry read")}</Button></div>}</>
+type ProjectReadQuery = Pick<QueryState, "isPending" | "error" | "refetch"> & { data: unknown }
+
+/** Supplemental project-list reads stay in the top-right center; they never insert rows above the collection. */
+function ProjectReadNotices({ entries }: { entries: readonly { label: string; query: ProjectReadQuery }[] }) {
+  const en = useI18n().locale === "en"
+  const { upsert, resolve } = usePmNoticeCenter()
+  const latest = useRef(entries); latest.current = entries
+  const stateKey = entries.map(({ label, query }) => `${label}:${query.isPending && !query.data ? 1 : 0}:${query.error?.message ?? ""}:${query.data ? 1 : 0}`).join("|")
+  useEffect(() => {
+    const current = latest.current
+    const pending = current.filter(entry => entry.query.isPending && !entry.query.data).map(entry => entry.label)
+    if (pending.length) {
+      upsert({ key: "project-list:reading", severity: "info", title: en ? "Reading project data" : "正在读取项目数据", detail: pending.join(" · "), source: "project-list", silent: true, transient: true })
+    } else {
+      resolve("project-list:reading")
+    }
+    for (const entry of current) {
+      const key = `project-list:read-error:${entry.label}`
+      if (!entry.query.error) { resolve(key); continue }
+      upsert({
+        key,
+        severity: "error",
+        title: `${entry.label} · ${entry.query.data ? (en ? "Refresh failed" : "刷新失败") : (en ? "Read failed" : "读取失败")}`,
+        detail: `${entry.query.error.message}${entry.query.data ? (en ? " The previous snapshot is retained and may be stale." : " 已保留上次快照，可能已过期。") : ""}`,
+        source: "project-list",
+        sticky: true,
+        action: { label: en ? "Retry read" : "重试读取", run: () => { void entry.query.refetch() } },
+      })
+    }
+  }, [en, resolve, stateKey, upsert])
+  return null
 }
 
 function ProjectSortSelect({ controls, sortKeys, onChange }: { controls: RowControls; sortKeys: readonly SortKey[]; onChange: (key: SortKey) => void }) {

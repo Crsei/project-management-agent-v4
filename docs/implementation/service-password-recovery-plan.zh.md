@@ -261,3 +261,12 @@ R01–R10 是稳定实施任务身份，不重编号。第11节为实现代理�
 - 正式浏览器在独立账号路由登记邮箱，从真实 SMTP 验证邮件取 fragment 并确认；再匿名申请找回、消费第二封邮件并重置。旧会话 `/auth/me=401`，新密码普通登录后200；fragment清空，令牌未写 localStorage/sessionStorage。没有读取用户凭据或公网发信。
 - 真实页面发现独立账号路由缺少 `PmServiceProvider`，修复为无工作区依赖的父级 provider；未知能力页面不可发信。实际 Caddy 验证 no-store/no-referrer/CSP，并以错误日志查询串探针确认不记录原请求。
 - 实际 S3 源备份含已验证邮箱和已消费令牌；新目标绑定激活前执行统一恢复围栏。验证账号另建，报告仍为 `productionCredentialPolicyApproved=false`，不代表旧密码/旧可信邮箱重新开放许可。公网 R-A14、失联恢复权与生产策略仍未关闭。
+
+## 13. 找回页精简展示（2026-11-02）
+
+- `/pm/account/recovery` 使用居中的单列表单，仅保留标题、两行说明、Email、`name@example.com` 占位符、Continue 和注册提示；沿用中英文偏好。移除品牌外壳、步骤条、重复卡片标题及常驻长说明。
+- 公开注册仍未开放，Register 明确禁用；恢复邮箱仍须已登记并验证。邮件能力关闭或未知时显示简短状态并禁用提交，不伪造发信。令牌重置、错误反馈和原请求核对按需显示，协议与持久化不变。
+- 临时 Web 4339 对接本副本 PM API，Chromium 已核对 1440×900 / 390×844 布局、无横向溢出、真实未开放状态、无效链接清除 fragment 并禁止改密，以及返回登录。此轮未发邮件或修改密码，不替代真实收信验收。
+- 定向 ESLint、Web TypeScript 和隔离 Vite 构建通过；`account-recovery.test.ts` 与 `account-security-recovery.test.ts` 共6项通过、无跳过。构建仍有大 chunk 与静态/动态导入混用警告。
+- 用户授权更新服务后，`pnpm build:web` 已更新常驻网关托管的 `apps/web/dist`，保留旧哈希资源。Chromium 在正式 `3224/pm/account/recovery` 确认精简页面生效；PM readiness、Agent HTTP 与公共 Web 均返回200，API/Worker/Agent/网关 PID 未变，未重启业务服务。
+

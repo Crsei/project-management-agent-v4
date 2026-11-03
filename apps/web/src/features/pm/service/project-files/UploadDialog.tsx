@@ -6,6 +6,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { Input } from "@/components/ui/input"
 import { artifactKindFor, classifyFile, formatFileSize } from "./model"
 import styles from "./project-files.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export type UploadInput = {
   files: File[]
@@ -72,19 +73,19 @@ export function UploadDialog({ onOpenChange, artifacts, staged, stagedError, can
       <form className={styles.dialogBody} onSubmit={event => { event.preventDefault(); submit() }}>
         <label className={styles.field}>
           <span>{t("目标成果", "Target artifact")}</span>
-          <select className={styles.formSelect} value={targetArtifactId} onChange={event => { const target = artifacts.find(artifact => artifact.id === event.target.value); setTargetArtifactId(event.target.value); setTargetArtifactVersion(target?.version ?? null); setFiles([]); setError(null) }} disabled={disabled}>
+          <RadixSelect className={styles.formSelect} value={targetArtifactId} onChange={event => { const target = artifacts.find(artifact => artifact.id === event.target.value); setTargetArtifactId(event.target.value); setTargetArtifactVersion(target?.version ?? null); setFiles([]); setError(null) }} disabled={disabled}>
             <option value="">{t("创建新成果", "Create a new artifact")}</option>
             {artifacts.filter(artifact => artifact.data.hiddenAt === null).map(artifact => <option key={artifact.id} value={artifact.id}>{String(artifact.data.title)}</option>)}
-          </select>
+          </RadixSelect>
           <small>{targetArtifactId ? t("选择文件后将追加为不可变的新版本。", "The selected file becomes an immutable new version.") : t("每个文件创建一个以文件名命名的成果。", "Each file creates an artifact named after the file.")}</small>
         </label>
 
         {!!staged.length && <label className={styles.field}>
           <span>{t("或登记已暂存文件", "Or register a staged upload")}</span>
-          <select className={styles.formSelect} value={stagedId} onChange={event => chooseStaged(event.target.value)} disabled={disabled}>
+          <RadixSelect className={styles.formSelect} value={stagedId} onChange={event => chooseStaged(event.target.value)} disabled={disabled}>
             <option value="">{t("不使用暂存文件", "Do not use a staged upload")}</option>
             {staged.map(row => <option key={row.id} value={row.id}>{`${typeof row.data.fileName === "string" ? row.data.fileName : row.id} · ${formatFileSize(row.data.size)}`}</option>)}
-          </select>
+          </RadixSelect>
           {stagedError && <small className={styles.warning}>{stagedError.message}</small>}
         </label>}
 

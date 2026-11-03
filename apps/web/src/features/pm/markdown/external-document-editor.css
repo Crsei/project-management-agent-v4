@@ -1,0 +1,32 @@
+.external-document-content .cm-editor { min-height: 320px; }
+.external-document-content .cm-scroller { overflow: auto; }
+.external-document-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 24px; border-bottom: 1px solid var(--border); }
+.external-document-actions button, .external-document-content .document-source-content-heading button { min-height: 36px; height: auto; white-space: normal; }
+.external-document-notices { flex-shrink: 0; min-width: 0; max-height: 32vh; overflow: auto; }
+.external-document-notices:empty { display: none; }
+.external-document-notices .document-source-warning { margin: 8px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.external-document-notices p { margin: 0; flex-basis: 100%; }
+.external-document-notices code { max-width: 100%; overflow-wrap: anywhere; font-size: 11px; }
+.external-document-notices .text-button { min-height: 32px; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.external-document-comparison { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: var(--surface); font-family: var(--font-mono, monospace); font-size: 12px; }
+.external-management-dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.external-management-dialog .cm-editor { max-height: 300px; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; }
+.external-management-dialog .cm-content { min-height: 140px; }
+.external-management-dialog .cm-scroller { max-height: 280px; overflow: auto; }
+.external-delete-confirmation { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.6; }
+.external-delete-confirmation input { margin-top: 4px; }
+.external-delete-button { color: var(--destructive, #b42318); border-color: currentColor; }
+.external-tree-actions { display: flex; flex-wrap: wrap; gap: 3px; padding: 0 8px 6px 30px; }
+.external-tree-actions > button, .markdown-workbench .document-source-tree .external-tree-actions > button { display: inline-flex; width: auto; min-height: 28px; padding: 3px 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted-foreground); font-size: 11px; }
+.external-tree-actions > button:hover { background: var(--muted); color: var(--foreground); }
+.external-tree-actions > button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.external-tree-create { margin: 4px 8px 8px; min-height: 32px; }
+@media (max-width: 640px) {
+  .external-document-actions { padding-inline: 12px; }
+  .external-document-actions button { flex: 1 1 100px; }
+  .external-management-dialog { max-height: calc(100dvh - 24px); }
+  .external-document-notices { max-height: 26dvh; }
+}
+@media (pointer: coarse) {
+  .external-document-actions button, .external-document-content .document-source-content-heading button, .external-tree-create, .external-tree-actions > button, .markdown-workbench .document-source-tree .external-tree-actions > button { min-height: 44px; }
+}

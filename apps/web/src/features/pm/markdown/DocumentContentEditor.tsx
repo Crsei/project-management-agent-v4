@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { useLocation } from 'react-router';
@@ -18,7 +18,9 @@ import { applyStructureCommand, documentStructureCommandReasons, scanDocumentBlo
 import { applyBodyChanges, bodyEditorText, bodyOffsetFromEditor, editorOffsetFromBody, splitDocumentBody, type BodyChange } from './document-body';
 import { DocumentObjectActions } from './DocumentObjectActions';
 import { Preview } from './Preview';
+import { getDocumentEditorPosition, retainDocumentEditorPosition } from './document-workbench-state';
 import './document-editor.css';
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const commands = [...documentCommands, ...structureCommands];
 const structureIds: Record<string, true> = Object.fromEntries(structureCommands.map(command => [command.id, true]));
@@ -59,6 +61,8 @@ function selectDocumentFragment(editor: EditorView, raw: string, hash: string) {
 export function DocumentContentEditor({ controller: c, en, onSource }: { controller: WorkspaceController; en: boolean; onSource: () => void }) {
   const location = useLocation();
   const view = useRef<EditorView | null>(null);
+  const previewPane = useRef<HTMLElement | null>(null);
+  const restoreFrame = useRef(0);
   const latest = useRef(c);
   latest.current = c;
   const pendingBody = useRef<string | null>(null);
@@ -68,7 +72,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
   const disabled = !c.canEditSourceDraft || !split;
   const [selection, setSelection] = useState({ from: 0, to: 0 });
   const [history, setHistory] = useState({ undo: 0, redo: 0 });
-  const [layout, setLayout] = useState<'split' | 'edit' | 'preview'>('edit');
+  const [layout, setLayout] = useState<'split' | 'edit' | 'preview'>(() => getDocumentEditorPosition(c.session, c.selectedId, 'body')?.layout ?? 'preview');
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [menu, setMenu] = useState<{ target: Target; x?: number; y?: number } | null>(null);
   const [palette, setPalette] = useState<{ target: Target; query: string; index: number } | null>(null);
@@ -79,11 +83,34 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
   const commandReasons = useMemo(() => documentStructureCommandReasons(body, selection), [body, selection]);
   const label = (english: string, zh: string) => en ? english : zh;
   const commandLabel = (command: DocumentCommandDefinition) => en ? command.labelEn : command.label;
+  const positionState = useRef({ layout });
+  positionState.current.layout = layout;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  function retainPosition() {
+    const editor = view.current;
+    if (!editor) return;
+    const range = editor.state.selection.main;
+    retainDocumentEditorPosition(c.session, c.selectedId, 'body', { anchor: range.anchor, head: range.head, scrollTop: editor.scrollDOM.scrollTop, scrollLeft: editor.scrollDOM.scrollLeft, previewScrollTop: previewPane.current?.scrollTop, layout: positionState.current.layout });
+  }
+  const retainLatestPosition = useRef(retainPosition);
+  retainLatestPosition.current = retainPosition;
+  useLayoutEffect(() => () => { cancelAnimationFrame(restoreFrame.current); retainLatestPosition.current(); }, []);
   useEffect(() => {
     if (!location.hash) return;
     let positionFrame = 0;
     const revealFrame = requestAnimationFrame(() => {
-      setLayout('edit');
+      if (layoutRef.current === 'preview') {
+        positionFrame = requestAnimationFrame(() => {
+          let fragment: string;
+          try { fragment = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+          const slug = headingSlug(fragment);
+          const match = Array.from(document.querySelectorAll<HTMLElement>('.document-preview-pane .markdown-preview h1, .document-preview-pane .markdown-preview h2, .document-preview-pane .markdown-preview h3, .document-preview-pane .markdown-preview h4, .document-preview-pane .markdown-preview h5, .document-preview-pane .markdown-preview h6')).find(element => element.id.endsWith(`heading-${slug}`));
+          if (match) match.scrollIntoView({ block: 'start' });
+          else if (previewPane.current) previewPane.current.scrollTop = 0;
+        });
+        return;
+      }
       positionFrame = requestAnimationFrame(() => {
         const controller = latest.current;
         if (view.current) selectDocumentFragment(view.current, controller.session.drafts.getSnapshot()[controller.selectedId]?.raw ?? controller.selected?.raw ?? '', location.hash);
@@ -193,6 +220,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
 
   function update(editorUpdate: ViewUpdate) {
     if (!editorUpdate.selectionSet && !editorUpdate.docChanged) return;
+    retainPosition();
     const current = target();
     setSelection(previous => previous.from === current.from && previous.to === current.to ? previous : { from: current.from, to: current.to });
     const undoCount = undoDepth(editorUpdate.state);
@@ -243,56 +271,83 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
   const block = blocks.find(candidate => selection.from >= candidate.from && selection.from < candidate.to);
 
   return <div className={`document-content-editor document-layout-${layout}`} data-testid="document-content-editor">
-    {disabled && <p className="document-editor-note" role="status">{readonlyReason}</p>}
-    {!split && <button type="button" className="text-button" onClick={onSource}>{label('Repair Markdown source', '修复 Markdown 源码')}</button>}
-    <div className="document-format-toolbar" role="toolbar" aria-label={label('Markdown formatting', 'Markdown 格式工具栏')}>
-      {([['bold', Bold], ['italic', Italic], ['inline-code', Code2], ['unordered-list', List]] as const).map(([id, Icon]) => {
-        const command = commands.find(candidate => candidate.id === id);
-        return command && <button type="button" key={id} aria-label={commandLabel(command)} title={disabled ? readonlyReason : commandLabel(command)} disabled={disabled} onPointerDown={event => event.preventDefault()} onClick={() => run(command)}><Icon size={16} /></button>;
-      })}
-      <DropdownMenu open={!!menu} onOpenChange={open => { if (open) setMenu(current => current ?? { target: target() }); else setMenu(null); }}><DropdownMenuTrigger asChild><button type="button" aria-label={label('All formatting and editing commands', '全部格式与编辑命令')} title={label('Formatting menu · also available by right-click', '格式菜单 · 也可右键打开')} className={menu?.x !== undefined ? 'document-context-anchor' : ''} style={menu?.x !== undefined ? { left: menu.x, top: menu.y } : undefined}><MoreHorizontal size={16} /><ChevronDown size={11} /></button></DropdownMenuTrigger><DropdownMenuContent className="document-menu" align="start" onCloseAutoFocus={event => event.preventDefault()}>
-        <DropdownMenuItem disabled={disabled || !history.undo} onSelect={() => historyAction(undo)}>{label('Undo', '撤销')}</DropdownMenuItem>
-        <DropdownMenuItem disabled={disabled || !history.redo} onSelect={() => historyAction(redo)}>{label('Redo', '重做')}</DropdownMenuItem>
-        <DropdownMenuSeparator className="document-menu-separator" />
-        {(['cut', 'copy', 'paste', 'plain-paste'] as const).map(action => <DropdownMenuItem key={action} disabled={action !== 'copy' && disabled || ['copy', 'cut'].includes(action) && selection.from === selection.to} onSelect={() => void clipboard(action, menu?.target ?? target())}>{action === 'cut' ? label('Cut', '剪切') : action === 'copy' ? label('Copy', '复制') : action === 'paste' ? label('Paste Markdown text', '粘贴 Markdown 文本') : label('Paste as plain text', '纯文本粘贴')}</DropdownMenuItem>)}
-        <DropdownMenuSeparator className="document-menu-separator" />{groups.map(renderGroup)}
-        <DropdownMenuSeparator className="document-menu-separator" /><DropdownMenuItem onSelect={() => { if (view.current) openSearchPanel(view.current); }}>{label('Find / replace', '查找 / 替换')}</DropdownMenuItem><DropdownMenuItem onSelect={openPalette}>{label('Search all commands…', '搜索全部命令…')}<kbd>Ctrl/⌘ P</kbd></DropdownMenuItem>
-      </DropdownMenuContent></DropdownMenu>
-      <select aria-label={label('Heading or paragraph style', '标题或段落样式')} value="" disabled={disabled} onChange={event => { const command = commands.find(candidate => candidate.id === event.target.value); if (command) run(command); }}><option value="">{label('Paragraph', '段落')}</option>{byIds(['paragraph', 'heading-1', 'heading-2', 'heading-3', 'heading-4', 'heading-5', 'heading-6', 'blockquote', 'task-list', 'strike', 'link', 'image', 'table', 'highlight-yellow']).map(command => <option key={command.id} value={command.id}>{commandLabel(command)}</option>)}</select>
-      <span className="document-toolbar-divider" />
-      <button type="button" disabled={disabled || !history.undo} aria-label={label('Undo', '撤销')} onPointerDown={event => event.preventDefault()} onClick={() => historyAction(undo)}><Undo2 size={16} /></button>
-      <button type="button" disabled={disabled || !history.redo} aria-label={label('Redo', '重做')} onPointerDown={event => event.preventDefault()} onClick={() => historyAction(redo)}><Redo2 size={16} /></button>
-      <button type="button" aria-label={label('Find / replace', '查找 / 替换')} onClick={() => { if (view.current) openSearchPanel(view.current); }}><Search size={16} /></button>
-      <button type="button" onClick={openPalette} aria-label={label('Search commands', '搜索命令')} title={label('Editor commands · Ctrl/⌘ P · slash at line start', '编辑命令 · Ctrl/⌘ P · 行首输入 /')}>/</button>
+    {layout !== 'preview' && disabled && <p className="document-editor-note" role="status">{readonlyReason}</p>}
+    {layout !== 'preview' && !split && <button type="button" className="text-button" onClick={onSource}>{label('Repair Markdown source', '修复 Markdown 源码')}</button>}
+    <div className="document-format-toolbar" role="toolbar" aria-label={layout === 'preview' ? label('Document view', '文档视图') : label('Markdown formatting', 'Markdown 格式工具栏')}>
+      {layout !== 'preview' && <>
+        {([['bold', Bold], ['italic', Italic], ['inline-code', Code2], ['unordered-list', List]] as const).map(([id, Icon]) => {
+          const command = commands.find(candidate => candidate.id === id);
+          return command && <button type="button" key={id} aria-label={commandLabel(command)} title={disabled ? readonlyReason : commandLabel(command)} disabled={disabled} onPointerDown={event => event.preventDefault()} onClick={() => run(command)}><Icon size={16} /></button>;
+        })}
+        <DropdownMenu open={!!menu} onOpenChange={open => { if (open) setMenu(current => current ?? { target: target() }); else setMenu(null); }}><DropdownMenuTrigger asChild><button type="button" aria-label={label('All formatting and editing commands', '全部格式与编辑命令')} title={label('Formatting menu · also available by right-click', '格式菜单 · 也可右键打开')} className={menu?.x !== undefined ? 'document-context-anchor' : ''} style={menu?.x !== undefined ? { left: menu.x, top: menu.y } : undefined}><MoreHorizontal size={16} /><ChevronDown size={11} /></button></DropdownMenuTrigger><DropdownMenuContent className="document-menu" align="start" onCloseAutoFocus={event => event.preventDefault()}>
+          <DropdownMenuItem disabled={disabled || !history.undo} onSelect={() => historyAction(undo)}>{label('Undo', '撤销')}</DropdownMenuItem>
+          <DropdownMenuItem disabled={disabled || !history.redo} onSelect={() => historyAction(redo)}>{label('Redo', '重做')}</DropdownMenuItem>
+          <DropdownMenuSeparator className="document-menu-separator" />
+          {(['cut', 'copy', 'paste', 'plain-paste'] as const).map(action => <DropdownMenuItem key={action} disabled={action !== 'copy' && disabled || ['copy', 'cut'].includes(action) && selection.from === selection.to} onSelect={() => void clipboard(action, menu?.target ?? target())}>{action === 'cut' ? label('Cut', '剪切') : action === 'copy' ? label('Copy', '复制') : action === 'paste' ? label('Paste Markdown text', '粘贴 Markdown 文本') : label('Paste as plain text', '纯文本粘贴')}</DropdownMenuItem>)}
+          <DropdownMenuSeparator className="document-menu-separator" />{groups.map(renderGroup)}
+          <DropdownMenuSeparator className="document-menu-separator" /><DropdownMenuItem onSelect={() => { if (view.current) openSearchPanel(view.current); }}>{label('Find / replace', '查找 / 替换')}</DropdownMenuItem><DropdownMenuItem onSelect={openPalette}>{label('Search all commands…', '搜索全部命令…')}<kbd>Ctrl/⌘ P</kbd></DropdownMenuItem>
+        </DropdownMenuContent></DropdownMenu>
+        <RadixSelect aria-label={label('Heading or paragraph style', '标题或段落样式')} value="" disabled={disabled} onChange={event => { const command = commands.find(candidate => candidate.id === event.target.value); if (command) run(command); }}><option value="">{label('Paragraph', '段落')}</option>{byIds(['paragraph', 'heading-1', 'heading-2', 'heading-3', 'heading-4', 'heading-5', 'heading-6', 'blockquote', 'task-list', 'strike', 'link', 'image', 'table', 'highlight-yellow']).map(command => <option key={command.id} value={command.id}>{commandLabel(command)}</option>)}</RadixSelect>
+        <span className="document-toolbar-divider" />
+        <button type="button" disabled={disabled || !history.undo} aria-label={label('Undo', '撤销')} onPointerDown={event => event.preventDefault()} onClick={() => historyAction(undo)}><Undo2 size={16} /></button>
+        <button type="button" disabled={disabled || !history.redo} aria-label={label('Redo', '重做')} onPointerDown={event => event.preventDefault()} onClick={() => historyAction(redo)}><Redo2 size={16} /></button>
+        <button type="button" aria-label={label('Find / replace', '查找 / 替换')} onClick={() => { if (view.current) openSearchPanel(view.current); }}><Search size={16} /></button>
+        <button type="button" onClick={openPalette} aria-label={label('Search commands', '搜索命令')} title={label('Editor commands · Ctrl/⌘ P · slash at line start', '编辑命令 · Ctrl/⌘ P · 行首输入 /')}>/</button>
+      </>}
       <button type="button" aria-label={label('Toggle outline', '切换大纲')} aria-pressed={outlineOpen} onClick={() => setOutlineOpen(open => !open)}><ListTree size={16} /></button>
-      <div className="document-layout-controls" role="group" aria-label={label('Editor layout', '编辑器布局')}>{([['edit', Code2, 'Editor', '编辑器'], ['split', Columns2, 'Editor and preview', '编辑与预览'], ['preview', Eye, 'Preview', '预览']] as const).map(([mode, Icon, english, zh]) => <button type="button" key={mode} aria-label={label(english, zh)} aria-pressed={layout === mode} onClick={() => setLayout(mode)}><Icon size={16} /></button>)}</div>
+      <div className="document-layout-controls" role="group" aria-label={label('Editor layout', '编辑器布局')}>{([['preview', Eye, 'Reading', '阅读'], ['edit', Code2, 'Source', '源码'], ['split', Columns2, 'Split', '分栏']] as const).map(([mode, Icon, english, zh]) => <button type="button" key={mode} aria-label={label(english, zh)} aria-pressed={layout === mode} onClick={() => setLayout(mode)}><Icon size={16} /></button>)}</div>
     </div>
     {error && <p className="document-editor-error" role="alert">{error}<button type="button" onClick={() => setError('')} aria-label={label('Dismiss editor error', '关闭编辑错误')}>×</button></p>}
     <div className="document-editing-workspace">
-      {outlineOpen && <aside className="document-outline" aria-label={label('Document outline and blocks', '文档大纲与内容块')}>
+      {outlineOpen && <aside className="document-outline" aria-label={layout === 'preview' ? label('Document outline', '文档大纲') : label('Document outline and blocks', '文档大纲与内容块')}>
         <strong>{label('Outline', '大纲')}</strong>
-        <div className="document-fold-controls">{([[foldAll, 'Fold all', '全部折叠'], [unfoldAll, 'Unfold all', '全部展开'], [foldCode, 'Fold current block', '折叠当前块'], [unfoldCode, 'Unfold current block', '展开当前块']] as const).map(([action, english, zh]) => <button type="button" key={english} onClick={() => { if (view.current) action(view.current); }}>{label(english, zh)}</button>)}</div>
+        {layout !== 'preview' && <div className="document-fold-controls">{([[foldAll, 'Fold all', '全部折叠'], [unfoldAll, 'Unfold all', '全部展开'], [foldCode, 'Fold current block', '折叠当前块'], [unfoldCode, 'Unfold current block', '展开当前块']] as const).map(([action, english, zh]) => <button type="button" key={english} onClick={() => { if (view.current) action(view.current); }}>{label(english, zh)}</button>)}</div>}
         {!outline.length && <p>{label('No Markdown headings yet.', '还没有 Markdown 标题。')}</p>}
-        {outline.map(heading => <button type="button" key={heading.from} style={{ paddingInlineStart: `${8 + (heading.level - 1) * 10}px` }} onClick={() => { const editor = view.current; if (!editor) return; const position = editorOffsetFromBody(body, heading.from); setLayout(mode => mode === 'preview' ? 'edit' : mode); editor.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: 'start' }) }); editor.focus(); }}>{heading.title}</button>)}
-        <strong>{label('Blocks · drag to reorder', '内容块 · 拖动排序')}</strong>
-        <p>{label('Select a block to use the Move up/down buttons, or drag it onto another block.', '选择内容块后可用上移/下移按钮，也可拖到另一个内容块上。')}</p>
-        {blocks.map((range, index) => <button type="button" key={`${range.from}:${range.to}`} draggable={!disabled} aria-label={`${label('Select or drag block', '选择或拖动内容块')} ${index + 1}: ${range.kind}`} disabled={disabled} onClick={() => {
+        {outline.map(heading => <button type="button" key={heading.from} style={{ paddingInlineStart: `${8 + (heading.level - 1) * 10}px` }} onClick={() => {
+          if (layout === 'preview') {
+            const match = Array.from(document.querySelectorAll<HTMLElement>('.document-preview-pane .markdown-preview h1, .document-preview-pane .markdown-preview h2, .document-preview-pane .markdown-preview h3, .document-preview-pane .markdown-preview h4, .document-preview-pane .markdown-preview h5, .document-preview-pane .markdown-preview h6')).find(element => element.textContent?.trim() === heading.title);
+            (match || previewPane.current)?.scrollIntoView({ block: 'start' });
+            return;
+          }
           const editor = view.current;
           if (!editor) return;
-          editor.dispatch({ selection: EditorSelection.range(editorOffsetFromBody(body, range.from), editorOffsetFromBody(body, range.to)), scrollIntoView: true });
-          setLayout(mode => mode === 'preview' ? 'edit' : mode);
+          const position = editorOffsetFromBody(body, heading.from);
+          editor.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: 'start' }) });
           editor.focus();
-        }} onDragStart={event => {
-          const editor = view.current;
-          if (!editor || disabled) { event.preventDefault(); return; }
-          editor.dispatch({ selection: EditorSelection.range(editorOffsetFromBody(body, range.from), editorOffsetFromBody(body, range.to)) });
-          draggedBlock.current = { target: target(), index };
-          event.dataTransfer.effectAllowed = 'move';
-          event.dataTransfer.setData('application/x-pm-document-block', String(index));
-        }} onDragOver={event => { if (!disabled && draggedBlock.current) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }} onDrop={event => { event.preventDefault(); dropBlock(index); }} onDragEnd={() => { draggedBlock.current = null; }}>⠿ {index + 1} · {range.kind}<small>{body.slice(range.from, range.to).replace(/\s+/g, ' ').slice(0, 60)}</small></button>)}
+        }}>{heading.title}</button>)}
+        {layout !== 'preview' && <>
+          <strong>{label('Blocks · drag to reorder', '内容块 · 拖动排序')}</strong>
+          <p>{label('Select a block to use the Move up/down buttons, or drag it onto another block.', '选择内容块后可用上移/下移按钮，也可拖到另一个内容块上。')}</p>
+          {blocks.map((range, index) => <button type="button" key={`${range.from}:${range.to}`} draggable={!disabled} aria-label={`${label('Select or drag block', '选择或拖动内容块')} ${index + 1}: ${range.kind}`} disabled={disabled} onClick={() => {
+            const editor = view.current;
+            if (!editor) return;
+            editor.dispatch({ selection: EditorSelection.range(editorOffsetFromBody(body, range.from), editorOffsetFromBody(body, range.to)), scrollIntoView: true });
+            editor.focus();
+          }} onDragStart={event => {
+            const editor = view.current;
+            if (!editor || disabled) { event.preventDefault(); return; }
+            editor.dispatch({ selection: EditorSelection.range(editorOffsetFromBody(body, range.from), editorOffsetFromBody(body, range.to)) });
+            draggedBlock.current = { target: target(), index };
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('application/x-pm-document-block', String(index));
+          }} onDragOver={event => { if (!disabled && draggedBlock.current) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }} onDrop={event => { event.preventDefault(); dropBlock(index); }} onDragEnd={() => { draggedBlock.current = null; }}>⠿ {index + 1} · {range.kind}<small>{body.slice(range.from, range.to).replace(/\s+/g, ' ').slice(0, 60)}</small></button>)}
+        </>}
       </aside>}
       <section className="document-body-pane" aria-label={label('Editable Markdown body', '可编辑 Markdown 正文')}>
-        <CodeMirror value={bodyEditorText(body)} extensions={extensions} minHeight="340px" editable={!disabled} readOnly={disabled} aria-label={label('Document content', '文档内容')} data-testid="document-body-editor" basicSetup={{ lineNumbers: false, foldGutter: true, highlightActiveLine: true, highlightSelectionMatches: true }} onCreateEditor={editor => { view.current = editor; setHistory({ undo: undoDepth(editor.state), redo: redoDepth(editor.state) }); selectDocumentFragment(editor, latest.current.raw, window.location.hash); }} onUpdate={update} onChange={(_value, change) => {
+        <CodeMirror value={bodyEditorText(body)} extensions={extensions} minHeight="340px" editable={!disabled} readOnly={disabled} aria-label={label('Document content', '文档内容')} data-testid="document-body-editor" basicSetup={{ lineNumbers: false, foldGutter: true, highlightActiveLine: true, highlightSelectionMatches: true }} onCreateEditor={editor => {
+          view.current = editor;
+          setHistory({ undo: undoDepth(editor.state), redo: redoDepth(editor.state) });
+          const position = getDocumentEditorPosition(c.session, c.selectedId, 'body');
+          if (position) editor.dispatch({ selection: { anchor: Math.min(position.anchor, editor.state.doc.length), head: Math.min(position.head, editor.state.doc.length) } });
+          editor.scrollDOM.addEventListener('scroll', () => retainLatestPosition.current(), { passive: true });
+          restoreFrame.current = requestAnimationFrame(() => {
+            if (position) {
+              editor.scrollDOM.scrollTop = position.scrollTop; editor.scrollDOM.scrollLeft = position.scrollLeft;
+              if (previewPane.current) previewPane.current.scrollTop = position.previewScrollTop ?? 0;
+            }
+            selectDocumentFragment(editor, latest.current.raw, window.location.hash);
+          });
+        }} onUpdate={update} onChange={(_value, change) => {
           const controller = latest.current;
           const raw = controller.session.drafts.getSnapshot()[controller.selectedId]?.raw ?? controller.selected?.raw ?? '';
           const parts = splitDocumentBody(raw);
@@ -302,7 +357,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
           controller.updateDraft(parts.prefix + (pendingBody.current ?? applyBodyChanges(parts.body, changes)));
         }} />
       </section>
-      <section className="document-preview-pane" aria-label={label('Live draft preview', '实时草稿预览')}><div className="document-pane-label">{label('Live preview · same unsaved draft', '实时预览 · 同一未保存草稿')}</div><Preview raw={c.raw} body={body} viewProps={{ ...c.viewProps, files: c.projected, allFiles: c.projected }} disabled={disabled || c.draftParseError} onToggle={line => {
+      <section ref={previewPane} onScroll={retainPosition} className="document-preview-pane" aria-label={label('Live draft preview', '实时草稿预览')}>{layout !== 'preview' && <div className="document-pane-label">{label('Live preview · same unsaved draft', '实时预览 · 同一未保存草稿')}</div>}<Preview raw={c.raw} body={body} viewProps={{ ...c.viewProps, files: c.projected, allFiles: c.projected }} hideTitle disabled={disabled || c.draftParseError} onToggle={line => {
         const expected = target();
         try {
           const { prefix, body: text } = requireTarget(expected);
@@ -314,12 +369,12 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
         } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
       }} onLink={c.wikiLink} /></section>
     </div>
-    <div className="document-block-controls" role="group" aria-label={label('Current block actions', '当前块操作')}><span>{block ? `${label('Block', '块')} · ${block.kind}` : label('Select a block', '选择正文块')}</span>{byIds(['block-move-up', 'block-move-down', 'block-duplicate', 'block-delete']).map(command => <button type="button" key={command.id} disabled={disabled || !block || !!commandReasons[command.id]} title={disabled ? readonlyReason : commandReasons[command.id] || undefined} onPointerDown={event => event.preventDefault()} onClick={() => run(command)}>{commandLabel(command)}</button>)}</div>
-    <DocumentObjectActions controller={c} en={en} selection={{ ...selection, text: body.slice(selection.from, selection.to) }} disabled={disabled || c.draftInvalid} onInsert={markdownText => {
+    {layout !== 'preview' && block && <div className="document-block-controls" role="group" aria-label={label('Current block actions', '当前块操作')}><span>{`${label('Block', '块')} · ${block.kind}`}</span>{byIds(['block-move-up', 'block-move-down', 'block-duplicate', 'block-delete']).map(command => <button type="button" key={command.id} disabled={disabled || !!commandReasons[command.id]} title={disabled ? readonlyReason : commandReasons[command.id] || undefined} onPointerDown={event => event.preventDefault()} onClick={() => run(command)}>{commandLabel(command)}</button>)}</div>}
+    {layout !== 'preview' && <DocumentObjectActions controller={c} en={en} selection={{ ...selection, text: body.slice(selection.from, selection.to) }} disabled={disabled || c.draftInvalid} onInsert={markdownText => {
       const { body: text } = requireTarget(insertionTarget);
       apply({ text: text.slice(0, insertionTarget.from) + markdownText + text.slice(insertionTarget.to), selection: { from: insertionTarget.from + markdownText.length, to: insertionTarget.from + markdownText.length } }, insertionTarget);
-    }} />
-    <p className="document-editor-hint">{label('Markdown is the source of truth, including the H1 title. Real-time saving is on: edits save automatically after they settle, and Save or Ctrl/⌘ S writes immediately. At line start, / opens commands.', 'Markdown（含 H1 标题）是唯一正文来源。实时保存已开启：停止输入后自动写入，也可点击保存或 Ctrl/⌘ S 立即写入。行首输入 / 打开命令。')}</p>
+    }} />}
+    {layout !== 'preview' && <p className="document-editor-hint">{label('Markdown is the source of truth, including the H1 title. Real-time saving is on: edits save automatically after they settle, and Save or Ctrl/⌘ S writes immediately. At line start, / opens commands.', 'Markdown（含 H1 标题）是唯一正文来源。实时保存已开启：停止输入后自动写入，也可点击保存或 Ctrl/⌘ S 立即写入。行首输入 / 打开命令。')}</p>}
     <Dialog open={!!palette} onOpenChange={open => { if (!open) setPalette(null); }}><DialogContent className="document-command-dialog" finalFocus={() => view.current?.contentDOM ?? null}><DialogTitle>{label('Editor commands', '编辑器命令')}</DialogTitle><DialogDescription>{label('Search all formatting, insertion and structural commands. Applies to the selection you opened this menu with.', '搜索全部格式、插入和结构命令，操作打开菜单时的选区。')}</DialogDescription><input autoFocus aria-label={label('Search editor commands', '搜索编辑器命令')} value={palette?.query ?? ''} onChange={event => setPalette(current => current && { ...current, query: event.target.value, index: 0 })} onKeyDown={event => {
       if (!palette || !filtered.length) return;
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setPalette({ ...palette, index: (palette.index + (event.key === 'ArrowDown' ? 1 : filtered.length - 1)) % filtered.length }); }

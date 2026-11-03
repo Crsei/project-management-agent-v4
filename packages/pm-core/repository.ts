@@ -1,7 +1,9 @@
-import { constants, closeSync, existsSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, linkSync } from 'node:fs';
+import { constants, closeSync, fstatSync, fsyncSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, unlinkSync, writeFileSync, linkSync, type BigIntStats } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { ProjectLocations, assertProjectFile } from './project-locations.ts';
+import { checkedFileOpen, directoryIdentity, fileStamp, pathContains, safeRelativePath, sameFileIdentity, samePath, syncDirectory } from './platform.ts';
+import { assertNoWindowsReparsePath, cacheWindowsPathAttributes } from './windows-reparse.ts';
 
 export const revisionOf = (raw: string): string => createHash('sha256').update(raw).digest('hex');
 export const maxRepositoryFileBytes = 4 * 1024 * 1024;
@@ -14,6 +16,7 @@ export class FileRepository {
   readonly root: string;
   private readonly locations?: ProjectLocations;
   private readonly validateStorage: (() => void) | undefined;
+  private rootIdentity: BigIntStats | undefined;
 
   constructor(root: string, mounted = true, validateStorage?: () => void) {
     this.root = path.resolve(root);
@@ -22,20 +25,27 @@ export class FileRepository {
   }
 
   init(): void {
+    if (this.rootIdentity) this.assertRoot();
     mkdirSync(this.root, { recursive: true });
-    if (lstatSync(this.root).isSymbolicLink() || realpathSync(this.root) !== this.root) {
-      throw new Error('Workspace must be a real directory, not a symbolic-link path');
-    }
+    this.assertRoot();
     this.mkdir('.pm');
     this.mkdir('.pm/cache');
     this.mkdir('.pm/views');
     this.mkdir('.pm/state');
   }
 
+  private assertRoot(): void {
+    const stat = directoryIdentity(this.root);
+    if (this.rootIdentity && !sameFileIdentity(this.rootIdentity, stat)) throw new Error('Workspace directory was replaced');
+    this.rootIdentity ??= stat;
+  }
+
   private projectPath(relative: string): { repository: FileRepository; relative: string } | undefined {
+    const namespace = relative.split('/')[0]!;
+    if (process.platform !== 'linux' && namespace.toLowerCase() === 'project-roots' && namespace !== 'project-roots') throw new Error('Unsafe virtual project path alias');
     if (relative !== 'project-roots' && !relative.startsWith('project-roots/')) return undefined;
     const [, projectId, ...parts] = relative.split('/');
-    if (!projectId || !/^PRJ-\d+$/.test(projectId) || !parts.length || parts.some(part => !part || part === '.' || part === '..' || part === '.pm' || part.includes('\\') || part.includes('\0'))) throw new Error('Unsafe virtual project path');
+    if (!projectId || !/^PRJ-\d+$/.test(projectId) || !parts.length || !safeRelativePath(parts.join('/')) || parts.some(part => part.toLowerCase() === '.pm')) throw new Error('Unsafe virtual project path');
     try {
       const mount = this.locations?.route(projectId);
       if (!mount) throw new Error('Unregistered project');
@@ -52,27 +62,26 @@ export class FileRepository {
 
   resolve(relative: string, allowMissing = false): string {
     this.validateStorage?.();
-    if (!relative || path.isAbsolute(relative) || relative.includes('\0') || relative.split(/[\\/]/).some(part => part === '..' || part === '')) {
-      throw new Error('Unsafe workspace path');
-    }
-    if (relative.includes('\\') || relative.split('/').some(part => part === '.')) throw new Error('Unsafe workspace path');
+    if (!safeRelativePath(relative)) throw new Error('Unsafe workspace path');
     const project = this.projectPath(relative);
     if (project) {
       try { return project.repository.resolve(project.relative, allowMissing); }
       catch (error) { throw this.projectError(error, relative); }
     }
     const target = path.resolve(this.root, relative);
-    if (!target.startsWith(this.root + path.sep)) throw new Error('Path escapes workspace');
-    if (lstatSync(this.root).isSymbolicLink() || realpathSync(this.root) !== this.root) throw new Error('Workspace path changed');
+    if (!pathContains(this.root, target) || target === this.root) throw new Error('Path escapes workspace');
+    this.assertRoot();
     let current = this.root;
     const parts = relative.split('/');
     for (let i = 0; i < parts.length; i++) {
       current = path.join(current, parts[i]!);
       try {
-        const stat = lstatSync(current);
+        const stat = lstatSync(current, { bigint: true });
         if (stat.isSymbolicLink()) throw new Error(`Symbolic links are not allowed: ${relative}`);
+        if (process.platform !== 'linux' && !samePath(realpathSync(current), current)) throw new Error(`Reparse aliases are not allowed: ${relative}`);
         if (!stat.isFile() && !stat.isDirectory()) throw new Error(`Only regular files and directories are allowed: ${relative}`);
-        if (stat.isFile() && stat.nlink > 1) throw new Error(`Hard-linked files are not allowed: ${relative}`);
+        assertNoWindowsReparsePath(current, stat);
+        if (stat.isFile() && stat.nlink > 1n) throw new Error(`Hard-linked files are not allowed: ${relative}`);
         if (i < parts.length - 1 && !stat.isDirectory()) throw new Error(`Not a directory: ${relative}`);
       } catch (error) {
         if (allowMissing && (error as NodeJS.ErrnoException).code === 'ENOENT') return target;
@@ -96,8 +105,7 @@ export class FileRepository {
       const parent = path.dirname(firstCreated);
       let directory = target;
       for (;;) {
-        const fd = openSync(directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-        try { fsyncSync(fd); } finally { closeSync(fd); }
+        syncDirectory(directory);
         if (directory === parent) break;
         directory = path.dirname(directory);
       }
@@ -111,13 +119,17 @@ export class FileRepository {
       catch (error) { throw this.projectError(error, relative); }
     }
     const filename = this.resolve(relative);
-    const fd = openSync(filename, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const fd = checkedFileOpen(filename, constants.O_RDONLY);
     try {
       const stat = fstatSync(fd);
       if (!stat.isFile() || stat.nlink > 1) throw new Error(`Only regular, unlinked workspace files are allowed: ${relative}`);
       // Durable state embeds a recovery journal and may exceed the Markdown content limit.
       if (!['.pm/state/state.json', '.pm/state/project-locations.json', '.pm/state/service-observations.json', '.pm/state/pm-command-journal.ndjson'].includes(relative) && stat.size > maxRepositoryFileBytes) throw new Error(`File exceeds the 4 MiB limit: ${relative}`);
-      return readFileSync(fd, 'utf8');
+      const before = fileStamp(fstatSync(fd, { bigint: true }));
+      const raw = readFileSync(fd, 'utf8');
+      if (fileStamp(fstatSync(fd, { bigint: true })) !== before || fileStamp(lstatSync(filename, { bigint: true })) !== before) throw new RepositoryConflict('File changed while reading');
+      this.resolve(relative);
+      return raw;
     } finally {
       closeSync(fd);
     }
@@ -130,8 +142,10 @@ export class FileRepository {
     const walk = (directory: string): void => {
       let entries;
       try {
+        if (!directory) this.assertRoot();
         const absolute = directory ? this.resolve(directory) : this.root;
         entries = readdirSync(absolute, { withFileTypes: true });
+        if (process.platform === 'win32') cacheWindowsPathAttributes(entries.map(entry => path.join(absolute, entry.name)));
       } catch (error) {
         errors.push({ path: directory || '.', message: (error as Error).message });
         return;
@@ -139,7 +153,7 @@ export class FileRepository {
       const retired = this.locations?.retiredPaths() ?? new Set<string>();
       for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
         const relative = directory ? `${directory}/${entry.name}` : entry.name;
-        if (relative === 'project-roots') { errors.push({ path: relative, message: 'Physical files cannot occupy the virtual project mount namespace' }); continue; }
+        if ((process.platform === 'linux' ? relative : relative.toLowerCase()) === 'project-roots') { errors.push({ path: relative, message: 'Physical files cannot occupy the virtual project mount namespace' }); continue; }
         if (entry.name.startsWith('.pm-write-') || relative === '.pm/cache' || relative === '.pm/state' || retired.has(relative)) continue;
         if (entry.isSymbolicLink()) {
           errors.push({ path: relative, message: 'Symbolic links are not allowed in the workspace' });
@@ -186,7 +200,7 @@ export class FileRepository {
     const temporary = path.join(path.dirname(filename), `.pm-write-${randomUUID()}`);
     let fd: number | undefined;
     try {
-      fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+      fd = checkedFileOpen(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
       writeFileSync(fd, raw, 'utf8');
       fsyncSync(fd);
       closeSync(fd);
@@ -195,7 +209,10 @@ export class FileRepository {
       if (expectedRevision !== undefined) {
         let actual: string;
         try { actual = revisionOf(this.read(relative)); }
-        catch { throw new RepositoryConflict('File disappeared or is no longer safe to write'); }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new RepositoryConflict('File disappeared or is no longer safe to write');
+          throw error;
+        }
         if (actual !== expectedRevision) throw new RepositoryConflict('File changed on disk');
         renameSync(temporary, filename);
       } else {
@@ -207,11 +224,10 @@ export class FileRepository {
         }
         unlinkSync(temporary);
       }
-      const directoryFd = openSync(path.dirname(filename), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-      try { fsyncSync(directoryFd); } finally { closeSync(directoryFd); }
+      syncDirectory(path.dirname(filename));
     } finally {
       if (fd !== undefined) closeSync(fd);
-      if (existsSync(temporary)) unlinkSync(temporary);
+      try { unlinkSync(temporary); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     }
   }
 
@@ -225,8 +241,7 @@ export class FileRepository {
     const filename = this.resolve(relative);
     if (revisionOf(this.read(relative)) !== expectedRevision) throw new RepositoryConflict('File changed on disk');
     unlinkSync(filename);
-    const directoryFd = openSync(path.dirname(filename), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-    try { fsyncSync(directoryFd); } finally { closeSync(directoryFd); }
+    syncDirectory(path.dirname(filename));
   }
 }
 

@@ -22,7 +22,7 @@
 .markdown-workbench .task-complete:hover:not(:disabled) { color: var(--foreground); background: var(--surface-hover); }
 .markdown-workbench .task-complete.is-completed { color: var(--success); }
 .markdown-workbench .task-complete-picker { padding: 0 3px; }
-.markdown-workbench .task-complete-picker select { max-width: 135px; padding: 3px 1px; border: 0; background: transparent; color: inherit; font-size: 11px; }
+.markdown-workbench .task-complete-picker [data-slot="select-trigger"] { max-width: 135px; padding: 3px 1px; border: 0; background: transparent; color: inherit; font-size: 11px; }
 .markdown-workbench .task-copy-status { padding: 6px 16px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px; }
 .markdown-workbench .task-detail-modes { display: flex; align-items: center; justify-content: space-between; min-width: 0; border-bottom: 1px solid var(--border); padding-right: 14px; flex-shrink: 0; }
 .markdown-workbench .task-detail-modes .detail-tabs { border: 0; min-width: 0; }
@@ -38,9 +38,9 @@
 .markdown-workbench .task-property dt { display: flex; align-items: center; gap: 8px; min-width: 0; padding-top: 7px; font-size: 12px; color: var(--muted-foreground); }
 .markdown-workbench .task-property dt svg { opacity: .85; }
 .markdown-workbench .task-property dd { min-width: 0; margin: 0; }
-.markdown-workbench .task-property dd > :is(input, select), .markdown-workbench .task-points-input > input { width: 100%; max-width: 100%; min-height: 29px; padding: 4px 7px; border-color: transparent; border-radius: var(--control-radius); background: transparent; color: var(--foreground); font-size: 12px; }
-.markdown-workbench .task-property dd > :is(input, select):hover:not(:disabled), .markdown-workbench .task-points-input > input:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border); }
-.markdown-workbench .task-property dd > :is(input, select):focus, .markdown-workbench .task-points-input > input:focus { background: var(--surface); border-color: var(--border-hover); }
+.markdown-workbench .task-property dd > :is(input, [data-slot="select-trigger"]), .markdown-workbench .task-points-input > input { width: 100%; max-width: 100%; min-height: 29px; padding: 4px 7px; border-color: transparent; border-radius: var(--control-radius); background: transparent; color: var(--foreground); font-size: 12px; }
+.markdown-workbench .task-property dd > :is(input, [data-slot="select-trigger"]):hover:not(:disabled), .markdown-workbench .task-points-input > input:hover:not(:disabled) { background: var(--surface-hover); border-color: var(--border); }
+.markdown-workbench .task-property dd > :is(input, [data-slot="select-trigger"]):focus, .markdown-workbench .task-points-input > input:focus { background: var(--surface); border-color: var(--border-hover); }
 .markdown-workbench .task-property [aria-invalid="true"] { border-color: var(--destructive); }
 .markdown-workbench .task-field-note { display: block; color: var(--muted-foreground); font-size: 10px; line-height: 1.55; padding: 1px 7px 3px; }
 .markdown-workbench .task-field-error { display: block; color: var(--destructive); font-size: 11px; line-height: 1.55; padding: 3px 7px; }
@@ -89,7 +89,7 @@
   .markdown-workbench .task-complete > span:not(.sr-only) { display: none; }
   .markdown-workbench .task-complete { width: 27px; padding-inline: 3px; }
   .markdown-workbench .task-complete-picker { width: auto; max-width: 91px; }
-  .markdown-workbench .task-complete-picker select { max-width: 69px; font-size: 10px; }
+  .markdown-workbench .task-complete-picker [data-slot="select-trigger"] { max-width: 69px; font-size: 10px; }
   .markdown-workbench .task-detail-surface { padding: 18px 16px 28px; }
   .markdown-workbench .task-property { grid-template-columns: 100px minmax(0, 1fr); gap: 3px; }
   .markdown-workbench .task-property dt { gap: 6px; font-size: 11px; }

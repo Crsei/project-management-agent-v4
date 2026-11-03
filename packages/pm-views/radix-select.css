@@ -1,0 +1,59 @@
+.pm-radix-select-trigger {
+  display: inline-flex;
+  min-height: 28px;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border: 1px solid var(--border, #d8dee7);
+  border-radius: 5px;
+  background: var(--surface, #fff);
+  color: inherit;
+  padding: 3px 7px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pm-radix-select-trigger[data-disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pm-radix-select-content {
+  z-index: 1000;
+  max-height: var(--radix-select-content-available-height);
+  min-width: var(--radix-select-trigger-width);
+  overflow: auto;
+  border: 1px solid var(--border, #d8dee7);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--foreground, #1f2328);
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.pm-radix-select-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 22px 5px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+  cursor: default;
+}
+
+.pm-radix-select-item[data-highlighted] {
+  background: var(--selection, #eef2ff);
+}
+
+.pm-radix-select-item[data-disabled] {
+  opacity: 0.45;
+}
+
+.pm-radix-select-check {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+}

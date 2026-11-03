@@ -12,6 +12,7 @@ import { withPmAutomationOrigin } from '../../../../packages/application/src/aut
 import { WorkspaceError } from '../../../../packages/pm-core/index.ts';
 import { CoreScope, type CoreWorkspacePool } from './core-routes.ts';
 import type { AgentChatTools, AgentChatToolContext } from './agent-chat-tools.ts';
+import { mcpRequestIdentity, recheckMcpRequest } from '../../../../packages/application/src/mcp-service-auth.ts';
 
 const correlation = z.string().min(1).max(200);
 const agentChatScopeSchema = z.strictObject({ kind: z.enum(['projects', 'workspace']), projectIds: z.array(z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/)).max(1000) });
@@ -86,7 +87,10 @@ export function registerAgentToolRoutes(app: FastifyInstance, options: {
     const actor = await options.actor(request), { tools } = getTools();
     const member = await getMembership(options.database(), actor, workspaceId);
     if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403);
-    return { tools: tools.registry.map(tool => ({ ...tool, inputSchema: agentChatToolDefinitions.find(item => item.function.name === tool.name)!.function.parameters })) };
+    const delegation = mcpRequestIdentity(request);
+    const visible = tools.registry.filter(tool => !delegation || (!tool.write || delegation.access === 'full') && tool.capabilities.every(capability => member.capabilities.includes(capability)) && (tool.name !== 'pm_create_project' || delegation.scope.projectId === null));
+    await recheckMcpRequest(options.database(), request);
+    return { tools: visible.map(tool => ({ ...tool, inputSchema: agentChatToolDefinitions.find(item => item.function.name === tool.name)!.function.parameters })) };
   });
   async function dispatch(request: FastifyRequest, reconcile: boolean) {
     const { workspaceId } = z.object({ workspaceId: z.uuid().toLowerCase() }).parse(request.params);
@@ -108,17 +112,19 @@ export function registerAgentToolRoutes(app: FastifyInstance, options: {
         active.add(input.operationId);
         const context: AgentChatToolContext = { actor, workspaceId, threadId: input.threadId, messageId: input.messageId, operationId: input.operationId, scope,
           checkAuthorization: async sql => {
+            await recheckMcpRequest(sql, request);
             const current = await scopeFor(actor, workspaceId, input.scope, sql, input.name);
             if (scope.projectIds.some(id => !current.projectIds.includes(id))) throw new DomainError('agent_authorization_changed', 'The authorized project scope changed before the operation was committed', 403);
           } };
         try { row = await finish(row, 'succeeded', agentChatToolResultSchema.parse(await originated(() => tools.execute(input.name, input.arguments, context))), null); }
         catch (error) { const outcome = failure(error, tools.registry.find(tool => tool.name === input.name)?.write ?? false); row = await finish(row, outcome.status, null, outcome.error); }
         finally { active.delete(input.operationId); }
+        await recheckMcpRequest(options.database(), request);
         return record(row);
       }
     }
     if (!row) throw new DomainError('agent_tool_outcome_unknown', 'Operation record is unavailable', 503);
-    if (row.status === 'running' && active.has(input.operationId)) return record(row);
+    if (row.status === 'running' && active.has(input.operationId)) { await recheckMcpRequest(options.database(), request); return record(row); }
     if (row.status === 'running' || row.status === 'unknown') {
       const context: AgentChatToolContext = { actor, workspaceId, threadId: input.threadId, messageId: input.messageId, operationId: input.operationId, scope };
       try {
@@ -133,6 +139,7 @@ export function registerAgentToolRoutes(app: FastifyInstance, options: {
         }
       }
     }
+    await recheckMcpRequest(options.database(), request);
     return record(row);
   }
   app.post('/api/v1/workspaces/:workspaceId/agent-tools/call', async (request, reply) => { reply.header('Cache-Control', 'private, no-store'); return dispatch(request, false); });

@@ -3,6 +3,7 @@ import { Button } from "@agent/components/ui/button";
 import { Input } from "@agent/components/ui/input";
 import { useAgentText, type AgentText } from "../../i18n";
 import { agentText } from "../../i18n-text.ts";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type Viewport = "fit" | "desktop" | "tablet" | "mobile";
 
@@ -207,7 +208,7 @@ export function BrowserPanel({ active = true }: { active?: boolean }) {
         <span className="inspector-toolbar-spacer" />
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
           {t("视口", "Viewport")}
-          <select
+          <RadixSelect
             value={viewport}
             onChange={(event) => {
               const value = event.target.value;
@@ -221,7 +222,7 @@ export function BrowserPanel({ active = true }: { active?: boolean }) {
                 {option.label}
               </option>
             ))}
-          </select>
+          </RadixSelect>
         </label>
       </div>
 

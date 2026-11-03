@@ -255,7 +255,8 @@
 }
 .page .tab[aria-selected="true"] {
   color: var(--foreground);
-  border-bottom-color: var(--foreground);
+  background: var(--selection);
+  font-weight: 500;
 }
 .page .panel {
   padding: 0;

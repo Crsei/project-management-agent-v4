@@ -35485,7 +35485,7 @@
       "git_mode": "100644",
       "bytes": 1399,
       "category": "behavior-test",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T4",
       "role": "test-only"
     },
@@ -35497,7 +35497,7 @@
       "git_mode": "100644",
       "bytes": 4079,
       "category": "package-source",
-      "action": "copy-verbatim",
+      "action": "copy-then-patch",
       "owner": "T4",
       "role": "runtime-or-build-input"
     },

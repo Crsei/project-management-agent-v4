@@ -1,4 +1,20 @@
+> **2026-11-03 已被取代：** 项目详情 Tab 页面已从正式路由移除。项目入口按旧 `?tab=` 或默认任务布局重定向到 `/issues?view=...`；文件与活动改为 `/files`、`/activity` 路由；所有项目子页面共享 `ServiceProjectLayout` 的标题与 `ProjectViewNavigation`。本文以下内容是 2026-10-22 的历史布局记录，不再代表当前路由。
+
 # 项目视图顶栏与任务工具栏重构记录
+
+## 2026-11-03 当前路由
+
+| 入口 | 当前行为 |
+| --- | --- |
+| `/pm/<workspace>/projects/<id>` | 重定向到 `/issues?view=<默认任务布局>`；不再渲染详情 Tab 页 |
+| `.../overview` | 项目概览页，使用统一项目标题与视图导航 |
+| `.../issues?view=kanban/list/table/calendar/gantt/tree/graph` | 任务工作台 |
+| `.../files` | 项目文件页 |
+| `.../activity` | 项目审计活动页 |
+| `.../documents` | 项目文档工作台，仍显示项目标题与视图导航 |
+| `.../roadmap`、`.../events` | 产品规划、活动日历 |
+
+视图导航顺序为：`概览 · 产品规划 · 看板 · 列表 · 表格 · 日历 · 时间线 · 树形图 · 关系图 · 文档 · 文件 · 活动`。旧 `?tab=overview` → `/overview`；`?tab=board/list/table/calendar/timeline/tree/graph` → `issues?view=...`；`?tab=files`、`?tab=activity` → 独立路由。正式路由不再使用 `ProjectDetailView` 的 tab strip。
 
 状态：已实现并接入正式 `/pm` 项目详情 · 日期：2026-10-22
 

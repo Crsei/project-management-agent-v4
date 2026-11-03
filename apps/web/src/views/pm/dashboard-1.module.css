@@ -45,7 +45,6 @@
   align-self: stretch;
   height: 48px;
   border: 0;
-  border-bottom: 2px solid transparent;
   border-radius: 0;
   padding: 0 16px;
   color: var(--text-secondary);
@@ -54,8 +53,8 @@
   flex-shrink: 0;
 }
 .navigation button[aria-pressed="true"] {
-  background: transparent;
-  border-bottom-color: var(--foreground);
+  background: var(--selection);
+  font-weight: 500;
   color: var(--foreground);
 }
 .stats {
@@ -604,7 +603,6 @@
   font-size: var(--text-control);
   height: 44px;
   border: 0;
-  border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--text-secondary);
@@ -612,8 +610,8 @@
   box-shadow: none;
 }
 .agendaTabs [role="tab"][data-state="active"] {
-  border-bottom-color: var(--foreground);
-  background: transparent;
+  background: var(--selection);
+  font-weight: 500;
   color: var(--foreground);
   box-shadow: none;
 }

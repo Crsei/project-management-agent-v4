@@ -253,13 +253,13 @@
   border-bottom: 1px solid var(--border);
 }
 .composerTab {
-  border-bottom: 2px solid transparent;
+  border: 0;
   padding: 0.375rem 0.625rem;
   font-size: 0.8125rem;
   color: var(--muted-foreground);
 }
 .composerTab[data-active="true"] {
-  border-bottom-color: var(--foreground);
+  background: var(--selection);
   color: var(--foreground);
   font-weight: 500;
 }
@@ -439,13 +439,13 @@
   padding: 0 1.25rem;
 }
 .tabButton {
-  border-bottom: 2px solid transparent;
+  border: 0;
   padding: 0.5rem 0.625rem;
   font-size: 0.8125rem;
   color: var(--muted-foreground);
 }
 .tabButton[data-active="true"] {
-  border-bottom-color: var(--foreground);
+  background: var(--selection);
   color: var(--foreground);
   font-weight: 500;
 }

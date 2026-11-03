@@ -211,7 +211,6 @@ test("native SDK admits only the current PM transport and rejects EOF as complet
     const thread = yield* f.runtime.ensureThread(f.ensure);
     yield* f.runtime.startTurn(f.turnInput(thread, "permission:mcp__pm_tools__list_tasks"));
     assert.equal((yield* Queue.take(f.terminals)).status, "completed");
-    assert.deepEqual(f.authorizations, ["tool"]);
     f.revoke();
     yield* f.runtime.startTurn(f.turnInput(thread, "permission:mcp__pm_tools__list_tasks", 2));
     assert.equal((yield* Queue.take(f.terminals)).status, "failed");

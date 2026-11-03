@@ -1,4 +1,6 @@
 export * from "./providers.ts";
+export * from "./mcp-apps.ts";
+export * from "./provider-skills.ts";
 
 // Derive fetch types instead of naming DOM-only aliases, so emitted declarations
 // also work in Node consumers whose TypeScript lib does not include DOM.

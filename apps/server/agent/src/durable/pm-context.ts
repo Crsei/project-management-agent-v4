@@ -6,6 +6,7 @@ import {
   type PmReferenceResolution,
 } from "@agent-workspace/contracts/pm-references";
 import { DurableError } from "./errors.ts";
+import { mcpIdentityFromHeaders, mcpIdentityHeaders } from "../mcp/identity.ts";
 
 const PM_CONTEXT_TIMEOUT_MS = 30_000;
 const projectIdPattern = /^PRJ-\d+$/;
@@ -27,7 +28,7 @@ export function samePmContext(a: PmContext | undefined, b: PmContext | undefined
 }
 
 /** Credentials stay request-local: only cookie/authorization are proxied, never stored. */
-function pmEndpoint(path: string, requestHeaders?: Headers): { url: URL; headers: Headers } {
+async function pmEndpoint(path: string, requestHeaders?: Headers): Promise<{ url: URL; headers: Headers }> {
   let base: URL;
   try {
     base = new URL(process.env.PM_API_URL?.trim() || "http://127.0.0.1:4194");
@@ -36,9 +37,15 @@ function pmEndpoint(path: string, requestHeaders?: Headers): { url: URL; headers
   } catch {
     throw new DurableError(503, "pm_api_unavailable", "PM API 地址配置无效，未接受本次请求。");
   }
+  let effectiveHeaders = requestHeaders;
+  if (requestHeaders?.get("authorization")?.startsWith("Bearer pm-mcp-service-v1.")) {
+    const identity = mcpIdentityFromHeaders(requestHeaders);
+    if (!identity) throw new DurableError(403, "mcp_grant_revoked", "原 MCP 委托已失效，拒绝解析 PM 引用。");
+    effectiveHeaders = await mcpIdentityHeaders(identity);
+  }
   const headers = new Headers({ "content-type": "application/json" });
   for (const name of ["cookie", "authorization"]) {
-    const value = requestHeaders?.get(name);
+    const value = effectiveHeaders?.get(name);
     if (value) headers.set(name, value);
   }
   return { url: new URL(path, base.origin), headers };
@@ -61,7 +68,7 @@ export async function resolvePmReferences(
 ): Promise<PmReferenceResolution[]> {
   if (references.length === 0) return [];
   const body = pmReferenceResolveRequestSchema.parse({ references: [...references] });
-  const { url, headers } = pmEndpoint(
+  const { url, headers } = await pmEndpoint(
     `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/agent-references/resolve`,
     requestHeaders,
   );

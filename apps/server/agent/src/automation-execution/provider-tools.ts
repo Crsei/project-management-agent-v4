@@ -14,7 +14,7 @@ export function getAutomationProviderToolSupport(driver: string): AutomationProv
   switch (driver) {
     // Codex projects every bound stdio descriptor. These ACP families use the
     // generic per-generation MCP/ACP bridge with live host authorization.
-    case 'codex': case 'antigravity': case 'grok': case 'fx': case 'acpRegistry':
+    case 'codex': case 'antigravity': case 'grok': case 'fx': case 'acpRegistry': case 'cursor': case 'claude': case 'muse':
       return { promptConnectors: supported(), templateWorkspace: supported() };
     case 'opencode':
       return { promptConnectors: unsupported('OpenCode accepts only one generation-scoped host transport. A prompt already uses the PM tools bridge, so an additional integration descriptor is unsupported.'), templateWorkspace: supported() };
@@ -24,18 +24,6 @@ export function getAutomationProviderToolSupport(driver: string): AutomationProv
     }
     case 'pi': {
       const reason = 'Pi currently requires the single generation-owned pm_tools extension and legacy loopback endpoint. Automation integration and scratch-workspace descriptors are unsupported; model-only templates remain usable.';
-      return { promptConnectors: unsupported(reason), templateWorkspace: unsupported(reason) };
-    }
-    case 'cursor': {
-      const reason = 'Cursor host tools currently admit only the pm_tools server and pm_* tool names. Automation integration and scratch-workspace descriptors are not admitted; model-only templates remain usable.';
-      return { promptConnectors: unsupported(reason), templateWorkspace: unsupported(reason) };
-    }
-    case 'claude': {
-      const reason = 'Claude’s current unattended host-tool approval path authorizes only mcp__pm_tools__* calls. Generic automation MCP calls require approvals that this runtime declines; model-only templates remain usable.';
-      return { promptConnectors: unsupported(reason), templateWorkspace: unsupported(reason) };
-    }
-    case 'muse': {
-      const reason = 'Muse’s current unattended host-tool approval path authorizes only the legacy pm_tools pm_* calls. Generic automation integration and scratch tools are not preauthorized; model-only templates remain usable.';
       return { promptConnectors: unsupported(reason), templateWorkspace: unsupported(reason) };
     }
     default: {

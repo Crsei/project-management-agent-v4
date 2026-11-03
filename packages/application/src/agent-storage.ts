@@ -8,24 +8,28 @@ import { DomainError, type Actor } from '../../domain/src/core.ts';
 import { getMembership } from './access.ts';
 import { allowedDirectory, requireLocalManagement, resolveLocalDirectory, type LocalProjectConfiguration } from './local-projects.ts';
 import type { SqlExecutor } from './ports.ts';
+import { assertCanonicalAbsolute, pathContains, safePathComponent, samePath, systemStoragePath } from '../../pm-core/platform.ts';
+import { assertNoWindowsReparsePath } from '../../pm-core/windows-reparse.ts';
 
 export type AgentDirectoryConfiguration = LocalProjectConfiguration & { chatSpaceRoot: string };
-const contains = (root: string, candidate: string) => candidate === root || candidate.startsWith(root + path.sep);
+const contains = pathContains;
 const forbidden = (message: string): never => { throw new DomainError('local_directory_forbidden', message, 403); };
 function inspect(candidate: string): void {
+  try { assertCanonicalAbsolute(candidate); } catch { forbidden('A canonical local directory is required'); }
   let current = path.parse(candidate).root;
-  for (const component of candidate.slice(current.length).split(path.sep).filter(Boolean)) {
-    current = path.join(current, component);
-    const stat = lstatSync(current);
-    if (!stat.isDirectory() || stat.isSymbolicLink()) forbidden('Symlinks and non-directories are not permitted');
+  for (const component of ['', ...candidate.slice(current.length).split(path.sep).filter(Boolean)]) {
+    if (component) current = path.join(current, component);
+    const stat = lstatSync(current, { bigint: true });
+    if (!stat.isDirectory() || stat.isSymbolicLink() || !samePath(realpathSync(current), current)) forbidden('Symlinks, reparse aliases and non-directories are not permitted');
+    assertNoWindowsReparsePath(current, stat);
   }
-  if (realpathSync(candidate) !== candidate) forbidden('Directory identity changed');
 }
 function deploymentRoot(config: AgentDirectoryConfiguration): string {
   const root = config.chatSpaceRoot;
-  if (!path.isAbsolute(root) || root.includes('\0') || root !== path.resolve(root) || root === path.parse(root).root) forbidden('An absolute Chat Space root is required');
+  try { assertCanonicalAbsolute(root); } catch { forbidden('An absolute Chat Space root is required'); }
+  if (samePath(root, path.parse(root).root)) forbidden('An absolute Chat Space root is required');
   const homeDefault = path.join(homedir(), '.pmv4');
-  if (['/proc', '/sys', '/dev', '/etc', '/boot', '/run', '/bin', '/sbin', '/lib', '/lib64', '/usr', '/root'].some(denied => contains(denied, root)) && root !== homeDefault) forbidden('System directories cannot be Chat Space roots');
+  if (systemStoragePath(root) && !samePath(root, homeDefault)) forbidden('System directories cannot be Chat Space roots');
   // Only the configured leaf may be absent. Never manufacture a missing home or mount.
   inspect(path.dirname(root));
   return root;
@@ -40,7 +44,7 @@ export function agentAllowedDirectory(config: AgentDirectoryConfiguration, candi
 }
 /** Read-only preflight, or creation of only the configured leaf and its contained descendants. */
 export function defaultAgentDirectory(config: AgentDirectoryConfiguration, effectiveRoot: string, scope: AgentScope, create = false): string {
-  const root = effectiveRoot === config.chatSpaceRoot ? deploymentRoot(config) : agentAllowedDirectory(config, effectiveRoot);
+  const root = samePath(effectiveRoot, config.chatSpaceRoot) ? deploymentRoot(config) : agentAllowedDirectory(config, effectiveRoot);
   const candidate = path.join(root, 'workspaces', scope.workspaceId, ...(scope.projectId ? ['projects', scope.projectId] : ['workspace']));
   if (!contains(root, candidate) || !/^[0-9a-f-]{36}$/.test(scope.workspaceId) || scope.projectId !== null && !/^PRJ-\d+$/.test(scope.projectId)) forbidden('Invalid Agent scope path');
   let current = root, missing = false;
@@ -71,7 +75,7 @@ export function resolveAgentDirectory(config: AgentDirectoryConfiguration, direc
   const parent = agentAllowedDirectory(config, candidate);
   if (directory.mode === 'existing') return { root: parent, mode: 'existing' };
   const root = path.join(parent, directory.folderName);
-  if (path.dirname(root) !== parent) forbidden('Folder name must be a single path component');
+  if (!safePathComponent(directory.folderName) || !samePath(path.dirname(root), parent)) forbidden('Folder name must be a single ordinary path component');
   try { lstatSync(root); throw new DomainError('local_directory_exists', 'Choose an unused folder name or existing-directory mode', 409); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   accessSync(parent, constants.W_OK | constants.X_OK);

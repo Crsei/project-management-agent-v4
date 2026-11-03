@@ -6,6 +6,7 @@ import "@xyflow/react/dist/style.css"
 import type { Entity } from "@contracts"
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n-provider"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type Props = {
   items: Entity[]
@@ -81,10 +82,10 @@ export function ServiceDependencyGraph({ items, onOpen, onAdd, onRemove, pending
     <p className="text-sm text-muted-foreground">{en ? "Arrows run from prerequisite to dependent. Select a node to manage dependencies; open its title to view the task. Server rules validate cycles and permissions." : "箭头从前置任务指向依赖任务。选择节点管理依赖，点击标题查看任务。循环与权限由服务端校验。"}</p>
     <div className="flex flex-wrap items-center gap-2">
       <label htmlFor={`${id}-item`}>{en ? "Selected task" : "选中任务"}</label>
-      <select id={`${id}-item`} className={field} value={selected?.id ?? ""} onChange={event => { setSelectedId(event.target.value); setPrerequisiteId("") }}>
+      <RadixSelect id={`${id}-item`} className={field} value={selected?.id ?? ""} onChange={event => { setSelectedId(event.target.value); setPrerequisiteId("") }}>
         <option value="">{en ? "Select a task" : "选择任务"}</option>
         {items.map(item => <option key={item.id} value={item.id}>{title(item)}</option>)}
-      </select>
+      </RadixSelect>
       {selected && <Button variant="outline" onClick={() => onOpen(selected)}>{en ? "Open task" : "打开任务"}</Button>}
       <Button variant="outline" onClick={() => setLayoutAttempt(value => value + 1)} disabled={layoutState === "loading"}>{en ? "Auto layout" : "自动布局"}</Button>
       <span role="status" className="text-sm">{layoutState === "loading" ? (en ? "Computing layout…" : "正在计算布局…") : selected ? `${en ? "Selected:" : "已选择："} ${title(selected)}` : ""}</span>
@@ -102,7 +103,7 @@ export function ServiceDependencyGraph({ items, onOpen, onAdd, onRemove, pending
       {prerequisites(selected).length === 0 && <p className="text-sm text-muted-foreground">{en ? "No prerequisites." : "无前置任务。"}</p>}
       {onAdd ? <form className="flex flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); if (!pending && candidates.some(item => item.id === prerequisiteId)) onAdd(selected, prerequisiteId) }}>
         <label htmlFor={`${id}-prerequisite`}>{en ? "Add prerequisite" : "添加前置任务"}</label>
-        <select id={`${id}-prerequisite`} className={field} value={prerequisiteId} onChange={event => setPrerequisiteId(event.target.value)} disabled={pending} required><option value="">{en ? "Choose a task in this project" : "选择同项目任务"}</option>{candidates.map(item => <option key={item.id} value={item.id}>{title(item)}</option>)}</select>
+        <RadixSelect id={`${id}-prerequisite`} className={field} value={prerequisiteId} onChange={event => setPrerequisiteId(event.target.value)} disabled={pending} required><option value="">{en ? "Choose a task in this project" : "选择同项目任务"}</option>{candidates.map(item => <option key={item.id} value={item.id}>{title(item)}</option>)}</RadixSelect>
         <Button type="submit" disabled={pending || !candidates.some(item => item.id === prerequisiteId)}>{en ? "Add" : "添加"}</Button>
       </form> : <p className="text-sm text-muted-foreground">{en ? "Dependency creation is unavailable with your current access." : "当前权限不可添加依赖。"}</p>}
     </div>}

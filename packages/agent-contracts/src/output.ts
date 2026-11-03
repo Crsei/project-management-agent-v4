@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mcpAppMetadataSchema, mcpAppToolResultSchema } from "./mcp-apps.ts";
 
 /** Adapted from T3 Code's ProviderAdapterV2/OrchestrationV2TurnItem design.
  * Copyright (c) 2026 T3 Tools Inc. MIT; see LICENSE.t3code. */
@@ -59,6 +60,9 @@ export const nativeOutputItemSchema = z.object({
   toolName: z.string().optional(),
   input: z.unknown().optional(),
   output: z.string().optional(),
+  /** Server-bound native App metadata; historical serialized output remains readable. */
+  mcpApp: mcpAppMetadataSchema.optional(),
+  mcpToolResult: mcpAppToolResultSchema.optional(),
   outputTruncated: z.boolean().optional(),
   exitCode: z.number().int().optional(),
   fileName: z.string().optional(),

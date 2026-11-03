@@ -6,6 +6,7 @@ import { Textarea } from "@agent/components/ui/textarea";
 import type { WorkflowStep, WorkspaceWorkflow } from "@agent-workspace/contracts/workspace";
 import { useWorkspace } from "./provider";
 import { usePanelDraft } from "./use-panel-draft";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const selectClass =
   "h-9 w-full min-w-0 rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -251,7 +252,7 @@ export function WorkflowsPanel() {
                   </label>
                   <label className="live-panel-field" htmlFor={`${fieldId}-${step.id}-agent`}>
                     执行 Agent
-                    <select
+                    <RadixSelect
                       id={`${fieldId}-${step.id}-agent`}
                       className={selectClass}
                       value={step.agentId}
@@ -266,7 +267,7 @@ export function WorkflowsPanel() {
                           {agent.name.trim() || "未命名 Agent"} · {agent.model}
                         </option>
                       ))}
-                    </select>
+                    </RadixSelect>
                   </label>
                   <label className="live-panel-field" htmlFor={`${fieldId}-${step.id}-instruction`}>
                     执行指令

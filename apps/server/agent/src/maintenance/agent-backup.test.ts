@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, statSync, chmodSync, symlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, writeFileSync, rmSync, existsSync, statSync, chmodSync, symlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -10,12 +11,13 @@ import * as Option from "effect/Option";
 import { createAgentBackup, restoreAgentBackup, verifyAgentBackup } from "./agent-backup.ts";
 import { getStoredInstance, listStoredInstances, providerContext } from "../providers/instances.ts";
 import { makePmProviderCredentials } from "../providers/t3code/credentials.ts";
+import { assertPrivatePath, makePrivatePath } from "../../../../../packages/pm-core/private-path.ts";
 
 type Fixture = {
   root: string; source: string; bundle: string; target: string; home: string; close: () => void;
 };
 function fixture(): Fixture {
-  const root = mkdtempSync(path.join(os.tmpdir(), "agent-backup-test-"));
+  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "agent-backup-test-")));
   const source = path.join(root, "source");
   const bundle = path.join(root, "bundle");
   const target = path.join(root, "restored");
@@ -67,9 +69,9 @@ test("credential-excluded backup restores histories/settings/model config with n
     const rawConfig = readFileSync(path.join(f.bundle, "provider-instances.json"), "utf8");
     for (const value of ["fake-inline-secret", "fake-stored-secret", "fake-url-secret", "fake-query-secret", "fake-observation-secret", f.source])
       assert.equal(rawConfig.includes(value), false);
-    assert.equal(statSync(f.bundle).mode & 0o777, 0o700);
+    assertPrivatePath(f.bundle);
     for (const member of [...manifest.files.map((entry) => entry.path), "manifest.json"])
-      assert.equal(statSync(path.join(f.bundle, member)).mode & 0o777, 0o600);
+      assertPrivatePath(path.join(f.bundle, member));
     assert.deepEqual(restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true }), manifest.coverage);
     assert.deepEqual(verifyAgentBackup({ bundle: f.bundle, target: f.target, stopped: true }), manifest.coverage);
     const records = restoredRecords(f.target);
@@ -120,6 +122,36 @@ test("explicit secret-inclusive offline bundle recovers credentials and dedicate
     assert.equal(JSON.parse(String(restoredRecords(f.target).find((row) => row.namespace === "chat:threads")!.value)).nativeSession.sessionId, "old-native-session");
     assert.equal(existsSync(path.join(f.source, "workspace.lock")), false);
   } finally { f.close(); }
+});
+
+test("restored backups cannot revive OAuth grants or live App context in either secret mode", async () => {
+  for (const secrets of ["include", "exclude"] as const) {
+    const f = fixture();
+    try {
+      const db = new DatabaseSync(path.join(f.source, "workspace.sqlite"));
+      const grant = { grantId: "grant-a", actorId: "owner-a", version: 4, revokedAt: null,
+        scope: { workspaceId: "workspace-a", projectId: "project-a" }, clientName: "External agent" };
+      try {
+        const put = db.prepare("INSERT INTO records VALUES (?, ?, ?)");
+        put.run("mcp:grants", "grant-a", JSON.stringify(grant));
+        for (const namespace of ["mcp:tokens", "mcp:codes", "mcp:consents", "mcp-app-model-context-v1"])
+          put.run(namespace, "private-a", JSON.stringify({ grantId: "grant-a", text: "nonportable authority" }));
+      } finally { db.close(); }
+      const before = readFileSync(path.join(f.source, "workspace.sqlite"));
+      await create(f, secrets);
+      restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      const rows = restoredRecords(f.target);
+      for (const namespace of ["mcp:tokens", "mcp:codes", "mcp:consents", "mcp-app-model-context-v1"])
+        assert.equal(rows.some(row => row.namespace === namespace), false, namespace);
+      const restored = JSON.parse(String(rows.find(row => row.namespace === "mcp:grants")!.value));
+      assert.equal(restored.version, 5);
+      assert.ok(Number.isFinite(Date.parse(restored.revokedAt)));
+      assert.deepEqual(restored.scope, grant.scope);
+      assert.equal(restored.clientName, grant.clientName);
+      assert.deepEqual(readFileSync(path.join(f.source, "workspace.sqlite")), before);
+      verifyAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+    } finally { f.close(); }
+  }
 });
 
 test("migrated private credentials and attachment bytes survive only their declared backup policy", async () => {
@@ -248,9 +280,12 @@ test("tampered member traversal, corrupted bytes and public backup permissions a
       assert.equal(existsSync(f.target), false);
     }
     writeFileSync(manifestFile, original);
-    chmodSync(f.bundle, 0o755);
-    assert.throws(() => verifyAgentBackup({ bundle: f.bundle, stopped: true }), /private/);
-    chmodSync(f.bundle, 0o700);
+    if (process.platform === "win32") {
+      execFileSync(path.join(process.env.SystemRoot!, "System32", "icacls.exe"), [f.bundle, "/grant", "*S-1-1-0:(OI)(CI)RX"],
+        { windowsHide: true, stdio: "ignore", timeout: 30_000 });
+    } else chmodSync(f.bundle, 0o755);
+    assert.throws(() => verifyAgentBackup({ bundle: f.bundle, stopped: true }), /private/i);
+    makePrivatePath(f.bundle);
     writeFileSync(path.join(f.bundle, "provider-instances.json"), "corruption");
     assert.throws(() => verifyAgentBackup({ bundle: f.bundle, stopped: true }), /checksum/);
   } finally { f.close(); }

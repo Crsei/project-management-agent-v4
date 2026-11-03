@@ -1,4 +1,4 @@
-import { accessSync, closeSync, constants, fsyncSync, lstatSync, mkdirSync, openSync } from 'node:fs';
+import { accessSync, constants, lstatSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import type { AgentCatalog, AgentFileArea, AgentFileAreaUpdate, AgentScope, ResolvedAgentContext } from '../../contracts/src/agent-file-areas.ts';
 import { agentFileAreaUpdateSchema, agentScopeSchema } from '../../contracts/src/agent-file-areas.ts';
@@ -10,6 +10,7 @@ import { assertProjectScope, getMembership, type Membership } from './access.ts'
 import { requireLocalManagement } from './local-projects.ts';
 import { agentAllowedDirectory, defaultAgentDirectory, readAgentStorageRoot, resolveAgentDirectory, type AgentDirectoryConfiguration } from './agent-storage.ts';
 import type { SqlExecutor } from './ports.ts';
+import { syncDirectory } from '../../pm-core/platform.ts';
 
 export type AgentFileAreaContext = { sql: SqlExecutor; actor: Actor; config: AgentDirectoryConfiguration; workspace: (workspaceId: string) => Promise<Workspace> };
 function canReadPath(member: Membership): boolean { return member.projectIds === null && member.capabilities.includes('access.manage'); }
@@ -87,8 +88,7 @@ export async function saveAgentFileArea(context: AgentFileAreaContext, scope: Ag
   const selected = resolveAgentDirectory(config, input.directory);
   if (selected.mode === 'new') {
     mkdirSync(selected.root, { mode: 0o700 });
-    const parent = openSync(path.dirname(selected.root), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-    try { fsyncSync(parent); } finally { closeSync(parent); }
+    syncDirectory(path.dirname(selected.root));
   }
   const identity = directoryIdentity(config, selected.root);
   const saved = await writeAgentFileArea(sql, scope, { path: identity.root, device: identity.device, inode: identity.inode, expectedRevision: input.expectedRevision, actorId: actor.id, source: 'explicit' });

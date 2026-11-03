@@ -4,11 +4,12 @@
 .usage-page h1, .usage-page h2, .usage-page h3, .usage-page p { margin: 0; }
 .usage-page h2 { font-size: 14px; line-height: 1.5; font-weight: 500; }
 .usage-page h3 { font-size: 14px; font-weight: 500; margin: 12px 0; }
-.usage-page a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
-.usage-page button, .usage-page select { font: inherit; color: inherit; }
+.usage-page a { color: inherit; text-decoration: none; }
+.usage-page a:hover { background: var(--selection); }
+.usage-page button, .usage-page [data-slot="select-trigger"] { font: inherit; color: inherit; }
 .usage-page button { cursor: pointer; }
 .usage-page button:disabled { opacity: .45; cursor: not-allowed; }
-.usage-page :is(button, select, a, summary, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.usage-page :is(button, [data-slot="select-trigger"], a, summary, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
 .usage-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 14px; min-height: 44px; border-bottom: 1px solid var(--border); }
 .usage-breadcrumbs, .usage-topbar-controls { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .usage-breadcrumbs { flex-wrap: wrap; }
@@ -28,7 +29,7 @@
 .usage-menu-note { margin: 5px 12px 10px; font-size: 12px; color: var(--muted-foreground); line-height: 1.6; }
 .usage-menu-separator { height: 1px; margin: 5px 0; background: var(--border); }
 .usage-instance-filter { display: flex; align-items: center; gap: 10px; margin: 10px 12px; font-size: 12px; }
-.usage-instance-filter select { font: inherit; color: var(--foreground); background: var(--background); min-width: 0; width: 100%; border: 1px solid var(--border); border-radius: 5px; padding: 5px; }
+.usage-instance-filter [data-slot="select-trigger"] { font: inherit; color: var(--foreground); background: var(--background); min-width: 0; width: 100%; border: 1px solid var(--border); border-radius: 5px; padding: 5px; }
 .usage-content { display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 1024px; min-width: 0; margin: 0 auto; padding: 24px 24px 48px; }
 .usage-muted, .usage-shortcuts, .usage-footnote, .usage-status { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
 .usage-overview { display: flex; flex-direction: column; gap: 28px; min-width: 0; }

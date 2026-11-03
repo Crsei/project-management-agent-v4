@@ -46,9 +46,9 @@ function AuthorizedBusinessSections({ file, kind }: CoreBusinessSectionsProps & 
             <legend className="sr-only">{t("PM 业务操作", "PM business operations")}</legend>
             {kind === "project" ? <>
               <nav aria-label={t("项目工具", "Project tools")} className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                <Link className="underline underline-offset-4" to={`${root}/projects/${encodeURIComponent(record.id)}/issues`}>{t("项目工作项", "Project work items")}</Link>
-                <Link className="underline underline-offset-4" to={`${root}/projects/${encodeURIComponent(record.id)}/events`}>{t("项目排期", "Project schedule")}</Link>
-                <Link className="underline underline-offset-4" to={`${root}/whiteboard?projectId=${encodeURIComponent(record.id)}`}>{t("个人本地白板", "Personal local whiteboard")}</Link>
+                <Link className="text-primary hover:text-foreground" to={`${root}/projects/${encodeURIComponent(record.id)}/issues`}>{t("项目工作项", "Project work items")}</Link>
+                <Link className="text-primary hover:text-foreground" to={`${root}/projects/${encodeURIComponent(record.id)}/events`}>{t("项目排期", "Project schedule")}</Link>
+                <Link className="text-primary hover:text-foreground" to={`${root}/whiteboard?projectId=${encodeURIComponent(record.id)}`}>{t("个人本地白板", "Personal local whiteboard")}</Link>
               </nav>
               <fieldset disabled={file.entity.archived === true} className="min-w-0"><PlanningPanel project={record} /></fieldset>
               <CoreBusinessPanel title={t("项目生命周期", "Project lifecycle")}><CoreLifecycle entity={record} /></CoreBusinessPanel>
@@ -87,7 +87,7 @@ function WorkItemBlockers({ item, file }: { item: Entity; file: FileRecord }) {
     <p className="text-sm text-muted-foreground">{t("对象间依赖在同一详情的关系中管理。", "Manage dependencies between entities in Relations in this same detail.")}</p>
     {base.version !== item.version && <div role="alert" className="space-y-2 text-sm">
       <p>{t("业务记录版本已变化；草稿保留，提交仍使用原版本以检测冲突。", "The business record changed; the draft is retained and submits its original version to detect conflicts.")}</p>
-      <button type="button" className="underline underline-offset-4" disabled={command.pending} onClick={() => setBase(item)}>{t("采用当前版本并保留草稿", "Use current version, retain draft")}</button>
+      <button type="button" className="font-medium hover:bg-selection" disabled={command.pending} onClick={() => setBase(item)}>{t("采用当前版本并保留草稿", "Use current version, retain draft")}</button>
     </div>}
   </Form>
 }

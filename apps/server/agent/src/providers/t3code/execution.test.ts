@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { test, beforeEach, afterEach } from "node:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
@@ -21,6 +24,14 @@ import { makePmProviderExecutionService } from "./execution.ts";
 import { pmAdapterBoundaryError } from "./events.ts";
 import { registerPmProviderProtocolResolver, PM_CONTINUATIONS, pmExecutionError, readPmContinuation, type PmProviderProtocolResolver } from "./continuation.ts";
 import { closeStore, listRecords } from "../../durable/store.ts";
+import { closeMcpAppSession, withMcpAppSession } from "../../mcp-apps/live.ts";
+import type { McpAppMetadata } from "@agent-workspace/contracts/mcp-apps";
+import { createProviderInstance, providerContext } from "../instances.ts";
+import { makePmProviderApplication, type PmProviderApplication } from "./application.ts";
+import { codexDriver, codexProtocolResolver, makeCodexDriverLayer } from "./families/codex.ts";
+import { makePmProviderFamily } from "./registration.ts";
+import { emitNativeOutput, endNativeOutput, getNativeOutput, initializeNativeOutput } from "../../durable/native-output.ts";
+import { mcpAppCall, mcpAppSnapshot, mcpAppTools } from "../../mcp-apps/requests.ts";
 
 const now = DateTime.makeUnsafe("2026-10-30T00:00:00.000Z");
 const driver = ProviderDriverKind.make("codex");
@@ -758,4 +769,230 @@ test("a technical caller cannot grant native worktree writes without live Chat i
     await assert.rejects(f.service.run(f.context, { model: "explicit", prompt: "test" }), { code: "scope_required" });
     assert.equal(f.starts.length, 0);
   } finally { f.releaseProbe(); }
+});
+
+test("fresh App output waits for the producing turn to settle before retaining its native capability without another turn", { timeout: 2000 }, async t => {
+  let nativeCalls = 0;
+  let checks = 0;
+  const finishGate = Promise.withResolvers<void>();
+  const appProduced = Promise.withResolvers<McpAppMetadata>();
+  const f = await harness((input, emit) => Effect.gen(function* () {
+    yield* emit({ type: "turn_item.updated", driver, turnItem: item({ id: "live-app-item", type: "dynamic_tool", threadId: input.threadId,
+      runId: input.runId, nodeId: input.rootNodeId, providerThreadId: input.providerThread.id, providerTurnId: null,
+      nativeItemRef: null, parentItemId: null, ordinal: 0, status: "completed", title: null, startedAt: now, completedAt: now, updatedAt: now,
+      toolName: "weather.show", input: { city: "Austin" }, output: { t3McpApp: { attachmentId: "private-html", server: "weather",
+        tool: "show", resourceUri: "ui://weather/app" }, result: { content: [{ type: "text", text: "forecast" }] } } }) });
+    yield* Effect.promise(() => finishGate.promise);
+    yield* finish(input, emit);
+  }), undefined, { configure: runtime => {
+    Object.assign(runtime, { mcpApps: {
+      listTools: () => Effect.sync(() => { nativeCalls++; return [{ name: "refresh" }]; }),
+      callTool: () => Effect.succeed({ content: [] }), readResource: () => Effect.succeed({ contents: [] }),
+    } });
+  } });
+  const context = { ...f.context, execution: { threadId: "live-app-thread", generationId: "live-app-generation", messageId: "live-app-message",
+    scope: { workspaceId: "workspace", projectId: null } }, authorizeExecution: async () => { checks++; },
+    authorizeMcpApp: async (headers: Headers) => { assert.equal(headers.get("cookie"), "fresh-browser"); checks++; } };
+  initializeNativeOutput(context.execution.generationId, context.execution.threadId, "running");
+  const run = f.service.run(context, { model: "explicit", prompt: "show forecast", userMessageText: "$weather Austin", signal: t.signal,
+    onEvent: event => {
+      emitNativeOutput(context.execution.generationId, event);
+      if (event.type === "item.upsert" && event.item.mcpApp) appProduced.resolve(event.item.mcpApp);
+    } });
+  void run.catch(appProduced.reject);
+  try {
+    const app = await appProduced.promise;
+    const producing = getNativeOutput(context.execution.generationId)!;
+    assert.equal(producing.status, "running");
+    assert.equal(producing.items.find(item => item.id === app.producing.itemId)?.status, "completed",
+      "A completed tool item is not a completed producing generation.");
+    await assert.rejects(mcpAppTools(context.execution.threadId, app.producing.itemId, new Headers({ cookie: "fresh-browser" })),
+      { code: "mcp_app_session_stopped" });
+    assert.equal(nativeCalls, 0, "Pre-handoff App reads cannot use the still-running generation.");
+    assert.equal(f.starts.length, 1);
+    finishGate.resolve();
+    const result = await run;
+    endNativeOutput(context.execution.generationId, "completed");
+    assert.equal(getNativeOutput(context.execution.generationId)?.status, "completed");
+    assert.equal(app.producing.nativeSessionId, result.nativeSession?.sessionId);
+    assert.equal(f.counts().closed, 0, "The native session must remain usable after the tool result completes.");
+    assert.equal(await Effect.runPromise(f.runtimeHost.read({ threadId: ThreadId.make(context.execution.threadId), providerInstanceId: instanceId })), undefined,
+      "The settled generation binding must not be resurrected for an App.");
+    assert.deepEqual(await withMcpAppSession(app, new Headers({ cookie: "fresh-browser" }), undefined, session => session.listTools()), [{ name: "refresh" }]);
+    assert.equal(nativeCalls, 1);
+    assert.equal(f.starts.length, 1, "Opening an App must never start a second paid native turn.");
+    assert.equal(f.starts[0]!.userMessageText, "$weather Austin");
+    assert.ok(checks >= 3);
+    await closeMcpAppSession(context.execution.threadId);
+    assert.equal(f.counts().closed, 1);
+    await assert.rejects(withMcpAppSession(app, new Headers({ cookie: "fresh-browser" }), undefined, session => session.listTools()),
+      { code: "mcp_app_session_stopped" });
+  } finally {
+    finishGate.resolve();
+    await run.catch(() => undefined);
+    await closeMcpAppSession(context.execution.threadId);
+    f.releaseProbe();
+  }
+});
+
+test("technical execution never acquires App capability even when native output contains an App reference", async () => {
+  const f = await harness((input, emit) => Effect.gen(function* () {
+    yield* emit({ type: "turn_item.updated", driver, turnItem: item({ id: "technical-app", type: "dynamic_tool", threadId: input.threadId,
+      runId: input.runId, nodeId: input.rootNodeId, providerThreadId: input.providerThread.id, providerTurnId: null,
+      nativeItemRef: null, parentItemId: null, ordinal: 0, status: "completed", title: null, startedAt: now, completedAt: now, updatedAt: now,
+      toolName: "weather.show", input: {}, output: { t3McpApp: { attachmentId: "private-html", server: "weather",
+        tool: "show", resourceUri: "ui://weather/app" }, result: { content: [] } } }) });
+    yield* finish(input, emit);
+  }), undefined, { configure: runtime => Object.assign(runtime, { mcpApps: {
+    listTools: () => Effect.die("Technical callers must not obtain App operations."),
+    callTool: () => Effect.die("Technical callers must not call App tools."),
+    readResource: () => Effect.die("Technical callers must not read App resources."),
+  } }) });
+  const output: NativeOutputEvent[] = [];
+  try {
+    await f.service.run(f.context, { model: "explicit", prompt: "technical", onEvent: event => output.push(event) });
+    assert.equal(output.some(event => event.type === "item.upsert" && event.item.mcpApp), false);
+    assert.equal(f.counts().closed, 1);
+  } finally { f.releaseProbe(); }
+});
+
+test("terminal completion waits the native pending-output probe and remains cancellable without another turn", { timeout: 2000 }, async () => {
+  const checkedPending = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  let probes = 0;
+  const f = await harness(finish, undefined, { configure: runtime => {
+    Object.assign(runtime, {
+      hasPendingBackgroundWork: Effect.die("The thread-scoped drain must not wait on another thread's session-wide work."),
+      hasPendingBackgroundWorkForThread: () => Effect.sync(() => { probes++; checkedPending.resolve(); return true; }),
+    });
+  } });
+  const run = f.service.run(f.context, { model: "explicit", prompt: "pending native output", signal: controller.signal });
+  const rejected = assert.rejects(run, { code: "aborted" });
+  try {
+    await checkedPending.promise;
+    assert.equal(f.counts().closed, 0);
+    assert.equal(f.starts.length, 1);
+    controller.abort();
+    await rejected;
+    assert.ok(probes > 0);
+    assert.equal(f.counts().closed, 1);
+    assert.equal(f.starts.length, 1);
+  } finally {
+    controller.abort();
+    await run.catch(() => undefined);
+    f.releaseProbe();
+  }
+});
+
+test("original Codex execution drains completed-only App captures after terminal, persists both payloads and retains native interaction", { timeout: 30_000 }, async t => {
+  const resourceGate = Promise.withResolvers<void>();
+  const resourceRequests: string[] = [];
+  const resourceServer = createServer(async (request, response) => {
+    const uri = new URL(request.url!, "http://localhost").searchParams.get("uri");
+    if (request.method !== "GET" || !uri || !["ui://weather/one", "ui://weather/two"].includes(uri)) {
+      response.writeHead(404).end();
+      return;
+    }
+    resourceRequests.push(uri);
+    try {
+      await resourceGate.promise;
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ contents: [{
+        uri, mimeType: "text/html;profile=mcp-app", text: "<!doctype html><h1>Captured after host terminal</h1>",
+        _meta: { ui: { csp: { connectDomains: ["https://api.weather.test"] } } },
+      }] }));
+    } catch { response.writeHead(503).end(); }
+  });
+  const listening = Promise.withResolvers<void>();
+  resourceServer.listen(0, "127.0.0.1", listening.resolve);
+  await listening.promise;
+  const threadId = "native-capture-thread";
+  const generationId = "native-capture-generation";
+  let application: PmProviderApplication | undefined;
+  let nativeRuntime: ProviderAdapterV2SessionRuntime | undefined;
+  let terminalPending: Promise<boolean> | undefined;
+  const events: NativeOutputEvent[] = [];
+  try {
+    const executable = join(directory, "codex.mjs");
+    await copyFile(fileURLToPath(new URL("../drivers/codex-protocol-fixture.mjs", import.meta.url)), executable);
+    await chmod(executable, 0o700);
+    const home = join(directory, "native-home");
+    await mkdir(home);
+    const eventLog = join(directory, "native-events.jsonl");
+    const instance = createProviderInstance({ instanceId: "native-capture-codex", driver: "codex",
+      config: { binaryPath: executable, homePath: home }, environment: [
+        { name: "MODE", value: "mcp-app", sensitive: false },
+        { name: "EVENT_LOG", value: eventLog, sensitive: false },
+        { name: "MCP_APP_RESOURCE_URL", value: `http://127.0.0.1:${(resourceServer.address() as AddressInfo).port}/app`, sensitive: false },
+      ] });
+    const resolveProtocol: PmProviderProtocolResolver = operation => {
+      nativeRuntime = operation.runtime;
+      return codexProtocolResolver(operation);
+    };
+    application = await makePmProviderApplication({
+      families: new Map([[codexDriver.driverKind, makePmProviderFamily(codexDriver, makeCodexDriverLayer)]]),
+      protocols: new Map([["codex", resolveProtocol]]),
+    });
+    const context: ProviderDriverContext = { ...providerContext(instance, directory),
+      execution: { threadId, generationId, messageId: "native-capture-message", scope: { workspaceId: "workspace", projectId: null } },
+      authorizeExecution: async () => {},
+      authorizeMcpApp: async headers => { assert.equal(headers.get("cookie"), "current-native-browser"); },
+    };
+    initializeNativeOutput(generationId, threadId, "running");
+    const result = await application.execution.run(context, { model: "native-codex-1", prompt: "Show both native Apps", signal: t.signal,
+      onEvent: event => {
+        events.push(event);
+        emitNativeOutput(generationId, event);
+        if (event.type === "item.upsert" && event.item.id.startsWith("native-terminal:") && !terminalPending) {
+          assert.ok(nativeRuntime?.hasPendingBackgroundWork);
+          // The real original adapter owns this pending capture. Only after the host
+          // observes its terminal and probes it may the real HTTP resource reply land.
+          terminalPending = Effect.runPromise(nativeRuntime.hasPendingBackgroundWork);
+          void terminalPending.then(() => resourceGate.resolve(), resourceGate.reject);
+        }
+      } });
+    endNativeOutput(generationId, "completed");
+    assert.equal(result.text, "native answer");
+    assert.equal(await terminalPending, true);
+    assert.deepEqual(resourceRequests, ["ui://weather/one", "ui://weather/two"]);
+    const output = getNativeOutput(generationId)!;
+    const apps = output.items.filter(item => item.mcpApp);
+    assert.equal(apps.length, 2, "Both source capture payloads must survive root completion and intermediate node updates.");
+    const terminalIndex = events.findIndex(event => event.type === "item.upsert" && event.item.id.startsWith("native-terminal:"));
+    for (const appItem of apps) {
+      const runningIndex = events.findIndex(event => event.type === "item.upsert" && event.item.id === appItem.id && event.item.status === "running");
+      const completedIndex = events.findIndex(event => event.type === "item.upsert" && event.item.id === appItem.id && Boolean(event.item.mcpApp));
+      assert.ok(runningIndex >= 0 && runningIndex < terminalIndex);
+      assert.ok(completedIndex > terminalIndex);
+      assert.equal(appItem.mcpApp!.producing.nativeSessionId, result.nativeSession?.sessionId);
+      assert.deepEqual(appItem.mcpToolResult?.structuredContent, { temp: 21 });
+    }
+    const headers = new Headers({ cookie: "current-native-browser" });
+    const selected = apps[0]!;
+    const snapshot = await mcpAppSnapshot(threadId, selected.id, headers);
+    assert.match(snapshot.html, /Captured after host terminal/);
+    assert.match(snapshot.html, /connect-src https:\/\/api\.weather\.test/);
+    assert.equal((await mcpAppTools(threadId, selected.id, headers)).tools[0]?.name, "get_weather");
+    assert.deepEqual(await mcpAppCall(threadId, selected.id, headers, { name: "get_weather", arguments: { city: "Oslo" } }),
+      { content: [{ type: "text", text: "Sunny refreshed" }], structuredContent: { temp: 21 } });
+    const nativeEvents = (await readFile(eventLog, "utf8")).trim().split("\n").map(line => JSON.parse(line));
+    assert.equal(nativeEvents.filter(event => event.rpc?.method === "turn/start").length, 1);
+    assert.equal(nativeEvents.filter(event => event.appResourceAfterTerminal === true).length, 2);
+    const toolCall = nativeEvents.find(event => event.rpc?.method === "mcpServer/tool/call")!.rpc;
+    assert.equal(toolCall.params.server, "weather");
+    assert.equal(toolCall.params.threadId, result.nativeSession?.sessionId);
+    await closeMcpAppSession(threadId);
+    await assert.rejects(mcpAppTools(threadId, selected.id, headers), { code: "mcp_app_session_stopped" });
+  } finally {
+    resourceGate.resolve();
+    try { await closeMcpAppSession(threadId); }
+    finally {
+      try { await application?.shutdown(); }
+      finally {
+        resourceServer.closeAllConnections();
+        const closing = Promise.withResolvers<void>();
+        resourceServer.close(error => error ? closing.reject(error) : closing.resolve());
+        await closing.promise;
+      }
+    }
+  }
 });

@@ -13,8 +13,8 @@
 }
 
 .root *, .controls *, .schedulePanel *, .milestonePanel *, .navigationPanel * { box-sizing: border-box; }
-.root :is(button, input, select, [tabindex]):focus-visible,
-.controls :is(button, input, select):focus-visible,
+.root :is(button, input, [data-slot="select-trigger"], [tabindex]):focus-visible,
+.controls :is(button, input, [data-slot="select-trigger"]):focus-visible,
 .schedulePanel :is(button, input):focus-visible,
 .milestonePanel button:focus-visible,
 .navigationPanel input:focus-visible {
@@ -24,7 +24,7 @@
 
 .localToolbar { flex-shrink: 0; padding: 10px 16px; border-bottom: 1px solid var(--border); }
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; color: var(--foreground); font-size: 12px; line-height: 18px; }
-.controls button, .controls select, .schedulePanel button, .milestonePanel button { font-family: inherit; }
+.controls button, .controls [data-slot="select-trigger"], .schedulePanel button, .milestonePanel button { font-family: inherit; }
 .segment { display: flex; flex-shrink: 0; align-items: center; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); }
 .segment button { height: 24px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); font-size: 12px; line-height: 18px; white-space: nowrap; cursor: pointer; }
 .segment button[aria-pressed="true"] { background: var(--surface); color: var(--foreground); box-shadow: 0 0 0 1px var(--border); font-weight: 500; }
@@ -76,7 +76,7 @@
 .groupRow > svg { flex-shrink: 0; }
 .count { color: var(--text-muted, var(--muted-foreground)); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .taskTitle { display: block; flex: 1; min-width: 0; overflow: hidden; padding: 2px 0; border: 0; border-radius: 3px; background: transparent; color: inherit; font: inherit; text-align: start; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-.taskTitle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.taskTitle:hover { background: var(--selection); }
 .laneRow[data-category="completed"] .taskTitle, .laneRow[data-category="canceled"] .taskTitle { color: var(--muted-foreground); }
 .statusIcon { display: inline-flex; flex: 0 0 13px; align-items: center; justify-content: center; width: 13px; height: 13px; border: 1.5px solid currentColor; border-radius: 50%; color: var(--muted-foreground); }
 .statusIcon[data-category="backlog"] { border-style: dashed; }
@@ -132,14 +132,14 @@
 .schedulePanel form :is(input, button) { min-height: 30px; height: 30px; font-size: 12px; }
 .schedulePanel form p { font-size: 11px; }
 .detailsLink { display: inline-flex; align-items: center; gap: 4px; margin-top: 14px; padding: 0; border: 0; background: transparent; color: var(--muted-foreground); font-size: 12px; cursor: pointer; }
-.detailsLink:hover { color: var(--foreground); text-decoration: underline; text-underline-offset: 3px; }
+.detailsLink:hover { color: var(--foreground); }
 .milestonePanel { width: min(340px, calc(100vw - 24px)); }
 .milestoneList { display: grid; gap: 0; margin: 8px 0 0; padding: 0; list-style: none; }
 .milestoneList li { display: grid; justify-items: start; gap: 3px; padding: 9px 0; border-top: 1px solid var(--border); }
 .milestoneList li > strong, .milestoneTitle { color: var(--foreground); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .milestoneList li > span { color: var(--muted-foreground); font-size: 11px; overflow-wrap: anywhere; }
 .milestoneTitle, .milestoneDate { padding: 0; border: 0; border-radius: 3px; background: transparent; text-align: start; cursor: pointer; }
-.milestoneTitle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.milestoneTitle:hover { color: var(--accent); }
 .milestoneDate { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 11px; }
 .milestoneDate:hover { color: var(--accent); }
 .empty { display: flex; flex: 1; min-height: 280px; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 32px 24px; color: var(--muted-foreground); text-align: center; }
@@ -165,7 +165,7 @@
 }
 
 @media (pointer: coarse) {
-  .controls :is(button, select) { min-height: 32px; }
+  .controls :is(button, [data-slot="select-trigger"]) { min-height: 32px; }
   .scheduleTrigger { opacity: 1; }
 }
 

@@ -6,6 +6,22 @@ import type {
   ProviderSettingsFormControl,
 } from "@t3tools/contracts";
 import type { ProviderIcon, ProviderEnvironmentField } from "@t3tools/provider-core/client";
+import type { AgentScope } from "./chat.ts";
+import type { ServerProviderSkill, ServerProviderSlashCommand } from "@t3tools/contracts";
+
+/** Provider-native discovery is distinct from saved WorkspaceSkill instructions. */
+export type ProviderSkillsRefreshInput = { scope: AgentScope; fresh?: boolean };
+export type ProviderSkillsSnapshot = {
+  instanceId: string;
+  revision: number;
+  cwd: string;
+  checkedAt: string;
+  pending: boolean;
+  skills: readonly ServerProviderSkill[];
+  commands: readonly ServerProviderSlashCommand[];
+  invocation: { skills: boolean; commands: boolean; skillSyntax: "mention" | "leading-mention" | "none"; commandAllowlist?: readonly string[] };
+  error?: { code: string; message: string };
+};
 
 export type ProviderDriver =
   | "codex" | "claude" | "cursor" | "grok" | "opencode"

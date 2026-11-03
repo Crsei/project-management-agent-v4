@@ -2,8 +2,8 @@
 .queryNotice { margin-bottom: 12px; font-size: 12px; line-height: 18px; color: var(--text-secondary); overflow-wrap: anywhere; }
 .queryNotice button { height: 28px; min-height: 28px; margin-top: 6px; padding-inline: 8px; font-size: 12px; }
 .selectField { display: flex; min-width: 0; flex-direction: column; gap: 8px; font-size: 12px; color: var(--text-secondary); }
-.selectField select, .issueFilters select { min-width: 0; min-height: 32px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--foreground); font: inherit; }
-.selectField select:focus-visible, .issueFilters select:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.selectField [data-slot="select-trigger"], .issueFilters [data-slot="select-trigger"] { min-width: 0; min-height: 32px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--foreground); font: inherit; }
+.selectField [data-slot="select-trigger"]:focus-visible, .issueFilters [data-slot="select-trigger"]:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .dateActions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dateActions button { min-height: 30px; height: 30px; }
 .timeline:not([data-today-visible])::before, .timeline:not([data-today-visible])::after { display: none; }
@@ -21,7 +21,7 @@
 .unavailable p { max-width: 260px; font-size: 12px; line-height: 18px; }
 .issueFilters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 12px; }
 .issueFilters > input { flex: 1 1 180px; min-width: 0; }
-.issueFilters select { flex: 1 1 130px; }
+.issueFilters [data-slot="select-trigger"] { flex: 1 1 130px; }
 .issueList { list-style: none; margin: 0 0 16px; padding: 0; }
 .issueList li + li { border-top: 1px solid var(--border); }
 .issueList button { display: flex; width: 100%; height: auto; min-height: 48px; justify-content: flex-start; gap: 12px; padding: 10px 8px; font-size: 12px; text-align: left; }

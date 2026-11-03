@@ -24,7 +24,7 @@ export function RichTextEditor({ value, onChange, disabled = false, label }: Pro
     editable: !disabled,
     immediatelyRender: false,
     editorProps: {
-      attributes: { role: "textbox", "aria-multiline": "true", "aria-label": name, "aria-describedby": `${id}-help`, class: "min-h-40 p-3 outline-none [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_pre]:overflow-auto [&_pre]:rounded-control [&_pre]:bg-muted [&_pre]:p-3 [&_a]:underline" },
+      attributes: { role: "textbox", "aria-multiline": "true", "aria-label": name, "aria-describedby": `${id}-help`, class: "min-h-40 p-3 outline-none [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_pre]:overflow-auto [&_pre]:rounded-control [&_pre]:bg-muted [&_pre]:p-3 [&_a]:text-primary [&_a:hover]:text-foreground" },
     },
     onUpdate: ({ editor: current }) => {
       const markdown = current.getMarkdown()

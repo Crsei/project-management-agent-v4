@@ -7,6 +7,7 @@ import { useProviders } from "@agent/hooks/use-providers";
 import type { WorkspaceAgent } from "@agent-workspace/contracts/workspace";
 import { useWorkspace } from "./provider";
 import { usePanelDraft } from "./use-panel-draft";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export function AgentsPanel() {
   const { state, threadId, update, runAgent, busy, submitting, ready, setPanel, settings } =
@@ -168,7 +169,7 @@ export function AgentsPanel() {
               )}
               <label className="live-panel-field">
                 <span>模型提供商</span>
-                <select
+                <RadixSelect
                   className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"
                   value={selectedProviderId}
                   onChange={(event) => {
@@ -192,11 +193,11 @@ export function AgentsPanel() {
                       {provider.label}
                     </option>
                   ))}
-                </select>
+                </RadixSelect>
               </label>
               <label className="live-panel-field">
                 <span>模型</span>
-                <select
+                <RadixSelect
                   className="h-9 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"
                   value={selected.model}
                   onChange={(event) => changeAgent(selected.id, { model: event.target.value })}
@@ -209,7 +210,7 @@ export function AgentsPanel() {
                       {model.label}
                     </option>
                   ))}
-                </select>
+                </RadixSelect>
               </label>
               <label className="live-panel-field">
                 <span>系统指令（最多 16,000 字符）</span>

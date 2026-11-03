@@ -3566,6 +3566,15 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     { isError: false, title: undefined },
   ])("keeps late MCP display metadata with %j", ({ isError, title }) =>
     Effect.gen(function* () {
+      const fixture = yield* PmNativeTestHost;
+      let toolAuthorizations = 0;
+      yield* fixture.bindGeneration({
+        threadId: ThreadId.make("thread-claude-wake"),
+        executionId: "run-mcp-presentation",
+        actions: ["tool"],
+        mcpServers: [{ name: "weather", transport: "stdio", command: "fixture-weather-mcp", args: [] }],
+        authorize: () => Effect.sync(() => { toolAuthorizations++; }),
+      });
       const harness = yield* makeWakeHarness;
       yield* harness.runtime.startTurn(
         makeClaudeTestTurnInput({
@@ -3579,6 +3588,13 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       );
       const toolName = "mcp__weather__get_weather";
       const id = "weather-call";
+      const authorizationsBeforeCall = toolAuthorizations;
+      const denied = yield* Effect.promise(() => harness.getOpenedOptions()!.canUseTool!(
+        "mcp__unbound_weather__get_weather", { city: "Berlin" },
+        { signal: new AbortController().signal, toolUseID: "unbound-weather-call", requestId: "unbound-weather-request" },
+      ));
+      assert.equal(denied.behavior, "deny");
+      assert.equal(toolAuthorizations, authorizationsBeforeCall);
       const permission = yield* Effect.promise(() =>
         harness.getOpenedOptions()!.canUseTool!(
           toolName,
@@ -3589,13 +3605,12 @@ describe("ClaudeAdapterV2 background wake turns", () => {
             requestId: "weather-request",
           },
         ),
-      ).pipe(Effect.forkScoped);
-      const request = yield* Queue.take(harness.runtimeRequestReceipts);
-      yield* harness.runtime.respondToRuntimeRequest({
-        requestId: request.runtimeRequest.id,
-        decision: "accept",
-      });
-      yield* Fiber.join(permission);
+      );
+      assert.equal(permission.behavior, "allow");
+      assert.isAbove(toolAuthorizations, authorizationsBeforeCall);
+      yield* harness.until(() => harness.events.some(event =>
+        event.type === "turn_item.updated" && event.turnItem.type === "dynamic_tool"));
+      assert.isFalse(harness.events.some(event => event.type === "runtime_request.updated"));
       yield* harness.offerAndWait(
         claudeSdkFrame({
           type: "assistant",
@@ -3671,7 +3686,10 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     }).pipe(
       Effect.scoped,
       Effect.provide(
-        Layer.mergeAll(IdAllocator.layer, pmRuntimeHostLayer, NodeServices.layer),
+        Layer.mergeAll(IdAllocator.layer, layerPmNativeTestHost({
+          driver: "claude", instanceId: ClaudeAdapterV2.CLAUDE_DEFAULT_INSTANCE_ID,
+          cwd: "/workspace", prefix: "pm-claude-mcp-presentation-",
+        }), NodeServices.layer),
       ),
     ),
   );

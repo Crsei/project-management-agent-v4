@@ -7,8 +7,8 @@
 .warning { padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .form { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
 .form label { font-size: 13px; display: flex; align-items: center; gap: 8px; }
-.form input, .form select, .form textarea { min-width: 0; max-width: 100%; }
-.form select, .form textarea { border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; background: var(--background); color: inherit; font-size: 13px; }
+.form input, .form [data-slot="select-trigger"], .form textarea { min-width: 0; max-width: 100%; }
+.form [data-slot="select-trigger"], .form textarea { border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; background: var(--background); color: inherit; font-size: 13px; }
 .form textarea { min-height: 90px; resize: vertical; font-family: monospace; }
 .form button { justify-self: start; }
 .list { display: grid; gap: 10px; }

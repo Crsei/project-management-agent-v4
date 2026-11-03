@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-grok/src/server/adapter.ts",
   "beforeSha256": "c3bc333e7aa55822fe4e8b1edff56bc1abf5e1e2c9bdce71d6aba905fcded2a7",
-  "afterSha256": "b5560110cf77e5ead0699f8d0cb53e63b803e46a818bbc5befdb264f910c08de",
+  "afterSha256": "9727e32da1093e188954d22fba7fd8a70fd92a6a61e80b33b59c9267f207ef64",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -36,6 +36,24 @@
         "  readonly selfInvocation: SelfInvocation;\n"
       ],
       "after": []
+    },
+    {
+      "start": 241,
+      "before": [
+        "      const mention = leadingGrokSkillMention(text);\n"
+      ],
+      "after": [
+        "      const mention = leadingGrokSkillMention(turnInput.userMessageText ?? text);\n"
+      ]
+    },
+    {
+      "start": 250,
+      "before": [
+        "            ? `/${mention.name}${mention.rest}`\n"
+      ],
+      "after": [
+        "            ? `/${mention.name}${turnInput.userMessageText === undefined ? mention.rest : `\\n${text}`}`\n"
+      ]
     },
     {
       "start": 348,

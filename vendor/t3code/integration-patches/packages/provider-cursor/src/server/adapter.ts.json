@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-cursor/src/server/adapter.ts",
   "beforeSha256": "559adaedca766123fbb7c1bff8f651e047cf4ee0403a91a46ef36e504cc6046e",
-  "afterSha256": "15e07391a5934c39a6f7ca8724cf7625073fff31095953cb185ac6a3c54405a6",
+  "afterSha256": "b4dd847120ed07ace96604a36c75abdd71d8718c3336724a8ad946b0ea83417c",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -200,6 +200,22 @@
       "after": []
     },
     {
+      "start": 2193,
+      "before": [],
+      "after": [
+        "          const selectedText = turnInput.userMessageText ?? rawText;\n"
+      ]
+    },
+    {
+      "start": 2196,
+      "before": [
+        "          if (hasCursorSkillMention(rawText) && cursorSkillNames === undefined) {\n"
+      ],
+      "after": [
+        "          if (hasCursorSkillMention(selectedText) && cursorSkillNames === undefined) {\n"
+      ]
+    },
+    {
       "start": 2210,
       "before": [
         "          const userText = t3OrchestrationPrompt({\n",
@@ -218,8 +234,14 @@
         "            deviceInstructionsDelivered: delivered.device,\n"
       ],
       "after": [
+        "          const selectedSuffix = turnInput.userMessageText?.trim();\n",
+        "          const rewritten = cursorSkillNames === undefined ? rawText : turnInput.userMessageText === undefined\n",
+        "            ? rewriteCursorSkillMentions(rawText, cursorSkillNames)\n",
+        "            : selectedSuffix && rawText.endsWith(selectedSuffix)\n",
+        "              ? rawText.slice(0, -selectedSuffix.length) + rewriteCursorSkillMentions(selectedSuffix, cursorSkillNames)\n",
+        "              : rawText;\n",
         "          const userText = yield* providerMessageTextWithAttachmentPaths({\n",
-        "            text: cursorSkillNames === undefined ? rawText : rewriteCursorSkillMentions(rawText, cursorSkillNames),\n",
+        "            text: rewritten,\n",
         "            attachments: turnInput.message.attachments,\n",
         "            resolveAttachmentPath: host.resolveAttachmentPath,\n",
         "            resolveExtractedTextPath: host.resolveExtractedTextPath,\n"

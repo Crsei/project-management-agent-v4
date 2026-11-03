@@ -19,6 +19,7 @@ import { useWorkspace } from "./provider";
 import { errorMessage, getActionIdentity, releaseActionIdentity, timestamp } from "./api";
 import { usePanelDraft } from "./use-panel-draft";
 import { workspaceClient } from "../network";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type TargetDraft = { source: string; input: string; snapshot?: AutomationRunTemplate };
 type ScheduleDraft = TargetDraft & {
@@ -96,7 +97,7 @@ function TargetFields({
       <legend className="text-sm font-medium">执行模板</legend>
       <label className="live-panel-field">
         <span>Agent / 工作流</span>
-        <select
+        <RadixSelect
           className="live-panel-select"
           value={draft.source}
           onChange={(event) => change({ source: event.target.value })}
@@ -122,7 +123,7 @@ function TargetFields({
             ].includes(draft.source) && (
               <option value={draft.source}>原执行对象已删除，请重新选择</option>
             )}
-        </select>
+        </RadixSelect>
       </label>
       <label className="live-panel-field">
         <span>任务输入（最多 8,000 字符）</span>
@@ -548,7 +549,7 @@ export function AutomationPanel({ active = true }: { active?: boolean }) {
               </label>
               <label className="live-panel-field">
                 <span>时间方式</span>
-                <select
+                <RadixSelect
                   className="live-panel-select"
                   value={scheduleDraft.timing}
                   onChange={(event) =>
@@ -560,7 +561,7 @@ export function AutomationPanel({ active = true }: { active?: boolean }) {
                 >
                   <option value="interval">按间隔</option>
                   <option value="fixed_time">每周固定时间</option>
-                </select>
+                </RadixSelect>
               </label>
               {scheduleDraft.timing === "interval" ? (
                 <label className="live-panel-field">
@@ -615,7 +616,7 @@ export function AutomationPanel({ active = true }: { active?: boolean }) {
               )}
               <label className="live-panel-field">
                 <span>停机错过策略</span>
-                <select
+                <RadixSelect
                   className="live-panel-select"
                   value={scheduleDraft.missedPolicy}
                   onChange={(event) =>
@@ -627,7 +628,7 @@ export function AutomationPanel({ active = true }: { active?: boolean }) {
                 >
                   <option value="skip">跳过所有错过时段</option>
                   <option value="run_once">恢复后最多补跑一次</option>
-                </select>
+                </RadixSelect>
               </label>
               <TargetFields
                 draft={scheduleDraft}
@@ -782,7 +783,7 @@ export function AutomationPanel({ active = true }: { active?: boolean }) {
                 </span>
               </div>
               <a
-                className="break-all text-sm underline"
+                className="break-all text-sm hover:text-primary"
                 href={`https://github.com/${encodeURIComponent(watch.owner)}/${encodeURIComponent(watch.repo)}/pull/${watch.number}`}
                 target="_blank"
                 rel="noreferrer"

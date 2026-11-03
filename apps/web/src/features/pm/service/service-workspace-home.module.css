@@ -28,9 +28,9 @@
 .actions button { height: var(--control-height); min-height: var(--control-height); padding-inline: 12px; font-size: var(--text-control); line-height: var(--text-control--line-height); }
 .contextLine { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; color: var(--text-muted); font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
 .contextLine a, .panelLink { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; color: var(--text-secondary); text-decoration: none; }
-.contextLine a:hover, .panelLink:hover, .panelFootnote a:hover, .scopeNote a:hover { color: var(--foreground); text-decoration: underline; }
+.contextLine a:hover, .panelLink:hover, .panelFootnote a:hover, .scopeNote a:hover { color: var(--foreground); }
 .scopeNote { margin: 0 0 12px; font-size: var(--text-meta); line-height: var(--text-meta--line-height); color: var(--text-secondary); overflow-wrap: anywhere; }
-.scopeNote a, .panelFootnote a { text-decoration: underline; text-underline-offset: 3px; }
+.scopeNote a, .panelFootnote a { color: var(--accent); }
 .readNotice { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 0 0 12px; padding: 12px 16px; border: 1px solid color-mix(in srgb, var(--destructive) 35%, var(--border)); border-radius: var(--radius-popover-value); background: color-mix(in srgb, var(--destructive) 4%, var(--surface)); box-shadow: inset 0 2px 0 var(--destructive), var(--edge-shadow); color: var(--destructive); font-size: var(--text-control); line-height: var(--text-control--line-height); overflow-wrap: anywhere; }
 .readNotice p { margin: 4px 0 0; line-height: var(--text-control--line-height); }
 .readNotice button, .readNotice a { flex-shrink: 0; }
@@ -72,7 +72,7 @@
 .projectRow { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(110px, 1fr) auto; gap: 16px; align-items: center; min-height: 64px; padding: 12px 16px; }
 .projectIdentity { display: flex; flex-direction: column; gap: 4px; }
 .projectIdentity a { display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; font-size: var(--text-body); line-height: var(--text-body--line-height); font-weight: 500; }
-.projectIdentity a:hover { text-decoration: underline; }
+.projectIdentity a:hover { color: var(--accent); }
 .projectIdentity a svg { flex-shrink: 0; color: var(--text-secondary); }
 .projectIdentity a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 6px; border: 1px solid var(--border); border-radius: var(--radius-inline-value); font-size: var(--text-meta); line-height: var(--text-meta--line-height); color: var(--text-secondary); }
@@ -92,7 +92,8 @@
 .deadlineRow .taskMeta { font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
 .deadlineDot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: var(--text-secondary); }
 .deadlineRow > time { flex-shrink: 0; color: var(--text-muted); font-size: var(--text-meta); line-height: var(--text-meta--line-height); font-variant-numeric: tabular-nums; }
-.moreDeadlines { margin: 2px 10px 4px 26px; padding: 6px 3px; color: var(--text-secondary); text-decoration: underline; text-underline-offset: 3px; font-size: var(--text-meta); line-height: var(--text-meta--line-height); cursor: pointer; }
+.moreDeadlines { margin: 2px 10px 4px 26px; padding: 6px 3px; color: var(--text-secondary); font-size: var(--text-meta); line-height: var(--text-meta--line-height); cursor: pointer; }
+.moreDeadlines:hover { color: var(--foreground); background: var(--surface-hover); }
 .nothingDue { margin: 4px 10px 6px; padding-block: 6px; color: var(--text-muted); font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
 .activityBody { padding: 16px; }
 .activityBody .readNotice { margin-bottom: 0; }
@@ -103,11 +104,12 @@
 .activityMain { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; overflow-wrap: anywhere; color: var(--text-secondary); font-size: var(--text-control); line-height: var(--text-control--line-height); }
 .eventType { color: var(--foreground); font-size: var(--text-control); line-height: var(--text-control--line-height); font-weight: 500; }
 .activityMain a { color: var(--text-secondary); text-decoration: none; line-height: var(--text-control--line-height); }
-.activityMain a:hover { text-decoration: underline; }
+.activityMain a:hover { color: var(--foreground); }
 .activityTime { display: block; color: var(--text-muted); font-size: var(--text-meta); line-height: var(--text-meta--line-height); }
 .unavailable { display: flex; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 12px; min-width: 0; padding: 24px; color: var(--text-secondary); text-align: center; overflow-wrap: anywhere; }
 .unavailable h1 { color: var(--foreground); font-size: var(--text-page); line-height: var(--text-page--line-height); font-weight: 600; }
-.unavailable a { text-decoration: underline; text-underline-offset: 3px; }
+.unavailable a { color: var(--accent); }
+.unavailable a:hover { background: var(--selection); }
 @media (max-width: 1100px) {
   .columns { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; }
   .stack { gap: 16px; }

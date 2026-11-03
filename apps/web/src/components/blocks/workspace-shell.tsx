@@ -80,6 +80,8 @@ export type WorkspaceShellProps = {
   /** Optional 48px activity rail. Without it, the original navigation layout is retained. */
   activityBar?: ReactNode
   sidebar?: ReactNode
+  /** Brand slot; moves the collapse control beside the brand and into the drawer header. */
+  sidebarHeader?: ReactNode
   children: ReactNode
   toolbar?: ReactNode
   inspector?: ReactNode
@@ -98,6 +100,7 @@ export function WorkspaceShell({
   title,
   activityBar,
   sidebar,
+  sidebarHeader,
   children,
   toolbar,
   inspector,
@@ -140,6 +143,7 @@ export function WorkspaceShell({
   const sidebarId = useId()
   const sidebarRef = useRef<HTMLElement>(null)
   const navigationOpenerRef = useRef<HTMLButtonElement>(null)
+  const sidebarCollapseRef = useRef<HTMLButtonElement>(null)
   const [requestedSidebarWidth, setSidebarWidth] = useLayoutValue(
     controlledSidebarWidth,
     defaultSidebarWidth,
@@ -271,7 +275,7 @@ export function WorkspaceShell({
   const panelBody = <div className={styles.inspectorBody}>{inspector}</div>
   const header = (
     <header className={styles.header}>
-      {sidebar !== undefined && <Button
+      {sidebar !== undefined && (sidebarHeader === undefined || !sidebarInline || sidebarCollapsed) && <Button
         variant="ghost"
         size="icon"
         className={styles.sidebarToggle}
@@ -290,11 +294,13 @@ export function WorkspaceShell({
             ? navigationOpen
             : !sidebarCollapsed
         }
-        onClick={() =>
-          drawerNavigation && !sidebarInline
-            ? setNavigationOpen(true)
-            : setSidebarCollapsed(!sidebarCollapsed)
-        }
+        onClick={() => {
+          if (drawerNavigation && !sidebarInline) setNavigationOpen(true)
+          else {
+            setSidebarCollapsed(!sidebarCollapsed)
+            if (sidebarCollapsed && sidebarHeader !== undefined) requestAnimationFrame(() => sidebarCollapseRef.current?.focus())
+          }
+        }}
       >
         {(
           drawerNavigation && !sidebarInline
@@ -364,7 +370,16 @@ export function WorkspaceShell({
           >
             {sidebarCollapsed && collapsedSidebar !== undefined
               ? collapsedSidebar
-              : sidebar}
+              : sidebarHeader === undefined ? sidebar : <div className="flex h-full min-h-0 flex-col">
+                <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
+                  {sidebarHeader}
+                  <Button ref={sidebarCollapseRef} variant="ghost" size="icon" aria-label={t("workspaceShell.collapseSidebar")} aria-expanded
+                    onClick={() => { setSidebarCollapsed(true); requestAnimationFrame(() => navigationOpenerRef.current?.focus()) }}>
+                    <PanelLeftClose />
+                  </Button>
+                </div>
+                <div className="min-h-0 flex-1">{sidebar}</div>
+              </div>}
           </aside>
         )}
         {sidebarResizable && sidebar !== undefined && (!sidebarCollapsed || collapseSnap !== null) && (
@@ -442,8 +457,9 @@ export function WorkspaceShell({
                   className={cn(styles.drawer, styles.navigationDrawer)}
                   onCloseAutoFocus={returnFocus(navigationOpenerRef)}
                 >
-                  <div className={styles.inspectorHeader}>
-                    <DialogPrimitive.Title>
+                  <div className={cn(styles.inspectorHeader, sidebarHeader !== undefined && "min-h-14!")}>
+                    {sidebarHeader}
+                    <DialogPrimitive.Title className={sidebarHeader === undefined ? undefined : "sr-only"}>
                       {t("workspaceShell.workspaceNavigation")}
                     </DialogPrimitive.Title>
                     <Button

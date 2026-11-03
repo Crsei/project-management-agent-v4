@@ -244,7 +244,7 @@ function ServiceSettingsContent() {
             <p className="text-sm text-muted-foreground">
               {t("成员、团队和工作量通过功能页签切换；成员布局在成员页签内选择。", "Members, teams and workload use functional tabs. Choose member layouts inside the Members tab.")}
             </p>
-            <Link className="inline-block rounded-control text-sm underline focus-visible:ring-2 focus-visible:ring-ring" to={`/pm/${encodeURIComponent(workspace.id)}/members?tab=members`}>
+            <Link className="inline-block rounded-control text-sm text-primary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" to={`/pm/${encodeURIComponent(workspace.id)}/members?tab=members`}>
               {t("打开成员与团队", "Open members & teams")}
             </Link>
           </Panel>
@@ -277,7 +277,7 @@ function ServiceSettingsContent() {
             "Browse example-data versions of the same pages. The component showcase is isolated from the real service and never writes to the backend.",
           )}
         </p>
-        <Link className="text-sm underline" to="/lab/pm/execra-ai/projects">
+        <Link className="text-sm text-primary hover:text-foreground" to="/lab/pm/execra-ai/projects">
           {t(
             "打开组件展示（示例数据）",
             "Open the component showcase (example data)",

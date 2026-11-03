@@ -1,4 +1,4 @@
-const defaultWorkspaceUrl = "http://127.0.0.1:3223/agent/workspace";
+const defaultAppUrl = "http://127.0.0.1:3224/pm";
 
 function publicUrl(value: string | undefined, httpsOnly = false): URL | undefined {
   if (!value?.trim()) return undefined;
@@ -15,21 +15,32 @@ function publicUrl(value: string | undefined, httpsOnly = false): URL | undefine
   }
 }
 
-const configuredWorkspaceUrl = import.meta.env.PUBLIC_WORKSPACE_URL?.trim();
-const workspace = publicUrl(configuredWorkspaceUrl || defaultWorkspaceUrl);
+// PUBLIC_APP_URL is the current name. PUBLIC_WORKSPACE_URL stays supported so
+// an existing deployment does not break while it points at the unified /pm app.
+const configuredAppUrl =
+  import.meta.env.PUBLIC_APP_URL?.trim() || import.meta.env.PUBLIC_WORKSPACE_URL?.trim();
+const app = publicUrl(configuredAppUrl || defaultAppUrl);
 
-if (!workspace) {
+if (!app) {
   throw new Error(
-    "PUBLIC_WORKSPACE_URL must be an absolute HTTP(S) URL without embedded credentials.",
+    "PUBLIC_APP_URL (or PUBLIC_WORKSPACE_URL) must be an absolute HTTP(S) URL without embedded credentials.",
   );
 }
 
-export const workspaceUrl = workspace.href;
-export const workspaceIsLocal = ["localhost", "127.0.0.1", "[::1]"].includes(workspace.hostname);
-export const workspaceLabel = workspaceIsLocal ? "Open local workspace" : "Open workspace";
-export const workspaceNote = workspaceIsLocal
-  ? `Opens ${workspaceUrl} on this computer. Start your workspace server first.`
-  : `Opens your configured workspace at ${workspace.origin}. This site does not run agents.`;
+export const appUrl = app.href;
+export const appIsLocal = ["localhost", "127.0.0.1", "[::1]"].includes(app.hostname);
+export const appLabel = appIsLocal ? "打开本地工作台" : "打开工作台";
+export const appNote = appIsLocal
+  ? `在本机打开 ${appUrl}。请先启动 v4 服务组，并使用 .local/access.json 中的账号登录。`
+  : `打开已配置的工作台 ${app.origin}。营销站本身不执行 Agent。`;
 
-// Public, build-time links only. Never put access tokens or provider keys in these values.
+export const agentWorkspaceUrl = new URL("/agent/workspace", app).href;
+
+// Backwards-compatible exports for the older guide pages.
+export const workspaceUrl = appUrl;
+export const workspaceIsLocal = appIsLocal;
+export const workspaceLabel = appLabel;
+export const workspaceNote = appNote;
+
+// Public, build-time links only. Never put access tokens or provider keys here.
 export const desktopReleaseUrl = publicUrl(import.meta.env.PUBLIC_DESKTOP_RELEASE_URL, true)?.href;

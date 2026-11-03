@@ -13,7 +13,10 @@ export const agentFileAreaSchema = z.strictObject({
 });
 export type AgentFileArea = z.infer<typeof agentFileAreaSchema>;
 export const agentCatalogSchema = z.strictObject({ workspaces: z.array(z.strictObject({
-  id: z.uuid(), name: z.string(), fileArea: agentFileAreaSchema,
+  id: z.uuid(), name: z.string(),
+  /** Explicit workspace-wide consent eligibility; absent older catalogs grant no new authority. */
+  workspaceAllowed: z.boolean().optional(),
+  fileArea: agentFileAreaSchema,
   projects: z.array(z.strictObject({ id: z.string(), name: z.string(), fileArea: agentFileAreaSchema })),
 })) });
 export type AgentCatalog = z.infer<typeof agentCatalogSchema>;

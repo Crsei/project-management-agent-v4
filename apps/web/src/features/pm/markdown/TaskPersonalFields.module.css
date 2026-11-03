@@ -152,10 +152,14 @@
 .field:focus-visible,
 .icon:focus-visible,
 .completion:focus-visible,
-.choice:focus-visible,
 .dateBody :is(button, input):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+.choice:focus-visible {
+  outline: none;
+  background: var(--surface-hover);
 }
 
 .menu,

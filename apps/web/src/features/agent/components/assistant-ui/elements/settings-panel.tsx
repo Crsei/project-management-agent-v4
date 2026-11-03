@@ -6,6 +6,7 @@ import { cn } from "@agent/lib/utils";
 import { field, mono, paper } from "./surfaces";
 import { clamp } from "../utils/range";
 import { useAgentText } from "@agent/src/i18n";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export interface SettingToggle {
   key: string;
@@ -93,7 +94,7 @@ export function SettingsPanel({
             <label className="sr-only" htmlFor="settings-provider-instance">
               {t("模型提供商", "Model providers")}
             </label>
-            <select
+            <RadixSelect
               id="settings-provider-instance"
               value={selectedProvider ? providerInstanceId : ""}
               onChange={(event) => changeProvider(event.target.value)}
@@ -112,7 +113,7 @@ export function SettingsPanel({
                   {provider.label}
                 </option>
               ))}
-            </select>
+            </RadixSelect>
 
             <div className="flex flex-col gap-2" role="group" aria-label={t("模型", "Model")}>
               {providers.map((group) => (
@@ -166,19 +167,19 @@ export function SettingsPanel({
             role="status"
             className={cn(field, "flex flex-col gap-2 rounded-lg px-3 py-2 text-xs")}
           >
-            <select
+            <RadixSelect
               disabled
               aria-label={t("模型提供商", "Model providers")}
               className="text-muted-foreground bg-transparent outline-none"
             >
               <option>{t("未配置提供商", "No provider configured")}</option>
-            </select>
+            </RadixSelect>
             <p className="text-muted-foreground">
               {t("尚未配置模型提供商，模型选择已禁用。", "No model provider is configured; model selection is disabled.")}
             </p>
             <Link
               to="/agent/settings/providers"
-              className="text-primary w-fit underline underline-offset-2"
+              className="text-primary w-fit hover:text-primary/80"
             >
               {t("前往配置模型提供商", "Configure model providers")}
             </Link>

@@ -1,17 +1,17 @@
 {
   "version": 1,
   "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
-  "sourceManifestSha256": "77b77eec62ad94d53a7a92cfa3578026e8561701d0a1e47253a7143aa9d3b622",
+  "sourceManifestSha256": "989f2c04b8eb0a65d2e511067185ef4965d910e8f29412e94985441d54ff889f",
   "scope": "Exact current selected upstream + explicit existing local adaptations/resources. No runtime, PM host persistence or source repository is copied wholesale.",
   "patchFormat": "integration-patches/*.json exact original-line splices with whole-file SHA256 preconditions and postconditions",
   "verification": "Static inventory authoring only; no check/build/test/install/smoke/service executed by T18. Parent M6 gate remains open.",
   "summary": {
     "upstreamInputs": 959,
     "upstreamSelected": 861,
-    "upstreamPristine": 699,
-    "upstreamPatched": 162,
-    "existingAdditionalAssets": 339,
-    "outputFilesExcludingSelf": 1200
+    "upstreamPristine": 697,
+    "upstreamPatched": 164,
+    "existingAdditionalAssets": 346,
+    "outputFilesExcludingSelf": 1213
   },
   "files": [
     {
@@ -26,8 +26,8 @@
     {
       "destination": "vendor/t3code/SYNC.md",
       "asset": "vendor/t3code/SYNC.md",
-      "sha256": "17a7bb8f6a43def4d24b7332ec853997b37de223ee25d154d9306e873a91e3e3",
-      "bytes": 12759,
+      "sha256": "76da05187a66df6c9ec8389f69c692dcee439026df96879e9a54e52ee5434e2f",
+      "bytes": 18520,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -231,13 +231,13 @@
       "destination": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts",
       "source": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts",
       "upstreamSha256": "6f0bd45c713fd0f12ead8ac992d87346e5af112660192623ada348d8d735dc73",
-      "sha256": "2dc7ad1e70c5eb092d26f06b7dcefc13a1aa7698fbffc8c4a87e8950c4d40629",
-      "bytes": 553581,
+      "sha256": "5ea9de339ee87231915d202550d09e4fe0d25195b190af2c3b326aedb4d468bd",
+      "bytes": 554728,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts.json",
-        "sha256": "8227c02fff4f48740db29962dd15d57ffb13d52ee75ae46cddf7689b6acce1b0"
+        "sha256": "e6db254e06f0db316c835894a5ef9750800b3b7f420e71063e8871ea65942fad"
       }
     },
     {
@@ -257,13 +257,13 @@
       "destination": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
       "source": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
       "upstreamSha256": "8b7146400cd440e084d89c6b8f578f325d634aa70bad3c51a94cf9146260ba8b",
-      "sha256": "297578bde3294b154dcc9ff78ec67668f8034982ad44d59c7bc00b23edeee3a9",
-      "bytes": 464433,
+      "sha256": "c46ef51e33d12bf4f8f082972d3208eadca17952b38a49db94fb362a4bbaf274",
+      "bytes": 466413,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts.json",
-        "sha256": "f93f9984893f4caabf760994b405ad340fd891bca24e554eb976aa1f4d8ad556"
+        "sha256": "48b87085e71022c06e4065672d5a5a2cf5b6acc673a660ca4d8e34f9c68185fa"
       }
     },
     {
@@ -287,6 +287,14 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeSkillSelection.test.ts",
+      "adaptation": "vendor/t3code/mcp-skills-adaptations.json",
+      "sha256": "9b349e7818d80c4d3fa4733d5d807da56c12ab9b2c5f9d7ae8d764756391423b",
+      "bytes": 777,
+      "mode": 420,
+      "provenance": "adapted-upstream"
     },
     {
       "destination": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeTaskOutputTail.test.ts",
@@ -336,13 +344,13 @@
       "destination": "vendor/t3code/apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
       "source": "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
       "upstreamSha256": "44f0cfba17c5ddf47cd5b75ab443d18c3a8080cc4638034b5b7e75c36a75e422",
-      "sha256": "d123d510381feccfc93233a6a5c0a9f8c24499c3fc4ce96773c533c35d39f24d",
-      "bytes": 329738,
+      "sha256": "9eee00ba839d6b57b5d3888336525fa5aa2868471545df5e6af03a2b2c1fffdf",
+      "bytes": 330836,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts.json",
-        "sha256": "b8af8a8d6c8e437b88bcfe445b21498db18c5f8b091a0e4a6d901c39faf4afe0"
+        "sha256": "b3b31f19978560f548f67db67058e9ed0c629c99ff29ff2ea338a8551e36ce80"
       }
     },
     {
@@ -2335,8 +2343,8 @@
     {
       "destination": "vendor/t3code/integration-patches.json",
       "asset": "vendor/t3code/integration-patches.json",
-      "sha256": "8489655e65f6e58c8a7cf34e0fdd838895adcbd5e5a4a43221a5c4157d853748",
-      "bytes": 55308,
+      "sha256": "52cb022b5257955311a8748b8c3859f405195f153e1804f288af30f7479751c0",
+      "bytes": 57557,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -2398,8 +2406,8 @@
     {
       "destination": "vendor/t3code/integration-patches/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts.json",
       "asset": "vendor/t3code/integration-patches/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.test.ts.json",
-      "sha256": "8227c02fff4f48740db29962dd15d57ffb13d52ee75ae46cddf7689b6acce1b0",
-      "bytes": 117453,
+      "sha256": "e6db254e06f0db316c835894a5ef9750800b3b7f420e71063e8871ea65942fad",
+      "bytes": 119858,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -2416,8 +2424,8 @@
     {
       "destination": "vendor/t3code/integration-patches/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts.json",
       "asset": "vendor/t3code/integration-patches/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts.json",
-      "sha256": "f93f9984893f4caabf760994b405ad340fd891bca24e554eb976aa1f4d8ad556",
-      "bytes": 48971,
+      "sha256": "48b87085e71022c06e4065672d5a5a2cf5b6acc673a660ca4d8e34f9c68185fa",
+      "bytes": 52250,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -2452,8 +2460,8 @@
     {
       "destination": "vendor/t3code/integration-patches/apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts.json",
       "asset": "vendor/t3code/integration-patches/apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts.json",
-      "sha256": "b8af8a8d6c8e437b88bcfe445b21498db18c5f8b091a0e4a6d901c39faf4afe0",
-      "bytes": 16767,
+      "sha256": "b3b31f19978560f548f67db67058e9ed0c629c99ff29ff2ea338a8551e36ce80",
+      "bytes": 18652,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3262,8 +3270,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-acp/src/server/adapter.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-acp/src/server/adapter.ts.json",
-      "sha256": "579d2b166d9ff08e8c887e26b99af617e1d89d256953465a2c4320d6fa84e8b8",
-      "bytes": 24306,
+      "sha256": "ef0bb53322ff8f2334be60e38bc2ec4953bc6c1ee043b80da9f4328cd396f7e2",
+      "bytes": 26192,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3298,8 +3306,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-core/src/server/ProviderAdapter.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-core/src/server/ProviderAdapter.ts.json",
-      "sha256": "95dbcdcbd3df47982a4336067b8cd237c0d71089d4de72837795e3d6a73ff21e",
-      "bytes": 2200,
+      "sha256": "e48005a20991b4bb2e8c21471bdfc876578a92bc9e981ab2f11029a51b06b972",
+      "bytes": 2435,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3379,8 +3387,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-cursor/src/server/adapter.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-cursor/src/server/adapter.ts.json",
-      "sha256": "8bd18287dc3c83f23039fa0aa445d897d01537cd8ede5c32b93b8eb41ccb63c6",
-      "bytes": 19179,
+      "sha256": "934b7e1347dab907956a75d1622ef3839c76982ccfa42c53d8d88d1bab1b86a2",
+      "bytes": 20066,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3451,8 +3459,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-grok/src/server/adapter.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-grok/src/server/adapter.ts.json",
-      "sha256": "155e16740a7b7ca34cf2610f1c1fce547863db40a0a6eb2550feccf4d7466824",
-      "bytes": 1919,
+      "sha256": "8c4d98cf08111af4cbe261eb76d7abf98a8e9c343bfda04e3de360b4847bd871",
+      "bytes": 2425,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3496,8 +3504,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-muse/src/server/adapter.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-muse/src/server/adapter.ts.json",
-      "sha256": "06c75477a826cac07a4a7eee4c6ad359163684cdb44e6f085e6c87ef643f3b07",
-      "bytes": 9133,
+      "sha256": "7b7887434b3f520fdfa02d67df2c5654cdf3f7a79e1cf37acb5a918f4da9aa58",
+      "bytes": 9514,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3550,8 +3558,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/adapter.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/adapter.ts.json",
-      "sha256": "96eeb06716b0923c389f400201e81e6926b0d6b0a417f11758ce349524f6ebdd",
-      "bytes": 29992,
+      "sha256": "22847ab6f68a457a41448e348962ffffa39061006cd166f4d6d9a1039ae08c61",
+      "bytes": 32136,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3640,8 +3648,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/v2/adapter.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/v2/adapter.ts.json",
-      "sha256": "afb8aa3dc5c25c6afc3721f721de05e1901f2016300c9ef5b9fc8cd422a27459",
-      "bytes": 42540,
+      "sha256": "e5398bf1624bc280b33aa0dc399fc630bed250dbfdb72544b2583e2e3d00c5c9",
+      "bytes": 44930,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3694,8 +3702,26 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-pi/src/server/adapter.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-pi/src/server/adapter.ts.json",
-      "sha256": "784a4411d00d911c53957407b1fce3f56d8c14e532fab0931fab243062ffbf02",
-      "bytes": 29987,
+      "sha256": "289a4451859e27303ad0b14505f4d3883d9e7cd8bbf1ec88f99ae8005c72658b",
+      "bytes": 33572,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/integration-patches/packages/provider-pi/src/server/commands.test.ts.json",
+      "asset": "vendor/t3code/integration-patches/packages/provider-pi/src/server/commands.test.ts.json",
+      "sha256": "14660af2476d3138482e0ddba47fe697922b271b9c43328ba9c6433ee880d515",
+      "bytes": 2062,
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/integration-patches/packages/provider-pi/src/server/commands.ts.json",
+      "asset": "vendor/t3code/integration-patches/packages/provider-pi/src/server/commands.ts.json",
+      "sha256": "b2ebc8e0ee1d755ce672eca801428cfa93261b54b731faa0bc2d27ad57db0b07",
+      "bytes": 2840,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3748,8 +3774,8 @@
     {
       "destination": "vendor/t3code/integration-patches/packages/provider-pi/src/server/status.ts.json",
       "asset": "vendor/t3code/integration-patches/packages/provider-pi/src/server/status.ts.json",
-      "sha256": "1a10ee6e9d102ada8428249d6551f8afc273fe4132e15dec08d7da9d74eeb28c",
-      "bytes": 882,
+      "sha256": "7d2a613e5c60a034d6615bbaefd6737b3f2d61fd805db06d1878d9bc9f1a7bef",
+      "bytes": 1038,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3798,6 +3824,24 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
+    },
+    {
+      "destination": "vendor/t3code/mcp-skills-adaptations.json",
+      "asset": "vendor/t3code/mcp-skills-adaptations.json",
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json",
+      "sha256": "557669126d130f72e26284d3b4a2d4a577b78ec4f9551a635ac7fa95b0fd26f0",
+      "bytes": 4746718
+    },
+    {
+      "destination": "vendor/t3code/mcp-skills-source.json",
+      "asset": "vendor/t3code/mcp-skills-source.json",
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json",
+      "sha256": "8623bcfa5350274564ec53ca7c938eb2566a6e155a235a58f68475e2a33989d6",
+      "bytes": 24291744
     },
     {
       "destination": "vendor/t3code/omp-source.json",
@@ -5538,13 +5582,13 @@
       "destination": "vendor/t3code/packages/provider-acp/src/server/adapter.ts",
       "source": "packages/provider-acp/src/server/adapter.ts",
       "upstreamSha256": "f13f74b38919c97674b52872fde2e29a27476054539cacb8840f215a7070cc91",
-      "sha256": "a0cf31ff7bd478d599e6361ae94a54ca25a70c812b686ed48dafb0b40be9952b",
-      "bytes": 379751,
+      "sha256": "d8deb1591a9de8a73e8a4a2c0836e77e0481a767414aa25a2017884a45831a79",
+      "bytes": 381025,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-acp/src/server/adapter.ts.json",
-        "sha256": "579d2b166d9ff08e8c887e26b99af617e1d89d256953465a2c4320d6fa84e8b8"
+        "sha256": "ef0bb53322ff8f2334be60e38bc2ec4953bc6c1ee043b80da9f4328cd396f7e2"
       }
     },
     {
@@ -5582,6 +5626,22 @@
       "bytes": 16479,
       "mode": 420,
       "provenance": "pristine-upstream"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-acp/src/server/liveWorkspace.test.ts",
+      "adaptation": "vendor/t3code/mcp-skills-adaptations.json",
+      "sha256": "3d2427f6f4d854fc0c8a50b87d64b7eff05477894d580f2dfe200258425303c0",
+      "bytes": 864,
+      "mode": 420,
+      "provenance": "local-integration"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-acp/src/server/liveWorkspace.ts",
+      "adaptation": "vendor/t3code/mcp-skills-adaptations.json",
+      "sha256": "0a764fbe3596ed8a904ed12a83ea0eb9da01e41a4f907e6b251d855cb3a3ff5b",
+      "bytes": 995,
+      "mode": 420,
+      "provenance": "adapted-upstream"
     },
     {
       "destination": "vendor/t3code/packages/provider-acp/src/server/mcpOverAcpBridge.test-peer.ts",
@@ -5779,13 +5839,13 @@
       "destination": "vendor/t3code/packages/provider-core/src/server/ProviderAdapter.ts",
       "source": "packages/provider-core/src/server/ProviderAdapter.ts",
       "upstreamSha256": "7adc5d8f10521254130449ee9c0d05cbcf1c2d4eddbf55aac7ab6db8946f93ea",
-      "sha256": "565c437216a3bb71777defd43cca0db42d8b97be216e586b2df99a96cc35ff29",
-      "bytes": 24505,
+      "sha256": "ac90d328e39a46f0334da0460021beaae9502c202a712aa7bf40d1eb0b37c8d3",
+      "bytes": 24637,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-core/src/server/ProviderAdapter.ts.json",
-        "sha256": "95dbcdcbd3df47982a4336067b8cd237c0d71089d4de72837795e3d6a73ff21e"
+        "sha256": "e48005a20991b4bb2e8c21471bdfc876578a92bc9e981ab2f11029a51b06b972"
       }
     },
     {
@@ -6422,8 +6482,8 @@
     {
       "destination": "vendor/t3code/packages/provider-cursor/src/server/CursorHostTools.ts",
       "asset": "vendor/t3code/packages/provider-cursor/src/server/CursorHostTools.ts",
-      "sha256": "a41f12df6bef3a0267a72958782dd6da991ed7037966d1670421425a2f3101c6",
-      "bytes": 2467,
+      "sha256": "aaf5d1260871d05e0e399b37362f817809bd50686af97f8f701a8e809a1627d2",
+      "bytes": 2590,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -6521,8 +6581,8 @@
     {
       "destination": "vendor/t3code/packages/provider-cursor/src/server/CursorSdkWorkerRunner.ts",
       "asset": "vendor/t3code/packages/provider-cursor/src/server/CursorSdkWorkerRunner.ts",
-      "sha256": "5ea4e207c30fe3e31867ebda72596db57f583e803d4d9124a0e9255f08054ef3",
-      "bytes": 9062,
+      "sha256": "4429a6208bdf0b382947bedca8d0f09f711694b8f2f6957cca6c078f410b3bd0",
+      "bytes": 9501,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -6598,13 +6658,13 @@
       "destination": "vendor/t3code/packages/provider-cursor/src/server/adapter.ts",
       "source": "packages/provider-cursor/src/server/adapter.ts",
       "upstreamSha256": "559adaedca766123fbb7c1bff8f651e047cf4ee0403a91a46ef36e504cc6046e",
-      "sha256": "15e07391a5934c39a6f7ca8724cf7625073fff31095953cb185ac6a3c54405a6",
-      "bytes": 110460,
+      "sha256": "b4dd847120ed07ace96604a36c75abdd71d8718c3336724a8ad946b0ea83417c",
+      "bytes": 110904,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-cursor/src/server/adapter.ts.json",
-        "sha256": "8bd18287dc3c83f23039fa0aa445d897d01537cd8ede5c32b93b8eb41ccb63c6"
+        "sha256": "934b7e1347dab907956a75d1622ef3839c76982ccfa42c53d8d88d1bab1b86a2"
       }
     },
     {
@@ -7017,13 +7077,13 @@
       "destination": "vendor/t3code/packages/provider-grok/src/server/adapter.ts",
       "source": "packages/provider-grok/src/server/adapter.ts",
       "upstreamSha256": "c3bc333e7aa55822fe4e8b1edff56bc1abf5e1e2c9bdce71d6aba905fcded2a7",
-      "sha256": "b5560110cf77e5ead0699f8d0cb53e63b803e46a818bbc5befdb264f910c08de",
-      "bytes": 15925,
+      "sha256": "9727e32da1093e188954d22fba7fd8a70fd92a6a61e80b33b59c9267f207ef64",
+      "bytes": 16010,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-grok/src/server/adapter.ts.json",
-        "sha256": "155e16740a7b7ca34cf2610f1c1fce547863db40a0a6eb2550feccf4d7466824"
+        "sha256": "8c4d98cf08111af4cbe261eb76d7abf98a8e9c343bfda04e3de360b4847bd871"
       }
     },
     {
@@ -7235,13 +7295,13 @@
       "destination": "vendor/t3code/packages/provider-muse/src/server/adapter.ts",
       "source": "packages/provider-muse/src/server/adapter.ts",
       "upstreamSha256": "b51b0650203461b65c0d70aa06d0ef39b6293ed0f1d0a75fdd1d08e0f3536a39",
-      "sha256": "365ba3115490f3d2d294c65c00bf83f70be106360e88ba3a67e23b650830d494",
-      "bytes": 100979,
+      "sha256": "fe3f846b4acb604e450222aeaa10d3f96a1869eef2c0a13682539277f06456bf",
+      "bytes": 101179,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-muse/src/server/adapter.ts.json",
-        "sha256": "06c75477a826cac07a4a7eee4c6ad359163684cdb44e6f085e6c87ef643f3b07"
+        "sha256": "7b7887434b3f520fdfa02d67df2c5654cdf3f7a79e1cf37acb5a918f4da9aa58"
       }
     },
     {
@@ -7502,8 +7562,8 @@
     {
       "destination": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
       "asset": "vendor/t3code/packages/provider-omp/src/server/adapter.ts",
-      "sha256": "281677bf997497e626a7568ad944793e1a95b1fd490248b4ae8661a7c2577c3d",
-      "bytes": 78063,
+      "sha256": "0595f6e41430278a8c0830df5f084d8a250426bf1ed60e8250f24a733fab7cdf",
+      "bytes": 78181,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -7871,13 +7931,13 @@
       "destination": "vendor/t3code/packages/provider-opencode/src/server/adapter.ts",
       "source": "packages/provider-opencode/src/server/adapter.ts",
       "upstreamSha256": "1c347f923077aa12af6a0497a70ae68ff558f4d7ba9951680fd30da5bfaf0703",
-      "sha256": "cf4d5a7abccc5ece3e20bfdb71cbe86665437e1eed206f66b1829ba9d4cca996",
-      "bytes": 168105,
+      "sha256": "090183ec598a2d7dab0543939980a1a904e13d456c015b4d1bf3c9ce065a1882",
+      "bytes": 169094,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/adapter.ts.json",
-        "sha256": "96eeb06716b0923c389f400201e81e6926b0d6b0a417f11758ce349524f6ebdd"
+        "sha256": "22847ab6f68a457a41448e348962ffffa39061006cd166f4d6d9a1039ae08c61"
       }
     },
     {
@@ -7905,6 +7965,22 @@
         "path": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/driver.ts.json",
         "sha256": "462b7f0f9167ff1c9ee75ceff67023abacc73ce996c0fe120374f030a8cb56c8"
       }
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-opencode/src/server/liveWorkspace.test.ts",
+      "adaptation": "vendor/t3code/mcp-skills-adaptations.json",
+      "sha256": "b0fda70351c7ed9295bc8d56d1efa8bc2e49024f32b401afd490a3b1ec5363db",
+      "bytes": 1091,
+      "mode": 420,
+      "provenance": "local-integration"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-opencode/src/server/liveWorkspace.ts",
+      "adaptation": "vendor/t3code/mcp-skills-adaptations.json",
+      "sha256": "f829d07c1a1379b45cd107c9e7e6c696eb1d1b935f87bc21ac2f88efbcb64186",
+      "bytes": 1421,
+      "mode": 420,
+      "provenance": "adapted-upstream"
     },
     {
       "destination": "vendor/t3code/packages/provider-opencode/src/server/openCode2Catalog.test.ts",
@@ -8091,13 +8167,13 @@
       "destination": "vendor/t3code/packages/provider-opencode/src/server/v2/adapter.ts",
       "source": "packages/provider-opencode/src/server/v2/adapter.ts",
       "upstreamSha256": "329e7537054566cbdf4e2aaac1db5fa781334bd6a23a076dba72fbcfe3acee22",
-      "sha256": "89a55f31b1472041c8711d738b3059034a6282711d3f9fd6ebd32260629cf4fd",
-      "bytes": 173960,
+      "sha256": "94c1a3b0761f6d2ff8a6c7052efc5a766d0a5ebf73b42e1431b9efdc37208094",
+      "bytes": 175186,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-opencode/src/server/v2/adapter.ts.json",
-        "sha256": "afb8aa3dc5c25c6afc3721f721de05e1901f2016300c9ef5b9fc8cd422a27459"
+        "sha256": "e5398bf1624bc280b33aa0dc399fc630bed250dbfdb72544b2583e2e3d00c5c9"
       }
     },
     {
@@ -8232,32 +8308,40 @@
       "destination": "vendor/t3code/packages/provider-pi/src/server/adapter.ts",
       "source": "packages/provider-pi/src/server/adapter.ts",
       "upstreamSha256": "f2f6fd8b71b1386f4850ee89f0ecb4be3370629a998e6b472136a8decd4c2220",
-      "sha256": "7eeaf4222053cdb51a79cf741adbd9ae1c749c0a0c633e52b1c234a1be8ebb32",
-      "bytes": 150206,
+      "sha256": "ab2bbe41b126dbfa3e3b967411d3031da3033aeb636811f695993c4dd3d047b9",
+      "bytes": 152260,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-pi/src/server/adapter.ts.json",
-        "sha256": "784a4411d00d911c53957407b1fce3f56d8c14e532fab0931fab243062ffbf02"
+        "sha256": "289a4451859e27303ad0b14505f4d3883d9e7cd8bbf1ec88f99ae8005c72658b"
       }
     },
     {
       "destination": "vendor/t3code/packages/provider-pi/src/server/commands.test.ts",
       "source": "packages/provider-pi/src/server/commands.test.ts",
       "upstreamSha256": "475e5da470d3f911b17fe775fa20debbcbf2ebaadd11d03557c904322ee22491",
-      "sha256": "475e5da470d3f911b17fe775fa20debbcbf2ebaadd11d03557c904322ee22491",
-      "bytes": 1399,
+      "sha256": "eb9f97bba2a52bc3cf4c23c6ef56b9f9e420ae3ec96f71275c037fbf91879e6d",
+      "bytes": 2220,
       "mode": 420,
-      "provenance": "pristine-upstream"
+      "provenance": "patched-upstream",
+      "patch": {
+        "path": "vendor/t3code/integration-patches/packages/provider-pi/src/server/commands.test.ts.json",
+        "sha256": "14660af2476d3138482e0ddba47fe697922b271b9c43328ba9c6433ee880d515"
+      }
     },
     {
       "destination": "vendor/t3code/packages/provider-pi/src/server/commands.ts",
       "source": "packages/provider-pi/src/server/commands.ts",
       "upstreamSha256": "76eaf97b247834e5f65a3298eda8bd11c640252a4088466d38fe33fff35ba8dc",
-      "sha256": "76eaf97b247834e5f65a3298eda8bd11c640252a4088466d38fe33fff35ba8dc",
-      "bytes": 4079,
+      "sha256": "165471a86bbae79eb359f3309a8aaa88a14300d14309ac86c8eb92ae42b84d8f",
+      "bytes": 5697,
       "mode": 420,
-      "provenance": "pristine-upstream"
+      "provenance": "patched-upstream",
+      "patch": {
+        "path": "vendor/t3code/integration-patches/packages/provider-pi/src/server/commands.ts.json",
+        "sha256": "b2ebc8e0ee1d755ce672eca801428cfa93261b54b731faa0bc2d27ad57db0b07"
+      }
     },
     {
       "destination": "vendor/t3code/packages/provider-pi/src/server/driver.test.ts",
@@ -8280,6 +8364,14 @@
       "bytes": 8013,
       "mode": 420,
       "provenance": "pristine-upstream"
+    },
+    {
+      "destination": "vendor/t3code/packages/provider-pi/src/server/liveWorkspace.ts",
+      "adaptation": "vendor/t3code/mcp-skills-adaptations.json",
+      "sha256": "3c5c66eb59de1f438009ea93d2402f17be17ad69d1f567cb5d010be5e04cf6e4",
+      "bytes": 960,
+      "mode": 420,
+      "provenance": "adapted-upstream"
     },
     {
       "destination": "vendor/t3code/packages/provider-pi/src/server/mcpExtensionSource.test.ts",
@@ -8364,13 +8456,13 @@
       "destination": "vendor/t3code/packages/provider-pi/src/server/status.ts",
       "source": "packages/provider-pi/src/server/status.ts",
       "upstreamSha256": "815af73de3590e37a1628817692fe0a7419a4fce256edefcaa6dd01bade9641d",
-      "sha256": "3a4a5a1c4392552893e61523d0e502018d2c96ac0cdc8d559a15db9e10fc6bbc",
-      "bytes": 15286,
+      "sha256": "c787e1e8d6da0d7faf62968e297eda4c002f1032fe19c32fe1cc3ba18e259a97",
+      "bytes": 15339,
       "mode": 420,
       "provenance": "patched-upstream",
       "patch": {
         "path": "vendor/t3code/integration-patches/packages/provider-pi/src/server/status.ts.json",
-        "sha256": "1a10ee6e9d102ada8428249d6551f8afc273fe4132e15dec08d7da9d74eeb28c"
+        "sha256": "7d2a613e5c60a034d6615bbaefd6737b3f2d61fd805db06d1878d9bc9f1a7bef"
       }
     },
     {
@@ -10483,10 +10575,19 @@
       "provenance": "pristine-upstream"
     },
     {
+      "destination": "vendor/t3code/scripts/capture-mcp-skills.py",
+      "asset": "vendor/t3code/scripts/capture-mcp-skills.py",
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json",
+      "sha256": "a231b14647719e5b43a8f773fb2de004073f92d225b1d818ac187469a1f84b11",
+      "bytes": 4109
+    },
+    {
       "destination": "vendor/t3code/scripts/capture.py",
       "asset": "vendor/t3code/scripts/capture.py",
-      "sha256": "ea465d4e6bd21b63634c81987e99b7f99c7963371c161722c0ab29fe5c6fb894",
-      "bytes": 7309,
+      "sha256": "2dac57ac990bff33c1c95eb5113d05397e86f62fa76d4f27f6a94e8827c3149a",
+      "bytes": 9386,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10503,17 +10604,35 @@
     {
       "destination": "vendor/t3code/scripts/imports.mjs",
       "asset": "vendor/t3code/scripts/imports.mjs",
-      "sha256": "2b6c7c513a5ae3998862da7ed0765560d16fc17062eb7682eebc35acfcbe55b8",
-      "bytes": 7701,
+      "sha256": "bf64aa39a8806319c9beed361a3ca054f17c15061227aac35b8950059ad309d7",
+      "bytes": 8289,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
     },
     {
+      "destination": "vendor/t3code/scripts/mcp-skills-adaptations.mjs",
+      "asset": "vendor/t3code/scripts/mcp-skills-adaptations.mjs",
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json",
+      "sha256": "b595113bd6284ba1899e176ca40cfaa5c59e0c4b36f1c1550ab6cedc1f1681f9",
+      "bytes": 5563
+    },
+    {
+      "destination": "vendor/t3code/scripts/mcp-skills-source.mjs",
+      "asset": "vendor/t3code/scripts/mcp-skills-source.mjs",
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json",
+      "sha256": "70a6be5c87c0d9a5fb26e117c9467025db5b2eed12f7dff06084fb0427636d35",
+      "bytes": 18804
+    },
+    {
       "destination": "vendor/t3code/scripts/sync.mjs",
       "asset": "vendor/t3code/scripts/sync.mjs",
-      "sha256": "f76500a5cc28ce7afdcf507585ad62330b230769b3960a2e8675be29f644cab3",
-      "bytes": 8346,
+      "sha256": "ede34d762ca6f92db3a073189a7340eda78263c62eab94c58e61e64f010e0eda",
+      "bytes": 9236,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10521,8 +10640,8 @@
     {
       "destination": "vendor/t3code/scripts/verify-sync.mjs",
       "asset": "vendor/t3code/scripts/verify-sync.mjs",
-      "sha256": "ca0fe94c494a8d65a7e9cf14a151ee1c6453524fec8780e08322edeadf04045c",
-      "bytes": 9271,
+      "sha256": "700ba8cea3384c6ccfa4e584dbed2bf6d6c7bd52e71a9aae0c351a07c1c54dc0",
+      "bytes": 11578,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10539,8 +10658,8 @@
     {
       "destination": "vendor/t3code/source-manifest.json",
       "asset": "vendor/t3code/source-manifest.json",
-      "sha256": "77b77eec62ad94d53a7a92cfa3578026e8561701d0a1e47253a7143aa9d3b622",
-      "bytes": 3517492,
+      "sha256": "989f2c04b8eb0a65d2e511067185ef4965d910e8f29412e94985441d54ff889f",
+      "bytes": 3517496,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10548,8 +10667,8 @@
     {
       "destination": "vendor/t3code/sync-imports.json",
       "asset": "vendor/t3code/sync-imports.json",
-      "sha256": "154090b98b0b051eea71832a804014fb66c46837b9bacde2fbcee1886482ea60",
-      "bytes": 2028562,
+      "sha256": "bcb2ef307a14c9aaf65450b2a918191d7f1c09ea67becce291896cec590070ae",
+      "bytes": 2294392,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -11510,11 +11629,11 @@
     "hostBuildInputs": [
       {
         "path": "apps/server/agent/scripts/build.mjs",
-        "sha256": "b4874a8c8a4b563a8c564e91c80aee8b8672d10844b6c55db91b7536b263875d"
+        "sha256": "cc3959c016590c39ce5d5f541d4145396f5d97775d51cc7750fd9769d748366a"
       },
       {
         "path": "apps/server/agent/scripts/package.mjs",
-        "sha256": "ceaa7b91485adfb3747b501c0408160da6486dbe1c6b1bf3a1c0d447ee298dfc"
+        "sha256": "5ac8d4d6887455418016f9c3afdb3be3240d22a687457cf4af94eea98c1ac70e"
       },
       {
         "path": "vendor/t3code/scripts/host-inputs.mjs",

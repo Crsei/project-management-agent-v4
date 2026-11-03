@@ -7,6 +7,8 @@ import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import { classifyProviderError } from "../errors.ts";
 import { pmExecutionError } from "./continuation.ts";
 import type { PmProviderBoundaryError } from "./contract.ts";
+import { mcpAppFromToolItem } from "@t3tools/shared/toolOutput";
+import { mcpAppMetadataSchema, mcpAppToolResultSchema, type McpAppProducingIdentity } from "@agent-workspace/contracts/mcp-apps";
 
 type RequestItem = Extract<OrchestrationV2TurnItem, { type: "user_input_request" | "approval_request" }>;
 const active: Readonly<Partial<Record<string, true>>> = { idle: true, pending: true, running: true, waiting: true };
@@ -24,6 +26,7 @@ export function makePmEventAdapter(input: {
   isRootItem?: (item: OrchestrationV2TurnItem) => boolean;
   isLiveRequest?: (request: OrchestrationV2RuntimeRequest) => boolean;
   rootThreadId?: string;
+  mcpAppIdentity?: (item: OrchestrationV2TurnItem) => McpAppProducingIdentity | undefined;
 }) {
   const items = new Map<string, NativeOutputItem>();
   const sourceItems = new Map<string, OrchestrationV2TurnItem>();
@@ -111,8 +114,16 @@ export function makePmEventAdapter(input: {
         diff: source.diffStr, oldText: source.oldStr, newText: source.newStr, changes: source.changes?.map((change) => ({ ...change })) }); return;
       case "file_search": publish({ ...base, type: source.type, input: source.pattern, results: source.results?.map((result) => ({ path: result.fileName, text: result.preview, line: result.line })) }); return;
       case "web_search": publish({ ...base, type: source.type, input: source.patterns, results: source.results?.map((result) => ({ title: result.title, url: result.url, text: result.snippet })) }); return;
-      case "dynamic_tool": publish({ ...base, type: source.type, toolName: source.toolName ?? undefined, input: source.input,
-        output: source.output === undefined ? undefined : typeof source.output === "string" ? source.output : JSON.stringify(normalizeToolValue(source.output)) }); return;
+      case "dynamic_tool": {
+        const app = mcpAppFromToolItem(source);
+        const producing = app && source.status === "completed" ? input.mcpAppIdentity?.(source) : undefined;
+        const result = source.output !== null && typeof source.output === "object" && "result" in source.output
+          ? mcpAppToolResultSchema.safeParse(source.output.result) : undefined;
+        publish({ ...base, type: source.type, toolName: source.toolName ?? undefined, input: source.input,
+          output: source.output === undefined ? undefined : typeof source.output === "string" ? source.output : JSON.stringify(normalizeToolValue(source.output)),
+          ...(app && producing && result?.success ? { mcpApp: mcpAppMetadataSchema.parse({ ...app, producing }), mcpToolResult: result.data } : {}) });
+        return;
+      }
       case "todo_list": case "proposed_plan": {
         planItems.set(source.planId, source.id);
         publish({ ...base, type: source.type,

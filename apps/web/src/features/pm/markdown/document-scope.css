@@ -1,4 +1,4 @@
-/* 文档页（Kind=document，默认列表/表格）专用视觉层。
+/* 文档页（Kind=document，仅列表）专用视觉层。
    仅允许选择 [data-entity-kind="document"]；视图页是 [data-entity-kind="all"]，不受影响。 */
 
 /* ---------- 页面标题 ---------- */
@@ -35,7 +35,7 @@
   gap: 8px;
 }
 
-.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar > select {
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar > [data-slot="select-trigger"] {
   min-height: var(--control-height);
   padding-block: 4px;
   border-radius: var(--control-radius);
@@ -67,30 +67,12 @@
   line-height: var(--text-meta--line-height);
 }
 
-.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar {
-  padding: 6px 24px;
-  gap: 8px;
-}
-
-.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar .view-tabs button {
+.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar .view-tabs button {
   min-height: var(--control-height);
   padding: 6px 12px;
   border-radius: var(--control-radius);
   font-size: var(--text-control);
   line-height: var(--text-control--line-height);
-}
-
-.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar > select {
-  min-height: var(--control-height);
-  padding-block: 4px;
-  border-radius: var(--control-radius);
-  font-size: var(--text-control);
-  line-height: var(--text-control--line-height);
-}
-
-.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar > .icon-button {
-  width: var(--control-height);
-  height: var(--control-height);
 }
 
 .markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar {
@@ -104,7 +86,7 @@
   line-height: var(--text-meta--line-height);
 }
 
-.markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar select {
+.markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar [data-slot="select-trigger"] {
   min-height: var(--control-height);
   padding-block: 5px;
   font-size: var(--text-control);
@@ -165,13 +147,9 @@
   line-height: var(--text-meta--line-height);
 }
 
-/* ---------- 底部统计 ---------- */
-.markdown-workbench .native-workbench[data-entity-kind="document"] .collection-meta {
-  min-height: 32px;
-  padding: 6px 24px;
-  color: var(--text-secondary);
-  font-size: var(--text-meta);
-  line-height: var(--text-meta--line-height);
+.markdown-workbench .native-workbench[data-entity-kind="document"] .work-table td .muted,
+.markdown-workbench .native-workbench[data-entity-kind="document"] .work-table .table-title .mono {
+  white-space: nowrap;
 }
 
 /* ---------- 响应式：保持原有收窄间距，表格自身横向滚动 ---------- */
@@ -181,17 +159,12 @@
   }
 
   .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar,
-  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar,
   .markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar {
     padding-inline: 16px;
   }
 
   .markdown-workbench .native-workbench[data-entity-kind="document"] .pm-view .table-scroll {
     margin: 8px 16px 16px;
-  }
-
-  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-meta {
-    padding-inline: 16px;
   }
 }
 
@@ -207,20 +180,15 @@
   }
 
   .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar,
-  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar,
   .markdown-workbench .native-workbench[data-entity-kind="document"] .filter-bar {
     padding-inline: 12px;
   }
 
-  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-view-toolbar .view-tabs button {
+  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-toolbar .view-tabs button {
     padding-inline: 8px;
   }
 
   .markdown-workbench .native-workbench[data-entity-kind="document"] .pm-view .table-scroll {
     margin: 4px 12px 12px;
-  }
-
-  .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-meta {
-    padding-inline: 12px;
   }
 }

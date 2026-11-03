@@ -166,7 +166,7 @@ export function PmInvitationAcceptPage() {
         navigate(`/pm/${encodeURIComponent(outcome.workspaceId)}/members`, { replace: true })
       }).catch(() => { if (mounted.current) setError(t("普通登录未成功，请确认密码或使用登录入口重试。邀请接受结果不受影响。", "Normal sign-in failed. Check the password or use the sign-in page. Your confirmed acceptance is unchanged.")) }).finally(() => { if (mounted.current) setLoginBusy(false) })
     }}><label className="grid gap-1 text-sm"><span>{t("邮箱", "Email")}</span><Input type="email" autoComplete="username" value={outcome.email} readOnly /></label><label className="grid gap-1 text-sm"><span>{t("账号密码", "Account password")}</span><Input type="password" autoComplete="current-password" required value={password} disabled={loginBusy} onChange={event => setPassword(event.target.value)} /></label><Button type="submit" disabled={loginBusy}>{loginBusy ? t("登录中…", "Signing in…") : t("普通登录并进入工作区", "Sign in normally and enter workspace")}</Button></form></section>}
-    {outcome && <p className="text-sm">{t("接受邀请不代表恢复邮箱已验证。普通登录后，请在本人账号安全中以当前密码发起独立邮件挑战。", "Accepting an invitation does not verify a recovery email. After normal sign-in, start a separate mail challenge with your current password in account security.")} <Link to="/pm/account/security" className="underline">{t("本人账号安全", "Account security")}</Link></p>}
-    <Link to="/pm" className="text-sm underline">{t("前往普通登录", "Go to normal sign-in")}</Link>
+    {outcome && <p className="text-sm">{t("接受邀请不代表恢复邮箱已验证。普通登录后，请在本人账号安全中以当前密码发起独立邮件挑战。", "Accepting an invitation does not verify a recovery email. After normal sign-in, start a separate mail challenge with your current password in account security.")} <Link to="/pm/account/security" className="text-primary hover:text-foreground">{t("本人账号安全", "Account security")}</Link></p>}
+    <Link to="/pm" className="text-sm text-primary hover:text-foreground">{t("前往普通登录", "Go to normal sign-in")}</Link>
   </main>
 }

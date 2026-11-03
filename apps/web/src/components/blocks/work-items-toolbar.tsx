@@ -21,6 +21,7 @@ import type {
 } from "../../lib/work-items-model"
 import { useI18n } from "../../lib/i18n-provider"
 import styles from "./work-items.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 export type WorkItemsToolbarProps = {
   view: WorkItemsViewState
   onViewChange: (view: WorkItemsViewState) => void
@@ -56,7 +57,7 @@ export function WorkItemsDisplayOptions({
         <div className={styles.display}>
           <label>
             {t("workItems.groupBy")}
-            <select
+            <RadixSelect
               disabled={
                 view.layout === "timeline" || view.layout === "calendar"
               }
@@ -75,7 +76,7 @@ export function WorkItemsDisplayOptions({
             >
               <option value="state">{t("workItems.state")}</option>
               <option value="priority">{t("workItems.priority")}</option>
-            </select>
+            </RadixSelect>
           </label>
           {enhancements && (
             <>
@@ -83,7 +84,7 @@ export function WorkItemsDisplayOptions({
                 <>
                   <label>
                     {t("workItems.swimlanes")}
-                    <select
+                    <RadixSelect
                       aria-label={t("workItems.swimlanes")}
                       value={view.subGroupBy ?? "none"}
                       onChange={(e) =>
@@ -104,7 +105,7 @@ export function WorkItemsDisplayOptions({
                       >
                         {t("workItems.priority")}
                       </option>
-                    </select>
+                    </RadixSelect>
                   </label>
                   <p className="text-xs">{t("workItems.swimlaneLayoutHint")}</p>
                 </>

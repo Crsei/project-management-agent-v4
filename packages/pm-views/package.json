@@ -9,11 +9,13 @@
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/utilities": "^3.2.2",
+    "@radix-ui/react-select": "2.4.1",
     "@tanstack/react-table": "8.21.3",
+    "@xyflow/react": "12.12.0",
+    "elkjs": "0.12.0",
     "lucide-react": "^0.577.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "react-force-graph-2d": "^1.29.2"
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@types/react": "^19",

@@ -1,8 +1,10 @@
-import { constants, closeSync, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, openSync, readdirSync, readSync, realpathSync, unlinkSync, writeSync } from 'node:fs';
+import { constants, closeSync, fstatSync, fsyncSync, linkSync, lstatSync, mkdirSync, readdirSync, readSync, unlinkSync, writeSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { FileRepository, revisionOf } from './repository.ts';
 import { inspectFrontmatter } from '../pm-markdown/index.ts';
+import { assertCanonicalAbsolute, checkedFileOpen, directoryIdentity, fileStamp, pathContains, safeRelativePath, syncDirectory, systemStoragePath } from './platform.ts';
+import { cacheWindowsPathAttributes } from './windows-reparse.ts';
 
 export interface ProjectDirectory { workspaceId: string; root: string; mode?: 'existing' | 'new' }
 export interface ProjectRootIdentity { device: string; inode: string }
@@ -33,18 +35,16 @@ export const projectLocationsPath = '.pm/state/project-locations.json';
 const projectIdPattern = /^PRJ-\d+$/;
 const hash = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const sameIdentity = (a: RootIdentity | undefined, b: RootIdentity): boolean => a?.device === b.device && a.inode === b.inode;
-const overlaps = (a: string, b: string): boolean => a === b || a.startsWith(b + path.sep) || b.startsWith(a + path.sep);
+const overlaps = (a: string, b: string): boolean => pathContains(a, b) || pathContains(b, a);
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
-const safeRelative = (value: string): boolean => !!value && !path.isAbsolute(value) && !value.includes('\\') && !value.includes('\0') && value.split('/').every(part => !!part && part !== '.' && part !== '..');
+const safeRelative = safeRelativePath;
 function identity(root: string): RootIdentity {
-  const stat = lstatSync(root, { bigint: true });
-  if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(root) !== root) throw new Error('Project directory is unsafe or has changed');
+  const stat = directoryIdentity(root);
   return { device: String(stat.dev), inode: String(stat.ino) };
 }
 function assertAllowedRoot(root: string): void {
-  if (!path.isAbsolute(root) || root.includes('\0') || path.resolve(root) !== root) throw new Error('Project directory must be a canonical absolute path');
-  const sensitive = ['/', '/etc', '/proc', '/sys', '/dev', '/boot', '/usr', '/bin', '/sbin', '/lib', '/lib64', '/run', '/root'];
-  if (sensitive.some(item => item === root || item !== '/' && root.startsWith(item + '/'))) throw new Error('System directories cannot store projects');
+  assertCanonicalAbsolute(root);
+  if (systemStoragePath(root)) throw new Error('System directories cannot store projects');
 }
 function validateRoot(root: string, allowMissing = false): string {
   assertAllowedRoot(root);
@@ -60,10 +60,6 @@ function validateRoot(root: string, allowMissing = false): string {
     }
   }
   return root;
-}
-function syncDirectory(directory: string): void {
-  const fd = openSync(directory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-  try { fsyncSync(fd); } finally { closeSync(fd); }
 }
 const markerFor = (entry: Entry): Marker => ({ version: 1, workspaceId: entry.workspaceId, projectId: entry.projectId, storageId: entry.storageId, core: '.pm/core', attachments: '.pm/attachments' });
 const markerRaw = (entry: Entry): string => JSON.stringify(markerFor(entry), null, 2) + '\n';
@@ -281,7 +277,10 @@ export class ProjectLocations {
       if (entry) {
         const attachmentRepository = new FileRepository(entry.root, false);
         const walk = (relative: string): void => {
-          for (const item of readdirSync(attachmentRepository.resolve(relative), { withFileTypes: true })) {
+          const directory = attachmentRepository.resolve(relative);
+          const entries = readdirSync(directory, { withFileTypes: true });
+          if (process.platform === 'win32') cacheWindowsPathAttributes(entries.map(item => path.join(directory, item.name)));
+          for (const item of entries) {
             if (item.name.startsWith('.pm-write-')) continue;
             const file = `${relative}/${item.name}`;
             if (item.isDirectory()) walk(file);
@@ -400,7 +399,10 @@ function verifyTransferContents(projectId: string, transfer: Transfer, source: F
   const inspectAttachments = (repository: FileRepository, complete: boolean): void => {
     let count = 0;
     const walk = (relative: string): void => {
-      for (const entry of readdirSync(repository.resolve(relative), { withFileTypes: true })) {
+      const directory = repository.resolve(relative);
+      const entries = readdirSync(directory, { withFileTypes: true });
+      if (process.platform === 'win32') cacheWindowsPathAttributes(entries.map(entry => path.join(directory, entry.name)));
+      for (const entry of entries) {
         if (entry.name.startsWith('.pm-write-')) continue;
         const file = `${relative}/${entry.name}`;
         if (entry.isDirectory()) walk(file);
@@ -420,26 +422,29 @@ function verifyTransferContents(projectId: string, transfer: Transfer, source: F
 }
 
 function binaryRevision(filename: string): string {
-  const fd = openSync(filename, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const fd = checkedFileOpen(filename, constants.O_RDONLY);
   try {
     const stat = fstatSync(fd);
     if (!stat.isFile() || stat.nlink !== 1) throw new Error('Unsafe transfer source');
+    const before = fileStamp(fstatSync(fd, { bigint: true }));
     const digest = createHash('sha256'), buffer = Buffer.allocUnsafe(64 * 1024);
     // Read through the already validated descriptor rather than following a second path lookup.
     let position = 0, bytes = 0;
     do { bytes = readSync(fd, buffer, 0, buffer.length, position); if (bytes) { digest.update(buffer.subarray(0, bytes)); position += bytes; } } while (bytes);
+    if (fileStamp(fstatSync(fd, { bigint: true })) !== before || fileStamp(lstatSync(filename, { bigint: true })) !== before) throw new Error('Transfer source changed while reading');
     return digest.digest('hex');
   } finally { closeSync(fd); }
 }
 
 function copyVerifiedFile(source: string, destination: string, revision: string): void {
-  const input = openSync(source, constants.O_RDONLY | constants.O_NOFOLLOW);
+  const input = checkedFileOpen(source, constants.O_RDONLY);
   const temporary = path.join(path.dirname(destination), `.pm-write-${randomUUID()}`);
   let output: number | undefined;
   try {
     const stat = fstatSync(input);
     if (!stat.isFile() || stat.nlink !== 1) throw new Error('Unsafe transfer source');
-    output = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+    const before = fileStamp(fstatSync(input, { bigint: true }));
+    output = checkedFileOpen(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
     const digest = createHash('sha256'), buffer = Buffer.allocUnsafe(64 * 1024);
     for (;;) {
       const bytes = readSync(input, buffer, 0, buffer.length, null);
@@ -449,7 +454,7 @@ function copyVerifiedFile(source: string, destination: string, revision: string)
       while (offset < bytes) offset += writeSync(output, buffer, offset, bytes - offset);
     }
     fsyncSync(output);
-    if (digest.digest('hex') !== revision) throw new Error('Transfer source changed while copying');
+    if (digest.digest('hex') !== revision || fileStamp(fstatSync(input, { bigint: true })) !== before || fileStamp(lstatSync(source, { bigint: true })) !== before) throw new Error('Transfer source changed while copying');
     linkSync(temporary, destination);
   } finally {
     closeSync(input);

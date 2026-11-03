@@ -1,0 +1,23 @@
+.document-tabs-bar { display: flex; flex: 0 0 auto; align-items: stretch; min-width: 0; max-width: 100%; border-bottom: 1px solid var(--border); background: var(--background); }
+.document-tabs-scroll { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.document-tab { display: flex; flex: 0 0 auto; align-items: center; max-width: 260px; min-width: 112px; border-right: 1px solid var(--border); border-bottom: 2px solid transparent; color: var(--muted-foreground); }
+.document-tab.is-active { border-bottom-color: var(--primary); color: var(--foreground); background: var(--muted); }
+.document-tab > button { display: flex; align-items: center; justify-content: flex-start; gap: 7px; min-width: 0; min-height: 42px; padding: 8px 10px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.document-tab > [role=tab] { flex: 1 1 auto; }
+.document-tab > button:focus-visible, .document-tabs-overflow:focus-visible { outline: 2px solid var(--primary); outline-offset: -3px; }
+.document-tab > button > svg { flex: 0 0 auto; }
+.document-tab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.document-tab-dirty { flex: 0 0 auto; font-size: 8px; color: var(--primary); }
+.document-tab > .document-tab-close { flex: 0 0 30px; justify-content: center; min-width: 30px; padding: 8px 6px; }
+.document-tab-close:hover, .document-tabs-overflow:hover { background: var(--accent); color: var(--foreground); }
+.document-tabs-overflow { display: flex; flex: 0 0 38px; align-items: center; justify-content: center; border: 0; border-left: 1px solid var(--border); background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.document-tabs-menu { max-width: min(390px, calc(100vw - 20px)); max-height: 60vh; overflow-y: auto; }
+.document-tabs-menu small { margin-left: auto; color: var(--muted-foreground); font-size: 10px; }
+.document-close-dialog { width: min(520px, calc(100vw - 24px)); }
+.document-close-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.document-close-error { color: var(--destructive); font-size: 13px; }
+.document-recovery-notices { flex: 0 0 auto; max-height: 30vh; overflow-y: auto; }
+.document-recovery-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--muted); font-size: 12px; }
+.document-recovery-notice > span { flex: 1 1 280px; }
+.document-recovery-notice > div { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 600px) { .document-tab { min-width: 100px; max-width: 190px; } .document-tab > button { min-height: 44px; } .document-close-actions > button { flex: 1 1 auto; } }

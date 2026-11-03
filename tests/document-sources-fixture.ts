@@ -2,13 +2,48 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import type { DocumentSource, DocumentSourceContent, DocumentSourceEntry, DocumentSourceFiles, DocumentSourceIssue } from '../packages/contracts/src/document-sources.ts';
+import type { DocumentSource, DocumentSourceAssociationScope, DocumentSourceContent, DocumentSourceEntry, DocumentSourceFiles, DocumentSourceIssue, DocumentSourceMutation, DocumentSourceMutationReceipt } from '../packages/contracts/src/document-sources.ts';
 import type { LocalProjectAttempt } from '../packages/contracts/src/local-projects.ts';
 import type { LocalProjectFixture, LocalProjectResponse } from './local-project-fixture.ts';
 
 export type DocumentSourceFailure = { error: { code: string; details?: Record<string, unknown> } };
-export function documentSourcesPath(f: LocalProjectFixture, scopeKey?: string, workspaceId = f.workspaceId): string {
-  return `/api/v1/workspaces/${workspaceId}/document-sources${scopeKey ? `/${encodeURIComponent(scopeKey)}` : ''}`;
+export type DocumentSourceCatalog = { sources: DocumentSource[]; scopes: DocumentSourceAssociationScope[] };
+export type DocumentSourceConfiguration = { sources: DocumentSource[]; scope: DocumentSourceAssociationScope };
+export function documentSourcesPath(f: LocalProjectFixture, sourceId?: string, workspaceId = f.workspaceId): string {
+  return `/api/v1/workspaces/${workspaceId}/document-sources${sourceId ? `/${encodeURIComponent(sourceId)}` : ''}`;
+}
+export function documentSourceConfigurationPath(f: LocalProjectFixture, workspaceId = f.workspaceId): string {
+  return `${documentSourcesPath(f, undefined, workspaceId)}/configuration`;
+}
+export function documentSourceOperationsPath(f: LocalProjectFixture, sourceId: string, operationId?: string): string {
+  return `${documentSourcesPath(f, sourceId)}/operations${operationId ? `/${encodeURIComponent(operationId)}` : ''}`;
+}
+export async function mutateDocumentSource(f: LocalProjectFixture, sourceId: string, input: DocumentSourceMutation, cookie?: string): Promise<DocumentSourceMutationReceipt> {
+  const response = await f.request<DocumentSourceMutationReceipt>(documentSourceOperationsPath(f, sourceId), { method: 'POST', body: input, ...(cookie === undefined ? {} : { cookie }) });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assertPrivateDocumentResponse(response);
+  assert.equal(response.body.operationId, input.operationId);
+  assert.equal(response.body.action, input.action);
+  assert.equal(response.body.path, input.path);
+  assert.equal(response.body.status, 'succeeded', JSON.stringify(response.body));
+  if (input.action === 'delete') {
+    assert.equal(response.body.content, undefined);
+  } else {
+    assert.ok(response.body.content, 'Successful file writes return their authoritative resulting content');
+    assert.equal(response.body.content.path, input.action === 'move' ? input.targetPath : input.path);
+    assert.equal(response.body.content.sourceRevision, input.action === 'move' ? input.targetSourceRevision : input.sourceRevision);
+    assert.ok(response.body.content.revision);
+    assert.equal(response.body.content.size, Buffer.byteLength(response.body.content.content));
+    if (input.action !== 'move') assert.equal(response.body.content.content, input.content);
+  }
+  return response.body;
+}
+export async function readDocumentSourceMutation(f: LocalProjectFixture, sourceId: string, operationId: string, cookie?: string): Promise<DocumentSourceMutationReceipt> {
+  const response = await f.request<DocumentSourceMutationReceipt>(documentSourceOperationsPath(f, sourceId, operationId), cookie === undefined ? {} : { cookie });
+  assert.equal(response.status, 200, JSON.stringify(response.body));
+  assertPrivateDocumentResponse(response);
+  assert.equal(response.body.operationId, operationId);
+  return response.body;
 }
 export function assertPrivateDocumentResponse(response: LocalProjectResponse<unknown>): void {
   const cache = response.headers.get('cache-control') ?? '';
@@ -31,32 +66,53 @@ export async function createDocumentProject(f: LocalProjectFixture, title: strin
   if (response.body.status !== 'ready') throw new Error('The isolated native project did not initialize');
   return response.body;
 }
-export async function readDocumentSources(f: LocalProjectFixture, cookie?: string, workspaceId = f.workspaceId): Promise<DocumentSource[]> {
-  const response = await f.request<{ sources: DocumentSource[] }>(documentSourcesPath(f, undefined, workspaceId), cookie === undefined ? {} : { cookie });
+export async function readDocumentSourceCatalog(f: LocalProjectFixture, cookie?: string, workspaceId = f.workspaceId): Promise<DocumentSourceCatalog> {
+  const response = await f.request<DocumentSourceCatalog>(documentSourcesPath(f, undefined, workspaceId), cookie === undefined ? {} : { cookie });
   assert.equal(response.status, 200, JSON.stringify(response.body));
   assertPrivateDocumentResponse(response);
   assert.ok(Array.isArray(response.body.sources));
-  return response.body.sources;
+  assert.ok(Array.isArray(response.body.scopes));
+  assert.equal(new Set(response.body.sources.map(source => source.sourceId)).size, response.body.sources.length);
+  return response.body;
 }
-export async function saveDocumentSource(f: LocalProjectFixture, scopeKey: string, path: string | null, expectedRevision: number): Promise<DocumentSource> {
-  const response = await f.request<{ source: DocumentSource }>(documentSourcesPath(f, scopeKey), { method: 'PUT', body: { path, expectedRevision } });
+export async function readDocumentSources(f: LocalProjectFixture, cookie?: string, workspaceId = f.workspaceId): Promise<DocumentSource[]> {
+  return (await readDocumentSourceCatalog(f, cookie, workspaceId)).sources;
+}
+export async function configureDocumentSources(f: LocalProjectFixture, projectId: string | null, paths: string[], expectedRevision: number, options: { cookie?: string; workspaceId?: string } = {}): Promise<DocumentSourceConfiguration> {
+  const response = await f.request<DocumentSourceConfiguration>(documentSourceConfigurationPath(f, options.workspaceId), {
+    method: 'PUT', body: { projectId, paths, expectedRevision }, ...(options.cookie === undefined ? {} : { cookie: options.cookie }),
+  });
   assert.equal(response.status, 200, JSON.stringify(response.body));
   assertPrivateDocumentResponse(response);
-  assert.equal(response.body.source.path, path);
-  assert.equal(response.body.source.revision, expectedRevision + 1);
-  assert.equal(response.body.source.status, path === null ? 'unconfigured' : 'available');
-  return response.body.source;
+  assert.equal(response.body.scope.projectId, projectId);
+  assert.equal(response.body.scope.revision, expectedRevision + 1);
+  assert.deepEqual(response.body.sources.map(source => source.path).sort(), [...paths].sort());
+  for (const source of response.body.sources) {
+    assert.equal(source.projectId, projectId);
+    assert.equal(source.status, 'available');
+    assert.match(source.sourceId, /^[A-Za-z0-9_-]+$/);
+    assert.ok(source.revision > 0);
+  }
+  return response.body;
 }
-export async function readSourceContent(f: LocalProjectFixture, scopeKey: string, path: string, cookie?: string): Promise<DocumentSourceContent> {
-  const response = await f.request<DocumentSourceContent>(`${documentSourcesPath(f, scopeKey)}/content?${new URLSearchParams({ path })}`, cookie === undefined ? {} : { cookie });
+export async function configureDocumentSource(f: LocalProjectFixture, projectId: string | null, path: string, expectedRevision: number): Promise<DocumentSource> {
+  const configured = await configureDocumentSources(f, projectId, [path], expectedRevision);
+  assert.equal(configured.sources.length, 1);
+  return configured.sources[0]!;
+}
+export async function readSourceContent(f: LocalProjectFixture, sourceId: string, path: string, cookie?: string): Promise<DocumentSourceContent> {
+  const response = await f.request<DocumentSourceContent>(`${documentSourcesPath(f, sourceId)}/content?${new URLSearchParams({ path })}`, cookie === undefined ? {} : { cookie });
   assert.equal(response.status, 200, JSON.stringify(response.body));
   assertPrivateDocumentResponse(response);
   assert.equal(response.body.path, path);
   assert.equal(response.body.size, Buffer.byteLength(response.body.content));
   assert.ok(Number.isFinite(Date.parse(response.body.modifiedAt)), 'Content has an actual modification timestamp');
+  assert.equal(typeof response.body.revision, 'string');
+  assert.ok(response.body.revision.length > 0, 'Content carries an opaque file revision distinct from the source configuration');
+  assert.equal(typeof response.body.canWrite, 'boolean');
   return response.body;
 }
-export async function collectDocumentFiles(f: LocalProjectFixture, scopeKey: string, options: { cookie?: string; limit?: number } = {}): Promise<{ entries: DocumentSourceEntry[]; issues: DocumentSourceIssue[]; scanComplete: boolean; pages: number; sourceRevision: number }> {
+export async function collectDocumentFiles(f: LocalProjectFixture, sourceId: string, options: { cookie?: string; limit?: number } = {}): Promise<{ entries: DocumentSourceEntry[]; issues: DocumentSourceIssue[]; scanComplete: boolean; pages: number; sourceRevision: number }> {
   const entries: DocumentSourceEntry[] = [], issues: DocumentSourceIssue[] = [];
   const cursors = new Set<string>();
   let cursor: string | null = null, scanComplete = true, pages = 0, sourceRevision: number | undefined;
@@ -64,7 +120,7 @@ export async function collectDocumentFiles(f: LocalProjectFixture, scopeKey: str
     const query = new URLSearchParams();
     if (options.limit !== undefined) query.set('limit', String(options.limit));
     if (cursor !== null) query.set('cursor', cursor);
-    const response = await f.request<DocumentSourceFiles>(`${documentSourcesPath(f, scopeKey)}/files?${query}`, options.cookie === undefined ? {} : { cookie: options.cookie });
+    const response = await f.request<DocumentSourceFiles>(`${documentSourcesPath(f, sourceId)}/files?${query}`, options.cookie === undefined ? {} : { cookie: options.cookie });
     assert.equal(response.status, 200, JSON.stringify(response.body));
     assertPrivateDocumentResponse(response);
     assert.ok(Array.isArray(response.body.entries));
@@ -75,6 +131,9 @@ export async function collectDocumentFiles(f: LocalProjectFixture, scopeKey: str
     for (const entry of response.body.entries) {
       assert.ok(entry.path && !entry.path.startsWith('/') && !entry.path.includes('\\'));
       assert.equal(entry.name, entry.path.split('/').at(-1));
+      assert.equal(typeof entry.fileKey, 'string');
+      assert.ok(entry.fileKey.length >= 32, 'Canonical file identity is opaque, not a filename');
+      assert.equal(entry.fileKey.includes(f.root), false);
       assert.ok(Number.isSafeInteger(entry.size) && entry.size >= 0);
       assert.ok(Number.isFinite(Date.parse(entry.modifiedAt)));
       assert.equal('content' in entry, false, 'Listing is not an eager body read');

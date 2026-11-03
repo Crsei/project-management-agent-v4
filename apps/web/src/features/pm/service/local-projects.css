@@ -1,9 +1,9 @@
 .local-project-panel { min-width: 0; display: grid; gap: 16px; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius, 8px); background: var(--surface); font-size: 13px; line-height: 1.6; }
 .local-project-panel h2, .local-project-panel h3 { font-weight: 600; }
 .local-project-panel label, .local-directory-fields label { display: grid; gap: 5px; min-width: 0; }
-.local-project-panel input:not([type="checkbox"]), .local-project-panel select, .local-directory-fields input, .local-directory-fields select { width: 100%; min-width: 0; min-height: 38px; border: 1px solid var(--border); border-radius: var(--control-radius); padding: 7px 9px; background: var(--surface); color: var(--foreground); }
-.local-project-panel input:focus-visible, .local-project-panel select:focus-visible, .local-directory-fields :focus-visible, .local-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.local-project-panel input:disabled, .local-project-panel select:disabled, .local-directory-fields:disabled { opacity: .65; }
+.local-project-panel input:not([type="checkbox"]), .local-project-panel [data-slot="select-trigger"], .local-directory-fields input, .local-directory-fields [data-slot="select-trigger"] { width: 100%; min-width: 0; min-height: 38px; border: 1px solid var(--border); border-radius: var(--control-radius); padding: 7px 9px; background: var(--surface); color: var(--foreground); }
+.local-project-panel input:focus-visible, .local-project-panel [data-slot="select-trigger"]:focus-visible, .local-directory-fields :focus-visible, .local-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.local-project-panel input:disabled, .local-project-panel [data-slot="select-trigger"][data-disabled], .local-directory-fields:disabled { opacity: .65; }
 .local-directory-fields { min-width: 0; display: grid; gap: 12px; border: 1px solid var(--border); border-radius: var(--control-radius); padding: 14px; }
 .local-directory-fields legend { padding: 0 5px; font-weight: 600; }
 .local-directory-browser { min-width: 0; display: grid; gap: 12px; border-top: 1px solid var(--border); padding-top: 12px; }

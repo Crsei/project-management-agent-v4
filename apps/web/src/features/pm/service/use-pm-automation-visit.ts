@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StudioClient } from '../../../../../../packages/contracts/src/automation-studio-client';
+import { StudioApiError, StudioClient } from '../../../../../../packages/contracts/src/automation-studio-client';
 import { usePmService } from './pm-service';
 
 type Attempt = { key: string; requestId: string; completed: boolean; pending: Promise<unknown> | null };
+let visitEndpointUnavailable = false;
 /** A visit is a real project-layout entry, not a render, focus, refresh or background source read. */
 export function usePmAutomationVisit(projectId: string, enabled: boolean): { error: string | null; retry: () => void } {
   const { actor, workspace } = usePmService();
@@ -14,7 +15,7 @@ export function usePmAutomationVisit(projectId: string, enabled: boolean): { err
     && (workspace.projectIds === null || workspace.projectIds.includes(projectId));
   const key = actorId && workspaceId ? `pm.automation.visit.v1:${actorId}:${workspaceId}:${projectId}` : null;
   useEffect(() => {
-    if (!key || !permitted || !workspaceId) return;
+    if (!key || !permitted || !workspaceId || visitEndpointUnavailable) return;
     if (attempt.current?.key === key && attempt.current.completed) return;
     if (attempt.current?.key !== key) {
       try {
@@ -40,6 +41,15 @@ export function usePmAutomationVisit(projectId: string, enabled: boolean): { err
       if (current) setError(null);
     }).catch(cause => {
       original.pending = null;
+      if (cause instanceof StudioApiError && cause.status === 404) {
+        // Older deployed servers may not expose the optional automation visit route.
+        // Treat it as unavailable rather than blocking the project page with a fake recovery action.
+        visitEndpointUnavailable = true;
+        original.completed = true;
+        try { if (sessionStorage.getItem(key) === original.requestId) sessionStorage.removeItem(key); } catch { /* Reload can still reconcile the original request. */ }
+        if (current) setError(null);
+        return;
+      }
       if (current) setError(cause instanceof Error ? cause.message : 'Project visit result is unknown; retry reconciles the original request.');
     });
     return () => { current = false; };

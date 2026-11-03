@@ -12,6 +12,7 @@ import {
 } from '../../../../packages/agent-contracts/src/pm-references.ts';
 import type { FileRecord } from '../../../../packages/pm-schema/index.ts';
 import { CoreScope, type CoreWorkspacePool } from './core-routes.ts';
+import { mcpRequestIdentity, recheckMcpRequest } from '../../../../packages/application/src/mcp-service-auth.ts';
 
 const params = z.strictObject({ workspaceId: z.uuid().toLowerCase() });
 
@@ -88,6 +89,12 @@ export function registerAgentReferenceRoutes(app: FastifyInstance, options: {
     if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403);
     if (!options.coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);
     const workspace = await options.coreWorkspaces.get(workspaceId);
-    return pmReferenceResolveResponseSchema.parse({ items: await resolveReferences(input.references, workspace, new CoreScope(member, workspaceId)) });
+    const delegation = mcpRequestIdentity(request);
+    const effective = delegation?.scope.projectId
+      ? { ...member, projectIds: member.projectIds === null || member.projectIds.includes(delegation.scope.projectId) ? [delegation.scope.projectId] : [] }
+      : member;
+    const result = pmReferenceResolveResponseSchema.parse({ items: await resolveReferences(input.references, workspace, new CoreScope(effective, workspaceId)) });
+    await recheckMcpRequest(options.database(), request);
+    return result;
   });
 }

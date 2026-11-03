@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "source": "packages/provider-pi/src/server/commands.ts",
+  "beforeSha256": "76eaf97b247834e5f65a3298eda8bd11c640252a4088466d38fe33fff35ba8dc",
+  "afterSha256": "165471a86bbae79eb359f3309a8aaa88a14300d14309ac86c8eb92ae42b84d8f",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 2,
+      "before": [],
+      "after": [
+        "import { SKILL_MENTION_PATTERN } from \"@t3tools/shared/composerInlineTokens\";\n",
+        "\n",
+        "const LEADING_SKILL_MENTION = new RegExp(`^\\\\s*${SKILL_MENTION_PATTERN.source}`, \"u\");\n",
+        "\n",
+        "/** Pi expands its own skill command at the beginning of the native prompt. */\n",
+        "export function piSkillCommand(text: string, data: unknown): string {\n",
+        "  const match = LEADING_SKILL_MENTION.exec(text);\n",
+        "  if (!match?.[2]) return text;\n",
+        "  const commands = recordField(data, \"commands\");\n",
+        "  if (!Array.isArray(commands)) throw new Error(\"Pi returned an invalid native command inventory.\");\n",
+        "  for (const command of commands) {\n",
+        "    if (recordString(command, \"source\") !== \"skill\") continue;\n",
+        "    const nativeName = recordString(command, \"name\");\n",
+        "    if (!nativeName || !/^[a-zA-Z0-9][a-zA-Z0-9:_-]*$/.test(nativeName)) continue;\n",
+        "    const skillName = nativeName.startsWith(\"skill:\") ? nativeName.slice(6) : nativeName;\n",
+        "    if (skillName === match[2]) return `/${nativeName}${text.slice(match[0].length)}`;\n",
+        "  }\n",
+        "  return text;\n",
+        "}\n",
+        "\n",
+        "export function hasLeadingPiSkillMention(text: string): boolean {\n",
+        "  return LEADING_SKILL_MENTION.test(text);\n",
+        "}\n",
+        "/** Match only commands the live Pi process actually advertises. */\n",
+        "export function piNativeCommandPrefix(text: string, data: unknown): string | undefined {\n",
+        "  const match = /^\\s*\\/([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\\s|$)/.exec(text);\n",
+        "  if (!match) return undefined;\n",
+        "  const commands = recordField(data, \"commands\");\n",
+        "  if (!Array.isArray(commands)) throw new Error(\"Pi returned an invalid native command inventory.\");\n",
+        "  return commands.some(command => recordString(command, \"name\") === match[1]) ? `/${match[1]}` : undefined;\n",
+        "}\n"
+      ]
+    }
+  ]
+}

@@ -67,6 +67,7 @@ export function SettingsNotice({ kind, children, onRetry }: {
 const pages = [
   { id: "general", title: ["通用", "General"], icon: Settings2, group: "偏好设置" },
   { id: "providers", title: ["提供商", "Providers"], icon: Plug, group: "偏好设置" },
+  { id: "mcp-clients", title: ["MCP 客户端", "MCP clients"], icon: Plug, group: "偏好设置" },
   { id: "usage", title: ["用量", "Usage"], icon: ChartNoAxesCombined, group: "偏好设置" },
   { id: "usage/config", title: ["用量与价格", "Usage"], icon: Database, group: "偏好设置" },
   { id: "appearance", title: ["外观", "Appearance"], icon: Palette, group: "偏好设置" },

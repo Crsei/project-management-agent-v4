@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, mkdir, rm, rename, readFile, lstat, symlink, link, unlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, rename, readFile, lstat, symlink, link, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Workspace } from '../../pm-core/index.ts';
@@ -16,7 +16,7 @@ import { exportLocalProjectCheckpoint, restoreLocalProjectCheckpoint } from '../
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 test('project facade keeps independent physical roots and refuses missing, replaced and cross-project storage', { skip: !databaseUrl }, async t => {
-  const root = await mkdtemp(join(tmpdir(), 'pm-project-blobs-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-project-blobs-')));
   const schema = `test_project_blob_${randomUUID().replaceAll('-', '')}`;
   const admin = createPool(databaseUrl!);
   await admin.query(`CREATE SCHEMA "${schema}"`);
@@ -55,7 +55,7 @@ test('project facade keeps independent physical roots and refuses missing, repla
   await rename(firstRoot, `${firstRoot}-offline`);
   await assert.rejects(restarted.put(Buffer.from('must not create a replacement root'), scopeA));
   await assert.rejects(lstat(firstRoot), { code: 'ENOENT' });
-  await symlink(`${firstRoot}-offline`, firstRoot, 'dir');
+  await symlink(`${firstRoot}-offline`, firstRoot, process.platform === 'win32' ? 'junction' : 'dir');
   await assert.rejects(restarted.read(savedA.key, { ...scopeA, storageId: savedA.storageId! }));
   await unlink(firstRoot); await rename(`${firstRoot}-offline`, firstRoot);
   const extraLink = join(root, 'external-hardlink'); await link(join(a.attachmentsPath, savedA.key), extraLink);
@@ -72,7 +72,7 @@ test('project facade keeps independent physical roots and refuses missing, repla
 });
 
 test('multi-root recovery preserves state and attachment bytes without any source root', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'pm-project-checkpoint-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-project-checkpoint-')));
   const sourceCore = join(root, 'source-core'); const workspaceId = randomUUID();
   const workspace = new Workspace(join(sourceCore, workspaceId));
   t.after(async () => { await workspace.close(); await rm(root, { recursive: true, force: true }); });

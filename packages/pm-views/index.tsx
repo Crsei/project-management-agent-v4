@@ -8,6 +8,9 @@ import { relationFields } from '../pm-schema/relations.ts';
 import { applyView, groupChange } from '../pm-schema/query.ts';
 import type { GraphQuery } from '../pm-schema/graph.ts';
 import { KnowledgeGraph } from './KnowledgeGraph.tsx';
+import { RadixSelect } from './RadixSelect.tsx';
+import { documentKindLabels } from './document-kind.ts';
+export { documentKindLabels };
 import type { GraphSource } from './KnowledgeGraph.tsx';
 
 export { KnowledgeGraph };
@@ -15,6 +18,7 @@ export type { GraphSource, KnowledgeGraphProps } from './KnowledgeGraph.tsx';
 
 export const priorities: Priority[] = ['urgent', 'high', 'medium', 'low'];
 const priorityLabels: Record<string, string> = { urgent: '紧急', high: '高', medium: '中', low: '低' };
+
 const labelTones = ['var(--accent)', 'var(--info)', 'var(--success)', 'var(--warning)', 'var(--agent)', 'var(--destructive)'];
 const labelTone = (id: string) => labelTones[Array.from(id).reduce((hash, character) => (hash * 31 + (character.codePointAt(0) ?? 0)) % 997, 0) % labelTones.length];
 export const StatusIcon = ({ category }: { category?: string }) => { const Icon = category === 'completed' ? CheckCircle2 : category === 'started' ? CircleDashed : category === 'canceled' ? XCircle : Circle; return <Icon size={14} className={`status-icon ${category || 'unstarted'}`} />; };
@@ -24,14 +28,14 @@ export const PriorityIcon = ({ priority, en }: { priority?: string; en?: boolean
 };
 export type ArchiveFilter = 'exclude' | 'include' | 'only';
 export function matchesArchive(file: FileRecord, filter: ArchiveFilter = 'exclude') { return filter === 'include' || (filter === 'only' ? !!file.entity.archived : !file.entity.archived); }
-export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; en?: boolean };
+export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null; en?: boolean };
 
 export function filterFiles(files: FileRecord[], config: ViewConfig, search = '', archiveFilter: ArchiveFilter = 'exclude', configuration = defaultConfiguration) { return applyView(files, config, { search, archived: archiveFilter, configuration }); }
 export function unresolvedBlockers(file: FileRecord, files: FileRecord[], configuration = defaultConfiguration) { return file.entity.blocked_by.filter(id => { const entity = files.find(f => f.id === id)?.entity; const category = entity && statusCategory(entity, configuration); return category !== 'completed' && category !== 'canceled'; }); }
 function StateSelect({ file, props }: { file: FileRecord; props: ViewProps }) {
   const workflow = workflowFor(file.entity.entity, props.configuration);
   if (!workflow) return <span className="muted">{String(file.entity.document_kind || '—')}</span>;
-  return <select aria-label={`Status for ${file.id}`} value={file.entity.status} disabled={!props.canEdit(file.id)} onChange={event => void props.onPatch(file.id, { status: event.target.value })}>{workflow.states.map(state => <option value={state.id} key={state.id} disabled={state.id !== file.entity.status && !workflow.transitions.some(t => t.from === file.entity.status && t.to === state.id)}>{state.label}</option>)}</select>;
+  return <RadixSelect aria-label={`Status for ${file.id}`} value={file.entity.status} disabled={!props.canEdit(file.id)} onChange={event => void props.onPatch(file.id, { status: event.target.value })}>{workflow.states.map(state => <option value={state.id} key={state.id} disabled={state.id !== file.entity.status && !workflow.transitions.some(t => t.from === file.entity.status && t.to === state.id)}>{state.label}</option>)}</RadixSelect>;
 }
 function MoveControls({ file, props }: { file: FileRecord; props: ViewProps }) { return props.onMove && !props.embedded ? <span className="manual-order-controls"><button aria-label={`Move ${file.id} up`} disabled={props.files[0]?.id === file.id} onClick={() => props.onMove?.(file.id, -1)}>↑</button><button aria-label={`Move ${file.id} down`} disabled={props.files.at(-1)?.id === file.id} onClick={() => props.onMove?.(file.id, 1)}>↓</button></span> : null; }
 
@@ -133,7 +137,7 @@ function BoardColumn({ id, value, label, category, files, props, groups, onGroup
     <div className="column-cards">{files.map(file => {
       const targets = [...groups].map(([key, group]) => ({ key, ...group, allowed: permitsGroup(file, group.value, props) }));
       const writable = targets.some(target => target.allowed);
-      return <div key={file.id}><TaskCard file={file} props={props} draggable={writable} groupId={id} groups={groups} onGroup={onGroup} landed={landedId === file.id} />{!statusGroup && <label className="card-group-control"><span>{props.config.group_by}</span><select aria-label={`Group ${props.config.group_by} for ${file.id}`} value={id} disabled={!writable} onChange={event => onGroup(file.id, event.target.value)}>{targets.map(target => <option key={target.key} value={target.key} disabled={!target.allowed}>{target.label}</option>)}</select></label>}</div>;
+      return <div key={file.id}><TaskCard file={file} props={props} draggable={writable} groupId={id} groups={groups} onGroup={onGroup} landed={landedId === file.id} />{!statusGroup && <label className="card-group-control"><span>{props.config.group_by}</span><RadixSelect aria-label={`Group ${props.config.group_by} for ${file.id}`} value={id} disabled={!writable} onChange={event => onGroup(file.id, event.target.value)}>{targets.map(target => <option key={target.key} value={target.key} disabled={!target.allowed}>{target.label}</option>)}</RadixSelect></label>}</div>;
     })}{!files.length && !create && <div className="column-empty">{props.en === false ? '暂无任务' : 'No tasks'}</div>}{create && <button type="button" className="addcard" onClick={create}><Plus size={14} aria-hidden="true" />{props.en === false ? '新建任务' : 'Add task'}</button>}</div>
   </section>;
 }
@@ -170,8 +174,18 @@ function Table(props: ViewProps) {
     const configured = props.config.columns || ['status', 'priority', 'assignee', 'blocked_by', ...(props.configuration?.custom_fields.filter(field => !props.config.entity || field.entities.includes(props.config.entity)).map(field => field.name) || [])];
     const names = !props.config.project && !configured.includes('project') ? ['project', ...configured] : configured;
     return [
-      { id: 'item', header: 'Entity', cell: ({ row: { original: file } }) => <><button className="table-title" onClick={() => props.onSelect(file.id)}><span className="mono">{file.id}</span><strong>{file.entity.title}</strong>{props.draftIds?.has(file.id) && <span className="draft-pill">Draft</span>}</button><MoveControls file={file} props={props} /></> },
-      ...names.filter(name => name !== 'title' && name !== 'id').map((name): ColumnDef<FileRecord> => ({ id: name, header: props.configuration?.custom_fields.find(field => field.name === name)?.label || name.replaceAll('_', ' '), cell: ({ row: { original: file } }) => name === 'status' ? <StateSelect file={file} props={props} /> : name === 'priority' && ['work_item', 'requirement'].includes(file.entity.entity) ? <select aria-label={`Priority for ${file.id}`} disabled={!props.canEdit(file.id)} value={String(file.entity.priority || 'medium')} onChange={event => void props.onPatch(file.id, { priority: event.target.value })}>{priorities.map(priority => <option key={priority}>{priority}</option>)}</select> : <span className="muted">{Array.isArray(file.entity[name]) ? (file.entity[name] as unknown[]).join(', ') : String(file.entity[name] ?? '—')}</span> })),
+      { id: 'item', header: props.config.entity === 'document' ? (props.en === false ? '文档名称' : 'Document') : 'Entity', cell: ({ row: { original: file } }) => <><button className="table-title" onClick={() => props.onSelect(file.id)}>{file.entity.entity === 'document' ? <><strong>{file.entity.title}</strong><span className="mono">{file.id}</span></> : <><span className="mono">{file.id}</span><strong>{file.entity.title}</strong></>}{props.draftIds?.has(file.id) && <span className="draft-pill">Draft</span>}</button><MoveControls file={file} props={props} /></> },
+      ...names.filter(name => name !== 'title' && name !== 'id').map((name): ColumnDef<FileRecord> => ({ id: name, header: props.config.entity === 'document' && name === 'document_kind' ? (props.en === false ? '类型' : 'Type') : props.config.entity === 'document' && name === 'project' ? (props.en === false ? '项目' : 'Project') : props.configuration?.custom_fields.find(field => field.name === name)?.label || name.replaceAll('_', ' '), cell: ({ row: { original: file } }) => {
+        if (name === 'document_kind') return <span className="muted">{documentKindLabels[String(file.entity.document_kind ?? 'note')]?.[props.en === false ? 'zh' : 'en'] ?? String(file.entity.document_kind ?? '—')}</span>;
+        if (name === 'project' && file.entity.entity === 'document') {
+          const project = (props.allFiles ?? props.files).find(candidate => candidate.entity.entity === 'project' && candidate.id === file.entity.project);
+          const title = project?.entity.title ?? String(file.entity.project ?? '—');
+          return <span className="muted" title={title}>{title}</span>;
+        }
+        if (name === 'status') return <StateSelect file={file} props={props} />;
+        if (name === 'priority' && ['work_item', 'requirement'].includes(file.entity.entity)) return <RadixSelect aria-label={`Priority for ${file.id}`} disabled={!props.canEdit(file.id)} value={String(file.entity.priority || 'medium')} onChange={event => void props.onPatch(file.id, { priority: event.target.value })}>{priorities.map(priority => <option key={priority}>{priority}</option>)}</RadixSelect>;
+        return <span className="muted">{Array.isArray(file.entity[name]) ? (file.entity[name] as unknown[]).join(', ') : String(file.entity[name] ?? '—')}</span>;
+      } })),
     ];
   }, [props]);
   const table = useReactTable({ data: props.files, columns, getCoreRowModel: getCoreRowModel() });
@@ -199,5 +213,5 @@ export function PMView(props: ViewProps) {
   const result = useMemo(() => { try { return { files: filterFiles(props.files, props.config, '', props.archiveFilter, props.configuration), error: '' }; } catch (error) { return { files: [], error: error instanceof Error ? error.message : String(error) }; } }, [props.files, props.config, props.archiveFilter, props.configuration]);
   const next = { ...props, files: result.files, allFiles: props.allFiles || props.files };
   if (result.error) return <div role="alert" className="inline-error">Invalid view: {result.error}</div>;
-  return <div className={`pm-view ${props.embedded ? 'embedded-view' : ''}`} data-testid={`view-${props.config.layout}`}>{props.config.layout === 'table' ? <Table {...next} /> : props.config.layout === 'tree' ? <Tree {...next} /> : props.config.layout === 'graph' ? <KnowledgeGraph files={props.allFiles || props.files} configuration={props.configuration} source={props.graphSource} query={{ ...props.graphQuery, view: props.graphQuery?.view ?? props.config, archived: props.graphQuery?.archived ?? props.archiveFilter }} refreshKey={props.graphRefreshKey} selectedId={props.selectedId} onSelect={props.onSelect} draftIds={props.draftIds} embedded={props.embedded} en={props.en} /> : <Board {...next} />}</div>;
+  return <div className={`pm-view ${props.embedded ? 'embedded-view' : ''}`} data-testid={`view-${props.config.layout}`}>{props.config.layout === 'table' ? <Table {...next} /> : props.config.layout === 'tree' ? <Tree {...next} /> : props.config.layout === 'graph' ? <KnowledgeGraph files={props.allFiles || props.files} configuration={props.configuration} source={props.graphSource} query={{ ...props.graphQuery, view: props.graphQuery?.view ?? props.config, archived: props.graphQuery?.archived ?? props.archiveFilter }} refreshKey={props.graphRefreshKey} selectedId={props.selectedId} onSelect={props.onSelect} draftIds={props.draftIds} embedded={props.embedded} en={props.en} graphScopeTarget={props.graphScopeTarget} graphToggleTarget={props.graphToggleTarget} /> : <Board {...next} />}</div>;
 }

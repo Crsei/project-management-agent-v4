@@ -11,13 +11,15 @@ import type { AgentScope } from "@agent-workspace/contracts/chat";
 import type { PmChangeKind, PmChangeSet, PmChangeState } from "@agent-workspace/contracts/pm-changes";
 import { DurableError } from "./durable/errors.ts";
 import { observePmCoreChanges } from "./pm-core-changes/index.ts";
+import { assertMcpThread, mcpIdentityFromHeaders, mcpIdentityHeaders, pmBrowser, type McpInvocationIdentity } from "./mcp/identity.ts";
 
 const namespace = "pm-tool-calls";
 const inputSchema = z.object({ operationId: z.uuid(), name: z.string().min(1), arguments: z.unknown() }).strict();
 type Input = z.infer<typeof inputSchema>;
-type Stored = { record: PmToolCallRecord; request: Input & { scope: { kind: "workspace" | "projects"; projectIds: string[] }; threadId: string; messageId: string; generationId: string } };
+type Stored = { record: PmToolCallRecord; delegation?: McpInvocationIdentity; request: Input & { scope: { kind: "workspace" | "projects"; projectIds: string[] }; threadId: string; messageId: string; generationId: string } };
 type Context = {
   scope: AgentScope; threadId: string; messageId: string; generationId: string; headers?: Headers;
+  delegation?: McpInvocationIdentity;
   /** Request-local live Chat authorization; never copied into a stored request. */
   authorizeExecution: (action: "tool") => Promise<void>;
 };
@@ -157,7 +159,18 @@ async function pmFetch(workspaceId: string, action: string, headers: Headers | u
   }
   return body;
 }
+/** Rehydrate only non-secret grant identity; never approve under the browser's identity. */
+async function delegatedHeaders(value: Stored, headers?: Headers): Promise<Headers | undefined> {
+  if (!value.delegation) return headers;
+  await assertMcpThread(value.delegation, value.record.threadId);
+  return mcpIdentityHeaders(value.delegation);
+}
+
+export async function listPmTools(workspaceId: string, headers?: Headers): Promise<unknown> {
+  return pmFetch(workspaceId, "", headers);
+}
 async function reconcile(value: Stored, headers?: Headers): Promise<PmToolCallRecord> {
+  headers = await delegatedHeaders(value, headers);
   if (value.record.status === "pending_approval") return value.record;
   try {
     const body = pmToolCallRecordSchema.parse(await pmFetch(value.record.workspaceId, "/result", headers, value.request)) as PmToolCallRecord;
@@ -170,7 +183,9 @@ async function reconcile(value: Stored, headers?: Headers): Promise<PmToolCallRe
   }
 }
 async function dispatch(value: Stored, headers?: Headers): Promise<PmToolCallRecord> {
+  // A denial before network dispatch is definite; a transport failure remains unknown.
   try {
+    headers = await delegatedHeaders(value, headers);
     const response = pmToolCallRecordSchema.parse(await pmFetch(value.record.workspaceId, "/call", headers, value.request)) as PmToolCallRecord;
     if (response.operationId !== value.record.operationId || response.threadId !== value.record.threadId || response.generationId !== value.record.generationId) throw new Error("PM returned a mismatched operation");
     value.record = response;
@@ -180,23 +195,37 @@ async function dispatch(value: Stored, headers?: Headers): Promise<PmToolCallRec
   }
   save(value); await observeCreatedProject(value.record, headers); return value.record;
 }
-async function call(context: Context, input: Input): Promise<PmToolCallRecord> {
+export async function callPmTool(context: Context, input: Input): Promise<PmToolCallRecord> {
+  input = inputSchema.parse(input);
+  const delegation = context.delegation ?? (context.headers ? mcpIdentityFromHeaders(context.headers) : null);
+  if (delegation) {
+    await assertMcpThread(delegation, context.threadId);
+    if (delegation.scope.workspaceId !== context.scope.workspaceId || delegation.scope.projectId !== context.scope.projectId)
+      throw Object.assign(new Error("PM tool scope exceeds the originating delegation"), { status: 403 });
+    const catalog = z.object({ tools: z.array(z.object({ name: z.string(), write: z.boolean() })) }).parse(
+      await listPmTools(context.scope.workspaceId, await mcpIdentityHeaders(delegation)));
+    const tool = catalog.tools.find(item => item.name === input.name);
+    if (!tool || tool.write && delegation.access !== "full")
+      throw Object.assign(new Error("PM tool is outside the current delegation ceiling"), { status: 403 });
+  }
   const request: Stored["request"] = { ...input, scope: context.scope.projectId ? { kind: "projects", projectIds: [context.scope.projectId] } : { kind: "workspace", projectIds: [] }, threadId: context.threadId, messageId: context.messageId, generationId: context.generationId };
   const existing = readRecord<Stored>(namespace, input.operationId);
   if (existing) {
-    if (JSON.stringify(existing.request) !== JSON.stringify(request) || existing.record.workspaceId !== context.scope.workspaceId) throw new Error("operationId already belongs to another request");
-    return existing.record;
+    if (JSON.stringify(existing.request) !== JSON.stringify(request) || existing.record.workspaceId !== context.scope.workspaceId || existing.delegation?.grantId !== delegation?.grantId) throw new Error("operationId already belongs to another request");
+    return delegation && (existing.record.status === "unknown" || existing.record.status === "running")
+      ? reconcile(existing, context.headers) : existing.record;
   }
   // New native work must remain authorized after asynchronous body admission.
   await context.authorizeExecution("tool");
   // Another request may have claimed the same operation while authorization awaited PM.
   const admitted = readRecord<Stored>(namespace, input.operationId);
   if (admitted) {
-    if (JSON.stringify(admitted.request) !== JSON.stringify(request) || admitted.record.workspaceId !== context.scope.workspaceId) throw new Error("operationId already belongs to another request");
-    return admitted.record;
+    if (JSON.stringify(admitted.request) !== JSON.stringify(request) || admitted.record.workspaceId !== context.scope.workspaceId || admitted.delegation?.grantId !== delegation?.grantId) throw new Error("operationId already belongs to another request");
+    return delegation && (admitted.record.status === "unknown" || admitted.record.status === "running")
+      ? reconcile(admitted, context.headers) : admitted.record;
   }
   const pending = destructivePmToolNames[input.name] === true;
-  const value: Stored = { request, record: { operationId: input.operationId, name: input.name, status: pending ? "pending_approval" : "running", result: null, error: null, threadId: context.threadId, messageId: context.messageId, generationId: context.generationId, workspaceId: context.scope.workspaceId, createdAt: new Date().toISOString(), finishedAt: null } };
+  const value: Stored = { request, ...(delegation ? { delegation } : {}), record: { operationId: input.operationId, name: input.name, status: pending ? "pending_approval" : "running", result: null, error: null, threadId: context.threadId, messageId: context.messageId, generationId: context.generationId, workspaceId: context.scope.workspaceId, createdAt: new Date().toISOString(), finishedAt: null } };
   save(value);
   if (pending) return value.record;
   return dispatch(value, context.headers);
@@ -204,6 +233,8 @@ async function call(context: Context, input: Input): Promise<PmToolCallRecord> {
 
 /** The loopback endpoint exists only for this generation. Headers and authorization remain in memory. */
 export async function openPmToolBridge(context: Context): Promise<{ url: string; close: () => Promise<void> }> {
+  const delegation = context.delegation ?? (context.headers ? mcpIdentityFromHeaders(context.headers) : null);
+  if (delegation) context = { ...context, delegation };
   // JSON-RPC IDs are local to a transport; Pi supplies its generation-local namespace.
   const mcpCalls = new Map<string, { signature: string; operationId: string; result: Promise<PmToolCallRecord> }>();
   const server: Server = createServer(async (req, res) => {
@@ -219,13 +250,14 @@ export async function openPmToolBridge(context: Context): Promise<{ url: string;
     try {
       if (req.method === "GET" && req.url === "/tools/list") {
         await context.authorizeExecution("tool");
-        res.end(JSON.stringify(await pmFetch(context.scope.workspaceId, "", context.headers)));
+        res.end(JSON.stringify(await listPmTools(context.scope.workspaceId, delegation ? await mcpIdentityHeaders(delegation) : context.headers)));
         return;
       }
       if (req.method !== "POST" || !["/tools/call", "/tools/result", "/tools/mcp-call"].includes(req.url ?? "")) { res.writeHead(404).end(JSON.stringify({ error: "not_found" })); return; }
       const chunks: Buffer[] = []; let size = 0;
       for await (const chunk of req) { const bytes = Buffer.from(chunk); size += bytes.length; if (size > 1024 * 1024) throw new Error("Input too large"); chunks.push(bytes); }
       const payload: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (delegation) await assertMcpThread(delegation, context.threadId);
       if (req.url === "/tools/mcp-call") {
         const input = z.strictObject({ transportId: z.string().min(1).max(128), requestId: z.union([z.string().max(512), z.number().int(), z.null()]), name: z.string().min(1), arguments: z.unknown() }).parse(payload);
         const key = JSON.stringify([input.transportId, input.requestId]);
@@ -237,13 +269,13 @@ export async function openPmToolBridge(context: Context): Promise<{ url: string;
           const deferred = Promise.withResolvers<PmToolCallRecord>();
           prior = { signature, operationId, result: deferred.promise };
           mcpCalls.set(key, prior);
-          void call(context, { operationId, name: input.name, arguments: input.arguments }).then(deferred.resolve, deferred.reject);
+          void callPmTool(context, { operationId, name: input.name, arguments: input.arguments }).then(deferred.resolve, deferred.reject);
         }
         res.end(JSON.stringify(await prior.result));
         return;
       }
       const input = inputSchema.parse(payload);
-      if (req.url === "/tools/call") { res.end(JSON.stringify(await call(context, input))); return; }
+      if (req.url === "/tools/call") { res.end(JSON.stringify(await callPmTool(context, input))); return; }
       const stored = readRecord<Stored>(namespace, input.operationId);
       if (!stored || stored.record.threadId !== context.threadId || JSON.stringify({ operationId: stored.request.operationId, name: stored.request.name, arguments: stored.request.arguments }) !== JSON.stringify(input)) throw new Error("Original operation not found or mismatched");
       res.end(JSON.stringify(await reconcile(stored, context.headers)));
@@ -303,6 +335,10 @@ pmToolRoutes.post("/pm-tools/calls/:operationId/approve", async (c) => {
   const stored = readRecord<Stored>(namespace, c.req.param("operationId")); if (!stored) return c.json({ error: "Operation not found" }, 404);
   const thread = getThread(stored.record.threadId); if (!thread) return c.json({ error: "Thread not found" }, 404);
   await assertThreadScopeAccessible(thread, c.req.raw.headers);
+  if (stored.delegation?.access === "read-only") return c.json({ error: "Read-only delegation cannot approve a write" }, 403);
+  if (stored.delegation && (await pmBrowser(c.req.raw)).actorId !== stored.delegation.actorId)
+    return c.json({ error: "Only the originating PM actor may approve this delegated operation" }, 403);
+  await delegatedHeaders(stored, c.req.raw.headers);
   const latest = readRecord<Stored>(namespace, c.req.param("operationId"));
   if (!latest || latest.record.status !== "pending_approval") return c.json({ error: "Operation is not awaiting approval", code: "approval_not_pending" }, 409);
   // Claim the original operation before any await so a concurrent approval cannot dispatch it twice.

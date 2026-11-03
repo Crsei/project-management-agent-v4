@@ -5,12 +5,12 @@ import { WORKSPACE_COLORS, WORKSPACE_ICONS } from "../../../../../../../packages
 import { updateWorkspaceIdentityPayloadSchema, workspaceIdentitySchema } from "../../../../../../../packages/contracts/src/workspace-identity"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { NativeSelect } from "@/components/ui/native-select"
 import { useWorkspaceIdentity } from "../pm-workspace-identity-hooks"
 import { WorkspaceIdentityBadge } from "../pm-workspace-identity-badge"
 import { usePmService } from "../pm-service"
 import { allowed, CommandNotice, useAction, useDraftState, useText } from "../pm-ui"
 import { SettingsNotice } from "./settings-shared"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type IdentityDraft = UpdateWorkspaceIdentityPayload & { version: number; pendingCommandId: string | null }
 function identityDraft(identity: WorkspaceIdentity): IdentityDraft {
@@ -23,7 +23,7 @@ function IdentityFields({ value, disabled, onChange }: { value: UpdateWorkspaceI
   const labels = { building: t("建筑", "Building"), grid: t("网格", "Grid"), briefcase: t("公文包", "Briefcase"), layers: t("图层", "Layers"), rocket: t("火箭", "Rocket"), globe: t("地球", "Globe") }
   return <fieldset disabled={disabled} className="space-y-5">
     <label htmlFor={`${id}-name`} className="grid gap-2 text-sm"><span className="font-medium">{t("工作区名称", "Workspace name")}</span><Input id={`${id}-name`} value={value.name} required maxLength={200} onChange={event => onChange?.({ name: event.target.value })} /><span className="text-muted-foreground">{t("1–200 个字符；保存后工作区选择与侧栏共用此名称。不会改变工作区 ID、Markdown 目录或 URL。", "1–200 characters. Workspace selection and navigation use this saved name. The workspace ID, Markdown directory and URL never change.")}</span></label>
-    <div className="flex flex-wrap items-center gap-4"><WorkspaceIdentityBadge icon={value.icon} color={value.color} className="size-12 [&>svg]:size-6" /><label htmlFor={`${id}-icon`} className="grid min-w-40 gap-2 text-sm"><span className="font-medium">{t("工作区图标", "Workspace icon")}</span><NativeSelect id={`${id}-icon`} value={value.icon} onChange={event => { const icon = event.target.value; if (WORKSPACE_ICONS.includes(icon as typeof value.icon)) onChange?.({ icon: icon as typeof value.icon }) }}>{WORKSPACE_ICONS.map(icon => <option key={icon} value={icon}>{labels[icon]}</option>)}</NativeSelect></label></div>
+    <div className="flex flex-wrap items-center gap-4"><WorkspaceIdentityBadge icon={value.icon} color={value.color} className="size-12 [&>svg]:size-6" /><label htmlFor={`${id}-icon`} className="grid min-w-40 gap-2 text-sm"><span className="font-medium">{t("工作区图标", "Workspace icon")}</span><RadixSelect id={`${id}-icon`} value={value.icon} onChange={event => { const icon = event.target.value; if (WORKSPACE_ICONS.includes(icon as typeof value.icon)) onChange?.({ icon: icon as typeof value.icon }) }}>{WORKSPACE_ICONS.map(icon => <option key={icon} value={icon}>{labels[icon]}</option>)}</RadixSelect></label></div>
     <div className="space-y-2"><p id={`${id}-colors`} className="text-sm font-medium">{t("工作区颜色", "Workspace color")}</p><div role="group" aria-labelledby={`${id}-colors`} className="flex flex-wrap gap-3">{WORKSPACE_COLORS.map(color => <button key={color} type="button" aria-label={`${t("颜色", "Color")} ${color}`} aria-pressed={value.color === color} onClick={() => onChange?.({ color })} className="size-8 rounded-full border-2 border-background outline-offset-2 aria-pressed:outline aria-pressed:outline-2 aria-pressed:outline-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed" style={{ backgroundColor: color }} />)}</div><p className="text-sm text-muted-foreground">{t("图标是应用自带矢量图形，颜色来自固定安全色板；不加载外部图片或任意 SVG。", "Icons are built-in vector shapes with an allowlisted palette. No external images or arbitrary SVG are loaded.")}</p></div>
   </fieldset>
 }

@@ -3,6 +3,7 @@ import type { Command, Entity } from "@contracts"
 import { moveProjectSidebarOrderIds, projectSidebarOrderIds } from "../../../../../../packages/domain/src/project-extras"
 import { usePmCommand, usePmService, useProjectExtras } from "./pm-service"
 import { useText } from "./pm-ui"
+import { usePmNoticeCenter } from "./pm-notice-center"
 
 type OrderFeedback = { scope: string; pending: boolean; error: string | null; notice: string | null }
 export type ProjectSidebarOrderState = {
@@ -19,6 +20,7 @@ export function useProjectSidebarOrder(projects: Entity[]): ProjectSidebarOrderS
   const query = useProjectExtras()
   const command = usePmCommand()
   const t = useText()
+  const { push } = usePmNoticeCenter()
   const scope = `${actor?.id ?? "anonymous"}:${actorEpoch}:${workspace?.id ?? "none"}:${workspace?.version ?? 0}`
   const currentScope = useRef<string | null>(scope)
   const submitting = useRef<string | null>(null)
@@ -56,8 +58,13 @@ export function useProjectSidebarOrder(projects: Entity[]): ProjectSidebarOrderS
       const refreshed = await query.refetch()
       if (currentScope.current !== scope) return
       setFeedback({ scope, pending: false, error: refreshed.error?.message ?? null, notice: t("侧栏项目顺序已保存。", "Sidebar project order saved.") })
+      if (!refreshed.error) push({ severity: "success", title: t("侧栏项目顺序已保存。", "Sidebar project order saved."), source: "project-menu" })
     } catch (error) {
-      if (currentScope.current === scope) setFeedback({ scope, pending: false, error: error instanceof Error ? error.message : String(error), notice: null })
+      if (currentScope.current === scope) {
+        const message = error instanceof Error ? error.message : String(error)
+        setFeedback({ scope, pending: false, error: message, notice: null })
+        push({ severity: "error", title: t("侧栏项目顺序保存失败", "Could not save sidebar project order"), detail: message, source: "project-menu" })
+      }
     } finally {
       if (submitting.current === scope) submitting.current = null
     }

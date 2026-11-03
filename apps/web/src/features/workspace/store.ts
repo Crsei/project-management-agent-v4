@@ -12,7 +12,7 @@ export type DisplayPreferences = {
   timeFormat: "12" | "24"
   startPage: "home" | "dashboard" | "issues" | "projects" | "notifications" | "members?tab=members" | "members?tab=teams" | "members?tab=workload"
   taskOpenMode: "panel" | "page"
-  projectTab: "overview" | "list" | "board" | "table" | "timeline"
+  projectTab: "list" | "board" | "table" | "timeline"
   showCompletedTasks: boolean
 }
 
@@ -32,7 +32,7 @@ export const defaultDisplayPreferences: BrowserPreferences = {
   locale: "zh-CN", theme: "system", accent: "indigo",
   sidebarDensity: "comfortable", taskDensity: "comfortable", motion: "system",
   spellcheck: true, dateFormat: "MMM d", weekStartsOn: 1, timeFormat: "24",
-  startPage: "home", taskOpenMode: "panel", projectTab: "overview", showCompletedTasks: true,
+  startPage: "home", taskOpenMode: "panel", projectTab: "board", showCompletedTasks: true,
 }
 const allowedValues: { [K in keyof BrowserPreferences]: readonly BrowserPreferences[K][] } = {
   locale: ["zh-CN", "en"], theme: ["light", "dark", "system"],
@@ -41,7 +41,7 @@ const allowedValues: { [K in keyof BrowserPreferences]: readonly BrowserPreferen
   motion: ["system", "reduce"], spellcheck: [true, false],
   dateFormat: ["MMM d", "d/M", "M/d", "yyyy-MM-dd"], weekStartsOn: [0, 1, 6],
   timeFormat: ["12", "24"], startPage: ["home", "dashboard", "issues", "projects", "notifications", "members?tab=members", "members?tab=teams", "members?tab=workload"],
-  taskOpenMode: ["panel", "page"], projectTab: ["overview", "list", "board", "table", "timeline"],
+  taskOpenMode: ["panel", "page"], projectTab: ["list", "board", "table", "timeline"],
   showCompletedTasks: [true, false],
 }
 
@@ -68,6 +68,7 @@ export function sanitizeDisplayPreferences(value: unknown): Partial<BrowserPrefe
   if (typeof candidate.startPage === "string" && Object.hasOwn(legacyPeopleStartPages, candidate.startPage)) {
     result.startPage = legacyPeopleStartPages[candidate.startPage]
   }
+  if (candidate.projectTab === "overview") result.projectTab = "board"
   return result as Partial<BrowserPreferences>
 }
 

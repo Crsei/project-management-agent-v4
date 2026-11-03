@@ -166,7 +166,7 @@ export function useEntityCreation(options: EntityCreationOptions) {
     if (now.command.pending || now.command.unknownCommand) return 'Resolve the original PM command before creating. / 请先核对原 PM 命令。';
     if (now.service.error || now.service.capabilities?.business.enabled !== true) return 'The service is unavailable. / 服务当前不可用。';
     if (!isOnline) return 'Offline. Your draft is retained; no write was sent. / 当前离线，草稿已保留，未发送写入。';
-    if (hasUncertainProjectTaskDraft(session.drafts.getSnapshot())) return 'Reconcile the uncertain native task edit first. / 请先核对结果未知的原生任务编辑。';
+    if (hasUncertainProjectTaskDraft(session.drafts.getSnapshot())) return 'Reconcile the uncertain native edit first. / 请先核对结果未知的原生编辑。';
     const other = Object.fromEntries(Object.entries(session.creationDrafts.getSnapshot()).filter(([key]) => key !== current.draftId));
     if (hasUncertainCreationDrafts(other)) return 'Reconcile the original native creation first. / 请先核对原生创建原请求。';
     const project = current.kind === 'project' ? undefined : String(current.values.project ?? '') || undefined;

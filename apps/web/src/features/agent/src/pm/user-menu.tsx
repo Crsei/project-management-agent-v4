@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Popover } from "@base-ui/react/popover";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronsUpDown, LoaderCircle, LogOut, Monitor, Moon, Sun } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@agent/components/ui/avatar";
 import { useTheme } from "@agent/hooks/use-theme";
@@ -54,8 +54,8 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
     }
   };
 
-  return <Popover.Root open={open} onOpenChange={setOpen}>
-    <Popover.Trigger
+  return <Popover open={open} onOpenChange={setOpen}>
+    <PopoverTrigger
       className={`${styles.trigger} pm-agent-user-trigger`}
       aria-label={t("账户菜单", "Account menu")}
       title={t("账户菜单", "Account menu")}
@@ -65,11 +65,9 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
       </Avatar>
       <span className={styles.name}>{displayName}</span>
       <ChevronsUpDown className={`${styles.chevron} pm-agent-user-chevron`} aria-hidden="true" />
-    </Popover.Trigger>
-    <Popover.Portal>
-      <Popover.Positioner side="top" align="start" sideOffset={8}>
-        <Popover.Popup className={`${styles.card} pm-agent-user-card`}>
-          <Popover.Title className="sr-only">{t("账户菜单", "Account menu")}</Popover.Title>
+    </PopoverTrigger>
+    <PopoverContent side="top" align="start" sideOffset={8} className={`${styles.card} pm-agent-user-card`}>
+          <PopoverTitle className="sr-only">{t("账户菜单", "Account menu")}</PopoverTitle>
           <div className={styles.identity}>
             <Avatar className={`${styles.identityAvatar} size-9`}>
               {avatarDataUrl ? <AvatarImage src={avatarDataUrl} alt={displayName} /> : <AvatarFallback>{avatarInitials}</AvatarFallback>}
@@ -100,8 +98,6 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
             {signingOut ? t("正在退出…", "Signing out…") : t("退出登录", "Sign out")}
           </button>
           {logoutError && <p role="alert" className={styles.error}>{logoutError}</p>}
-        </Popover.Popup>
-      </Popover.Positioner>
-    </Popover.Portal>
-  </Popover.Root>;
+    </PopoverContent>
+  </Popover>;
 }

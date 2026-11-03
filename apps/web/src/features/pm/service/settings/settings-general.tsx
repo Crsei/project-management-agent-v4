@@ -4,11 +4,11 @@ import { ArrowUpRight, Building2, CircleHelp, ImagePlus, IdCard, MapPin, RotateC
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
-import { NativeSelect } from "@/components/ui/native-select"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { useText } from "../pm-ui"
 import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type DemoBusiness = { taxId: string; address: string; logo: File | null }
 type DemoStatus = "active" | "deactivated" | "deleted"
@@ -53,27 +53,27 @@ function AppearancePreferences({ preferencesHref }: { preferencesHref?: string }
       <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         <label htmlFor={`${id}-theme`} className="grid min-w-0 gap-2 text-sm">
           <span>{t("主题", "Theme")}</span>
-          <NativeSelect id={`${id}-theme`} value={theme} onChange={(event) => {
+          <RadixSelect id={`${id}-theme`} value={theme} onChange={(event) => {
             const value = event.target.value
             if (value === "light" || value === "dark" || value === "system") setTheme(value)
           }}>
             <option value="light">{t("浅色", "Light")}</option>
             <option value="dark">{t("深色", "Dark")}</option>
             <option value="system">{t("跟随系统", "System")}</option>
-          </NativeSelect>
+          </RadixSelect>
         </label>
         <label htmlFor={`${id}-locale`} className="grid min-w-0 gap-2 text-sm">
           <span>{t("界面语言", "Interface language")}</span>
-          <NativeSelect id={`${id}-locale`} value={locale} onChange={(event) => {
+          <RadixSelect id={`${id}-locale`} value={locale} onChange={(event) => {
             const value = event.target.value
             if (value === "zh-CN" || value === "en") setLocale(value)
           }}>
             <option value="zh-CN">{t("中文（简体）", "Chinese (Simplified)")}</option>
             <option value="en">{t("英文", "English")}</option>
-          </NativeSelect>
+          </RadixSelect>
         </label>
       </div>
-      {preferencesHref && <Link to={preferencesHref} className="inline-flex items-center gap-1 rounded-control text-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      {preferencesHref && <Link to={preferencesHref} className="inline-flex items-center gap-1 rounded-control text-sm text-primary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {t("完整外观设置", "All appearance settings")}<ArrowUpRight aria-hidden="true" className="size-3.5" />
       </Link>}
     </GeneralRow>
@@ -85,11 +85,11 @@ function FontPreference() {
   const id = useId()
   return (
     <GeneralRow id={id} label={t("系统字体", "System Font")} description={t("设置应用界面使用的字体。", "Choose the font used throughout the application.")}>
-      <NativeSelect id={id} disabled defaultValue="system" aria-describedby={`${id}-description ${id}-unavailable`}>
+      <RadixSelect id={id} disabled defaultValue="system" aria-describedby={`${id}-description ${id}-unavailable`}>
         <option value="inter">Inter</option>
         <option value="manrope">Manrope</option>
         <option value="system">{t("系统默认", "System")}</option>
-      </NativeSelect>
+      </RadixSelect>
       <p id={`${id}-unavailable`} className="text-sm leading-6 text-muted-foreground">{t("暂不可用：应用尚不支持全局字体切换及持久化，当前继续使用系统字体。", "Unavailable: global font switching and persistence are not supported. The current system font remains in use.")}</p>
     </GeneralRow>
   )
@@ -189,7 +189,7 @@ function ServiceGeneral() {
         </div>
         <Button variant="outline" render={<Link to={`${root}/plans`} />}>{t("查看方案支持情况", "View plan availability")}<ArrowUpRight aria-hidden="true" className="size-4" /></Button>
       </div>
-      <GeneralRow label={t("工作区资料", "Workspace identity")} description={t("名称、应用内安全图标和颜色使用正式工作区服务保存；不会改动 URL、核心目录或组织税务资料。", "Name, safe built-in icon and color save through the real workspace service. URLs, core directories and organization tax details are unchanged.")}><Link to={`${root}/workspace`} className="inline-flex items-center gap-1 text-sm underline underline-offset-4">{t("管理工作区名称、图标与颜色", "Manage workspace name, icon and color")}<ArrowUpRight aria-hidden="true" className="size-3.5" /></Link></GeneralRow>
+      <GeneralRow label={t("工作区资料", "Workspace identity")} description={t("名称、应用内安全图标和颜色使用正式工作区服务保存；不会改动 URL、核心目录或组织税务资料。", "Name, safe built-in icon and color save through the real workspace service. URLs, core directories and organization tax details are unchanged.")}><Link to={`${root}/workspace`} className="inline-flex items-center gap-1 text-sm text-primary hover:text-foreground">{t("管理工作区名称、图标与颜色", "Manage workspace name, icon and color")}<ArrowUpRight aria-hidden="true" className="size-3.5" /></Link></GeneralRow>
       <SettingsNotice>{t("组织资料暂不可编辑：后端尚无公司标志、税号或企业地址的服务契约。下方停用和删除操作同样不可用。外观与语言可使用现有应用偏好进行调整。", "Organization details cannot be edited: the backend has no company logo, tax ID, or business address contract. Deactivation and deletion are also unavailable. Appearance and language use the existing application preferences.")}</SettingsNotice>
       <div>
         <GeneralRow id={`${id}-logo`} label={t("公司标志", "Company Logo")} description={t("更新公司标志。当前服务不支持组织标志上传。", "Update your company logo. Organizational logo uploads are not supported by this service.")}>

@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-pi/src/server/status.ts",
   "beforeSha256": "815af73de3590e37a1628817692fe0a7419a4fce256edefcaa6dd01bade9641d",
-  "afterSha256": "3a4a5a1c4392552893e61523d0e502018d2c96ac0cdc8d559a15db9e10fc6bbc",
+  "afterSha256": "c787e1e8d6da0d7faf62968e297eda4c002f1032fe19c32fe1cc3ba18e259a97",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -21,6 +21,14 @@
       ],
       "after": [
         "    runtimeBinding: undefined,\n"
+      ]
+    },
+    {
+      "start": 142,
+      "before": [],
+      "after": [
+        "    disableExtensions: true,\n",
+        "    disableTools: true,\n"
       ]
     }
   ]

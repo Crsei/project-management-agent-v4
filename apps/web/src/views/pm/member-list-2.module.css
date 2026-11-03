@@ -248,8 +248,7 @@
   opacity: 1;
 }
 .nameButton:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--primary);
 }
 .identity p {
   overflow: hidden;

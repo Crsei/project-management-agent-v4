@@ -7,6 +7,8 @@ import { agentFileAreaUpdateSchema, agentScopeSchema, agentStorageSettingsUpdate
 import type { Actor } from '../../../../packages/domain/src/core.ts';
 import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
 import type { Workspace } from '../../../../packages/pm-core/index.ts';
+import { getMembership } from '../../../../packages/application/src/access.ts';
+import { mcpRequestIdentity, recheckMcpRequest } from '../../../../packages/application/src/mcp-service-auth.ts';
 
 type RouteContext = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config: AgentDirectoryConfiguration; workspace: (workspaceId: string) => Promise<Workspace> };
 const workspaceParams = agentScopeSchema.pick({ workspaceId: true });
@@ -17,7 +19,9 @@ export function registerAgentFileAreaRoutes(app: FastifyInstance, options: Route
     const actor = await options.actor(request), sql = await options.database().connect();
     try {
       await sql.query('BEGIN'); await lockWorkspace(sql, scope.workspaceId);
+      await recheckMcpRequest(sql, request);
       const result = await operation({ sql, actor, config: options.config, workspace: options.workspace });
+      await recheckMcpRequest(sql, request);
       await sql.query('COMMIT');
       return result;
     } catch (error) { await sql.query('ROLLBACK').catch(() => undefined); throw error; }
@@ -27,7 +31,17 @@ export function registerAgentFileAreaRoutes(app: FastifyInstance, options: Route
     reply.header('Cache-Control', 'private, no-store');
     z.strictObject({}).parse(request.query);
     const actor = await options.actor(request);
-    return listAgentContexts({ sql: options.database(), actor, config: options.config, workspace: options.workspace });
+    const catalog = await listAgentContexts({ sql: options.database(), actor, config: options.config, workspace: options.workspace });
+    const delegation = mcpRequestIdentity(request);
+    const workspaces = await Promise.all(catalog.workspaces.filter(workspace => !delegation || workspace.id === delegation.scope.workspaceId).map(async workspace => {
+      const member = await getMembership(options.database(), actor, workspace.id);
+      const projectId = delegation?.scope.projectId;
+      return { ...workspace, workspaceAllowed: member.projectIds === null && (!delegation || projectId === null),
+        ...(delegation && projectId !== null ? { fileArea: { ...workspace.fileArea, path: null, canManage: false } } : {}),
+        projects: workspace.projects.filter(project => !delegation || projectId === null || project.id === projectId) };
+    }));
+    await recheckMcpRequest(options.database(), request);
+    return { workspaces };
   });
   app.get('/api/v1/workspaces/:workspaceId/agent-storage-settings', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');

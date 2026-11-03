@@ -1,6 +1,7 @@
 import type { ProviderInstance, ProviderModel, ProviderOptionSelection } from "@agent-workspace/contracts/provider";
 import { selectableProviderOptionChoices } from "@agent-workspace/client-runtime/providers";
 import { useAgentText } from "../i18n";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 /** Native session readiness is authoritative; account identity is independent. */
 export function providerSelectable(provider: ProviderInstance | undefined): boolean {
@@ -49,23 +50,23 @@ export function ModelOptionControls({ model, selections, disabled, onChange }: {
       if (descriptor.type === "boolean") {
         const valid = !saved || typeof saved.value === "boolean";
         return <label key={descriptor.id} className="flex flex-col gap-1 text-sm" title={descriptor.description}>
-          <span>{descriptor.label}</span><select aria-label={descriptor.label} disabled={disabled} value={saved ? String(saved.value) : "default"} onChange={(event) => update(descriptor.id, event.target.value === "default" ? undefined : event.target.value === "true")}>
+          <span>{descriptor.label}</span><RadixSelect aria-label={descriptor.label} disabled={disabled} value={saved ? String(saved.value) : "default"} onChange={(event) => update(descriptor.id, event.target.value === "default" ? undefined : event.target.value === "true")}>
             <option value="default">{t("默认", "Default")}{descriptor.currentValue === undefined ? "" : descriptor.currentValue ? t("（开启）", " (on)") : t("（关闭）", " (off)")}</option>
             {!valid && <option value={String(saved?.value)}>{t("不可用：", "Unavailable: ")}{String(saved?.value)}</option>}
             <option value="true">{t("开启", "On")}</option><option value="false">{t("关闭", "Off")}</option>
-          </select>{descriptor.description && <small>{descriptor.description}</small>}
+          </RadixSelect>{descriptor.description && <small>{descriptor.description}</small>}
         </label>;
       }
       const current = descriptor.options.find((option) => option.id === descriptor.currentValue) ?? descriptor.options.find((option) => option.isDefault);
       const valid = !saved || typeof saved.value === "string" && descriptor.options.some((option) => option.id === saved.value);
       return <label key={descriptor.id} className="flex flex-col gap-1 text-sm" title={descriptor.description}>
-        <span>{descriptor.label}</span><select aria-label={descriptor.label} disabled={disabled} value={saved ? String(saved.value) : ""} onChange={(event) => update(descriptor.id, event.target.value || undefined)}>
+        <span>{descriptor.label}</span><RadixSelect aria-label={descriptor.label} disabled={disabled} value={saved ? String(saved.value) : ""} onChange={(event) => update(descriptor.id, event.target.value || undefined)}>
           <option value="">{t("默认", "Default")}{current ? ` (${current.label})` : ""}</option>
           {!valid && <option value={String(saved?.value)}>{t("不可用：", "Unavailable: ")}{String(saved?.value)}</option>}
           {selectableProviderOptionChoices(descriptor).map((option) => <option key={option.id} value={option.id} title={option.description}>{option.label}</option>)}
-        </select>{descriptor.description && <small>{descriptor.description}</small>}
+        </RadixSelect>{descriptor.description && <small>{descriptor.description}</small>}
       </label>;
     })}
-    {!modelOptionsValid(model, selections) && <p role="alert" className="text-destructive text-xs">{t("保存的模型选项已不可用，请重新选择。", "Saved model options are unavailable; select again.")} <button type="button" disabled={disabled} className="underline" onClick={() => onChange([])}>{t("清除选项", "Clear options")}</button></p>}
+    {!modelOptionsValid(model, selections) && <p role="alert" className="text-destructive text-xs">{t("保存的模型选项已不可用，请重新选择。", "Saved model options are unavailable; select again.")} <button type="button" disabled={disabled} className="enabled:hover:bg-foreground/[0.05]" onClick={() => onChange([])}>{t("清除选项", "Clear options")}</button></p>}
   </div>;
 }

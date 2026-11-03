@@ -16,6 +16,7 @@ import { registerPmProviderProtocolResolver, type PmProviderProtocolResolver } f
 import type { PmProviderFamily } from "./registration.ts";
 import { providerBoundaryError } from "./config-mapping.ts";
 
+import { shutdownMcpApps } from "../../mcp-apps/live.ts";
 export interface PmProviderApplicationOptions {
   readonly families: ReadonlyMap<ProviderDriverKind, PmProviderFamily>;
   readonly protocols: ReadonlyMap<ProviderDriver, PmProviderProtocolResolver>;
@@ -61,6 +62,7 @@ export async function makePmProviderApplication(options: PmProviderApplicationOp
         return closing ??= (async () => {
           const failures: unknown[] = [];
           try { await maintenance; } catch (error) { failures.push(error); }
+          try { await shutdownMcpApps(); } catch (error) { failures.push(error); }
           try { await Effect.runPromise(host.shutdown); } catch (error) { failures.push(error); }
           try { await Effect.runPromise(Scope.close(scope, Exit.succeed(undefined))); } catch (error) { failures.push(error); }
           if (failures.length) throw new AggregateError(failures, "Provider application cleanup failed.");

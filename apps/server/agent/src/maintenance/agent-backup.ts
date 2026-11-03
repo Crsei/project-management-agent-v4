@@ -1,14 +1,17 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
-  chmodSync, closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync,
+  closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync,
   mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, renameSync,
-  rmSync, unlinkSync, writeFileSync,
+  rmdirSync, rmSync, unlinkSync, writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { backup, DatabaseSync } from "node:sqlite";
 import { getNativeProviderAdapter } from "../providers/driver-registry.ts";
 import { validateHubUrl } from "../usage/hubs.ts";
+import { assertPrivatePath, makePrivatePath } from "../../../../../packages/pm-core/private-path.ts";
+import { assertCanonicalAbsolute, directoryIdentity, pathContains, safePathComponent, safeRelativePath, sameFileIdentity, samePath } from "../../../../../packages/pm-core/platform.ts";
+import { assertNoWindowsReparsePath, cacheWindowsPathAttributes } from "../../../../../packages/pm-core/windows-reparse.ts";
 
 type SecretPolicy = "include" | "exclude";
 type JsonObject = Record<string, unknown>;
@@ -48,8 +51,9 @@ const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 
 function regular(filename: string): void {
   const info = lstatSync(filename);
-  if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1)
+  if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || !samePath(realpathSync(filename), path.resolve(filename)))
     throw new Error("Backup refuses symlinks, hardlinks and nonregular files.");
+  if (process.platform === "win32") assertNoWindowsReparsePath(filename, lstatSync(filename, { bigint: true }));
 }
 function readJson(filename: string): JsonObject {
   regular(filename);
@@ -57,8 +61,7 @@ function readJson(filename: string): JsonObject {
   return parseObject(readFileSync(filename, "utf8"));
 }
 function safeRelative(value: unknown): string {
-  if (typeof value !== "string" || !value || value.includes("\\") || value.includes("\0")
-    || path.posix.isAbsolute(value) || value.split("/").some((part) => !part || part === "." || part === "..")
+  if (typeof value !== "string" || !safeRelativePath(value)
     || !(value === USAGE_SOURCES || value === CURSOR_USAGE_CACHE || /^(?:workspace\.sqlite|provider-instances\.json|providers\.json|(?:provider-homes|provider-private|provider-attachments)\/.+)$/.test(value)))
     throw new Error("Unsafe backup member path.");
   return value;
@@ -67,16 +70,17 @@ function safeRelative(value: unknown): string {
 function safeAbsolute(value: string): string {
   if (!value || value.includes("\0") || value.split(/[\\/]/).includes("..")) throw new Error("Unsafe maintenance path.");
   const absolute = path.resolve(value);
+  assertCanonicalAbsolute(absolute);
   let current = path.parse(absolute).root;
   for (const part of absolute.slice(current.length).split(path.sep).filter(Boolean)) {
     current = path.join(current, part);
-    if (existsSync(current) && lstatSync(current).isSymbolicLink()) throw new Error("Maintenance paths cannot contain symlinks.");
+    if (existsSync(current) && (lstatSync(current).isSymbolicLink() || !samePath(realpathSync(current), current))) throw new Error("Maintenance paths cannot contain symlinks or reparse aliases.");
+    if (process.platform === "win32" && existsSync(current)) assertNoWindowsReparsePath(current, lstatSync(current, { bigint: true }));
   }
   return absolute;
 }
 function separate(left: string, right: string): void {
-  const within = (base: string, child: string) => child === base || child.startsWith(`${base}${path.sep}`);
-  if (within(left, right) || within(right, left)) throw new Error("Source, backup and restore paths must be separate, not nested.");
+  if (pathContains(left, right) || pathContains(right, left)) throw new Error("Source, backup and restore paths must be separate, not nested.");
 }
 function directory(value: string): string {
   const absolute = safeAbsolute(value);
@@ -121,21 +125,25 @@ function acquireOfflineLock(root: string): () => void {
 }
 function restrictedWrite(filename: string, content: string): void {
   writeFileSync(filename, content, { mode: 0o600, flag: "wx" });
+  makePrivatePath(filename);
 }
 function copyRestricted(source: string, target: string): void {
   regular(source);
   mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
   copyFileSync(source, target, constants.COPYFILE_EXCL);
-  chmodSync(target, 0o600);
+  makePrivatePath(target);
 }
 function walk(root: string, prefix = ""): string[] {
   const result: string[] = [];
-  for (const name of readdirSync(path.join(root, prefix)).sort()) {
-    if (name.includes("\\") || name === "." || name === "..") throw new Error("Unsupported backup file name.");
+  const names = readdirSync(path.join(root, prefix)).sort();
+  if (process.platform === "win32") cacheWindowsPathAttributes(names.map(name => path.join(root, prefix, name)));
+  for (const name of names) {
+    if (!safePathComponent(name)) throw new Error("Unsupported backup file name.");
     const relative = prefix ? `${prefix}/${name}` : name;
     const filename = path.join(root, relative);
     const info = lstatSync(filename);
     if (info.isSymbolicLink()) throw new Error("Backup refuses symbolic links.");
+    if (process.platform === "win32") assertNoWindowsReparsePath(filename, lstatSync(filename, { bigint: true }));
     if (info.isDirectory()) result.push(...walk(root, relative));
     else { regular(filename); result.push(relative); }
   }
@@ -296,10 +304,26 @@ function excludeNativeSessions(db: DatabaseSync): void {
     update.run(JSON.stringify(value), row.namespace!, row.key!);
   }
 }
+/** A portable copy never revives external access or a nonportable live App context. */
+function revokeCopiedMcpAuthority(db: DatabaseSync): void {
+  db.exec("DELETE FROM records WHERE namespace IN ('mcp:codes', 'mcp:tokens', 'mcp:consents', 'mcp-app-model-context-v1')");
+  const revokedAt = new Date().toISOString();
+  const update = db.prepare("UPDATE records SET value = ? WHERE namespace = 'mcp:grants' AND key = ?");
+  for (const row of db.prepare("SELECT key, value FROM records WHERE namespace = 'mcp:grants'").all()) {
+    const grant = parseObject(String(row.value));
+    if (!Number.isSafeInteger(grant.version) || Number(grant.version) < 1 || Number(grant.version) >= Number.MAX_SAFE_INTEGER)
+      throw new Error("Invalid MCP grant version; backup refused.");
+    update.run(JSON.stringify({ ...grant, revokedAt, version: Number(grant.version) + 1 }), row.key!);
+  }
+}
 function privateBundle(root: string): void {
-  if ((lstatSync(root).mode & 0o077) !== 0) throw new Error("Backup directory must be private (0700).");
-  for (const relative of walk(root))
-    if ((lstatSync(path.join(root, relative)).mode & 0o077) !== 0) throw new Error("Backup files must be private (0600).");
+  assertPrivatePath(root);
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const filename = path.join(root, entry.name);
+    if (entry.isSymbolicLink()) throw new Error("Backup refuses symbolic links.");
+    if (entry.isDirectory()) privateBundle(filename);
+    else assertPrivatePath(filename);
+  }
 }
 
 /** Filesystem-only private bundle. Never registered as an HTTP route. */
@@ -323,13 +347,14 @@ export async function createAgentBackup(options: { source: string; bundle: strin
     try {
       assertDatabaseOffline(original);
       staging = mkdtempSync(path.join(path.dirname(bundle), ".agent-backup-"));
-      chmodSync(staging, 0o700);
+      makePrivatePath(staging);
       await backup(original, path.join(staging, DATABASE));
     } finally { original.close(); }
-    chmodSync(path.join(staging!, DATABASE), 0o600);
+    makePrivatePath(path.join(staging!, DATABASE));
     const snapshot = new DatabaseSync(path.join(staging!, DATABASE));
     try {
       snapshot.exec("PRAGMA journal_mode = DELETE; BEGIN IMMEDIATE; DELETE FROM worker_owner;");
+      revokeCopiedMcpAuthority(snapshot);
       if (options.secrets === "exclude") excludeNativeSessions(snapshot);
       snapshot.exec("COMMIT;");
     } finally { snapshot.close(); }
@@ -368,6 +393,7 @@ export async function createAgentBackup(options: { source: string; bundle: strin
         ".env.agent and all process/global environment, browser cookies/preferences, external/global provider homes",
         "workspace.lock and worker_owner execution ownership; provider probe observations",
         "rebuildable provider-cache probes, transcript/database usage scan caches and interrupted atomic-write temporary files",
+        "MCP OAuth codes/tokens/consent challenges and live App context; copied client grants retain audit metadata but are revoked in both secret modes and require fresh consent",
         ...(options.secrets === "exclude" ? ["providers.json, provider-private credential/identity store, all provider home contents, instance env and native config secrets/endpoints/executable/argument overrides; native resume/fork references are cleared; providers remain disabled until explicitly reconfigured and enabled; hub management keys are removed and hubs disabled"] : [])],
     };
     restrictedWrite(path.join(staging!, "manifest.json"), json(manifest));
@@ -435,6 +461,7 @@ function loadBundle(value: string): { root: string; manifest: AgentBackupManifes
 }
 function compareTarget(bundle: string, target: string, manifest: AgentBackupManifest): Coverage {
   const expected = new Set(manifest.files.map((entry) => entry.path));
+  assertPrivatePath(target);
   for (const relative of walk(target)) {
     if (relative === "workspace.lock" || relative === "agent-restore.json") continue;
     if (!expected.has(relative)) throw new Error("Restore target contains unverified files.");
@@ -442,7 +469,7 @@ function compareTarget(bundle: string, target: string, manifest: AgentBackupMani
   for (const entry of manifest.files) {
     const filename = path.join(target, safeRelative(entry.path));
     regular(filename);
-    if ((lstatSync(filename).mode & 0o077) !== 0) throw new Error("Restored files must have restricted permissions.");
+    assertPrivatePath(filename);
     const bytes = readFileSync(filename);
     const expectedHash = entry.path === CONFIG
       ? sha256(relocateConfiguration(readFileSync(path.join(bundle, CONFIG)), target)) : entry.sha256;
@@ -461,13 +488,14 @@ export function restoreAgentBackup(options: { bundle: string; target: string; st
   if (existsSync(target)) {
     directory(target);
     if (readdirSync(target).length !== 0) throw new Error("Restore target must be a separate empty directory. Existing data was not changed.");
-  } else mkdirSync(target, { mode: 0o700 });
+  } else { mkdirSync(target, { mode: 0o700 }); makePrivatePath(target); }
+  const targetIdentity = directoryIdentity(target);
   const release = acquireOfflineLock(target);
   let locked = true;
   let staging: string | undefined;
   try {
     staging = mkdtempSync(path.join(path.dirname(target), ".agent-restore-"));
-    chmodSync(staging, 0o700);
+    makePrivatePath(staging);
     for (const entry of manifest.files) {
       const relative = safeRelative(entry.path);
       if (relative === CONFIG) restrictedWrite(path.join(staging, CONFIG), relocateConfiguration(readFileSync(path.join(root, CONFIG)), target));
@@ -498,9 +526,14 @@ export function restoreAgentBackup(options: { bundle: string; target: string; st
     restrictedWrite(path.join(staging, "agent-restore.json"), json({ format: "agent-isolated-restore", version: 1,
       restoredAt: new Date().toISOString(), secrets: manifest.secrets, requiresLogin: manifest.secrets === "exclude",
       backupManifestSha256: sha256(readFileSync(path.join(root, "manifest.json"))), exclusions: manifest.exclusions }));
+    privateBundle(staging);
     release(); locked = false;
     if (readdirSync(target).length !== 0) throw new Error("Restore target changed during maintenance; refusing overwrite.");
-    // POSIX rename replaces only the verified empty target atomically; a concurrently populated directory makes it fail.
+    if (!sameFileIdentity(targetIdentity, directoryIdentity(target))) throw new Error("Restore target directory was replaced during maintenance.");
+    // Windows rename cannot replace even an empty directory. rmdir is deliberately
+    // nonrecursive: concurrent content is never removed, and rename refuses any
+    // destination created after the empty-directory removal.
+    if (process.platform === "win32") rmdirSync(target);
     renameSync(staging, target); staging = undefined;
     return restored;
   } finally {

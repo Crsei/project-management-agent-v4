@@ -13,6 +13,7 @@ import { useWorkspace } from "./provider";
 import { errorMessage, timestamp } from "./api";
 import { WorkspaceClientError } from "@agent-workspace/client-runtime";
 import { usePanelDraft } from "./use-panel-draft";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const statusLabels: Record<RunStatus | RunStepStatus, string> = {
   queued: "排队中",
@@ -586,7 +587,7 @@ export function RunsPanel() {
               <h4 className="text-sm font-medium">从执行快照 Fork</h4>
               <label className="live-panel-field">
                 <span>选择上下文边界</span>
-                <select
+                <RadixSelect
                   className="live-panel-select"
                   value={boundary ?? ""}
                   onChange={(event) =>
@@ -603,7 +604,7 @@ export function RunsPanel() {
                       {index + 1}. {step.name}（已完成边界）
                     </option>
                   ))}
-                </select>
+                </RadixSelect>
               </label>
               <p className="live-panel-status">
                 复制会话资源与有限历史；失败结果不视为成功。原运行不变，默认共享工作目录，不会在创建分支时自动调用

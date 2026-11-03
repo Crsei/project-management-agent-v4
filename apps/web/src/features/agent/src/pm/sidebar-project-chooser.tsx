@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Popover } from "@base-ui/react/popover";
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { ExternalLinkIcon, FolderIcon, FolderPlusIcon, MessageSquareIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { sameScope, type AgentCatalog, type AgentFileArea, type AgentScope, type PmIdentity } from "./state";
 import { useAgentText } from "../i18n";
@@ -32,11 +32,10 @@ export function SidebarProjectChooser({ catalog, identity, scope, pending, loadi
     <button type="button" className="pm-agent-icon" disabled={pending || !!error} aria-label={t(`在${group.name}新建会话`, `New session in ${group.name}`)} title={t("新建会话", "New session")} onClick={() => select(group.scope, true)}><PlusIcon /></button>
     {group.scope.projectId && <Link className="pm-agent-icon" data-automation-leave-guarded="true" aria-label={t(`在 PM 中管理${group.name}`, `Manage ${group.name} in PM`)} title={t("在 PM 中管理项目", "Manage project in PM")} to={`/pm/${encodeURIComponent(group.scope.workspaceId)}/projects/${encodeURIComponent(group.scope.projectId)}`} onClick={(event) => { if (!canLeave()) event.preventDefault(); }}><ExternalLinkIcon /></Link>}
   </div>;
-  return <Popover.Root open={open} onOpenChange={setOpen}>
-    <Popover.Trigger className="pm-agent-icon" aria-label={t("选择工作区或项目", "Select workspace or project")} title={t("选择工作区或项目", "Select workspace or project")}><FolderPlusIcon /></Popover.Trigger>
-    <Popover.Portal><Popover.Positioner className="pm-agent-chooser-positioner" side="bottom" align="start" sideOffset={6}>
-      <Popover.Popup className="pm-agent-chooser">
-        <Popover.Title className="pm-agent-chooser-title">{t("工作区与项目", "Workspaces & projects")}</Popover.Title>
+  return <Popover open={open} onOpenChange={setOpen}>
+    <PopoverTrigger className="pm-agent-icon" aria-label={t("选择工作区或项目", "Select workspace or project")} title={t("选择工作区或项目", "Select workspace or project")}><FolderPlusIcon /></PopoverTrigger>
+    <PopoverContent className="pm-agent-chooser pm-agent-chooser-positioner" side="bottom" align="start" sideOffset={6}>
+        <PopoverTitle className="pm-agent-chooser-title">{t("工作区与项目", "Workspaces & projects")}</PopoverTitle>
         {loading && !catalog && <p role="status" className="pm-agent-empty-group">{t("正在读取工作区…", "Loading workspaces…")}</p>}
         {error && <div role="alert" className="pm-agent-sidebar-error">{t("工作区读取失败：", "Failed to load workspaces: ")}{error}<button type="button" className="pm-agent-chooser-retry" onClick={onRefresh}>{t("重新读取", "Retry")}</button></div>}
         {catalog?.workspaces.map((workspace) => {
@@ -51,7 +50,6 @@ export function SidebarProjectChooser({ catalog, identity, scope, pending, loadi
           </section>;
         })}
         {!loading && !error && !catalog?.workspaces.length && <p className="pm-agent-empty-group">{t("没有可访问的 PM 工作区。", "No PM workspaces you can access.")}</p>}
-      </Popover.Popup>
-    </Popover.Positioner></Popover.Portal>
-  </Popover.Root>;
+    </PopoverContent>
+  </Popover>;
 }

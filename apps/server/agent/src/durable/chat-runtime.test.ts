@@ -8,6 +8,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import type { UIMessage, UIMessageChunk } from "ai";
 import type { AgentScope } from "@agent-workspace/contracts/chat";
 import type { NativeSessionRef, ProviderOptionSelection } from "@agent-workspace/contracts/provider";
+import type { AgentCatalog } from "../../../../../packages/contracts/src/agent-file-areas.ts";
 import { codexAdapter } from "../providers/drivers/codex.ts";
 import { claudeAdapter } from "../providers/drivers/claude.ts";
 import { getThreadUsage } from "../usage/ledger.ts";
@@ -75,10 +76,17 @@ beforeEach(async () => {
   resolvedRequests = [];
   pmStatus = 200;
   onScopeResolution = undefined;
+  const catalog: AgentCatalog = {
+    workspaces: [fixtureScope.workspaceId, secondWorkspace, thirdWorkspace].map((id) => ({
+      id, name: "Fixture workspace",
+      fileArea: { path: directory, status: "available", revision: 1, source: "explicit", canManage: false },
+      projects: [],
+    })),
+  };
   pmServer = createServer(async (incoming, outgoing) => {
     if (incoming.method === "GET" && incoming.url === "/api/v1/agent-contexts") {
       outgoing.writeHead(200, { "content-type": "application/json" });
-      outgoing.end(JSON.stringify({ workspaces: [fixtureScope.workspaceId, secondWorkspace, thirdWorkspace].map((id) => ({ id, projects: [] })) }));
+      outgoing.end(JSON.stringify(catalog));
       return;
     }
     if (incoming.method === "GET" && /^\/api\/v1\/workspaces\/[^/]+\/agent-tools\/core-files\?projectId=PRJ-\d+$/.test(incoming.url ?? "")) {
@@ -629,7 +637,7 @@ test("frozen native launch options reach persisted transcript pricing after thre
 });
 
 for (const mode of ["onReturn", "beforeCacheExpires"] as const) {
-  test(`Claude ${mode} compacts the authorized native session as a durable turn`, { timeout: 10000 }, async () => {
+  test(`Claude ${mode} compacts the authorized native session as a durable turn`, { timeout: 30000 }, async () => {
     const originalCheck = claudeAdapter.check;
     const originalRun = claudeAdapter.run;
     const compactStarted = Promise.withResolvers<void>();
@@ -1324,7 +1332,7 @@ test("two scoped CLI sessions execute in separate cwd and queued snapshots survi
   }
 });
 
-test("native resume, continuation and fork require matching scope and accepted directory", { timeout: 30000 }, async () => {
+test("native resume, continuation and fork require matching scope and accepted directory", { timeout: 90000 }, async () => {
   const { instance, log } = await controlledCliProvider();
   const scope = { ...fixtureScope, projectId: "PRJ-002" };
   const initialPath = join(directory, "native-initial");

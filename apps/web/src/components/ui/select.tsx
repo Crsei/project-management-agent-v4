@@ -147,7 +147,7 @@ export function SelectItem({
     <SelectPrimitive.Item
       {...props}
       className={cn(
-        "flex min-h-8 cursor-default items-center gap-2 rounded-sm px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring data-highlighted:bg-surface-hover data-highlighted:text-foreground data-disabled:opacity-50 [@media(pointer:coarse)]:min-h-11",
+        "flex min-h-8 cursor-default items-center gap-2 rounded-sm px-3 text-sm outline-none data-highlighted:bg-surface-hover data-highlighted:text-foreground data-disabled:opacity-50 [@media(pointer:coarse)]:min-h-11",
         className,
       )}
     >
@@ -169,6 +169,7 @@ export function SelectItem({
 export function SelectTrigger({
   className,
   children,
+  ref,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
   className?: string
@@ -177,8 +178,11 @@ export function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       {...props}
+      data-slot="select-trigger"
       ref={(element) => {
         if (triggerRef) triggerRef.current = element
+        if (typeof ref === "function") ref(element)
+        else if (ref) ref.current = element
       }}
       className={cn(
         "h-control rounded-md border bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-disabled:opacity-50 [@media(pointer:coarse)]:min-h-11",

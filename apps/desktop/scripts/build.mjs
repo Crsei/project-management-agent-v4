@@ -1,22 +1,28 @@
-import { cp, mkdir, rm } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { cp, lstat, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const source = join(root, "src");
 const dist = join(root, "dist");
-await rm(dist, { recursive: true, force: true });
-await mkdir(dist, { recursive: true });
-for (const name of [
-  "main.mjs",
-  "local-server.mjs",
-  "policy.mjs",
-  "preload.cjs",
-  "connection.html",
-  "connection.css",
-  "connection.mjs",
-]) {
-  await cp(join(root, "src", name), join(dist, name));
+const previous = await lstat(dist).catch((error) => { if (error.code === "ENOENT") return null; throw error; });
+if (previous && (!previous.isDirectory() || previous.isSymbolicLink()))
+  throw new Error("Desktop dist must be a real directory; refusing to replace a symlink or caller-owned file.");
+const temporary = await mkdtemp(join(root, ".desktop-build-"));
+try {
+  await cp(source, join(temporary, "dist"), {
+    recursive: true,
+    filter: async (path) => {
+      const name = basename(path);
+      if (path === join(source, "backend") || ["node_modules", "tests", "__tests__", ".git"].includes(name) || name.startsWith(".env") || /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(name)) return false;
+      if ((await lstat(path)).isSymbolicLink()) throw new Error("Desktop source must not contain symlinked application resources.");
+      return true;
+    },
+  });
+  await mkdir(root, { recursive: true });
+  await rm(dist, { recursive: true, force: true });
+  await rename(join(temporary, "dist"), dist);
+  console.log(`Desktop host files written to ${dist}. Local launch uses the prepared bundled Node/PostgreSQL runtime; no startup downloads.`);
+} finally {
+  await rm(temporary, { recursive: true, force: true });
 }
-console.log(
-  `Desktop application files written to ${dist}. Build the v4 Agent and unified apps/web/dist before local launch; Node 24 and user-managed PostgreSQL are required.`,
-);

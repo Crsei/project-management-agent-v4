@@ -73,6 +73,7 @@ import {
 } from "./issue-domain"
 import { pmMembers, type PmScenario } from "./model"
 import { usePmScenarioState } from "./shared"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export type ScheduleOutcome = PmIssueOutcome
 export type ScheduleCheckOutcome = Exclude<PmIssueOutcome, "unknown">
@@ -427,7 +428,7 @@ export function ScheduleOutcomeField({
     <div className="flex flex-wrap items-center gap-3" data-pm-outcome-field>
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
         {en ? "Fixture outcome (simulated)" : "本地 fixture 结果（模拟）"}
-        <select
+        <RadixSelect
           id={`${id}-outcome`}
           aria-label={en ? "Simulated fixture outcome" : "模拟本地结果"}
           className="h-8 rounded-md border bg-surface px-2 text-sm"
@@ -443,12 +444,12 @@ export function ScheduleOutcomeField({
           <option value="confirmed">confirmed · 已确认</option>
           <option value="rejected">rejected · 已拒绝</option>
           <option value="unknown">unknown · 结果未知</option>
-        </select>
+        </RadixSelect>
       </label>
       {page.hasUnknownRequest && (
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           {en ? "Result check returns" : "显式结果检查的返回值"}
-          <select
+          <RadixSelect
             id={`${id}-check-outcome`}
             aria-label={
               en ? "Simulated result-check outcome" : "模拟结果检查返回值"
@@ -465,7 +466,7 @@ export function ScheduleOutcomeField({
           >
             <option value="confirmed">confirmed</option>
             <option value="rejected">rejected</option>
-          </select>
+          </RadixSelect>
         </label>
       )}
       {page.hasUnknownRequest && (
@@ -854,7 +855,7 @@ export function ScheduleAddIssueDialog({
                     {en
                       ? "Simulated result-check outcome"
                       : "模拟结果检查返回值"}
-                    <select
+                    <RadixSelect
                       aria-label={
                         en
                           ? "Simulated result-check outcome"
@@ -873,7 +874,7 @@ export function ScheduleAddIssueDialog({
                     >
                       <option value="confirmed">confirmed</option>
                       <option value="rejected">rejected</option>
-                    </select>
+                    </RadixSelect>
                   </label>
                   <Button size="sm" disabled={page.blocked} onClick={check}>
                     {en ? "Check result" : "核对结果"}

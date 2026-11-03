@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Switch } from "@/components/ui/switch"
 import { useText } from "../pm-ui"
 import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type MessagePreference = "all" | "mentions" | "none"
 type MobileContent = "full" | "sender" | "hidden"
@@ -241,7 +242,7 @@ function NotificationFields({ value, onChange, applied }: {
         </div>
       </div>
       <Collapsible open={expanded} onOpenChange={setExpanded}>
-        <CollapsibleTrigger className="inline-flex min-h-11 items-center gap-2 rounded-control px-2 text-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+        <CollapsibleTrigger className="inline-flex min-h-11 items-center gap-2 rounded-control px-2 text-sm font-medium outline-none hover:bg-selection focus-visible:ring-2 focus-visible:ring-ring">
           {t("移动端设置与通知预览", "Mobile settings and notification preview")}
           <ChevronDown aria-hidden="true" className={`size-4 transition-transform motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`} />
         </CollapsibleTrigger>
@@ -260,7 +261,7 @@ function NotificationFields({ value, onChange, applied }: {
           />
           <label className="grid min-w-0 gap-2 text-sm">
             <span className="font-medium">{t("移动端锁屏内容", "Mobile lock-screen content")}</span>
-            <select
+            <RadixSelect
               className="min-h-11 w-full min-w-0 rounded-control border bg-surface px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               value={disabled ? "" : value.mobileContent}
               disabled={disabled || !value.mobileOverride}
@@ -274,7 +275,7 @@ function NotificationFields({ value, onChange, applied }: {
               <option value="full">{t("显示发送者和消息正文", "Show sender and message")}</option>
               <option value="sender">{t("只显示发送者", "Show sender only")}</option>
               <option value="hidden">{t("隐藏通知内容", "Hide notification content")}</option>
-            </select>
+            </RadixSelect>
           </label>
           {applied && <NotificationPreview preferences={applied} />}
         </CollapsibleContent>
@@ -308,7 +309,7 @@ function ServiceNotificationSettings() {
       )}</p>
       {workspaceSlug && <Link
         to={`/pm/${encodeURIComponent(workspaceSlug)}/notifications`}
-        className="mt-2 inline-flex min-h-11 items-center rounded-control font-medium text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="mt-2 inline-flex min-h-11 items-center rounded-control font-medium text-foreground hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >{t("查看真实工作区活动", "View real workspace activity")}</Link>}
     </SettingsNotice>
   </div>

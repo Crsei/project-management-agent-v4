@@ -1,8 +1,699 @@
-.product-roadmap{padding:28px clamp(16px,3vw,48px);max-width:1560px;margin:auto;width:100%;min-width:0;color:var(--foreground);font-size:14px;line-height:1.6;overflow:auto;height:100%}.product-roadmap *{box-sizing:border-box}.roadmap-header{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:24px}.roadmap-eyebrow{font-size:11px;letter-spacing:.16em;color:var(--muted-foreground)}.roadmap-header h1{font-size:clamp(24px,2.5vw,34px);line-height:1.3;font-weight:650;margin:8px 0}.roadmap-header p:last-child{color:var(--muted-foreground)}.product-roadmap button,.product-roadmap select{border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:var(--card);color:inherit;cursor:pointer;font:inherit}.product-roadmap button:hover:not(:disabled){background:var(--accent)}.product-roadmap button:disabled{opacity:.45;cursor:not-allowed}.product-roadmap button.primary{background:var(--primary);color:var(--primary-foreground)}.product-roadmap :focus-visible{outline:2px solid var(--ring);outline-offset:3px}.roadmap-tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);padding-bottom:14px;overflow:auto}.roadmap-tabs button{white-space:nowrap;border-color:transparent}.roadmap-tabs button[aria-pressed=true]{background:var(--accent);border-color:var(--border)}.roadmap-tabs span{font-size:11px;color:var(--muted-foreground);margin-right:10px}.roadmap-toolbar,.roadmap-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0}.roadmap-toolbar>span{margin-right:auto;color:var(--muted-foreground);font-size:12px}.roadmap-brief-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}.roadmap-card{border:1px solid var(--border);border-radius:14px;padding:24px;background:var(--card);min-width:0;margin-bottom:20px}.roadmap-card h2{font-size:18px;font-weight:600;margin:0 0 12px}.roadmap-card h3{font-weight:600;font-size:13px;margin:0 0 5px}.roadmap-card-heading{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.roadmap-card-heading>span{color:var(--muted-foreground)}.roadmap-question-index{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0 30px}.roadmap-question-index button{padding:0;width:30px;height:30px;border-radius:50%;font-size:12px}.roadmap-question-index button[aria-current=step]{background:var(--primary);color:var(--primary-foreground)}.roadmap-question{display:grid;gap:12px}.roadmap-question strong{font-size:23px;font-weight:600}.roadmap-question span,.roadmap-muted{font-size:12px;color:var(--muted-foreground)}.product-roadmap textarea,.product-roadmap input:not([type=checkbox]){border:1px solid var(--border);background:var(--background);border-radius:8px;padding:10px 12px;width:100%;color:inherit;font:inherit}.product-roadmap textarea{resize:vertical;min-height:80px}.roadmap-prd{max-height:510px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding-right:8px}.roadmap-prd section{border-top:1px solid var(--border);padding:16px 0}.roadmap-prd p{font-size:13px;color:var(--muted-foreground)}.roadmap-canvas{border:1px solid var(--border);border-radius:12px;max-width:100%;max-height:530px;overflow:auto;background-color:var(--background);background-image:radial-gradient(var(--border) 1px,transparent 1px);background-size:18px 18px;margin:16px 0}.roadmap-plane{position:relative}.roadmap-plane>svg{position:absolute;inset:0;pointer-events:none;color:var(--muted-foreground)}.roadmap-node{position:absolute;width:260px;min-height:150px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 5px 16px #00000008;overflow:hidden}.roadmap-node[data-selected=true]{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 22%,transparent)}.roadmap-node-grip{padding:10px 14px 0;display:flex;justify-content:space-between;font-size:11px;color:var(--muted-foreground);cursor:grab}.product-roadmap .roadmap-node-select{display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;border:0;padding:9px 14px;background:transparent}.roadmap-node-select strong{font-size:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%}.roadmap-node-select>span{font-size:12px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--muted-foreground)}.roadmap-node footer{padding:8px 14px;font-size:10px;display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--border);color:var(--muted-foreground)}.roadmap-canvas-empty{padding:50px;color:var(--muted-foreground)}.roadmap-editor-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:20px}.roadmap-fields{display:grid;gap:14px}.roadmap-fields label{display:grid;gap:5px;font-size:12px}.product-roadmap fieldset{border:1px solid var(--border);border-radius:8px;padding:12px;margin:18px 0}.roadmap-check{display:flex;gap:9px;align-items:flex-start;margin:10px 0;font-size:13px}.roadmap-check input{margin-top:4px;flex-shrink:0}.product-roadmap input.roadmap-coordinate{width:80px;margin-left:6px}.roadmap-warning,.roadmap-error,.roadmap-notice,.roadmap-confirm{padding:14px 18px;border:1px solid var(--border);border-radius:10px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}.roadmap-warning{background:color-mix(in srgb,#d79d28 9%,var(--background))}.roadmap-error{color:#dc6b6b}.roadmap-notice{background:color-mix(in srgb,#379b81 8%,var(--background))}.roadmap-confirm{background:var(--accent)}.roadmap-confirm button{margin:10px 10px 0 0}.roadmap-deliveries article{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:15px 0;border-bottom:1px solid var(--border)}.roadmap-deliveries p{font-size:12px;color:var(--muted-foreground);overflow-wrap:anywhere}.roadmap-deliveries a{color:var(--primary);white-space:nowrap}.roadmap-footnote{font-size:11px;color:var(--muted-foreground);padding:16px 0}.product-roadmap details{margin-top:22px}.product-roadmap summary{cursor:pointer}.product-roadmap ol,.product-roadmap ul{padding-left:22px}.product-roadmap hr{margin:25px 0;border-color:var(--border)}
-@media(max-width:850px){.roadmap-brief-grid,.roadmap-editor-grid{grid-template-columns:1fr}.roadmap-header{display:block}.roadmap-header>button{margin-top:16px}.roadmap-card{padding:18px}.roadmap-card-heading{flex-wrap:wrap}.roadmap-deliveries article{align-items:flex-start;flex-direction:column}.roadmap-toolbar>span{flex-basis:100%}.product-roadmap{padding:20px 14px}.roadmap-question-index{margin-bottom:20px}.roadmap-canvas{max-height:360px}.roadmap-prd{max-height:380px}}
+/* 产品规划页沿用项目详情页的页面几何、语义 Token 与控件规格。
+   页面位于项目布局的滚动区内，因此不再叠加第二层大边距或独立画布底色。 */
 
-.roadmap-tabs button[aria-pressed=true]{color:var(--accent-foreground)}.roadmap-canvas-tools{display:flex;justify-content:flex-end;gap:7px;align-items:center;margin-top:12px}.roadmap-canvas-tools button{padding:3px 9px;font-size:12px}.roadmap-canvas-tools span{font-size:11px;color:var(--muted-foreground);min-width:38px;text-align:center}
+.product-roadmap {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  padding: 12px;
+  color: var(--foreground);
+  background: transparent;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
 
-.roadmap-node-detail { margin-block: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: .75rem; background: var(--muted); }
-.roadmap-node-detail p { white-space: pre-wrap; overflow-wrap: anywhere; }
-.roadmap-tabs button[aria-pressed=true] span { color: inherit; opacity: .75; }
+.product-roadmap * {
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .product-roadmap {
+    padding: 20px;
+  }
+}
+
+/* ---------- 页头 ---------- */
+
+.roadmap-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.roadmap-header h1 {
+  margin: 0;
+  font-size: var(--text-page);
+  line-height: var(--text-page--line-height);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.roadmap-header p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+/* ---------- 操作按钮 ----------
+   只作用于页面自身的操作按钮；嵌入的 App 预览、Agent 面板保留各自样式。 */
+
+.product-roadmap :where(
+  .roadmap-header > button,
+  .roadmap-toolbar > button,
+  .roadmap-actions > button,
+  .roadmap-confirm > button,
+  .roadmap-canvas-tools > button,
+  .roadmap-card > button,
+  .roadmap-card-heading > button,
+  .roadmap-card details > button,
+  .roadmap-deliveries article > button
+) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-height);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-hover) var(--motion-ease-out),
+    border-color var(--motion-hover) var(--motion-ease-out);
+}
+
+.product-roadmap :where(
+  .roadmap-header > button,
+  .roadmap-toolbar > button,
+  .roadmap-actions > button,
+  .roadmap-confirm > button,
+  .roadmap-canvas-tools > button,
+  .roadmap-card > button,
+  .roadmap-card-heading > button,
+  .roadmap-card details > button,
+  .roadmap-deliveries article > button
+):hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+.product-roadmap button.primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.product-roadmap button.primary:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 90%, transparent);
+}
+
+.product-roadmap :where(
+  .roadmap-header > button,
+  .roadmap-toolbar > button,
+  .roadmap-actions > button,
+  .roadmap-confirm > button,
+  .roadmap-canvas-tools > button,
+  .roadmap-card > button,
+  .roadmap-card-heading > button,
+  .roadmap-card details > button,
+  .roadmap-deliveries article > button
+):disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- 步骤切换 ---------- */
+
+.roadmap-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 12px;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.roadmap-tabs button {
+  min-height: var(--control-height);
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-hover) var(--motion-ease-out),
+    color var(--motion-hover) var(--motion-ease-out);
+}
+
+.roadmap-tabs button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+.roadmap-tabs button[aria-pressed="true"] {
+  background: var(--selection);
+  border-bottom-color: var(--selection-marker);
+  color: var(--foreground);
+}
+
+.roadmap-tabs span {
+  margin-right: 6px;
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.roadmap-tabs button[aria-pressed="true"] span {
+  color: inherit;
+}
+
+/* ---------- 工具栏与提示 ---------- */
+
+.roadmap-toolbar,
+.roadmap-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.roadmap-toolbar > span {
+  margin-right: auto;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.roadmap-muted {
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+/* ---------- 内容卡片 ---------- */
+
+.roadmap-brief-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.roadmap-card {
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module);
+  background: var(--surface);
+}
+
+.roadmap-brief-grid > .roadmap-card,
+.roadmap-editor-grid > .roadmap-card {
+  margin-bottom: 0;
+}
+
+.roadmap-card h2 {
+  margin: 0 0 8px;
+  font-size: var(--text-section);
+  line-height: var(--text-section--line-height);
+  font-weight: 600;
+}
+
+.roadmap-card h3 {
+  margin: 0 0 4px;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: 600;
+}
+
+.roadmap-card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.roadmap-card-heading > span {
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+/* ---------- 需求引导 ---------- */
+
+.roadmap-question-index {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 16px 0 20px;
+}
+
+.roadmap-question-index button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  cursor: pointer;
+}
+
+.roadmap-question-index button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.roadmap-question-index button[aria-current="step"] {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.roadmap-question {
+  display: grid;
+  gap: 8px;
+}
+
+.roadmap-question strong {
+  font-size: var(--text-section);
+  line-height: var(--text-section--line-height);
+  font-weight: 600;
+}
+
+.roadmap-question span {
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.product-roadmap input:not([type="checkbox"]),
+.product-roadmap textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+}
+
+.product-roadmap input:not([type="checkbox"]) {
+  height: var(--control-height);
+  padding: 0 10px;
+}
+
+.product-roadmap textarea {
+  min-height: 96px;
+  padding: 8px 10px;
+  line-height: var(--text-body--line-height);
+  resize: vertical;
+}
+
+.product-roadmap input.roadmap-coordinate {
+  width: 80px;
+  margin-left: 6px;
+}
+
+.roadmap-card-heading > [data-slot="select-trigger"] {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 180px;
+  max-width: 280px;
+}
+
+/* ---------- PRD 预览 ---------- */
+
+.roadmap-prd {
+  max-height: 510px;
+  padding-right: 8px;
+  overflow: auto;
+}
+
+.roadmap-prd section {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.roadmap-prd section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.roadmap-prd p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Roadmap 画布 ---------- */
+
+.roadmap-canvas {
+  max-width: 100%;
+  max-height: 530px;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module);
+  background-color: var(--surface-raised);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--border) 80%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 18px 18px;
+  overflow: auto;
+}
+
+.roadmap-plane {
+  position: relative;
+}
+
+.roadmap-plane > svg {
+  position: absolute;
+  inset: 0;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.roadmap-node {
+  position: absolute;
+  width: 260px;
+  min-height: 150px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module);
+  background: var(--surface);
+  box-shadow: var(--edge-shadow);
+}
+
+.roadmap-node[data-selected="true"] {
+  border-color: var(--selection-marker);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--selection-marker) 22%, transparent);
+}
+
+.roadmap-node-grip {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px 0;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  cursor: grab;
+}
+
+.product-roadmap .roadmap-node-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.roadmap-node-select strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roadmap-node-select > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.roadmap-node footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.roadmap-canvas-empty {
+  padding: 40px;
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+.roadmap-canvas-tools {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.roadmap-canvas-tools > button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.roadmap-canvas-tools > span {
+  min-width: 38px;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  text-align: center;
+}
+
+/* ---------- 任务编辑 ---------- */
+
+.roadmap-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.roadmap-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.roadmap-fields label {
+  display: grid;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.product-roadmap fieldset {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.product-roadmap legend {
+  padding: 0 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+.roadmap-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+.roadmap-check input {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+/* ---------- 状态提示 ---------- */
+
+.roadmap-warning,
+.roadmap-error,
+.roadmap-notice,
+.roadmap-confirm {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-popover);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.roadmap-warning {
+  border-color: color-mix(in srgb, var(--warning) 28%, var(--border));
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+}
+
+.roadmap-error {
+  border-color: color-mix(in srgb, var(--destructive) 28%, var(--border));
+  background: color-mix(in srgb, var(--destructive) 6%, var(--surface));
+  color: var(--destructive);
+}
+
+.roadmap-notice {
+  border-color: color-mix(in srgb, var(--success) 25%, var(--border));
+  background: color-mix(in srgb, var(--success) 7%, var(--surface));
+}
+
+.roadmap-confirm {
+  background: var(--surface-raised);
+}
+
+.roadmap-confirm p {
+  margin: 0;
+}
+
+.roadmap-confirm button {
+  margin-top: 8px;
+  margin-right: 8px;
+}
+
+.roadmap-node-detail {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-module);
+  background: var(--surface-raised);
+}
+
+.roadmap-node-detail p {
+  margin: 4px 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 交付与验收 ---------- */
+
+.roadmap-deliveries article {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.roadmap-deliveries p {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  overflow-wrap: anywhere;
+}
+
+.roadmap-deliveries a {
+  color: var(--primary);
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+  white-space: nowrap;
+}
+
+.roadmap-footnote {
+  padding: 12px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+}
+
+/* ---------- 原生折叠与列表 ---------- */
+
+.product-roadmap details {
+  margin-top: 16px;
+}
+
+.product-roadmap summary {
+  font-size: var(--text-control);
+  line-height: var(--text-control--line-height);
+  cursor: pointer;
+}
+
+.product-roadmap ol,
+.product-roadmap ul {
+  padding-left: 20px;
+}
+
+.product-roadmap hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* ---------- 窄屏 ---------- */
+
+@media (max-width: 850px) {
+  .roadmap-brief-grid,
+  .roadmap-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .roadmap-header {
+    display: block;
+  }
+
+  .roadmap-header > button {
+    margin-top: 12px;
+  }
+
+  .roadmap-card {
+    padding: 14px;
+  }
+
+  .roadmap-card-heading {
+    flex-wrap: wrap;
+  }
+
+  .roadmap-card-heading > [data-slot="select-trigger"] {
+    width: 100%;
+    max-width: none;
+  }
+
+  .roadmap-deliveries article {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .roadmap-toolbar > span {
+    flex-basis: 100%;
+  }
+
+  .roadmap-canvas {
+    max-height: 360px;
+  }
+
+  .roadmap-prd {
+    max-height: 380px;
+  }
+}

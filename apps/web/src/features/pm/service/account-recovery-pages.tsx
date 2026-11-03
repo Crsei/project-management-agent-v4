@@ -203,23 +203,13 @@ export function PasswordRecoveryPage() {
   }
   const blocked=busy || request.failed || reset.failed;
   const committed=outcome?.status==='committed';
-  const step=committed ? 3 : token ? inspection ? 3 : 2 : 1;
-  const steps=[t('申请邮件','Request email'),t('打开链接','Open link'),t('设置新密码','Set new password')];
   const outcomeTone:NoticeTone = outcome?.status==='committed' ? 'success' : outcome?.status==='cancelled' ? 'warning' : 'error';
-  return <PmAuthPageShell split={false}>
-    <div className={`${styles.page} ${styles.narrow}`}>
-      <AccountPageHeader
-        icon={<KeyRound size={20}/>}
-        eyebrow={t('账号','Account')}
-        title={t('通过可信邮箱找回密码','Recover your password')}
-        description={t('仅已登记并独立验证的恢复邮箱有效；登录名或历史邀请不是验证证明。没有可信邮箱且无法登录时，请联系实例运维；本服务没有人工绕过接口。','Only independently verified recovery emails are eligible. A sign-in email or historical invitation is not proof. If you cannot sign in and have no recovery email, contact instance operations; no bypass endpoint exists.')}
-      />
-      <ol className={styles.steps} aria-label={t('找回步骤','Recovery steps')}>
-        {steps.map((label,index)=><li key={label} className={styles.step} data-active={step===index+1 || undefined} aria-current={step===index+1 ? 'step' : undefined}>
-          <span className={styles.stepIndex} aria-hidden="true">{index+1}</span>
-          <span className={styles.stepLabel}>{label}</span>
-        </li>)}
-      </ol>
+  return <main id="main-content" className={styles.recoveryShell} data-pm-route-page>
+    <div className={`${styles.page} ${styles.recovery}`}>
+      <header className={styles.recoveryHeader}>
+        <h1 id="password-recovery-title" className={styles.title}>{t('忘记密码','Forgot Password')}</h1>
+        {!token && !committed && <p className={styles.description}>{t('输入已登记并验证的恢复邮箱，','Enter your registered, verified recovery email and')}<br/>{t('我们将发送密码重置链接。','we will send you a link to reset your password.')}</p>}
+      </header>
       <div className={styles.stack}>
         {(request.failed || reset.failed) && <StatusNotice tone="warning">{t('恢复记录损坏或存储不可用，已禁止新写入。请恢复存储权限后重新加载，不要清除尚未核对的原记录。','Recovery storage is corrupt or unavailable. New writes are blocked. Restore access and reload; do not erase an unreconciled marker.')}</StatusNotice>}
         {error && <StatusNotice tone="error">{error}</StatusNotice>}
@@ -272,32 +262,24 @@ export function PasswordRecoveryPage() {
               <Button type="submit" className={styles.submit} loading={busy} disabled={blocked || !inspection || password!==confirmation || !password}>{t('重置密码并撤销全部会话','Reset password and revoke all sessions')}</Button>
             </form>
           </div>
-        </section> : !reset.marker && !committed && <section className={styles.card} aria-labelledby="recovery-request-title">
-          <header className={styles.cardHeader}>
-            <div className={styles.cardSymbol}><MailCheck size={16} aria-hidden="true"/></div>
-            <div className={styles.cardHeading}>
-              <h2 id="recovery-request-title" className={styles.cardTitle}>{t('申请一封找回邮件','Request a recovery email')}</h2>
-              <p className={styles.cardDescription}>{t('使用已登记并独立验证的恢复邮箱。统一响应不会披露该地址是否存在或是否已发送。','Use an independently verified recovery email. The uniform response never reveals whether the address exists or whether mail was sent.')}</p>
-            </div>
-          </header>
-          <div className={styles.cardBody}>
-            {enabled!==true && <StatusNotice tone={enabled===false ? 'info' : 'warning'}>{enabled===false ? t('实例未配置邮件找回。普通登录不受影响。','Recovery issuance is not configured. Normal sign-in remains available.') : t('能力状态未知，不能发起邮件。','Capability status unknown; mail requests are blocked.')}</StatusNotice>}
-            <form onSubmit={submitRequest} className={styles.form}>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>{t('已验证的恢复邮箱（不是任意登录邮箱）','Verified recovery email (not any sign-in email)')}</span>
-                <Input type="email" required maxLength={254} autoComplete="email" value={email} disabled={blocked || !!request.marker || !enabled} onChange={event=>setEmail(event.target.value)}/>
-                <span className={styles.fieldHint}>{t('登录名、历史邀请或普通联系邮箱不构成验证证明。','A sign-in name, historical invitation or ordinary contact email is not verification.')}</span>
-              </label>
-              <Button type="submit" className={styles.submit} loading={busy} disabled={blocked || !!request.marker || !enabled}>{t('申请一次找回邮件','Request one recovery email')}</Button>
-            </form>
-          </div>
-        </section>}
+        </section> : !reset.marker && !committed && <>
+          <form onSubmit={submitRequest} className={styles.form} aria-labelledby="password-recovery-title">
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>{t('邮箱','Email')}</span>
+              <Input name="email" type="email" required maxLength={254} autoComplete="email" autoCapitalize="none" spellCheck={false} placeholder="name@example.com" value={email} disabled={blocked || !!request.marker || !enabled} onChange={event=>setEmail(event.target.value)}/>
+            </label>
+            <Button type="submit" className={styles.submit} loading={busy} disabled={blocked || !!request.marker || !enabled}>{t('继续','Continue')}</Button>
+          </form>
+          {enabled!==true && <p className={styles.recoveryStatus} role="status">{enabled===false ? t('邮件找回暂未开放。','Email recovery is currently unavailable.') : t('暂时无法确认邮件找回状态。','Email recovery availability could not be confirmed.')}</p>}
+        </>}
         {!token && reset.marker && <StatusNotice tone="warning">{t('缺少原令牌。请打开原邮件链接，不能从服务器重新取出。','Original token missing. Reopen its email; the server cannot return it.')}</StatusNotice>}
       </div>
-      <nav className={styles.footerLinks} aria-label={t('相关入口','Related links')}>
-        <Link className={styles.link} to="/pm">{t('普通登录','Normal sign-in')}</Link>
-        <Link className={styles.link} to="/pm/account/security">{t('本人账号安全','Account security')}</Link>
-      </nav>
+      {token || committed || reset.marker ? <nav className={styles.recoveryFooter} aria-label={t('相关入口','Related links')}>
+        <Link className={styles.link} to="/pm">{t('返回登录','Back to sign in')}</Link>
+      </nav> : <p className={styles.recoveryFooter}>
+        {t('还没有账号？','Don’t have an account?')}{' '}
+        <button type="button" className={styles.registerUnavailable} disabled>{t('注册（暂未开放）','Register (unavailable)')}</button>
+      </p>}
     </div>
-  </PmAuthPageShell>;
+  </main>;
 }

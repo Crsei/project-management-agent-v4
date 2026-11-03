@@ -1,5 +1,4 @@
-/* Directory sources are a separate read-only collection; native editors stay
-   mounted so switching collections never discards a PM draft. */
+/* Directory sources are separate from native PM entities and their draft cache. */
 .markdown-workbench [data-document-source-view="external"] > :is(.collection-toolbar, .collection-view-toolbar, .filter-bar, .collection-body, .collection-diagnostics) {
   display: none;
 }
@@ -48,22 +47,14 @@
   overflow: auto;
 }
 
-.markdown-workbench .document-sources-toolbar {
-  display: flex;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+.markdown-workbench .document-sources-summary {
+  flex: none;
+  overflow: visible;
 }
 
-.document-sources-toolbar > div { flex: 1 1 220px; min-width: 0; }
-.document-sources-toolbar h2 { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
-.document-sources-toolbar p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 12px; }
-.document-source-scope { display: grid; gap: 4px; min-width: 0; max-width: 100%; font-size: 12px; color: var(--muted-foreground); }
-.document-source-scope select { width: 100%; max-width: 320px; min-height: 36px; }
+.markdown-workbench .document-sources-summary .document-source-state {
+  padding-block: 8px 12px;
+}
 
 .markdown-workbench .document-source-browser {
   display: grid;
@@ -73,6 +64,9 @@
   min-height: 0;
   overflow: hidden;
 }
+
+.markdown-workbench .document-source-browser.opens-workbench { grid-template-columns: minmax(0, 1fr); }
+.markdown-workbench .document-source-browser.opens-workbench .document-source-files { border-right: 0; }
 
 .markdown-workbench .document-source-files {
   min-width: 0;
@@ -102,6 +96,11 @@
 .document-source-tree strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .document-source-tree code, .document-source-tree small { color: var(--muted-foreground); font-size: 11px; overflow-wrap: anywhere; }
 
+.markdown-workbench .document-source-table .document-source-row-actions { display: flex; justify-content: flex-end; gap: 2px; }
+.markdown-workbench .document-source-table .document-source-row-actions .icon-button { width: 22px; height: 22px; }
+.markdown-workbench .document-collection-table .document-source-row-actions { display: flex; justify-content: flex-end; gap: 2px; }
+.markdown-workbench .document-collection-table .document-source-row-actions .icon-button { width: 22px; height: 22px; }
+
 .markdown-workbench .document-source-reader { min-width: 0; min-height: 0; overflow: auto; background: var(--background); overscroll-behavior: contain; }
 .document-source-content-heading { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--border); }
 .document-source-content-heading > div { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
@@ -113,6 +112,12 @@
 .markdown-workbench .document-source-markdown pre { max-width: 100%; overflow: auto; }
 .markdown-workbench .document-source-markdown table { display: block; width: max-content; max-width: 100%; overflow: auto; }
 .markdown-workbench .document-source-markdown img { max-width: 100%; }
+
+.external-document-content { flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--background); overscroll-behavior: contain; }
+.external-document-content .document-source-markdown { padding: 20px 24px 40px; max-width: none; overflow-wrap: anywhere; }
+.external-document-content .document-source-markdown pre { max-width: 100%; overflow: auto; }
+.external-document-content .document-source-markdown table { display: block; width: max-content; max-width: 100%; overflow: auto; }
+.external-document-content .document-source-markdown img { max-width: 100%; }
 .document-source-state { display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 8px; padding: 20px 24px; font-size: 13px; line-height: 1.7; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .document-source-state > p { flex-basis: 100%; margin: 0; }
 .document-source-state > svg { flex-shrink: 0; }
@@ -124,14 +129,13 @@
 .document-source-issues li { display: grid; gap: 4px; padding-block: 6px; overflow-wrap: anywhere; }
 .document-source-issues span { color: var(--muted-foreground); }
 .document-source-pagination { display: grid; justify-items: start; gap: 8px; padding: 12px 16px 20px; font-size: 12px; }
-.document-source-scan-summary { padding: 12px 16px 20px; color: var(--muted-foreground); font-size: 12px; }
 
-.document-source-dialog { width: min(600px, calc(100vw - 24px)); max-width: 600px; padding: 24px; gap: 16px; }
+.document-source-dialog { width: min(680px, calc(100vw - 24px)); max-width: 680px; padding: 24px; gap: 16px; }
 .document-source-dialog > div > :is(p, label, form, div) { min-width: 0; }
 .document-source-dialog [data-slot="dialog-description"] { padding-right: 16px; line-height: 1.7; }
 .document-source-dialog .document-source-field { display: grid; gap: 7px; margin-top: 16px; font-size: 13px; font-weight: 500; }
-.document-source-dialog .document-source-field :is(input, select) { width: 100%; min-width: 0; min-height: 38px; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--foreground); background: var(--surface); font-size: 13px; font-weight: 400; }
-.document-source-form { display: grid; gap: 14px; margin-block: 16px; }
+.document-source-dialog .document-source-field :is(input, [data-slot="select-trigger"]) { width: 100%; min-width: 0; min-height: 38px; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--foreground); background: var(--surface); font-size: 13px; font-weight: 400; }
+.document-source-form { display: grid; gap: 14px; margin-block: 16px 0; }
 .document-source-form .document-source-field { margin-top: 0; }
 .document-source-hint { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 .document-source-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -140,36 +144,63 @@
 .document-source-dialog .document-source-error { display: grid; justify-items: start; gap: 8px; margin-block: 8px; font-size: 13px; line-height: 1.7; }
 .document-source-dialog button { flex-shrink: 0; }
 .document-source-dialog code { font-size: 12px; overflow-wrap: anywhere; }
+.document-source-selection-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; }
+.document-source-selection-heading h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.document-source-selected-folders { list-style: none; display: grid; gap: 8px; max-height: 34dvh; overflow-y: auto; margin: 0; padding: 0; overscroll-behavior: contain; }
+.document-source-selected-folders > li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
+.document-source-selected-folders > li > svg { margin-top: 3px; color: var(--muted-foreground); }
+.document-source-selected-folders > li > div { display: grid; min-width: 0; gap: 4px; font-size: 12px; overflow-wrap: anywhere; }
+.document-source-selected-folders strong { font-weight: 500; }
+.document-source-selected-folders code { color: var(--muted-foreground); }
+.document-source-empty { margin: 0; padding: 16px; border: 1px dashed var(--border); border-radius: 6px; color: var(--muted-foreground); font-size: 13px; line-height: 1.7; }
+.document-source-latest p { margin: 0; }
+.document-source-latest ul { margin: 8px 0 0; padding-left: 18px; }
+.document-source-folder-location { display: flex; align-items: end; gap: 8px; margin-block: 16px 12px; }
+.document-source-folder-location .document-source-field { flex: 1; min-width: 0; margin-top: 0; }
+.document-source-folder-location > button { min-height: 38px; }
+.document-source-folder-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.document-source-folder-browser { min-width: 0; max-height: 36dvh; overflow: auto; margin-bottom: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; overscroll-behavior: contain; }
+.document-source-folder-current { display: block; padding: 4px 4px 10px; color: var(--muted-foreground); }
+.document-source-folder-browser ul { list-style: none; display: grid; gap: 4px; margin: 0; padding: 0; }
+.document-source-folder-browser li { min-width: 0; }
+.document-source-folder-browser li button { display: flex; align-items: flex-start; gap: 8px; width: 100%; min-height: 40px; padding: 9px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; font-size: 13px; overflow-wrap: anywhere; }
+.document-source-folder-browser li button:not(:disabled):hover { background: var(--muted); }
+.document-source-folder-browser li button:disabled { color: var(--muted-foreground); opacity: .6; cursor: not-allowed; }
+.document-source-folder-browser li button:focus-visible { outline: 2px solid var(--ring, var(--foreground)); outline-offset: -2px; }
+.document-source-folder-browser li button > svg { flex-shrink: 0; margin-top: 2px; }
+.document-source-folder-browser li button > span { display: grid; min-width: 0; gap: 4px; }
+.document-source-folder-browser small { color: var(--muted-foreground); font-size: 11px; }
+.document-source-folder-dialog .document-source-actions { margin-top: 16px; }
 .document-source-tabs button:focus-visible, .document-source-tree :is(button, summary):focus-visible { outline: 2px solid var(--ring, var(--foreground)); outline-offset: 2px; }
 
 @media (max-width: 900px) {
   .markdown-workbench .document-source-tabs { padding-inline: 16px; }
-  .markdown-workbench .document-sources-toolbar { padding: 12px 16px; }
   .markdown-workbench .document-source-browser { grid-template-columns: minmax(200px, 36%) minmax(0, 1fr); }
-  .markdown-workbench .native-workbench.is-inspecting > .document-source-tabs { display: none; }
+  .markdown-workbench .native-workbench.is-inspecting > :is(.document-source-tabs, .document-sources-summary) { display: none; }
 }
 
 @media (max-width: 640px) {
+  .markdown-workbench .native-workbench[data-document-source-view="native"]:not(.is-inspecting) { overflow-y: auto; }
+  .markdown-workbench .native-workbench[data-document-source-view="native"]:not(.is-inspecting) > .collection-body { min-height: 280px; flex-shrink: 0; }
   .markdown-workbench .document-source-browser { display: block; overflow: auto; }
   .markdown-workbench .document-source-files { min-height: 100%; overflow: visible; border-right: 0; }
   .markdown-workbench .document-source-reader { display: none; min-height: 100%; overflow: visible; }
   .markdown-workbench .document-source-browser.has-selection .document-source-files { display: none; }
   .markdown-workbench .document-source-browser.has-selection .document-source-reader { display: block; }
-  .markdown-workbench .document-sources-toolbar { gap: 10px; }
-  .document-sources-toolbar > div { flex-basis: 100%; }
-  .document-source-scope { flex: 1 1 180px; }
-  .document-source-scope select { max-width: 100%; }
+  .markdown-workbench .document-sources-summary .document-source-state { padding-inline: 16px; }
   .document-source-content-heading, .document-source-resource-notice, .markdown-workbench .document-source-markdown { padding-inline: 16px; }
+  .external-document-content .document-source-markdown { padding-inline: 16px; }
 }
 
 @media (max-width: 560px) {
   .markdown-workbench .native-workbench[data-entity-kind="document"] .collection-heading-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
   .markdown-workbench .document-source-tabs { padding: 0 12px 10px; }
-  .markdown-workbench .document-sources-toolbar { padding-inline: 12px; }
   .document-source-dialog { padding: 20px 16px; }
   .document-source-actions > button { flex: 1 1 150px; }
+  .document-source-selected-folders > li { grid-template-columns: 18px minmax(0, 1fr); }
+  .document-source-selected-folders > li > button { grid-column: 2; justify-self: start; }
 }
 
 @media (pointer: coarse) {
-  .document-source-tabs button, .document-source-settings-entry, .document-sources-toolbar button, .document-source-scope select, .document-source-directory > details > summary, .document-source-dialog button, .document-source-dialog .document-source-field :is(input, select) { min-height: 44px; }
+  .document-source-tabs button, .document-source-settings-entry, .document-source-directory > details > summary, .document-source-dialog button, .document-source-dialog .document-source-field :is(input, [data-slot="select-trigger"]) { min-height: 44px; }
 }

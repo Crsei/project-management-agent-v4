@@ -1,5 +1,36 @@
 import { type ServerProviderSkill, type ServerProviderSlashCommand } from "@t3tools/contracts";
 import * as Predicate from "effect/Predicate";
+import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
+
+const LEADING_SKILL_MENTION = new RegExp(`^\\s*${SKILL_MENTION_PATTERN.source}`, "u");
+
+/** Pi expands its own skill command at the beginning of the native prompt. */
+export function piSkillCommand(text: string, data: unknown): string {
+  const match = LEADING_SKILL_MENTION.exec(text);
+  if (!match?.[2]) return text;
+  const commands = recordField(data, "commands");
+  if (!Array.isArray(commands)) throw new Error("Pi returned an invalid native command inventory.");
+  for (const command of commands) {
+    if (recordString(command, "source") !== "skill") continue;
+    const nativeName = recordString(command, "name");
+    if (!nativeName || !/^[a-zA-Z0-9][a-zA-Z0-9:_-]*$/.test(nativeName)) continue;
+    const skillName = nativeName.startsWith("skill:") ? nativeName.slice(6) : nativeName;
+    if (skillName === match[2]) return `/${nativeName}${text.slice(match[0].length)}`;
+  }
+  return text;
+}
+
+export function hasLeadingPiSkillMention(text: string): boolean {
+  return LEADING_SKILL_MENTION.test(text);
+}
+/** Match only commands the live Pi process actually advertises. */
+export function piNativeCommandPrefix(text: string, data: unknown): string | undefined {
+  const match = /^\s*\/([a-zA-Z0-9][a-zA-Z0-9:_-]*)(?=\s|$)/.exec(text);
+  if (!match) return undefined;
+  const commands = recordField(data, "commands");
+  if (!Array.isArray(commands)) throw new Error("Pi returned an invalid native command inventory.");
+  return commands.some(command => recordString(command, "name") === match[1]) ? `/${match[1]}` : undefined;
+}
 
 // Pi RPC get_commands omits TUI builtins. Advertise /compact so T3 can map it to RPC compact.
 const PI_COMPACT_SLASH_COMMAND: ServerProviderSlashCommand = {

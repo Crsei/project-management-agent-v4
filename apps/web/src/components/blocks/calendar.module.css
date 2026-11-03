@@ -56,8 +56,6 @@
 .day[data-today="true"] .dateButton {
   font-weight: 600;
   color: var(--primary);
-  text-decoration: underline;
-  text-underline-offset: 4px;
 }
 .dayEntries {
   font-size: 12px;

@@ -2,6 +2,7 @@ import { z } from "zod"
 import { parseMarkdown, patchMarkdown } from "../../../../../../packages/pm-markdown/index.ts"
 import { MAX_WORK_ITEM_ESTIMATE_POINTS, ProtocolError, validateTransition, type FileRecord, type ProtocolConfiguration, type WorkspaceSnapshot } from "../../../../../../packages/pm-schema/index.ts"
 import { validateRelations } from "../../../../../../packages/pm-schema/relations.ts"
+import { hasUncertainDocumentSave } from "../markdown/document-save-model.ts"
 
 const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
   const date = new Date(`${value}T00:00:00Z`)
@@ -37,7 +38,9 @@ export function readProjectTaskDraft(value: unknown): ProjectTaskDraft | undefin
   const result = storedDraftSchema.safeParse(value)
   return result.success && result.data.revision === result.data.projectTaskEditing.revision ? result.data.projectTaskEditing : undefined
 }
-export function hasUncertainProjectTaskDraft(values: Readonly<Record<string, unknown>>): boolean {
+export function hasUncertainProjectTaskDraft(values: Readonly<Record<string, unknown>>, savingDocumentId?: string): boolean {
+  // All native editor surfaces share this write gate. Only an active PUT may keep editing its own draft.
+  if (hasUncertainDocumentSave(values, savingDocumentId)) return true
   return Object.values(values).some(value => {
     const draft = readProjectTaskDraft(value)
     return draft?.phase === "unknown" || draft?.phase === "observed"

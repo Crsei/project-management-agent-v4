@@ -2,6 +2,7 @@ import { useEffect, useId, useReducer, useRef, useState, type KeyboardEvent, typ
 import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n-provider"
 import { canvasColors, canvasReducer, initialView, newCanvasShape, parseCanvas, wrapCanvasText, type CanvasDocument, type CanvasPoint, type CanvasShape, type CanvasView } from "./whiteboard-model"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type Props = { storageKey: string }
 type Tool = "select" | "pan" | CanvasShape["kind"]
@@ -213,7 +214,7 @@ function LocalCanvas({ storageKey }: Props) {
     </svg>
     {shapes.length === 0 && <p className="text-sm text-muted-foreground">{en ? "Empty canvas. Add a note or draw a shape to begin." : "画布为空。添加便签或绘制图形即可开始。"}</p>}
     <div className="grid gap-3 rounded-panel border border-border p-3 md:grid-cols-2">
-      <label className="space-y-1 text-sm"><span>{en ? "Selected object" : "选择对象"}</span><select className={field} value={selected?.id ?? ""} onChange={event => setSelectedId(event.target.value)}><option value="">{en ? "No selection" : "未选择"}</option>{shapes.map((shape, index) => <option key={shape.id} value={shape.id}>{index + 1}. {names[shape.kind]} {shape.text.slice(0, 70)}</option>)}</select></label>
+      <label className="space-y-1 text-sm"><span>{en ? "Selected object" : "选择对象"}</span><RadixSelect className={field} value={selected?.id ?? ""} onChange={event => setSelectedId(event.target.value)}><option value="">{en ? "No selection" : "未选择"}</option>{shapes.map((shape, index) => <option key={shape.id} value={shape.id}>{index + 1}. {names[shape.kind]} {shape.text.slice(0, 70)}</option>)}</RadixSelect></label>
       {selected && <>
         <label className="space-y-1 text-sm"><span>{en ? "Object text" : "对象文本"}</span><textarea ref={textField} className={`${field} min-h-20 py-2`} maxLength={10000} value={selected.text} onChange={event => updateSelected({ text: event.target.value })} /></label>
         <div className="grid grid-cols-2 gap-2">{(["x", "y", "width", "height"] as const).map(property => <label key={property} className="space-y-1 text-sm"><span>{({ x: "X", y: "Y", width: en ? "Width" : "宽度", height: en ? "Height" : "高度" })[property]}</span><input type="number" className={field} min={property === "width" || property === "height" ? 1 : -1000000} max={1000000} step="any" value={Math.round(selected[property] * 100) / 100} onChange={event => {

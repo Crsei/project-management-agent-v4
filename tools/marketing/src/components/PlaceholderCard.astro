@@ -1,0 +1,18 @@
+---
+import type { PlaceholderItem } from "../lib/capabilities";
+
+interface Props {
+  item: PlaceholderItem;
+}
+
+const { item } = Astro.props;
+---
+
+<article class="placeholder-card" aria-label={`${item.label}：待补充`}>
+  <span class="placeholder-cross" aria-hidden="true"></span>
+  <div class="placeholder-copy">
+    <span class="placeholder-meta">{item.meta}</span>
+    <h3>{item.label}</h3>
+    <p>{item.detail}</p>
+  </div>
+</article>

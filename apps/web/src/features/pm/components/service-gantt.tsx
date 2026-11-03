@@ -8,6 +8,7 @@ import { useWorkspaceStore } from "@/providers/app-providers"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { addDays, dateOnly, dayNumber, itemDates, itemRange, itemStatus, itemText, itemTitle, ScheduleEditor, statusLabel, todayDate, type ScheduleItem, type ScheduleProps } from "./service-collection-shared"
 import styles from "./service-gantt.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type Scale = "week" | "month" | "quarter"
 type GroupBy = "status" | "assignee" | "project" | "none"
@@ -218,12 +219,12 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
     <div className={styles.segment} aria-label={en ? "Timeline scale" : "时间线比例"}>
       {(["week", "month", "quarter"] as const).map(value => <button type="button" key={value} aria-pressed={scale === value} className={value === "quarter" ? styles.quarter : undefined} onClick={() => setScale(value)}>{en ? { week: "Weeks", month: "Months", quarter: "Quarter" }[value] : { week: "周", month: "月", quarter: "季度" }[value]}</button>)}
     </div>
-    <select className={styles.groupSelect} value={groupBy} aria-label={en ? "Group by" : "分组方式"} onChange={event => setGroupBy(event.target.value as GroupBy)}>
+    <RadixSelect className={styles.groupSelect} value={groupBy} aria-label={en ? "Group by" : "分组方式"} onChange={event => setGroupBy(event.target.value as GroupBy)}>
       <option value="status">{en ? "Group: Status" : "按状态分组"}</option>
       <option value="assignee">{en ? "Group: Assignee" : "按负责人分组"}</option>
       <option value="project">{en ? "Group: Project" : "按项目分组"}</option>
       <option value="none">{en ? "No grouping" : "不分组"}</option>
-    </select>
+    </RadixSelect>
     <button type="button" className={styles.controlButton} onClick={() => goToDate(today)}><Crosshair size={14} aria-hidden="true" />{en ? "Today" : "今天"}</button>
     <div className={styles.periodNavigation}>
       <button type="button" className={styles.iconButton} aria-label={en ? "Previous period" : "上一时段"} onClick={() => goToDate(moveAnchor(anchor, scale, -1))}><ChevronLeft size={14} aria-hidden="true" /></button>

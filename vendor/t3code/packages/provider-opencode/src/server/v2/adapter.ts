@@ -60,6 +60,8 @@ import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import * as OpenCode2Client from "./OpenCode2Client.ts";
 import * as OpenCode2Server from "./OpenCode2Server.ts";
 import * as OpenCodeRuntime from "../OpenCodeRuntime.ts";
+import { registerLiveOpenCodeInventory } from "../liveWorkspace.ts";
+import { openCode2CommandsToServerProviderSlashCommands, openCode2SkillsToServerProviderSkills } from "../status.ts";
 import * as ProviderRuntimeHost from "@t3tools/provider-core/server/ProviderRuntimeHost";
 import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
 import * as KeyedLock from "@t3tools/shared/KeyedLock";
@@ -726,6 +728,18 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
         driver: OPENCODE_PROVIDER, detail: "The host transport does not match this native operation.",
       });
     }
+    const inventoryCwd = directoryOf(input.runtimePolicy.cwd);
+    const unregisterInventory = binding && registerLiveOpenCodeInventory(instanceId, input.threadId, binding.executionId, inventoryCwd, () =>
+      Effect.all({
+        skills: client.skill.list({ location: { directory: inventoryCwd } }).pipe(Effect.map(result => result.data)),
+        commands: client.command.list({ location: { directory: inventoryCwd } }).pipe(Effect.map(result => result.data)),
+      }).pipe(Effect.map(({ skills, commands }) => ({
+        skills: openCode2SkillsToServerProviderSkills(skills),
+        commands: openCode2CommandsToServerProviderSlashCommands(commands),
+        pending: commands.length === 0,
+      }))),
+    );
+    if (unregisterInventory) yield* Effect.addFinalizer(() => Effect.sync(unregisterInventory));
     // Reuse only this operation's admitted owner, never a later binding for the same thread.
     const authorizeHostTools = binding?.mcpServers.length
       ? runtimeHost.authorize({ threadId: binding.threadId, providerInstanceId: binding.providerInstanceId,
@@ -3407,13 +3421,13 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
       const text = turnInput.message.text.trim();
       const bare = turnInput.message.attachments.length === 0;
       const id = turnPromptId(sessionId, turnInput.attemptId);
-      if (bare && text === "/compact") {
+      if (bare && (turnInput.userMessageText ?? text).trim() === "/compact") {
         yield* recheckHostTools;
         if (!sending()) return;
         return yield* client.session.compact({ sessionID, id }).pipe(Effect.asVoid);
       }
       const location = { directory: turnInput.runtimePolicy.cwd ?? host.paths.cwd };
-      const command = bare ? commandOf(text) : undefined;
+      const command = bare ? commandOf(turnInput.userMessageText ?? text) : undefined;
       if (command !== undefined) {
         const commands = yield* client.command.list({ location }).pipe(
           Effect.timeout(INVENTORY_TIMEOUT),
@@ -3426,12 +3440,14 @@ export const make = Effect.fn("OpenCode2Adapter.make")(function* (instanceId: Pr
           yield* markBefore(sessionId, newest.data[0]?.id ?? null);
           yield* recheckHostTools;
           if (!sending()) return;
-          return yield* client.session.command({ sessionID, ...command });
+          return yield* client.session.command({ sessionID, ...command,
+            text: turnInput.userMessageText === undefined ? command.text : text });
         }
       }
-      const skills = SKILL_MENTION.test(text)
+      const selectedText = turnInput.userMessageText ?? text;
+      const skills = SKILL_MENTION.test(selectedText)
         ? skillsNamed(
-            text,
+            selectedText,
             yield* client.skill.list({ location }).pipe(
               Effect.timeout(INVENTORY_TIMEOUT),
               Effect.map((list) => new Set(list.data.map((skill) => skill.id))),

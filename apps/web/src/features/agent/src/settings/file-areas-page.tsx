@@ -8,6 +8,7 @@ import { useAgentText, type AgentText } from "../i18n";
 import { SettingsNotice, SettingsSection, useSettingsGuard } from "./settings-layout";
 import "../../styles/pm-chat.css";
 import "./file-areas-history.css";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const statusLabels = (t: AgentText): Record<AgentFileArea["status"], string> => ({
   available: t("目录可用", "Directory available"), unconfigured: t("尚未配置", "Not configured"), unavailable: t("目录不可用", "Directory unavailable"),
@@ -46,10 +47,10 @@ export default function FileAreasPage() {
   return <div className="agent-file-areas-settings">
     <SettingsSection title={t("工作区默认保存根目录", "Workspace default save root")} scope="workspace">
       <label className="pm-agent-directory-form">{t("选择工作区", "Select workspace")}
-        <select aria-label={t("默认保存根目录所属工作区", "Workspace for the default save root")} value={workspace?.id ?? ""} disabled={rootEditing || !!directory || state.loading || !!state.error} onChange={(event) => setWorkspaceId(event.target.value)}>
+        <RadixSelect aria-label={t("默认保存根目录所属工作区", "Workspace for the default save root")} value={workspace?.id ?? ""} disabled={rootEditing || !!directory || state.loading || !!state.error} onChange={(event) => setWorkspaceId(event.target.value)}>
           {!workspace && <option value="">{t("没有可访问的工作区", "No accessible workspace")}</option>}
           {state.catalog?.workspaces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
+        </RadixSelect>
       </label>
       {workspace && <WorkspaceSaveRoot key={workspace.id} workspaceId={workspace.id} name={workspace.name} disabled={state.loading || !!state.error || !!directory} onEditing={setRootEditing} />}
     </SettingsSection>

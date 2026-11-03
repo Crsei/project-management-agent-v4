@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-pi/src/server/adapter.ts",
   "beforeSha256": "f2f6fd8b71b1386f4850ee89f0ecb4be3370629a998e6b472136a8decd4c2220",
-  "afterSha256": "7eeaf4222053cdb51a79cf741adbd9ae1c749c0a0c633e52b1c234a1be8ebb32",
+  "afterSha256": "ab2bbe41b126dbfa3e3b967411d3031da3033aeb636811f695993c4dd3d047b9",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -24,12 +24,15 @@
     {
       "start": 42,
       "before": [
-        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n"
+        "import * as McpProviderSessions from \"@t3tools/provider-core/server/McpProviderSessions\";\n",
+        "import { parsePiCompactCommand, type PiCompactCommand } from \"./commands.ts\";\n"
       ],
       "after": [
         "import { ProviderRuntimeHost } from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n",
         "import { PiHostResources } from \"./PiHostResources.ts\";\n",
-        "import { bindPiSessionEvidence } from \"./sessionEvidence.ts\";\n"
+        "import { bindPiSessionEvidence } from \"./sessionEvidence.ts\";\n",
+        "import { hasLeadingPiSkillMention, piNativeCommandPrefix, piSkillCommand, parsePiCompactCommand, parsePiDiscoveredCommands, withPiBuiltinSlashCommands, type PiCompactCommand } from \"./commands.ts\";\n",
+        "import { registerLivePiWorkspace } from \"./liveWorkspace.ts\";\n"
       ]
     },
     {
@@ -82,6 +85,25 @@
       "before": [],
       "after": [
         "      let permissionHookReady = false;\n"
+      ]
+    },
+    {
+      "start": 621,
+      "before": [],
+      "after": [
+        "      if (runtimeBinding && runtimeBinding.cwd === cwd) {\n",
+        "        const unregisterInventory = registerLivePiWorkspace(options.instanceId, input.threadId, runtimeBinding.executionId, cwd, () =>\n",
+        "          request({ type: \"get_commands\" }).pipe(Effect.flatMap(data => Effect.try({\n",
+        "            try: () => {\n",
+        "              if (!Array.isArray(recordField(data, \"commands\"))) throw new Error(\"Invalid Pi command inventory.\");\n",
+        "              const inventory = parsePiDiscoveredCommands(data);\n",
+        "              return { ...inventory, slashCommands: withPiBuiltinSlashCommands(inventory.slashCommands) };\n",
+        "            },\n",
+        "            catch: cause => protocolError(\"Pi returned an invalid native command inventory.\", cause),\n",
+        "          }))),\n",
+        "        );\n",
+        "        yield* Effect.addFinalizer(() => Effect.sync(unregisterInventory));\n",
+        "      }\n"
       ]
     },
     {
@@ -155,9 +177,49 @@
       ]
     },
     {
-      "start": 2326,
+      "start": 2303,
       "before": [],
       "after": [
+        "        userMessageText?: string,\n"
+      ]
+    },
+    {
+      "start": 2305,
+      "before": [],
+      "after": [
+        "        const selectedText = userMessageText ?? text;\n",
+        "        let command: string | undefined;\n",
+        "        let translated = selectedText;\n",
+        "        if (hasLeadingPiSkillMention(selectedText) || (userMessageText !== undefined && /^\\s*\\//.test(selectedText))) {\n",
+        "          const commands = yield* request({ type: \"get_commands\" });\n",
+        "          const resolved = yield* Effect.try({\n",
+        "            try: () => ({\n",
+        "              translated: piSkillCommand(selectedText, commands),\n",
+        "              nativeCommand: piNativeCommandPrefix(selectedText, commands),\n",
+        "            }),\n",
+        "            catch: cause => protocolError(\"Pi returned an invalid native command inventory.\", cause),\n",
+        "          });\n",
+        "          translated = resolved.translated;\n",
+        "          command = translated !== selectedText ? /^\\/[^\\s]+/.exec(translated)?.[0] : resolved.nativeCommand;\n",
+        "        }\n",
+        "        const prompt = command === undefined ? text : userMessageText === undefined ? translated : `${command}\\n${text}`;\n"
+      ]
+    },
+    {
+      "start": 2306,
+      "before": [
+        "          text,\n"
+      ],
+      "after": [
+        "          text: prompt,\n"
+      ]
+    },
+    {
+      "start": 2324,
+      "before": [],
+      "after": [
+        "      });\n",
+        "\n",
         "      // Both prompt turns and native buffered work use the original turn allocation/state helper.\n",
         "      // The buffered path never constructs a message and never sends `prompt`.\n",
         "      const makeActiveTurn = Effect.fnUntraced(function* (\n",
@@ -182,9 +244,7 @@
         "          settleWhenIdle: false, sawCompaction: false, manualCompactInFlight: settings.compact === true,\n",
         "          activeCompaction: null, activeProviderRetry: null, failure: null, rejectedPromptFailure: null,\n",
         "        };\n",
-        "        return active;\n",
-        "      });\n",
-        "\n"
+        "        return active;\n"
       ]
     },
     {
@@ -211,6 +271,24 @@
       "before": [],
       "after": [
         "            if (!permissionHookReady) return yield* protocolError(\"Pi did not activate its required permission hook; no prompt was sent.\");\n"
+      ]
+    },
+    {
+      "start": 2424,
+      "before": [
+        "              : parsePiCompactCommand(turnInput.message.text);\n"
+      ],
+      "after": [
+        "              : parsePiCompactCommand(turnInput.userMessageText ?? turnInput.message.text);\n"
+      ]
+    },
+    {
+      "start": 2427,
+      "before": [
+        "                ? yield* resolvePromptPayload(turnInput.message.text, turnInput.message.attachments)\n"
+      ],
+      "after": [
+        "                ? yield* resolvePromptPayload(turnInput.message.text, turnInput.message.attachments, turnInput.userMessageText)\n"
       ]
     },
     {

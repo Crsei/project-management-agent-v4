@@ -98,7 +98,6 @@ export function remarkWorkspace({ source, prefix, hideTitle = false }: { source:
   return (tree: SyntaxNode) => {
     enhanceMarkdownTree(tree, source);
     const headings = new Map<string, number>();
-    let titleHidden = false;
     let embedIndex = 0;
     function indexEmbeds(node: SyntaxNode) {
       if (node.type === 'workspaceEmbed') { properties(node, { 'data-embed-index': embedIndex++ }); return; }
@@ -111,8 +110,8 @@ export function remarkWorkspace({ source, prefix, hideTitle = false }: { source:
       if (node.type === 'heading') {
         const slug = headingSlug(text(node)); const count = headings.get(slug) ?? 0; headings.set(slug, count + 1);
         properties(node, { id: `${prefix}-heading-${slug}${count ? `-${count}` : ''}` });
-        if (hideTitle && node.depth === 1 && !titleHidden && tree.children?.includes(node)) {
-          titleHidden = true; node.type = 'workspaceAnchor'; node.data = { ...node.data, hName: 'span' }; properties(node, { className: 'md-hidden-heading', 'aria-hidden': true }); node.children = [];
+        if (hideTitle && node.depth === 1 && tree.children?.includes(node)) {
+          node.type = 'workspaceAnchor'; node.data = { ...node.data, hName: 'span' }; properties(node, { className: 'md-hidden-heading', 'aria-hidden': true }); node.children = [];
         }
       }
       if (node.type === 'blockquote') {

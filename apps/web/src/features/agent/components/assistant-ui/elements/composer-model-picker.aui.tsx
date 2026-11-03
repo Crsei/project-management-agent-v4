@@ -8,7 +8,7 @@ import {
   formatProviderUpdateRequiredNotice, getProviderInstanceDisplayName, getProviderModelShortName,
   resolveProviderModelSelection, shouldShowProviderInstanceBadge,
 } from "@agent-workspace/client-runtime/providers";
-import { Popover, PopoverContent, PopoverTrigger } from "@easyuse-ui/ui/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@agent/lib/utils";
 import { ProviderGlyph } from "@agent/src/settings/provider-card";
 import { workspaceClient } from "@agent/src/network";
@@ -286,7 +286,7 @@ export function ComposerModelPicker({
       {(saving || pending) && <Loader2Icon aria-label={t("保存中", "Saving")} className="size-3 shrink-0 animate-spin" />}
       <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
     </PopoverTrigger>
-    <PopoverContent align="start" side="top" aria-label={t("模型和提供商", "Model and provider")} initialFocus={searchRef} className="w-[360px] max-w-[calc(100vw-16px)] overflow-hidden p-0">
+    <PopoverContent align="start" side="top" aria-label={t("模型和提供商", "Model and provider")} onOpenAutoFocus={(event) => { event.preventDefault(); searchRef.current?.focus(); }} className="w-[360px] max-w-[calc(100vw-16px)] overflow-hidden p-0">
       <div className="flex max-h-[min(346px,calc(100dvh-24px),var(--available-height))] min-h-0 overflow-hidden" data-model-picker-content="true" onKeyDown={(event) => { if (event.key === "Enter" || event.key.startsWith("Arrow")) event.stopPropagation(); }}>
         {!searching && <div ref={railRef} role="toolbar" aria-label={t("提供商", "Providers")} aria-orientation="vertical" className="w-11 shrink-0 overflow-y-auto bg-muted/30 p-1" data-model-picker-sidebar="true" onKeyDown={(event) => {
           event.stopPropagation();
@@ -306,7 +306,7 @@ export function ComposerModelPicker({
           <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3"><SearchIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /><input ref={searchRef} role="combobox" aria-label={t("搜索模型或提供商", "Search models or providers")} aria-expanded="true" aria-controls={listId} aria-activedescendant={highlightedItem ? `${listId}-option-${visible.indexOf(highlightedItem)}` : undefined} aria-autocomplete="list" value={query} onChange={(event) => { setQuery(event.target.value); setHighlighted(null); }} onKeyDown={onSearchKeyDown} placeholder={t("搜索模型…", "Search models…")} className="h-10 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60" /></div>
           <div ref={listRef} id={listId} role="listbox" aria-label={t("模型列表", "Model list")} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
             {(catalog.loading || refreshing) && <p role="status" className="px-2 py-3 text-xs text-muted-foreground">{t("正在加载模型目录…", "Loading model catalog…")}</p>}
-            {catalog.error && <div role="alert" className="px-2 py-3 text-xs text-destructive">{t("模型目录读取失败：", "Failed to load the model catalog: ")}{catalog.error} <button type="button" className="underline" onClick={refresh}>{t("重试", "Retry")}</button></div>}
+            {catalog.error && <div role="alert" className="px-2 py-3 text-xs text-destructive">{t("模型目录读取失败：", "Failed to load the model catalog: ")}{catalog.error} <button type="button" className="hover:bg-foreground/[0.05]" onClick={refresh}>{t("重试", "Retry")}</button></div>}
             {!catalog.loading && !refreshing && !catalog.error && selectionNotice && <p role="status" className="break-words px-2 py-2 text-xs text-destructive">{selectionNotice} {t("不会自动替换所选模型。", "The selected model is never replaced automatically.")}</p>}
             {!catalog.loading && !catalog.error && updateNotices.map(({ provider, notice }) => <p key={provider.instanceId} role="status" className="break-words px-2 py-2 text-xs text-muted-foreground">{getProviderInstanceDisplayName(provider)} · {notice}</p>)}
             {!catalog.loading && !refreshing && !catalog.error && visible.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">{searching ? t("没有匹配的模型。", "No matching models.") : section.kind === "favorites" ? t("尚无收藏模型。", "No favorite models yet.") : t("没有可展示的模型。", "No models to show.")}</p>}
@@ -323,8 +323,8 @@ export function ComposerModelPicker({
               </div>;
             })}
           </div>
-          {!searching && selectedProvider && providerNotice(selectedProvider, t) && <div className="max-h-20 shrink-0 overflow-y-auto border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">{providerNotice(selectedProvider, t)}{selectedProvider.message && <p className="mt-1 break-words">{selectedProvider.message}</p>} <Link to="/agent/settings/providers" state={{ settingsReturnTo: `${location.pathname}${location.search}` }} className="underline underline-offset-2">{t("前往配置", "Configure")}</Link></div>}
-          {(saveError || localError) && <div role="alert" className="max-h-20 shrink-0 overflow-y-auto break-words border-t border-border/70 px-3 py-2 text-xs text-destructive">{saveError || localError}{onRetry && <> <button type="button" disabled={saving || pending} onClick={retrySave} className="underline disabled:opacity-50">{t("重试保存", "Retry save")}</button></>} <button type="button" disabled={refreshing || catalog.loading} onClick={refresh} className="underline disabled:opacity-50">{t("刷新模型目录", "Refresh catalog")}</button></div>}
+          {!searching && selectedProvider && providerNotice(selectedProvider, t) && <div className="max-h-20 shrink-0 overflow-y-auto border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">{providerNotice(selectedProvider, t)}{selectedProvider.message && <p className="mt-1 break-words">{selectedProvider.message}</p>} <Link to="/agent/settings/providers" state={{ settingsReturnTo: `${location.pathname}${location.search}` }} className="hover:text-primary">{t("前往配置", "Configure")}</Link></div>}
+          {(saveError || localError) && <div role="alert" className="max-h-20 shrink-0 overflow-y-auto break-words border-t border-border/70 px-3 py-2 text-xs text-destructive">{saveError || localError}{onRetry && <> <button type="button" disabled={saving || pending} onClick={retrySave} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("重试保存", "Retry save")}</button></>} <button type="button" disabled={refreshing || catalog.loading} onClick={refresh} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("刷新模型目录", "Refresh catalog")}</button></div>}
           <div className="shrink-0 border-t border-border/70 p-1"><Link to="/agent/settings/providers" state={{ settingsReturnTo: `${location.pathname}${location.search}` }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"><Settings2Icon aria-hidden="true" className="size-3.5" />{t("管理模型提供商", "Manage model providers")}</Link></div>
         </div>
       </div>

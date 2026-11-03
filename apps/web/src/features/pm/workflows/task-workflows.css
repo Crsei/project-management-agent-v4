@@ -24,7 +24,7 @@
 .workflow-content p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
 .workflow-content small, .workflow-properties small { color: var(--muted-foreground); font-size: 12px; }
 .workflow-content label, .workflow-properties label, .workflow-toolbar label { display: grid; gap: 6px; font-size: 12px; min-width: 0; }
-.workflow-content input, .workflow-content select, .workflow-properties input, .workflow-properties select, .workflow-properties textarea, .workflow-toolbar input { border: 1px solid var(--border); border-radius: 6px; padding: 8px; background: var(--background); color: var(--foreground); width: 100%; min-width: 0; }
+.workflow-content input, .workflow-content [data-slot="select-trigger"], .workflow-properties input, .workflow-properties [data-slot="select-trigger"], .workflow-properties textarea, .workflow-toolbar input { border: 1px solid var(--border); border-radius: 6px; padding: 8px; background: var(--background); color: var(--foreground); width: 100%; min-width: 0; }
 .workflow-content button, .workflow-dialog button:not(.react-flow__controls-button), .workflow-start-dialog button { border: 1px solid var(--border); border-radius: 6px; padding: 7px 12px; font-size: 12px; cursor: pointer; }
 .workflow-content button:disabled, .workflow-dialog button:disabled, .workflow-start-dialog button:disabled { opacity: .45; cursor: not-allowed; }
 .workflow-primary { background: var(--primary) !important; color: var(--primary-foreground) !important; }

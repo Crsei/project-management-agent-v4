@@ -123,7 +123,7 @@
 }
 .live-panel-field input,
 .live-panel-field textarea,
-.live-panel-field select {
+.live-panel-field [data-slot="select-trigger"] {
   font-weight: 400;
 }
 .live-panel-field textarea {
@@ -307,8 +307,9 @@
   border-radius: var(--radius-control);
   padding: 4px;
   font-size: 13px;
-  text-decoration: underline;
-  text-underline-offset: 4px;
+}
+.live-run-disclosure:hover {
+  background: var(--selection);
 }
 .live-run-list-row {
   min-height: 44px;

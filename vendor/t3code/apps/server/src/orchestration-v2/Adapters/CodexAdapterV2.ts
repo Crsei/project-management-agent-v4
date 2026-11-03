@@ -3153,11 +3153,16 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             | ProviderAdapter.ProviderAdapterV2TurnInput
             | ProviderAdapter.ProviderAdapterV2SteerInput,
             "message"
-          >,
+          > & { readonly userMessageText?: string },
         ) {
           const inputItems: Array<CodexSchema.V2TurnStartParams__UserInput> = [];
+          const raw = turnInput.message.text;
+          const suffix = turnInput.userMessageText?.trim();
+          const prompt = turnInput.userMessageText === undefined ? codexSkillMentionText(raw)
+            : suffix && raw.endsWith(suffix)
+              ? raw.slice(0, -suffix.length) + codexSkillMentionText(suffix) : raw;
           const text = yield* providerMessageTextWithAttachmentPaths({
-            text: codexSkillMentionText(turnInput.message.text),
+            text: prompt,
             attachments: turnInput.message.attachments,
             resolveExtractedTextPath: (path) =>
               DocumentText.resolveExtractedTextPath(path).pipe(
@@ -3732,6 +3737,20 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           item: Extract<CodexDynamicToolItem, { readonly type: "mcpToolCall" }>,
           resourceUri: string,
         ) {
+          // Completed-only native notifications need the same active-item marker as
+          // item/started. Keep this stable row running until the captured App payload
+          // lands, even after pending capture is cleared before its node/item pair.
+          const pendingArtifacts = yield* buildDynamicToolArtifacts(context, item);
+          yield* emitProviderEvent({
+            type: "node.updated",
+            driver: CODEX_PROVIDER,
+            node: { ...pendingArtifacts.node, status: "running", completedAt: null },
+          });
+          yield* emitProviderEvent({
+            type: "turn_item.updated",
+            driver: CODEX_PROVIDER,
+            turnItem: { ...pendingArtifacts.turnItem, status: "running", completedAt: null },
+          });
           // Registered before it can run, so a turn ending right away sees it.
           const started = yield* Deferred.make<void>();
           const fiber = yield* Deferred.await(started).pipe(

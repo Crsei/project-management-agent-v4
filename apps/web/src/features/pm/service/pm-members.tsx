@@ -14,6 +14,7 @@ import { useMemberDirectory, useMemberInvitations } from "./pm-member-hooks"
 import { directoryMemberRecord, invitationRecord, memberRoleValues, visibleDirectoryMembers } from "./pm-member-model"
 import { matchesInvitationConditions } from "@/views/pm/member-directory-filters"
 import { MemberAccessForm, MemberInvitationForm, MemberInvitationOperationDialog, MemberSelfProfileEditor, type InvitationOperation } from "./pm-member-editors"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export function ServiceMembers() {
   const { workspace, actor } = usePmService()
@@ -90,11 +91,11 @@ export function ServiceMembers() {
       : undefined
   const header = <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
     {query.data && <span className="text-xs text-muted-foreground" data-pm-member-count>{t(`${all.length} 位可见成员`, `${all.length} visible members`)}</span>}
-    <select className="h-8 max-w-full rounded-md border bg-background px-2 text-xs" aria-label={t("成员布局", "Member layout")} value={variant} onChange={event => {
+    <RadixSelect className="h-8 max-w-full rounded-md border bg-background px-2 text-xs" aria-label={t("成员布局", "Member layout")} value={variant} onChange={event => {
       const next = new URLSearchParams(searchParams)
       next.set("view", event.target.value)
       setSearchParams(next)
-    }}><option value="member1">{t("目录表格", "Directory table")}</option><option value="member2">{t("联系卡片", "Contact cards")}</option><option value="member3">{t("管理表格", "Management table")}</option></select>
+    }}><option value="member1">{t("目录表格", "Directory table")}</option><option value="member2">{t("联系卡片", "Contact cards")}</option><option value="member3">{t("管理表格", "Management table")}</option></RadixSelect>
     <Button variant="outline" disabled={!query.data} onClick={() => setPanel("profile", "me")}><UserPen aria-hidden="true" />{t("本人资料", "My profile")}</Button>
     {canManage && <Button variant="outline" disabled={locked} onClick={() => setEditor({ userId: null, mode: "capabilities" })} title={t("直接授权已存在账号，不发送邮件", "Grant an existing account access without sending email")}><UserPlus aria-hidden="true" />{t("授权已有账号", "Grant existing account")}</Button>}
     {canManage && <Button variant="outline" onClick={() => setPanel("panel", "invitations")}><Mail aria-hidden="true" />{t("邀请记录", "Invitations")}</Button>}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm, writeFile, unlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, writeFile, truncate, link, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Pool } from 'pg';
@@ -10,12 +10,12 @@ import { createUser, createWorkspace, login, authenticate } from '../src/auth.ts
 import { LocalBlobStore } from '../src/blobs.ts';
 import { bindBlobStore, readStorageBinding } from '../src/blob-storage-binding.ts';
 import { bindStorage, collectBlobInventory, createMigrationManifest, migrateStorage, verifyStorageMigration, activateStorage, resumeSourceStorage, migrationManifestSha256, type StorageEndpoint } from '../src/blob-storage-maintenance.ts';
-import { exportBlobBackup, verifyBlobBackup, restoreBlobBackup } from '../src/blob-storage-backup.ts';
+import { exportBlobBackup, readBlobBackupManifest, verifyBlobBackup, restoreBlobBackup } from '../src/blob-storage-backup.ts';
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 async function fixture(t: test.TestContext) {
   const admin = createPool(databaseUrl!);
-  const root = await mkdtemp(join(tmpdir(), 'pm-storage-binding-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-storage-binding-')));
   const schemas: string[] = []; const pools: Pool[] = [];
   t.after(async () => { for (const pool of pools) await pool.end(); for (const schema of schemas) await admin.query(`DROP SCHEMA "${schema}" CASCADE`); await admin.end(); await rm(root, { recursive: true, force: true }); });
   async function database() {
@@ -147,4 +147,24 @@ test('pre-write source rollback is CAS/idempotent and any new SQL fact forces a 
       assert.equal((await bindBlobStore(pool, source.locator, source.provider).read(item.key)).toString(), `retained object ${changed}`);
     }
   }
+});
+
+test('native blob backup manifests are bounded regular single-link files', async t => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-backup-manifest-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const directory = join(root, 'archive'); await mkdir(directory);
+  const manifest = {
+    formatVersion: 1 as const, backupSetId: randomUUID(), createdAt: new Date().toISOString(),
+    source: { storeId: randomUUID(), provider: 'local' as const, locatorSha256: 'a'.repeat(64), epoch: '1', state: 'active' as const, verifiedManifestSha256: null, verifiedAt: null },
+    databaseDumpSha256: 'b'.repeat(64), coreManifestSha256: 'c'.repeat(64), entries: [],
+  };
+  const path = join(directory, 'manifest.json'); await writeFile(path, JSON.stringify(manifest));
+  assert.deepEqual(await readBlobBackupManifest(directory), manifest);
+  const alias = join(root, 'manifest-alias'); await link(path, alias);
+  await assert.rejects(readBlobBackupManifest(directory), { code: 'blob_backup_manifest_invalid' });
+  await unlink(alias);
+  await writeFile(path, '{\"incomplete\":');
+  await assert.rejects(readBlobBackupManifest(directory));
+  await truncate(path, 64 * 1024 * 1024 + 1);
+  await assert.rejects(readBlobBackupManifest(directory), { code: 'blob_backup_manifest_invalid' });
 });

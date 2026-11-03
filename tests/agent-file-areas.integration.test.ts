@@ -39,9 +39,10 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
       path: project.location.path, status: 'available', revision: 0, source: 'project_location', canManage: true,
     });
     const nativeScope = { workspaceId: f.workspaceId, projectId: project.record.id };
-    assert.deepEqual(await client.agentContexts.resolve(nativeScope), {
-      scope: nativeScope, workspaceName: 'Local project acceptance', projectName: 'A real empty project', path: project.location.path,
-    });
+    const nativeArea = await client.agentContexts.resolve(nativeScope);
+    assert.deepEqual(nativeArea.scope, nativeScope);
+    assert.equal(nativeArea.path, project.location.path);
+    assert.equal(nativeArea.actorId, f.owner.id);
     const defaultArea = await client.agentContexts.resolve({ workspaceId: f.workspaceId, projectId: null });
     assert.equal(defaultArea.path, group.fileArea.path);
     assert.ok((await lstat(defaultArea.path)).isDirectory());

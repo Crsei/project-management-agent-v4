@@ -1,33 +1,37 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { Link, Outlet, useLocation, useParams } from "react-router"
-import { Activity, Archive, CalendarDays, ChevronRight, Columns3, GitBranch, LayoutDashboard, ListTodo, Paperclip, Search, Star, Table2, ChartGantt } from "lucide-react"
+import { Activity, Archive, CalendarDays, ChevronRight, Columns3, FileText, GitBranch, LayoutDashboard, ListTodo, Network, Paperclip, Search, Star, Table2, ChartGantt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { safeWorkspaceReturn } from "../markdown/task-collection-model"
 import { projectDetailViews, resolveVariant, usePmDisplaySetting } from "./pm-display-settings"
 import { usePmEntities, usePmEntity, usePmService, useProjectExtras } from "./pm-service"
-import { QueryNotice, ServiceGuard, string, useText } from "./pm-ui"
+import { QueryNotice, ServiceGuard, string, usePmReadStatus, useText } from "./pm-ui"
+import { useI18n } from "@/lib/i18n-provider"
+import { usePmNoticeCenter } from "./pm-notice-center"
 import { ProjectIdentityIcon, ProjectMenuButton, useProjectMenuActions } from "./project-menu"
 import { projectArchived } from "./project-menu-model"
 import styles from "./service-project-layout.module.css"
 import { usePmAutomationVisit } from "./use-pm-automation-visit"
 
 const projectViews = [
+  { key: "overview", path: "/overview", zh: "概览", en: "Overview", icon: LayoutDashboard },
   { key: "roadmap", path: "/roadmap", zh: "产品规划", en: "Product roadmap", icon: GitBranch },
-  { key: "overview", path: "?tab=overview", zh: "概览", en: "Overview", icon: LayoutDashboard },
   { key: "kanban", path: "/issues?view=kanban", zh: "看板", en: "Board", icon: Columns3 },
   { key: "list", path: "/issues?view=list", zh: "列表", en: "List", icon: ListTodo },
   { key: "table", path: "/issues?view=table", zh: "表格", en: "Table", icon: Table2 },
   { key: "calendar", path: "/issues?view=calendar", zh: "日历", en: "Calendar", icon: CalendarDays },
   { key: "gantt", path: "/issues?view=gantt", zh: "时间线", en: "Timeline", icon: ChartGantt },
   { key: "tree", path: "/issues?view=tree", zh: "树形图", en: "Tree", icon: GitBranch },
-  { key: "files", path: "?tab=files", zh: "文件", en: "Files", icon: Paperclip },
-  { key: "activity", path: "?tab=activity", zh: "活动", en: "Activity", icon: Activity },
+  { key: "relationships", path: "/issues?view=graph", zh: "关系图", en: "Graph", icon: Network },
+  { key: "documents", path: "/documents", zh: "文档", en: "Documents", icon: FileText },
+  { key: "files", path: "/files", zh: "文件", en: "Files", icon: Paperclip },
+  { key: "activity", path: "/activity", zh: "活动", en: "Activity", icon: Activity },
 ] as const
 
 const sidebarViews = [
-  ...projectViews.filter(view => ["kanban", "list", "gantt", "files"].includes(view.key)),
+  ...projectViews.filter(view => ["overview", "kanban", "list", "gantt", "documents", "files"].includes(view.key)),
 ]
 const issueViewKeys: Readonly<Record<string, string>> = {
   board: "kanban", kanban: "kanban", board1: "kanban", board2: "kanban", board3: "kanban", "dnd-board": "kanban",
@@ -35,6 +39,7 @@ const issueViewKeys: Readonly<Record<string, string>> = {
   table: "table", spreadsheet1: "table",
   calendar: "calendar", calendar1: "calendar", calendar2: "calendar", "hour-calendar": "calendar",
   gantt: "gantt", gantt1: "gantt", tree: "tree",
+  graph: "relationships",
 }
 const detailTabs = ["overview", "board", "list", "table", "calendar", "timeline", "tree", "graph", "files", "activity"]
 
@@ -70,7 +75,11 @@ function useActiveProjectView(base: string) {
     if (!params.get("view") && params.get("savedView")) return ""
     return issueViewKeys[params.get("view") || configuredView] || ""
   }
+  if (pathname === `${base}/overview`) return "overview"
   if (pathname === `${base}/roadmap`) return "roadmap"
+  if (pathname === `${base}/documents`) return "documents"
+  if (pathname === `${base}/files`) return "files"
+  if (pathname === `${base}/activity`) return "activity"
   return pathname === `${base}/events` ? "calendar" : ""
 }
 
@@ -108,6 +117,7 @@ function ProjectSidebarContent({ base, projectId }: { base: string; projectId?: 
   const location = useLocation()
   const menu = useProjectMenuActions()
   const t = useText()
+  usePmReadStatus({ label: t("项目收藏", "Project favorites"), query: extras, source: "project-sidebar" })
   const id = useId()
   const storageKey = actor && workspace ? `pm.project-tree.v1:${actor.id}:${workspace.id}` : null
   const [expanded, setExpanded] = useState(() => readProjectExpansion(storageKey))
@@ -185,11 +195,7 @@ function ProjectSidebarContent({ base, projectId }: { base: string; projectId?: 
           </ul>
           {!!needle && visible.length === 0 && accessible.length > 0 && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{t("没有匹配的项目。", "No matching projects.")}</p>}
         </QueryNotice>
-        {extras.isPending && !extras.data && <p role="status" className="px-3 py-1 text-xs text-muted-foreground">{t("正在读取收藏…", "Loading favorites…")}</p>}
-        {extras.error && <div role="alert" className="px-3 py-1 text-xs text-muted-foreground [overflow-wrap:anywhere]"><p>{t("无法读取项目收藏；未显示收藏标记。", "Project favorites are unavailable; favorite markers are not shown.")}</p><p>{extras.error.message}</p><Button variant="ghost" size="sm" onClick={() => { void extras.refetch() }}>{t("重试读取", "Retry read")}</Button></div>}
-        {menu.orderError && <p role="alert" className="px-3 py-1 text-xs [overflow-wrap:anywhere]">{menu.orderError}</p>}
-        {menu.orderNotice && <p role="status" className="px-3 py-1 text-xs [overflow-wrap:anywhere]">{menu.orderNotice}</p>}
-        <Link to={`${base}/projects?archive=archived`} data-navigation-close className="flex min-h-9 items-center gap-2 px-3 text-xs text-muted-foreground hover:underline"><Archive className="size-3.5" aria-hidden="true" />{t("已归档项目", "Archived projects")}{archivedCount > 0 && <span>({archivedCount})</span>}</Link>
+        <Link to={`${base}/projects?archive=archived`} data-navigation-close className="flex min-h-9 items-center gap-2 px-3 text-xs text-muted-foreground hover:text-foreground"><Archive className="size-3.5" aria-hidden="true" />{t("已归档项目", "Archived projects")}{archivedCount > 0 && <span>({archivedCount})</span>}</Link>
         {persistenceError && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{t("无法保存展开偏好；当前标签页仍可使用。", "Expansion preferences could not be saved; they still work in this tab.")}</p>}
       </div>
     </section>
@@ -202,19 +208,9 @@ export function ServiceProjectSidebar({ base, projectId }: { base: string; proje
   return <ProjectSidebarContent key={`${actor?.id ?? "anonymous"}:${workspace?.id ?? "none"}`} base={base} projectId={projectId} />
 }
 
-function ProjectEntityScope({ projectId, entityId }: { projectId: string; entityId: string }) {
-  const query = usePmEntity(entityId)
-  const t = useText()
-  if (query.isPending) return <p role="status" className="p-6">{t("正在加载对象…", "Loading entity…")}</p>
-  if (query.error) return <div role="alert" className="space-y-3 p-6"><p>{query.error.message}</p><Button onClick={() => { void query.refetch() }}>{t("重试读取", "Retry read")}</Button></div>
-  if (!query.data || (query.data.projectId !== projectId && !(query.data.id === projectId && query.data.kind === "project"))) return <p role="alert" className="p-6">{t("对象不属于当前项目，或不可访问。", "The entity does not belong to this project or is unavailable.")}</p>
-  return <Outlet />
-}
-
 function ProjectLayoutContent({ projectId, workspaceSlug }: { projectId: string; workspaceSlug: string }) {
   const query = usePmEntity(projectId)
   const { workspace } = usePmService()
-  const { entityId } = useParams<{ entityId: string }>()
   const location = useLocation()
   const t = useText()
   const root = `/pm/${encodeURIComponent(workspaceSlug)}`
@@ -222,24 +218,43 @@ function ProjectLayoutContent({ projectId, workspaceSlug }: { projectId: string;
   const permitted = !!workspace && (workspace.projectIds === null || workspace.projectIds.includes(projectId))
   const unavailable = !permitted || !query.isPending && !query.error && query.data?.kind !== "project"
   const visit = usePmAutomationVisit(projectId, permitted && !query.error && query.data?.kind === "project")
-  const visitNotice = visit.error ? <div role="status" className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-xs"><span>{t("项目访问记录未确认；离开后摘要不会猜测缺失时间。", "Project visit is unconfirmed; since-last-visit analysis will not invent a missing boundary.")} {visit.error}</span><Button variant="ghost" size="sm" onClick={visit.retry}>{t("核对原访问记录", "Reconcile original visit")}</Button></div> : null
-  if (unavailable) return <div role="alert" className="space-y-3 p-6"><p>{t("项目不存在或不可访问。", "Project not found or unavailable.")}</p><Link to={`${root}/projects`} className="underline">{t("返回项目列表", "Back to projects")}</Link></div>
+  const en = useI18n().locale === "en"
+  const { upsert, resolve } = usePmNoticeCenter()
+  const visitRetry = useRef(visit.retry); visitRetry.current = visit.retry
+  useEffect(() => {
+    const key = `project-visit:${projectId}`
+    if (visit.error) {
+      upsert({
+        key,
+        severity: "warning",
+        title: en ? "Project visit is unconfirmed" : "项目访问记录未确认",
+        detail: `${visit.error}${en ? " Since-last-visit analysis will not invent a missing boundary." : " 离开后摘要不会猜测缺失时间。"}`,
+        source: "project-visit",
+        sticky: true,
+        action: { label: en ? "Reconcile original visit" : "核对原访问记录", run: () => visitRetry.current() },
+      })
+    } else {
+      resolve(key)
+    }
+  }, [en, projectId, resolve, upsert, visit.error])
+  if (unavailable) return <div role="alert" className="space-y-3 p-6"><p>{t("项目不存在或不可访问。", "Project not found or unavailable.")}</p><Link to={`${root}/projects`} className="text-primary hover:text-foreground">{t("返回项目列表", "Back to projects")}</Link></div>
   if (query.isPending) return <p role="status" className="p-6">{t("正在加载项目…", "Loading project…")}</p>
-  if (query.error) return <div role="alert" className="space-y-3 p-6"><p>{query.error.message}</p><Button onClick={() => { void query.refetch() }}>{t("重试读取", "Retry read")}</Button><Link to={`${root}/projects`} className="block underline">{t("返回项目列表", "Back to projects")}</Link></div>
+  if (query.error) return <div role="alert" className="space-y-3 p-6"><p>{query.error.message}</p><Button onClick={() => { void query.refetch() }}>{t("重试读取", "Retry read")}</Button><Link to={`${root}/projects`} className="block text-primary hover:text-foreground">{t("返回项目列表", "Back to projects")}</Link></div>
   if (!query.data) return null
-  // The existing detail variants already own their heading and project tabs.
-  if (location.pathname.replace(/\/$/, "") === base) return <>{visitNotice}<Outlet /></>
+  // Detail variants and documents own their page chrome. Keep project access
+  // checks above, but do not wrap documents in a second title/navigation shell.
+  const pathname = location.pathname.replace(/\/$/, "")
+  if (pathname === base || pathname === `${base}/documents`) return <Outlet />
   const name = string(query.data.data.name) || projectId
   // The right task panel owns the vertical space; keep the project nav out of that surface.
   const inspectingEntity = !!new URLSearchParams(location.search).get("entity")
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-pm-project-workspace={projectId}>
-    {visitNotice}
     {!inspectingEntity && <header className="shrink-0 border-b bg-surface px-3 pt-2 sm:px-5">
       <div className="mb-1 flex min-w-0 items-center justify-between gap-2"><h1 className="min-w-0 break-words text-base font-semibold leading-6" title={projectId}>{name}</h1><ProjectMenuButton projectId={projectId} /></div>
       <ProjectViewNavigation base={base} />
     </header>}
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-      {entityId ? <ProjectEntityScope key={entityId} projectId={projectId} entityId={entityId} /> : <Outlet />}
+      <Outlet />
     </div>
   </div>
 }

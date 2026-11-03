@@ -1,9 +1,10 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Check, Copy, X } from 'lucide-react';
+import { Copy, X } from 'lucide-react';
 import type { WorkspaceController } from './controller';
 import { Diagnostics } from './Diagnostics';
 import { ViewEditor } from './WorkspaceEditors';
 import { EntityCreationSurface } from './TaskCreationSurface';
+import { usePmNoticeCenter } from '../service/pm-notice-center';
 
 function Modal({ title, children, onClose, wide = false, projectCreate = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean; projectCreate?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -19,8 +20,18 @@ function Modal({ title, children, onClose, wide = false, projectCreate = false }
   return <dialog ref={ref} className={`modal ${wide ? 'modal-wide' : ''}${projectCreate ? ' modal-project-create' : ''}`} aria-label={title} onCancel={event => { event.preventDefault(); onClose(); }}><div className="modal-heading"><h2>{title}</h2><button className="icon-button" aria-label="Close dialog / 关闭对话框" onClick={onClose}><X size={18} /></button></div>{children}</dialog>;
 }
 export function WorkspaceDialogs({ controller: c, en, helpOpen, onCloseHelp, onSavedView, onExpandCreation }: { controller: WorkspaceController; en: boolean; helpOpen: boolean; onCloseHelp: () => void; onSavedView: (id: string) => void; onExpandCreation?: (draftId: string) => void }) {
+  const { upsert } = usePmNoticeCenter()
+  const controller = useRef(c); controller.current = c
+  useEffect(() => {
+    if (!c.notice) return
+    upsert({
+      severity: 'success',
+      title: c.notice,
+      source: 'workbench',
+      action: c.creationOutsideScope ? { label: `${en ? 'Open' : '打开'} ${c.creationOutsideScope}`, run: () => { const current = controller.current; if (current.creationOutsideScope) current.select(current.creationOutsideScope) } } : undefined,
+    })
+  }, [c.notice, c.creationOutsideScope, en, upsert])
   return <>
-    {c.notice && <div className="toast" role="status"><Check size={16} />{c.notice}{c.creationOutsideScope && <button type="button" className="secondary-button" onClick={() => c.select(c.creationOutsideScope!)}>{en ? 'Open' : '打开'} {c.creationOutsideScope}</button>}</div>}
     {c.createStatus !== null && <Modal title={c.creationScope.kind === 'project' ? (en ? 'New project' : '新建项目') : (en ? 'Create entity' : '新建对象')} wide={c.creationScope.kind !== 'project'} projectCreate={c.creationScope.kind === 'project'} onClose={() => c.openCreate(null)}><EntityCreationSurface mode="dialog" projectId={c.projectId} initial={{ ...c.creationScope, entity: c.creationScope.kind, status: c.createStatus }} onCreated={c.acceptCreated} onClose={() => c.openCreate(null)} onExpand={onExpandCreation} /></Modal>}
     {c.deleteTarget && <Modal title={`${en ? 'Permanently delete' : '永久删除'} ${c.deleteTarget.id}`} onClose={() => { if (!c.busy) c.setDeleteTarget(null); }}><form className="modal-form" onSubmit={event => { event.preventDefault(); if (c.deleteTarget && c.deleteConfirmation === c.deleteTarget.id) void c.lifecycle(c.deleteTarget, 'delete'); }}><p>{en ? 'This permanently removes the Markdown file. Its ID will not be reused. Incoming references or unreadable sources prevent deletion; other files are not modified.' : '这将永久删除 Markdown 文件，编号不会重用。入站引用或不可读源码会阻止删除，其他文件不受影响。'}</p><label>{en ? 'Type the entity ID to confirm' : '输入对象编号以确认'}: {c.deleteTarget.id}<input aria-label="Confirm deletion ID" data-testid="delete-confirmation" value={c.deleteConfirmation} onChange={event => c.setDeleteConfirmation(event.target.value)} autoFocus autoComplete="off" /></label>{c.error && <div className="inline-error" role="alert">{c.error}</div>}<Diagnostics diagnostics={c.requestDiagnostics} /><div className="modal-actions"><button type="button" className="secondary-button" disabled={!!c.busy} onClick={() => c.setDeleteTarget(null)}>{en ? 'Cancel' : '取消'}</button><button type="submit" className="primary-button" data-testid="confirm-delete-entity" disabled={c.deleteConfirmation !== c.deleteTarget.id || !c.canManageLifecycle(c.deleteTarget.id)}>{en ? 'Permanently delete' : '永久删除'}</button></div></form></Modal>}
     {c.saveViewOpen && <Modal title={en ? 'Edit and save view' : '编辑并保存视图'} wide onClose={() => c.setSaveViewOpen(false)}><ViewEditor config={c.config} configuration={c.configuration} views={c.query.data?.views || []} active={c.activeView} onUse={view => { c.useView(view); onSavedView(''); c.setSaveViewOpen(false); }} onSaved={view => { c.acceptView(view); onSavedView(view.id); }} onError={c.handleAccessError} disabled={c.configurationInvalid || !!c.busy || !c.canWrite || c.writesBlocked} /></Modal>}

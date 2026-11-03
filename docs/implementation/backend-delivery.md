@@ -342,6 +342,7 @@
 
 - 两个 `gpt-6.1-sol` 子代理分别实现活动数据适配和页面；当前工具未暴露有效 effort，不能独立确认用户指定的 `xhigh`。只读参考 gr8r-studio 的 Activity、活动行和时间线样式，不导入示例事实或修改参考仓库。
 - `/pm/<workspace>/notifications` 默认使用 820px 单列活动流、连线头像行、日期分组、全部/状态变更/评论/项目和人员筛选、真实任务/评论锚点/项目链接及相对/绝对时间；个人通知保留在 `?section=notifications`，原通知布局偏好、已读/归档与收据机制不变。
+- 项目详情“活动”页与通知收件箱共用主从展示：左侧审计条目列表（搜索、刷新、加载更早记录），可打开的文档、任务、项目等条目带跳转标记，点击后在右侧复用既有对象详情面板（与看板/集合的右侧检查器一致）；评论、关注、收藏等无对象详情来源保持静态且不打开右侧。审计仍只读，保留 `audit.read`/`domain.read` 裁剪与既有权限/字段边界，不新增任务或通知写入。
 - 复用当前核心文件、成员目录、个人时区、项目审计和 changes 接口，不修改后端合同或权限。已有 `audit.read` 才能读取审计操作者/字段差异；普通读者只看到授权的保留事件元数据，明确生命周期事件可作为状态变更，但泛化更新不能推测状态。评论链接通过当前授权任务评论解析，不拿评论 UUID 当任务 ID。
 - 同项目优先采用审计，避免以时间近似合并导致重复；因此不把审计未覆盖的外部修改冒充完整工作区历史。已删除项目无法通过当前审计接口查询；缺失/已删除/不可解析目标不链接。遵守 INV-01/20、PROJ-INV-05、SC-14/20、INF-03/06；展示动态不会改变任务或通知状态。
 - 隔离 PostgreSQL schema、临时 Markdown 根和真实 HTTP 服务中的生产构建浏览器已验证：四类筛选、成员与无结果清除、评论目标锚点、个人通知已读/归档（API 重读 version=3）、返回活动、实际发布事件后的实时刷新、普通读者只见单项目且未请求审计、390px 浅色中文/深色英文无横向溢出。截图在 `.local/evidence/activity-replica/`。
@@ -394,3 +395,63 @@
 - `3224` 已实看新的580px项目弹窗、8个既有图标选项、7张模板卡片、真实负责人和保存位置；仅打开/取消，未提交真实工作区项目。临时脚本和参考副本已删除，两个隔离根目录及临时监听端口均已核对清理；验收夹具关闭时分别将 SIGINT / exit143 记为清理异常，不将进程退出码当作无异常关闭通过。
 - 会话与持久化尚未经过统一设计，当前仍沿用 Agent Chat 保存方式；本次项目创建界面没有改变该边界。
 
+## MCP / Skills 与 MCP Apps 宿主接入（2026-11-04，验收中）
+
+按已接受的 [MCP / Skills 复制与适配计划](t3code-mcp-skills-replication-plan.zh.md)先复制固定 `d53873b6a4799e87afd63c8d288ef0089f5a3748` 原始源码，再复用现有 `30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c` vendor 与 PM 宿主接线。以下是本轮独立证据，不继承上方历史全绿结果；不宣称生产部署或全 Provider 真实账号通过。
+
+- 对外 scoped HTTP MCP 与 OAuth authorization code／S256、发现／同意／客户端管理／撤销已实现。入口为 `/agent/settings/mcp-clients`、`/connect-agent` 与 `/mcp`；授权默认只读，明确绑定 PM 主体、workspace／project 和允许的线程集合。外部 token 不接受于普通 PM／Agent API，不以共享 Agent Cookie 冒充批准人。
+- 原生 PM 工具继续按 Provider MCP／ACP／SDK／Host Tools 注入，共用当前授权、审批、revision、operationId 与结果核对。Full access 不批准受保护动作；只读也不能经创建／发送 Chat 间接触发写入。未映射的完整上游 delegation／scheduler／设备工具不发布；Chat 成功不完成 WorkItem。
+- scoped Skills／commands DTO、按 PM scope 解出的 cwd 目录刷新、Composer `$`／`/`／chip 和显式 session restart 已接入；历史保留、原生 continuation 失效。各 Provider 仍使用自己的目录和 dispatch，disabled／不可用户调用条目不开放；WorkspaceSkill 指令块不改作原生 Skill。OpenCode 只借用匹配已授权 live session 发现，不能为刷新启动插件；Muse／ACP Registry／OMP 的独立 Skill 调用禁用，OMP 命令仅既有 `session` 白名单。完整逐家支持与 transport 限制见计划第10.2节。
+- 类型化 MCP App 输出、私有资源、producing item／Server／thread／session 绑定、live lifecycle、工具／资源请求与按项替换／清除的模型上下文已接入。当前原生 live App adapter 为 Codex，其他 Provider 不假报支持。工具完成后可保留可交互 session，停止／配置／范围变更／restart／撤权／shutdown 失效；不会为打开 App 启动新模型轮次。隔离 frame 不加 `allow-same-origin`，UI 工具确认不代替服务端授权。
+- Agent 的 `MCP_PUBLIC_ORIGIN` 必须是固定可信 origin；PM 私有回调用 `PM_MCP_AGENT_URL`，只回退既有 `PM_AUTOMATION_AGENT_URL`，不猜 localhost。内部委托复用 `PM_AUTOMATION_SERVICE_SECRET`，以 `pm-mcp-service-v1` 域／audience 分离；实时校验 grant／批准人／范围／能力，秘密不外发。网关不能把内部 introspection 暴露公网；HTTPS、外部可达性与受控部署仍是环境前提。
+- 撤销并非 SQLite 与 PostgreSQL 跨存储原子事务，也不回滚已提交业务动作。备份 `--secrets exclude` 和 `include` 均使**导出副本**中的 MCP grants／tokens／consent 与 App model context 失效，不修改源数据库；恢复后重新授权，不恢复 live App session。现有 PM 应用规则及临时 Agent Chat 保存方式保持，统一会话／持久化设计未收口。
+
+### 已收到的主集成证据与缺口
+
+| 检查／场景 | 已观察结果及边界 |
+| --- | --- |
+| 来源与依赖 | 不可变来源PASS28,234文件；post-lifecycle bg42最终recapture：补充88 outputs、基线164 patches／1214 outputs；imports1295文件／7715 edges／18 packages。最终离线重建／repeat-no-diff／pristine／conflict／mode／symlink／wrong-source／tool drift拒绝检查均true（1296files） |
+| 编译／构建 | 最终post-lifecycle bg42 PASS：typecheck:agent、lint:agent、Web tsc、隔离Vite build；PM定向ESLint bg45 exit0。此前lint15项既有automation warnings、client-runtime18/18、contracts112命令／143路径、docs150 Markdown／27计划通过。最终Agent＋隔离Web linux-x64包167 packages／22001 files／292 links；迁址bg46在无关cwd `/tmp`运行PASS，七项artifactHashesAndInternalLinks／diskSdkImports／nativePtyLoad／oneEffectSingleton／documentWorker／productionClaudeHistoryDispatch／apiOnlyProductionHttp均true，取代修正前bg40产物证据；不代表付费推理 |
+| 原 vendor 回归 | 311/312文件通过，唯一 Claude metadata失败随后修复，定向 Claude241/241通过；不改写为原全套312/312 |
+| 原 Codex pending-output 回归 | 43/43通过，含 terminal 后两项 completed-only Apps、保留 native tools、仅一个模型 turn；受控协议不是付费账号 |
+| 真实 CLI Skills 发现 | 实际安装的 codex-cli0.163.0在隔离 HOME 通过 `skills/list` 发现实际 scoped `SKILL.md`；未启动 MCP 或模型 turn。未证明付费／真实账号 Skill 模型行为或所有 Provider |
+| OAuth／撤销浏览器 | 同意页默认readonly、显式workspace／thread；callback＋S256200；active MCP session200→UI revoke200→同 session401 |
+| Skills 浏览器 | 菜单／选择／chip／显式重启保留草稿与历史，无额外 turn；内嵌菜单白色对比度修复已用截图核对。完整窄屏／键盘／IME矩阵未因此通过 |
+| App 浏览器正向 | 原 Codex adapter＋受控 native CLI实际渲染；标准 SDK JSON-RPC初始化、resource read、tool call、context update成功；sandbox恰为`allow-scripts allow-forms`。内嵌此前持续409，修正后隔离fixture6选Skill、新建项目线程POST/chat200、原生turn完成、snapshot GET200、App无需刷新初始化；trace无失败／取消请求。内嵌tool/resource后续结果见交互续验行；不是付费或真实账号turn |
+| 原始App grant撤销 | 认证浏览器API确认原full grant仍active；SQLite对应context namespace恰有一条匹配grant／sentinel的revision1记录。携带当前CSRF撤销200后，同namespace为0条；证明已保存model context清除，不仅是bearer session拒绝，不证明跨库原子性 |
+| App 导航安全 | 为隔离 port attestation，刻意移除原 pagehide/unload 通知；同 opaque origin、同 WindowProxy 导航，在 image响应被扣留、iframe load之前发送 context/resource/tool三请求。fresh-port超时约2秒失效；后端 call/resource/context POST均0，迟到回复0，context sentinel仍revision1，native日志无额外tool/read/turn。正常pagehide立即失效亦已观察；不替代全部攻击矩阵 |
+| App迟到响应隔离 | fixture6通过CDP response stage扣留原App真实resources/read HTTP200，仅移除原pagehide/unload通知以隔离port binding；导航同iframe后，替换页沿用同WindowProxy，在image阻塞load期间发context/resource/tool候选及伪造port。原200在攻击开始后、frame失效／load前释放：替换页JSON-RPC回复0，后端仅原合法resource POST1次，无攻击者context/tool/read POST；frame失效、load未触发。未替换认证或mock响应，与前述候选拦截是独立证据 |
+| 内嵌窄屏／键盘／IME | 实际390×844视口，document.scrollWidth390，无横向溢出，Composer／Skills控件可见且已截图。`$`菜单ArrowDown＋Enter选中Smoke Skill chip，Escape关闭，native turn仍2。Chromium CDP原生IME composition产生实际Enter／keyCode229／isComposing=true，中文草稿保留、POST/chat为0；不推及全部实例／scope组合或实体输入法设备 |
+| 迟到攻击后的状态核对 | context仍为revision1 sentinel；native日志累计2 turns／4 resource reads（原始捕获资源及合法点击）／1合法tool call，不把合法调用误算为攻击者请求 |
+| 完整 Agent suite | bg43 bounded concurrency2：996total／994pass／0fail／1cancel／1skip，628.6秒、exit1。此前unscoped draft及ten-turn修正均在本次完整运行通过；取消为Claude `beforeCacheExpires` compaction（`chat-runtime.test.ts:640`），10秒deadline在10941ms触发。测试deadline随后改30秒，行为断言不变，onReturn／beforeCacheExpires定向2/2通过（2.85秒／2.72秒）；没有之后完整全绿结果，1项真实Linux sandbox skip保留 |
+| 完整 backend suite | 1027 total／967 pass／6 fail／7 skip／47 cancel。本轮actorId resolve整对象期望改为行为断言后，定向文件6/6通过；不把局部结果改写为全套通过 |
+| 内嵌App交互续验 | 原生tool返回`structuredContent.clicked=true`及native text；resource read返回原native session数据；Set model context返回`{}`。全屏／退出全屏已实看；显式Close App→“重新读取 App”→重新初始化通过，native fixture日志`rpc.method === 'turn/start'`计数前后均2，无额外原生turn。截图：`.tmp/omp-sshots-15bfe177ac813cf1.webp`（内嵌）、`.tmp/omp-sshots-15bfe18ea3813cf2.webp`（全屏） |
+| 官方SDK及安全回归 | bg49官方MCP SDK1.32.2 Client＋StreamableHTTPClientTransport真实loopback HTTP通过initialize／readonly目录过滤／允许thread读取／ping／terminateSession／重连后撤权拒绝；使用预批准synthetic grant与受控PM catalog，不是完整SDK OAuth流程。此前两次失败为fixture目录shape及可选isError断言。bg43有界OAuth／权限／HTTP session／工具安全回归均通过，详见计划E3及主集成记录artifact225:2790-2876，不扩大为全部真实PM攻击／unknown副作用通过 |
+| 剩余检查槽 | 完整Agent仍非全绿，deadline修正仅定向通过；T13完成。完整SDK OAuth、剩余真实PM安全／浏览器组合、付费模型、逐Provider账号与生产发布，以及backend环境／无关阻塞仍保留 |
+
+backend剩余环境／无关阻塞保留：guard只接受55444，拒绝自有临时PG16的32768；缺少`pg_dump16`、不安全TMPDIR Git根、Web filter模型迁移／project-audit失败及S3不可用。生产55444不可用，临时库不代表生产就绪。root类型检查的无关Web错误未变。此前root unit459pass／2个旧OpenAPI失败／6 DBskip、Agent strip-only TS parameter property和过时runtime mocks记录是历史，不能以修正或当前定向结果宣称完整回归全绿。文档代理未执行测试／构建／浏览器；上述结果来自主集成提供的观察，逐标准缺口见计划第10.3节。
+
+内嵌lifecycle修正：取消snapshot授权请求不再错误关闭保留lease，并增加generation完成后的UI gating。此前409的旧trace不能区分readiness与取消授权检查丢失lease，不能单因归因；两处均已修正并回归覆盖。隔离fixture6的无需刷新初始化、后续交互及重新打开无额外turn已通过上述浏览器复验；execution＋App requests定向55/55通过，包含取消保留仍获授权lease及取消仍撤销已拒绝authority。不是完整Agent suite重新通过。
+
+本轮未获生产部署／重启或真实凭据导入授权，未执行这些操作；未commit／push，未写业务审核或完成任务。
+
+主集成已清理自有smoke脚本5个及服务／临时数据库／浏览器与测试数据，生产未触及。源码＋产物交付保留在`.local/mcp-skills-artifact-HWjm8O/agent`：仅Agent＋Web，不是整套PM／DB部署；从已通过迁址验证的包复制并保留相对symlink。保留副本bg50在cwd `/tmp`、linux-x64下通过与bg46相同的七项runtime验证；最终docs／contract／import检查通过：150份Markdown／27计划、112命令／143路径、1295文件／7715 imports／18 packages。T1—T13按有界证据完成；T14受真实Provider／账号／平台矩阵及backend环境／无关失败阻塞；T15未授权、未执行，M5／M6不签收。
+
+## Windows / macOS Desktop 独立运行时
+
+- 按用户选择，以六个 `openai-codex/gpt-6.1-sol:xhigh` 子代理实现 Electron 宿主、受管 PostgreSQL、进程生命周期、跨平台核心文件/附件存储和原生打包；主线程集成初始化、完整备份恢复及实际运行验证。只读参考 t3code，不替换已有 Web，不复用或重启原开发服务，不导入真实凭据。
+- 目标为 Windows x64 NSIS、macOS 15+ arm64/x64 DMG/ZIP。安装资源包含 Node 24.21.0、PostgreSQL 16.15 完整运行时、PM/Worker、Agent 原生依赖闭包及生产 Web；运行时按目标平台下载、固定校验、离线启动。没有 Linux 发布目标、自动更新源或自动 Release。
+- 本地实例自行初始化数据库、应用存储、账号及工作区；不保存初始账号明文密码。稳定公共 origin 与实例身份绑定浏览器分区；仅监督自有进程，端口/数据身份冲突拒绝接管。数据库关机超时保留进程与锁，允许重试，避免以 SIGKILL 冒充正常停止。
+- 复用现有 HTTP/Agent 授权和业务规则。Electron 启用 renderer sandbox/contextIsolation，禁用 Node 集成；原生 IPC 仅限可信顶层连接窗口。跨平台路径和文件身份规则落到核心/基础设施，新增 `0046_native_absolute_paths.sql` 正向迁移，不改写旧迁移。Windows ACL/reparse 检查及 Job Object 监督仍须原生验证。
+- 离线完整备份通过真实 `pg_dump`、现有 PM 检查点/附件备份与 Agent 备份实现；恢复使用新目录、新 PG 凭据、新实例身份和存储绑定，最后登记 bootstrap。账号和业务对象保留，浏览器 Cookie/客户端日志不复制；外部目录需重新关联。备份明确包含私密数据，只接受同 OS 恢复。详细范围与操作见 [README Desktop](../../README.md#desktopwindows--macos)。
+- 已在隔离 Debian 12 容器、实际 bundled Node/PG 下完成：真实初始化/登录/授权工作区、项目和 Markdown 文档创建、附件上传、停止/重启、稳定 origin、完整备份、独立恢复后原账号/文档/附件内容一致。匿名附件请求401，非空恢复目标拒绝，所有本次拥有的服务退出。没有用 mock 数据库或业务 API 替代这条路径。
+- 已用真实 electron-builder 组装含 `app.asar`、生产 workspace 和完整运行时的 Linux 目录验证产物；对该产物资源执行原生 SDK/PTY 加载、初始化、登录、Agent 访问、Web 服务、同一实例重启与进程清理冒烟，全部通过，`PATH` 不依赖宿主开发工具。这是验证资源闭包，不是 Windows/macOS 安装包，也不证明真实 Provider 推理。
+- 实际 Electron GUI 验证发现安装资源继承构建目录 `0700`，导致不同用户无法读取启动文件；`afterPack` 现在把公共程序目录规范为 `0755`、普通源码文件 `0644`，保留可执行位及 pinned runtime 文件模式，不改变私有工作区权限。在安装资源由 root 拥有、桌面以普通用户运行的容器中完成了修复后验证。
+- 实际界面完成首次账号创建、PM 登录/授权工作区选择、产品菜单切到 Agent、关闭工作区窗口仍保留5个自有服务、重新打开、原生取消停止保持认证、确认 Disconnect 后自有服务为0，以及完整退出/再启动后的稳定 origin、localStorage 标记和 PM 登录态保留。初始密码未回填，业务 renderer 的 Node/原生桥均不可见。原生 Quit 确认后应用退出0；修复重新打开后仍显示“窗口已关闭”的状态文字。截图与结构化证据：`.local/evidence/desktop-runtime-QMmTDz/`。
+- 桌面原有52项全通过；新增默认项目目录和数据库慢关机回归后，受影响23项通过，均无跳过。Agent 备份/访问19项通过。PM、Agent、Web 与 Desktop 的对应类型检查/生产构建通过，文档与 OpenAPI 检查通过。受影响 oxlint 无 error、保留4条 warning（控制字符匹配和 finally 清理错误）；不宣称零警告。
+- 后端入口的153文件清单按隔离运行及失败/未完成文件续跑覆盖，逐文件最后结果合并为 **1043项：1034通过、2失败、7跳过、0取消；150/153文件通过**，不是一次连续全绿。保留失败为 `artifact-files-model.test.ts` 的旧 filter 合同、`project-audit.integration.test.ts` 的原始正文留存断言；S3 的7项因未配置服务跳过，不计通过。未放宽这些断言或改动无关 Web 逻辑。完整逐文件记录在上述证据目录 `backend-evidence.json`。
+- 回归修复了本次跨平台目录 guard 把已知不安全路径转成409/503的问题：底层静态拒绝保留 `EPERM`，文档边界在变更前转换为原有403；目录身份变化/未知副作用不改成成功。原有文档读写及安全真实 HTTP 回归16项最终全通过，另以直接文件系统冒烟确认正常文档读写、链接读写均403且外部文件未改变。原生平台/权限5项、附件10项、完整项目备份恢复和 Worker/outbox/UUID 回归也通过。
+- 回归使用自有 PostgreSQL、独立网络命名空间、Git/完整 PG 客户端及私有临时目录；命名空间内部55444只用于满足既有测试防护，未连接宿主55444。只读源码挂载下的 `.local` 写入通过独立临时挂载隔离，不向仓库原测试/审计目录写入。已清理自有 GUI 账号/数据、临时脚本/构建目录、验证容器和命名镜像；仅保留证据与开发运行时缓存。
+- 全仓根类型检查仍被无关 Web/测试合同错误阻塞：notification-inbox、project-files、agent-file-areas 测试 actorId、artifact filter、document-sources fixture exactOptionalPropertyTypes、graph-flow 可空值。未覆盖并行改动，不把局部检查记为全仓 `pnpm check` 通过。
+- 需要原生 Windows/macOS 机器才能验收目标安装包、安装/卸载、权限与进程监督；正式签名另需发布者证书及 macOS 公证材料。本机没有对应平台环境，未生成目标安装包或执行签名、公证、发布。原生手动 CI 已接入受管运行时冒烟和核心文件/附件/权限回归；Windows reparse 原生用例只在 Windows 注册，不能把 Linux 的5项平台测试当作该用例通过。signed 缺少材料时失败，不退化为 unsigned。未 commit/push。
+- 会话与持久化尚未统一设计收口，仍沿用 Agent Chat 保存方式；桌面备份不消除尚未确认客户端操作的未知副作用。Linux descriptor-relative 保证不等同于 macOS/Windows 路径校验，Windows 目录元数据断电持久性受 Node 能力限制；不宣称新增同用户文件系统安全沙箱。

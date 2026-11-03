@@ -7,6 +7,11 @@
   ],
   "type": "module",
   "exports": {
+    "./mcp-apps": {
+      "types": "./dist/mcp-apps.d.ts",
+      "development": "./src/mcp-apps.ts",
+      "default": "./dist/mcp-apps.js"
+    },
     "./pm-tool-result": {
       "types": "./dist/pm-tool-result.d.ts",
       "development": "./src/pm-tool-result.ts",

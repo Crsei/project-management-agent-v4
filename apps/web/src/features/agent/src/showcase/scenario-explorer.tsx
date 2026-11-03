@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Copy } from "./types";
 import { useShowcasePreferences } from "./preferences";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 /** Only visited controllers mount; switching preserves them, reset replaces one. */
 export function ScenarioExplorer<Id extends string>({
@@ -35,7 +36,7 @@ export function ScenarioExplorer<Id extends string>({
         <strong>{title}</strong>
         <label>
           {locale === "en" ? "Scenario" : "场景"}
-          <select
+          <RadixSelect
             value={scenario}
             onChange={(event) =>
               navigate(`/agent/showcase/${pageId}?scenario=${encodeURIComponent(event.target.value)}`)
@@ -46,7 +47,7 @@ export function ScenarioExplorer<Id extends string>({
                 {item.name[locale]}
               </option>
             ))}
-          </select>
+          </RadixSelect>
         </label>
         <span>{locale === "en" ? "Edits stay in each scenario" : "各场景分别保留编辑"}</span>
         <button

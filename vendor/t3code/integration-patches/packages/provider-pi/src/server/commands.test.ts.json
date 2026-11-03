@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "source": "packages/provider-pi/src/server/commands.test.ts",
+  "beforeSha256": "475e5da470d3f911b17fe775fa20debbcbf2ebaadd11d03557c904322ee22491",
+  "afterSha256": "eb9f97bba2a52bc3cf4c23c6ef56b9f9e420ae3ec96f71275c037fbf91879e6d",
+  "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
+  "rationaleLedgers": [
+    "vendor/t3code/integration-patches.json",
+    "vendor/t3code/codex-patches.json",
+    "vendor/t3code/claude-patches.json",
+    "vendor/t3code/antigravity-patches.json",
+    "vendor/t3code/sdk-provider-patches.json",
+    "vendor/t3code/acp-provider-patches.json",
+    "vendor/t3code/opencode-patches.json"
+  ],
+  "splices": [
+    {
+      "start": 2,
+      "before": [
+        "import { parsePiDiscoveredCommands } from \"./commands.ts\";\n"
+      ],
+      "after": [
+        "import { hasLeadingPiSkillMention, parsePiDiscoveredCommands, piNativeCommandPrefix, piSkillCommand } from \"./commands.ts\";\n"
+      ]
+    },
+    {
+      "start": 49,
+      "before": [],
+      "after": [
+        "\n",
+        "it(\"maps only an explicitly selected leading native Pi skill to its exact command\", () => {\n",
+        "  const inventory = { commands: [\n",
+        "    { name: \"skill:review\", source: \"skill\" },\n",
+        "    { name: \"deploy\", source: \"extension\" },\n",
+        "  ] };\n",
+        "  expect(hasLeadingPiSkillMention(\"$review focus on auth\")).toBe(true);\n",
+        "  expect(piSkillCommand(\"$review focus on auth\", inventory)).toBe(\"/skill:review focus on auth\");\n",
+        "  expect(piSkillCommand(\"$deploy now\", inventory)).toBe(\"$deploy now\");\n",
+        "  expect(piNativeCommandPrefix(\"/deploy now\", inventory)).toBe(\"/deploy\");\n",
+        "  expect(piNativeCommandPrefix(\"/unknown\", inventory)).toBeUndefined();\n",
+        "  expect(piSkillCommand(\"history $review\", inventory)).toBe(\"history $review\");\n",
+        "  expect(() => piSkillCommand(\"$review\", {})).toThrow();\n",
+        "});\n"
+      ]
+    }
+  ]
+}

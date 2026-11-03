@@ -8,6 +8,7 @@ import type { DisplayPreferences } from "@/features/workspace/store"
 import { usePersonalDashboard } from "../pm-service"
 import { useText } from "../pm-ui"
 import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const selectClass = "min-h-10 w-full rounded-control border bg-surface px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring"
 const accentColors = { indigo: "#4b5bd6", blue: "#2563c5", violet: "#7348cc", teal: "#087b72", rose: "#b93663", graphite: "#525762" }
@@ -24,7 +25,7 @@ function BrowserScope({ mode }: SettingsPageProps) {
 }
 
 function PreferenceSelect({ label, description, value, onChange, children }: { label: string; description?: string; value: string | number; onChange: (value: string) => void; children: ReactNode }) {
-  return <Field label={label} description={description}>{control => <select {...control} className={selectClass} value={value} onChange={event => onChange(event.target.value)}>{children}</select>}</Field>
+  return <Field label={label} description={description}>{control => <RadixSelect {...control} className={selectClass} value={value} onChange={event => onChange(event.target.value)}>{children}</RadixSelect>}</Field>
 }
 
 export function SettingsAppearance({ mode }: SettingsPageProps) {
@@ -71,7 +72,7 @@ export function SettingsDateTime({ mode }: SettingsPageProps) {
   const sample = "2026-10-21T15:05:00Z"
   return <SettingsSection title={t("日期与时间", "Date & time")} description={t("调整日期与时间的显示，不改变工作项的全天日期或服务器时间。", "Change date and time presentation without changing all-day task dates or server timestamps.")}>
     <BrowserScope mode={mode} />
-    <div className="space-y-3 rounded-module border p-4"><h3 className="text-sm font-medium">{t("时区", "Time zone")}</h3>{mode === "service" ? <ProfileTimeZone /> : <p className="text-sm text-muted-foreground">{t("Lab 不读取或创建正式个人时区。", "Lab does not read or create a service profile time zone.")}</p>}<p className="text-sm leading-6 text-muted-foreground">{t("个人工作台的会议与工时使用个人资料中的真实时区。其他未指定时区的时间戳按浏览器时区显示；任务全天日期不做时区转换。", "Personal meetings and time logs use your actual profile time zone. Timestamps without an explicit zone use the browser zone; all-day task dates are never shifted.")}</p><Link className="inline-block rounded-control text-sm underline focus-visible:ring-2 focus-visible:ring-ring" to={`${mode === "lab" ? "/lab/pm" : "/pm"}/${encodeURIComponent(workspaceSlug)}/settings/profile`}>{t("在个人资料中管理时区", "Manage time zone in Profile")}</Link></div>
+    <div className="space-y-3 rounded-module border p-4"><h3 className="text-sm font-medium">{t("时区", "Time zone")}</h3>{mode === "service" ? <ProfileTimeZone /> : <p className="text-sm text-muted-foreground">{t("Lab 不读取或创建正式个人时区。", "Lab does not read or create a service profile time zone.")}</p>}<p className="text-sm leading-6 text-muted-foreground">{t("个人工作台的会议与工时使用个人资料中的真实时区。其他未指定时区的时间戳按浏览器时区显示；任务全天日期不做时区转换。", "Personal meetings and time logs use your actual profile time zone. Timestamps without an explicit zone use the browser zone; all-day task dates are never shifted.")}</p><Link className="inline-block rounded-control text-sm text-primary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring" to={`${mode === "lab" ? "/lab/pm" : "/pm"}/${encodeURIComponent(workspaceSlug)}/settings/profile`}>{t("在个人资料中管理时区", "Manage time zone in Profile")}</Link></div>
     <PreferenceSelect label={t("日期格式", "Date format")} value={dateFormat} onChange={value => setPreferences({ dateFormat: value as DisplayPreferences["dateFormat"] })}>{(["MMM d", "d/M", "M/d", "yyyy-MM-dd"] as const).map(value => <option key={value} value={value}>{value} · {formatPreferenceDate("2026-10-21", value, locale)}</option>)}</PreferenceSelect>
     <PreferenceSelect label={t("每周开始于", "Week starts on")} description={t("用于任务日历与甘特周视图，不改变服务端工时汇总规则。", "Used in task calendars and weekly Gantt views; server time-total rules are unchanged.")} value={weekStartsOn} onChange={value => setPreferences({ weekStartsOn: Number(value) as DisplayPreferences["weekStartsOn"] })}><option value="1">{t("星期一", "Monday")}</option><option value="0">{t("星期日", "Sunday")}</option><option value="6">{t("星期六", "Saturday")}</option></PreferenceSelect>
     <PreferenceSelect label={t("时间格式", "Time format")} value={timeFormat} onChange={value => setPreferences({ timeFormat: value as DisplayPreferences["timeFormat"] })}><option value="12">{t("12 小时制", "12-hour")}</option><option value="24">{t("24 小时制", "24-hour")}</option></PreferenceSelect>

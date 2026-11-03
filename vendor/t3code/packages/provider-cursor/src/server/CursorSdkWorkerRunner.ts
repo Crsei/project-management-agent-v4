@@ -23,8 +23,13 @@ export function makeCursorSdkWorkerRunner(environment: NodeJS.ProcessEnv, stateR
       const cwd = input.options.local?.cwd;
       if (typeof cwd !== "string" || (binding && (binding.threadId !== input.threadId || binding.cwd !== cwd)))
         return yield* new CursorAgentSdkRunnerError({ method: "open", cause: new Error("Cursor native operation binding mismatch.") });
-      if (Object.keys(input.options.mcpServers ?? {}).length && !binding)
-        return yield* new CursorAgentSdkRunnerError({ method: "open", cause: new Error("Cursor PM transport is not bound.") });
+      const descriptors = Object.entries(input.options.mcpServers ?? {});
+      if (descriptors.some(([name, server]) => {
+        const admitted = binding?.mcpServers.find(candidate => candidate.name === name);
+        return !admitted || server.type !== "stdio" || server.command !== admitted.command ||
+          JSON.stringify(server.args ?? []) !== JSON.stringify(admitted.args);
+      }) || binding?.promptAuthorization === "technical-no-tools" && descriptors.length > 0)
+        return yield* new CursorAgentSdkRunnerError({ method: "open", cause: new Error("Cursor MCP descriptor is not part of this generation's host binding.") });
       const launch = yield* agentScope.wrap({ command: process.execPath, args: [...process.execArgv, fileURLToPath(entry)],
         name: "cursor-sdk", threadId: input.threadId, env: environment });
       const child = yield* Effect.try({

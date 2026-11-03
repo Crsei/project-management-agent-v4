@@ -2,12 +2,12 @@
 .document-content-editor [hidden] { display: none !important; }
 .document-format-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; padding: 8px 10px; border-bottom: 1px solid var(--border, #e3e7ee); background: var(--surface, #fff); position: sticky; top: 0; z-index: 2; }
 .document-format-toolbar > button, .document-layout-controls button { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 32px; min-height: 34px; padding: 6px; border: 1px solid transparent; border-radius: 5px; background: transparent; font: inherit; cursor: pointer; }
-.document-format-toolbar > select { max-width: 130px; min-height: 34px; border: 1px solid var(--border, #e3e7ee); border-radius: 5px; background: var(--surface, #fff); padding: 5px; color: inherit; font-size: 11px; }
+.document-format-toolbar > [data-slot="select-trigger"] { max-width: 130px; min-height: 34px; border: 1px solid var(--border, #e3e7ee); border-radius: 5px; background: var(--surface, #fff); padding: 5px; color: inherit; font-size: 11px; }
 .document-editing-panel[hidden], .document-source-panel[hidden] { display: none !important; }
 .document-source-panel { height: 100%; min-height: 360px; }
 .document-content-editor button:disabled { cursor: not-allowed; opacity: .45; }
 .document-format-toolbar button:hover:not(:disabled), .document-format-toolbar button[aria-pressed="true"], .document-block-controls button:hover:not(:disabled) { background: var(--surface-hover, #edf0fb); color: var(--primary, #635bce); }
-.document-content-editor button:focus-visible, .document-menu [role^="menuitem"]:focus-visible { outline: 2px solid var(--primary, #635bce); outline-offset: 2px; }
+.document-content-editor button:focus-visible { outline: 2px solid var(--primary, #635bce); outline-offset: 2px; }
 .document-toolbar-divider { width: 1px; height: 21px; background: var(--border, #e3e7ee); margin: 0 3px; }
 .document-layout-controls { display: flex; align-items: center; margin-inline-start: auto; gap: 2px; }
 .document-format-toolbar > .document-context-anchor { position: fixed; width: 1px; height: 1px; min-width: 0; min-height: 0; padding: 0; border: 0; pointer-events: none; opacity: 0; }
@@ -57,6 +57,7 @@
 .document-command-results { display: flex; flex-direction: column; max-height: 340px; overflow-y: auto; margin-top: 10px; gap: 3px; }
 .document-command-results > button { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 9px; border: 0; border-radius: 5px; text-align: start; background: transparent; cursor: pointer; }
 .document-command-results > button:hover, .document-command-results > button.is-highlighted { background: var(--surface-hover, #edf0fb); }
+.document-command-results > button:focus-visible { outline: none; background: var(--surface-hover, #edf0fb); }
 .document-command-results small { color: var(--muted-foreground, #7b8599); font-size: 10px; }
 .detail-content-content:has(.document-content-editor) { padding: 0; overflow-x: hidden; }
 @media (max-width: 700px) {

@@ -1,0 +1,58 @@
+{
+  "sourceCommit": "d53873b6a4799e87afd63c8d288ef0089f5a3748",
+  "sourceRoot": "apps/server/src/mcp/toolkits",
+  "scope": "Accepted plan section 3.1; source retention does not mean production registration. Existing Agent Chat remains authoritative; no t3 Orchestrator is started.",
+  "included": {
+    "orchestrator_capabilities": "orchestrator/tools.ts: enabled existing Provider/model inventory; no secrets, config, login, native discovery sessions or delegation capability claims",
+    "t3_project_list": "project/tools.ts: currently granted PM business project catalog, explicitly not repository projects",
+    "t3_project_read": "project/tools.ts: granted PM project metadata; no directory initialization or arbitrary path",
+    "t3_thread_list": "orchestrator/tools.ts: only explicit grant thread IDs, never global history",
+    "t3_thread_read": "orchestrator/tools.ts: granted persisted Chat history and current generation, bounded offset page",
+    "t3_thread_launch": "project/tools.ts: one idle scoped thread, optional explicit catalog-validated provider/model settings; atomic creation plus settings plus grant plus clientRequestId receipt; no worktree or implicit model execution",
+    "t3_thread_send": "orchestrator/tools.ts: optional explicit selection persisted via existing settings validators/App invalidation and idle revision-CAS before existing submitChat; durable clientRequestId receipt; unknown never redispatched",
+    "t3_thread_interrupt": "orchestrator/tools.ts: exact authorized generation via cancelThreadChat; cancellation is not rollback"
+  },
+  "pmTools": {
+    "source": "Existing PM agent-tools registry, not an upstream t3 business toolkit",
+    "selection": "Every tool in the current PM-authorized registry; write tools omitted for read-only grants",
+    "input": "{threadId,operationId,arguments}; original tool inputSchema is preserved under arguments",
+    "authority": "callPmTool shared with native bridge; pending_approval retained for protected actions; operationId and argument identity, original receipts and unknown handling preserved",
+    "approval": "Existing PM tools UI; same live PM actor as originating grant plus current delegation scope/full ceiling; revoke denies later approval"
+  },
+  "excluded": {
+    "orchestrator": {
+      "tools": ["delegate_task", "task_status", "task_cancel", "t3_workflow_stop", "schedule_task", "list_scheduled_tasks", "update_scheduled_task", "delete_scheduled_task", "request_secret", "create_threads", "t3_thread_update", "t3_thread_wait"],
+      "reason": "No foreign orchestration, workflow, scheduler, secret-request, batch-thread or metadata lifecycle is mounted. The accepted external facade exposes explicit read/create/send/stop using host Chat, not the full upstream toolkit."
+    },
+    "project": {
+      "tools": ["t3_project_create", "t3_project_update", "t3_project_delete", "t3_project_clone"],
+      "reason": "Upstream repository registration/clone semantics are not PM business project mutations; authorized PM project tools remain available under their own names."
+    },
+    "thread": {
+      "tools": ["t3_thread_organize", "t3_queue_list", "t3_queue_read", "t3_queue_edit", "t3_queue_cancel", "t3_queue_reorder", "t3_queue_promote_to_steer", "t3_pending_request_list", "t3_pending_request_read", "t3_pending_request_respond", "t3_thread_configuration", "t3_thread_configure", "t3_thread_fork", "t3_thread_merge_back", "t3_thread_transfers", "t3_thread_search", "run_scheduled_task_now"],
+      "reason": "Source retained; no foreign queue, scheduling, transfer, global search, configuration or organization authority is registered. Provider selection for an explicit send uses existing host configuration validation."
+    },
+    "attachment": { "tools": ["t3_attachment_prepare_upload", "t3_attachment_discard", "t3_thread_send_attachments"], "reason": "No equivalent scoped signed-upload contract in this accepted external facade; existing Chat attachments remain unchanged." },
+    "environment": { "tools": ["t3_environment_read", "t3_environment_preferences_update"], "reason": "Environment-wide settings are not equivalent to PM actor-scoped preferences; no authorized equivalent is registered." },
+    "previewControls": { "tools": ["t3_preview_list", "t3_preview_close"], "reason": "MCP Apps are isolated producing-item resources, not the source collaborative browser product." },
+    "preview": {
+      "tools": ["preview_status", "preview_open", "preview_dialog", "preview_navigate", "preview_resize", "preview_set_appearance", "preview_snapshot", "preview_click", "preview_type", "preview_hover", "preview_select", "preview_drag", "preview_upload", "preview_press", "preview_scroll", "preview_evaluate", "preview_wait_for", "preview_recording_start", "preview_recording_stop"],
+      "reason": "Full collaborative browser automation is explicitly outside plan section 3.1."
+    },
+    "device": { "tools": ["device_list", "device_open", "device_screenshot", "device_close"], "reason": "Device host product is explicitly outside plan section 3.1." },
+    "html": { "tools": ["html_preview", "html_render"], "reason": "General HTML rendering/browser product is not the isolated MCP Apps producing-item contract." },
+    "worktree": { "tools": ["t3_worktree_handoff", "t3_worktree_status", "t3_worktree_list"], "reason": "Existing PM delivery worktree service is not the full upstream general worktree product." },
+    "pullRequests": { "tools": ["link_pull_request", "unlink_pull_request", "list_thread_pull_requests", "watch_pull_request", "unwatch_pull_request", "write_pull_request_guides", "read_pull_request_guide"], "reason": "No foreign PR watcher, guides or general worktree/PR product is mounted." }
+  },
+  "nativeInjection": {
+    "codex": "Existing bound stdio descriptor projection and per-generation authorization retained",
+    "antigravity,grok,fx,acpRegistry": "Existing native ACP bridge and live host authority retained",
+    "claude": "Only server-bound mcp__SERVER__TOOL callbacks authorized, with active generation/owner/signal checks; arbitrary native permissions remain denied",
+    "muse": "Only bound stdio MCP server tool callbacks admitted; protected native writes still not auto-approved; current turn authorization retained",
+    "cursor": "Bound stdio MCP clients projected to namespaced SDK custom tools; worker authorizes every execute; native commands still ungranted",
+    "opencode": "Source-supported single generation transport retained; PM plus additional integration descriptors remain explicitly unsupported",
+    "pi": "Source-supported single generation-owned extension/transport retained; arbitrary multi-server descriptors explicitly unsupported",
+    "omp": "Existing newer host PM bridge retained; no matching pinned upstream generic injection implementation; additional descriptors explicitly unsupported"
+  },
+  "revocationSemantics": "Authorization is rechecked at final PM authority checks. Independent Agent SQLite and PM database commits are not claimed to provide cross-store atomic revocation."
+}

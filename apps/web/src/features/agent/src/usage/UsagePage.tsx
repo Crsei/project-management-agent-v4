@@ -18,6 +18,7 @@ import { buildUsageView } from "./usage-view-model";
 import { formatUsageExact, formatUsageShare } from "./usage-display";
 import { providerPresentation, UsageProviderIcon } from "./usage-presentation";
 import "./usage-page.css";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type Metric = "cost" | "tokens" | "limits";
 type Preferences = { metric: Metric; period: Period; hiddenProviders: UsageProviderKind[] };
@@ -155,7 +156,7 @@ export default function UsagePage() {
           <DropdownMenuContent className="usage-filter-menu">
             <DropdownMenuLabel className="usage-menu-label">{t("本机环境", "Local environment")}</DropdownMenuLabel>
             <p className="usage-menu-note">{t("原生来源可能包含本机账号在其他工具中的历史，不仅限于当前 PM 项目。", "Native sources may include history from this machine's accounts in other tools, not only the current PM project.")}</p>
-            <label className="usage-instance-filter">{t("实例", "Instance")}<select value={instanceId} onKeyDown={event => event.stopPropagation()} onChange={event => setInstanceId(event.target.value)}><option value="">{t("所有实例", "All instances")}</option>{instanceId && !providers.some(provider => provider.instanceId === instanceId) && <option value={instanceId}>{t("当前实例（列表不可用或已移除）", "Current instance (list unavailable or removed)")}</option>}{providers.map(provider => <option key={provider.instanceId} value={provider.instanceId}>{provider.label}{provider.enabled ? "" : t("（已停用）", " (disabled)")}</option>)}</select></label>
+            <label className="usage-instance-filter">{t("实例", "Instance")}<RadixSelect value={instanceId} onKeyDown={event => event.stopPropagation()} onChange={event => setInstanceId(event.target.value)}><option value="">{t("所有实例", "All instances")}</option>{instanceId && !providers.some(provider => provider.instanceId === instanceId) && <option value={instanceId}>{t("当前实例（列表不可用或已移除）", "Current instance (list unavailable or removed)")}</option>}{providers.map(provider => <option key={provider.instanceId} value={provider.instanceId}>{provider.label}{provider.enabled ? "" : t("（已停用）", " (disabled)")}</option>)}</RadixSelect></label>
             <p className="usage-menu-note">{metric === "limits" ? t("额度不受时间范围影响；每 5 分钟自动检查。", "Limits are independent of the time range; checked automatically every 5 minutes.") : summary ? t(`${view.sources.length} 个选中来源 · ${view.partial ? "部分数据" : "当前快照"}`, `${view.sources.length} selected sources · ${view.partial ? "partial data" : "current snapshot"}`) : t("正在读取来源状态", "Loading source status")}</p>
             <DropdownMenuSeparator className="usage-menu-separator" />
             <DropdownMenuItem render={<Link to={USAGE_CONFIG_PATH} />}>{t("模型价格与 Usage 来源设置", "Model pricing and Usage source settings")}</DropdownMenuItem>

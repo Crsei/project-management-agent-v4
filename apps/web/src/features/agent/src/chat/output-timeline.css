@@ -7,7 +7,8 @@
 .native-card-body { margin-top: .55rem; min-width: 0; overflow-wrap: anywhere; }
 .native-card-body pre { max-height: 22rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: color-mix(in srgb, currentColor 5%, transparent); border-radius: .35rem; padding: .55rem; }
 .native-card-body ul, .native-card-body ol { padding-inline-start: 1.25rem; }
-.native-card-body a { text-decoration: underline; }
+.native-card-body a { color: var(--ring); text-decoration: none; }
+.native-card-body a:hover { background: var(--selection); }
 .native-card-body small { color: var(--color-muted-foreground, #69717c); }
 .native-error, .native-error p { color: var(--color-destructive, #c33232); }
 .native-diff .addition { background: rgba(30, 150, 70, .17); }

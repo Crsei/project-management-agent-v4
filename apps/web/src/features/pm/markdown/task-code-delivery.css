@@ -4,7 +4,7 @@
 .task-delivery-content p { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
 .task-delivery-content small { color: var(--muted-foreground, #71717a); }
 .task-delivery-content label { display: grid; gap: 4px; font-size: 13px; }
-.task-delivery-content input, .task-delivery-content select { padding: 7px 9px; border: 1px solid var(--border, #d4d4d8); border-radius: 5px; background: var(--background, transparent); min-width: 0; }
+.task-delivery-content input, .task-delivery-content [data-slot="select-trigger"] { padding: 7px 9px; border: 1px solid var(--border, #d4d4d8); border-radius: 5px; background: var(--background, transparent); min-width: 0; }
 .task-delivery-content button { width: fit-content; border: 1px solid var(--border, #d4d4d8); padding: 6px 10px; border-radius: 5px; }
 .task-delivery-content button:disabled { opacity: .45; cursor: not-allowed; }
 .task-delivery-content dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 12px; }

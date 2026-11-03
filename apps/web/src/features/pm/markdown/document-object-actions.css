@@ -32,7 +32,7 @@
 .document-object-panel p { line-height: 1.5; }
 .document-object-panel label { display: grid; min-width: 0; gap: .3rem; }
 .document-object-panel input,
-.document-object-panel select {
+.document-object-panel [data-slot="select-trigger"] {
   min-width: 0;
   max-width: 100%;
   padding: .45rem .55rem;

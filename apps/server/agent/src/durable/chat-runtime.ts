@@ -18,6 +18,9 @@ import type { PmReferenceInput, PmReferenceResolution } from "@agent-workspace/c
 import type { NativeOutputItem, ResponseStreamingMode } from "@agent-workspace/contracts/output";
 import type { NativeUsageUpdate, ThreadUsageSnapshot } from "@agent-workspace/contracts/usage";
 import type { ContextTransfer } from "@agent-workspace/contracts/durable";
+import type { McpAppProducingIdentity } from "@agent-workspace/contracts/mcp-apps";
+import { closeMcpAppSession } from "../mcp-apps/live.ts";
+import { assertMcpThread, mcpIdentityFromHeaders } from "../mcp/identity.ts";
 import { beginThreadUsage, getThreadUsage, recordNativeUsage, updateUsageSession } from "../usage/ledger.ts";
 import { recordUsageLaunch, recordUsageLaunchSession } from "../usage/service-tiers.ts";
 import {
@@ -673,6 +676,8 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
     generation.threadId,
     async () => {
       if (controller.signal.aborted) return;
+      await closeMcpAppSession(generation.threadId, { preserveContext: true });
+      if (controller.signal.aborted) return;
       const snapshot = generation.executionSnapshot;
       if (!snapshot)
         throw new DurableError(412, "scope_required", "本次执行没有可信目录快照，请选择上下文后新建请求。");
@@ -696,9 +701,18 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         if (!samePmContext(thread.pmContext, threadSnapshot.pmContext))
           throw new ThreadConflictError("会话绑定的 PM 议题已更改，拒绝过期原生回调。", "pm_context_conflict");
       };
+      const assertExternalGrant = async () => {
+        if (!requestHeaders?.get("authorization")?.startsWith("Bearer pm-mcp-service-v1.")) return;
+        const identity = mcpIdentityFromHeaders(requestHeaders);
+        if (!identity || identity.access !== "full")
+          throw new DurableError(403, "mcp_write_forbidden", "原 MCP 委托不允许执行 Chat。");
+        await assertMcpThread(identity, generation.threadId);
+        assertLiveAuthorization();
+      };
       // The initiating PM credentials live only in this closure, not the provider binding or Chat records.
       const authorizeExecution = async (action: "compaction" | "tool") => {
         assertLiveAuthorization();
+        await assertExternalGrant();
         if (action === "tool" && generation.idleCompaction)
           throw new DurableError(412, "scope_required", "无工具的会话压缩不能获得 PM 工具权限。");
         try {
@@ -715,6 +729,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
             await resolvePmContextBinding(threadSnapshot.pmContext, snapshot.scope, requestHeaders, controller.signal);
             assertLiveAuthorization();
           }
+          await assertExternalGrant();
         } catch (error) {
           // Cancellation or a revision cutover wins even when it aborts the in-flight PM request.
           assertLiveAuthorization();
@@ -722,6 +737,54 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         }
       };
       const templateChild = automationRequestForNativeGeneration(generation)?.config.action.kind === "template";
+      // Retained Apps use current browser authority, not a completed generation's
+      // tool grant or the initiating user's saved credentials.
+      const authorizeMcpApp = generation.idleCompaction || templateChild || isPmAnalysisGeneration(generation)
+        ? undefined
+        : async (headers: Headers, producing: McpAppProducingIdentity): Promise<void> => {
+          const assertCurrent = () => {
+            const current = getChatGeneration(generation.id);
+            const thread = requireRunnableThread(generation.threadId);
+            const instance = getStoredInstance(generation.providerInstanceId);
+            const active = getActiveChat(generation.threadId);
+            if (state.stopping || controller.signal.aborted ||
+                producing.threadId !== generation.threadId || producing.generationId !== generation.id ||
+                producing.providerInstanceId !== generation.providerInstanceId ||
+                producing.instanceRevision !== generation.providerInstanceRevision ||
+                !instance?.enabled || instance.revision !== generation.providerInstanceRevision ||
+                !current || !["running", "completed"].includes(current.status) ||
+                current.nativeSession?.sessionId !== producing.nativeSessionId ||
+                (active && active.id !== generation.id) ||
+                listRuns(generation.threadId).some(run => run.status === "queued" || run.status === "running") ||
+                !sameAgentScope(thread.scope, snapshot.scope) ||
+                JSON.stringify(thread.settings) !== JSON.stringify(generation.threadSettingsSnapshot) ||
+                !samePmContext(thread.pmContext, threadSnapshot?.pmContext) ||
+                (current.status === "completed" && (
+                  thread.nativeSession?.sessionId !== producing.nativeSessionId ||
+                  thread.nativeMessageId !== generation.messageId ||
+                  listChatGenerations(generation.threadId)[0]?.id !== generation.id
+                )))
+              throw new DurableError(409, "mcp_app_session_stale", "此 App 不再属于当前原生会话。");
+            return thread;
+          };
+          const thread = assertCurrent();
+          if (requestHeaders?.get("authorization")?.startsWith("Bearer pm-mcp-service-v1.")) {
+            const originalGrant = mcpIdentityFromHeaders(requestHeaders);
+            if (!originalGrant)
+              throw new DurableError(403, "mcp_grant_revoked", "产生此 App 的 MCP 委托已撤销。");
+            await assertMcpThread(originalGrant, generation.threadId);
+            assertCurrent();
+          }
+          const resolved = await resolveChatExecutionScope(thread, headers, "inspect");
+          assertCurrent();
+          if (!sameAgentScope(resolved.scope, snapshot.scope) || resolved.path !== snapshot.path ||
+              (snapshot.actorId && resolved.actorId !== snapshot.actorId))
+            throw new DurableError(403, "mcp_app_scope_changed", "当前身份或文件区域与产生此 App 时不一致。");
+          if (thread.pmContext) {
+            await resolvePmContextBinding(thread.pmContext, snapshot.scope, headers);
+            assertCurrent();
+          }
+        };
       const bridge = generation.idleCompaction || templateChild ? undefined : await openPmToolBridge({
         scope: snapshot.scope, threadId: generation.threadId, messageId: generation.messageId,
         generationId: generation.id, headers: requestHeaders, authorizeExecution,
@@ -739,6 +802,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
       await observe("before");
       saveGeneration({ ...getChatGeneration(generation.id)!, status: "running" });
       setNativeOutputStatus(generation.id, "running");
+      await assertExternalGrant();
       automationConnectors = await openAutomationGenerationConnectors(generation, requestHeaders, authorizeExecution);
       let failed: unknown;
       let source: ReadableStream<UIMessageChunk>;
@@ -837,11 +901,16 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
               });
               const result = await runNativeRuntime(runtime, {
                 prompt: generation.idleCompaction ? "/compact" : !bridge ? plan.prompt : `${plan.prompt}\n\nPM tools are available through the generation-scoped CLI. List: ${[process.execPath, path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url, "tools", "list"].map((part) => `'${part.replaceAll("'", "'\\''")}'`).join(" ")}. For calls or reconciliation use the same command replacing list with call or result and supply JSON on stdin: {"operationId":"UUID","name":"pm_...","arguments":{...}}. Keep the same operationId and arguments to reconcile an unknown outcome; never redispatch an unknown write with a new ID. Tool results are authoritative; shell exit status or model text alone is not proof of a write.`,
+                userMessageText: generation.idleCompaction ? undefined : generation.request.messages.findLast(message => message.role === "user")
+                  ?.parts.filter(part => part.type === "text").map(part => part.text).join("\n"),
                 pmToolBridge: bridge ? { command: process.execPath, args: [path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url] } : undefined,
                 mcpServers: automationConnectors?.mcpServers,
                 execution: { threadId: generation.threadId, generationId: generation.id,
                   messageId: generation.messageId, scope: snapshot.scope },
                 authorizeExecution,
+                authorizeMcpApp,
+                originatingMcpGrant: requestHeaders?.get("authorization")?.startsWith("Bearer pm-mcp-service-v1.")
+                  ? mcpIdentityFromHeaders(requestHeaders) ?? undefined : undefined,
                 authorizeWorktreeWrite: generation.idleCompaction || !snapshot.worktreeWriteConfirmed ? undefined : async () => {
                   await authorizeExecution("tool");
                   const current = await resolveChatExecutionScope(requireRunnableThread(generation.threadId), requestHeaders, "execute", controller.signal);
@@ -1061,8 +1130,11 @@ function settleChat(id: string, status: ChatGeneration["status"], error?: unknow
 }
 export async function cancelChat(id: string): Promise<void> {
   const current = getChatGeneration(id);
-  if (!current || !isChatActive(current)) return;
-  controllers.get(id)?.abort("explicit-cancel");
+  if (!current) return;
+  if (isChatActive(current)) controllers.get(id)?.abort("explicit-cancel");
+  if (getActiveChat(current.threadId)?.id === id || listChatGenerations(current.threadId)[0]?.id === id)
+    await closeMcpAppSession(current.threadId);
+  if (!isChatActive(current)) return;
   closeNativeInteractions(id);
   // A queued task might wait behind a long workspace run: settle immediately, never execute it later.
   if (current.status === "queued") settleChat(id, "cancelled");
@@ -1072,6 +1144,7 @@ export async function cancelThreadChat(
   threadId: string,
   target: { generationId?: string; messageId?: string },
 ): Promise<void> {
+  if (!target.generationId && !target.messageId && !getActiveChat(threadId)) await closeMcpAppSession(threadId);
   if (target.messageId)
     writeRecord("chat:cancellations", JSON.stringify([threadId, target.messageId]), {
       cancelledAt: new Date().toISOString(),

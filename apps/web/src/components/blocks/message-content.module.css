@@ -98,9 +98,11 @@
 .link {
   color: var(--primary);
   font-weight: 500;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
   overflow-wrap: anywhere;
+}
+.link:hover {
+  color: var(--text-secondary);
 }
 .link:focus-visible {
   border-radius: var(--radius-inline-value);

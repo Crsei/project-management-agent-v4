@@ -425,6 +425,8 @@ export interface ProviderAdapterV2TurnInput {
   readonly rootNodeId: NodeId;
   readonly providerThread: OrchestrationV2ProviderThread;
   readonly message: ProviderAdapterV2TurnMessage;
+  /** Latest raw user text, for selecting native skills only; never an authorization grant. */
+  readonly userMessageText?: string;
   readonly modelSelection: ModelSelection;
   readonly runtimePolicy: ProviderAdapterV2RuntimePolicy;
   readonly appContext?: ReadonlyArray<{ readonly key: string; readonly text: string }>;

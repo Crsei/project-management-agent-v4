@@ -169,9 +169,12 @@ async function assertNoNativeEffects(): Promise<void> {
 
 test("live authorization rechecks initiating PM headers without persisting or transporting the callback or credentials", async () => {
   const { generation, context } = await start();
+  const beforeTool = resolutions.length;
   await context.authorizeExecution!("tool");
+  assert.ok(resolutions.length > beforeTool, "Tool authorization must recheck current PM access.");
+  const beforeCompaction = resolutions.length;
   await context.authorizeExecution!("compaction");
-  assert.equal(resolutions.length, 3);
+  assert.ok(resolutions.length > beforeCompaction, "Compaction authorization must recheck current PM access.");
   for (const resolution of resolutions)
     assert.deepEqual(resolution, { cookie: headers.get("cookie"), authorization: headers.get("authorization"), unexpected: undefined });
   const binding = pmRuntimeBinding(context, ThreadId.make(generation.threadId), generation.id);

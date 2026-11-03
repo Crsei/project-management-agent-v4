@@ -14,6 +14,7 @@ import {
   type WorkItemsViewState,
 } from "../../lib/work-items-model"
 import styles from "./work-items.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type FilterProps = {
   view: WorkItemsViewState
@@ -179,7 +180,7 @@ export function WorkItemsFilterMenu({
                     <span className={styles.filterConjunction}>
                       {index ? t("workItems.and") : t("workItems.where")}
                     </span>
-                    <select
+                    <RadixSelect
                       className={styles.filterSelect}
                       aria-label={t("workItems.filterField")}
                       value={condition.field}
@@ -196,8 +197,8 @@ export function WorkItemsFilterMenu({
                           {text.field(field)}
                         </option>
                       ))}
-                    </select>
-                    <select
+                    </RadixSelect>
+                    <RadixSelect
                       className={styles.filterSelect}
                       aria-label={t("workItems.filterOperator")}
                       value={condition.operator}
@@ -211,7 +212,7 @@ export function WorkItemsFilterMenu({
                     >
                       <option value="is">{t("workItems.filterIs")}</option>
                       <option value="isNot">{t("workItems.filterIsNot")}</option>
-                    </select>
+                    </RadixSelect>
                     <Button
                       variant="secondary"
                       size="sm"

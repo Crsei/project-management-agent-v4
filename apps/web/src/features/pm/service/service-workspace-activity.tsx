@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/avatar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
 import { useI18n } from "@/lib/i18n-provider"
+import { actionLabels } from "./activity-action-labels"
 import { useWorkspaceActivity } from "./pm-activity-hooks"
 import { usePmService } from "./pm-service"
 import { ServiceGuard, useText } from "./pm-ui"
@@ -13,27 +14,6 @@ import styles from "./service-workspace-activity.module.css"
 
 type Text = (zh: string, en: string) => string
 const dayMilliseconds = 86_400_000
-const actionLabels: Readonly<Record<string, readonly [string, string]>> = {
-  CreateCoreEntity: ["创建了", "created"], UpdateCoreProperties: ["更新了", "updated"],
-  UpdateCoreSource: ["编辑了", "edited"], ArchiveCoreEntity: ["归档了", "archived"],
-  RestoreCoreEntity: ["恢复了", "restored"], DeleteCoreEntity: ["删除了", "deleted"],
-  CreateTaskComment: ["评论了", "commented on"], UpdateTaskComment: ["编辑了评论，位于", "edited a comment on"],
-  DeleteTaskComment: ["删除了评论，位于", "deleted a comment on"], RestoreTaskComment: ["恢复了评论，位于", "restored a comment on"],
-  TaskCommentChanged: ["更新了任务评论，位于", "updated a task comment on"],
-  UpdateProject: ["更新了项目", "updated project"], UpdateWorkItem: ["更新了任务", "updated task"],
-  CreateProject: ["创建了项目", "created project"], CreateWorkItem: ["创建了任务", "created task"],
-  StartWorkItem: ["开始了", "started"], CompleteWorkItem: ["完成了", "completed"],
-  CancelWorkItem: ["取消了", "cancelled"], ReopenWorkItem: ["重新打开了", "reopened"],
-  ReadyWorkItem: ["将以下任务设为就绪：", "readied"], UpdateWorkItemMetadata: ["更新了", "updated"],
-  ArchiveObject: ["归档了", "archived"], RestoreArchivedObject: ["恢复了", "restored"], DeleteObject: ["删除了", "deleted"],
-  WorkItemReadied: ["将以下任务设为就绪：", "readied"], WorkItemStarted: ["开始了", "started"],
-  WorkItemCompleted: ["完成了", "completed"], WorkItemCancelled: ["取消了", "cancelled"],
-  WorkItemReopened: ["重新打开了", "reopened"], ProjectActivated: ["激活了", "activated"],
-  ProjectCompleted: ["完成了", "completed"], ProjectCancelled: ["取消了", "cancelled"],
-  ProjectReopened: ["重新打开了", "reopened"], MilestoneAchieved: ["达成了", "achieved"],
-  MilestoneCancelled: ["取消了", "cancelled"], MilestoneReopened: ["重新打开了", "reopened"],
-}
-
 /** Read-only workspace history; the personal notification inbox remains a separate surface. */
 export function ServiceWorkspaceActivity() {
   const { actor, workspace, actorEpoch } = usePmService()

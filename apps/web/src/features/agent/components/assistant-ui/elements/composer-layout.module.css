@@ -17,12 +17,10 @@
   color: var(--muted-foreground);
   font-size: 12px;
   line-height: 18px;
-  text-underline-offset: 3px;
 }
 
 .alternate:hover {
   color: var(--foreground);
-  text-decoration: underline;
 }
 
 .alternate:focus-visible {
@@ -73,8 +71,10 @@
 
 .historyError button {
   color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+}
+
+.historyError button:hover:not(:disabled) {
+  background: var(--selection);
 }
 
 .historyError button:focus-visible {

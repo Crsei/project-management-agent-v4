@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { Link } from "react-router"
 import { ApiError } from "@contracts"
-import { ArrowRight, Eye, EyeOff, FolderKanban, KeyRound, MessageSquare, PanelsTopLeft, Users } from "lucide-react"
+import { ArrowRight, Eye, EyeOff, FolderKanban, MessageSquare, Users } from "lucide-react"
+import { DovspaceWordmark } from "@/components/dovspace-brand"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Field } from "@/components/ui/field"
@@ -23,8 +24,7 @@ export function PmAuthPageShell({ children, toolbar, split = true }: {
     <div className={styles.shell}>
       <header className={styles.header}>
         <Link to="/pm" className={styles.brand}>
-          <PanelsTopLeft size={22} aria-hidden="true" />
-          <span>Project Management</span>
+          <DovspaceWordmark />
         </Link>
         {toolbar && <div className={styles.toolbar}>{toolbar}</div>}
       </header>
@@ -47,7 +47,7 @@ export function PmAuthPageShell({ children, toolbar, split = true }: {
         <div className={styles.content}>{children}</div>
       </main>
       <footer className={styles.footer}>
-        <span>© Project Management</span>
+        <span>© Dovspace</span>
         <span>{t("为团队协作而建", "Built for working together")}</span>
       </footer>
     </div>
@@ -157,7 +157,7 @@ export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) 
 
   return (
     <section className={styles.authForm} aria-labelledby="pm-login-title">
-      <div className={styles.symbol}><KeyRound size={20} aria-hidden="true" /></div>
+      <div className="mb-6 flex justify-center"><DovspaceWordmark height={30} /></div>
       <Title id="pm-login-title" className={styles.title}>{t("欢迎回来", "Welcome back")}</Title>
       <p className={styles.description}>{t("登录，继续与团队一起推进项目。", "Sign in to continue working with your team.")}</p>
       <form noValidate aria-labelledby="pm-login-title" onSubmit={(event) => { void submit(event) }}>
@@ -204,7 +204,7 @@ export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) 
       <div className={styles.accountGuidance}>
         <p>{t("使用管理员创建的账号，或通过有效邀请创建的账号登录。", "Sign in with an administrator-provisioned account or an account created through a valid invitation.")}</p>
         <p>{t("公开注册未开放。邮件找回只面向本人已独立验证的恢复邮箱；历史登录邮箱或邀请不是验证证明。", "Public signup is unavailable. Email recovery requires an independently verified recovery email; a historical sign-in email or invitation is not verification.")}</p>
-        <Link to="/pm/account/recovery" className="text-sm underline">{t("忘记密码 / 查看邮件找回状态", "Forgot password / email recovery availability")}</Link>
+        <Link to="/pm/account/recovery" className="text-sm text-primary hover:text-foreground">{t("忘记密码 / 查看邮件找回状态", "Forgot password / email recovery availability")}</Link>
       </div>
     </section>
   )

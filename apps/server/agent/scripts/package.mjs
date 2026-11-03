@@ -185,6 +185,7 @@ for (const relative of provenance) {
   fileRecords.push({ path: target, sha256: sha(bytes), bytes: bytes.length, mode: 0o644 });
 }
 await inventoryTree(path.join(vendorRoot, "integration-patches"), "licenses/provenance/vendor/t3code/integration-patches");
+await inventoryTree(path.join(vendorRoot, "scripts"), "licenses/provenance/vendor/t3code/scripts");
 await inventoryTree(path.join(vendorRoot, "third-party/patches"), "licenses/provenance/vendor/t3code/third-party/patches");
 await inventoryTree(path.join(vendorRoot, "third-party-licenses"), "licenses/provenance/vendor/t3code/third-party-licenses");
 {

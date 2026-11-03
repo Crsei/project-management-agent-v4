@@ -10,6 +10,7 @@ import { createRegistry } from '../../application/src/registry.ts';
 import { LocalBlobStore } from '../../infrastructure/src/blobs.ts';
 import { buildOpenApi } from '../src/openapi.ts';
 import { generateContracts, schemaType } from '../../../scripts/generate-contracts.ts';
+import { agentCatalogSchema } from '../src/agent-file-areas.ts';
 
 const root = new URL('../../../', import.meta.url);
 const registry = createRegistry(new LocalBlobStore('/unused-contract-test-store'));
@@ -135,4 +136,21 @@ test('generation is deterministic and --check detects YAML and client type drift
   assert.equal(await readFile(clientPath, 'utf8'), originalClient);
   await generateContracts(true, directory);
   assert.throws(() => schemaType({ type: 'unexpected' }), /Unsupported/);
+});
+
+test('Agent catalog accepts optional workspace consent eligibility without loosening its contract', () => {
+  const workspace = {
+    id: '11111111-1111-4111-8111-111111111111', name: 'Workspace',
+    fileArea: { path: null, status: 'unavailable', revision: 0, source: null, canManage: false },
+    projects: [],
+  };
+  for (const value of [undefined, false, true]) {
+    const input = { workspaces: [{ ...workspace, ...(value === undefined ? {} : { workspaceAllowed: value }) }] };
+    assert.deepEqual(agentCatalogSchema.parse(input), input);
+  }
+  assert.equal(agentCatalogSchema.safeParse({ workspaces: [{ ...workspace, workspaceAllowed: 'true' }] }).success, false);
+  assert.equal(agentCatalogSchema.safeParse({ workspaces: [{ ...workspace, unrelatedAuthority: true }] }).success, false);
+  const schema = contract.paths['/api/v1/agent-contexts']!.get.responses[200].content['application/json'].schema.properties.workspaces.items;
+  assert.deepEqual(schema.properties.workspaceAllowed, { type: 'boolean' });
+  assert.equal(schema.required.includes('workspaceAllowed'), false);
 });

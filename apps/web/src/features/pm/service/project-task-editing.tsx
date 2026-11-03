@@ -17,6 +17,7 @@ import { allowed, useText } from "./pm-ui"
 import { adoptProjectTaskDraft, hasUncertainProjectTaskDraft, observeProjectTaskDraft, prepareProjectTaskPatch, projectTaskChangesSchema, projectTaskDraftValue, projectTaskWriteProblem, readProjectTaskDraft, type ProjectTaskChanges, type ProjectTaskDraft, type ProjectTaskField, type ProjectTaskWriteContext } from "./project-task-editing-model"
 import { hasUncertainCreationDrafts } from "../markdown/creation-model"
 import { createCoreTimelineMetadata } from "./pm-core-schedule"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export type { ProjectTaskChanges, ProjectTaskDraft, ProjectTaskField } from "./project-task-editing-model"
 export interface ProjectTaskEditing {
@@ -294,9 +295,9 @@ export function ProjectTaskInlineField({ editing, item, field, catalog }: { edit
   if (field === "status" || field === "priority") {
     const workflow = editing.configuration && workflowFor("work_item", editing.configuration)
     const options = field === "status" ? workflow?.states ?? [] : [{ id: "low", label: t("低", "Low") }, { id: "medium", label: t("中", "Medium") }, { id: "high", label: t("高", "High") }, { id: "urgent", label: t("紧急", "Urgent") }]
-    return <select className="min-h-9 max-w-full rounded border bg-background px-2 text-sm" aria-label={`${label} ${item.identifier}`} value={typeof value === "string" ? value : ""} disabled={disabled} title={title} onChange={event => editing.change(item.id, field === "status" ? { status: event.target.value } : { priority: projectTaskChangesSchema.shape.priority.parse(event.target.value || null) })}>
+    return <RadixSelect className="min-h-9 max-w-full rounded border bg-background px-2 text-sm" aria-label={`${label} ${item.identifier}`} value={typeof value === "string" ? value : ""} disabled={disabled} title={title} onChange={event => editing.change(item.id, field === "status" ? { status: event.target.value } : { priority: projectTaskChangesSchema.shape.priority.parse(event.target.value || null) })}>
       {!value && <option value="">—</option>}{options.map(option => <option key={option.id} value={option.id} disabled={field === "status" && option.id !== file.entity.status && !workflow?.transitions.some(transition => transition.from === file.entity.status && transition.to === option.id)}>{option.label}</option>)}
-    </select>
+    </RadixSelect>
   }
   if (field === "assignee") return <span className="inline-grid gap-1"><Input list={`project-task-assignees-${item.id}`} aria-label={`${label} ${item.identifier}`} title={title} value={typeof value === "string" ? value : ""} disabled={disabled} placeholder={t("未分配", "Unassigned")} onChange={event => editing.change(item.id, { assignee: event.target.value || null })} /><datalist id={`project-task-assignees-${item.id}`}>{catalog.assignees.map(person => <option key={person.id} value={person.id}>{person.label}</option>)}</datalist></span>
   return <Input type={field === "title" ? "text" : "date"} aria-label={`${label} ${item.identifier}`} title={title} value={typeof value === "string" ? value : ""} disabled={disabled} onChange={event => editing.change(item.id, field === "title" ? { title: event.target.value } : field === "due" ? { due: event.target.value || null } : { "x-pm-start": event.target.value || null })} />

@@ -68,7 +68,7 @@
   grid-column: 1 / -1;
 }
 
-.local-project-creation .local-directory-fields :is(input, select) {
+.local-project-creation .local-directory-fields :is(input, [data-slot="select-trigger"]) {
   min-height: 34px;
   max-width: 100%;
   padding: 6px 9px;
@@ -119,8 +119,6 @@
   min-height: 32px;
   max-width: 100%;
   color: var(--muted-foreground);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .local-project-creation .local-actions a:hover {
@@ -190,7 +188,7 @@
   list-style: disc;
 }
 
-.local-project-creation :is(button, a, input, select, summary):focus-visible {
+.local-project-creation :is(button, a, input, [data-slot="select-trigger"], summary):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 3px;
 }

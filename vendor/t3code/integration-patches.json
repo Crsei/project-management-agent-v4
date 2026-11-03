@@ -11,6 +11,23 @@
   },
   "patches": [
     {
+      "id": "PM-MCP-APP-CAPTURE-TAIL",
+      "paths": ["apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts", "../../apps/server/agent/src/providers/t3code/execution.ts", "../../apps/server/agent/src/providers/t3code/execution.test.ts", "../../apps/server/agent/src/providers/drivers/codex-protocol-fixture.mjs"],
+      "reason": "Adapt d538 RunExecutionService shouldStopProviderEventIngestion/activeBackgroundTurnItems into the existing PM completed-root drain and native pending probe. Preserve newer30eb Codex captureMcpApp running-until-snapshot invariant with a provisional running node/tool upsert for completed-only native notifications; do not clear pending before final item publication. Adapt original terminal-before-resource transcript to real PM execution/native adapter with a controlled stdio peer and gated local HTTP resource, without sleeps or another turn.",
+      "adaptationManifest": "vendor/t3code/mcp-skills-adaptations.json",
+      "verification": "Released implementation and authoring only; parent owns revalidation. No new pass claim.",
+      "status": "applied"
+    },
+    {
+      "id": "PM-MCP-SKILLS-DUAL-SOURCE",
+      "paths": ["mcp-skills-source.json", "mcp-skills-adaptations.json", "scripts/capture-mcp-skills.py", "scripts/mcp-skills-adaptations.mjs", "scripts/capture.py", "scripts/sync.mjs", "scripts/imports.mjs", "scripts/verify-sync.mjs", "SYNC.md"],
+      "reason": "Retain immutable newer30eb production originals and exact baseline patches; separately map d538 MCP/Skills originals to adapted host/new-vendor outputs with source hash/blob/mode, deterministic replay and MIT coverage. Distinguish genuine local integration, preflight vendor and explicitly listed host conflicts together, and include mapped host imports in AST provenance. No production .ref/external source imports, downgrade, foreign Orchestrator or second runtime.",
+      "sourceManifest": "vendor/t3code/mcp-skills-source.json",
+      "adaptationManifest": "vendor/t3code/mcp-skills-adaptations.json",
+      "verification": "Authoring only. Parent owns final imports --check, sync reconstruction/conflict fixtures, build/package/relocation and behavior acceptance; no new pass claim.",
+      "status": "applied"
+    },
+    {
       "id": "P012",
       "path": "vite.config.ts",
       "reason": "Use the pinned Provider test environment and setup without upstream task-cache, whole-app projects or frontend replacement.",

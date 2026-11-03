@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-acp/src/server/adapter.ts",
   "beforeSha256": "f13f74b38919c97674b52872fde2e29a27476054539cacb8840f215a7070cc91",
-  "afterSha256": "a0cf31ff7bd478d599e6361ae94a54ca25a70c812b686ed48dafb0b40be9952b",
+  "afterSha256": "d8deb1591a9de8a73e8a4a2c0836e77e0481a767414aa25a2017884a45831a79",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -29,6 +29,7 @@
       ],
       "after": [
         "import * as ProviderRuntimeHost from \"@t3tools/provider-core/server/ProviderRuntimeHost\";\n",
+        "import { registerLiveAcpWorkspace } from \"./liveWorkspace.ts\";\n",
         "import * as HostProcess from \"@t3tools/shared/HostProcess\";\n"
       ]
     },
@@ -201,6 +202,20 @@
       ]
     },
     {
+      "start": 1564,
+      "before": [],
+      "after": [
+        "        const workspaceCommands = new Map<string, ReadonlyArray<EffectAcpSchema.AvailableCommand>>();\n",
+        "        if (binding) {\n",
+        "          const unregisterInventory = registerLiveAcpWorkspace(options.instanceId, input.threadId, binding.executionId, cwd, () => {\n",
+        "            const active = Ref.getUnsafe(activeSessionId);\n",
+        "            return active === null ? undefined : workspaceCommands.get(active);\n",
+        "          });\n",
+        "          yield* Effect.addFinalizer(() => Effect.sync(unregisterInventory));\n",
+        "        }\n"
+      ]
+    },
+    {
       "start": 1982,
       "before": [
         "            cwd: input.runtimePolicy.cwd ?? process.cwd(),\n"
@@ -281,6 +296,15 @@
       "after": [
         "              if (rawNotification.update.sessionUpdate === \"state_update\")\n",
         "                observedWork.set(rawNotification.sessionId, rawNotification.update.state);\n"
+      ]
+    },
+    {
+      "start": 5809,
+      "before": [],
+      "after": [
+        "                workspaceCommands.delete(notification.sessionId);\n",
+        "                workspaceCommands.set(notification.sessionId, notification.update.availableCommands);\n",
+        "                while (workspaceCommands.size > 32) workspaceCommands.delete(workspaceCommands.keys().next().value!);\n"
       ]
     },
     {
@@ -373,6 +397,25 @@
       "after": [
         "            hasT3Mcp: false,\n",
         "            hasDeviceTools: false,\n"
+      ]
+    },
+    {
+      "start": 7181,
+      "before": [
+        "          const userText =\n"
+      ],
+      "after": [
+        "          const requestedCommand = turnInput.userMessageText?.trim().match(/^\\/([^\\s/]+)(?:\\s|$)/)?.[1];\n",
+        "          const nativeCommand = requestedCommand && workspaceCommands.get(sessionId)?.some(command => command.name === requestedCommand);\n",
+        "          const rewrittenUserText =\n"
+      ]
+    },
+    {
+      "start": 7192,
+      "before": [],
+      "after": [
+        "          const userText = nativeCommand && rewrittenUserText === turnInput.message.text\n",
+        "            ? `/${requestedCommand}\\n${turnInput.message.text}` : rewrittenUserText;\n"
       ]
     },
     {

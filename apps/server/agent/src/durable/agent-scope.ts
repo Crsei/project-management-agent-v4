@@ -2,6 +2,7 @@ import path from "node:path";
 import { z } from "zod";
 import { agentScopeSchema, type AgentScope } from "@agent-workspace/contracts/chat";
 import { DurableError } from "./errors.ts";
+import { mcpIdentityFromHeaders, mcpIdentityHeaders } from "../mcp/identity.ts";
 
 export type AgentExecutionSnapshot = {
   /** Resolved by PM, never inferred from a local thread or credentials. Legacy snapshots may lack it. */
@@ -41,9 +42,17 @@ export async function resolveAgentScope(
   } catch {
     throw new DurableError(503, "scope_unavailable", "PM API 地址配置无效。");
   }
+  // Only a server-issued delegation is renewed here. The public OAuth bearer
+  // never enters ordinary Chat routes; every renewal checks its original grant.
+  let effectiveHeaders = requestHeaders;
+  if (requestHeaders?.get("authorization")?.startsWith("Bearer pm-mcp-service-v1.")) {
+    const identity = await mcpIdentityFromHeaders(requestHeaders);
+    if (!identity) throw new DurableError(403, "mcp_grant_revoked", "原 MCP 委托已失效，拒绝继续执行。");
+    effectiveHeaders = await mcpIdentityHeaders(identity);
+  }
   const headers = new Headers({ "content-type": "application/json" });
   for (const name of ["cookie", "authorization"]) {
-    const value = requestHeaders?.get(name);
+    const value = effectiveHeaders?.get(name);
     if (value) headers.set(name, value);
   }
   let response: Response;

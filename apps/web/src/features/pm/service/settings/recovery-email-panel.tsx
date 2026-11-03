@@ -34,7 +34,7 @@ export function RecoveryEmailPanel({security}:{security:AccountSecurityState}) {
       <label className="grid gap-2 text-sm"><span>{t('当前密码（提交即清空）','Current password (cleared on submission)')}</span><Input type="password" maxLength={256} autoComplete="current-password" value={password} disabled={disabled} onChange={event=>setPassword(event.target.value)} /></label>
       {!state?.pending && <Button type="submit" disabled={disabled || !enabled || !password || !email}>{t('创建一次验证邮件','Queue one verification email')}</Button>}
     </form>
-    <Link to="/pm/account/verify-recovery-email" className="text-sm underline">{t('验证链接说明 / 核对原验证','Verification link help / reconcile original verification')}</Link>
+    <Link to="/pm/account/verify-recovery-email" className="text-sm text-primary hover:text-foreground">{t('验证链接说明 / 核对原验证','Verification link help / reconcile original verification')}</Link>
     {state?.email && <div className="space-y-3 border-t pt-3">
       <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={unbind} disabled={disabled} onChange={event=>setUnbind(event.target.checked)} /><span>{t('我确认解绑后不能再通过此邮箱找回，且所有现有找回/验证链接失效；已有会话保持不变。','I understand unbinding removes email recovery and invalidates all existing recovery/verification links. Existing sessions stay unchanged.')}</span></label>
       <Button variant="destructive" disabled={disabled || !unbind || !password} onClick={()=>{const current=password;setPassword('');setUnbind(false);void security.unbindEmail(current);}}>{t('确认解绑可信恢复邮箱','Confirm unbinding recovery email')}</Button>

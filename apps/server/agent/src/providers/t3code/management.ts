@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { ProviderAuthInteraction, ProviderAuthMethod, ProviderCapabilities, ProviderDriver, ProviderModel } from "@agent-workspace/contracts/provider";
-import { ProviderSetupError, type ProviderAuthState, type ServerProvider } from "@t3tools/contracts";
+import type { ProviderAuthInteraction, ProviderAuthMethod, ProviderCapabilities, ProviderDriver, ProviderModel, ProviderSkillsSnapshot } from "@agent-workspace/contracts/provider";
+import { PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS, ProviderSetupError, type ProviderAuthState, type ServerProvider } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -18,7 +18,16 @@ import type { PmProviderBoundaryError, PmProviderHostService, PmProviderLease } 
 import { providerBoundaryError } from "./config-mapping.ts";
 import { makePmProviderPlatformLayer } from "./host-runtime.ts";
 import { getStoredInstance, providerDataDirectory } from "../instances.ts";
+import { sanitizeProviderMessage } from "../catalog.ts";
+import type { AgentScope } from "@agent-workspace/contracts/chat";
 import { ProviderAuthSessionInvalidation } from "../../../../../../vendor/t3code/apps/server/src/provider/ProviderAuthService.ts";
+import { listRecords, readRecord } from "../../durable/store.ts";
+import type { ChatGeneration } from "../../durable/chat-runtime.ts";
+import { liveOpenCodeInventory } from "../../../../../../vendor/t3code/packages/provider-opencode/src/server/liveWorkspace.ts";
+import { livePiWorkspace } from "../../../../../../vendor/t3code/packages/provider-pi/src/server/liveWorkspace.ts";
+import { liveAcpWorkspace } from "../../../../../../vendor/t3code/packages/provider-acp/src/server/liveWorkspace.ts";
+import { normalizeAcpRegistryCommands } from "../../../../../../vendor/t3code/packages/provider-acp-registry/src/server/probe.ts";
+import { closeMcpAppSessionsForInstance } from "../../mcp-apps/live.ts";
 
 export type PmProviderInstallationMethods = {
   readonly [Action in "prepare" | "removeInstallation"]?: (
@@ -30,6 +39,7 @@ export type PmProviderInstallationMethods = {
 };
 export type PmProviderManagement = Pick<NativeProviderAdapter, "check" | "authenticate" | "logout" | "prepare" | "update" | "removeInstallation"> & {
   readonly shutdown: () => Promise<void>;
+  readonly refreshSkills: (context: ProviderDriverContext, scope: AgentScope, actorId: string | undefined, fresh?: boolean, signal?: AbortSignal) => Promise<ProviderSkillsSnapshot>;
 };
 export type PmProviderCapabilitiesProjector = (input: {
   readonly context: ProviderDriverContext;
@@ -127,6 +137,9 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
   const root = providerDataDirectory();
   const shutdownController = new AbortController();
   const admitted = new Set<Promise<unknown>>();
+  // The scoped cache is private to this application lifetime and never reused across PM actors or scopes.
+  const skillSnapshots = new Map<string, ProviderSkillsSnapshot>();
+  const skillClaims = new Map<string, symbol>();
   let closing: Promise<void> | undefined;
   const runMaintenance = <A>(context: ProviderDriverContext, task: (signal: AbortSignal) => Promise<A>, signal?: AbortSignal): Promise<A> => {
     if (shutdownController.signal.aborted)
@@ -135,9 +148,12 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
       return Promise.reject(providerBoundaryError("Provider application data root changed before maintenance."));
     const lifetime = signal ? AbortSignal.any([signal, shutdownController.signal]) : shutdownController.signal;
     // Register synchronously, including provisional instances, before source dispatch can begin.
-    const pending = Promise.resolve().then(() => {
+    const pending = Promise.resolve().then(async () => {
       lifetime.throwIfAborted();
       if (providerDataDirectory() !== root) throw providerBoundaryError("Provider application data root changed before maintenance.");
+      if (getStoredInstance(context.instanceId)?.revision === context.revision)
+        await closeMcpAppSessionsForInstance(context.instanceId);
+      lifetime.throwIfAborted();
       return task(lifetime);
     });
     admitted.add(pending);
@@ -196,7 +212,10 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
       return result;
     }), lifetime);
   }, signal);
-  const authenticate: NativeProviderAdapter["authenticate"] = (context, authOptions) => use(context, "auth", lease => Effect.gen(function* () {
+  const authenticate: NativeProviderAdapter["authenticate"] = async (context, authOptions) => {
+    if (getStoredInstance(context.instanceId)?.revision === context.revision)
+      await closeMcpAppSessionsForInstance(context.instanceId);
+    return use(context, "auth", lease => Effect.gen(function* () {
     const auth = lease.instance.auth;
     if (!auth) return yield* Effect.fail(providerBoundaryError("Authentication is managed externally for this Provider.", "unsupported_auth", 409));
     const owner = randomUUID();
@@ -272,9 +291,161 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
       Effect.andThen(Effect.fail(new Error("Provider authentication stream ended before a terminal state."))),
     ));
     yield* lease.assertCurrent;
-  }), authOptions.signal);
+    }), authOptions.signal);
+  };
   return {
     shutdown,
+    refreshSkills: async (context, scope, actorId, fresh = false, signal) => {
+      const key = JSON.stringify([context.instanceId, context.revision, context.cwd, actorId ?? null, scope.workspaceId, scope.projectId]);
+      const previous = skillSnapshots.get(key);
+      if (shutdownController.signal.aborted || providerDataDirectory() !== root)
+        throw providerBoundaryError("Provider application is not accepting discovery.", "provider_host_closed", 503);
+      signal?.throwIfAborted();
+      const current = getStoredInstance(context.instanceId);
+      if (!current?.enabled || current.config.enabled === false || current.revision !== context.revision || current.driver !== context.driver)
+        throw providerBoundaryError("Provider instance or configuration changed.", "session_mismatch", 409);
+      if (!fresh && previous && !previous.pending && !previous.error &&
+          Date.now() - Date.parse(previous.checkedAt) < PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS) {
+        if (context.driver === "opencode") return previous;
+        // A cached inventory remains subject to the current instance lease.
+        return use(context, "status", lease => lease.assertCurrent.pipe(Effect.as(previous)), signal);
+      }
+      if (context.driver === "opencode") {
+        const active = actorId && listRecords<ChatGeneration>("chat:generations").find(item =>
+          item.status === "running" && item.providerInstanceId === context.instanceId &&
+          item.providerInstanceRevision === context.revision && item.executionSnapshot?.path === context.cwd &&
+          item.executionSnapshot.actorId === actorId && item.executionSnapshot.scope.workspaceId === scope.workspaceId &&
+          item.executionSnapshot.scope.projectId === scope.projectId &&
+          liveOpenCodeInventory(context.instanceId, item.threadId, item.id, context.cwd));
+        if (!active) return { instanceId: context.instanceId, revision: context.revision, cwd: context.cwd,
+          checkedAt: previous?.checkedAt ?? new Date().toISOString(), pending: true, skills: previous?.skills ?? [], commands: previous?.commands ?? [],
+          invocation: { skills: true, commands: true, skillSyntax: "mention" },
+          error: { code: "safe_discovery_unavailable", message: "OpenCode discovery is available when a matching authorized native Chat session is running." } };
+      }
+      const claim = Symbol();
+      skillClaims.set(key, claim);
+      try {
+        const result = await use(context, "status", lease => Effect.gen(function* () {
+          const checkedAt = new Date().toISOString();
+          const invocation: ProviderSkillsSnapshot["invocation"] = context.driver === "omp"
+            ? { skills: false, commands: false, skillSyntax: "none", commandAllowlist: ["session"] }
+            : { skills: true, commands: true, skillSyntax: context.driver === "pi" || context.driver === "grok" ? "leading-mention" : "mention" };
+          const base = { instanceId: context.instanceId, revision: context.revision, cwd: context.cwd, checkedAt, invocation };
+          if (!lease.instance.snapshotForCwd) {
+            const machine = yield* lease.instance.snapshot.getSnapshot;
+            const generation = actorId && listRecords<ChatGeneration>("chat:generations").find(item =>
+              item.status === "running" && item.providerInstanceId === context.instanceId &&
+              item.providerInstanceRevision === context.revision && item.executionSnapshot?.path === context.cwd &&
+              item.executionSnapshot.actorId === actorId && item.executionSnapshot.scope.workspaceId === scope.workspaceId &&
+              item.executionSnapshot.scope.projectId === scope.projectId &&
+              liveAcpWorkspace(context.instanceId, item.threadId, item.id, context.cwd));
+            const read = generation ? liveAcpWorkspace(context.instanceId, generation.threadId, generation.id, context.cwd) : undefined;
+            const advertised = read?.();
+            yield* lease.assertCurrent;
+            if (generation && read && advertised !== undefined) {
+              const latest = readRecord<ChatGeneration>("chat:generations", generation.id);
+              if (!latest || latest.status !== "running" || latest.providerInstanceRevision !== context.revision ||
+                  liveAcpWorkspace(context.instanceId, generation.threadId, generation.id, context.cwd) !== read ||
+                  latest.executionSnapshot?.actorId !== actorId || latest.executionSnapshot.path !== context.cwd ||
+                  latest.executionSnapshot.scope.workspaceId !== scope.workspaceId || latest.executionSnapshot.scope.projectId !== scope.projectId)
+                return yield* Effect.fail(providerBoundaryError("Native Chat session changed during workspace discovery.", "session_mismatch", 409));
+              const inventory = normalizeAcpRegistryCommands(advertised);
+              return { ...base, pending: false, skills: inventory.skills, commands: inventory.slashCommands,
+                invocation: { skills: false, commands: true, skillSyntax: "none" as const } };
+            }
+            const error = machine.status === "error" ? { code: "provider_error",
+              message: sanitizeProviderMessage(current, machine.message ?? "Native provider reported an error.") } : undefined;
+            if (context.driver === "muse") return { ...base, pending: false, skills: [], commands: machine.slashCommands,
+              invocation: { skills: false, commands: true, skillSyntax: "none" as const }, ...(error ? { error } : {}) };
+            return { ...base, pending: true, skills: [], commands: machine.slashCommands,
+              invocation: { skills: false, commands: true, skillSyntax: "none" as const }, ...(error ? { error } : {}) };
+          }
+          // Reuse only the native connection already admitted for this exact live Chat.
+          // Starting a separate OpenCode server for discovery could execute project plugins/MCP.
+          if (context.driver === "opencode") {
+            const generation = actorId && listRecords<ChatGeneration>("chat:generations").find(item =>
+              item.status === "running" && item.providerInstanceId === context.instanceId &&
+              item.providerInstanceRevision === context.revision && item.executionSnapshot?.path === context.cwd &&
+              item.executionSnapshot.actorId === actorId && item.executionSnapshot.scope.workspaceId === scope.workspaceId &&
+              item.executionSnapshot.scope.projectId === scope.projectId);
+            const read = generation && liveOpenCodeInventory(context.instanceId, generation.threadId, generation.id, context.cwd);
+            if (!generation || !read) {
+              yield* lease.assertCurrent;
+              return { ...base, checkedAt: previous?.checkedAt ?? checkedAt, pending: true, skills: previous?.skills ?? [], commands: previous?.commands ?? [],
+                error: { code: "safe_discovery_unavailable", message: "OpenCode discovery is available when a matching authorized native Chat session is running." } };
+            }
+            const scanned = yield* read().pipe(Effect.timeout("20 seconds"), Effect.result);
+            yield* lease.assertCurrent;
+            const latest = readRecord<ChatGeneration>("chat:generations", generation.id);
+            if (!latest || latest.status !== "running" || latest.providerInstanceRevision !== context.revision ||
+                liveOpenCodeInventory(context.instanceId, generation.threadId, generation.id, context.cwd) !== read ||
+                latest.executionSnapshot?.actorId !== actorId || latest.executionSnapshot.path !== context.cwd ||
+                latest.executionSnapshot.scope.workspaceId !== scope.workspaceId || latest.executionSnapshot.scope.projectId !== scope.projectId)
+              return yield* Effect.fail(providerBoundaryError("Native Chat session changed during workspace discovery.", "session_mismatch", 409));
+            if (scanned._tag === "Failure") {
+              const current = getStoredInstance(context.instanceId);
+              const message = scanned.failure instanceof Error ? scanned.failure.message : "Native workspace discovery failed.";
+              return { ...base, checkedAt: previous?.checkedAt ?? checkedAt, pending: false, skills: previous?.skills ?? [], commands: previous?.commands ?? [],
+                error: { code: "discovery_failed", message: current ? sanitizeProviderMessage(current, message) : "Native workspace discovery failed." } };
+            }
+            return { ...base, pending: scanned.success.pending ?? false, skills: scanned.success.skills,
+              commands: scanned.success.pending && previous ? previous.commands : scanned.success.commands };
+          }
+          if (context.driver === "pi" && actorId) {
+            const generation = listRecords<ChatGeneration>("chat:generations").find(item =>
+              item.status === "running" && item.providerInstanceId === context.instanceId &&
+              item.providerInstanceRevision === context.revision && item.executionSnapshot?.path === context.cwd &&
+              item.executionSnapshot.actorId === actorId && item.executionSnapshot.scope.workspaceId === scope.workspaceId &&
+              item.executionSnapshot.scope.projectId === scope.projectId &&
+              livePiWorkspace(context.instanceId, item.threadId, item.id, context.cwd));
+            const read = generation && livePiWorkspace(context.instanceId, generation.threadId, generation.id, context.cwd);
+            if (generation && read) {
+              const scanned = yield* read().pipe(Effect.timeout("20 seconds"), Effect.result);
+              yield* lease.assertCurrent;
+              const latest = readRecord<ChatGeneration>("chat:generations", generation.id);
+              if (!latest || latest.status !== "running" || latest.providerInstanceRevision !== context.revision ||
+                  livePiWorkspace(context.instanceId, generation.threadId, generation.id, context.cwd) !== read ||
+                  latest.executionSnapshot?.actorId !== actorId || latest.executionSnapshot.path !== context.cwd ||
+                  latest.executionSnapshot.scope.workspaceId !== scope.workspaceId || latest.executionSnapshot.scope.projectId !== scope.projectId)
+                return yield* Effect.fail(providerBoundaryError("Native Chat session changed during workspace discovery.", "session_mismatch", 409));
+              if (scanned._tag === "Failure") {
+                const current = getStoredInstance(context.instanceId);
+                const message = scanned.failure instanceof Error ? scanned.failure.message : "Native workspace discovery failed.";
+                return { ...base, checkedAt: previous?.checkedAt ?? checkedAt, pending: false, skills: previous?.skills ?? [], commands: previous?.commands ?? [],
+                  error: { code: "discovery_failed", message: current ? sanitizeProviderMessage(current, message) : "Native workspace discovery failed." } };
+              }
+              return { ...base, pending: false, skills: scanned.success.skills, commands: scanned.success.slashCommands };
+            }
+          }
+          if (fresh && lease.instance.invalidateCaches) yield* lease.instance.invalidateCaches;
+          const scanned = yield* lease.instance.snapshotForCwd(context.cwd).pipe(Effect.result);
+          yield* lease.assertCurrent;
+          if (scanned._tag === "Failure") {
+            const current = getStoredInstance(context.instanceId);
+            const message = scanned.failure instanceof Error ? scanned.failure.message : "Native workspace discovery failed.";
+            return { ...base, checkedAt: previous?.checkedAt ?? checkedAt, pending: false, skills: previous?.skills ?? [], commands: previous?.commands ?? [],
+              error: { code: "discovery_failed", message: current ? sanitizeProviderMessage(current, message) : "Native workspace discovery failed." } };
+          }
+          const snapshot = scanned.success;
+          const pending = context.driver === "pi" || (snapshot.slashCommandsPending ?? snapshot.status === "error");
+          const refreshedInstance = getStoredInstance(context.instanceId);
+          return { ...base, pending, skills: snapshot.skills,
+            commands: pending && previous ? previous.commands : snapshot.slashCommands,
+            ...(snapshot.status === "error" && snapshot.message ? { error: { code: "provider_error",
+              message: refreshedInstance ? sanitizeProviderMessage(refreshedInstance, snapshot.message) : "Native provider reported an error." } } : {}) };
+        }), signal);
+        if (skillClaims.get(key) !== claim)
+          throw providerBoundaryError("A newer workspace discovery superseded this result.", "discovery_superseded", 409);
+        if (skillClaims.get(key) === claim && !result.error) {
+          skillSnapshots.delete(key);
+          skillSnapshots.set(key, result);
+          while (skillSnapshots.size > 32) skillSnapshots.delete(skillSnapshots.keys().next().value!);
+        }
+        return result;
+      } finally {
+        if (skillClaims.get(key) === claim) skillClaims.delete(key);
+      }
+    },
     check: (context, signal) => use(context, "status", lease => Effect.gen(function* () {
       const snapshot = yield* lease.instance.snapshot.refresh;
       const auth = lease.instance.auth;
@@ -287,13 +458,17 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
         ...(capabilities ? { capabilities } : {}) };
     }), signal),
     authenticate,
-    logout: (context, signal) => use(context, "auth", lease => Effect.gen(function* () {
+    logout: async (context, signal) => {
+      if (getStoredInstance(context.instanceId)?.revision === context.revision)
+        await closeMcpAppSessionsForInstance(context.instanceId);
+      return use(context, "auth", lease => Effect.gen(function* () {
       const auth = lease.instance.auth;
       if (!auth) return yield* Effect.fail(providerBoundaryError("This Provider has no application-managed logout.", "unsupported_logout", 409));
       const state = yield* auth.logout(stopSessions(lease));
       if (state.phase === "failed") return yield* Effect.fail(providerBoundaryError(state.message ?? "Provider logout failed.", "provider_logout_failed", 412));
       yield* lease.assertCurrent;
-    }), signal),
+      }), signal);
+    },
     prepare: (context, signal, progress) => runInstallation("prepare", context, signal, progress),
     removeInstallation: (context, signal, progress) => runInstallation("removeInstallation", context, signal, progress),
     update: (context, signal, progress) => runMaintenance(context, lifetime => use(context, "maintenance", lease => Effect.gen(function* () {

@@ -11,6 +11,7 @@ import {
   type TaskFilterCondition,
   type TaskFilterField,
 } from './task-filter';
+import { RadixSelect } from "@/components/ui/radix-select"
 
 interface Props {
   controller: WorkspaceController;
@@ -74,18 +75,18 @@ export default function TaskFilterCard({ controller: c, en, projectId, today, ac
               <div className="task-filter-row task-filter-condition-row">
                 <span className="task-filter-conjunction">{!fixedProject && index === 0 ? t('Where', '条件') : t('and', '且')}</span>
                 <label>
-                  <select className="task-filter-field" aria-label={t('Filter field', '筛选字段')} value={condition.field} onChange={event => patch(index, { field: event.target.value as TaskFilterField, values: [] })}>
+                  <RadixSelect className="task-filter-field" aria-label={t('Filter field', '筛选字段')} value={condition.field} onChange={event => patch(index, { field: event.target.value as TaskFilterField, values: [] })}>
                     {taskFilterFields.map(field => <option key={field} value={field}>{taskFilterFieldLabel(field, en)}</option>)}
-                  </select>
-                  <select className="task-filter-operator" aria-label={t('Filter operator', '筛选操作符')} value={condition.operator} onChange={event => patch(index, { operator: event.target.value as TaskFilterCondition['operator'] })}>
+                  </RadixSelect>
+                  <RadixSelect className="task-filter-operator" aria-label={t('Filter operator', '筛选操作符')} value={condition.operator} onChange={event => patch(index, { operator: event.target.value as TaskFilterCondition['operator'] })}>
                     <option value="is">{taskFilterOperatorLabel('is', en)}</option>
                     <option value="isNot">{taskFilterOperatorLabel('isNot', en)}</option>
-                  </select>
+                  </RadixSelect>
                   {bucket ? (
-                    <select className="task-filter-value" aria-label={taskFilterFieldLabel(condition.field, en)} value={condition.values[0] ?? ''} onChange={event => patch(index, { values: event.target.value ? [event.target.value] : [] })}>
+                    <RadixSelect className="task-filter-value" aria-label={taskFilterFieldLabel(condition.field, en)} value={condition.values[0] ?? ''} onChange={event => patch(index, { values: event.target.value ? [event.target.value] : [] })}>
                       <option value="">{t('Any', '任意')}</option>
                       {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
+                    </RadixSelect>
                   ) : (
                     <button type="button" className="task-filter-value" aria-expanded={expanded === index} onClick={() => setExpanded(expanded === index ? null : index)}>
                       <span>{taskFilterValueSummary(condition.field, condition.values, options, en)}</span>
@@ -122,11 +123,11 @@ export default function TaskFilterCard({ controller: c, en, projectId, today, ac
           <span className="task-filter-conjunction">{t('and', '且')}</span>
           <label>
             {t('Archive', '归档')}
-            <select aria-label={t('Archive filter', '归档筛选')} data-testid="archive-filter" value={c.prefs.archived} onChange={event => c.preference('archived', event.target.value as ArchiveFilter)}>
+            <RadixSelect aria-label={t('Archive filter', '归档筛选')} data-testid="archive-filter" value={c.prefs.archived} onChange={event => c.preference('archived', event.target.value as ArchiveFilter)}>
               <option value="exclude">{t('Active objects', '活动对象')}</option>
               <option value="include">{t('Include archived', '包含归档')}</option>
               <option value="only">{t('Archived only', '仅归档')}</option>
-            </select>
+            </RadixSelect>
           </label>
         </div>
       </div>

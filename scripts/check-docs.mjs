@@ -7,7 +7,7 @@ import remarkParse from 'remark-parse';
 import { unified } from 'unified';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const excluded = new Set(['node_modules', '.git', '.ref', '.next', 'dist', '.local', 'coverage']);
+const excluded = new Set(['node_modules', '.git', '.ref', '.next', 'dist', '.local', '.runtime', 'coverage']);
 async function markdownFiles(directory) {
   const result = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {

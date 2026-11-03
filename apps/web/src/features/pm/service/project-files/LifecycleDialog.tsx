@@ -10,6 +10,7 @@ import { allowed, entitySchema, makeCommand, useDraftState, useText } from '../p
 import { PmCommandError, PmServiceError, pmErrorMessage } from '../pm-errors';
 import { asString, fileProjectWritable } from './model';
 import styles from './project-files.module.css';
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export type FileLifecycleAction = { mode: 'rename' | 'hide' | 'restore' | 'copy'; artifact: Entity; version: Entity };
 const savedAttemptSchema = z.strictObject({
@@ -172,7 +173,7 @@ function LifecycleDialog({ action, project, locale, onClose, execute, suspended 
         <p className={styles.hint}>{t('原文件名', 'Original filename')}: {asString(action.version.data.fileName)} · <code>{action.version.id}</code></p>
         {(copy || action.mode === 'rename') && <label className={styles.field}><span>{t('显示名', 'Display title')}</span><Input value={title} maxLength={20_000} required disabled={locked} onChange={event => setTitle(event.target.value)} /></label>}
         {copy && <>
-          <label className={styles.field}><span>{t('目标项目', 'Target project')}</span><select className={styles.formSelect} value={destination?.id ?? ''} disabled={locked} required onChange={event => { setDestination(targets.find(candidate => candidate.id === event.target.value) ?? null); }}><option value="">{t('选择可写项目', 'Choose a writable project')}</option>{targets.map(candidate => <option key={candidate.id} value={candidate.id}>{asString(candidate.data.name)} · {candidate.id}</option>)}</select></label>
+          <label className={styles.field}><span>{t('目标项目', 'Target project')}</span><RadixSelect className={styles.formSelect} value={destination?.id ?? ''} disabled={locked} required onChange={event => { setDestination(targets.find(candidate => candidate.id === event.target.value) ?? null); }}><option value="">{t('选择可写项目', 'Choose a writable project')}</option>{targets.map(candidate => <option key={candidate.id} value={candidate.id}>{asString(candidate.data.name)} · {candidate.id}</option>)}</RadixSelect></label>
           <label className={styles.field}><span>{t('成果类型', 'Artifact kind')}</span><Input value={kind} maxLength={100} required disabled={locked} onChange={event => setKind(event.target.value)} /></label>
           <p className={styles.warning}>{t('目标项目读者将获得该版本内容。', 'Readers of the target project will gain access to this version’s contents.')} {destination && `${asString(destination.data.name)} (${destination.id})`}</p>
           {projects.error && <p role="alert">{projects.error.message}</p>}

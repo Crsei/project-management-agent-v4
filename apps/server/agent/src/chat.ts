@@ -53,6 +53,10 @@ import { getThreadSidebar, updateThreadSidebar } from "./durable/thread-sidebar.
 import { generateThreadTitle } from "./durable/thread-title.ts";
 import { resolvePmContextBinding } from "./durable/pm-context.ts";
 import { transaction } from "./durable/store.ts";
+import { resolveAgentScope } from "./durable/agent-scope.ts";
+import { listRuns } from "./durable/engine.ts";
+import { setThreadNativeSession } from "./durable/threads.ts";
+import { closeMcpAppSession } from "./mcp-apps/live.ts";
 
 export const chatRoutes = new Hono();
 export const publicThread = (thread: ThreadMetadata) => ({
@@ -186,6 +190,32 @@ chatRoutes.get("/chat/threads/:id", (c) => {
     ? c.json({ thread: publicThread(thread) })
     : c.json({ error: "找不到会话。", code: "not_found" }, 404);
 });
+chatRoutes.post("/chat/threads/:id/native-session/restart", async c => {
+  z.strictObject({}).parse(await c.req.json());
+  const id = c.req.param("id");
+  const thread = getThread(id);
+  if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
+  await assertThreadScopeAccessible(thread, c.req.raw.headers);
+  const assertIdle = () => {
+    if (getActiveChat(id) || listRuns(id).some(run => run.status === "queued" || run.status === "running"))
+      throw new DurableError(409, "chat_busy", "会话仍在运行；请等待完成或显式停止，不能自动取消。");
+  };
+  assertIdle();
+  await closeMcpAppSession(id);
+  await assertThreadScopeAccessible(thread, c.req.raw.headers);
+  const current = transaction(() => {
+    const latest = getThread(id);
+    if (!latest) throw new DurableError(404, "not_found", "找不到会话。");
+    if (latest.revision !== thread.revision || JSON.stringify(latest.scope) !== JSON.stringify(thread.scope) ||
+        JSON.stringify(latest.nativeSession) !== JSON.stringify(thread.nativeSession) ||
+        JSON.stringify(latest.pendingFork) !== JSON.stringify(thread.pendingFork))
+      throw new ThreadConflictError("会话已更改，请重新载入。");
+    assertIdle();
+    setThreadNativeSession(id, undefined);
+    return getThread(id)!;
+  });
+  return c.json({ thread: publicThread(current) });
+});
 chatRoutes.put("/chat/threads/:id", async (c) => {
   const id = c.req.param("id");
   const patch = threadPatchSchema.parse(await c.req.json());
@@ -217,6 +247,22 @@ chatRoutes.put("/chat/threads/:id", async (c) => {
         error instanceof Error ? error.message : "无效模型选择。",
       );
     }
+  }
+  if (patch.settings || patch.status === "archived" || pmContext !== undefined) {
+    const thread = getThread(id);
+    if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
+    if (patch.revision !== undefined && patch.revision !== thread.revision)
+      throw new ThreadConflictError("会话已更改，请重新载入。");
+    // Unscoped drafts may save settings, but cannot own an executable native App.
+    // Clearing an inaccessible issue still requires authorization for its underlying scope.
+    if (pmContext === null) await resolveAgentScope(thread.scope, c.req.raw.headers, c.req.raw.signal);
+    else if (thread.scope) await assertThreadScopeAccessible(thread, c.req.raw.headers);
+    await closeMcpAppSession(id);
+    const latest = getThread(id);
+    if (!latest || latest.revision !== thread.revision)
+      throw new ThreadConflictError("会话已更改，请重新载入。");
+    if ((patch.status === "archived" || pmContext !== undefined) && getActiveChat(id))
+      throw new DurableError(409, "chat_busy", "会话仍在运行，请先停止生成。");
   }
   return c.json({ thread: publicThread(updateThread(id, { ...patch, ...(pmContext !== undefined ? { pmContext } : {}) })) });
 });
@@ -262,6 +308,9 @@ chatRoutes.delete("/chat/threads/:id", async (c) => {
     if (isChatActive(generation)) await cancelChat(generation.id);
   if (getActiveChat(id))
     throw new DurableError(409, "chat_busy", "后台生成尚未确认停止，历史未删除；请核对生成状态后重试。");
+  await closeMcpAppSession(id);
+  if (getActiveChat(id))
+    throw new DurableError(409, "chat_busy", "后台生成尚未确认停止，历史未删除。");
   deleteThread(id);
   return c.json({ deleted: true });
 });
@@ -307,7 +356,13 @@ chatRoutes.post("/chat/threads/:id/cancel", async (c) => {
   const body = z
     .object({ generationId: z.string().optional(), messageId: z.string().max(256).optional() })
     .parse(await c.req.json());
-  await cancelThreadChat(c.req.param("id"), body);
+  const id = c.req.param("id");
+  const thread = getThread(id);
+  if (thread && !getActiveChat(id)) {
+    await assertThreadScopeAccessible(thread, c.req.raw.headers);
+    await closeMcpAppSession(id);
+  }
+  await cancelThreadChat(id, body);
   return c.json({ cancelled: true });
 });
 chatRoutes.post("/chat/generations/:id/continue", async (c) => {

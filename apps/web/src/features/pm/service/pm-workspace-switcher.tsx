@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useParams } from "react-router"
-import { Bot, Check, ChevronsUpDown, FolderKanban, LayoutGrid, LoaderCircle, RefreshCw, Settings, Users } from "lucide-react"
+import { Bot, Check, ChevronDown, ChevronsUpDown, Ellipsis, FolderKanban, LayoutGrid, LoaderCircle, RefreshCw, Settings, Users } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +24,7 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
   const en = useI18n().locale === "en"
   const startPage = useWorkspaceStore(state => state.startPage)
   const [refreshing, setRefreshing] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [refreshError, setRefreshError] = useState<Error | null>(null)
   const pending = loading || refreshing
   const visibleError = error ?? refreshError
@@ -63,29 +64,27 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
     }
   }
 
-  return <div className="mb-1 shrink-0">
-    <DropdownMenu>
+  return <div className="mb-3 shrink-0">
+    <DropdownMenu onOpenChange={open => { if (!open) setMoreOpen(false) }}>
       <DropdownMenuTrigger
         aria-label={en
-          ? `Workspace: ${name}. Current workspace type: ${currentProduct.title}. Switch workspace or workspace type`
-          : `工作区：${name}。当前工作空间：${currentProduct.title}。切换工作区或工作空间`}
+          ? `Switch app. Current app: ${currentProduct.title}. Workspace: ${name}`
+          : `切换应用。当前应用：${currentProduct.title}。工作区：${name}`}
         aria-busy={pending}
-        className={`${styles.workspaceTrigger} ${collapsed ? "justify-center px-0" : "px-3"} flex w-full min-w-0 items-center gap-2 rounded-control py-1 text-left text-sm font-medium outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring`}
+        title={collapsed ? currentProduct.title : undefined}
+        className={`${styles.workspaceTrigger} ${collapsed ? styles.collapsedTrigger : ""}`}
       >
-        <WorkspaceIdentityBadge icon={workspace?.icon} color={workspace?.color} />
+        <span className={styles.applicationIcon}><CurrentProductIcon className="size-4" aria-hidden="true" /></span>
         {!collapsed && <span className="min-w-0 flex-1">
-          <span className="block truncate" title={name}>{name}</span>
-          <span className="flex min-w-0 items-center gap-1 text-[11px] font-normal text-muted-foreground">
-            <CurrentProductIcon className="size-3 shrink-0" aria-hidden="true" />
-            <span className="truncate" title={currentProduct.description}>{currentProduct.description}</span>
-          </span>
+          <span className="block truncate text-[13px] font-medium" title={currentProduct.title}>{currentProduct.title}</span>
+          <span className="block truncate text-[11px] font-normal text-muted-foreground">{currentProduct.description}</span>
         </span>}
         {collapsed ? null : pending ? <LoaderCircle className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-1rem)] overflow-y-auto">
         {workspace && !visibleError && <>
-          <DropdownMenuLabel className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground">{en ? "Workspace type" : "工作空间"}</DropdownMenuLabel>
-          <DropdownMenuGroup aria-label={en ? "Workspace types" : "工作空间类型"}>
+          <DropdownMenuLabel className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground">{en ? "Switch app" : "切换应用"}</DropdownMenuLabel>
+          <DropdownMenuGroup aria-label={en ? "Applications" : "应用"}>
             {products.map(product => {
               const current = product.id === currentProduct.id
               const Icon = product.icon
@@ -104,24 +103,29 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
                   <span className="block text-sm font-medium">{product.title}</span>
                   <span className="block text-[11px] font-normal text-muted-foreground">{product.description}</span>
                 </span>
-                {current && <><span className="shrink-0 text-[11px] text-muted-foreground">{en ? "Current" : "当前"}</span><Check className="size-3.5 shrink-0" aria-hidden="true" /></>}
+                {current && <Check className="size-3.5 shrink-0" aria-hidden="true" />}
               </DropdownMenuItem>
             })}
           </DropdownMenuGroup>
           <DropdownMenuSeparator className="my-1 h-px bg-border" />
         </>}
-        {workspace && !pending && !visibleError && <>
-          <DropdownMenuGroup aria-label={en ? "Current workspace links" : "当前工作区入口"}>
+        <DropdownMenuGroup aria-label={en ? "Manage" : "管理"}>
+          <DropdownMenuLabel className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground">{en ? "Manage" : "管理"} · <span title={name}>{name}</span></DropdownMenuLabel>
+          {workspace && !pending && !visibleError && <>
             <DropdownMenuItem render={<a href={`${base}/settings/general`} data-navigation-close />}>
               <Settings className="size-4 shrink-0" aria-hidden="true" />{en ? "Workspace settings" : "工作区设置"}
             </DropdownMenuItem>
             {canReadMembers && <DropdownMenuItem render={<a href={`${base}/members?tab=members`} data-navigation-close />}>
               <Users className="size-4 shrink-0" aria-hidden="true" />{en ? "Members & teams" : "成员与团队"}
             </DropdownMenuItem>}
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator className="my-1 h-px bg-border" />
-        </>}
+          </>}
+          <DropdownMenuItem render={<a href="/pm" data-navigation-close />}>
+            <LayoutGrid className="size-4 shrink-0" aria-hidden="true" />
+            {en ? "All workspaces" : "全部工作区"}
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         {(pending || visibleError || workspaces.some(candidate => candidate.id !== workspace?.id)) && <>
+        <DropdownMenuSeparator className="my-1 h-px bg-border" />
         <DropdownMenuLabel className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground">{en ? "Switch workspace" : "切换工作区"}</DropdownMenuLabel>
         <DropdownMenuGroup aria-label={en ? "Authorized workspaces" : "有权访问的工作区"}>
           {pending ? <DropdownMenuItem disabled><LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />{en ? "Loading workspaces…" : "正在加载工作区…"}</DropdownMenuItem> : visibleError ? <DropdownMenuItem disabled>{en ? "Workspace information is unavailable" : "暂时无法读取工作区"}</DropdownMenuItem> : workspaces.length ? workspaces.map(candidate => {
@@ -138,20 +142,23 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
             >
               <WorkspaceIdentityBadge icon={candidate.icon} color={candidate.color} />
               <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{candidate.name}</span>
-              {current && <><span className="shrink-0 text-[11px] text-muted-foreground">{en ? "Current" : "当前"}</span><Check className="size-3.5 shrink-0" aria-hidden="true" /></>}
+              {current && <Check className="size-3.5 shrink-0" aria-hidden="true" />}
             </DropdownMenuItem>
           }) : <DropdownMenuItem disabled>{en ? "No authorized workspaces" : "尚无有权访问的工作区"}</DropdownMenuItem>}
         </DropdownMenuGroup>
         </>}
         <DropdownMenuSeparator className="my-1 h-px bg-border" />
-        <DropdownMenuItem disabled={pending} onSelect={event => { event.preventDefault(); void refreshWorkspaces() }}>
+        {visibleError && <DropdownMenuItem disabled={pending} onSelect={event => { event.preventDefault(); void refreshWorkspaces() }}>
+          <RefreshCw className="size-4 shrink-0" aria-hidden="true" />{en ? "Retry workspace loading" : "重试读取工作区"}
+        </DropdownMenuItem>}
+        <DropdownMenuItem closeOnClick={false} aria-expanded={moreOpen} onSelect={() => setMoreOpen(open => !open)}>
+          <Ellipsis className="size-4" aria-hidden="true" />{en ? "More actions" : "更多操作"}
+          <ChevronDown className={`ml-auto size-3.5 ${moreOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+        </DropdownMenuItem>
+        {moreOpen && <DropdownMenuItem disabled={pending} onSelect={event => { event.preventDefault(); void refreshWorkspaces() }}>
           <RefreshCw className="size-4 shrink-0" aria-hidden="true" />
           {refreshing ? en ? "Refreshing…" : "正在刷新…" : en ? "Refresh workspaces" : "刷新工作区"}
-        </DropdownMenuItem>
-        <DropdownMenuItem render={<a href="/pm" data-navigation-close />}>
-          <LayoutGrid className="size-4 shrink-0" aria-hidden="true" />
-          {en ? "All workspaces" : "全部工作区"}
-        </DropdownMenuItem>
+        </DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
     {!collapsed && pending && <p role="status" className="px-3 text-xs text-muted-foreground">{refreshing ? en ? "Refreshing workspaces…" : "正在刷新工作区…" : en ? "Loading workspaces…" : "正在加载工作区…"}</p>}

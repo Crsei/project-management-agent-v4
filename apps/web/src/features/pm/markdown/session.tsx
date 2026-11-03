@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useSyncExternalStore, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { createCoreClient, type CoreClient } from './api';
 import { createCreationStore, type CreationStore } from './creation-store';
 import { creationComplete, type CreationDrafts } from './creation-model';
+import { preserveDocumentSaveRecovery, type DocumentSaveRecovery, type DocumentWriteStatus } from './document-save-model';
 
-export interface Draft { raw: string; revision: string }
+export interface Draft { raw: string; revision: string; documentSave?: DocumentSaveRecovery }
 export type Drafts = Record<string, Draft>;
 export type DetailTab = 'content' | 'source' | 'properties' | 'relations' | 'graph' | 'business' | 'context';
 export interface DetailState { tab: DetailTab; entityId?: string }
@@ -16,6 +17,7 @@ interface SessionStore<T> {
 export interface CoreSession {
   namespace: string;
   scope: string;
+  isCurrent: () => boolean;
   api: CoreClient;
   queryKey: readonly ['pm', string, string, string, 'core', number, number];
   onAccessFailure: () => Promise<void>;
@@ -23,9 +25,12 @@ export interface CoreSession {
   drafts: SessionStore<Drafts>;
   creationDrafts: CreationStore;
   detail: SessionStore<DetailState>;
+  documentWrites: SessionStore<Record<string, DocumentWriteStatus>>;
 }
 const Context = createContext<CoreSession | null>(null);
 const sessions = new Map<string, Omit<CoreSession, 'onAccessFailure'>>();
+const currentScopes = new Map<string, string>();
+const scopeUsers = new Map<string, number>();
 
 /** The host keeps draft protection mounted across pages, but never across identities. */
 export function useCoreDraftProtection(hostNamespace: string, actorId: string | undefined, actorEpoch: number) {
@@ -75,6 +80,7 @@ function scopedSession(hostNamespace: string, workspaceId: string, actorId: stri
   const drafts = stored<Drafts>(storageKey('drafts'), stored<Drafts>(`pm-markdown:${workspaceId}:${actorId}:drafts`, {}));
   const session: Omit<CoreSession, 'onAccessFailure'> = {
     namespace, scope, storageKey, api: createCoreClient(workspaceId),
+    isCurrent: () => currentScopes.get(hostNamespace) === scope,
     queryKey: ['pm', hostNamespace, actorId, workspaceId, 'core', membershipVersion, actorEpoch],
     drafts: store(drafts, storageKey('drafts')),
     creationDrafts: createCreationStore(storageKey('creation-drafts'), {
@@ -82,12 +88,26 @@ function scopedSession(hostNamespace: string, workspaceId: string, actorId: stri
       setItem: (key, value) => localStorage.setItem(key, value),
     }, changed => window.addEventListener('storage', event => { if (event.key === storageKey('creation-drafts') || event.key === null) changed(); })),
     detail: store<DetailState>({ tab: 'content' }),
+    documentWrites: store<Record<string, DocumentWriteStatus>>({}),
   };
   sessions.set(scope, session);
   return session;
 }
 export function CoreSessionProvider({ hostNamespace, workspaceId, actorId, membershipVersion, actorEpoch, onAccessFailure, children }: { hostNamespace: string; workspaceId: string; actorId: string; membershipVersion: number; actorEpoch: number; onAccessFailure: () => Promise<void>; children: ReactNode }) {
   const session = useMemo(() => ({ ...scopedSession(hostNamespace, workspaceId, actorId, membershipVersion, actorEpoch), onAccessFailure }), [hostNamespace, workspaceId, actorId, membershipVersion, actorEpoch, onAccessFailure]);
+  currentScopes.set(hostNamespace, session.scope);
+  useLayoutEffect(() => {
+    currentScopes.set(hostNamespace, session.scope);
+    scopeUsers.set(session.scope, (scopeUsers.get(session.scope) ?? 0) + 1);
+    return () => {
+      const remaining = (scopeUsers.get(session.scope) ?? 1) - 1;
+      if (remaining > 0) scopeUsers.set(session.scope, remaining);
+      else {
+        scopeUsers.delete(session.scope);
+        if (currentScopes.get(hostNamespace) === session.scope) currentScopes.delete(hostNamespace);
+      }
+    };
+  }, [hostNamespace, session.scope]);
   return <Context.Provider key={session.scope} value={session}>{children}</Context.Provider>;
 }
 export function useCoreSession(): CoreSession {
@@ -97,7 +117,8 @@ export function useCoreSession(): CoreSession {
 }
 export function useSessionDrafts(): [Drafts, Dispatch<SetStateAction<Drafts>>] {
   const { drafts } = useCoreSession();
-  return [useSyncExternalStore(drafts.subscribe, drafts.getSnapshot, drafts.getSnapshot), drafts.update];
+  const update = useCallback<Dispatch<SetStateAction<Drafts>>>(next => drafts.update(previous => preserveDocumentSaveRecovery(previous, typeof next === 'function' ? next(previous) : next)), [drafts]);
+  return [useSyncExternalStore(drafts.subscribe, drafts.getSnapshot, drafts.getSnapshot), update];
 }
 export function useDetailState(): [DetailState, (changes: Partial<DetailState>) => void] {
   const { detail } = useCoreSession();

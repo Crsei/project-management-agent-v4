@@ -53,6 +53,13 @@ try {
   assert.ok(patched);
   assert.equal(sha(await readFile(path.join(pristine, patched.destination))), patched.upstreamSha256);
   assert.equal(sha(await readFile(path.join(destination, patched.destination))), patched.sha256);
+  const adaptations = JSON.parse(await readFile(path.join(destination, "vendor/t3code/mcp-skills-adaptations.json"), "utf8"));
+  assert.ok(adaptations.sources.some((entry) => entry.commit === "d53873b6a4799e87afd63c8d288ef0089f5a3748"));
+  assert.ok(adaptations.sources.some((entry) => entry.commit === inventory.upstreamCommit));
+  for (const entry of adaptations.outputs) {
+    assert.equal(sha(await readFile(path.join(destination, entry.destination))), entry.sha256);
+    if (!entry.destination.startsWith("vendor/t3code/")) await assert.rejects(lstat(path.join(pristine, entry.destination)), { code: "ENOENT" });
+  }
 
   const copyHostInputs = async root => {
     for (const entry of inventory.runtimeResources.hostBuildInputs) {
@@ -122,6 +129,15 @@ try {
   const conflicted = await snapshot(conflict);
   assert.match(sync(conflict, [], 1).stderr, /Destination conflict/);
   assert.deepEqual(await snapshot(conflict), conflicted); // missing LICENSE must not be partially restored
+  const adaptedHost = adaptations.outputs.find((entry) => entry.provenance === "adapted-upstream" && !entry.destination.startsWith("vendor/t3code/"));
+  assert.ok(adaptedHost);
+  const hostConflict = path.join(temporary, "host-output-conflict");
+  await cp(destination, hostConflict, { recursive: true });
+  await rm(path.join(hostConflict, "vendor/t3code/LICENSE"));
+  await appendFile(path.join(hostConflict, adaptedHost.destination), "\n// deliberate host adaptation conflict\n");
+  const hostConflictBefore = await snapshot(hostConflict);
+  assert.match(sync(hostConflict, [], 1).stderr, /Destination conflict/);
+  assert.deepEqual(await snapshot(hostConflict), hostConflictBefore);
 
   const clone = path.join(temporary, "source-clone");
   command("git", ["clone", "--quiet", "--local", "--no-hardlinks", "--no-checkout", source, clone]);
@@ -139,12 +155,23 @@ try {
   await appendFile(path.join(badTool, patched.patch.path), "\n");
   assert.match(sync(path.join(temporary, "wrong-patch"), [], 1, source, path.join(badTool, "vendor/t3code/scripts/sync.mjs")).stderr, /Wrong patch hash/);
 
+  const badAdaptationTool = path.join(temporary, "bad-adaptation-tool");
+  await cp(destination, badAdaptationTool, { recursive: true });
+  await copyHostInputs(badAdaptationTool);
+  const adaptationFile = path.join(badAdaptationTool, "vendor/t3code/mcp-skills-adaptations.json");
+  const alteredAdaptations = JSON.parse(await readFile(adaptationFile, "utf8"));
+  alteredAdaptations.outputs.find((entry) => entry.inputs.length).inputs[0].sha256 = "0".repeat(64);
+  await writeFile(adaptationFile, JSON.stringify(alteredAdaptations));
+  const badAdaptationDestination = path.join(temporary, "bad-adaptation-output");
+  assert.match(sync(badAdaptationDestination, [], 1, source, path.join(badAdaptationTool, "vendor/t3code/scripts/sync.mjs")).stderr, /Adaptation original hash\/blob conflict/);
+  await assert.rejects(lstat(badAdaptationDestination), { code: "ENOENT" });
+
   const symlinkRoot = path.join(temporary, "symlink-destination");
   await mkdir(symlinkRoot);
   await symlink(destination, path.join(symlinkRoot, "vendor"), process.platform === "win32" ? "junction" : "dir");
   assert.match(sync(symlinkRoot, [], 1).stderr, /Unsafe symlink\/non-directory/);
   assert.deepEqual(await snapshot(destination), before);
-  console.log(JSON.stringify({ cleanOfflineReconstruction: true, repeatNoDiff: true, pristine: true, unrelatedPmPreserved: true, destinationConflictRefusedBeforeWrites: true, groupWriteAcceptedUntouched: true, executableModeConflictRefusedBeforeWrites: true, unsafeSpecialModesRefusedBeforeWrites: true, wrongSourceHashRefused: true, wrongCommitRefused: true, wrongPatchRefused: true, hostToolDriftRefusedBeforeWrites: true, symlinkRefused: true, files: first.files }));
+  console.log(JSON.stringify({ cleanOfflineReconstruction: true, repeatNoDiff: true, pristine: true, unrelatedPmPreserved: true, destinationConflictRefusedBeforeWrites: true, dualSourceAdaptations: true, hostAdaptationConflictRefusedBeforeWrites: true, adaptationOriginalHashRefusedBeforeWrites: true, groupWriteAcceptedUntouched: true, executableModeConflictRefusedBeforeWrites: true, unsafeSpecialModesRefusedBeforeWrites: true, wrongSourceHashRefused: true, wrongCommitRefused: true, wrongPatchRefused: true, hostToolDriftRefusedBeforeWrites: true, symlinkRefused: true, files: first.files }));
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

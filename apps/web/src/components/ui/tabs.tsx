@@ -156,7 +156,7 @@ export function TabsTab<T extends TabId>({
         : { "aria-controls": undefined })}
       value={tabValue}
       className={cn(
-        "min-h-8 border-b-2 border-transparent px-3 text-sm text-muted-foreground outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:border-primary data-[state=active]:text-foreground disabled:opacity-50 [@media(pointer:coarse)]:min-h-11",
+        "min-h-8 rounded-control px-3 text-sm text-muted-foreground outline-none hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-selection data-[state=active]:font-medium data-[state=active]:text-foreground forced-colors:data-[state=active]:outline forced-colors:data-[state=active]:outline-[Highlight] disabled:opacity-50 [@media(pointer:coarse)]:min-h-11",
         className,
       )}
     />

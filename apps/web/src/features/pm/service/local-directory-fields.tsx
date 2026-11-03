@@ -5,6 +5,7 @@ import { pmKeys } from './pm-data';
 import { useText } from './pm-ui';
 import { localProjectApi } from './local-project-api';
 import './local-projects.css';
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export function LocalDirectoryFields({ value, defaultParent, disabled, existingOnly = false, onChange }: {
   value?: LocalDirectory; defaultParent: string | null; disabled: boolean; existingOnly?: boolean; onChange: (directory: LocalDirectory) => void;
@@ -34,10 +35,10 @@ export function LocalDirectoryFields({ value, defaultParent, disabled, existingO
   }
   return <fieldset className="local-directory-fields" disabled={disabled}>
     <legend>{t('服务器上的项目文件夹', 'Project folder on the server')}</legend>
-    {!existingOnly && <label>{t('保存模式', 'Save mode')}<select aria-label={t('保存模式', 'Save mode')} value={directory.mode} onChange={event => change(event.target.value === 'existing' ? { mode: 'existing', path } : { mode: 'new', parentPath: path, folderName: '' })}>
+    {!existingOnly && <label>{t('保存模式', 'Save mode')}<RadixSelect aria-label={t('保存模式', 'Save mode')} value={directory.mode} onChange={event => change(event.target.value === 'existing' ? { mode: 'existing', path } : { mode: 'new', parentPath: path, folderName: '' })}>
       <option value="new">{t('在父目录下新建文件夹', 'New subfolder in a parent directory')}</option>
       <option value="existing">{t('使用已有目录（保留原文件）', 'Use an existing directory (preserve files)')}</option>
-    </select></label>}
+    </RadixSelect></label>}
     <label>{directory.mode === 'existing' ? t('已有目录绝对路径', 'Existing directory absolute path') : t('父目录绝对路径', 'Parent directory absolute path')}
       <input aria-label={directory.mode === 'existing' ? t('已有目录绝对路径', 'Existing directory absolute path') : t('父目录绝对路径', 'Parent directory absolute path')} value={path} maxLength={4096} autoComplete="off" spellCheck={false} onFocus={() => { editing.current = true; }} onBlur={() => { editing.current = false; }} onChange={event => change(directory.mode === 'existing' ? { mode: 'existing', path: event.target.value } : { ...directory, parentPath: event.target.value })} />
     </label>

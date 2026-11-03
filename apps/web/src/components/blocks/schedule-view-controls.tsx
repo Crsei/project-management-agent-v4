@@ -11,6 +11,7 @@ import type {
   CalendarSettings,
 } from "../../lib/schedule-view-model"
 import styles from "./schedule.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 export type ScheduleViewControlsProps = { today: string } & (
   | {
       kind: "timeline"
@@ -96,7 +97,7 @@ export function ScheduleViewControls(props: ScheduleViewControlsProps) {
       </Button>
       <label>
         {t(props.kind === "timeline" ? "schedule.scale" : "schedule.mode")}
-        <select
+        <RadixSelect
           aria-label={t(
             props.kind === "timeline" ? "schedule.scale" : "schedule.mode",
           )}
@@ -119,11 +120,11 @@ export function ScheduleViewControls(props: ScheduleViewControlsProps) {
               {t(`schedule.${v}`)}
             </option>
           ))}
-        </select>
+        </RadixSelect>
       </label>
       <label>
         {t("schedule.weekStartsOn")}
-        <select
+        <RadixSelect
           aria-label={t("schedule.weekStartsOn")}
           value={value.weekStartsOn}
           onChange={(e) => update({ weekStartsOn: Number(e.target.value) })}
@@ -133,7 +134,7 @@ export function ScheduleViewControls(props: ScheduleViewControlsProps) {
               {day}
             </option>
           ))}
-        </select>
+        </RadixSelect>
       </label>
       {props.kind === "calendar" && (
         <label>

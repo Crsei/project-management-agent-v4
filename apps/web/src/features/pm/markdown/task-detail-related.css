@@ -63,7 +63,7 @@ button.td-blocker-link { cursor: pointer; }
 .td-related-management { margin-top: 12px; }
 .td-related-management > summary { color: var(--foreground); font-size: 12px; }
 .td-delivery-controls { min-width: 0; margin: 10px 0 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--control-radius, 6px); }
-.td-delivery-controls :where(input, select, textarea, button) { max-width: 100%; }
+.td-delivery-controls :where(input, [data-slot="select-trigger"], textarea, button) { max-width: 100%; }
 .td-delivery-controls pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
 .td-task-audit { min-width: 0; }
 .td-audit-list > li { padding-block: 10px; border-bottom: 1px solid var(--border); }

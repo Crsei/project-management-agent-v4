@@ -44,7 +44,8 @@ import { mcpToolPresentation } from "@t3tools/provider-core/server/mcpToolPresen
 import { ProviderRuntimeHost } from "@t3tools/provider-core/server/ProviderRuntimeHost";
 import { PiHostResources } from "./PiHostResources.ts";
 import { bindPiSessionEvidence } from "./sessionEvidence.ts";
-import { parsePiCompactCommand, type PiCompactCommand } from "./commands.ts";
+import { hasLeadingPiSkillMention, piNativeCommandPrefix, piSkillCommand, parsePiCompactCommand, parsePiDiscoveredCommands, withPiBuiltinSlashCommands, type PiCompactCommand } from "./commands.ts";
+import { registerLivePiWorkspace } from "./liveWorkspace.ts";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
 import * as ProviderAdapter from "@t3tools/provider-core/server/ProviderAdapter";
@@ -632,6 +633,19 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
 
       const request = (record: PiRpcRecord, timeoutMs = PI_REQUEST_TIMEOUT_MS) =>
         connection.request(record, timeoutMs);
+      if (runtimeBinding && runtimeBinding.cwd === cwd) {
+        const unregisterInventory = registerLivePiWorkspace(options.instanceId, input.threadId, runtimeBinding.executionId, cwd, () =>
+          request({ type: "get_commands" }).pipe(Effect.flatMap(data => Effect.try({
+            try: () => {
+              if (!Array.isArray(recordField(data, "commands"))) throw new Error("Invalid Pi command inventory.");
+              const inventory = parsePiDiscoveredCommands(data);
+              return { ...inventory, slashCommands: withPiBuiltinSlashCommands(inventory.slashCommands) };
+            },
+            catch: cause => protocolError("Pi returned an invalid native command inventory.", cause),
+          }))),
+        );
+        yield* Effect.addFinalizer(() => Effect.sync(unregisterInventory));
+      }
 
       const nonNegativeInteger = (input: unknown, key: string): number | undefined => {
         const value = recordNumber(input, key);
@@ -2330,10 +2344,27 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
       const resolvePromptPayload = Effect.fnUntraced(function* (
         text: string,
         attachments: ReadonlyArray<ChatAttachment>,
+        userMessageText?: string,
       ) {
         const images: Array<{ type: "image"; data: string; mimeType: string }> = [];
+        const selectedText = userMessageText ?? text;
+        let command: string | undefined;
+        let translated = selectedText;
+        if (hasLeadingPiSkillMention(selectedText) || (userMessageText !== undefined && /^\s*\//.test(selectedText))) {
+          const commands = yield* request({ type: "get_commands" });
+          const resolved = yield* Effect.try({
+            try: () => ({
+              translated: piSkillCommand(selectedText, commands),
+              nativeCommand: piNativeCommandPrefix(selectedText, commands),
+            }),
+            catch: cause => protocolError("Pi returned an invalid native command inventory.", cause),
+          });
+          translated = resolved.translated;
+          command = translated !== selectedText ? /^\/[^\s]+/.exec(translated)?.[0] : resolved.nativeCommand;
+        }
+        const prompt = command === undefined ? text : userMessageText === undefined ? translated : `${command}\n${text}`;
         const message = yield* providerMessageTextWithAttachmentPaths({
-          text,
+          text: prompt,
           attachments,
           resolveAttachmentPath: host.resolveAttachmentPath,
           resolveExtractedTextPath: host.resolveExtractedTextPath,
@@ -2483,10 +2514,10 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
             // Inject instructions through before_agent_start; wrapping user text breaks slash-command expansion.
             const compactCommand = continuation
               ? null
-              : parsePiCompactCommand(turnInput.message.text);
+              : parsePiCompactCommand(turnInput.userMessageText ?? turnInput.message.text);
             const payload =
               !continuation && compactCommand === null
-                ? yield* resolvePromptPayload(turnInput.message.text, turnInput.message.attachments)
+                ? yield* resolvePromptPayload(turnInput.message.text, turnInput.message.attachments, turnInput.userMessageText)
                 : null;
             const activeTurn = yield* makeActiveTurn(turnInput, {
               commandOnly: compactCommand !== null || (payload?.message.trimStart().startsWith("/") ?? false),

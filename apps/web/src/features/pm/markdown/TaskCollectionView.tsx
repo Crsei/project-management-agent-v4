@@ -13,6 +13,7 @@ import type { TaskScope } from './task-collection-model';
 import type { WorkspaceController } from './controller';
 import type { ScheduleViewProps } from './workspace';
 import './task-list-scope.css';
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const priorityLabels: Record<string, string> = { urgent: '紧急', high: '高', medium: '中', low: '低' };
 
@@ -39,8 +40,8 @@ function TaskRow({ file, controller: c, en, workflow, dueLabel }: { file: FileRe
       <button type="button" className="icon-button task-watch" aria-pressed={!!watch} aria-label={`${watch ? en ? 'Unwatch' : '取消关注' : en ? 'Watch' : '关注'} ${file.entity.title}`} disabled={c.writesBlocked || action.locked || !personal.data || !!personal.error || !file.entity.project} onClick={() => { void action.run(() => action.execute(watch ? { commandId: crypto.randomUUID(), commandType: 'UnwatchTask', targetId: watch.id, projectId: file.entity.project!, expectedVersions: { [watch.id]: watch.version }, payload: {} } : { commandId: crypto.randomUUID(), commandType: 'WatchTask', projectId: file.entity.project!, payload: { taskId: file.id } })); }}><Bookmark size={15} fill={watch ? 'currentColor' : 'none'} /></button>
       <Popover><PopoverTrigger type="button" className="icon-button task-row-edit-trigger" aria-label={`${en ? 'Task actions for' : '任务操作'} ${file.id}`} title={en ? 'Edit task fields' : '编辑任务属性'}><MoreHorizontal size={16} /></PopoverTrigger><PopoverContent className="task-row-editor" align="end" aria-label={`${en ? 'Edit fields for' : '编辑属性'} ${file.id}`}>
         <h3>{file.id} · {en ? 'Task fields' : '任务属性'}</h3>
-        <label>{en ? 'Status' : '状态'}<select aria-label={`${en ? 'Status for' : '状态'} ${file.id}`} value={file.entity.status} disabled={!c.canEdit(file.id)} onChange={event => { void c.patch(file.id, { status: event.target.value }); }}>{workflow?.states.map(state => <option key={state.id} value={state.id} disabled={file.entity.status !== state.id && !workflow.transitions.some(transition => transition.from === file.entity.status && transition.to === state.id)}>{taskStateLabel(state, en)}</option>)}</select></label>
-        <label>{en ? 'Priority' : '优先级'}<select aria-label={`${en ? 'Priority for' : '优先级'} ${file.id}`} value={file.entity.priority} disabled={!c.canEdit(file.id)} onChange={event => { void c.patch(file.id, { priority: event.target.value }); }}>{priorities.map(priority => <option key={priority} value={priority}>{en ? priority : priorityLabels[priority]}</option>)}</select></label>
+        <label>{en ? 'Status' : '状态'}<RadixSelect aria-label={`${en ? 'Status for' : '状态'} ${file.id}`} value={file.entity.status} disabled={!c.canEdit(file.id)} onChange={event => { void c.patch(file.id, { status: event.target.value }); }}>{workflow?.states.map(state => <option key={state.id} value={state.id} disabled={file.entity.status !== state.id && !workflow.transitions.some(transition => transition.from === file.entity.status && transition.to === state.id)}>{taskStateLabel(state, en)}</option>)}</RadixSelect></label>
+        <label>{en ? 'Priority' : '优先级'}<RadixSelect aria-label={`${en ? 'Priority for' : '优先级'} ${file.id}`} value={file.entity.priority} disabled={!c.canEdit(file.id)} onChange={event => { void c.patch(file.id, { priority: event.target.value }); }}>{priorities.map(priority => <option key={priority} value={priority}>{en ? priority : priorityLabels[priority]}</option>)}</RadixSelect></label>
         <p><UserRound size={13} aria-hidden="true" />{en ? 'Assignee' : '负责人'}: {assigneeLabel}</p>
         <PopoverClose type="button" className="task-row-open" onClick={() => c.select(file.id)}>{en ? 'Open task details' : '打开任务详情'}</PopoverClose>
       </PopoverContent></Popover>
@@ -51,7 +52,7 @@ function TaskRow({ file, controller: c, en, workflow, dueLabel }: { file: FileRe
 }
 
 /** Every scope projects the same authorized files; layout never owns the task set. */
-export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarTarget, personal, scope }: { controller: WorkspaceController; en: boolean; renderSchedule: (props: ScheduleViewProps) => ReactNode; toolbarTarget?: HTMLElement | null; personal?: { today: string | null; actorId: string | null }; scope?: TaskScope }) {
+export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarTarget, personal, scope, graphScopeTarget, graphToggleTarget }: { controller: WorkspaceController; en: boolean; renderSchedule: (props: ScheduleViewProps) => ReactNode; toolbarTarget?: HTMLElement | null; personal?: { today: string | null; actorId: string | null }; scope?: TaskScope; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null }) {
   const showCompletedTasks = useWorkspaceStore(state => state.showCompletedTasks);
   const display = useDisplayDateTime();
   const collection = c.taskCollection;
@@ -66,17 +67,19 @@ export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarT
   const workflow = workflowFor('work_item', c.configuration);
   const board = c.prefs.layout === 'kanban';
   const timeline = c.prefs.layout === 'gantt';
-  const scheduled = c.prefs.layout === 'calendar' || c.prefs.layout === 'gantt' || c.prefs.layout === 'graph';
-  // Lists group all/important tasks by workflow state; boards keep every task in its column; gantt/graph keep one open lane plus terminal drawers; the calendar shows open tasks only.
+  const scheduled = c.prefs.layout === 'calendar' || c.prefs.layout === 'gantt';
+  // Lists group all/important tasks by workflow state; boards keep every task in its column; gantt keeps one open lane plus terminal drawers; the calendar shows open tasks only.
   const boardFiles = showCompletedTasks ? collection.files : [...collection.open, ...collection.canceled];
   const grouped = board ? [{ id: 'open', files: boardFiles, due: undefined }] : scheduled ? [{ id: 'open', files: collection.open, due: undefined }] : collection.groups;
-  const terminalDrawers = scheduled && c.prefs.layout !== 'calendar';
+  const terminalDrawers = timeline;
   function render(files: FileRecord[], terminal = false) {
     if (!terminal && (c.prefs.layout === 'calendar' || c.prefs.layout === 'gantt')) return renderSchedule({ files, layout: c.prefs.layout, contextFiles: c.files, configuration: c.configuration, projectId: c.projectId || c.prefs.project || undefined, toolbarTarget, onSelect: c.select, onPatch: c.patch, canEdit: c.canEdit, ...(c.canWrite && !c.writesBlocked && !c.configurationInvalid && !c.busy && (!personal || personal.actorId) ? { onCreate: (due: string) => c.openCreate(workflow?.initial, undefined, { due }) } : {}) });
     if (!terminal && c.prefs.layout !== 'list') return <PMView {...c.viewProps} files={files} />;
     return <div className={`task-native-table${c.projectId ? ' task-native-table-project' : ''}`}><div className="task-list-columns" aria-hidden="true"><span>{en ? 'Task' : '任务'}</span><span>{en ? 'Status' : '状态'}</span><span>{en ? 'Assignee' : '负责人'}</span><span>{en ? 'Priority' : '优先级'}</span><span>{en ? 'Due' : '截止'}</span>{!c.projectId && <span>{en ? 'Project' : '项目'}</span>}<span /></div><ul className="task-native-list">{files.map(file => <TaskRow key={file.id} file={file} controller={c} en={en} workflow={workflow} dueLabel={file.entity.due ? display.date(file.entity.due) : undefined} />)}</ul></div>;
   }
   if (personal && c.prefs.layout === 'calendar') return <div className="task-collection-content">{render(collection.files)}</div>;
+  // The graph owns its own entity navigation and node inspector; a task table below it would duplicate the list/table views and starve the canvas.
+  if (c.prefs.layout === 'graph') return <div className="task-collection-content task-collection-graph"><PMView {...c.viewProps} files={collection.files} graphScopeTarget={graphScopeTarget} graphToggleTarget={graphToggleTarget} /></div>;
   return <div className={`task-collection-content${timeline ? ' task-timeline-content' : ''}${board ? ' task-collection-board' : ''}`}>
     {grouped.map(group => {
       const heading = group.label

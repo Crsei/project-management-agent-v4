@@ -111,8 +111,8 @@
 
 .page .tabs { display: flex; align-items: stretch; gap: 2px; margin: 0; padding: 0; overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
 .page .tabs::-webkit-scrollbar { display: none; }
-.page .tab { flex: none; min-height: 36px; padding: 0 10px; border-bottom: 2px solid transparent; background: transparent; color: var(--muted-foreground); font-size: 12.5px; font-weight: 400; line-height: 20px; }
-.page .tab[aria-selected="true"] { border-bottom-color: var(--foreground); color: var(--foreground); font-weight: 600; }
+.page .tab { flex: none; min-height: 36px; padding: 0 10px; border: 0; background: transparent; color: var(--muted-foreground); font-size: 12.5px; font-weight: 400; line-height: 20px; }
+.page .tab[aria-selected="true"] { background: var(--selection); color: var(--foreground); font-weight: 600; }
 .page .panel { padding-top: 20px; }
 .page .panel[hidden] { display: none; }
 

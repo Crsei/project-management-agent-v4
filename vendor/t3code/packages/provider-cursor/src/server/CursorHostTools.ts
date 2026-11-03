@@ -11,7 +11,7 @@ export async function connectCursorHostTools(options: AgentOptions, currentAgent
   const close = async () => { await Promise.all(clients.map(client => client.close())); };
   try {
     for (const [name, server] of Object.entries(options.mcpServers ?? {})) {
-      if (name !== "pm_tools" || server.type !== "stdio") throw new Error("Unbound Cursor native MCP server.");
+      if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name) || server.type !== "stdio") throw new Error("Unbound Cursor native MCP server.");
       const client = new Client({ name: "pm-cursor-generation", version: "1" }, { capabilities: {} });
       clients.push(client);
       await client.connect(new StdioClientTransport({ command: server.command,
@@ -20,9 +20,10 @@ export async function connectCursorHostTools(options: AgentOptions, currentAgent
       do {
         const catalog = await client.listTools(cursor ? { cursor } : {});
         for (const tool of catalog.tools) {
-          if (!/^pm_[a-z_]+$/.test(tool.name)) throw new Error("Cursor PM transport returned an unrecognized tool.");
-          if (tools[tool.name]) throw new Error("Cursor PM transport returned duplicate tools.");
-          tools[tool.name] = {
+          if (!/^[A-Za-z0-9_.-]+$/.test(tool.name)) throw new Error("Cursor MCP transport returned an invalid tool name.");
+          const toolName = name === "pm_tools" ? tool.name : `mcp__${name}__${tool.name}`;
+          if (tools[toolName]) throw new Error("Cursor MCP transport returned duplicate tools.");
+          tools[toolName] = {
             ...(tool.description === undefined ? {} : { description: tool.description }),
             inputSchema: z.record(z.string(), z.json()).parse(tool.inputSchema),
             async execute(args, context) {

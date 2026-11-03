@@ -1,11 +1,11 @@
-import { appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, openSync } from 'node:fs';
-import path from 'node:path';
+import { appendFileSync, closeSync, constants, fstatSync, fsyncSync, lstatSync } from 'node:fs';
 import type { Command, CommandReceipt } from '../../../../packages/domain/src/core.ts';
 import { z } from 'zod';
 import { projectAuditWriteSchema, type ProjectAuditWrite } from '../../../../packages/application/src/project-audit.ts';
 import { capturedServiceFactSchema, type CapturedServiceFact } from '../../../../packages/application/src/service-facts.ts';
 import { summarySchema, type CoreFactSummary } from '../../../../packages/pm-core/service-facts.ts';
 import { FileRepository } from '../../../../packages/pm-core/repository.ts';
+import { checkedFileOpen, sameFileIdentity, syncDirectory } from '../../../../packages/pm-core/platform.ts';
 const journalPath = '.pm/state/pm-command-journal.ndjson';
 
 type Pending = { kind: 'pending'; commandId: string; actorId: string; hash: string; commandType: string; command?: Command; copyAudit?: readonly ProjectAuditWrite[] };
@@ -71,29 +71,31 @@ const entrySchema = z.discriminatedUnion('kind', [
  * process restart. The journal lives in `.pm/state/`, so it is not a disposable cache.
  */
 export class CoreCommandJournal {
-  private readonly file: string;
   private readonly repository: FileRepository;
   constructor(workspaceRoot: string) {
-    this.file = path.join(workspaceRoot, '.pm', 'state', 'pm-command-journal.ndjson');
     this.repository = new FileRepository(workspaceRoot);
   }
 
   private append(entry: Entry): void {
     this.repository.mkdir('.pm/state');
     const validated = entrySchema.parse(entry);
-    const created = !existsSync(this.file);
+    const filename = this.repository.resolve(journalPath, true);
     // Flush the durable outcome before SQL persistence or a successful response.
-    const descriptor = openSync(this.repository.resolve(journalPath, true), constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | constants.O_NOFOLLOW, 0o600);
+    const descriptor = checkedFileOpen(filename, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND, 0o600);
     try {
       const stat = fstatSync(descriptor);
       if (!stat.isFile() || stat.nlink !== 1) throw new Error('Unsafe core fact journal');
       appendFileSync(descriptor, JSON.stringify(validated) + '\n', { encoding: 'utf8' });
       fsyncSync(descriptor);
+      if (!sameFileIdentity(fstatSync(descriptor, { bigint: true }), lstatSync(filename, { bigint: true }))) throw new Error('Core fact journal was replaced during append');
+      this.repository.resolve(journalPath);
     } finally { closeSync(descriptor); }
-    if (created) {
-      const directory = openSync(this.repository.resolve('.pm/state'), constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-      try { fsyncSync(directory); } finally { closeSync(directory); }
-    }
+    syncDirectory(this.repository.resolve('.pm/state'));
+  }
+
+  private raw(): string | undefined {
+    try { return this.repository.read(journalPath); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined; throw error; }
   }
 
   pending(command: Command, hash: string, actorId: string): void {
@@ -126,14 +128,14 @@ export class CoreCommandJournal {
   }
 
   entries(): Entry[] {
-    if (!existsSync(this.file)) return [];
-    return this.repository.read(journalPath).split('\n').filter(Boolean).map(line => entrySchema.parse(JSON.parse(line)));
+    return (this.raw() ?? '').split('\n').filter(Boolean).map(line => entrySchema.parse(JSON.parse(line)));
   }
 
   httpOutcome(commandId: string, actorId: string): CoreHttpOutcome | undefined {
-    if (!existsSync(this.file)) return undefined;
+    const raw = this.raw();
+    if (raw === undefined) return undefined;
     let match: CoreHttpOutcome | undefined;
-    for (const line of this.repository.read(journalPath).split('\n')) {
+    for (const line of raw.split('\n')) {
       if (!line) continue;
       const entry: Entry = entrySchema.parse(JSON.parse(line));
       if (entry.commandId !== commandId || entry.actorId !== actorId || !entry.kind.startsWith('http_')) continue;
@@ -149,10 +151,11 @@ export class CoreCommandJournal {
   }
 
   find(commandId: string, actorId: string, hash?: string): Completed | Pending | undefined {
-    if (!existsSync(this.file)) return undefined;
+    const raw = this.raw();
+    if (raw === undefined) return undefined;
     const target = commandId.toLowerCase();
     let match: Completed | Pending | undefined;
-    for (const line of this.repository.read(journalPath).split('\n')) {
+    for (const line of raw.split('\n')) {
       if (!line) continue;
       const entry: Entry = entrySchema.parse(JSON.parse(line));
       if (entry.commandId !== target || entry.actorId !== actorId || (hash !== undefined && entry.hash !== hash)) continue;

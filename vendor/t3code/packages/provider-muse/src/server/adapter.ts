@@ -1226,13 +1226,14 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
                   required: true,
                 })),
               };
-        // Only the currently bound PM stdio server may enter transport; its business authorization stays in the host.
+        // Only a currently bound stdio server may enter transport; business authorization stays in the host.
         const binding = operationBinding;
         const approval = native.type === "approval" ? native.value : undefined;
         const autoApprove = !!turn && !!approval && !child && approval.subject.kind === "tool" &&
           approval.protectedWrite !== true && approval.turnId === turn.nativeId &&
-          /^(?:mcp__pm_tools__|pm_tools_)pm_[a-z_]+$/.test(approval.toolName ?? "") &&
-          binding?.mcpServers.some(server => server.name === "pm_tools" && server.transport === "stdio") === true;
+          binding?.promptAuthorization !== "technical-no-tools" &&
+          binding?.mcpServers.some(server => server.transport === "stdio" &&
+            [`mcp__${server.name}__`, `${server.name}_`].some(prefix => (approval.toolName ?? "").startsWith(prefix) && (approval.toolName?.length ?? 0) > prefix.length)) === true;
         if (autoApprove) yield* authorizeTools;
         const entry: PendingRequest = {
           native,
@@ -2191,7 +2192,7 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
             ),
           ),
         startTurn: (args) =>
-          start(args).pipe(
+          start(args, args.userMessageText?.trim() === "/compact" && args.message.attachments.length === 0).pipe(
             commands.withPermits(1),
             Effect.mapError(
               (cause) =>

@@ -141,6 +141,17 @@ if (args.includes("--version")) {
           status: "completed", arguments: { city: "Oslo" }, result: { content: [{ type: "text", text: "Sunny" }] } };
         notify("item/completed", { ...base, completedAtMs: Date.now(), item: tool });
       }
+      if (process.env.MODE === "mcp-app") {
+        // No item/started notification: the source capture seam must own both
+        // provisional rows. The peer handles resource requests only after this
+        // synchronous turn/start handler has emitted turn/completed.
+        for (const suffix of ["one", "two"]) notify("item/completed", {
+          threadId: thread.id, turnId: turn.id, completedAtMs: Date.now(),
+          item: { type: "mcpToolCall", id: `${turn.id}:app-${suffix}`, server: "weather", tool: "get_weather",
+            status: "completed", arguments: { city: "Oslo" }, mcpAppResourceUri: `ui://weather/${suffix}`,
+            result: { content: [{ type: "text", text: `Sunny ${suffix}` }], structuredContent: { temp: 21 } } },
+        });
+      }
       const tokens = { totalTokens: 12, inputTokens: 8, cachedInputTokens: 3, cacheWriteInputTokens: 0, outputTokens: 4, reasoningOutputTokens: 1 };
       notify("thread/tokenUsage/updated", { threadId: thread.id, turnId: turn.id, tokenUsage: { total: tokens, last: tokens, modelContextWindow: 200000 } });
       const failed = path.join(process.cwd(), "fail-next");
@@ -149,6 +160,24 @@ if (args.includes("--version")) {
     } else if (method === "turn/interrupt") { respond({}); if (active) complete(active.threadId, active.turn, "", "interrupted"); }
     else if (method === "thread/backgroundTerminals/list") respond({ data: [], nextCursor: null });
     else if (method === "thread/unsubscribe") respond({ status: "unsubscribed" });
+    else if (process.env.MODE === "mcp-app" && method === "mcpServer/resource/read") {
+      if (params.server !== "weather" || !params.uri.startsWith("ui://weather/")) { reject("Unknown App source"); continue; }
+      record({ appResourceAfterTerminal: active === undefined, uri: params.uri });
+      if (process.env.MCP_APP_RESOURCE_URL) {
+        const endpoint = new URL(process.env.MCP_APP_RESOURCE_URL);
+        endpoint.searchParams.set("uri", params.uri);
+        const response = await fetch(endpoint);
+        if (!response.ok) reject("Controlled App resource was unavailable");
+        else respond(await response.json());
+      } else respond({ contents: [{ uri: params.uri, mimeType: "text/html;profile=mcp-app",
+        text: "<!doctype html><h1>Native captured App</h1>", _meta: { ui: { csp: { connectDomains: ["https://api.weather.test"] } } } }] });
+    } else if (process.env.MODE === "mcp-app" && method === "mcpServerStatus/list") {
+      respond({ data: [{ name: "weather", authStatus: "unsupported", resources: [], resourceTemplates: [],
+        tools: { get_weather: { name: "get_weather", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } } } }], nextCursor: null });
+    } else if (process.env.MODE === "mcp-app" && method === "mcpServer/tool/call") {
+      if (params.server !== "weather" || params.tool !== "get_weather") { reject("Unknown App tool"); continue; }
+      respond({ content: [{ type: "text", text: "Sunny refreshed" }], structuredContent: { temp: 21 } });
+    }
     else if (id !== undefined) respond({});
   }
 }

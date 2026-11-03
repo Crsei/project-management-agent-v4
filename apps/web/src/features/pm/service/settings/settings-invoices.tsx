@@ -4,6 +4,7 @@ import { Receipt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useText } from "../pm-ui"
 import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type InvoiceStatus = "paid" | "open"
 type Invoice = { number: string; date: string; cents: number; status: InvoiceStatus }
@@ -83,11 +84,11 @@ function LabInvoices() {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <label htmlFor={`${id}-filter`} className="flex flex-wrap items-center gap-3 text-sm">
         <span className="font-medium">{t("样例状态", "Example status")}</span>
-        <select id={`${id}-filter`} value={filter} onChange={event => setFilter(event.target.value as "all" | InvoiceStatus)} className="h-10 max-w-full rounded-control border bg-surface px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        <RadixSelect id={`${id}-filter`} value={filter} onChange={event => setFilter(event.target.value as "all" | InvoiceStatus)} className="h-10 max-w-full rounded-control border bg-surface px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
           <option value="all">{t("全部样例", "All examples")}</option>
           <option value="paid">{t("已支付样例", "Paid examples")}</option>
           <option value="open">{t("待支付样例（空态）", "Open examples (empty state)")}</option>
-        </select>
+        </RadixSelect>
       </label>
       <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{t(`${invoices.length} 条样例`, `${invoices.length} example invoices`)}</p>
     </div>

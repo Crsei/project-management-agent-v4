@@ -1,0 +1,22 @@
+---
+import type { Capability } from "../lib/capabilities";
+
+interface Props {
+  capability: Capability;
+}
+
+const { capability } = Astro.props;
+---
+
+<article class="cap-card" id={`cap-${capability.index}`}>
+  <div class="cap-card-top">
+    <span class="cap-index">{capability.index}</span>
+    <span class="cap-status"><span class="cap-dot" aria-hidden="true"></span>已实现</span>
+  </div>
+  <h3>{capability.title}</h3>
+  <p class="cap-summary">{capability.summary}</p>
+  <ul class="cap-points">
+    {capability.points.map((point) => <li>{point}</li>)}
+  </ul>
+  <p class="cap-evidence">依据：{capability.evidence}</p>
+</article>

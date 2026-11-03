@@ -1,6 +1,6 @@
 import { expect, it } from "@effect/vitest";
 
-import { parsePiDiscoveredCommands } from "./commands.ts";
+import { hasLeadingPiSkillMention, parsePiDiscoveredCommands, piNativeCommandPrefix, piSkillCommand } from "./commands.ts";
 
 it("maps current Pi skill metadata to T3's user and project skill scopes", () => {
   expect(
@@ -46,4 +46,18 @@ it("maps current Pi skill metadata to T3's user and project skill scopes", () =>
     ],
     slashCommands: [{ name: "hello", description: "Say hello." }],
   });
+});
+
+it("maps only an explicitly selected leading native Pi skill to its exact command", () => {
+  const inventory = { commands: [
+    { name: "skill:review", source: "skill" },
+    { name: "deploy", source: "extension" },
+  ] };
+  expect(hasLeadingPiSkillMention("$review focus on auth")).toBe(true);
+  expect(piSkillCommand("$review focus on auth", inventory)).toBe("/skill:review focus on auth");
+  expect(piSkillCommand("$deploy now", inventory)).toBe("$deploy now");
+  expect(piNativeCommandPrefix("/deploy now", inventory)).toBe("/deploy");
+  expect(piNativeCommandPrefix("/unknown", inventory)).toBeUndefined();
+  expect(piSkillCommand("history $review", inventory)).toBe("history $review");
+  expect(() => piSkillCommand("$review", {})).toThrow();
 });

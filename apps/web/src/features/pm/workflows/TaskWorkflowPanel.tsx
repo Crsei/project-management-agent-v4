@@ -11,6 +11,7 @@ import { WorkflowCanvas } from './WorkflowCanvas';
 import './task-workflows.css';
 import { DeliveryOverview } from './DeliveryOverview';
 import { providerReadinessHint, deliveryTaskStatusLabel, workflowNodeMessage } from './workflow-presentation';
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type Catalog = { definitions: WorkflowDefinition[]; runs: WorkflowRun[]; repository: string | null; defaultBase?: string | null; hasManualDelivery: boolean };
 type Props = DeliveryScope & { revision: string; taskStatus: string; disabled: boolean };
@@ -130,14 +131,14 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
     <div className="workflow-toolbar"><button type="button" disabled={loading || busy} onClick={() => void load()}>{loading ? '正在读取工作流…' : '刷新工作流 / 核对启动'}</button></div>
     {!catalog && !loading && <p>尚未加载。项目需绑定可访问的 GitHub 仓库；失败时不会回退示例数据。</p>}
     {catalog && <>
-      <label>交付方式 · 工作流模板<select disabled={busy || !!uncertain} value={selected} onChange={e => setSelected(e.target.value)}>{catalog.definitions.map(d => <option key={d.id} value={d.id}>{d.draft.name} · {d.versions.length ? `v${d.versions.at(-1)!.version}` : '未发布'}</option>)}</select></label>
+      <label>交付方式 · 工作流模板<RadixSelect disabled={busy || !!uncertain} value={selected} onChange={e => setSelected(e.target.value)}>{catalog.definitions.map(d => <option key={d.id} value={d.id}>{d.draft.name} · {d.versions.length ? `v${d.versions.at(-1)!.version}` : '未发布'}</option>)}</RadixSelect></label>
       <div className="workflow-toolbar"><button type="button" onClick={() => edit(false)} disabled={!definition || disabled || busy}>打开节点画布</button><button type="button" onClick={() => edit(true)} disabled={!definition || disabled || busy}>复制为项目工作流</button></div>
       {!run && catalog.hasManualDelivery && <p>此任务已有手动代码交付，请继续使用下方原入口。新工作流请在新任务启动；仍可编辑项目模板。</p>}
       {!run && !catalog.hasManualDelivery && <>
         <small>仓库：{catalog.repository ?? '未就绪：请先绑定具有 GitHub origin 的项目 Git 仓库'}。模板发布不等于授权执行。</small>
         <label>远端基准分支<input placeholder="填写实际分支，例如 main" value={base} disabled={!!uncertain || busy} onChange={e => setBase(e.target.value)} /></label>
-        <label>运行 Provider<select value={provider} disabled={!!uncertain || busy} onChange={e => { setProvider(e.target.value); setModel(''); }}><option value="">选择已有 Provider</option>{providers.map(p => <option key={p.instanceId} value={p.instanceId} disabled={!p.enabled || !p.nativeSessionReady || !p.configured || (!!needWrite && p.driver !== 'codex')}>{p.label}{!p.nativeSessionReady ? ' · 未就绪' : ''}</option>)}</select></label>
-        <label>运行模型<select value={model} disabled={!providerValue || !!uncertain || busy} onChange={e => setModel(e.target.value)}><option value="">选择模型</option>{providerValue?.models.map(m => <option key={m.id} value={m.id} disabled={!!m.disabledReason}>{m.label}</option>)}</select></label>
+        <label>运行 Provider<RadixSelect value={provider} disabled={!!uncertain || busy} onChange={e => { setProvider(e.target.value); setModel(''); }}><option value="">选择已有 Provider</option>{providers.map(p => <option key={p.instanceId} value={p.instanceId} disabled={!p.enabled || !p.nativeSessionReady || !p.configured || (!!needWrite && p.driver !== 'codex')}>{p.label}{!p.nativeSessionReady ? ' · 未就绪' : ''}</option>)}</RadixSelect></label>
+        <label>运行模型<RadixSelect value={model} disabled={!providerValue || !!uncertain || busy} onChange={e => setModel(e.target.value)}><option value="">选择模型</option>{providerValue?.models.map(m => <option key={m.id} value={m.id} disabled={!!m.disabledReason}>{m.label}</option>)}</RadixSelect></label>
         <small>{providersLoading ? '正在检查 Provider，画布可先编辑。' : providerError}</small><button type="button" onClick={() => void loadProviders()} disabled={providersLoading}>刷新 Provider</button>
         {!providersLoading && providers.filter(p => !p.nativeSessionReady).map(p => <small key={p.instanceId}>{p.label} 未就绪：{providerReadinessHint(p.message)}</small>)}
         <div className="delivery-preflight" aria-label="启动前检查"><span data-ready={!!published}>流程{published ? '已发布' : '待发布'}</span><span data-ready={!!catalog.repository}>仓库{catalog.repository ? '已绑定' : '未就绪'}</span><span data-ready={!!providerValue?.nativeSessionReady}>Agent{providerValue?.nativeSessionReady ? '已就绪' : '待选择或修复'}</span><span data-ready={!disabled}>{disabled ? '请先保存任务' : '任务已保存'}</span></div>

@@ -104,6 +104,7 @@ export function DropdownMenuItem({
       {...props}
       {...(render !== undefined ? { asChild: true } : {})}
       onSelect={(event) => {
+        if (closeOnClick === false) event.preventDefault()
         onSelect?.(event)
         if (closeOnClick) close?.()
       }}
@@ -135,6 +136,7 @@ export function DropdownMenuCheckboxItem({
     <MenuPrimitive.CheckboxItem
       {...props}
       onSelect={(event) => {
+        if (closeOnClick === false) event.preventDefault()
         onSelect?.(event)
         if (closeOnClick) close?.()
       }}
@@ -165,6 +167,7 @@ export function DropdownMenuRadioItem({
     <MenuPrimitive.RadioItem
       {...props}
       onSelect={(event) => {
+        if (closeOnClick === false) event.preventDefault()
         onSelect?.(event)
         if (closeOnClick) close?.()
       }}

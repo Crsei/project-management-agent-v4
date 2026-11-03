@@ -1,5 +1,5 @@
 import { Link, useLocation, useMatch, useParams } from "react-router"
-import { useState, useSyncExternalStore, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { onlineManager } from "@tanstack/react-query"
 import { ApiError } from "@contracts"
 import {
@@ -26,6 +26,7 @@ import {
   UsersRound,
 } from "lucide-react"
 import { WorkspaceShell } from "@/components/blocks/workspace-shell"
+import { DovspaceBrandLink } from "@/components/dovspace-brand"
 import {
   ErrorPageScreen,
   type HttpErrorCode,
@@ -51,10 +52,12 @@ import { PmCommandPalette } from "./service/pm-command-palette"
 import { PmAuthPageShell } from "./service/pm-auth-page"
 import { PmUserMenu } from "./service/pm-user-menu"
 import { PmCommandRecovery } from "./service/pm-ui"
+import { PmNoticeCenterTrigger, PmNoticeProvider, usePmNoticeCenter } from "./service/pm-notice-center"
 import { ServiceProjectSidebar } from "./service/service-project-layout"
 import { ServiceProjectMenuProvider } from "./service/project-menu"
 import { PmWorkspaceSwitcher } from "./service/pm-workspace-switcher"
 import { useCoreDraftProtection } from "./markdown/session"
+import { documentWorkbenchLocation } from "./markdown/document-workbench-navigation"
 import { useNavigate } from "react-router"
 import { PmShowcaseCatalog } from "./pm-showcase-catalog"
 import dashboardStyles from "@/views/pm/dashboards-views.module.css"
@@ -511,6 +514,37 @@ function ServiceFrame({ children }: { children: ReactNode }) {
       setRetrying(false)
     }
   }
+  const { upsert: upsertNotice, resolve: resolveNotice, reset: resetNotices } = usePmNoticeCenter()
+  const noticeScope = `${actor?.id ?? "anonymous"}:${workspace?.id ?? "none"}:${service.actorEpoch}`
+  const previousNoticeScope = useRef(noticeScope)
+  useEffect(() => {
+    if (previousNoticeScope.current === noticeScope) return
+    previousNoticeScope.current = noticeScope
+    resetNotices()
+  }, [noticeScope, resetNotices])
+  useEffect(() => {
+    if (!online) {
+      upsertNotice({ key: "shell:offline", severity: "warning", title: en ? "You are offline" : "当前离线", detail: en ? "Showing the last snapshot, which may be stale. Reads resume when the network returns; unknown commands still need their original receipts checked." : "显示的上次快照可能已过期。联网后恢复读取；结果未知的命令仍须查询原收据。", source: "shell", sticky: true })
+    } else {
+      resolveNotice("shell:offline")
+    }
+  }, [en, online, resolveNotice, upsertNotice])
+  const streamInterrupted = !!workspace && online && (streamState === "reconnecting" || streamState === "resyncing")
+  useEffect(() => {
+    if (streamInterrupted) {
+      upsertNotice({ key: "shell:stream", severity: "warning", title: en ? "Live updates interrupted" : "实时更新中断", detail: en ? "The connection is reconnecting or resynchronizing; the last snapshot may be stale. Unknown writes still need their original receipts checked." : "连接正在重连或重新同步，上次快照可能已过期；结果未知的写入仍须核对原收据。", source: "shell", sticky: true })
+    } else {
+      resolveNotice("shell:stream")
+    }
+  }, [en, resolveNotice, streamInterrupted, upsertNotice])
+  const serviceErrorMessage = service.error ? pmErrorMessage(service.error, en ? "en" : "zh") : null
+  useEffect(() => {
+    if (serviceErrorMessage) {
+      upsertNotice({ key: "shell:service-error", severity: "error", title: en ? "Session or service error" : "会话或服务错误", detail: serviceErrorMessage, source: "shell", sticky: true })
+    } else {
+      resolveNotice("shell:service-error")
+    }
+  }, [en, resolveNotice, serviceErrorMessage, upsertNotice])
   if (errorCode) {
     return (
       <ErrorPageScreen
@@ -537,6 +571,7 @@ function ServiceFrame({ children }: { children: ReactNode }) {
           split={!actor}
           toolbar={
             <>
+              <PmNoticeCenterTrigger />
               {actor && (
                 <Button
                   variant="ghost"
@@ -566,8 +601,10 @@ function ServiceFrame({ children }: { children: ReactNode }) {
   }
   const base = workspace ? `/pm/${encodeURIComponent(workspaceSlug || workspace.id)}` : "/pm"
   const searchParams = new URLSearchParams(location.search)
+  const documentWorkbench = pathname.endsWith("/documents") && documentWorkbenchLocation(searchParams).enabled
   const issueCollection = pathname.replace(/\/$/, "") === `${base}/issues`
   const scope = searchParams.get("scope")
+  const graphView = searchParams.get("view") === "graph"
   const personalScope = scope === "mine" || scope === "important"
   const taskView = requestedView || (searchParams.get("savedView") ? "" : configuredIssue)
   const scheduleView = ["calendar", "calendar1", "calendar2", "hour-calendar"].includes(taskView)
@@ -596,14 +633,22 @@ function ServiceFrame({ children }: { children: ReactNode }) {
   ] as const
   const navigationLinkClass = shellStyles.navigationLink
   const currentProjectId = projectDetailMatch?.params.projectId ?? projectMatch?.params.projectId
-  const pageLabel = pathname.endsWith("/issues/new")
+  const pageLabel = documentWorkbench
+    ? en ? "Document workbench" : "文档工作台"
+    : pathname.endsWith("/issues/new")
     ? en ? "New task" : "新建任务"
     : pathname.includes("/entities/")
       ? en ? "Entity details" : "对象详情"
       : currentProjectId
         ? pathname.endsWith("/issues")
-          ? en ? "Tasks" : "任务"
-          : pathname.endsWith("/events") ? en ? "Calendar" : "日历" : null
+          ? graphView ? "" : en ? "Tasks" : "任务"
+          : pathname.endsWith("/overview")
+            ? en ? "Overview" : "概览"
+            : pathname.endsWith("/files")
+            ? en ? "Files" : "文件"
+            : pathname.endsWith("/activity")
+              ? en ? "Activity" : "活动"
+              : pathname.endsWith("/events") ? en ? "Calendar" : "日历" : null
         : issueCollection && personalScope
           ? personalLinks.find(([personal]) => personal === scope)?.[2]
           : settingsActive
@@ -613,6 +658,7 @@ function ServiceFrame({ children }: { children: ReactNode }) {
               : homePage ? homeLabel : links.find(([, , , active]) => active)?.[2] ?? (en ? "Workspace" : "工作区")
   const controls = <div className={shellStyles.headerControls}>
     {actor && <div className={shellStyles.command}><PmCommandPalette /></div>}
+    {actor && <PmNoticeCenterTrigger />}
     {workspace && <ServiceHeaderMenu base={base} section={pageSection} activeView={pageVariant} />}
   </div>
   const menuScope = `${actor?.id ?? "anonymous"}:${workspace?.id ?? "none"}`
@@ -622,6 +668,7 @@ function ServiceFrame({ children }: { children: ReactNode }) {
     ...links.map(([path, icon, label, active]) => ({ key: path, to: `${base}/${path}`, icon, label, active })),
   ]
   const sidebarRail = <nav data-pm-sidebar className={shellStyles.rail} aria-label={en ? "Workspace navigation" : "工作区导航"}>
+    <div className="flex h-12 shrink-0 items-center justify-center"><DovspaceBrandLink collapsed /></div>
     <PmWorkspaceSwitcher collapsed />
     <div className={shellStyles.railScroll}>
       {workspace && railItems.map(({ key, to, icon: Icon, label, active }) => <Link key={key} to={to} data-navigation-close title={label} aria-label={label} aria-current={active ? "page" : undefined} className={shellStyles.railLink}><Icon className="size-4 shrink-0" aria-hidden="true" /></Link>)}
@@ -631,9 +678,10 @@ function ServiceFrame({ children }: { children: ReactNode }) {
       {actor && <PmUserMenu collapsed />}
     </div>
   </nav>
-  return <ServiceProjectMenuProvider key={menuScope}><div className={`fixed inset-0 min-w-0 ${referenceLayout ? dashboardStyles.page : ""}`} data-pm-product data-pm-actor={actor?.id}>
-    <WorkspaceShell layoutMode="adaptive" mobileNavigation headerPlacement="main" defaultSidebarWidth={252} sidebarMinWidth={200} sidebarMaxWidth={360} sidebarResizable inspectorOpen={false} bottomPanelOpen={false}
-      sidebarCollapsed={sidebarCollapsed} onSidebarCollapsedChange={setSidebarCollapsed} collapsedSidebar={sidebarRail}
+  return <ServiceProjectMenuProvider key={menuScope}><div className={`fixed inset-0 min-w-0 ${referenceLayout ? dashboardStyles.page : ""}`} data-pm-product data-pm-actor={actor?.id} data-pm-document-workbench={documentWorkbench || undefined}>
+    <WorkspaceShell layoutMode={documentWorkbench ? "desktop" : "adaptive"} mobileNavigation headerPlacement="main" defaultSidebarWidth={252} sidebarMinWidth={200} sidebarMaxWidth={360} sidebarResizable={!documentWorkbench} inspectorOpen={false} bottomPanelOpen={false}
+      sidebarCollapsed={documentWorkbench || sidebarCollapsed} onSidebarCollapsedChange={setSidebarCollapsed} collapsedSidebar={documentWorkbench ? undefined : sidebarRail} activityBar={documentWorkbench ? sidebarRail : undefined}
+      sidebarHeader={documentWorkbench ? undefined : <DovspaceBrandLink />}
       title={<nav className={shellStyles.breadcrumb} aria-label={en ? "Breadcrumb" : "面包屑导航"}>
         <Link to={base} className={shellStyles.workspaceCrumb} title={workspace?.name}>{workspace?.name ?? (en ? "Workspace" : "工作区")}</Link>
         <ChevronRight className={shellStyles.workspaceCrumbSeparator} aria-hidden="true" />
@@ -641,7 +689,7 @@ function ServiceFrame({ children }: { children: ReactNode }) {
         {pageLabel && <span className={shellStyles.currentContext} aria-current="page" title={pageLabel}>{pageLabel}</span>}
       </nav>}
       toolbar={controls}
-      sidebar={<nav data-pm-sidebar className={shellStyles.sidebar} aria-label={en ? "Workspace navigation" : "工作区导航"}>
+      sidebar={documentWorkbench ? undefined : <nav data-pm-sidebar className={shellStyles.sidebar} aria-label={en ? "Workspace navigation" : "工作区导航"}>
         <PmWorkspaceSwitcher />
         <div className={shellStyles.sidebarScroll}>
           {workspace && <>
@@ -663,9 +711,6 @@ function ServiceFrame({ children }: { children: ReactNode }) {
         </div>
       </nav>} className={`h-full! ${shellStyles.shell}`}>
       <div key={`${actor?.id ?? "anonymous"}:${workspace?.id ?? "none"}`} ref={entranceRef} className="flex h-full min-h-0 min-w-0 flex-col" data-pm-route-surface>
-        {!online && <p role="status" className="shrink-0 border-b border-warning bg-surface p-3 text-sm">{en ? "Offline. Showing the last snapshot, which may be stale. Reads resume when the network returns; unknown commands still require checking their original receipts." : "当前离线，显示的上次快照可能已过期。联网后恢复读取；结果未知的命令仍须查询原收据。"}</p>}
-        {workspace && online && (streamState === "reconnecting" || streamState === "resyncing") && <p role="status" className="shrink-0 border-b border-warning bg-surface p-3 text-sm">{en ? "Live updates were interrupted or need resynchronization; the last snapshot may be stale. Unknown writes still need their original receipts checked." : "实时更新中断或需要重新同步，上次快照可能已过期；结果未知的写入仍须核对原收据。"}</p>}
-        {service.error && <p role="alert" className="shrink-0 border-b border-destructive bg-surface px-3 py-2 text-sm text-destructive">{pmErrorMessage(service.error, en ? "en" : "zh")}</p>}
         <PmCommandRecovery />
         <PmAgentProvider>{children}</PmAgentProvider>
       </div>
@@ -674,5 +719,5 @@ function ServiceFrame({ children }: { children: ReactNode }) {
 }
 
 export function PmProductLayout({ children }: { children: ReactNode }) {
-  return <PmServiceProvider><ServiceFrame>{children}</ServiceFrame></PmServiceProvider>
+  return <PmServiceProvider><PmNoticeProvider><ServiceFrame>{children}</ServiceFrame></PmNoticeProvider></PmServiceProvider>
 }

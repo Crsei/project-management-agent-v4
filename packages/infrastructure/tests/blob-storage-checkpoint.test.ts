@@ -1,14 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, mkdir, writeFile, rm, symlink, cp, lstat } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, realpath, rm, symlink, link, unlink, cp, lstat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { captureCoreCheckpoint, verifyCoreCheckpoint } from '../src/blob-storage-checkpoint.ts';
 import { Workspace } from '../../pm-core/index.ts';
+import { exportLocalProjectCheckpoint, localProjectCheckpointSha256, restoreLocalProjectCheckpoint } from '../src/project-storage-checkpoint.ts';
 
 test('checkpoint preserves config/views/state and excludes only reconstructible cache', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'pm-core-checkpoint-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-core-checkpoint-'))); t.after(() => rm(root, { recursive: true, force: true }));
   const workspace = join(root, randomUUID());
   await mkdir(join(workspace, '.pm', 'state'), { recursive: true }); await mkdir(join(workspace, '.pm', 'cache')); await mkdir(join(workspace, '.pm', 'views'));
   await writeFile(join(workspace, '.pm', 'config.yaml'), 'schemaVersion: 1\n');
@@ -26,7 +27,7 @@ test('checkpoint preserves config/views/state and excludes only reconstructible 
   await assert.rejects(verifyCoreCheckpoint(root, [{ path: '../escape', sha256: 'a'.repeat(64), size: 0 }]), { code: 'blob_checkpoint_unsafe' });
 });
 test('checkpoint restores a default-config workspace without inventing a configuration file', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'pm-core-checkpoint-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-core-checkpoint-'))); t.after(() => rm(root, { recursive: true, force: true }));
   const sourceRoot = join(root, 'source'), targetRoot = join(root, 'target'), id = randomUUID();
   const source = new Workspace(join(sourceRoot, id));
   await source.init();
@@ -45,9 +46,57 @@ test('checkpoint restores a default-config workspace without inventing a configu
   finally { await restored.close(); }
 });
 test('checkpoint never recreates missing durable state or follows symlinks to make recovery pass', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'pm-core-checkpoint-')); t.after(() => rm(root, { recursive: true, force: true }));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-core-checkpoint-'))); t.after(() => rm(root, { recursive: true, force: true }));
   const workspace = join(root, randomUUID()); await mkdir(join(workspace, '.pm'), { recursive: true }); await writeFile(join(workspace, '.pm', 'config.yaml'), 'schemaVersion: 1\n');
   await assert.rejects(captureCoreCheckpoint(root));
-  await mkdir(join(workspace, '.pm', 'state')); await symlink('/etc/passwd', join(workspace, 'not-markdown'));
+  await mkdir(join(workspace, '.pm', 'state'));
+  const outside = `${root}-outside`; await mkdir(outside); t.after(() => rm(outside, { recursive: true, force: true })); await writeFile(join(outside, 'private'), 'not checkpoint data');
+  await symlink(outside, join(workspace, 'not-markdown'), process.platform === 'win32' ? 'junction' : 'dir');
   await assert.rejects(captureCoreCheckpoint(root), { code: 'blob_checkpoint_unsafe' });
+});
+
+test('native checkpoint capture rejects hardlinked authoritative content', async t => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-checkpoint-links-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const core = join(root, 'core'), workspace = join(core, randomUUID());
+  await mkdir(join(workspace, '.pm', 'state'), { recursive: true });
+  const file = join(workspace, 'TASK-001.md'), alias = join(root, 'outside-hardlink');
+  await writeFile(file, '# Durable state');
+  await link(file, alias);
+  await assert.rejects(captureCoreCheckpoint(core), { code: 'blob_checkpoint_unsafe' });
+  await unlink(alias);
+  assert.equal((await captureCoreCheckpoint(core)).length, 1);
+});
+
+test('project restore rejects unsafe portable manifest paths before creating targets', async t => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-checkpoint-paths-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourceRoot = join(root, 'source'), workspace = new Workspace(join(sourceRoot, randomUUID()));
+  await workspace.init(); await workspace.close();
+  const directory = join(root, 'archive');
+  const backup = await exportLocalProjectCheckpoint({ coreRoot: sourceRoot, directory, stopped: true });
+  assert.ok(backup.manifest.core.length);
+  const paths = ['../escape', '/absolute', 'C:drive-relative', 'unsafe\\\\segment', ...(process.platform === 'win32' ? ['file:stream', 'CON.txt', 'name.', 'name '] : [])];
+  for (const [index, path] of paths.entries()) {
+    const manifest = { ...backup.manifest, core: backup.manifest.core.map((entry, position) => position === 0 ? { ...entry, path } : entry) };
+    const targetCoreRoot = join(root, `target-core-${index}`), targetProjectsRoot = join(root, `target-projects-${index}`);
+    await assert.rejects(restoreLocalProjectCheckpoint({ directory, manifest, expectedManifestSha256: localProjectCheckpointSha256(manifest), targetCoreRoot, targetProjectsRoot, stopped: true }), { code: 'blob_checkpoint_unsafe' });
+    await assert.rejects(lstat(targetCoreRoot), { code: 'ENOENT' });
+    await assert.rejects(lstat(targetProjectsRoot), { code: 'ENOENT' });
+  }
+});
+
+test('native restore refuses directory symlinks or Windows junctions without modifying their target', async t => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-checkpoint-junction-')));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourceRoot = join(root, 'source'), workspace = new Workspace(join(sourceRoot, randomUUID()));
+  await workspace.init(); await workspace.close();
+  const directory = join(root, 'archive');
+  const backup = await exportLocalProjectCheckpoint({ coreRoot: sourceRoot, directory, stopped: true });
+  const outside = join(root, 'outside'); await mkdir(outside); await writeFile(join(outside, 'sentinel'), 'untouched');
+  const targetCoreRoot = join(root, 'target-core'), targetProjectsRoot = join(root, 'target-projects');
+  await symlink(outside, targetCoreRoot, process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(restoreLocalProjectCheckpoint({ directory, manifest: backup.manifest, expectedManifestSha256: backup.manifestSha256, targetCoreRoot, targetProjectsRoot, stopped: true }));
+  assert.equal((await readFile(join(outside, 'sentinel'))).toString(), 'untouched');
+  assert.deepEqual(await captureCoreCheckpoint(sourceRoot), backup.manifest.core);
 });

@@ -11,6 +11,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
 import { providerAttachmentsDirectory, registerProviderAttachment } from "./attachments.ts";
+import { registerMcpAppAsset } from "../../../mcp-apps/assets.ts";
 
 function readMcpAppDocument(contents: ReadonlyArray<unknown>, uri: string): { html: string | null; meta: unknown } | undefined {
   for (const content of contents) {
@@ -50,6 +51,13 @@ export const snapshotMcpApp = Effect.fn("PmMcpAppSnapshot.snapshot")(function* (
   const csp = readMcpAppCsp(ui.csp);
   const html = injectMcpAppCsp(document.html, csp);
   const attachmentId = `${randomUUID()}-html`;
+  const permissions = readMcpAppPermissions(ui.permissions);
+  const reference = {
+    attachmentId, server: input.server, tool: input.tool, resourceUri: input.resourceUri,
+    ...(csp === undefined ? {} : { csp }),
+    ...(permissions === undefined ? {} : { permissions }),
+    ...(typeof ui.prefersBorder === "boolean" ? { prefersBorder: ui.prefersBorder } : {}),
+  } satisfies McpAppReference;
   yield* Effect.try({
     try: () => {
       const root = path.resolve(providerAttachmentsDirectory());
@@ -64,6 +72,7 @@ export const snapshotMcpApp = Effect.fn("PmMcpAppSnapshot.snapshot")(function* (
         finally { closeSync(descriptor); }
         registerProviderAttachment({ id: attachmentId, type: "file", name: relativePath,
           mimeType: MCP_APP_MIME_TYPE, sizeBytes: Buffer.byteLength(html, "utf8") }, relativePath);
+        registerMcpAppAsset(input.threadId, reference, html);
       } catch (error) {
         unlinkSync(file);
         throw error;
@@ -71,11 +80,5 @@ export const snapshotMcpApp = Effect.fn("PmMcpAppSnapshot.snapshot")(function* (
     },
     catch: cause => cause instanceof Error ? cause : new Error("Could not register the native MCP snapshot."),
   });
-  const permissions = readMcpAppPermissions(ui.permissions);
-  return {
-    attachmentId, server: input.server, tool: input.tool, resourceUri: input.resourceUri,
-    ...(csp === undefined ? {} : { csp }),
-    ...(permissions === undefined ? {} : { permissions }),
-    ...(typeof ui.prefersBorder === "boolean" ? { prefersBorder: ui.prefersBorder } : {}),
-  } satisfies McpAppReference;
+  return reference;
 });

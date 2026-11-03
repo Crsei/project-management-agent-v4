@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { MultiFileDiff } from "@pierre/diffs/react";
 import "@xterm/xterm/css/xterm.css";
 import { Markdown } from "../../../../../../../vendor/agent-workspace-views/conversations/markdown";
-import type { NativeInteractionResponse, NativeOutputItem } from "@agent-workspace/contracts/output";
+import type { GenerationOutputStatus, NativeInteractionResponse, NativeOutputItem } from "@agent-workspace/contracts/output";
 import { WorkspaceClientError } from "@agent-workspace/client-runtime";
 import { appendTerminalOutput, EMPTY_TERMINAL_OUTPUT, terminalOutputPlainText } from "@agent-workspace/contracts/terminal-output";
 import { workspaceClient } from "../network";
@@ -12,6 +12,7 @@ import { subscribeCommand, useGenerationOutput } from "./output-stream";
 import { PmToolCard } from "./pm-tool-card";
 import { usePmToolCalls } from "./pm-tool-calls";
 import { useAgentText, type AgentText } from "../i18n";
+import { McpAppFrame } from "./mcp-app-frame";
 import "./output-timeline.css";
 
 const labels = (t: AgentText): Record<NativeOutputItem["type"], string> => ({
@@ -140,7 +141,7 @@ function Diff({ text }: { text: string }) {
 // assistant-ui replaces the live message with authoritative history at finish.
 // Keep explicit expansion through that remount, without persisting output or unbounded keys.
 const expandedRows = new Set<string>();
-const OutputRow = memo(function OutputRow({ item, generationId }: { item: NativeOutputItem; generationId: string }) {
+const OutputRow = memo(function OutputRow({ item, generationId, generationStatus }: { item: NativeOutputItem; generationId: string; generationStatus: GenerationOutputStatus }) {
   const t = useAgentText();
   const expansionKey = JSON.stringify([generationId, item.id]);
   const [open, setOpen] = useState(() => expandedRows.has(expansionKey));
@@ -167,7 +168,7 @@ const OutputRow = memo(function OutputRow({ item, generationId }: { item: Native
     {(item.type === "notification" || item.type === "error" || item.type === "compaction") && <>{item.text && <p>{item.text}</p>}{item.output && <pre>{item.output}</pre>}{item.input !== undefined && <pre>{printable(item.input)}</pre>}</>}
     {item.error && <p role="alert" className="native-error">{item.error}</p>}
   </>;
-  return <section className={`native-output-card native-${item.type}`}><header>{collapsible ? <button type="button" aria-expanded={open} onClick={toggle}><span aria-hidden>{open ? "▾" : "▸"}</span> {title}</button> : <strong>{title}</strong>}<span className="native-status">{statuses(t)[item.status]} <Duration item={item} /></span></header>{(!collapsible || open) && <div className="native-card-body">{body}</div>}</section>;
+  return <section className={`native-output-card native-${item.type}`}><header>{collapsible ? <button type="button" aria-expanded={open} onClick={toggle}><span aria-hidden>{open ? "▾" : "▸"}</span> {title}</button> : <strong>{title}</strong>}<span className="native-status">{statuses(t)[item.status]} <Duration item={item} /></span></header>{item.mcpApp && <McpAppFrame key={JSON.stringify(item.mcpApp.producing)} app={item.mcpApp} generationStatus={generationStatus} />}{(!collapsible || open) && <div className="native-card-body">{body}</div>}</section>;
 });
 export function OutputTimeline({ generationId }: { generationId: string }) {
   const t = useAgentText();
@@ -203,7 +204,7 @@ export function OutputTimeline({ generationId }: { generationId: string }) {
         return <PmToolCard key={item.id} record={record} onUpdate={toolCalls!.update} />;
       }
       if (operationId) return <section key={item.id} className="native-output-card"><header><strong>{item.toolName || t("PM 工具", "PM tool")}</strong><span>{callsError ? t("记录不可用", "Records unavailable") : t("正在读取操作记录…", "Loading operation records…")}</span></header></section>;
-      return <OutputRow key={item.id} item={item} generationId={generationId} />;
+      return <OutputRow key={item.id} item={item} generationId={generationId} generationStatus={snapshot.status} />;
     })}
     {calls.filter(call => !rendered.has(call.operationId)).map(call => <PmToolCard key={call.operationId} record={call} onUpdate={toolCalls!.update} />)}
     {snapshot && <div className="native-generation-status" role="status">{snapshot.status === "queued" ? t("等待运行", "Queued") : snapshot.status === "running" ? t("正在运行", "Running") : snapshot.status === "completed" ? t("运行完成", "Run completed") : snapshot.status === "failed" ? t("运行失败", "Run failed") : snapshot.status === "cancelled" ? t("运行已取消", "Run cancelled") : t("运行已中断", "Run interrupted")}</div>}

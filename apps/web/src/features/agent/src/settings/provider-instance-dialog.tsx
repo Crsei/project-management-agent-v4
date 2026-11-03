@@ -13,6 +13,7 @@ import { useAgentText } from "../i18n";
 import { useSettingsGuard } from "./settings-layout";
 import { ProviderGlyph } from "./provider-card";
 import { ProviderModelSettings, emptyModelPreferences } from "./provider-model-settings";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type Operations = {
   createInstance: (input: ProviderInstanceInput) => Promise<ProviderInstance>;
@@ -343,7 +344,7 @@ export function ProviderInstanceForm({ provider, providers, drivers, createInsta
       </section>}
       {wizard && driver === "acpRegistry" && step === 1 && <section className="provider-settings-section">
         <h3>{t("选择 ACP 来源", "Choose an ACP source")}</h3>
-        <div className="provider-settings-group"><SettingsRow title={t("来源", "Source")}><select value={localAcp ? "local" : "registry"} onChange={(event) => { if (sourceField) changeField(sourceField, event.target.value); setPreparation(null); }}><option value="registry">ACP Registry</option><option value="local">{t("本地命令", "Local command")}</option></select></SettingsRow></div>
+        <div className="provider-settings-group"><SettingsRow title={t("来源", "Source")}><RadixSelect value={localAcp ? "local" : "registry"} onChange={(event) => { if (sourceField) changeField(sourceField, event.target.value); setPreparation(null); }}><option value="registry">ACP Registry</option><option value="local">{t("本地命令", "Local command")}</option></RadixSelect></SettingsRow></div>
         {!localAcp && <div className="provider-registry-search">
           <label htmlFor={`${id}-registry-wizard`}>{t("搜索 ACP Registry", "Search the ACP Registry")}</label>
           <div><Input id={`${id}-registry-wizard`} value={registryQuery} onChange={(event) => setRegistryQuery(event.target.value)} /><Button type="button" variant="outline" onClick={() => void searchRegistry()}><Search aria-hidden="true" />{t("搜索", "Search")}</Button></div>
@@ -386,7 +387,7 @@ export function ProviderInstanceForm({ provider, providers, drivers, createInsta
       {(!definition || fields.length > 0 || runtime) && <RuntimeSection className={`provider-settings-section${managedCodex ? " provider-runtime-fold" : ""}`} aria-label="Runtime">
         {managedCodex ? <summary>Runtime</summary> : <h3>Runtime</h3>}
         {managedCodex && <div className="provider-settings-group"><SettingsRow title="Codex runtime"><code>{baseline?.installation?.executablePath ?? t("尚未准备运行时", "Runtime not prepared yet")}</code></SettingsRow></div>}
-        {definition?.docsUrl && <p className="provider-section-note"><a href={definition.docsUrl} target="_blank" rel="noreferrer noopener" className="underline">{t("配置文档", "Configuration docs")}</a></p>}
+        {definition?.docsUrl && <p className="provider-section-note"><a href={definition.docsUrl} target="_blank" rel="noreferrer noopener" className="hover:text-primary">{t("配置文档", "Configuration docs")}</a></p>}
         {!definition && <p role="alert" className="provider-feedback provider-feedback-error">{t("驱动配置元数据不可用，请重新读取提供商。", "Driver configuration metadata is unavailable. Reload the providers.")}</p>}
         {!wizard && driver === "acpRegistry" && !localAcp && <div className="provider-registry-search">
           <label htmlFor={`${id}-registry`}>ACP Registry</label>
@@ -404,11 +405,11 @@ export function ProviderInstanceForm({ provider, providers, drivers, createInsta
           const secret = entry.secret || entry.type === "password" || entry.control === "password";
           const helpId = entry.description ? `${inputId}-help` : undefined;
           return <SettingsRow key={entry.key} title={entry.label} description={entry.description} inputId={inputId}>
-            {entry.type === "boolean" ? <input id={inputId} aria-describedby={helpId} type="checkbox" role="switch" checked={value === true} onChange={(event) => { const draft = changeField(entry, event.target.checked); if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`, false, draft); }} /> : entry.type === "select" ? <select id={inputId} aria-describedby={helpId} value={String(value)} required={entry.required} onChange={(event) => { const draft = changeField(entry, event.target.value); if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`, false, draft); }}>
+            {entry.type === "boolean" ? <input id={inputId} aria-describedby={helpId} type="checkbox" role="switch" checked={value === true} onChange={(event) => { const draft = changeField(entry, event.target.checked); if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`, false, draft); }} /> : entry.type === "select" ? <RadixSelect id={inputId} aria-describedby={helpId} value={String(value)} required={entry.required} onChange={(event) => { const draft = changeField(entry, event.target.value); if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`, false, draft); }}>
               {entry.defaultValue === undefined && <option value="">{entry.required ? t("请选择", "Select") : t("使用默认值", "Use default")}</option>}
               {String(value) && !entry.options?.some((option) => option.value === value) && <option value={String(value)}>{t(`${String(value)}（当前配置）`, `${String(value)} (current)`)}</option>}
               {entry.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select> : entry.type === "string-list" ? <div className="provider-string-list">
+            </RadixSelect> : entry.type === "string-list" ? <div className="provider-string-list">
               {(Array.isArray(value) ? value : []).map((item, index, items) => <div key={index}><Input aria-label={`${entry.label} ${index + 1}`} value={item} autoComplete="off" onChange={(event) => changeField(entry, items.map((current, row) => row === index ? event.target.value : current))} /><Button type="button" size="icon-sm" variant="ghost" aria-label={t(`移除 ${entry.label} ${index + 1}`, `Remove ${entry.label} ${index + 1}`)} onClick={() => changeField(entry, items.filter((_, row) => row !== index))}><X aria-hidden="true" /></Button></div>)}
               <Button type="button" size="sm" variant="outline" onClick={() => changeField(entry, [...(Array.isArray(value) ? value : []), ""])}><Plus aria-hidden="true" />{t("添加", "Add")}</Button>
             </div> : entry.control === "textarea" && !secret ? <textarea id={inputId} aria-describedby={helpId} value={String(value)} placeholder={entry.placeholder} required={entry.required} spellCheck={false} onChange={(event) => changeField(entry, event.target.value)} onBlur={() => { if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`); }} /> : <Input id={inputId} aria-describedby={helpId} type={secret ? "password" : entry.type === "number" ? "number" : "text"} required={entry.required && !(secret && storedSecret && configDraft[entry.key] !== null)} min={entry.min} max={entry.max} step={entry.type === "number" ? "any" : undefined} value={String(value)} autoComplete={secret ? "new-password" : "off"} spellCheck={false} placeholder={secret && storedSecret ? t("已保存 · 留空保留现有值", "Saved · leave blank to keep the current value") : entry.placeholder} onChange={(event) => changeField(entry, event.target.value)} onBlur={() => { if (!wizard && driver !== "acpRegistry") void save(`config:${entry.key}`); }} />}

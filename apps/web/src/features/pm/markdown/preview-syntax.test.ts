@@ -58,6 +58,13 @@ test('GFM footnotes and local anchors coexist with hidden title, source lines, b
   assert.match(html, /Real footnote/);
 });
 
+test('hideTitle removes every top-level H1 while keeping section headings', () => {
+  const html = render('# First title\n\n# Duplicate title\n\n## Section', true);
+  assert.doesNotMatch(html, /<h1/);
+  assert.match(html, /<h2[^>]*>Section<\/h2>/);
+  assert.doesNotMatch(html, /First title|Duplicate title/);
+});
+
 test('image dimensions are rendered as bounded attributes while escaped non-table dimensions remain literal', () => {
   const html = render('![diagram|640x480](https://example.test/a.png)\n\n![literal\\|640](https://example.test/a.png)\n\n| Image |\n| --- |\n| ![cell\\|320](https://example.test/a.png) |');
   assert.match(html, /alt="diagram" width="640" height="480"/);

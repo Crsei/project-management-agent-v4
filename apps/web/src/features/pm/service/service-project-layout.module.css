@@ -48,7 +48,32 @@
 }
 
 .workspaceTrigger {
-  min-height: 48px;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 60px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--surface-raised);
+  color: var(--foreground);
+  text-align: left;
+}
+
+.workspaceTrigger:hover { background: var(--surface-hover); }
+.workspaceTrigger:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.collapsedTrigger { width: 40px; min-height: 40px; justify-content: center; padding: 4px; }
+.applicationIcon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: var(--selection);
+  color: var(--primary);
 }
 
 @media (pointer: coarse) {

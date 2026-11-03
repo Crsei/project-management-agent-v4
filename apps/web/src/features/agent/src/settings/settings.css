@@ -6,10 +6,13 @@
   font: 14px/1.5 var(--font-sans);
 }
 .settings-shell * { min-width: 0; }
+/* Settings rows render provider names and other labels inside buttons. Native buttons
+   opt out of text selection, so allow selection without changing activation behavior. */
+.settings-shell :is(button, summary) { -webkit-user-select: text; user-select: text; }
 .settings-shell svg { width: 16px; height: 16px; flex-shrink: 0; }
 .settings-shell button:not(:disabled), .settings-shell summary { cursor: pointer; }
 .settings-shell button:disabled { cursor: not-allowed; }
-.settings-shell :is(button, a, summary, input, select, textarea):focus-visible {
+.settings-shell :is(button, a, summary, input, [data-slot="select-trigger"], textarea):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
@@ -59,7 +62,8 @@
 .settings-notice > div { flex: 1; min-width: min(180px, 100%); }
 .settings-notice > button { margin-left: auto; }
 .settings-notice > div > button { margin-top: 10px; }
-.settings-notice a { color: var(--ring); text-decoration: underline; text-underline-offset: 3px; }
+.settings-notice a { color: var(--ring); text-decoration: none; }
+.settings-notice a:hover { background: var(--selection); }
 .settings-notice[data-kind="error"] { color: var(--destructive); }
 .settings-notice[data-kind="loading"], .settings-notice[data-kind="info"] { color: var(--muted-foreground); }
 .settings-notice[data-kind="success"] { color: var(--success); }

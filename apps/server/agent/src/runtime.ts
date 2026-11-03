@@ -8,6 +8,7 @@ import { providerApplicationOptions } from "./providers/t3code/production.ts";
 import { migrateProviderStartupState } from "./providers/instances.ts";
 import { startAutomationExecutionRuntime, stopAutomationExecutionRuntime } from "./automation-execution/index.ts";
 import { recoverAutomationGenerationConnectors } from "./automation-execution/connectors.ts";
+import { closeMcpServer, startMcpServer } from "./mcp/server.ts";
 
 let starting: Promise<void> | null = null;
 let stopping: Promise<void> | null = null;
@@ -35,16 +36,19 @@ export function startRuntime(): Promise<void> {
       await startAutomationExecutionRuntime();
       if (stopping) return;
       startTaskWorkflows();
+      startMcpServer();
     } catch (error) {
+      const protocols = Promise.allSettled([closeMcpServer()]);
       const maintenance = Promise.allSettled([stopPmProviderMaintenance()]);
       const workflows = await Promise.allSettled([stopTaskWorkflows()]);
       const automationExecutions = await Promise.allSettled([stopAutomationExecutionRuntime()]);
       const workers = await Promise.allSettled([stopAutomation(), stopExecution(), stopChatRuntime()]);
       const drained = await maintenance;
+      const protocolResults = await protocols;
       const providers = await Promise.allSettled([stopPmProviderApplication()]);
       closeStore();
       starting = null;
-      const cleanupFailures = [...workflows, ...automationExecutions, ...workers, ...drained, ...providers].flatMap(result => result.status === "rejected" ? [result.reason] : []);
+      const cleanupFailures = [...workflows, ...automationExecutions, ...workers, ...drained, ...protocolResults, ...providers].flatMap(result => result.status === "rejected" ? [result.reason] : []);
       if (cleanupFailures.length) throw new AggregateError([error, ...cleanupFailures], "工作区启动失败且后台清理失败。");
       throw error;
     }
@@ -56,6 +60,7 @@ export function stopRuntime(): Promise<void> {
   if (stopping) return stopping;
   // Fence admissions and signal HTTP/direct installers before awaiting any worker or cleanup.
   const maintenance = Promise.allSettled([stopPmProviderMaintenance()]);
+  const protocols = Promise.allSettled([closeMcpServer()]);
   stopping = (async () => {
     if (starting) await starting.catch(() => undefined);
     try {
@@ -63,8 +68,9 @@ export function stopRuntime(): Promise<void> {
       const automation = await Promise.allSettled([stopAutomation(), stopAutomationExecutionRuntime()]);
       const workers = await Promise.allSettled([stopExecution(), stopChatRuntime()]);
       const drained = await maintenance;
+      const protocolResults = await protocols;
       const providers = await Promise.allSettled([stopPmProviderApplication()]);
-      const failures = [...workflows, ...automation, ...workers, ...drained, ...providers].flatMap((result) =>
+      const failures = [...workflows, ...automation, ...workers, ...drained, ...protocolResults, ...providers].flatMap((result) =>
         result.status === "rejected" ? [result.reason] : [],
       );
       if (failures.length) throw new AggregateError(failures, "工作区后台任务关闭失败。");

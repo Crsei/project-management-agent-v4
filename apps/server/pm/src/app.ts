@@ -13,6 +13,7 @@ import { createBlobStore, type BlobStorageProvider } from '../../../../packages/
 import { bindBlobStore } from '../../../../packages/infrastructure/src/blob-storage-binding.ts';
 import type { BlobStorageLocator } from '../../../../packages/infrastructure/src/blob-storage-config.ts';
 import { login, authenticate, logout } from '../../../../packages/infrastructure/src/auth.ts';
+import { authorizeMcpService, mcpRequestIdentity } from '../../../../packages/application/src/mcp-service-auth.ts';
 import { createRegistry } from '../../../../packages/application/src/registry.ts';
 import { runCommand, getCommandReceipt } from '../../../../packages/application/src/kernel.ts';
 import { listEntities, listWorkspaces, readEntity } from '../../../../packages/application/src/queries.ts';
@@ -228,6 +229,11 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   }
   async function actor(request: FastifyRequest) {
     const credential = token(request);
+    if (credential.startsWith('pm-mcp-service-v1.')) {
+      const identity = mcpRequestIdentity(request);
+      if (!identity) throw new DomainError('unauthenticated', 'Invalid MCP service delegation', 401);
+      return authorizeMcpService(database(), identity, request);
+    }
     if (credential.startsWith('pm-automation-v1.')) {
       const identity = verifyAutomationServiceBearer(credential);
       if (!identity) throw new DomainError('unauthenticated', 'Automation service identity is invalid or expired', 401);

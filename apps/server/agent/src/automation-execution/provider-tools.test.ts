@@ -6,7 +6,7 @@ import { assertAutomationProviderToolSupport, getAutomationProviderToolSupport }
 function config(action: StudioConfig['action']): StudioConfig { return { name: 'Provider shape fixture', description: '', projectId: 'PRJ-001', tags: [], templateId: null, action, trigger: { kind: 'manual' }, dailyLimit: 1, cooldownMinutes: 0 }; }
 const common = { repositories: [], plugins: [], timeoutSeconds: 30 };
 test('legacy-only drivers explicitly reject automation descriptor names instead of pretending generic MCP support', () => {
-  for (const driver of ['omp', 'pi', 'cursor']) {
+  for (const driver of ['omp', 'pi']) {
     const support = getAutomationProviderToolSupport(driver);
     assert.equal(support.promptConnectors.available, false, driver);
     assert.equal(support.templateWorkspace.available, false, driver);
@@ -19,11 +19,10 @@ test('OpenCode accepts one scratch descriptor but not the prompt PM-plus-integra
   assert.equal(support.promptConnectors.available, false);
   assert.match(support.promptConnectors.reason!, /one generation-scoped host transport/);
 });
-test('generic transport projection is not mistaken for unattended approval authority', () => {
-  for (const driver of ['claude', 'muse']) {
+test('source-backed bound MCP descriptors are admitted without granting arbitrary native tools', () => {
+  for (const driver of ['claude', 'muse', 'cursor']) {
     const support = getAutomationProviderToolSupport(driver);
-    assert.equal(support.promptConnectors.available, false); assert.equal(support.templateWorkspace.available, false);
-    assert.match(support.templateWorkspace.reason!, /approval|preauthorized/);
+    assert.equal(support.promptConnectors.available, true); assert.equal(support.templateWorkspace.available, true);
   }
 });
 test('source-backed generic adapters remain available while unknown mappings fail closed', () => {

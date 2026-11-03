@@ -237,7 +237,7 @@ export function makeGrokAcpAdapterFlavor(
     // Grok expands only a leading `/name`, while the `$` picker inserts `$name` from the
     // `grok inspect` catalog. Ask that catalog again so other `$` text is left alone.
     rewriteUserText: (text, turnInput) => {
-      const mention = leadingGrokSkillMention(text);
+      const mention = leadingGrokSkillMention(turnInput.userMessageText ?? text);
       if (mention === undefined) return Effect.succeed(text);
       return discoverGrokSkills(
         options.settings,
@@ -246,7 +246,7 @@ export function makeGrokAcpAdapterFlavor(
       ).pipe(
         Effect.map((skills) =>
           skills.some((skill) => skill.enabled && skill.name === mention.name)
-            ? `/${mention.name}${mention.rest}`
+            ? `/${mention.name}${turnInput.userMessageText === undefined ? mention.rest : `\n${text}`}`
             : text,
         ),
         Effect.orElseSucceed(() => text),

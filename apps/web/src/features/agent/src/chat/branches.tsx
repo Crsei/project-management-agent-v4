@@ -5,6 +5,7 @@ import { useWorkspace } from "../workspace/provider";
 import { workspaceClient } from "../network";
 import type { ChatGenerationView } from "@agent-workspace/contracts/chat";
 import { useAgentText, type AgentText } from "../i18n";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 const statusLabels = (t: AgentText): Record<ChatGenerationView["status"], string> => ({
   queued: t("排队中", "Queued"),
@@ -59,7 +60,7 @@ export function ChatBranchControls({ generations }: { generations: ChatGeneratio
           <>
             <label className="flex min-w-0 flex-wrap items-center gap-2">
               {t("聊天稳定边界", "Stable chat boundary")}
-              <select
+              <RadixSelect
                 aria-label={t("选择聊天回复边界", "Select a chat reply boundary")}
                 className="border-input bg-background max-w-full rounded-md border p-2 text-xs"
                 value={source.id}
@@ -71,7 +72,7 @@ export function ChatBranchControls({ generations }: { generations: ChatGeneratio
                     {statusLabels(t)[generation.status]} · {generation.id.slice(0, 8)}
                   </option>
                 ))}
-              </select>
+              </RadixSelect>
             </label>
             <Button
               size="sm"

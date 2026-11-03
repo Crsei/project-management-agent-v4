@@ -2190,10 +2190,11 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
           turnInput: ProviderAdapter.ProviderAdapterV2TurnInput,
         ) {
           const rawText = turnInput.message.text;
+          const selectedText = turnInput.userMessageText ?? rawText;
           if (rawText.trim() === "/compress" && turnInput.message.attachments.length === 0) {
             return "/compress";
           }
-          if (hasCursorSkillMention(rawText) && cursorSkillNames === undefined) {
+          if (hasCursorSkillMention(selectedText) && cursorSkillNames === undefined) {
             const skills = yield* discoverCursorSkills(
               turnInput.runtimePolicy.cwd ?? undefined,
               adapterOptions.environment,
@@ -2207,8 +2208,14 @@ export const makeCursorAdapterV2 = Effect.fn("makeCursorAdapterV2")(function* (
                 .map((skill) => skill.name),
             );
           }
+          const selectedSuffix = turnInput.userMessageText?.trim();
+          const rewritten = cursorSkillNames === undefined ? rawText : turnInput.userMessageText === undefined
+            ? rewriteCursorSkillMentions(rawText, cursorSkillNames)
+            : selectedSuffix && rawText.endsWith(selectedSuffix)
+              ? rawText.slice(0, -selectedSuffix.length) + rewriteCursorSkillMentions(selectedSuffix, cursorSkillNames)
+              : rawText;
           const userText = yield* providerMessageTextWithAttachmentPaths({
-            text: cursorSkillNames === undefined ? rawText : rewriteCursorSkillMentions(rawText, cursorSkillNames),
+            text: rewritten,
             attachments: turnInput.message.attachments,
             resolveAttachmentPath: host.resolveAttachmentPath,
             resolveExtractedTextPath: host.resolveExtractedTextPath,

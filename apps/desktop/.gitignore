@@ -1,2 +1,5 @@
 dist/
-release/
+releases/
+.runtime/
+.cache/
+.desktop-build-*/

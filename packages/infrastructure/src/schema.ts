@@ -8,7 +8,7 @@ export { blobStorageBinding, blobStorageOperations, projectBlobStores, projectBl
 export * from './webhook-schema.ts';
 export { localProjectSettings, localProjectOperations } from './local-projects-schema.ts';
 export { agentFileAreas, agentStorageSettings } from './agent-file-areas-schema.ts';
-export { documentSources } from './document-sources-schema.ts';
+export { documentSourceScopes, documentSources, documentSourceOperations } from './document-sources-schema.ts';
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey(), email: text('email').notNull().unique(), name: text('name').notNull(),

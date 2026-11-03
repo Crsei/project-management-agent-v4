@@ -312,7 +312,6 @@
   min-height: 40px;
   padding: 0 8px;
   border: 0;
-  border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--muted-foreground);
   font: inherit;
@@ -333,8 +332,16 @@
 }
 
 .pm-agent-inspector-tab[aria-selected="true"] {
-  border-bottom-color: var(--ring);
+  background: var(--selection);
   color: var(--foreground);
+  font-weight: 600;
+}
+
+@media (forced-colors: active) {
+  .pm-agent-inspector-tab[aria-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
 }
 
 .pm-agent-inspector-close {

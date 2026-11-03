@@ -128,7 +128,7 @@ function NotificationEventContext({ mode }: SettingsPageProps) {
     )}</p>
     {mode === "service" && workspaceSlug && <>
       <p className="mt-2">{t("真实活动是服务变更记录，不是通知收件箱；没有已读或归档状态。", "Real activity contains service change records, not a notification inbox; read and archive states are unavailable.")}</p>
-      <Link to={`/pm/${encodeURIComponent(workspaceSlug)}/notifications`} className="mt-2 inline-flex min-h-11 items-center rounded-control font-medium text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("查看真实工作区活动", "View real workspace activity")}</Link>
+      <Link to={`/pm/${encodeURIComponent(workspaceSlug)}/notifications`} className="mt-2 inline-flex min-h-11 items-center rounded-control font-medium text-foreground hover:text-primary outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("查看真实工作区活动", "View real workspace activity")}</Link>
     </>}
   </SettingsNotice>
 }
@@ -206,7 +206,7 @@ function NotificationEventPage({ mode, page }: SettingsPageProps & { page: Event
   const root = `${mode === "lab" ? "/lab/pm" : "/pm"}/${encodeURIComponent(workspaceSlug)}/settings`
 
   return <SettingsSection title={t(...page.title)} description={page.description ? t(...page.description) : undefined}>
-    <Link to={`${root}/notifications`} className="inline-flex min-h-11 items-center rounded-control text-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("返回通知总览", "Back to notification overview")}</Link>
+    <Link to={`${root}/notifications`} className="inline-flex min-h-11 items-center rounded-control text-sm font-medium text-primary hover:text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">{t("返回通知总览", "Back to notification overview")}</Link>
     {mode === "service" ? <ServiceNotificationEvents key={page.id} page={page} /> : <LabNotificationEvents key={page.id} page={page} />}
   </SettingsSection>
 }

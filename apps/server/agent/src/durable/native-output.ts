@@ -22,7 +22,8 @@ import {
   type TerminalOutputState,
 } from "@agent-workspace/contracts/terminal-output";
 import { DurableError } from "./errors.ts";
-import { listRecords, readRecord, writeRecord } from "./store.ts";
+import { listRecords, readRecord, transaction, writeRecord } from "./store.ts";
+import { indexMcpAppItem } from "../mcp-apps/items.ts";
 
 const OUTPUTS = "native-output";
 const QUEUE_LIMIT = 128;
@@ -215,7 +216,10 @@ function upsert(generationId: string, item: NativeOutputItem, settling = false):
   if (index < 0) snapshot.items.push(checked);
   else snapshot.items[index] = checked;
   snapshot.sequence = nextSequence(snapshot);
-  save(snapshot);
+  transaction(() => {
+    indexMcpAppItem(snapshot, checked);
+    save(snapshot);
+  });
   scheduleItem({ kind: "item", generationId, sequence: snapshot.sequence, item: checked });
 }
 

@@ -227,9 +227,7 @@
 }
 
 .titleButton:hover .taskTitle {
-  text-decoration: underline;
-  text-decoration-color: var(--border-hover);
-  text-underline-offset: 3px;
+  color: var(--accent);
 }
 
 .draftBadge {

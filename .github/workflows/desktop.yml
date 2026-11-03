@@ -1,0 +1,182 @@
+name: Desktop native installers
+
+# Manual only: creating/editing this workflow never publishes or triggers builds.
+on:
+  workflow_dispatch:
+    inputs:
+      distribution:
+        description: Unsigned test artifacts, or signed/notarized artifacts using the protected signing environment
+        type: choice
+        options: [unsigned, signed]
+        default: unsigned
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}-${{ inputs.distribution }}
+  cancel-in-progress: false
+
+env:
+  DESKTOP_ARTIFACT_DIR: ${{ github.workspace }}/apps/desktop/releases/ci-${{ github.run_id }}-${{ github.run_attempt }}
+  PM_DESKTOP_TEST_POSTGRES_ROOT: ${{ github.workspace }}/apps/desktop/.runtime/desktop-runtime/postgres
+
+jobs:
+  unsigned:
+    if: inputs.distribution == 'unsigned'
+    name: Unsigned ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            platform: win32
+            arch: x64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.21.0'
+          architecture: ${{ matrix.arch }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.9.0'
+          run_install: false
+      - name: Install locked native runner dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prepare integrity-pinned offline Node and complete PostgreSQL
+        run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+      - name: Execute bundled runtime tools without ambient PATH
+        run: pnpm --filter @agent-workspace/desktop runtime:smoke
+      - name: Typecheck desktop backend helpers
+        run: pnpm --filter @agent-workspace/desktop typecheck
+      - name: Desktop contracts and real PostgreSQL bootstrap tests
+        run: pnpm --filter @agent-workspace/desktop test
+      - name: Native filesystem identity, private permissions and reparse regressions
+        run: pnpm exec node --conditions=development --test packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
+      - name: Build explicitly unsigned native installers
+        run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$env:DESKTOP_ARTIFACT_DIR"
+        if: runner.os == 'Windows'
+      - name: Build explicitly unsigned native installers
+        run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$DESKTOP_ARTIFACT_DIR"
+        if: runner.os == 'macOS'
+      - name: Real packaged managed instance login, shutdown and reconnect
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import path from "node:path";
+            import {spawnSync} from "node:child_process";
+            const output=process.env.DESKTOP_ARTIFACT_DIR;
+            const manifest=JSON.parse(fs.readFileSync(path.join(output,"desktop-package.json"),"utf8"));
+            const resources=path.resolve(output,manifest.applicationResources);
+            const result=spawnSync(process.execPath,["apps/desktop/scripts/smoke-managed.mjs","--server-root",path.join(resources,"workspace-runtime"),"--runtime-root",path.join(resources,"desktop-runtime")],{stdio:"inherit"});
+            process.exitCode=result.status??1;
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-unsigned-${{ matrix.platform }}-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.exe
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.dmg
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.zip
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.blockmap
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/desktop-package.json
+
+  signed:
+    if: inputs.distribution == 'signed'
+    name: Signed ${{ matrix.platform }}-${{ matrix.arch }}
+    # Configure approval and repository-owned certificate secrets here. Missing
+    # materials fail closed; this job never falls back to unsigned output.
+    environment: desktop-signing
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            platform: win32
+            arch: x64
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.21.0'
+          architecture: ${{ matrix.arch }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.9.0'
+          run_install: false
+      - name: Install locked native runner dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Prepare integrity-pinned offline Node and complete PostgreSQL
+        run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+      - name: Execute bundled runtime tools without ambient PATH
+        run: pnpm --filter @agent-workspace/desktop runtime:smoke
+      - name: Typecheck desktop backend helpers
+        run: pnpm --filter @agent-workspace/desktop typecheck
+      - name: Desktop contracts and real PostgreSQL bootstrap tests
+        run: pnpm --filter @agent-workspace/desktop test
+      - name: Native filesystem identity, private permissions and reparse regressions
+        run: pnpm exec node --conditions=development --test packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
+      - name: Build Authenticode-signed NSIS installer
+        if: runner.os == 'Windows'
+        env:
+          CSC_LINK: ${{ secrets.DESKTOP_WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_WINDOWS_CSC_KEY_PASSWORD }}
+        run: pnpm --filter @agent-workspace/desktop package:signed --platform win32 --arch x64 --output "$env:DESKTOP_ARTIFACT_DIR"
+      - name: Build Developer ID-signed and notarized DMG and ZIP
+        if: runner.os == 'macOS'
+        env:
+          CSC_LINK: ${{ secrets.DESKTOP_MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.DESKTOP_APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
+        run: pnpm --filter @agent-workspace/desktop package:signed --platform darwin --arch ${{ matrix.arch }} --output "$DESKTOP_ARTIFACT_DIR"
+      - name: Real signed packaged managed instance login, shutdown and reconnect
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import path from "node:path";
+            import {spawnSync} from "node:child_process";
+            const output=process.env.DESKTOP_ARTIFACT_DIR;
+            const manifest=JSON.parse(fs.readFileSync(path.join(output,"desktop-package.json"),"utf8"));
+            const resources=path.resolve(output,manifest.applicationResources);
+            const result=spawnSync(process.execPath,["apps/desktop/scripts/smoke-managed.mjs","--server-root",path.join(resources,"workspace-runtime"),"--runtime-root",path.join(resources,"desktop-runtime")],{stdio:"inherit"});
+            process.exitCode=result.status??1;
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-signed-${{ matrix.platform }}-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.exe
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.dmg
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.zip
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.blockmap
+            ${{ env.DESKTOP_ARTIFACT_DIR }}/desktop-package.json

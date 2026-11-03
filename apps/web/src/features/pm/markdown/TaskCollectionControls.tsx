@@ -29,14 +29,17 @@ interface Props extends TaskWorkspaceProps {
   onAdvancedSplitChange: (open: boolean) => void;
   onHelp: () => void;
   onToolbarTargetChange: (target: HTMLElement | null) => void;
+  onGraphScopeTargetChange: (target: HTMLElement | null) => void;
+  onGraphToggleTargetChange: (target: HTMLElement | null) => void;
 }
 
 /** Task-only chrome; generic entities retain their existing collection workspace. */
-export default function TaskCollectionControls({ controller: c, en, projectId, taskContext, title, filtersOpen, onFiltersOpenChange, explorerOpen, onExplorerOpenChange, advancedSplit, onAdvancedSplitChange, onHelp, onNewPage, onScope, onPresentation, onSavedView, onAgent, onToolbarTargetChange }: Props) {
+export default function TaskCollectionControls({ controller: c, en, projectId, taskContext, title, filtersOpen, onFiltersOpenChange, explorerOpen, onExplorerOpenChange, advancedSplit, onAdvancedSplitChange, onHelp, onNewPage, onScope, onPresentation, onSavedView, onAgent, onToolbarTargetChange, onGraphScopeTargetChange, onGraphToggleTargetChange }: Props) {
   const panelId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
+  const graph = c.prefs.layout === 'graph';
   useEffect(() => {
-    if (!taskContext) return;
+    if (!taskContext || graph) return;
     const focusSearch = (event: KeyboardEvent) => {
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target;
@@ -47,7 +50,7 @@ export default function TaskCollectionControls({ controller: c, en, projectId, t
     };
     window.addEventListener('keydown', focusSearch);
     return () => window.removeEventListener('keydown', focusSearch);
-  }, [taskContext]);
+  }, [taskContext, graph]);
   const { actor } = usePmService();
   if (!taskContext) return null;
   const t = (english: string, zh: string) => en ? english : zh;
@@ -84,18 +87,20 @@ export default function TaskCollectionControls({ controller: c, en, projectId, t
   return <>
     <div className={`collection-heading task-collection-heading${projectId ? ' task-project-heading' : ''}${timeline ? ' task-timeline-heading' : ''}${personalChrome ? ` ${personalStyles.heading}` : ''}`}>
       <div className="task-collection-identity">
-        <h1>{personalScope ? t('My Tasks', '我的任务') : timeline ? t('Timeline', '时间线') : projectId ? t('Tasks', '任务') : title}</h1>
+        <h1>{graph ? t('Graph', '关系图') : personalScope ? t('My Tasks', '我的任务') : timeline ? t('Timeline', '时间线') : projectId ? t('Tasks', '任务') : title}</h1>
       </div>
       <div className="collection-heading-actions">
         {personalChrome && <div className={personalStyles.viewSwitch} role="group" aria-label={t('Collection layout', '集合布局')}>
           {(['list', 'calendar'] as const).map(layout => { const Icon = layoutIcons[layout]; return <button key={layout} type="button" aria-pressed={c.prefs.layout === layout} onClick={() => { c.preference('layout', layout); onPresentation(layout); }}><Icon size={13} aria-hidden="true" />{layout === 'list' ? t('List', '列表') : t('Calendar', '日历')}</button>; })}
         </div>}
-        {searchControl}
+        {!graph && searchControl}
+        {graph && <div className="task-graph-scope-target" ref={onGraphScopeTargetChange} />}
         {filterControl}
-        {sortControl}
+        {!graph && sortControl}
         {groupControl}
         {agentEntry}
         <button type="button" className="primary-button" data-testid="new-task" aria-label={t('New task', '新建任务')} disabled={c.configurationInvalid || c.writesBlocked || !!c.busy || !c.canWrite || (personalScope && !taskContext.actorId)} onClick={() => c.openCreate(workflowFor('work_item', c.configuration)?.initial)}><Plus size={15} aria-hidden="true" />{t('New task', '新建任务')}</button>
+        {graph && <div className="task-graph-toggle-target" ref={onGraphToggleTargetChange} />}
         <DropdownMenu><DropdownMenuTrigger type="button" className="icon-button task-more-trigger" aria-label={t('More task tools', '更多任务工具')} title={t('More task tools', '更多任务工具')}><MoreHorizontal size={18} /></DropdownMenuTrigger><DropdownMenuContent className="task-collection-menu" align="end">
           <DropdownMenuLabel className="task-menu-label">{t('Create', '创建')}</DropdownMenuLabel>
           <DropdownMenuItem onSelect={() => onNewPage(c.prefs.project)}><Plus size={14} aria-hidden="true" />{t('Full creation page', '完整创建页')}</DropdownMenuItem>

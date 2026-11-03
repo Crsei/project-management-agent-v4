@@ -25,7 +25,7 @@ node vendor/t3code/scripts/sync.mjs --source "$SOURCE" --destination "$DEST"
 node vendor/t3code/scripts/sync.mjs --source "$SOURCE" --destination "$DEST" --check
 ```
 
-The destination is the PM root, not `vendor/t3code`. Sync validates HEAD, every original input/reference hash/blob, every patch preimage/postimage/hash and every local asset **before** destination preflight. It refuses traversal, symlink/nonregular targets, wrong source identity and every destination hash/executable-class conflict. Modes follow a Git-style executable class: any POSIX execute bit (`mode & 0111`) marks a file executable. Ordinary read/write differences such as 0644 versus 0664 are accepted and left untouched; existing files are never chmodded. Setuid, setgid and sticky bits (`mode & 07000`) on regular files are unsafe and refused before any destination writes. Only absent, allowlisted `vendor/t3code/**` files are created exclusively with canonical 0644/0755 modes. There is no force/update/delete/overwrite mode. Unrelated PM paths are never enumerated for copying or deletion. A filesystem/permission failure during publication can leave newly created files; no existing file is overwritten. Do not concurrently mutate the input or destination trees.
+The destination is the PM root, not `vendor/t3code`. Sync validates HEAD, every original input/reference hash/blob, every patch preimage/postimage/hash and every local asset **before** destination preflight. It refuses traversal, symlink/nonregular targets, wrong source identity and every destination hash/executable-class conflict. Modes follow a Git-style executable class: any POSIX execute bit (`mode & 0111`) marks a file executable. Ordinary read/write differences such as 0644 versus 0664 are accepted and left untouched; existing files are never chmodded. Setuid, setgid and sticky bits (`mode & 07000`) on regular files are unsafe and refused before any destination writes. Only absent, allowlisted vendor and supplemental MCP/Skills host files are created exclusively with canonical 0644/0755 modes. There is no force/update/delete/overwrite mode. Unrelated PM paths are never enumerated for copying or deletion. A filesystem/permission failure during publication can leave newly created files; no existing file is overwritten. Do not concurrently mutate the input or destination trees.
 
 For a separate pristine reconstruction of just the selected original inputs (without PM additions or patches):
 
@@ -43,7 +43,7 @@ node vendor/t3code/scripts/imports.mjs --check
 
 The first command uses disposable roots and a local no-hardlink Git clone. It exercises clean offline reconstruction, exact repeat-no-diff, pristine and patched hash distinction, preservation of an unrelated PM sentinel, destination-conflict refusal before any missing file is created, wrong source hash/commit and patch hash refusal, and symlink refusal. POSIX permission fixtures explicitly change a reconstructed non-executable file from 0644 to 0664 and assert sync/check preserve its hash, mode, inode, modification and metadata-change timestamps. Changing its executable class or setting any of setuid/setgid/sticky must refuse before a deliberately missing file can be created. The harness never edits the designated upstream checkout or chmods repository files. The import command checks the frozen actual syntax inventory and refuses unresolved local/workspace closure. `imports.mjs --write` is a deliberate maintainer recapture operation: review changes first, then recapture corresponding sync hashes/patches; never use it to bless unexplained drift.
 
-Host-tool fixtures copy the recorded tooling into a disposable source root, prove its baseline sync succeeds, then alter each tool independently and require rejection before any destination exists. This checks drift, not just the presence of descriptive hashes. Reconstruction still owns only `vendor/t3code/**`; it neither copies nor overwrites PM host scripts.
+Host-tool fixtures copy the recorded tooling into a disposable source root, prove its baseline sync succeeds, then alter each tool independently and require rejection before any destination exists. This checks drift, not just the presence of descriptive hashes. Reconstruction owns `vendor/t3code/**` and the explicit MCP/Skills host output allowlist described below; it never overwrites existing PM files or copies unlisted host scripts.
 
 Future upstream commits require a new reviewed pinned manifest and new exact patches. This same-commit tool deliberately does not guess upgrade merges or erase local changes.
 
@@ -55,7 +55,51 @@ node vendor/t3code/scripts/imports.mjs --write
 python3 vendor/t3code/scripts/capture.py --source "$SOURCE"
 ```
 
-`capture.py` validates the pinned commit and every immutable source/reference hash/blob before writing only patch recipes and the sync inventory. It refuses misclassified pristine/patched source actions and unallowlisted local paths; it never rewrites source manifests, host code or upstream files. The second capture binds the freshly authored import inventory. New upstream versions remain a separate review. Acceptance still requires the read-only commands above; recapture is not evidence that a behavior works.
+`capture.py` validates the pinned commit and every immutable source/reference hash/blob before writing patch recipes and the sync inventory. By default it refuses misclassified pristine/patched source actions and unallowlisted local paths; explicit `--review-actions` permits updating only copy dispositions, preserving original source identity fields. It never rewrites host code or upstream files. The second capture binds the freshly authored import inventory. New upstream versions remain a separate review. Acceptance still requires the read-only commands above; recapture is not evidence that a behavior works.
+
+## MCP / Skills dual-source adaptations (T13)
+
+The MCP/Skills source snapshot is pinned separately at `d53873b6a4799e87afd63c8d288ef0089f5a3748`. The production baseline remains the newer `30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c`; neither its original hashes/blobs/bytes/modes nor the immutable `.ref` source bytes are rewritten. The full `mcp-skills-source.json` inventory records the copied original tree and its point-in-time baseline comparison, not continuously updated production hashes.
+
+`mcp-skills-adaptations.json` supplements—not replaces—that source inventory:
+
+- Each source-derived host adapter/new vendor module names every original input commit/path, SHA-256, Git blob, size and mode, its adaptation reason, final output hash/mode, and MIT notice coverage. Recipes apply exact zero-based original-line splices against the first mapped input. Other mapped inputs are independently checked derivation references. A host adapter can include PM-owned integration without being mislabeled entirely local or pristine upstream.
+- Genuinely local integration is separately classified and recorded as exact embedded bytes. Existing upstream vendor files continue using the baseline `integration-patches/` recipes; new adapted vendor modules use supplemental recipes, not the local-asset escape hatch.
+- `sync.mjs` reads both commits from a **local Git object database** and checks all source/license/recipe/output identities before destination preflight. Supplemental host outputs are explicitly allowlisted, included in the same no-overwrite conflict transaction, and omitted by `--pristine`. No recipe imports or executes `.ref`, source checkout code, credentials, or a foreign application.
+- The AST import inventory includes mapped host adaptations and rejects literal absolute, `file:` and `.ref` source imports. It still distinguishes unselected PM host boundaries and computed native resources.
+
+One disposable authoring checkout used for this integration is `/tmp/pm-t3code-t13-30eb-local`, created entirely offline:
+
+```sh
+git clone --shared --no-checkout /data2-HDD-SATA-20T/Digital_avatar/haoweiyao/t3code /tmp/pm-t3code-t13-30eb-local
+git -C /tmp/pm-t3code-t13-30eb-local checkout --detach 30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c
+```
+
+That temporary checkout may share read-only Git objects with its local origin; it is not shipped or required at runtime. Any offline checkout containing both commits and checked out at `30eb...` is equivalent. Parent reconstruction acceptance should use its own independent local clone if it needs to demonstrate object-store independence.
+
+After all feature owners release their outputs, reviewed metadata authoring is:
+
+```sh
+SOURCE=/tmp/pm-t3code-t13-30eb-local
+python3 vendor/t3code/scripts/capture-mcp-skills.py --source "$SOURCE"
+python3 vendor/t3code/scripts/capture.py --source "$SOURCE" --review-actions
+node vendor/t3code/scripts/imports.mjs --write
+python3 vendor/t3code/scripts/capture.py --source "$SOURCE"
+```
+
+`--review-actions` authorizes only copy-verbatim/copy-then-patch disposition changes; original source fields remain unchanged. `--allow-local vendor/t3code/<path>` explicitly enrolls a reviewed new local metadata/implementation asset. Never use it for an upstream adaptation: add that module's exact source mapping to the supplemental manifest instead. Recapture after any integration/build-tool edits; it is authoring, not verification. Parent runs `imports.mjs --check`, `verify-sync.mjs --source "$SOURCE"`, independent packaging and relocated artifact acceptance.
+
+Distribution includes the existing MIT `LICENSE`, both source/adaptation manifests, baseline ledgers/recipes/import inventory and complete `vendor/t3code/scripts/` under artifact provenance. Package metadata must include these files without `.ref`, source `.git`, absolute checkout paths as dependencies, or a second executable t3code tree. Host build-tool fingerprints—including package-script changes—are refreshed by the final baseline capture. No build, tests, lint, formatter or reconstruction acceptance is implied by capture.
+
+The final integration allowlist also records the host runtime startup/shutdown fixture, expanded durable HTTP error contract, and Agent contracts/client-runtime package wiring as `local-integration`. Claude lifecycle fixtures remain in the baseline `ClaudeAdapterV2.test.ts` patch; execution drain fixtures remain in the separately mapped host `execution.test.ts`. Their current bytes are captured without claiming the local lifecycle changes originated upstream.
+
+Intentional exclusions from the supplemental host reconstruction allowlist:
+
+- Build/package scripts are bound by `runtimeResources.hostBuildInputs`, not duplicated as supplemental source-derived outputs. Package-script changes require baseline recapture and a fresh parent build.
+- The root lockfile is distributed by packaging with dependency/license evidence; it is not a source-adaptation recipe or an independently reconstructed host implementation.
+- Unrelated PM document-source, graph, notice-center and shared Web styling work remains host-owned and is not enrolled merely because it is dirty. In particular, `chat/output-timeline.css` contains unrelated link styling; MCP App styling is separately mapped in `chat/mcp-app-frame.css`.
+- Root documentation, acceptance evidence and temporary browser/HTTP fixtures are not executable adaptation outputs. The immutable source snapshot inventory remains a point-in-time record; current hashes belong to the baseline and supplemental output ledgers.
+
 
 ## Independently runnable Agent artifact
 
@@ -63,7 +107,7 @@ The existing build bundles original source and ordinary dependency closure while
 
 The build validates host-tool provenance before deleting its normal output directory. Intentional tooling updates require reviewed recapture and a fresh build; changing only the inventory after an older build cannot make that output current. The packager refuses missing/stale `hostBuildInputs` in `build-inputs.json` before creating its destination.
 
-Parent commands, **unexecuted by T18**:
+Commands for parent integration (source-copy workers do not run builds or acceptance checks):
 
 ```sh
 BUILD=$(mktemp -d /tmp/pm-agent-build-XXXXXX)
@@ -95,4 +139,4 @@ DATA=$(mktemp -d /tmp/pm-agent-data-XXXXXX)
   node "$ARTIFACT/apps/server/agent/dist/index.mjs")
 ```
 
-The included verifier is an unexecuted acceptance command, not pre-recorded success. It starts the emitted API from an unrelated temporary cwd with an explicitly empty native environment and checks the real `/api/access` response. It imports the pinned disk-backed SDKs and emitted Pi extension, opens/disposes a disposable Cursor SDK SQLite store, starts/closes the emitted Cursor IPC worker without opening an Agent, loads the native PTY binding, extracts real RTF text through the emitted document worker, and reads empty history through both production Claude entrypoints. No Provider generation/login/installation or Keychain credential read is requested. For a manual run, observe the random listener and stop only that owned process. Successful packaging alone is not SDK/native/runtime acceptance. Required PM environment/authorization configuration remains the existing host contract; do not import global credentials. No M6 or release gate is marked passed here. Current Chat records/history/journal remain the current design pending unified persistence work.
+Parent acceptance results, including the exercised artifact and remaining release gates, are recorded in [the MCP/Skills evidence ledger](../../docs/implementation/t3code-mcp-skills-replication-plan.zh.md#103-逐标准证据与未完成门槛). The verifier starts the emitted API from an unrelated temporary cwd with an explicitly empty native environment and checks the real `/api/access` response. It imports the pinned disk-backed SDKs and emitted Pi extension, opens/disposes a disposable Cursor SDK SQLite store, starts/closes the emitted Cursor IPC worker without opening an Agent, loads the native PTY binding, extracts real RTF text through the emitted document worker, and reads empty history through both production Claude entrypoints. No Provider generation/login/installation or Keychain credential read is requested. For a manual run, observe the random listener and stop only that owned process. Successful packaging alone is not SDK/native/runtime acceptance. Required PM environment/authorization configuration remains the existing host contract; do not import global credentials. No M6 or release gate is marked passed here. Current Chat records/history/journal remain the current design pending unified persistence work.

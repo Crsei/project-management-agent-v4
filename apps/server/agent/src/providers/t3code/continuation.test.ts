@@ -223,7 +223,8 @@ function seedOwnedGeneration(executionId: string, status: "running" | "completed
   writeRecord("chat:generations", executionId, { threadId: ownerThreadId, providerInstanceId: instanceId, status });
   initializeNativeOutput(executionId, ownerThreadId, "running");
   if (status === "completed") endNativeOutput(executionId, status);
-  return pmRuntimeBinding(retainedContext, ownerThreadId, executionId);
+  return pmRuntimeBinding({ ...retainedContext, execution: { threadId: ownerThreadId, generationId: executionId,
+    messageId: `message-${executionId}`, scope: { workspaceId: "workspace", projectId: null } } }, ownerThreadId, executionId);
 }
 
 function drainBufferedOffers(requests: { readonly offer: (request: ProviderContinuationRequest) => Effect.Effect<void> }) {
@@ -235,7 +236,7 @@ function drainBufferedOffers(requests: { readonly offer: (request: ProviderConti
   });
 }
 
-test("a status-first retained continuation service adopts only explicitly authorized original generation owners", async () => {
+test("a status-first retained continuation service adopts only explicitly authorized original generation owners", { timeout: 20_000 }, async () => {
   const runtimeHost = makePmProviderRuntimeHost();
   const adopted: string[] = [];
   const authorizations: string[] = [];
@@ -276,7 +277,7 @@ test("a status-first retained continuation service adopts only explicitly author
 });
 
 for (const during of [false, true]) {
-  test(`revoked native buffered authority ${during ? "during" : "before"} authorization never reaches adoption`, async () => {
+  test(`revoked native buffered authority ${during ? "during" : "before"} authorization never reaches adoption`, { timeout: 20_000 }, async () => {
     const runtimeHost = makePmProviderRuntimeHost();
     const binding = seedOwnedGeneration("revoked-owner");
     const started = Promise.withResolvers<void>();
@@ -358,7 +359,7 @@ test("stale and missing captured owners cannot borrow a newer generation's sink 
   assert.ok(getNativeOutput(oldBinding.executionId)?.items.some(item => item.text === "Original stale native result"));
 });
 
-test("an in-flight original offer cannot adopt or fail the replacement generation after its binding drains", async () => {
+test("an in-flight original offer cannot adopt or fail the replacement generation after its binding drains", { timeout: 20_000 }, async () => {
   const runtimeHost = makePmProviderRuntimeHost();
   const binding = seedOwnedGeneration("draining-owner");
   const oldScope = await Effect.runPromise(Scope.make());

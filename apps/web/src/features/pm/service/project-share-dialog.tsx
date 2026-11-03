@@ -123,7 +123,7 @@ function ProjectShareManagement({ project, onNavigate }: { project: Entity; onNa
     setOperation(projectShareDraft(member, action))
     setNotice(null)
   }
-  const managementLink = <Link className="text-sm underline" to={membersHref} aria-disabled={busy} tabIndex={busy ? -1 : undefined} onClick={event => { if (busy) event.preventDefault(); else onNavigate() }}>{t("在成员目录中打开完整能力编辑器", "Open full capability editor in member directory")}</Link>
+  const managementLink = <Link className="text-sm text-primary hover:text-foreground" to={membersHref} aria-disabled={busy} tabIndex={busy ? -1 : undefined} onClick={event => { if (busy) event.preventDefault(); else onNavigate() }}>{t("在成员目录中打开完整能力编辑器", "Open full capability editor in member directory")}</Link>
 
   return <div className="space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium">{t("项目授权与成员", "Project grants and people")}</h3><Button variant="ghost" size="sm" disabled={busy || directory.isFetching || invitations.isFetching} onClick={() => { void directory.refetch(); void invitations.refetch() }}><RefreshCw aria-hidden="true" />{t("刷新权限与邀请", "Refresh access and invitations")}</Button></div>
@@ -181,7 +181,7 @@ function ProjectShareManagement({ project, onNavigate }: { project: Entity; onNa
         <div className="space-y-2 text-sm"><h4 className="font-medium">{t("适用于本项目的邀请记录", "Invitation records applicable to this project")}</h4>
           {invitations.data && !invitations.error && invitationItems.length === 0 && <p>{t("没有邀请记录。", "No invitation records.")}</p>}
           <ul className="space-y-2">{invitationItems.map(invitation => <li key={invitation.id} className="space-y-1 rounded-md border p-3"><p className="break-all font-medium">{invitation.email} · {invitation.role}</p><InvitationStatus invitation={invitationRecord(invitation)} /><p className="text-xs text-muted-foreground">{invitation.projectIds === null ? t("整个工作区（继承）", "Whole workspace (inherited)") : `${t("项目范围：", "Project scope: ")}${invitation.projectIds.join(", ")}`} · {t("有效期至：", "Expires: ")}<time dateTime={invitation.expiresAt}>{invitation.expiresAt}</time></p>{invitation.delivery?.failureCode && <p role="status">{invitation.delivery.failureCode}</p>}</li>)}</ul>
-          <Link className="inline-block underline" to={`${membersHref}&panel=invitations`} aria-disabled={busy} tabIndex={busy ? -1 : undefined} onClick={event => { if (busy) event.preventDefault(); else onNavigate() }}>{t("管理完整邀请记录、撤销和显式重发", "Manage full invitation records, revocation and explicit resend")}</Link>
+          <Link className="inline-block text-primary hover:text-foreground" to={`${membersHref}&panel=invitations`} aria-disabled={busy} tabIndex={busy ? -1 : undefined} onClick={event => { if (busy) event.preventDefault(); else onNavigate() }}>{t("管理完整邀请记录、撤销和显式重发", "Manage full invitation records, revocation and explicit resend")}</Link>
         </div>
       </section>
     </>}

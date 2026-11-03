@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-muse/src/server/adapter.ts",
   "beforeSha256": "b51b0650203461b65c0d70aa06d0ef39b6293ed0f1d0a75fdd1d08e0f3536a39",
-  "afterSha256": "365ba3115490f3d2d294c65c00bf83f70be106360e88ba3a67e23b650830d494",
+  "afterSha256": "fe3f846b4acb604e450222aeaa10d3f96a1869eef2c0a13682539277f06456bf",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -61,13 +61,14 @@
         "        const autoApprove = child && input.runtimePolicy.runtimeMode === \"full-access\";\n"
       ],
       "after": [
-        "        // Only the currently bound PM stdio server may enter transport; its business authorization stays in the host.\n",
+        "        // Only a currently bound stdio server may enter transport; business authorization stays in the host.\n",
         "        const binding = operationBinding;\n",
         "        const approval = native.type === \"approval\" ? native.value : undefined;\n",
         "        const autoApprove = !!turn && !!approval && !child && approval.subject.kind === \"tool\" &&\n",
         "          approval.protectedWrite !== true && approval.turnId === turn.nativeId &&\n",
-        "          /^(?:mcp__pm_tools__|pm_tools_)pm_[a-z_]+$/.test(approval.toolName ?? \"\") &&\n",
-        "          binding?.mcpServers.some(server => server.name === \"pm_tools\" && server.transport === \"stdio\") === true;\n",
+        "          binding?.promptAuthorization !== \"technical-no-tools\" &&\n",
+        "          binding?.mcpServers.some(server => server.transport === \"stdio\" &&\n",
+        "            [`mcp__${server.name}__`, `${server.name}_`].some(prefix => (approval.toolName ?? \"\").startsWith(prefix) && (approval.toolName?.length ?? 0) > prefix.length)) === true;\n",
         "        if (autoApprove) yield* authorizeTools;\n"
       ]
     },
@@ -127,6 +128,15 @@
         "                transport: \"stdio\" as const, mode: \"required\" as const,\n",
         "                command: server.command, args: [...server.args],\n",
         "              }])) }\n"
+      ]
+    },
+    {
+      "start": 2186,
+      "before": [
+        "          start(args).pipe(\n"
+      ],
+      "after": [
+        "          start(args, args.userMessageText?.trim() === \"/compact\" && args.message.attachments.length === 0).pipe(\n"
       ]
     },
     {

@@ -466,7 +466,7 @@
 .tab {
   flex-shrink: 0;
   padding: 10px 12px;
-  border-bottom: 2px solid transparent;
+  border: 0;
   background: none;
   color: var(--muted-foreground);
   font-size: 14px;
@@ -475,7 +475,8 @@
   white-space: nowrap;
 }
 .tab[aria-selected="true"] {
-  border-bottom-color: var(--primary);
+  background: var(--selection);
+  font-weight: 500;
   color: var(--foreground);
 }
 .tab:focus-visible {
@@ -1048,7 +1049,7 @@
 }
 .detail1Page .tab[aria-selected="true"],
 .detail2Page .tab[aria-selected="true"] {
-  border-bottom-color: var(--foreground);
+  background: var(--selection);
   color: var(--foreground);
 }
 .detail2Page [data-pm-overview-panel] {

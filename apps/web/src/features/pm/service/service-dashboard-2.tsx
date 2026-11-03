@@ -21,6 +21,7 @@ import { NotesPanel } from "./dashboard-personal"
 import { PresencePanel } from "./dashboard-time"
 import { SprintPlanner } from "./dashboard-sprints"
 import styles from "./service-dashboard-2.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type IssueMode = "scheduled" | "undated" | "all"
 type ScheduledIssue = { entity: Entity; start: string; end: string }
@@ -186,7 +187,7 @@ export function ServiceDashboard2({ surface, projects, issues, milestones, membe
       <Popover>
         <PopoverTrigger render={<Button variant="ghost" size="icon" className={d2.scopeTrigger} aria-label={text("筛选项目范围", "Filter project scope")} />}><MoreHorizontal size={16} aria-hidden="true" /></PopoverTrigger>
         <PopoverContent align="end" className={d2.scopeMenu}>
-          <label className={styles.selectField}><span>{text("项目范围", "Project scope")}</span><select value={selectedProjectId ?? ""} onChange={event => focusProject(event.target.value)} disabled={!projects.data}><option value="">{text("所有授权项目", "All authorized projects")}</option>{missingScope && <option value={selectedProjectId!}>{text("项目不可用", "Unavailable project")}</option>}{projects.data?.map(project => <option key={project.id} value={project.id}>{string(project.data.name) || project.id}</option>)}</select></label>
+          <label className={styles.selectField}><span>{text("项目范围", "Project scope")}</span><RadixSelect value={selectedProjectId ?? ""} onChange={event => focusProject(event.target.value)} disabled={!projects.data}><option value="">{text("所有授权项目", "All authorized projects")}</option>{missingScope && <option value={selectedProjectId!}>{text("项目不可用", "Unavailable project")}</option>}{projects.data?.map(project => <option key={project.id} value={project.id}>{string(project.data.name) || project.id}</option>)}</RadixSelect></label>
         </PopoverContent>
       </Popover>
       <span className={d2.snapshot}><Clock3 size={14} aria-hidden="true" />{fetching ? text("正在读取", "Refreshing") : text("服务快照", "Service snapshot")}</span>
@@ -287,7 +288,7 @@ export function ServiceDashboard2({ surface, projects, issues, milestones, membe
         <NotesPanel />
       </div>,
       issues: <details ref={issueDetailsRef} className={d2.issueDetails} open={issuesExpanded} onToggle={event => setIssuesExpanded(event.currentTarget.open)} data-pm-dashboard2="issues"><summary>{text("任务明细", "Issue details")}<span className={d2.caption}>{issueRows?.length ?? "—"} {text("项", "issues")} · {activeStatuses.length ? activeStatuses.map(statusLabel).join(", ") : text("所有状态", "All statuses")}{activeFilters ? ` · ${activeFilters} ${text("个筛选条件", "filters")}` : ""}</span></summary><div className={d2.issueDetailsBody}>
-        <div className={styles.issueFilters}><Input aria-label={text("搜索任务", "Search issues")} placeholder={text("搜索任务…", "Search issues…")} value={issueQuery} onChange={event => setIssueQuery(event.target.value)} /><select aria-label={text("任务日期范围", "Issue date scope")} value={issueMode} onChange={event => setIssueMode(event.target.value as IssueMode)}><option value="scheduled">{text("窗口内到期", "Due in window")}</option><option value="undated">{text("无有效到期日", "Without a valid due date")}</option><option value="all">{text("当前范围全部任务", "All issues in scope")}</option></select><Popover>
+        <div className={styles.issueFilters}><Input aria-label={text("搜索任务", "Search issues")} placeholder={text("搜索任务…", "Search issues…")} value={issueQuery} onChange={event => setIssueQuery(event.target.value)} /><RadixSelect aria-label={text("任务日期范围", "Issue date scope")} value={issueMode} onChange={event => setIssueMode(event.target.value as IssueMode)}><option value="scheduled">{text("窗口内到期", "Due in window")}</option><option value="undated">{text("无有效到期日", "Without a valid due date")}</option><option value="all">{text("当前范围全部任务", "All issues in scope")}</option></RadixSelect><Popover>
           <PopoverTrigger render={<Button variant="ghost" size="sm" aria-label={text("筛选任务", "Filter issues")} />}><SlidersHorizontal size={14} aria-hidden="true" />{text("筛选", "Filter")}{activeFilters > 0 && ` (${activeFilters})`}</PopoverTrigger>
           <PopoverContent align="start" className="w-[min(460px,calc(100vw-2rem))] p-0">
             <FilterCard

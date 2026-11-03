@@ -2,7 +2,7 @@
   "version": 1,
   "source": "packages/provider-core/src/server/ProviderAdapter.ts",
   "beforeSha256": "7adc5d8f10521254130449ee9c0d05cbcf1c2d4eddbf55aac7ab6db8946f93ea",
-  "afterSha256": "565c437216a3bb71777defd43cca0db42d8b97be216e586b2df99a96cc35ff29",
+  "afterSha256": "ac90d328e39a46f0334da0460021beaae9502c202a712aa7bf40d1eb0b37c8d3",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -14,6 +14,14 @@
     "vendor/t3code/opencode-patches.json"
   ],
   "splices": [
+    {
+      "start": 427,
+      "before": [],
+      "after": [
+        "  /** Latest raw user text, for selecting native skills only; never an authorization grant. */\n",
+        "  readonly userMessageText?: string;\n"
+      ]
+    },
     {
       "start": 453,
       "before": [],

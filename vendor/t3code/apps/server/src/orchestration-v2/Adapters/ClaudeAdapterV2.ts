@@ -1958,9 +1958,17 @@ function isSupportedClaudeImageMimeType(
 ): mimeType is SupportedClaudeImageMimeType {
   return supportedClaudeImageMimeTypes.has(mimeType);
 }
+function planClaudeMessageSkillDispatch(text: string, skills: ReadonlyMap<string, ClaudeSkillTarget>, userMessageText?: string) {
+  const dispatch = planClaudeSkillDispatch(userMessageText ?? text, skills);
+  if (!dispatch || userMessageText === undefined) return dispatch;
+  // The host's full portable context stays intact; only the latest user message selects a skill.
+  return { ...dispatch, leadingText: [text, dispatch.leadingText].filter(Boolean).join("\n\n") };
+}
+
 
 export function makeClaudeUserMessage(input: {
   readonly text: string;
+  readonly userMessageText?: string;
   readonly priority?: SDKUserMessage["priority"];
   readonly skills?: ReadonlyMap<string, ClaudeSkillTarget>;
   readonly uuid?: SDKUserMessage["uuid"];
@@ -1968,7 +1976,7 @@ export function makeClaudeUserMessage(input: {
   // Claude expands a skill only when `/name` starts the last text block.
   // Keep the whole request before that block; see ClaudeSkillDispatch.
   const dispatch =
-    input.skills === undefined ? undefined : planClaudeSkillDispatch(input.text, input.skills);
+    input.skills === undefined ? undefined : planClaudeMessageSkillDispatch(input.text, input.skills, input.userMessageText);
   return {
     type: "user",
     message: {
@@ -2122,6 +2130,7 @@ const reserveClaudePdfBudget = (
 
 const makeClaudeUserMessageWithAttachments = Effect.fnUntraced(function* (input: {
   readonly text: string;
+  readonly userMessageText?: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
   readonly priority?: SDKUserMessage["priority"];
   readonly uuid?: SDKUserMessage["uuid"];
@@ -2133,6 +2142,7 @@ const makeClaudeUserMessageWithAttachments = Effect.fnUntraced(function* (input:
   if (input.attachments.length === 0) {
     const message = makeClaudeUserMessage({
       text: input.text,
+      ...(input.userMessageText === undefined ? {} : { userMessageText: input.userMessageText }),
       ...(input.skills === undefined ? {} : { skills: input.skills }),
       ...(input.priority === undefined ? {} : { priority: input.priority }),
       ...(input.uuid === undefined ? {} : { uuid: input.uuid }),
@@ -2157,7 +2167,7 @@ const makeClaudeUserMessageWithAttachments = Effect.fnUntraced(function* (input:
   const dispatch =
     input.skills === undefined
       ? undefined
-      : planClaudeSkillDispatch(textWithAttachmentPaths, input.skills);
+      : planClaudeMessageSkillDispatch(textWithAttachmentPaths, input.skills, input.userMessageText);
   const content: Array<ClaudeUserContentBlock> = [];
   // Base64 adds a third to the payload. Leave room below Anthropic's 32 MB
   // request limit for text, instructions, and SDK framing. The SDK does not
@@ -9210,17 +9220,32 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               toolUseID: callbackOptions.toolUseID,
             } satisfies PermissionResult;
           }
-          if (/^mcp__pm_tools__[A-Za-z0-9_]+$/.test(toolName)) {
+          if (toolName.startsWith("mcp__")) {
             const binding = operationBinding;
             if (binding?.nativePermissions === "deny-ungranted" && binding.executionId === String(context.input.runId)
               && binding.threadId === context.input.threadId && binding.cwd === context.input.runtimePolicy.cwd
-              && binding.mcpServers.some((server) => server.name === "pm_tools")) {
+              && binding.promptAuthorization !== "technical-no-tools"
+              && binding.mcpServers.some((server) => server.transport === "stdio" && toolName.startsWith(`mcp__${server.name}__`) && toolName.length > `mcp__${server.name}__`.length)) {
               yield* authorize("tool");
               if (owner === activePermissionOwner && !callbackOptions.signal.aborted && (yield* Ref.get(activeTurn)) === context) {
+                // Automatic host admission still starts the ordinary tool lifecycle.
+                // The later assistant frame enriches this same call with MCP display metadata.
+                if (context.heldRootFrames.length > 0) yield* releaseHeldRootFrames(context);
+                yield* ensureToolCallStarted({
+                  context,
+                  nativeItemId: callbackOptions.toolUseID,
+                  toolName,
+                  toolInput: claudeNativeToolInputFromRecord(toolInput),
+                  parentToolUseId: null,
+                });
+                // Publishing artifacts may yield; do not carry admission across a revoked host grant.
+                yield* authorize("tool");
+                if (owner !== activePermissionOwner || callbackOptions.signal.aborted || (yield* Ref.get(activeTurn)) !== context)
+                  return { behavior: "deny", message: "This native MCP transport no longer belongs to the live generation." } satisfies PermissionResult;
                 return { behavior: "allow", updatedInput: toolInput } satisfies PermissionResult;
               }
             }
-            return { behavior: "deny", message: "This native PM transport no longer belongs to the live generation." } satisfies PermissionResult;
+            return { behavior: "deny", message: "This native MCP transport no longer belongs to the live generation." } satisfies PermissionResult;
           }
 
           const nativeRequestId = callbackOptions.toolUseID;
@@ -9887,6 +9912,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                       turnInput.message.text,
                       compileClaudeModelSelection(turnInput.modelSelection).promptEffort,
                     ),
+                    ...(turnInput.userMessageText === undefined ? {} : { userMessageText: turnInput.userMessageText }),
                     attachments: turnInput.message.attachments,
                     attachmentsDir,
                     fileSystem,

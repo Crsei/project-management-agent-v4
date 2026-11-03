@@ -4,6 +4,7 @@ import { chmod, lstat, mkdir, readFile, realpath, writeFile } from "node:fs/prom
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyHostBuildInputs } from "./host-inputs.mjs";
+import { planMcpSkillsAdaptations } from "./mcp-skills-adaptations.mjs";
 
 const toolRoot = fileURLToPath(new URL("../", import.meta.url));
 const repository = path.resolve(toolRoot, "../..");
@@ -91,11 +92,12 @@ for (const entry of manifest.files) {
   if (hash(bytes) !== entry.sha256 || bytes.length !== entry.bytes || blob !== entry.git_blob_sha1) throw new Error(`Wrong source hash/blob: ${entry.source_path}`);
   originals.set(entry.source_path, bytes);
 }
+const adaptations = options.has("--pristine") ? new Map() : await planMcpSkillsAdaptations(repository, source);
 const pending = [];
 const seen = new Set();
 function schedule(relative, bytes, mode) {
   relativePath(relative);
-  if (!relative.startsWith("vendor/t3code/")) throw new Error(`Outside owned vendor tree: ${relative}`);
+  if (!relative.startsWith("vendor/t3code/") && !adaptations.has(relative)) throw new Error(`Outside owned source/adaptation tree: ${relative}`);
   if (mode !== 0o644 && mode !== 0o755) throw new Error(`Noncanonical inventory mode: ${relative}`);
   if (seen.has(relative)) throw new Error(`Duplicate destination: ${relative}`);
   seen.add(relative);
@@ -114,12 +116,22 @@ for (const entry of inventory.files) {
       if (patch.version !== 1 || patch.source !== entry.source || patch.beforeSha256 !== entry.upstreamSha256 || patch.afterSha256 !== entry.sha256) throw new Error(`Patch identity mismatch: ${entry.source}`);
       bytes = applySplices(bytes, patch.splices, entry.source);
     }
+  } else if (entry.adaptation) {
+    const adaptation = adaptations.get(entry.destination);
+    if (!adaptation || entry.adaptation !== "vendor/t3code/mcp-skills-adaptations.json") throw new Error(`Missing supplemental adaptation: ${entry.destination}`);
+    bytes = adaptation.bytes;
   } else {
     bytes = await readFile(await safePath(repository, entry.asset));
   }
   const expected = options.has("--pristine") ? entry.upstreamSha256 : entry.sha256;
   if (hash(bytes) !== expected) throw new Error(`Wrong reconstructed hash: ${entry.destination}`);
   schedule(entry.destination, bytes, entry.mode);
+}
+for (const [relative, adaptation] of adaptations) {
+  if (seen.has(relative)) {
+    const existing = pending.find((entry) => entry.relative === relative);
+    if (!existing.bytes.equals(adaptation.bytes) || existing.mode !== adaptation.mode) throw new Error(`Baseline/supplemental recipe conflict: ${relative}`);
+  } else schedule(relative, adaptation.bytes, adaptation.mode);
 }
 if (!options.has("--pristine")) schedule("vendor/t3code/sync-inventory.json", inventoryBytes, 0o644);
 pending.sort((left, right) => left.relative < right.relative ? -1 : left.relative > right.relative ? 1 : 0);

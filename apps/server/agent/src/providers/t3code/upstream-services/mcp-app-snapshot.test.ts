@@ -8,6 +8,7 @@ import { MCP_APP_MAX_HTML_BYTES, MCP_APP_MIME_TYPE } from "@t3tools/shared/mcpAp
 import * as Effect from "effect/Effect";
 import { providerAttachmentsDirectory, resolveAttachmentPath } from "./attachments.ts";
 import { snapshotMcpApp } from "./mcp-app-snapshot.ts";
+import { closeStore } from "../../../durable/store.ts";
 
 async function isolated(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(path.join(tmpdir(), "pm-native-snapshot-"));
@@ -15,6 +16,7 @@ async function isolated(run: (root: string) => Promise<void>) {
   process.env.AGENT_WORKSPACE_DATA_DIR = root;
   try { await run(root); }
   finally {
+    closeStore();
     if (previous === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR;
     else process.env.AGENT_WORKSPACE_DATA_DIR = previous;
     await rm(root, { recursive: true, force: true });

@@ -6,6 +6,7 @@ import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { PmCommandStore } from "./pm-command-store"
 import { usePmService, useTimeDashboard } from "./pm-service"
 import { Choice, CommandNotice, Field, Form, makeCommand, useAction, useDraftState, useText } from "./pm-ui"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export type TimerPanelProps = { issues?: Entity[]; className?: string }
 export type TimeTrackingPanelProps = { issues?: Entity[]; className?: string }
@@ -134,7 +135,7 @@ export function PresencePanel({ className = "" }: PresencePanelProps) {
   const labels = { online: t("在线", "Online"), away: t("离开", "Away"), offline: t("离线", "Offline") }
   return <section className={`min-w-0 space-y-3 ${className}`} aria-label={t("在线状态", "Presence")}>
     <h3 className="font-medium">{t("在线状态", "Presence")}</h3><TimeReadNotice query={query} />
-    {self && <><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm">{t("我的状态", "My status")}: {labels[self.status]}</p><select aria-label={t("我的在线意图", "My presence preference")} value={self.preference} disabled={action.locked || !!query.error} className="min-h-9 rounded-md border bg-background px-2 text-sm" onChange={event => { const preference = event.target.value as "online" | "away"; void action.run(() => action.execute({ commandId: crypto.randomUUID(), commandType: "SetPresencePreference", payload: { preference }, ...(self.preferenceId ? { targetId: self.preferenceId, expectedVersions: { [self.preferenceId]: self.preferenceVersion! } } : {}) })) }}><option value="online">{labels.online}</option><option value="away">{labels.away}</option></select></div>
+    {self && <><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm">{t("我的状态", "My status")}: {labels[self.status]}</p><RadixSelect aria-label={t("我的在线意图", "My presence preference")} value={self.preference} disabled={action.locked || !!query.error} className="min-h-9 rounded-md border bg-background px-2 text-sm" onChange={event => { const preference = event.target.value as "online" | "away"; void action.run(() => action.execute({ commandId: crypto.randomUUID(), commandType: "SetPresencePreference", payload: { preference }, ...(self.preferenceId ? { targetId: self.preferenceId, expectedVersions: { [self.preferenceId]: self.preferenceVersion! } } : {}) })) }}><option value="online">{labels.online}</option><option value="away">{labels.away}</option></RadixSelect></div>
       <p className="text-xs text-muted-foreground">{t("心跳超过90秒即离线；其他标签页不会覆盖离开意图。", "Offline after 90s without a heartbeat; other tabs cannot overwrite away intent.")}</p>
       {query.data!.presence.directoryVisible ? <ul className="space-y-2">{query.data!.presence.members.map(member => <li key={member.userId} className="flex min-w-0 justify-between gap-2 text-sm"><span className="truncate">{member.name}</span><span className="text-muted-foreground">{labels[member.status]}</span></li>)}</ul> : <p className="text-xs text-muted-foreground">{t("仅显示本人；成员目录需要 access.manage。", "Self only; the member directory requires access.manage.")}</p>}</>}
     {action.localError && <p role="alert" className="text-sm text-destructive">{action.localError}</p>}<CommandNotice />

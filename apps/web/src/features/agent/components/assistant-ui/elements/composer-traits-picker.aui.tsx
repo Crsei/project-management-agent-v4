@@ -241,6 +241,6 @@ export function ComposerTraitsPicker({
       </DropdownMenuContent>
     </DropdownMenu>
     {unavailable.length > 0 && !open && <p role="alert" className="min-w-0 max-w-full basis-full break-words px-2 text-xs text-destructive">{t("已保存的模型选项不可用，发送已阻止。请打开模型选项明确更正：", "Saved model options are invalid and sending is blocked. Open model options to explicitly correct: ")}{unavailable.map((selection) => `${selection.id} = ${String(selection.value)}`).join(t("、", ", "))}</p>}
-    {error && !open && <p role="alert" className="min-w-0 max-w-full basis-full break-words px-2 text-xs text-destructive">{t("参数未保存：", "Parameters not saved: ")}{error}{onRetry && <> <button type="button" disabled={blocked} className="underline disabled:opacity-50" onClick={retry}>{t("重试保存", "Retry save")}</button></>}</p>}
+    {error && !open && <p role="alert" className="min-w-0 max-w-full basis-full break-words px-2 text-xs text-destructive">{t("参数未保存：", "Parameters not saved: ")}{error}{onRetry && <> <button type="button" disabled={blocked} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50" onClick={retry}>{t("重试保存", "Retry save")}</button></>}</p>}
   </>;
 }

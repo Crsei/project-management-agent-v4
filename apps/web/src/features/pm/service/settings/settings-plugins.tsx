@@ -10,12 +10,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { NativeSelect } from "@/components/ui/native-select"
 import { useText } from "../pm-ui"
 import { pluginCatalog, pluginCategories, type PluginCategory, type PluginDefinition } from "./plugin-catalog"
 import { PluginSmtpStatus } from "./plugin-smtp-status"
 import { PluginWebhookStatus } from "./plugin-webhook-status"
 import { SettingsNotice, SettingsSection, type SettingsPageProps } from "./settings-shared"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 function PluginImplementation({ plugin }: { plugin: PluginDefinition }) {
   const t = useText()
@@ -99,7 +99,7 @@ export function SettingsPlugins({ mode }: SettingsPageProps) {
         </div>
         <div className="min-w-0 space-y-2">
           <label htmlFor={`${id}-category`} className="text-sm font-medium">{t("分类", "Category")}</label>
-          <NativeSelect
+          <RadixSelect
             id={`${id}-category`}
             value={category}
             onChange={event => setCategory(event.target.value as PluginCategory | "all")}
@@ -107,7 +107,7 @@ export function SettingsPlugins({ mode }: SettingsPageProps) {
           >
             <option value="all">{t("全部分类", "All categories")}</option>
             {pluginCategories.map(entry => <option key={entry.id} value={entry.id}>{t(entry.label[0], entry.label[1])}</option>)}
-          </NativeSelect>
+          </RadixSelect>
         </div>
       </div>
       <p id={`${id}-search-hint`} className="text-xs leading-5 text-muted-foreground">{t("同时匹配中英文名称和说明；分类与搜索共同生效。", "Matches Chinese and English names and descriptions; category and search filters apply together.")}</p>

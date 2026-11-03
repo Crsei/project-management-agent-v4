@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { usePmService } from "../pm-service"
+import { usePmNoticeCenter } from "../pm-notice-center"
 import { downloadProjectAttachment } from "../service-project-detail-panels"
 import { FileTypeIcon } from "./FileTypeIcon"
 import { FileContentPreview } from "./FileContentPreview"
@@ -33,7 +34,7 @@ export function FilePreviewDialog({ entry, initialVersionId, locale, t, uploader
   const [selectedId, setSelectedId] = useState(initialVersionId ?? entry.latest.id)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [copyNotice, setCopyNotice] = useState<string | null>(null)
+  const { push } = usePmNoticeCenter()
   const selected = entry.versions.find(version => version.id === selectedId) ?? entry.latest
   const origin = useArtifactCopyOrigin(selected.id, selected.projectId)
   const en = locale === "en"
@@ -54,8 +55,7 @@ export function FilePreviewDialog({ entry, initialVersionId, locale, t, uploader
 
   async function copy(version: Entity) {
     const copied = await onCopyLink(version)
-    setCopyNotice(copied ? t("链接已复制", "Link copied") : t("无法复制链接", "Unable to copy link"))
-    window.setTimeout(() => setCopyNotice(null), 2600)
+    push({ severity: copied ? "success" : "error", title: copied ? t("链接已复制", "Link copied") : t("无法复制链接", "Unable to copy link"), source: "file-preview" })
   }
 
   return <Dialog open onOpenChange={onOpenChange}>
@@ -88,7 +88,6 @@ export function FilePreviewDialog({ entry, initialVersionId, locale, t, uploader
           </div>)}
         </div>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
-        {copyNotice && <p role="status" className={styles.notice}>{copyNotice}</p>}
       </div>
       <div className={styles.formActions}>
         <Button variant="outline" disabled={downloading} onClick={() => { void download(selected) }}><Download size={14} />{downloading ? t("下载中…", "Downloading…") : t("下载", "Download")}</Button>

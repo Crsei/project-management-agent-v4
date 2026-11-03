@@ -5,6 +5,8 @@ import * as Stream from "effect/Stream";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 import * as Cause from "effect/Cause";
+import * as Scope from "effect/Scope";
+import * as Exit from "effect/Exit";
 import {
   ThreadId, RunId, MessageId, ProjectId, ProviderInstanceId, ModelSelection, OrchestrationV2AppThread,
   OrchestrationV2ProviderThreadJson, OrchestrationV2ProviderTurnJson,
@@ -26,6 +28,8 @@ import { pmRuntimeBinding } from "./runtime-host.ts";
 import { makePmUsageUpdates, pmThreadUsage, pmTurnUsage } from "./usage.ts";
 import { assertPmContinuationCursor, bindPmContinuationSink, decodePmNativeHistory, nextPmOrdinal, nextPmProviderTurnOrdinal, pmExecutionError, readPmContinuation, resolvePmProviderProtocol, savePmContinuation,
   type PmProviderProtocolProbe } from "./continuation.ts";
+import { closeMcpAppSession, retainMcpAppSession } from "../../mcp-apps/live.ts";
+import { mcpAppContextForDispatch, mcpAppContextForTurn } from "../../mcp-apps/context.ts";
 
 /** Single application instance, configured by parent lifecycle assembly. No driver or protocol registry here. */
 export function makePmProviderExecutionService(host: PmProviderHostService, runtimeHost: ProviderRuntimeHostService): PmProviderExecutionService {
@@ -33,6 +37,10 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
     fork?: { source: NativeSessionRef; boundary?: { readonly turnId?: string; readonly messageId?: string } }): Promise<CliChatResult> => {
     if (context.pmToolBridge && (!context.execution || !context.authorizeExecution)) throw pmExecutionError(412, "scope_required", "PM tools require a trusted live Chat authorization.");
     if (!options.model.trim()) throw pmExecutionError(400, "invalid_model", "Select an explicit native model.");
+    if (context.execution) await closeMcpAppSession(context.execution.threadId, { preserveContext: true });
+    const sessionScope = await Effect.runPromise(Scope.make());
+    let sessionRetained = false;
+    let sessionCloseScheduled = false;
     const technicalId = `host-thread:${randomUUID()}`;
     let threadId = ThreadId.make(context.execution?.threadId ?? technicalId);
     const runId = RunId.make(context.execution?.generationId ?? randomUUID());
@@ -44,7 +52,7 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
     if (options.signal?.aborted) preOpenAbort.abort();
     try {
     const exit = await Effect.runPromiseExit(Effect.scoped(Effect.gen(function* () {
-      const lease = yield* host.acquire(context, "execution");
+      const lease = yield* host.acquire(context, "execution").pipe(Effect.provideService(Scope.Scope, sessionScope));
       yield* lease.assertCurrent;
       const source = fork?.source ?? options.resume;
       const saved = source ? readPmContinuation(lease, source, undefined, fork ? undefined : context.execution?.threadId, Boolean(fork)) : undefined;
@@ -61,6 +69,10 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
         yield* lease.assertCurrent;
         if (options.signal?.aborted) return yield* Effect.fail(pmExecutionError(409, "stale_execution", "Native execution is no longer live."));
       }) : undefined);
+      // Preserve native teardown-before-binding-release for ordinary executions.
+      // Only a completed App session may transfer its native Scope past this finalizer.
+      yield* Effect.addFinalizer(() => Effect.suspend(() => sessionRetained ? Effect.void : Scope.close(sessionScope, Exit.void)));
+      sessionCloseScheduled = true;
       const allocator = yield* IdAllocatorV2;
       const providerSessionId = yield* allocator.allocate.providerSession({ providerInstanceId: lease.instance.instanceId, threadId });
       const rootNodeId = allocator.derive.rootNode({ runId });
@@ -80,6 +92,7 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
       const runtime = yield* lease.instance.orchestrationAdapter.openSession({ threadId, providerSessionId, modelSelection, runtimePolicy,
         ...(saved ? { resumeFromSession: saved.session } : {}), ...(source ? { initialNativeThreadId: source.sessionId } : {}) }).pipe(
           Effect.mapError((error) => pmAdapterBoundaryError(error)),
+          Effect.provideService(Scope.Scope, sessionScope),
         );
       if (runtime.instanceId !== lease.instance.instanceId || runtime.driver !== lease.instance.driverKind
         || runtime.providerSessionId !== providerSessionId || runtime.providerSession.id !== providerSessionId
@@ -113,6 +126,26 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
         const causeFailures = (cause: Cause.Cause<unknown>) => cause.reasons.flatMap(reason =>
           Cause.isFailReason(reason) ? [reason.error] : Cause.isDieReason(reason) ? [reason.defect] : []);
         const outcome = Promise.withResolvers<void>();
+        let outputDrained = false;
+        const activeBackgroundItems = new Set<string>();
+        // Adapted from RunExecutionService.shouldStopProviderEventIngestion: root
+        // completion does not settle the generation while its native output is pending.
+        const resolveWhenDrained = async (event: ProviderAdapterV2Event) => {
+          const terminal = observed.end;
+          if (!terminal || firstFailure) return;
+          if (terminal.status === "completed") {
+            // Native producers publish node + item pairs. A node is not evidence
+            // that the corresponding completed tool payload has been ingested.
+            if (activeBackgroundItems.size || event.type === "node.updated") return;
+            const pending = thread && runtime.hasPendingBackgroundWorkForThread
+              ? runtime.hasPendingBackgroundWorkForThread(thread)
+              : runtime.hasPendingBackgroundWork;
+            if (pending && await runOperation(pending)) return;
+            await assertCurrent();
+          }
+          outputDrained = true;
+          outcome.resolve();
+        };
         let currentEventWork: Promise<void> | undefined;
         const consumerAbort = new AbortController();
         const pendingRequests = new Map<string, { token: symbol; close: () => void }>();
@@ -156,6 +189,13 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
           rootThreadId: threadId,
           isRootItem: (item) => item.threadId === threadId && (item.providerThreadId === null || item.providerThreadId === thread?.id),
           isLiveRequest: (request) => request.responseCapability.type === "live" && request.responseCapability.providerSessionId === runtime.providerSessionId,
+          mcpAppIdentity: context.execution && context.authorizeMcpApp && !context.pmAnalysis && runtime.mcpApps
+            ? item => thread && item.threadId === threadId && item.runId === runId && item.providerThreadId === thread.id
+              && thread.nativeThreadRef?.nativeId && thread.nativeThreadRef.strength === "strong"
+              ? { threadId, itemId: item.id, generationId: runId, providerInstanceId: lease.instanceId,
+                instanceRevision: lease.revision, providerSessionId: runtime.providerSessionId,
+                providerThreadId: thread.id, nativeSessionId: thread.nativeThreadRef.nativeId } : undefined
+            : undefined,
           onRequestClosed: (id) => { const current = pendingRequests.get(id); pendingRequests.delete(id); current?.close(); },
           onRequest: (request, sourceRequest) => {
             const closed = Promise.withResolvers<void>();
@@ -203,7 +243,7 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
             const currentThread = thread;
             await assertCurrent();
             const ordinal = nextPmProviderTurnOrdinal(turns.values());
-            const { message: _message, ...turn } = startInput;
+            const { message: _message, userMessageText: _userMessageText, ...turn } = startInput;
             const isCurrent = lease.assertCurrent.pipe(
               Effect.andThen(runtimeHost.read({ threadId, providerInstanceId: lease.instance.instanceId })),
               Effect.map((binding) => !stopped && !observed.end && !firstFailure && binding?.executionId === runId),
@@ -322,16 +362,24 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
               break;
           }
           mapper.handle(event);
+          if (event.type === "turn_item.updated" && (event.turnItem.type === "command_execution"
+            || event.turnItem.type === "dynamic_tool" || event.turnItem.type === "subagent")) {
+            const status = event.turnItem.status;
+            if (status === "pending" || status === "running" || status === "waiting") activeBackgroundItems.add(event.turnItem.id);
+            else activeBackgroundItems.delete(event.turnItem.id);
+          }
           if (event.type === "provider_session.updated" || (event.type === "turn.terminal" && observed.end === event)
             || (event.type === "provider_thread.updated" && event.providerThread.id === thread?.id)) await persist();
-          if (event.type === "turn.terminal" && observed.end === event) outcome.resolve();
+          await resolveWhenDrained(event);
           })();
           currentEventWork = work;
           return work;
         }, catch: (error) => error })).pipe(Effect.provideService(IdAllocatorV2, allocator));
         const consumer = Effect.runPromiseExit(consume, { signal: consumerAbort.signal }).then(exit => {
           if (exit._tag === "Success") {
-            if (!stopped && !observed.end) fail(pmExecutionError(502, "provider_stream_closed", "Native event stream ended without a matching root terminal."));
+            if (!stopped && !outputDrained) fail(pmExecutionError(502, "provider_stream_closed", observed.end
+              ? "Native event stream ended before its pending output was fully delivered."
+              : "Native event stream ended without a matching root terminal."));
             return;
           }
           if (stopped && Cause.hasInterruptsOnly(exit.cause)) return;
@@ -485,18 +533,26 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
               activeProviderThreadId: thread.id, lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId }, forkedFrom: null,
               createdBy: "user", creationSource: "server", createdAt: now, updatedAt: now, archivedAt: null, deletedAt: null,
               settledOverride: null, settledAt: null, lastVisitedAt: null });
+            const appContext = await mcpAppContextForTurn(context, source);
+            await assertCurrent();
             startInput = { appThread, threadId, runId, runOrdinal, providerTurnOrdinal,
               nativeThreadHasTurns: Boolean(source), attemptId, rootNodeId, providerThread: thread,
-              message: { messageId, text: options.prompt, attachments: [], createdBy: "user", creationSource: "server" }, modelSelection, runtimePolicy };
-            startTask = runOperation(runtime.startTurn(startInput).pipe(
+              message: { messageId, text: options.prompt, attachments: [], createdBy: "user", creationSource: "server" }, modelSelection, runtimePolicy,
+              ...(options.userMessageText === undefined ? {} : { userMessageText: options.userMessageText }),
+              ...(appContext.length ? { appContext } : {}) };
+            startTask = runOperation(Effect.suspend(() => {
+              if (appContext.length) startInput = { ...startInput!, appContext: mcpAppContextForDispatch(context, source, appContext) };
+              return runtime.startTurn(startInput!);
+            }).pipe(
               Effect.mapError(error => pmAdapterBoundaryError(error)),
               Effect.onExit(exit => Effect.sync(() => {
                 if (exit._tag === "Failure") startFailures.push(...causeFailures(exit.cause));
               })),
             ));
             await Promise.race([startTask, outcome.promise]);
-            // A matching terminal is sufficient even when startTurn remains open until its Scope is interrupted.
-            if (!firstFailure && !observed.end) await outcome.promise;
+            // startTurn may return at the root terminal while native MCP App capture
+            // still owns pending output. Wait for the source drain predicate as well.
+            if (!firstFailure) await outcome.promise;
             if (firstFailure) throw firstFailure;
             if (!observed.end) throw pmExecutionError(502, "provider_terminal_missing", "Native execution did not produce a matching root terminal.");
             const omitted = mapper.pendingBodies();
@@ -587,9 +643,53 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
             primary instanceof Error ? primary : {}, { cause: primary });
         }
         if (!result) throw pmExecutionError(502, "provider_result_missing", "Native execution produced no result.");
+        const apps = [...mapper.items.values()].flatMap(item => item.mcpApp ? [item.mcpApp] : []);
+        if (!fork && apps.length && runtime.mcpApps && context.execution && context.authorizeMcpApp && context.authorizeExecution
+          && !context.pmAnalysis && thread && nativeSession && observed.end?.status === "completed" && observed.end.threadDisposition === "reusable"
+          && !options.signal?.aborted) {
+          await assertCurrent();
+          const watchSubscription = runtime.subscribeEvents ? await Effect.runPromise(runtime.subscribeEvents) : undefined;
+          if (watchSubscription) await Effect.runPromise(Scope.addFinalizer(sessionScope, watchSubscription.close));
+          const watchAbort = new AbortController();
+          let watchTask: Promise<unknown> | undefined;
+          const invalidate = retainMcpAppSession({ apps, scope: context.execution.scope, cwd: lease.cwd, providerThread: thread, mcpApps: runtime.mcpApps,
+            blockedServers: ["pm_tools", ...(context.mcpServers ?? []).map(server => server.name)],
+            assertCurrent, authorize: context.authorizeMcpApp,
+            originatingMcpGrant: context.originatingMcpGrant,
+            close: async () => {
+              watchAbort.abort();
+              await watchTask;
+              await Effect.runPromise(Scope.close(sessionScope, Exit.void));
+            } });
+          // Drain the original native stream without starting work. Late permissions are
+          // denied, never promoted into a generation or a PM business approval.
+          watchTask = Effect.runPromiseExit(Stream.runForEach(watchSubscription?.events ?? runtime.events, event => Effect.gen(function* () {
+            yield* lease.assertCurrent;
+            if (event.type === "provider_session.updated" && event.providerSession.id === runtime.providerSessionId
+              && (["stopped", "error"].includes(event.providerSession.status) || event.providerSession.providerInstanceId !== lease.instanceId
+                || event.providerSession.cwd !== lease.cwd))
+              return yield* Effect.fail(pmExecutionError(409, "mcp_app_session_stopped", "The native App session stopped or changed."));
+            if (event.type === "provider_thread.updated" && event.providerThread.id === thread!.id
+              && (event.providerThread.status === "closed" || event.providerThread.status === "error"
+                || event.providerThread.providerSessionId !== runtime.providerSessionId || event.providerThread.providerInstanceId !== lease.instanceId
+                || event.providerThread.nativeThreadRef?.nativeId !== nativeSession!.sessionId))
+              return yield* Effect.fail(pmExecutionError(409, "mcp_app_session_stopped", "The native App thread changed."));
+            if (event.type === "runtime_request.updated" && event.runtimeRequest.status === "pending"
+              && event.runtimeRequest.responseCapability.type === "live" && event.runtimeRequest.responseCapability.providerSessionId === runtime.providerSessionId)
+              yield* runtime.respondToRuntimeRequest({ requestId: event.runtimeRequest.id,
+                decision: event.runtimeRequest.kind === "user_input" ? "cancel" : "decline" });
+          })), { signal: watchAbort.signal }).then(() => {
+            if (!watchAbort.signal.aborted) void invalidate().catch(() => undefined);
+          });
+          sessionRetained = true;
+        }
         return result;
       }, catch: (error) => error });
-    }).pipe(Effect.provide(idAllocatorLayer))), { signal: preOpenAbort.signal });
+    }).pipe(Effect.provide(idAllocatorLayer))).pipe(
+      Effect.onExit(exit => Exit.isFailure(exit) && sessionRetained
+        ? Effect.promise(() => closeMcpAppSession(threadId)) : Effect.void),
+      Effect.ensuring(Effect.suspend(() => sessionCloseScheduled ? Effect.void : Scope.close(sessionScope, Exit.void))),
+    ), { signal: preOpenAbort.signal });
       if (exit._tag === "Success") return exit.value;
       const errors = exit.cause.reasons.flatMap(reason =>
         Cause.isFailReason(reason) ? [reason.error] : Cause.isDieReason(reason) ? [reason.defect] : []);

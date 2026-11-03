@@ -23,6 +23,8 @@ export function makePmProviderRuntimeHost(): ProviderRuntimeHostService {
       const authorization = current?.authorization;
       if (!current || !authorization || current.binding.executionId !== input.executionId || !current.owners.size)
         return yield* Effect.fail(stale);
+      if (input.action === "tool" && current.binding.promptAuthorization === "technical-no-tools")
+        return yield* Effect.fail(Object.assign(new Error("Technical provider requests cannot authorize tools."), { status: 403, code: "scope_required" }));
       yield* Effect.suspend(() => authorization(input.action));
       if (bindings.get(id) !== current || !current.owners.size)
         return yield* Effect.fail(stale);
@@ -49,6 +51,14 @@ export function makePmProviderRuntimeHost(): ProviderRuntimeHostService {
 
 /** Only server-constructed Chat context may grant access to the existing PM transport. */
 export function pmRuntimeBinding(context: ProviderDriverContext, threadId: ThreadId, executionId: string): ProviderRuntimeHostBinding {
+  if (context.pmAnalysis && (context.pmToolBridge || context.mcpServers?.length))
+    throw Object.assign(new Error("Technical analysis cannot inject native tools."), { status: 412, code: "scope_required" });
+  const names = new Set<string>();
+  for (const server of context.mcpServers ?? []) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(server.name) || names.has(server.name))
+      throw Object.assign(new Error("MCP descriptors require unique valid server names."), { status: 412, code: "scope_required" });
+    names.add(server.name);
+  }
   if ((context.pmToolBridge || context.mcpServers?.length) && (!context.execution || !context.authorizeExecution))
     throw Object.assign(new Error("PM tools require a trusted live Chat authorization."), { status: 412, code: "scope_required" });
   const bridge = context.pmToolBridge;

@@ -94,7 +94,7 @@ export function PmWorkspacePicker() {
           {!refreshing && <RefreshCw aria-hidden="true" className="size-4" />}
           {refreshing ? t("正在刷新…", "Refreshing…") : t("刷新工作区", "Refresh workspaces")}
         </Button>
-        <Link to="/pm/account/security" className="self-center px-3 text-sm underline">{t("本人账号安全（无需工作区）", "Account security (no workspace required)")}</Link>
+        <Link to="/pm/account/security" className="self-center px-3 text-sm text-primary hover:text-foreground">{t("本人账号安全（无需工作区）", "Account security (no workspace required)")}</Link>
       </div>
     </section>
   )

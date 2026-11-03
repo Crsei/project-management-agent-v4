@@ -80,6 +80,8 @@ export async function resolveProviderRuntime(options: ResolveProviderRuntimeOpti
 
 export async function runNativeRuntime(runtime: ProviderRuntime, options: {
   prompt: string; signal?: AbortSignal; onText?: (delta: string) => void; cwd?: string;
+  /** Original latest user text for native invocation parsing, separate from PM context. */
+  userMessageText?: string;
   session?: CliSessionOptions; onSession?: (ref: NativeSessionRef) => void;
   onEvent?: (event: NativeOutputEvent) => void;
   onRequest?: (request: NativeInteractionRequest) => Promise<NativeInteractionResponse>;
@@ -90,6 +92,8 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
   mcpServers?: ProviderDriverContext["mcpServers"];
   execution?: PmExecutionIdentity;
   authorizeExecution?: ProviderDriverContext["authorizeExecution"];
+  authorizeMcpApp?: ProviderDriverContext["authorizeMcpApp"];
+  originatingMcpGrant?: ProviderDriverContext["originatingMcpGrant"];
   pmAnalysis?: true;
   authorizeWorktreeWrite?: ProviderDriverContext["authorizeWorktreeWrite"];
 }): Promise<CliChatResult> {
@@ -132,8 +136,11 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
     const result = await adapter.run({ ...providerContext(instance, cwd), pmToolBridge: options.pmToolBridge,
       mcpServers: options.mcpServers, execution: options.execution, authorizeExecution: options.authorizeExecution,
       authorizeWorktreeWrite: options.authorizeWorktreeWrite,
+      authorizeMcpApp: options.authorizeMcpApp,
+      originatingMcpGrant: options.originatingMcpGrant,
       ...(options.pmAnalysis ? { pmAnalysis: true as const } : {}) }, {
       model: runtime.modelId, prompt: options.prompt, signal: options.signal,
+      userMessageText: options.userMessageText,
       modelOptions, interactionMode: options.interactionMode ?? "default",
       onText: options.onText, onEvent: options.onEvent, onRequest: options.onRequest, resume, onSession: publishSession,
       onUsage: (update) => {

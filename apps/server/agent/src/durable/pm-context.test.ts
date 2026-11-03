@@ -171,11 +171,17 @@ test("ensureThread never silently rebinds; update can set and clear a binding", 
   ensureThread("bound");
   assert.deepEqual(getThread("bound")!.pmContext, { taskId: "TASK-1", entityId: null });
 
+  const beforeSet = referenceCalls.length;
   const set = await putThread("bound", { pmContext: { taskId: "TASK-2", entityId: "TASK-2" } });
   assert.equal(set.status, 200);
   assert.deepEqual(getThread("bound")!.pmContext, { taskId: "TASK-2", entityId: "TASK-2" });
-  // The same ID is resolved once, never duplicated.
-  assert.deepEqual(referenceCalls.at(-1)!.body.references.map((item) => item.id), ["TASK-2"]);
+  // Rechecks may validate the old binding again; the new binding must still
+  // resolve the shared task/entity ID without duplicating it in a request.
+  const newBindingCalls = referenceCalls.slice(beforeSet)
+    .filter((call) => call.body.references.some((item) => item.id === "TASK-2"));
+  assert.ok(newBindingCalls.length > 0, "The replacement binding must be authorized through PM.");
+  for (const call of newBindingCalls)
+    assert.deepEqual(call.body.references.map((item) => item.id), ["TASK-2"]);
 
   const calls = referenceCalls.length;
   const cleared = await putThread("bound", { pmContext: null });

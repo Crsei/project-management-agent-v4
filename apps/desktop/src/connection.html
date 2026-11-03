@@ -3,136 +3,76 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'"
-    />
-    <title>Workspace connection — Agent Workspace</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'" />
+    <title>Workspace connection — PM Agent v4</title>
     <link rel="stylesheet" href="./connection.css" />
     <script type="module" src="./connection.mjs"></script>
   </head>
   <body>
-    <header>
-      <span class="brand-mark" aria-hidden="true">aw</span><span>Agent Workspace</span
-      ><span class="desktop-label">Desktop</span>
-    </header>
+    <header><span class="brand-mark" aria-hidden="true">pm</span><span>PM Agent v4</span><span class="desktop-label">Desktop</span></header>
     <main>
-      <h1>Your workspace, your runtime</h1>
-      <p class="intro">Run on this computer, or connect to a workspace Server you trust.</p>
+      <h1>Your workspace, on your terms</h1>
+      <p class="intro">Start a private workspace on this computer, or connect to a Server you trust.</p>
       <form id="connection-form">
         <fieldset class="mode-picker">
           <legend>Connection mode</legend>
-          <label
-            ><input type="radio" name="mode" value="local" checked /><span
-              ><strong>Local computer</strong><small>Private Server · local projects</small></span
-            ></label
-          >
-          <label
-            ><input type="radio" name="mode" value="remote" /><span
-              ><strong>Remote Server</strong><small>Your self-hosted workspace</small></span
-            ></label
-          >
+          <label><input type="radio" name="mode" value="local" checked /><span><strong>Local computer</strong><small>Managed PostgreSQL · local projects</small></span></label>
+          <label><input type="radio" name="mode" value="remote" /><span><strong>Remote Server</strong><small>Your self-hosted workspace</small></span></label>
         </fieldset>
-        <section id="local-fields" aria-label="Local Server settings">
-          <div class="field">
-            <label for="project-root">Project root</label>
-            <div class="input-row">
-              <input id="project-root" name="projectRoot" required spellcheck="false" /><button
-                type="button"
-                data-directory="projectRoot"
-              >
-                Browse…
-              </button>
+        <section id="local-fields" aria-label="Local workspace settings">
+          <p class="notice">Node and PostgreSQL are included. No separate installation, Docker, environment files or manual database setup is needed. Data stays in the managed workspace folder.</p>
+          <fieldset class="setup-fields">
+            <legend>First local account</legend>
+            <label class="check-row"><input type="checkbox" id="create-account" name="createAccount" /><span>Set up a new local workspace</span></label>
+            <small>Enable this only for the first connection to a new empty workspace folder. Existing accounts are never reset. Leave it off to reconnect, then sign in inside PM.</small>
+            <div id="account-fields" hidden>
+              <div class="field"><label for="account-email">Email</label><input id="account-email" name="email" type="email" maxlength="254" autocomplete="off" autocapitalize="none" spellcheck="false" /></div>
+              <div class="field"><label for="account-name">Your name</label><input id="account-name" name="name" maxlength="120" autocomplete="off" /></div>
+              <div class="field"><label for="account-password">Password <span class="muted">at least 12 characters</span></label><input id="account-password" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" /><small>Used only to create the account; never saved in desktop connection settings. You will sign in with this password in PM.</small></div>
+              <div class="field"><label for="workspace-name">Workspace name</label><input id="workspace-name" name="workspaceName" maxlength="120" autocomplete="off" /></div>
             </div>
-            <small
-              >The Server runs here. Choose an existing project folder; changing mode never moves
-              your files.</small
-            >
+          </fieldset>
+          <div class="field">
+            <label for="data-dir">Managed workspace data folder</label>
+            <div class="input-row"><input id="data-dir" name="dataDir" required spellcheck="false" /><button type="button" data-directory="dataDir">Browse…</button></div>
+            <small>Choose a new empty folder, or an existing desktop-managed workspace. Unknown or damaged data is refused, never replaced. This includes the database, Agent state and workspace storage.</small>
           </div>
           <div class="field">
-            <label for="data-dir">Workspace data directory</label>
-            <div class="input-row">
-              <input id="data-dir" name="dataDir" required spellcheck="false" /><button
-                type="button"
-                data-directory="dataDir"
-              >
-                Browse…
-              </button>
-            </div>
-            <small
-              >Uses v4-owned Agent data. Local mode also starts the PM API, Worker and public gateway. PostgreSQL is user-managed and is not bundled.</small
-            >
+            <label for="project-root">Project root <span class="muted">optional</span></label>
+            <div class="input-row"><input id="project-root" name="projectRoot" spellcheck="false" placeholder="Default: projects inside the managed workspace folder" /><button type="button" data-directory="projectRoot">Browse…</button></div>
+            <small>Leave empty to use the workspace’s projects folder. An explicitly selected existing project folder becomes an allowed local root; no repository folder is implicitly shared.</small>
           </div>
-          <div class="field">
-            <label for="node-path">Node executable <span class="muted">24 LTS</span></label>
-            <div class="input-row">
-              <input
-                id="node-path"
-                name="nodePath"
-                value="node"
-                required
-                spellcheck="false"
-              /><button type="button" id="choose-node">Browse…</button>
-            </div>
-            <small
-              >Use “node” from PATH, or an absolute executable path. Native PTY runs in Node, not
-              Electron.</small
-            >
-          </div>
-          <p class="notice">
-            Configure and migrate PostgreSQL and storage before connecting. Development reads
-            <code>.env</code> and <code>.env.worker</code> in the v4 repository (optional
-            <code>.env.agent</code>); a packaged app reads them from <code>~/.pmv4</code>.
-            Local ports 3224, 4194 and 4325 must be available.
-          </p>
+          <details id="development-runtime" hidden>
+            <summary>Development runtime override</summary>
+            <div class="field"><label for="node-path">Explicit Node 24 executable <span class="muted">optional</span></label><div class="input-row"><input id="node-path" name="nodePath" spellcheck="false" placeholder="Use the prepared bundled Node runtime" /><button type="button" id="choose-node">Browse…</button></div><small>Development only. Packaged apps always use their included Node runtime. Native dependencies do not run inside Electron.</small></div>
+          </details>
         </section>
         <section id="remote-fields" aria-label="Remote Server settings" hidden>
-          <div class="field">
-            <label for="remote-url">Workspace Server URL</label
-            ><input
-              id="remote-url"
-              name="remoteUrl"
-              type="url"
-              placeholder="https://workspace.example.com"
-              spellcheck="false"
-              autocomplete="url"
-            /><small
-              >HTTPS is required outside loopback. Use the server origin, not an API URL or a URL
-              containing an access token.</small
-            >
-          </div>
-          <p class="notice">
-            You will sign in on the Server’s workspace login page. Remote sessions are isolated from
-            the local Server and its private access token. Trust the Server before entering
-            credentials.
-          </p>
+          <div class="field"><label for="remote-url">Workspace Server URL</label><input id="remote-url" name="remoteUrl" type="url" placeholder="https://workspace.example.com" spellcheck="false" autocomplete="url" /><small>Use the public origin or /pm. HTTPS is required outside loopback. Never put an access token or credentials in a URL. An explicit /agent/workspace URL is also supported.</small></div>
+          <p class="notice">Sign in on the remote Server’s own PM login page. Its cookies and browser storage are isolated from every managed local workspace. Trust that Server before entering credentials. Agent can be opened using the existing product switch.</p>
         </section>
-        <div class="actions">
-          <button class="primary" type="submit" id="connect">Connect workspace</button
-          ><button type="button" id="open" hidden>Open workspace</button
-          ><button type="button" id="disconnect" hidden>Disconnect</button>
-        </div>
+        <div class="actions"><button class="primary" type="submit" id="connect">Connect workspace</button><button type="button" id="open" hidden>Open workspace</button><button type="button" id="disconnect" hidden>Disconnect</button></div>
       </form>
       <section class="status-panel" aria-labelledby="status-title">
         <h2 id="status-title">Connection</h2>
+        <progress id="progress" aria-label="Workspace operation in progress" hidden></progress>
         <p id="status" role="status" aria-live="polite">Preparing desktop connection…</p>
+        <p id="processes" class="muted" hidden></p>
         <p id="address" class="mono" hidden></p>
         <p id="error" role="alert" hidden></p>
-        <details id="diagnostics" hidden>
-          <summary>Startup diagnostics</summary>
-          <pre id="details"></pre>
-        </details>
+        <details id="diagnostics" hidden><summary>Safe diagnostics / operation result</summary><pre id="details"></pre></details>
+      </section>
+      <section class="maintenance-panel" aria-labelledby="maintenance-title">
+        <h2 id="maintenance-title">Local workspace data</h2>
+        <p class="small-note">Backup and restore require a disconnected workspace with all managed services stopped. Backups include private data, saved credentials and conversations; external/global CLI credential homes are excluded. Backups are not encrypted. Restore always uses a new empty folder, never overwrites an existing workspace, and does not connect automatically.</p>
+        <p class="mono" id="maintenance-root"></p>
+        <div class="actions"><button type="button" id="backup">Back up workspace…</button><button type="button" id="restore">Restore to new folder…</button></div>
+        <div class="actions folder-actions"><button type="button" data-reveal="dataDir">Reveal saved data folder</button><button type="button" data-reveal="projectRoot">Reveal saved project root</button></div>
       </section>
       <footer>
-        <p>
-          <strong>Close a workspace window</strong> to keep local tasks running. This connection
-          window remains available.
-        </p>
-        <p>
-          <strong>Quit</strong> to stop the local Server and its workers. Schedules do not run after
-          quitting. Remote Servers are managed separately.
-        </p>
-        <button type="button" id="quit">Quit Agent Workspace…</button>
+        <p><strong>Close the workspace window</strong> to keep local tasks running. This connection window remains available. Reconnecting preserves pending-command journals; it does not replay uncertain actions.</p>
+        <p><strong>Quit</strong> to stop local services, PostgreSQL and workers. Local schedules do not run after quitting. Remote Servers are managed separately.</p>
+        <button type="button" id="quit">Quit PM Agent v4…</button>
       </footer>
     </main>
   </body>

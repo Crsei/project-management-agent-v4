@@ -63,7 +63,6 @@
   min-height: 34px;
   padding: 0 0 12px;
   border: 0;
-  border-bottom: 2px solid transparent;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -73,10 +72,11 @@
   line-height: 20px;
 }
 .tabs [role="tab"][aria-selected="true"] {
-  border-bottom-color: var(--foreground);
+  background: var(--selection);
+  font-weight: 500;
   color: var(--foreground);
 }
-.tabs [role="tab"]:hover,
+.tabs [role="tab"]:not([aria-selected="true"]):hover,
 .tasksTab:hover {
   background: transparent;
   color: var(--foreground);
@@ -348,8 +348,7 @@
 }
 .personName:hover {
   background: transparent;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--primary);
 }
 .personName:disabled {
   opacity: 1;
@@ -450,8 +449,7 @@
 }
 .phoneButton:hover {
   background: transparent;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--primary);
 }
 .teamCount {
   flex-shrink: 0;

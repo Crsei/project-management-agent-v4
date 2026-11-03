@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import os from "node:os";
 import test from "node:test";
 
-const startupStages = ["migration", "providers", "chat", "connector-recovery", "execution", "automation", "studio", "workflows"] as const;
+const startupStages = ["migration", "providers", "chat", "connector-recovery", "execution", "automation", "studio", "workflows", "mcp"] as const;
 
 function runRuntimeScenario(scenario: string): void {
   // An isolated process enables Node's module seam without changing the suite's loader.
@@ -43,6 +43,7 @@ function runRuntimeScenario(scenario: string): void {
     replace("automation-execution/connectors.ts", { recoverAutomationGenerationConnectors: () => start("connector-recovery") });
     replace("automation-execution/index.ts", { startAutomationExecutionRuntime: () => start("studio"), stopAutomationExecutionRuntime: () => stop("studio") });
     replace("task-workflows/runner.ts", { startTaskWorkflows: () => start("workflows"), stopTaskWorkflows: () => stop("workflows") });
+    replace("mcp/server.ts", { startMcpServer: () => start("mcp"), closeMcpServer: () => stop("mcp") });
     replace("durable/store.ts", { getDatabase: () => ({}), closeStore: () => events.push("close:store") });
     replace("providers/instances.ts", { migrateProviderStartupState: () => start("migration") });
     replace("providers/t3code/production.ts", { providerApplicationOptions: {} });
@@ -57,7 +58,7 @@ function runRuntimeScenario(scenario: string): void {
       assert.ok(events.indexOf(earlier) < events.indexOf(later), earlier + " must precede " + later);
     };
     const assertDrained = () => {
-      const components = ["maintenance", "workflows", "automation", "studio", "execution", "chat", "providers"];
+      const components = ["maintenance", "mcp", "workflows", "automation", "studio", "execution", "chat", "providers"];
       assert.deepEqual(events.filter(event => event.startsWith("stop:")).map(event => event.slice(5)).sort(), [...components].sort());
       assertBefore("stop:maintenance", "stop:workflows");
       for (const name of ["automation", "studio", "execution", "chat"]) assertBefore("stopped:workflows", "stop:" + name);
@@ -74,7 +75,7 @@ function runRuntimeScenario(scenario: string): void {
   });
 }
 
-for (const held of startupStages.filter(stage => stage !== "workflows")) {
+for (const held of startupStages.filter(stage => stage !== "workflows" && stage !== "mcp")) {
   test(`shutdown during ${held} startup prevents later workers from admitting work`, () => {
     runRuntimeScenario(`
       const held = ${JSON.stringify(held)};
@@ -84,7 +85,7 @@ for (const held of startupStages.filter(stage => stage !== "workflows")) {
       await startup.entered.promise;
       const stopping = stopRuntime();
       assert.equal(fenced, true);
-      assert.deepEqual(events, ["stop:maintenance", "stopped:maintenance"], "workers must not drain before startup settles");
+      assert.ok(events.every(event => /^(stop|stopped):(maintenance|mcp)$/.test(event)), "workers must not drain before startup settles");
       startup.release.resolve();
       await Promise.all([starting, stopping]);
       assert.deepEqual(starts, startupStages.slice(0, startupStages.indexOf(held) + 1));
@@ -98,7 +99,7 @@ test("combined runtime drains workflow and automation producers before workers, 
   runRuntimeScenario(`
     await startRuntime();
     assert.deepEqual(starts, startupStages);
-    for (const name of ["maintenance", "workflows", "automation", "studio", "execution", "chat", "providers"]) stopBarriers.set(name, barrier());
+    for (const name of ["maintenance", "mcp", "workflows", "automation", "studio", "execution", "chat", "providers"]) stopBarriers.set(name, barrier());
     const stopping = stopRuntime();
     assert.equal(fenced, true);
     assert.equal(stopRuntime(), stopping, "concurrent shutdown shares the drain");
@@ -121,6 +122,9 @@ test("combined runtime drains workflow and automation producers before workers, 
     assert.equal(events.includes("stop:providers"), false, "maintenance must drain before providers close");
     assert.equal(events.includes("close:store"), false);
     stopBarriers.get("maintenance").release.resolve();
+    await nextTurn();
+    assert.equal(events.includes("stop:providers"), false, "native providers stay live until admitted MCP work drains");
+    stopBarriers.get("mcp").release.resolve();
     await stopBarriers.get("providers").entered.promise;
     assert.equal(events.includes("close:store"), false, "the store stays open while providers drain");
     stopBarriers.get("providers").release.resolve();

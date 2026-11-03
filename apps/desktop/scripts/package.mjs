@@ -1,119 +1,123 @@
-import { spawn } from "node:child_process";
-import { access, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { desktopBuilderConfig } from "../electron-builder.config.mjs";
+import { buildWorkspace, inspectDeployment, run, stageWorkspace } from "./stage-workspace.mjs";
+import {
+  defaultRuntimeRoot, desktopRoot, hashFile, portable, requireNativeTarget,
+  requirePinnedNode, verifyRuntime,
+} from "./runtime-manifest.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const repository = resolve(root, "../..");
-const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-const rootManifest = JSON.parse(await readFile(join(repository, "package.json"), "utf8"));
-if (!["linux", "darwin", "win32"].includes(process.platform) || !["x64", "arm64"].includes(process.arch))
-  throw new Error("Package on the target OS and x64/arm64 architecture; native Agent dependencies cannot be cross-packaged.");
-if (!process.env.npm_execpath)
-  throw new Error("Run through pnpm: pnpm --filter @agent-workspace/desktop package");
-if (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY)
-  process.env.ELECTRON_GET_USE_PROXY ||= "1";
-const { packager } = await import("@electron/packager");
-
-function run(command, args, cwd = repository) {
-  return new Promise((resolveRun, reject) => {
-    const child = spawn(command, args, { cwd, env: process.env, stdio: "inherit" });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => code === 0 ? resolveRun() : reject(new Error(`${command} ${args.join(" ")} failed (${signal || code}).`)));
-  });
+let mode;
+const options = new Map();
+for (let index = 2; index < process.argv.length; index++) {
+  const name = process.argv[index];
+  if (["--unsigned", "--signed"].includes(name)) {
+    if (mode) throw new Error("Choose exactly one of --unsigned and --signed.");
+    mode = name.slice(2);
+  } else if (["--runtime-root", "--output", "--platform", "--arch"].includes(name) && process.argv[index + 1] && !process.argv[index + 1].startsWith("--")) {
+    options.set(name, process.argv[++index]);
+  } else throw new Error("Usage through pnpm: package.mjs (--unsigned | --signed) [--runtime-root DIRECTORY] [--output NEW_DIRECTORY] [--platform PLATFORM] [--arch ARCH]");
 }
-const pnpm = (args, cwd) => run(process.execPath, [process.env.npm_execpath, ...args], cwd);
-
-async function inspectDeployment(directory, boundary) {
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name);
-    const info = await lstat(path);
-    if (info.isSymbolicLink()) {
-      const target = await realpath(path);
-      const within = relative(boundary, target);
-      if (within === ".." || within.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(within))
-        throw new Error(`Deployment contains an external symlink: ${path} -> ${target}`);
-    } else if (info.isDirectory()) await inspectDeployment(path, boundary);
-  }
+if (!mode) throw new Error("Signing is explicit: use package (unsigned) or package:signed. Nothing is published.");
+requirePinnedNode();
+const target = requireNativeTarget(options.get("--platform"), options.get("--arch"), true);
+const runtimeRoot = resolve(options.get("--runtime-root") ?? process.env.PM_DESKTOP_RUNTIME_ROOT ?? defaultRuntimeRoot);
+const runtimeManifest = await verifyRuntime(runtimeRoot, target).catch((cause) => {
+  throw new Error(`A complete verified desktop runtime is required. Run pnpm --filter @agent-workspace/desktop runtime:prepare on this runner first. ${cause.message}`);
+});
+if (mode === "unsigned") {
+  process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
+  for (const name of ["CSC_LINK", "CSC_KEY_PASSWORD", "CSC_NAME", "WIN_CSC_LINK", "WIN_CSC_KEY_PASSWORD", "APPLE_ID", "APPLE_APP_SPECIFIC_PASSWORD", "APPLE_TEAM_ID", "APPLE_API_KEY", "APPLE_API_KEY_ID", "APPLE_API_ISSUER", "APPLE_KEYCHAIN", "APPLE_KEYCHAIN_PROFILE"])
+    delete process.env[name];
+} else {
+  if (!process.env.CSC_LINK && !(process.platform === "win32" && process.env.WIN_CSC_LINK))
+    throw new Error("Signed packaging requires CSC_LINK (or Windows WIN_CSC_LINK) plus its certificate password environment variable. No unsigned fallback is allowed.");
+  if (process.platform === "darwin" && !(
+    (process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD && process.env.APPLE_TEAM_ID) ||
+    (process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER)
+  )) throw new Error("Signed macOS packaging additionally requires Apple notarization credentials (APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID or APPLE_API_KEY/APPLE_API_KEY_ID/APPLE_API_ISSUER). Nothing is published.");
 }
-
+if (process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY) process.env.ELECTRON_GET_USE_PROXY ||= "1";
+const manifest = JSON.parse(await readFile(join(desktopRoot, "package.json"), "utf8"));
+const output = resolve(options.get("--output") ?? join(desktopRoot, "releases", manifest.version, target, mode));
+for (let current = output; ; current = dirname(current)) {
+  const info = await lstat(current).catch((error) => { if (error.code === "ENOENT") return null; throw error; });
+  if (info && (current === output || !info.isDirectory() || info.isSymbolicLink()))
+    throw new Error("Installer output must be a new directory with real directory ancestors; previous artifacts are never overwritten.");
+  if (dirname(current) === current) break;
+}
 const staging = await mkdtemp(join(tmpdir(), "pm-agent-v4-desktop-"));
 try {
-  for (const name of ["@agent-workspace/contracts", "@agent-workspace/client-runtime", "@agent-workspace/server", "@pm/web"])
-    await pnpm(["--filter", name, "build"]);
-  await run(process.execPath, [join(root, "scripts", "build.mjs")]);
+  await buildWorkspace();
   const application = join(staging, "application");
-  const workspace = join(staging, "workspace");
-  const runtime = join(staging, "runtime");
-  await mkdir(workspace);
-  for (const file of ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"])
-    await cp(join(repository, file), join(workspace, file));
-  await cp(join(repository, "patches"), join(workspace, "patches"), { recursive: true });
-  // Isolate pnpm legacy deployment from the checkout's installed dependency graph.
-  for (const location of ["apps/server/agent", "packages/agent-contracts", "packages/agent-client-runtime"]) {
-    const target = join(workspace, location);
-    await mkdir(target, { recursive: true });
-    await cp(join(repository, location, "package.json"), join(target, "package.json"));
-    await cp(join(repository, location, "dist"), join(target, "dist"), { recursive: true });
+  const workspaceRuntime = join(staging, "workspace-runtime");
+  await stageWorkspace(workspaceRuntime, application);
+  const nativeBinaries = [];
+  if (process.platform === "darwin") {
+    const magic = Buffer.alloc(4);
+    const machO = new Set(["feedface", "feedfacf", "cefaedfe", "cffaedfe", "cafebabe", "bebafeca", "cafebabf", "bfbafeca"]);
+    async function collectBinaries(root, prefix, directory = root) {
+      for (const entry of await readdir(directory, { withFileTypes: true })) {
+        const path = join(directory, entry.name);
+        if (entry.isDirectory()) await collectBinaries(root, prefix, path);
+        else if (entry.isFile()) {
+          const file = await open(path, "r");
+          try {
+            const { bytesRead } = await file.read(magic, 0, 4, 0);
+            if (bytesRead === 4 && machO.has(magic.toString("hex")))
+              nativeBinaries.push(`Contents/Resources/${prefix}/${portable(relative(root, path))}`);
+          } finally { await file.close(); }
+        }
+      }
+    }
+    await collectBinaries(runtimeRoot, "desktop-runtime");
+    await collectBinaries(workspaceRuntime, "workspace-runtime");
   }
-  await pnpm(["--filter", rootManifest.name, "--config.hoist-workspace-packages=false", "deploy", "--prod", "--legacy", runtime], workspace);
-  // Only dependencies and the module-type manifest from the root deployment are needed.
-  for (const entry of await readdir(runtime))
-    if (!["node_modules", "package.json"].includes(entry)) await rm(join(runtime, entry), { recursive: true, force: true });
-  const agent = join(runtime, "apps/server/agent");
-  await mkdir(dirname(agent), { recursive: true });
-  await pnpm(["--filter", "@agent-workspace/server", "--config.hoist-workspace-packages=false", "deploy", "--prod", "--legacy", agent], workspace);
-  await mkdir(join(runtime, "apps/server/pm"), { recursive: true });
-  await mkdir(join(runtime, "apps/server/worker"), { recursive: true });
-  await cp(join(repository, "apps/server/pm/src"), join(runtime, "apps/server/pm/src"), { recursive: true });
-  await cp(join(repository, "apps/server/worker/src"), join(runtime, "apps/server/worker/src"), { recursive: true });
-  await cp(join(repository, "apps/server/gateway.ts"), join(runtime, "apps/server/gateway.ts"));
-  await cp(join(repository, "packages"), join(runtime, "packages"), {
-    recursive: true,
-    filter: (path) => !["node_modules", "tests", "dist"].includes(path.split(/[\\/]/).at(-1)),
+  const { Arch, Platform, build } = await import("electron-builder");
+  const platform = process.platform === "win32" ? Platform.WINDOWS : Platform.MAC;
+  const arch = process.arch === "arm64" ? Arch.arm64 : Arch.x64;
+  const artifacts = await build({
+    targets: platform.createTarget(process.platform === "win32" ? ["nsis"] : ["dmg", "zip"], arch),
+    publish: "never",
+    config: desktopBuilderConfig({ application, workspaceRuntime, desktopRuntime: runtimeRoot, output, electronVersion: manifest.devDependencies.electron, mode, platform: process.platform, nativeBinaries }),
   });
-  await mkdir(join(runtime, "apps/web"), { recursive: true });
-  await cp(join(repository, "apps/web/dist"), join(runtime, "apps/web/dist"), { recursive: true });
-  for (const file of ["apps/server/pm/src/main.ts", "apps/server/worker/src/main.ts", "apps/server/agent/dist/index.mjs", "apps/server/agent/dist/agents/claude-history-worker.mjs", "apps/server/gateway.ts", "apps/web/dist/index.html"])
-    await access(join(runtime, file));
-  await inspectDeployment(runtime, runtime);
-  const require = createRequire(join(agent, "package.json"));
-  require.resolve("@lydell/node-pty");
-  const sdkRequire = createRequire(require.resolve("@anthropic-ai/claude-agent-sdk"));
-  const nativeRoot = dirname(sdkRequire.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/package.json`));
-  await access(join(nativeRoot, process.platform === "win32" ? "claude.exe" : "claude"));
-  await mkdir(application);
-  await cp(join(root, "dist"), join(application, "dist"), { recursive: true });
-  await writeFile(join(application, "package.json"), JSON.stringify({
-    name: "pm-agent-v4-desktop", productName: "PM Agent v4", version: manifest.version,
-    type: "module", main: "dist/main.mjs", description: manifest.description, private: true,
-  }, null, 2));
-  await writeFile(join(application, "runtime-requirements.json"), JSON.stringify({
-    node: "Node 24 LTS external executable", database: "User-provided, running and migrated PostgreSQL; not bundled",
-    configuration: "~/.pmv4/.env and ~/.pmv4/.env.worker are required; ~/.pmv4/.env.agent is optional. Configure storage and the database before connecting.",
-    ports: "127.0.0.1:3224 public, 4194 PM, 4325 Agent; all must be free",
-    data: "Desktop and Agent data use v4-specific userData; project root is selected by the user",
-    lifecycle: "Closing the workspace window keeps local tasks running; Quit stops only this desktop's own processes.",
-    distribution: "Unsigned application directory, no installer or updates; native binaries match the build OS and architecture.",
-  }, null, 2));
-  const output = await packager({
-    dir: application, name: "PM Agent v4", executableName: "PM Agent v4",
-    appBundleId: "com.projectmanagementagent.v4", appCategoryType: "public.app-category.developer-tools",
-    appVersion: manifest.version, electronVersion: manifest.devDependencies.electron,
-    platform: process.platform, arch: process.arch, out: join(root, "release"), overwrite: true, asar: true, prune: false,
-  });
-  for (const directory of output) {
-    const resources = process.platform === "darwin" ? join(directory, "PM Agent v4.app", "Contents", "Resources") : join(directory, "resources");
-    const packagedRuntime = join(resources, "workspace-runtime");
-    await cp(runtime, packagedRuntime, { recursive: true, verbatimSymlinks: true });
-    await inspectDeployment(packagedRuntime, packagedRuntime);
-    const executable = process.platform === "darwin" ? join(directory, "PM Agent v4.app", "Contents", "MacOS", "PM Agent v4") : join(directory, process.platform === "win32" ? "PM Agent v4.exe" : "PM Agent v4");
-    await access(executable);
-    console.log(`Runnable desktop application: ${executable}`);
+  const resources = process.platform === "win32"
+    ? join(output, "win-unpacked", "resources")
+    : join(output, process.arch === "arm64" ? "mac-arm64" : "mac", "PM Agent v4.app", "Contents", "Resources");
+  await inspectDeployment(join(resources, "workspace-runtime"));
+  // afterPack verifies runtime bytes before native signing changes executable
+  // hashes. Retain that source inventory as provenance; verify the signed bundle
+  // and hash the final distributables below instead of rejecting upstream npm files.
+  if (mode === "signed" && process.platform === "darwin")
+    await run("codesign", ["--verify", "--deep", "--strict", join(resources, "../..")]);
+  const records = [];
+  for (const path of artifacts) {
+    if (!isAbsolute(path)) throw new Error("Builder returned an unexpected relative artifact path.");
+    records.push({ path: portable(relative(output, path)), sha256: await hashFile(path) });
   }
-  console.log("Distribute the complete directory. Node 24 and a user-managed PostgreSQL database are required; no credentials or PostgreSQL are bundled.");
+  const expected = process.platform === "win32" ? [".exe"] : [".dmg", ".zip"];
+  if (expected.some((suffix) => !records.some((record) => record.path.endsWith(suffix))))
+    throw new Error("Builder did not produce every required native installer/archive target.");
+  if (mode === "signed" && process.platform === "win32") {
+    const powershell = join(process.env.SystemRoot || process.env.WINDIR || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+    for (const path of [join(output, "win-unpacked", "PM Agent v4.exe"), ...artifacts.filter((file) => file.endsWith(".exe"))]) {
+      process.env.PM_DESKTOP_VERIFY_SIGNATURE_PATH = path;
+      try {
+        await run(powershell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; $signature=Get-AuthenticodeSignature -LiteralPath $env:PM_DESKTOP_VERIFY_SIGNATURE_PATH; if ($signature.Status -ne 'Valid') { throw 'Desktop Authenticode verification failed' }"]);
+      } finally { delete process.env.PM_DESKTOP_VERIFY_SIGNATURE_PATH; }
+    }
+  }
+  await mkdir(output, { recursive: true });
+  await writeFile(join(output, "desktop-package.json"), JSON.stringify({
+    version: manifest.version, target, signing: mode,
+    signingDetail: mode === "unsigned" && process.platform === "darwin" ? "ad-hoc only; not Developer ID signed or notarized" : mode,
+    runtimeSources: runtimeManifest.sources,
+    applicationResources: portable(relative(output, resources)),
+    artifacts: records,
+    updates: "Manual installer replacement only; managed data is outside installation and is preserved. No update feed or publishing is configured.",
+  }, null, 2) + "\n");
+  console.log(JSON.stringify({ output, manifest: join(output, "desktop-package.json"), target, signing: mode, published: false, artifacts: records }));
 } finally {
   await rm(staging, { recursive: true, force: true });
 }

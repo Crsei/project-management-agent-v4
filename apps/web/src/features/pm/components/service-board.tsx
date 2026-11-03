@@ -4,10 +4,10 @@ import { CSS } from "@dnd-kit/utilities"
 import { GripVertical } from "lucide-react"
 import type { Entity } from "@contracts"
 import { Button } from "@/components/ui/button"
-import { NativeSelect } from "@/components/ui/native-select"
 import { useI18n } from "@/lib/i18n-provider"
 import { itemDates, itemStatus, itemTitle, statusLabel, workItemStatuses } from "./service-collection-shared"
 import styles from "./service-collections.module.css"
+import { RadixSelect } from "@/components/ui/radix-select"
 
 type BoardProps = {
   items: Entity[]
@@ -37,13 +37,13 @@ function BoardCard({ item, states, onOpen, onMove, canMove, pending, selected, o
     </div>
     <p className={styles.hint}>{dates.start ?? "—"} → {dates.due ?? "—"}</p>
     <label htmlFor={id} className={styles.hint}>{en ? "Move to" : "移至"}</label>
-    <NativeSelect id={id} value="" disabled={pending || !destinations.length} onChange={(event) => {
+    <RadixSelect id={id} value="" disabled={pending || !destinations.length} onChange={(event) => {
       const state = event.target.value
       if (destinations.includes(state) && !pending) onMove(item, state)
     }}>
       <option value="">{destinations.length ? (en ? "Choose state…" : "选择状态…") : (en ? "No available moves" : "无可用状态变更")}</option>
       {destinations.map((state) => <option key={state} value={state}>{statusLabel(state, locale)}</option>)}
-    </NativeSelect>
+    </RadixSelect>
   </article>
 }
 

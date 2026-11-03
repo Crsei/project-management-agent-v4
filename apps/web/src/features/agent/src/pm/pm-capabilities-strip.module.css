@@ -103,9 +103,11 @@
   background: none;
   color: var(--ring);
   font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
   cursor: pointer;
+}
+
+.retry:hover {
+  background: var(--selection);
 }
 
 .retry:focus-visible {

@@ -17,6 +17,7 @@ const DiagnosticsPage = lazy(() => import("./settings/diagnostics-page"));
 const StoragePage = lazy(() => import("./settings/storage-page"));
 const UsagePage = lazy(() => import("./usage/UsagePage"));
 const UsageSettings = lazy(() => import("./usage/UsageSettings"));
+const McpClientsPage = lazy(() => import("./settings/mcp-clients-page"));
 export const showcaseEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_UI_LAB === "1";
 
 function UsageRedirect() {
@@ -82,6 +83,7 @@ export function App() {
       <Route index element={<SettingsIndex />} />
       <Route path="general" element={<GeneralPage />} />
       <Route path="providers" element={<ProvidersPage />} />
+      <Route path="mcp-clients" element={<McpClientsPage />} />
       <Route path="usage" element={<UsagePage />} />
       <Route path="usage/config" element={<UsageSettings />} />
       <Route path="appearance" element={<AppearancePage />} />

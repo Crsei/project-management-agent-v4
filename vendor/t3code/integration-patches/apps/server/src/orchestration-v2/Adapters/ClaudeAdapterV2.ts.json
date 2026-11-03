@@ -2,7 +2,7 @@
   "version": 1,
   "source": "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
   "beforeSha256": "8b7146400cd440e084d89c6b8f578f325d634aa70bad3c51a94cf9146260ba8b",
-  "afterSha256": "297578bde3294b154dcc9ff78ec67668f8034982ad44d59c7bc00b23edeee3a9",
+  "afterSha256": "c46ef51e33d12bf4f8f082972d3208eadca17952b38a49db94fb362a4bbaf274",
   "format": "Exact zero-based original-line splices; no offsets or fuzz. Lines include original terminators.",
   "rationaleLedgers": [
     "vendor/t3code/integration-patches.json",
@@ -586,6 +586,58 @@
       "after": []
     },
     {
+      "start": 2045,
+      "before": [],
+      "after": [
+        "function planClaudeMessageSkillDispatch(text: string, skills: ReadonlyMap<string, ClaudeSkillTarget>, userMessageText?: string) {\n",
+        "  const dispatch = planClaudeSkillDispatch(userMessageText ?? text, skills);\n",
+        "  if (!dispatch || userMessageText === undefined) return dispatch;\n",
+        "  // The host's full portable context stays intact; only the latest user message selects a skill.\n",
+        "  return { ...dispatch, leadingText: [text, dispatch.leadingText].filter(Boolean).join(\"\\n\\n\") };\n",
+        "}\n",
+        "\n"
+      ]
+    },
+    {
+      "start": 2048,
+      "before": [],
+      "after": [
+        "  readonly userMessageText?: string;\n"
+      ]
+    },
+    {
+      "start": 2055,
+      "before": [
+        "    input.skills === undefined ? undefined : planClaudeSkillDispatch(input.text, input.skills);\n"
+      ],
+      "after": [
+        "    input.skills === undefined ? undefined : planClaudeMessageSkillDispatch(input.text, input.skills, input.userMessageText);\n"
+      ]
+    },
+    {
+      "start": 2209,
+      "before": [],
+      "after": [
+        "  readonly userMessageText?: string;\n"
+      ]
+    },
+    {
+      "start": 2220,
+      "before": [],
+      "after": [
+        "      ...(input.userMessageText === undefined ? {} : { userMessageText: input.userMessageText }),\n"
+      ]
+    },
+    {
+      "start": 2244,
+      "before": [
+        "      : planClaudeSkillDispatch(textWithAttachmentPaths, input.skills);\n"
+      ],
+      "after": [
+        "      : planClaudeMessageSkillDispatch(textWithAttachmentPaths, input.skills, input.userMessageText);\n"
+      ]
+    },
+    {
       "start": 2581,
       "before": [
         "const ClaudeBypassSettings = Schema.StructWithRest(\n",
@@ -800,17 +852,32 @@
       "before": [],
       "after": [
         "          }\n",
-        "          if (/^mcp__pm_tools__[A-Za-z0-9_]+$/.test(toolName)) {\n",
+        "          if (toolName.startsWith(\"mcp__\")) {\n",
         "            const binding = operationBinding;\n",
         "            if (binding?.nativePermissions === \"deny-ungranted\" && binding.executionId === String(context.input.runId)\n",
         "              && binding.threadId === context.input.threadId && binding.cwd === context.input.runtimePolicy.cwd\n",
-        "              && binding.mcpServers.some((server) => server.name === \"pm_tools\")) {\n",
+        "              && binding.promptAuthorization !== \"technical-no-tools\"\n",
+        "              && binding.mcpServers.some((server) => server.transport === \"stdio\" && toolName.startsWith(`mcp__${server.name}__`) && toolName.length > `mcp__${server.name}__`.length)) {\n",
         "              yield* authorize(\"tool\");\n",
         "              if (owner === activePermissionOwner && !callbackOptions.signal.aborted && (yield* Ref.get(activeTurn)) === context) {\n",
+        "                // Automatic host admission still starts the ordinary tool lifecycle.\n",
+        "                // The later assistant frame enriches this same call with MCP display metadata.\n",
+        "                if (context.heldRootFrames.length > 0) yield* releaseHeldRootFrames(context);\n",
+        "                yield* ensureToolCallStarted({\n",
+        "                  context,\n",
+        "                  nativeItemId: callbackOptions.toolUseID,\n",
+        "                  toolName,\n",
+        "                  toolInput: claudeNativeToolInputFromRecord(toolInput),\n",
+        "                  parentToolUseId: null,\n",
+        "                });\n",
+        "                // Publishing artifacts may yield; do not carry admission across a revoked host grant.\n",
+        "                yield* authorize(\"tool\");\n",
+        "                if (owner !== activePermissionOwner || callbackOptions.signal.aborted || (yield* Ref.get(activeTurn)) !== context)\n",
+        "                  return { behavior: \"deny\", message: \"This native MCP transport no longer belongs to the live generation.\" } satisfies PermissionResult;\n",
         "                return { behavior: \"allow\", updatedInput: toolInput } satisfies PermissionResult;\n",
         "              }\n",
         "            }\n",
-        "            return { behavior: \"deny\", message: \"This native PM transport no longer belongs to the live generation.\" } satisfies PermissionResult;\n"
+        "            return { behavior: \"deny\", message: \"This native MCP transport no longer belongs to the live generation.\" } satisfies PermissionResult;\n"
       ]
     },
     {
@@ -946,6 +1013,13 @@
         "            if (isCompactionCommandMessage({ role: \"user\", ...turnInput.message })) {\n",
         "              yield* authorize(\"compaction\");\n",
         "            }\n"
+      ]
+    },
+    {
+      "start": 10034,
+      "before": [],
+      "after": [
+        "                    ...(turnInput.userMessageText === undefined ? {} : { userMessageText: turnInput.userMessageText }),\n"
       ]
     },
     {

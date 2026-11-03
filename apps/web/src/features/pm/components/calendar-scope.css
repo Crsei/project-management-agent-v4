@@ -82,7 +82,7 @@
   line-height: var(--text-control--line-height);
 }
 
-.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-filter-panel select {
+.native-workbench[data-task-layout="calendar"]:not([data-task-project]):not([data-task-scope="mine"]):not([data-task-scope="important"]) .task-filter-panel [data-slot="select-trigger"] {
   min-height: 32px;
   border-radius: var(--control-radius);
   font-size: var(--text-control);

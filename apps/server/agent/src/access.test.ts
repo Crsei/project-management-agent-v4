@@ -79,6 +79,26 @@ test("remote authorization uses an HttpOnly cookie and token rotation revokes it
   assert.equal(authorizeHeaders(sessionHeaders), false);
 });
 
+test("MCP access and service bearers never authorize ordinary Agent HTTP or PTY access", async () => {
+  for (const configured of [false, true]) {
+    if (configured) process.env.AGENT_WORKSPACE_ACCESS_TOKEN = "mcp-audience-test-" + "x".repeat(40);
+    else delete process.env.AGENT_WORKSPACE_ACCESS_TOKEN;
+    let cookie = "";
+    if (configured) {
+      const response = await app.request("http://localhost/api/access", {
+        method: "POST", headers: { host: "localhost", "content-type": "application/json" },
+        body: JSON.stringify({ token: process.env.AGENT_WORKSPACE_ACCESS_TOKEN }),
+      });
+      cookie = response.headers.get("set-cookie")!.split(";")[0]!;
+    }
+    for (const prefix of ["pm-mcp-access-v1.", "pm-mcp-service-v1."]) {
+      const headers = new Headers({ host: "localhost", cookie, authorization: `Bearer ${prefix}${"x".repeat(43)}` });
+      assert.equal(authorizeHeaders(headers), false);
+      assert.equal((await app.request("http://localhost/api/private", { headers })).status, 401);
+    }
+  }
+});
+
 test("network binding cannot rely on a spoofable Host header for remote access", () => {
   const proxy = process.env.AGENT_WORKSPACE_LOOPBACK_PROXY;
   delete process.env.AGENT_WORKSPACE_LOOPBACK_PROXY;

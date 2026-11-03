@@ -6,6 +6,7 @@ import { ShowcasePreferences, useShowcasePreferences } from "./preferences";
 import { Provider as BusinessProvider } from "./business";
 import { Provider as PlatformProvider } from "./platform";
 import "./showcase.css";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 class PageBoundary extends Component<
   { children: ReactNode; locale: "en" | "zh-CN" },
@@ -139,7 +140,7 @@ function ShowcaseContent() {
             </label>
             <label>
               {locale === "en" ? "Page group" : "页面分组"}
-              <select
+              <RadixSelect
                 value={group}
                 onChange={(event) =>
                   setQuery(
@@ -155,7 +156,7 @@ function ShowcaseContent() {
                 {Array.from(new Set(listed.map((entry) => entry.group))).map((name) => (
                   <option key={name}>{name}</option>
                 ))}
-              </select>
+              </RadixSelect>
             </label>
             <span role="status">
               {visible.length} {locale === "en" ? "results" : "个结果"}

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.agent.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    "types": ["node"]
+  },
+  "include": ["src/backend/**/*.ts"],
+  "exclude": ["node_modules", "dist", ".runtime"]
+}

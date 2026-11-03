@@ -1,6 +1,7 @@
 import { useAgentText } from "../i18n";
 import { SettingsNotice, SettingsSection } from "./settings-layout";
 import { setChatBrowserPreferences, useChatBrowserPreferences } from "./browser-preferences";
+import { RadixSelect } from "@/components/ui/radix-select"
 
 export function ShortcutCatalog() {
   const t = useAgentText();
@@ -23,7 +24,7 @@ export default function InputPreferences() {
   const t = useAgentText();
   const { preferences, storageError } = useChatBrowserPreferences();
   return <SettingsSection title={t("输入与快捷键", "Input & shortcuts")} scope="browser">
-    <div className="agent-preference-row"><label htmlFor="agent-send-shortcut">{t("发送方式", "Send with")}</label><select id="agent-send-shortcut" value={preferences.sendShortcut} onChange={(event) => setChatBrowserPreferences({ sendShortcut: event.target.value as "enter" | "ctrlEnter" })}><option value="enter">{t("Enter 发送 · Shift+Enter 换行", "Enter to send · Shift+Enter for a line break")}</option><option value="ctrlEnter">{t("Ctrl / ⌘+Enter 发送 · Enter 换行", "Ctrl / ⌘+Enter to send · Enter for a line break")}</option></select></div>
+    <div className="agent-preference-row"><label htmlFor="agent-send-shortcut">{t("发送方式", "Send with")}</label><RadixSelect id="agent-send-shortcut" value={preferences.sendShortcut} onChange={(event) => setChatBrowserPreferences({ sendShortcut: event.target.value as "enter" | "ctrlEnter" })}><option value="enter">{t("Enter 发送 · Shift+Enter 换行", "Enter to send · Shift+Enter for a line break")}</option><option value="ctrlEnter">{t("Ctrl / ⌘+Enter 发送 · Enter 换行", "Ctrl / ⌘+Enter to send · Enter for a line break")}</option></RadixSelect></div>
     {storageError && <SettingsNotice kind="error">{storageError}</SettingsNotice>}
     <ShortcutCatalog />
   </SettingsSection>;

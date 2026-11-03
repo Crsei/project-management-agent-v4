@@ -64,6 +64,7 @@ import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { makeAcpMcpOverAcpBridge, type AcpMcpOverAcpBridge } from "./mcpOverAcpBridge.ts";
 import { mcpToolPresentation } from "@t3tools/provider-core/server/mcpToolPresentation";
 import * as ProviderRuntimeHost from "@t3tools/provider-core/server/ProviderRuntimeHost";
+import { registerLiveAcpWorkspace } from "./liveWorkspace.ts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   applyAcpAgentTerminalUpdate,
@@ -1587,6 +1588,14 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
             : flavor.extractSubagentUpdate?.(tool);
         let turnAttached = yield* Deferred.make<boolean>();
         const activeSessionId = yield* Ref.make<string | null>(null);
+        const workspaceCommands = new Map<string, ReadonlyArray<EffectAcpSchema.AvailableCommand>>();
+        if (binding) {
+          const unregisterInventory = registerLiveAcpWorkspace(options.instanceId, input.threadId, binding.executionId, cwd, () => {
+            const active = Ref.getUnsafe(activeSessionId);
+            return active === null ? undefined : workspaceCommands.get(active);
+          });
+          yield* Effect.addFinalizer(() => Effect.sync(unregisterInventory));
+        }
         const contextUsageBySessionId = yield* Ref.make(
           new Map<string, ThreadTokenUsageSnapshot>(),
         );
@@ -5823,6 +5832,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                       clientTerminals.readOutputSnapshot,
                     );
               if (notification.update.sessionUpdate === "available_commands_update") {
+                workspaceCommands.delete(notification.sessionId);
+                workspaceCommands.set(notification.sessionId, notification.update.availableCommands);
+                while (workspaceCommands.size > 32) workspaceCommands.delete(workspaceCommands.keys().next().value!);
                 yield* (
                   flavor.onAvailableCommandsUpdate?.(notification.update.availableCommands) ??
                     Effect.void
@@ -7225,7 +7237,9 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
           } satisfies T3AcpInstructionState;
           const previousInstructionState = (yield* Ref.get(promptInstructionStates)).get(sessionId);
           const compactionMarker = (yield* Ref.get(compactionMarkers)).get(sessionId);
-          const userText =
+          const requestedCommand = turnInput.userMessageText?.trim().match(/^\/([^\s/]+)(?:\s|$)/)?.[1];
+          const nativeCommand = requestedCommand && workspaceCommands.get(sessionId)?.some(command => command.name === requestedCommand);
+          const rewrittenUserText =
             flavor.rewriteUserText === undefined
               ? turnInput.message.text
               : yield* flavor
@@ -7236,6 +7250,8 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
                       childProcessSpawner,
                     ),
                   );
+          const userText = nativeCommand && rewrittenUserText === turnInput.message.text
+            ? `/${requestedCommand}\n${turnInput.message.text}` : rewrittenUserText;
           const messageText = yield* providerMessageTextWithAttachmentPaths({
             text: userText,
             attachments: turnInput.message.attachments,

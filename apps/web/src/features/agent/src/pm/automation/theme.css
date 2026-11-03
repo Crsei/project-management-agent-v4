@@ -28,8 +28,8 @@
   font-size: 14px;
   line-height: 1.5;
 }
-.pm-automation :is(button, input, select, textarea) { font-size: 14px; line-height: 1.5; }
-.pm-automation select { height: 32px; min-height: 32px; padding: 0 8px; border: .5px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--foreground); }
+.pm-automation :is(button, input, [data-slot="select-trigger"], textarea) { font-size: 14px; line-height: 1.5; }
+.pm-automation [data-slot="select-trigger"] { height: 32px; min-height: 32px; padding: 0 8px; border: .5px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--foreground); }
 .pm-automation input::placeholder, .pm-automation textarea::placeholder { color: var(--text-muted); }
-.pm-automation input:focus-visible, .pm-automation select:focus-visible, .pm-automation textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.pm-automation input:focus-visible, .pm-automation [data-slot="select-trigger"]:focus-visible, .pm-automation textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 .pm-automation .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

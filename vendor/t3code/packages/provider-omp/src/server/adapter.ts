@@ -805,7 +805,7 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (options
         resumeThread: resume => protect(register({ threadId: resume.threadId ?? input.threadId, existingProviderThread: resume.providerThread,
           modelSelection: resume.modelSelection ?? input.modelSelection, runtimePolicy: resume.runtimePolicy ?? input.runtimePolicy })),
         startTurn: turnInput => protect(Effect.gen(function* () {
-          yield* Effect.try(() => { assertHosted(turnInput.providerThread); assertOmpPromptIsSafe(turnInput.message.text); });
+          yield* Effect.try(() => { assertHosted(turnInput.providerThread); assertOmpPromptIsSafe(turnInput.userMessageText ?? turnInput.message.text); });
           if (turn || starting || closed) return yield* protocolError("OMP previous turn is still active or the process is unavailable");
           if (turnInput.threadId !== input.threadId || (turnInput.runtimePolicy.cwd ?? cwd) !== cwd || turnInput.runtimePolicy.runtimeMode !== input.runtimePolicy.runtimeMode)
             return yield* protocolError("OMP turn policy differs from its scoped session");
@@ -822,7 +822,8 @@ export const makeOmpAdapterV2 = Effect.fn("makeOmpAdapterV2")(function* (options
               registeredTools.toolNames.some(name => typeof name !== "string" || !hostTools.names.has(name)))
               return yield* protocolError("OMP did not register the exact host PM tool schemas");
             yield* selection(turnInput.modelSelection);
-            const message = yield* providerMessageTextWithAttachmentPaths({ text: turnInput.message.text, attachments: turnInput.message.attachments,
+            const text = turnInput.userMessageText?.trim() === "/session" ? "/session" : turnInput.message.text;
+            const message = yield* providerMessageTextWithAttachmentPaths({ text, attachments: turnInput.message.attachments,
               resolveAttachmentPath: host.resolveAttachmentPath, resolveExtractedTextPath: host.resolveExtractedTextPath });
             const images: OmpRpcRecord[] = [];
             for (const attachment of turnInput.message.attachments) if (attachment.mimeType.startsWith("image/")) {

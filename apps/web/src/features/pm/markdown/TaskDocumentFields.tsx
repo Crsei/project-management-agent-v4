@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { workflowFor, type ProtocolConfiguration } from '@pm-schema';
 import { Popover, PopoverContent, PopoverTrigger } from '../../../components/ui/popover';
+import { RadixSelect } from "@/components/ui/radix-select"
 
 /** A borderless, auto-growing title. The value is the task's only title source. */
 export function TaskTitleField({ value, disabled, invalid, describedBy, en, autoFocus, testId, className, placeholder, required, onValue }: {
@@ -403,11 +404,11 @@ export function InlineSubtasks({ items, configuration, members, disabled, en, ma
             </label>
             <label className="doc-subtask-field">
               <span>{en ? 'Assignee' : '负责人'}</span>
-              <select value={assignee} disabled={locked} onChange={event => onChange(item.draftId, { values: { assignee: event.target.value || null } })}>
+              <RadixSelect value={assignee} disabled={locked} onChange={event => onChange(item.draftId, { values: { assignee: event.target.value || null } })}>
                 <option value="">{en ? 'Unassigned' : '未分配'}</option>
                 {assignee && !member && <option value={assignee}>{en ? 'Current assignee unavailable' : '原负责人不可用'}</option>}
                 {members.map(candidate => <option key={candidate.userId} value={candidate.userId}>{candidate.name} · {candidate.userId}</option>)}
-              </select>
+              </RadixSelect>
             </label>
             <p className="doc-subtask-status">{en ? 'Status is controlled by the circle toggle. Saving creates a separate work item linked to this parent.' : '状态由左侧圆形按钮控制；保存后会创建独立工作项并关联父任务。'}</p>
           </div>}
