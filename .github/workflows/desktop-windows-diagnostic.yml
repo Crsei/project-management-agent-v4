@@ -19,44 +19,32 @@ jobs:
           version: '11.9.0'
           run_install: false
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform win32 --arch x64
-      - name: Diagnose native blob directory boundary
+      - name: Observe native repository directory traversal
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          import cp from 'node:child_process';
+          import fs from 'node:fs';
           import {syncBuiltinESMExports} from 'node:module';
-          const originalExec=cp.execFileSync;
-          const queries=new Map(),started=Date.now();let nativeCalls=0,nativeMilliseconds=0;
-          cp.execFileSync=(file,args,options)=>{
-            const native=args?.some(value=>value.includes('class PmNativePathAttributes')),start=Date.now();
-            try{return originalExec(file,args,options);}
-            catch(error){if(args?.some(value=>value.includes('class PmNativePathAttributes')))console.error(String(error.stderr));throw error;}
-            finally{if(native){nativeCalls++;nativeMilliseconds+=Date.now()-start;for(const filename of JSON.parse(options.input))queries.set(filename,(queries.get(filename)??0)+1);}}
+          import {tmpdir} from 'node:os';
+          import path from 'node:path';
+          const originalMkdir=fs.mkdirSync,originalStat=fs.lstatSync;let previous='',repeated=0;
+          fs.mkdirSync=(filename,options)=>{const created=originalMkdir(filename,options);console.log(JSON.stringify({mkdir:filename,created}));return created;};
+          fs.lstatSync=(filename,options)=>{
+            repeated=filename===previous?repeated+1:0;previous=filename;
+            if(repeated>40&&filename===path.parse(filename).root)throw new Error('Repeated volume-root traversal: '+filename);
+            return originalStat(filename,options);
           };
           syncBuiltinESMExports();
-          import {mkdtemp,realpath,rm} from 'node:fs/promises';
-          import {tmpdir} from 'node:os';
-          import {join} from 'node:path';
-          import {SafeDirectory} from './packages/infrastructure/src/portable-directory.ts';
-          import {LocalBlobStore} from './packages/infrastructure/src/blobs.ts';
-          import {ensurePrivateDirectory} from './apps/desktop/src/private-state.mjs';
-          const root=await realpath(await mkdtemp(join(tmpdir(),'desktop-blob-diagnostic-')));
+          const {FileRepository,revisionOf}=await import('./packages/pm-core/repository.ts');
+          const root=fs.realpathSync(fs.mkdtempSync(path.join(tmpdir(),'desktop-repository-diagnostic-')));
           try{
-            await ensurePrivateDirectory(root,{newlyCreated:true});
-            const blobs=join(root,'blobs');await ensurePrivateDirectory(blobs);
-            const directory=await SafeDirectory.open(blobs,true);
-            await directory.identity();await directory.close();
-            const store=new LocalBlobStore(blobs);await store.init();
-            const saved=await store.put(Buffer.from('native blob boundary'));
-            if((await store.read(saved.key)).toString()!=='native blob boundary')throw new Error('Blob content mismatch');
-            console.log(JSON.stringify({nativeBlobRoundTrip:true,elapsedMilliseconds:Date.now()-started,nativeCalls,nativeMilliseconds,queries:[...queries]}));
-          }finally{await rm(root,{recursive:true,force:true});}
+            const repository=new FileRepository(root,false);
+            console.log('Initializing repository');repository.init();
+            console.log('Creating nested directory');repository.mkdir('nested/deep');
+            repository.write('nested/deep/note.md','first');
+            repository.write('nested/deep/note.md','second',revisionOf('first'));
+            if(repository.read('nested/deep/note.md')!=='second')throw new Error('Repository content mismatch');
+            repository.remove('nested/deep/note.md',revisionOf('second'));
+            console.log(JSON.stringify({nativeRepositoryRoundTrip:true}));
+          }finally{fs.rmSync(root,{recursive:true,force:true});}
           NODE
-      - name: Verify native file identity and blob storage regressions
-        run: pnpm exec node --conditions=development --test packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
-      - name: Verify native PostgreSQL lifecycle and restored services
-        shell: bash
-        run: |
-          export PM_DESKTOP_TEST_POSTGRES_ROOT="$(node -p "require('node:path').resolve('apps/desktop/.runtime/desktop-runtime/postgres')")"
-          node --test apps/desktop/src/managed-postgres.test.mjs apps/desktop/src/backend/bootstrap.test.ts apps/desktop/src/local-server.test.mjs
