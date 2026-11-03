@@ -98,9 +98,9 @@ async function acquireServicePorts(dataDir, reservations, assertActive = () => {
 // not copy another instance's browser origin or private service identity.
 export async function prepareServicePorts(input) {
   const dataDir = absolutePath(input, "Data directory");
-  await mkdir(dataDir, { recursive: true, mode: 0o700 });
+  const createdDataDirectory = await mkdir(dataDir, { recursive: true, mode: 0o700 });
   if ((await readdir(dataDir)).length) throw new Error("Preparing desktop service ports requires an empty target directory.");
-  await ensurePrivateDirectory(dataDir);
+  await ensurePrivateDirectory(dataDir, { newlyCreated: createdDataDirectory !== undefined });
   const reservations = new Map();
   try {
     const ports = await acquireServicePorts(dataDir, reservations);

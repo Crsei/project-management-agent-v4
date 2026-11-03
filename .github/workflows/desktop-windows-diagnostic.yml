@@ -6,7 +6,7 @@ permissions:
 jobs:
   powershell-startup:
     runs-on: windows-2025
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -14,5 +14,41 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24.21.0'
-      - name: Exercise real private metadata and owned process lifecycle
-        run: node --test apps/desktop/src/private-state.test.mjs apps/desktop/src/local-process.test.mjs
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.9.0'
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform win32 --arch x64
+      - name: Observe private PostgreSQL startup under the native runner token
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import cp from 'node:child_process';
+          import {syncBuiltinESMExports} from 'node:module';
+          import {mkdtemp,realpath,rm} from 'node:fs/promises';
+          import {tmpdir} from 'node:os';
+          import {join,basename,resolve} from 'node:path';
+          let instance;
+          const original=cp.spawn;
+          cp.spawn=(command,args,options)=>{
+            if(basename(command).toLowerCase()!=='postgres.exe'||options.stdio!=='ignore')return original(command,args,options);
+            const child=original(command,args,{...options,stdio:['ignore','ignore','pipe']});
+            let diagnostic='';child.stderr.on('data',chunk=>{diagnostic=(diagnostic+chunk).slice(-16384)});
+            child.on('exit',code=>console.log(JSON.stringify({postgresExit:code,diagnostic:diagnostic.replaceAll(instance?.state?.password??'not-a-generated-password','[REDACTED]')})));
+            return child;
+          };
+          syncBuiltinESMExports();
+          const {ManagedPostgres}=await import('./apps/desktop/src/managed-postgres.mjs');
+          const root=await realpath(await mkdtemp(join(tmpdir(),'desktop-pg-diagnostic-')));
+          instance=new ManagedPostgres({dataDir:join(root,'instance'),binariesDir:resolve('apps/desktop/.runtime/desktop-runtime/postgres')});
+          try{
+            try{await instance.start();console.log(JSON.stringify({directStart:true}));}
+            catch(error){
+              console.log(JSON.stringify({directStart:false,error:error.message}));
+              await instance.command('pg_ctl',['start','-D',instance.clusterDir,'-o',`-h 127.0.0.1 -p ${instance.state.port} -c unix_socket_directories=`, '-w','-t','15','-l',join(root,'postgres.log')]);
+              await instance.identify();console.log(JSON.stringify({controlStart:true}));
+              await instance.command('pg_ctl',['stop','-D',instance.clusterDir,'-m','fast','-w','-t','15']);
+            }
+          }finally{await instance.stop();await rm(root,{recursive:true,force:true});}
+          NODE
