@@ -442,7 +442,7 @@ backend剩余环境／无关阻塞保留：guard只接受55444，拒绝自有临
 - 按用户选择，以六个 `openai-codex/gpt-6.1-sol:xhigh` 子代理实现 Electron 宿主、受管 PostgreSQL、进程生命周期、跨平台核心文件/附件存储和原生打包；主线程集成初始化、完整备份恢复及实际运行验证。只读参考 t3code，不替换已有 Web，不复用或重启原开发服务，不导入真实凭据。
 - 目标为 Windows x64 NSIS、macOS 15+ arm64/x64 DMG/ZIP。安装资源包含 Node 24.21.0、PostgreSQL 16.15 完整运行时、PM/Worker、Agent 原生依赖闭包及生产 Web；运行时按目标平台下载、固定校验、离线启动。没有 Linux 发布目标、自动更新源或自动 Release。
 - 本地实例自行初始化数据库、应用存储、账号及工作区；不保存初始账号明文密码。稳定公共 origin 与实例身份绑定浏览器分区；仅监督自有进程，端口/数据身份冲突拒绝接管。数据库关机超时保留进程与锁，允许重试，避免以 SIGKILL 冒充正常停止。
-- 复用现有 HTTP/Agent 授权和业务规则。Electron 启用 renderer sandbox/contextIsolation，禁用 Node 集成；原生 IPC 仅限可信顶层连接窗口。跨平台路径和文件身份规则落到核心/基础设施，新增 `0046_native_absolute_paths.sql` 正向迁移，不改写旧迁移。Windows ACL/reparse 检查及 Job Object 监督仍须原生验证。
+- 复用现有 HTTP/Agent 授权和业务规则。Electron 启用 renderer sandbox/contextIsolation，禁用 Node 集成；原生 IPC 仅限可信顶层连接窗口。跨平台路径和文件身份规则落到核心/基础设施，新增 `0046_native_absolute_paths.sql` 正向迁移，不改写旧迁移。Windows ACL/reparse 检查及 Job Object 监督由原生 CI 单独验证，不把 Linux 用例视为 Windows 证据。
 - 离线完整备份通过真实 `pg_dump`、现有 PM 检查点/附件备份与 Agent 备份实现；恢复使用新目录、新 PG 凭据、新实例身份和存储绑定，最后登记 bootstrap。账号和业务对象保留，浏览器 Cookie/客户端日志不复制；外部目录需重新关联。备份明确包含私密数据，只接受同 OS 恢复。详细范围与操作见 [README Desktop](../../README.md#desktopwindows--macos)。
 - 已在隔离 Debian 12 容器、实际 bundled Node/PG 下完成：真实初始化/登录/授权工作区、项目和 Markdown 文档创建、附件上传、停止/重启、稳定 origin、完整备份、独立恢复后原账号/文档/附件内容一致。匿名附件请求401，非空恢复目标拒绝，所有本次拥有的服务退出。没有用 mock 数据库或业务 API 替代这条路径。
 - 已用真实 electron-builder 组装含 `app.asar`、生产 workspace 和完整运行时的 Linux 目录验证产物；对该产物资源执行原生 SDK/PTY 加载、初始化、登录、Agent 访问、Web 服务、同一实例重启与进程清理冒烟，全部通过，`PATH` 不依赖宿主开发工具。这是验证资源闭包，不是 Windows/macOS 安装包，也不证明真实 Provider 推理。
@@ -453,5 +453,6 @@ backend剩余环境／无关阻塞保留：guard只接受55444，拒绝自有临
 - 回归修复了本次跨平台目录 guard 把已知不安全路径转成409/503的问题：底层静态拒绝保留 `EPERM`，文档边界在变更前转换为原有403；目录身份变化/未知副作用不改成成功。原有文档读写及安全真实 HTTP 回归16项最终全通过，另以直接文件系统冒烟确认正常文档读写、链接读写均403且外部文件未改变。原生平台/权限5项、附件10项、完整项目备份恢复和 Worker/outbox/UUID 回归也通过。
 - 回归使用自有 PostgreSQL、独立网络命名空间、Git/完整 PG 客户端及私有临时目录；命名空间内部55444只用于满足既有测试防护，未连接宿主55444。只读源码挂载下的 `.local` 写入通过独立临时挂载隔离，不向仓库原测试/审计目录写入。已清理自有 GUI 账号/数据、临时脚本/构建目录、验证容器和命名镜像；仅保留证据与开发运行时缓存。
 - 全仓根类型检查仍被无关 Web/测试合同错误阻塞：notification-inbox、project-files、agent-file-areas 测试 actorId、artifact filter、document-sources fixture exactOptionalPropertyTypes、graph-flow 可空值。未覆盖并行改动，不把局部检查记为全仓 `pnpm check` 通过。
-- 需要原生 Windows/macOS 机器才能验收目标安装包、安装/卸载、权限与进程监督；正式签名另需发布者证书及 macOS 公证材料。本机没有对应平台环境，未生成目标安装包或执行签名、公证、发布。原生手动 CI 已接入受管运行时冒烟和核心文件/附件/权限回归；Windows reparse 原生用例只在 Windows 注册，不能把 Linux 的5项平台测试当作该用例通过。signed 缺少材料时失败，不退化为 unsigned。未 commit/push。
+- 用户已授权并执行全部项目更新的 commit/push，首批提交为 `4bcf7f276f1fe5ec55a35348adeec592edf01207`（504 个文件）；后续原生 CI 修复单独提交。[GitHub Actions](../../.github/workflows/desktop.yml) 使用 Windows 2025、macOS 15 Intel/arm64 原生 runner，显式构建 unsigned 测试包、执行真实 PG/文件权限回归及打包资源的登录/停止/重连冒烟；产物含 SHA256 清单，保留14天，不自动创建 GitHub Release。
+- 原生构建和服务冒烟不等于已完成目标系统的安装/卸载、GUI 人工验收或真实 Provider 推理。正式 Windows Authenticode、macOS Developer ID 签名与公证仍需发布者材料及受保护的 `desktop-signing` 环境；signed 缺少材料时失败，不退化为 unsigned。macOS ad-hoc 测试签名不算正式签名或公证。
 - 会话与持久化尚未统一设计收口，仍沿用 Agent Chat 保存方式；桌面备份不消除尚未确认客户端操作的未知副作用。Linux descriptor-relative 保证不等同于 macOS/Windows 路径校验，Windows 目录元数据断电持久性受 Node 能力限制；不宣称新增同用户文件系统安全沙箱。
