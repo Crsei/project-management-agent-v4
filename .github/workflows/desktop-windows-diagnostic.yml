@@ -1,0 +1,37 @@
+name: Temporary Windows desktop startup diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  powershell-startup:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.21.0'
+      - name: Isolate environment and stdin startup requirements
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {execFile} from 'node:child_process';
+          import {join} from 'node:path';
+          const root=process.env.SystemRoot;
+          const executable=join(root,'System32','WindowsPowerShell','v1.0','powershell.exe');
+          const minimal={SystemRoot:root,WINDIR:root};
+          const selected=keys=>Object.fromEntries(keys.flatMap(key=>process.env[key]===undefined?[]:[[key,process.env[key]]]));
+          const service={...minimal,...selected(['PATH','TEMP','TMP','TMPDIR'])};
+          const profile={...service,...selected(['USERPROFILE','APPDATA','LOCALAPPDATA','HOMEDRIVE','HOMEPATH','PSModulePath'])};
+          for(const [name,env] of [['minimal',minimal],['service',service],['profile',profile],['inherited',process.env]]){
+            for(const closeInput of [false,true]){
+              const started=Date.now();
+              await new Promise(resolve=>{
+                const child=execFile(executable,['-NoLogo','-NoProfile','-NonInteractive','-Command',"[Console]::Out.WriteLine('ps-ready')"],{env,windowsHide:true,timeout:5000},(error,stdout,stderr)=>{
+                  console.log(JSON.stringify({name,closeInput,elapsedMs:Date.now()-started,code:error?.code,killed:error?.killed,signal:error?.signal,stdout:stdout.trim(),stderr:stderr.trim()}));resolve();
+                });
+                if(closeInput)child.stdin.end();
+              });
+            }
+          }
+          NODE
