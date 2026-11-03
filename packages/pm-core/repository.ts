@@ -102,11 +102,12 @@ export class FileRepository {
     this.resolve(relative);
     if (firstCreated !== undefined) {
       // Persist every new directory entry before a journal may reference its files.
-      const parent = path.dirname(firstCreated);
+      // Win32 recursive mkdir returns an extended-length path even for ordinary input.
+      const parent = path.toNamespacedPath(path.dirname(firstCreated));
       let directory = target;
       for (;;) {
         syncDirectory(directory);
-        if (directory === parent) break;
+        if (samePath(path.toNamespacedPath(directory), parent)) break;
         directory = path.dirname(directory);
       }
     }

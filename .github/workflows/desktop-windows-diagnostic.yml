@@ -48,3 +48,5 @@ jobs:
             console.log(JSON.stringify({nativeRepositoryRoundTrip:true}));
           }finally{fs.rmSync(root,{recursive:true,force:true});}
           NODE
+      - name: Verify native directory and blob regressions
+        run: pnpm exec node --conditions=development --test packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
