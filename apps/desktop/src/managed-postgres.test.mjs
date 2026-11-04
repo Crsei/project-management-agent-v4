@@ -31,6 +31,32 @@ test("managed metadata rejects corrupt credentials, ownership, ports and major u
   }
 });
 
+test("command output remains owned until inherited pipes close after process exit", { timeout: 10_000 }, async t => {
+  const { dataDir, processes } = await isolated(t);
+  await mkdir(dataDir);
+  const pg = new ManagedPostgres({ dataDir, binariesDir: dataDir });
+  processes.push(pg);
+  pg.binary = () => process.execPath;
+  const releaseOutput = join(dataDir, "release-output");
+  const delayedOutput = `const fs = require('node:fs'); const timer = setInterval(() => { if (fs.existsSync(${JSON.stringify(releaseOutput)})) { clearInterval(timer); process.stdout.end('complete command output'); } }, 10); setTimeout(() => process.exit(2), 8000).unref();`;
+  const launcher = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(delayedOutput)}], { stdio: ['ignore', 'inherit', 'inherit'] }).unref();`;
+  const result = pg.command("version-probe", ["-e", launcher], { captureOutput: true });
+  let settled = false;
+  result.then(() => { settled = true; }, () => { settled = true; });
+  const child = pg.children.values().next().value;
+  const closed = once(child, "close");
+  try {
+    await once(child, "exit");
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(settled, false, "process exit must not truncate still-open command output");
+  } finally {
+    await writeFile(releaseOutput, "release");
+    await closed;
+  }
+  assert.equal(await result, "complete command output");
+  assert.equal(pg.ownedProcessCount, 0);
+});
+
 test("unowned nonempty roots are preserved and never initialized", async t => {
   const { dataDir, processes } = await isolated(t);
   await mkdir(dataDir);

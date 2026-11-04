@@ -82,17 +82,19 @@ export class ManagedPostgres {
   }
   checkCancelled() { if (this.cancelled) throw new Error("Managed PostgreSQL startup cancelled"); }
   progress(message) { this.onProgress?.({ role: "postgres", message }); }
-  async command(name, args, { timeout = 30_000, cancelable = true } = {}) {
+  async command(name, args, { timeout = 30_000, cancelable = true, captureOutput = false } = {}) {
     if (cancelable) this.checkCancelled();
-    const child = spawn(this.binary(name), args, { cwd: this.dataDir, env: this.environment(), windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(this.binary(name), args, { cwd: this.dataDir, env: this.environment(), windowsHide: true, stdio: captureOutput ? ["ignore", "pipe", "pipe"] : "ignore" });
     this.children.add(child);
     return new Promise((done, reject) => {
       let output = "";
-      const capture = bytes => { if (output.length < 16_384) output += bytes.toString("utf8").slice(0, 16_384 - output.length); };
-      child.stdout.on("data", capture); child.stderr.on("data", capture);
+      if (captureOutput) {
+        const capture = bytes => { if (output.length < 16_384) output += bytes.toString("utf8").slice(0, 16_384 - output.length); };
+        child.stdout.on("data", capture); child.stderr.on("data", capture);
+      }
       const timer = setTimeout(() => child.kill(), timeout);
       child.once("error", () => { clearTimeout(timer); this.children.delete(child); reject(new Error(`Managed PostgreSQL ${name} could not start`)); });
-      child.once("exit", code => {
+      child.once("close", code => {
         clearTimeout(timer); this.children.delete(child);
         if (code === 0) done(output);
         else reject(new Error(`Managed PostgreSQL ${name} failed${code === null ? " or timed out" : ` (exit ${code})`}`));
@@ -329,7 +331,7 @@ export class ManagedPostgres {
   async startInternal() {
     try {
       await this.prepareState(); this.checkCancelled();
-      const version = await this.command("postgres", ["--version"]);
+      const version = await this.command("postgres", ["--version"], { captureOutput: true });
       if (!/\(PostgreSQL\) 16\./.test(version)) throw new Error("Managed desktop requires PostgreSQL 16 binaries; automatic upgrades are forbidden");
       await this.initialize(); this.checkCancelled();
       await this.recoverOwnedServer(); await assertPortFree(this.state.port); this.checkCancelled();
