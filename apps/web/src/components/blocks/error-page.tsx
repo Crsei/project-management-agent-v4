@@ -47,7 +47,7 @@ const errorIcons = {
 } satisfies Record<HttpErrorCode, typeof LockKeyhole>
 
 /**
- * HTTP error surface ported from the EasyuseUI auth-pages block. It renders
+ * HTTP error surface shared by the product shell and auth pages. It renders
  * only caller-provided state: no permission, retry or success is inferred.
  */
 export function ErrorPage({

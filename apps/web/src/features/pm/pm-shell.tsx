@@ -279,7 +279,7 @@ function PmFrame({ children }: { children: ReactNode }) {
         title={
           <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
             <Link to="/lab/pm" className="truncate font-medium">
-              {referenceLayout ? (en ? "Project Management" : "项目管理") : `EasyuseUI · ${en ? "Project management" : "项目管理"}`}
+              {en ? "Project Management" : "项目管理"}
             </Link>
             {referenceLayout && <div className="flex shrink-0 items-center gap-1"><span className="mr-2 text-xs text-muted-foreground">{en ? "Demo data" : "演示数据"}</span><Preferences />{pageSection && workspace && <PageSwitcher section={pageSection} activeView={pageVariant} />}</div>}
           </div>

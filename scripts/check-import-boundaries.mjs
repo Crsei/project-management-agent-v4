@@ -46,8 +46,6 @@ const allowed = new Map([
   ["apps/server/agent/src/usage/limits/core.test.ts", [native + "provider/resetCreditCoordinator.ts"]],
   ["apps/server/agent/src/usage/readers/transcript-cache.test.ts", [native + "provider/Drivers/codexUsage.ts"]],
   ["apps/server/agent/src/usage/readers/transcripts.test.ts", [native + "provider/Drivers/claudeUsage.ts", native + "provider/Drivers/codexUsage.ts"]],
-  // This timeline is the existing presentation adapter, not a native Provider consumer.
-  ["apps/web/src/features/agent/src/chat/output-timeline.tsx", ["vendor/agent-workspace-views/conversations/markdown"]],
 ]);
 
 const catalogIds = [

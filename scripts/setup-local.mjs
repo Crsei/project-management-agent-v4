@@ -58,8 +58,7 @@ try {
   await writeFile(path.join(root, '.env.agent'), [
     'HOST=127.0.0.1', 'AGENT_WORKSPACE_API_PORT=4325', 'AGENT_WEB_PORT=4326',
     'PM_API_URL=http://127.0.0.1:4194', 'AGENT_WORKSPACE_API_ONLY=1',
-    `AGENT_WORKSPACE_DATA_DIR=${path.join(root, '.local', 'agent-data')}`,
-    'VITE_ENABLE_UI_LAB=0', '',
+    `AGENT_WORKSPACE_DATA_DIR=${path.join(root, '.local', 'agent-data')}`, '',
   ].join('\n'), { flag: 'wx', mode: 0o600 });
   console.log('Created private .env.agent with isolated v4 data; no Provider credentials or global CLI homes were imported.');
 } catch (error) {

@@ -1,0 +1,93 @@
+---
+import CommandBlock from '../components/CommandBlock.astro';
+import GuideLayout from '../layouts/GuideLayout.astro';
+import { workspaceLabel, workspaceNote, workspaceUrl } from '../lib/site';
+
+const providerSettingsUrl = new URL('/agent/settings/providers', workspaceUrl).href;
+const contents = [
+  { id: 'requirements', label: 'Before you start' },
+  { id: 'run', label: 'Build and run' },
+  { id: 'first-run', label: 'Connect a provider' },
+  { id: 'scope', label: 'PM scope and directories' },
+  { id: 'development', label: 'Development mode' },
+  { id: 'website', label: 'Run this website' },
+];
+---
+
+<GuideLayout
+  title="A workspace on your terms."
+  description="Build from your source checkout, start a local server, and connect the providers you already use. No hosted account is required."
+  eyebrow="Self-host / Getting started"
+  contents={contents}
+>
+  <section id="requirements">
+    <h2>Before you start</h2>
+    <p>Use the independent <strong>project-management-agent-v3</strong> checkout. Run the commands below from its root—the directory containing <code>pnpm-workspace.yaml</code>, <code>apps/</code>, and <code>packages/</code>. Do not reuse another installation’s environment, database, or Provider homes.</p>
+    <ul>
+      <li><strong>Node.js 24 LTS.</strong> The Agent server uses Node’s native SQLite implementation. Local PM also requires Docker Compose for its dedicated PostgreSQL.</li>
+      <li><strong>pnpm 11.9.0</strong>, as declared by the root package manager field.</li>
+      <li><strong>A provider account</strong> for model execution. An API key or compatible, authenticated Codex / Claude CLI is needed; model usage can incur the provider’s charges.</li>
+      <li><strong>A PM workspace/project file area you trust.</strong> Configure an allowed directory explicitly; accepted chat requests resolve the actual CLI working directory from PM.</li>
+    </ul>
+    <p>Read the <a href="/security/">security and operational boundaries</a> before enabling remote access. This is a single-user environment, not a multi-user service.</p>
+  </section>
+
+  <section id="run">
+    <h2>01 / Build and run</h2>
+    <CommandBlock label="Fresh v3 installation, from the repository root" code={`pnpm install --frozen-lockfile
+pnpm setup:local
+pnpm db:up
+pnpm db:migrate
+pnpm bootstrap
+pnpm storage bind --new --stopped --target-config .local/blob-target.json
+pnpm build:v3
+pnpm services:start
+pnpm services:status`} />
+    <p>The public entry is <a href="http://127.0.0.1:3223/agent/workspace"><code>http://127.0.0.1:3223/agent/workspace</code></a>. The service manager owns this checkout’s PM API, Worker, Agent API and both Web processes. The bind command above is only for a new empty installation; existing data requires the documented adopt/maintenance procedure.</p>
+    <p>Agent data defaults to this checkout’s <code>.local/agent-data</code>. Keep it stable across restarts and run only one Agent server per data directory. No global CLI credentials are imported implicitly.</p>
+    <p>Stop the service before backing up that directory. Back up any separately configured CLI home as well. Rebuilding the Web app is not a backup of your conversations, runs, or credentials.</p>
+    <a class="button button-primary" href={workspaceUrl}>{workspaceLabel}<span aria-hidden="true">↗</span></a>
+    <p class="entry-note">{workspaceNote}</p>
+  </section>
+
+  <section id="first-run">
+    <h2>02 / Connect a provider</h2>
+    <ol class="instruction-list">
+      <li>Open <a href={providerSettingsUrl}>Provider settings</a> in your running workspace. If remote access is protected, enter your workspace access token first.</li>
+      <li>Create or edit a DeepSeek, OpenAI, or Anthropic API instance, or a Codex / Claude CLI instance. Supply its server-side credentials and endpoint or CLI configuration.</li>
+      <li>Choose the instance and model for a thread. Send a small request deliberately; a provider call may be billable.</li>
+      <li>Select a real PM workspace/project scope and configure its file area before creating a scoped conversation.</li>
+    </ol>
+    <p>API credentials can also be supplied through server-side <code>DEEPSEEK_API_KEY</code>, <code>OPENAI_API_KEY</code>, or <code>ANTHROPIC_API_KEY</code> fallback variables. Keep them in the root private <code>.env.agent</code> or the Agent server environment. Never prefix secrets with <code>VITE_</code> or <code>PUBLIC_</code>.</p>
+    <p>Missing credentials do not silently switch you to a different provider. Check the recorded error and correct the instance. Native resume and fork require a compatible CLI and session boundary; API-backed models use normalized conversation context instead.</p>
+  </section>
+
+  <section id="scope">
+    <h2>03 / Select PM scope and a file area</h2>
+    <p>Log into PM at the same public origin and open Agent Chat from its product switch. The Session sidebar lists real authorized workspaces and projects, including empty groups. Configure workspace and project file areas through their directory controls.</p>
+    <p>The server validates the selected scope and directory when accepting a request. CLI execution uses that directory snapshot; API-only models are not presented as having local file tools. This is not a new permission system or sandbox, and no chat outcome automatically completes a PM task. The v3 chat shell does not expose the source application’s workflow/automation/inspector navigation.</p>
+  </section>
+
+  <section id="development">
+    <h2>Develop the Web app and server</h2>
+    <CommandBlock label="After setup, migration, bootstrap and storage binding" code="pnpm dev:v3" />
+    <p>This starts all five independent v3 processes. Open <a href="http://127.0.0.1:3223/agent/workspace"><code>http://127.0.0.1:3223/agent/workspace</code></a>. Web HMR is enabled; restart after backend changes. Streams and terminal WebSockets retain same-origin access checks.</p>
+    <p>Keep the root server environment and data directory in place. Do not copy provider credentials into the Web app. For an Electron host of the same application, follow the <a href="/desktop/">desktop build guide</a>.</p>
+  </section>
+
+  <section id="website">
+    <h2>This website is a separate application</h2>
+    <p>The marketing site is Astro-generated static HTML and CSS. It does not import server workers, read provider credentials, connect to an execution API, or run tasks when somebody visits a page.</p>
+    <CommandBlock label="Independent marketing commands, from the monorepo root" code={`pnpm dev:marketing
+# Or typecheck and generate static output, then preview it:
+pnpm typecheck:marketing
+pnpm build:marketing
+pnpm preview:marketing`} />
+    <p>Development and preview use <a href="http://127.0.0.1:4330"><code>http://127.0.0.1:4330</code></a>. Static output is in <code>apps/marketing/dist/</code>; deploy that directory with a static host. Preview is not an execution server.</p>
+    <p>Optional public build-time values belong in <code>apps/marketing/.env</code>. Never put credentials there.</p>
+    <CommandBlock label="Public website configuration—not secrets" code={`PUBLIC_WORKSPACE_URL=http://127.0.0.1:3223/agent/workspace
+# Optional, only after publishing a real HTTPS release:
+PUBLIC_DESKTOP_RELEASE_URL=`} />
+    <p><code>PUBLIC_WORKSPACE_URL</code> must be an absolute HTTP(S) URL without embedded credentials. It changes the workspace entry links, not the setup guide’s documented local defaults. Rebuild after changing it. Without a valid HTTPS desktop release URL, desktop entry points lead to real source-build instructions instead of a download button.</p>
+  </section>
+</GuideLayout>

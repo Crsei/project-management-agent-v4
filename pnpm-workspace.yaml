@@ -3,7 +3,7 @@ packages:
   - apps/server/agent
   - apps/server/pm
   - apps/web
-  - tools/marketing
+  - apps/marketing
   - packages/*
   - vendor/*
   - vendor/t3code/packages/*

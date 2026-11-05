@@ -2,7 +2,7 @@
 
 - 先读 `README.md`、`docs/domain-design/README.md` 第七节、`docs/architecture/context.md`、`docs/architecture/adr/0003-markdown-core.md` 及受影响的公开使用指南，再读关联领域文档与 INV/SC/INF 编号。当前/历史适用性按公开入口解释，不把内部27步计划或旧批次验收当新任务指令。
 - 统一 Agent 的现行用法见 `docs/guides/agent-chat.md`；根四份旧合同及 `docs/implementation` 原件仅本机历史、不作公开依赖。沿用纯 Agent Chat、工作区/项目作用域、文件区域及既有安全/业务检查，不恢复旧完整执行计划，不新增权限体系或业务完成规则。
-- 本仓库是独立项目。`project-management-book` / EasyuseUI 为历史设计与展示来源，不是安装/构建依赖；不自动改写来源仓库代码或接管既有服务。
+- 本仓库是独立项目。历史设计与展示来源已归档，不是安装/构建依赖；当前 `apps/web` UI 为本项目自有代码。不自动改写外部来源仓库代码或接管既有服务。
 - 业务规则由 domain/application 所有；HTTP、Worker 和未来 Runner 回报入口使用相同应用服务。前端、执行回调和后台投影不得自行决定工作项完成。
 - 未实现能力明确禁用；初始化健康检查不代表数据库、存储、Worker 或 Agent 已就绪。Run 成功不代表 WorkItem 完成，未知副作用先查询核对。
 - 开始编辑前检查 Git 状态和目标目录规则，保留无关并行修改。只修改任务路径；不 reset、clean 或广泛暂存。commit 与 push 需要分别获得用户授权。

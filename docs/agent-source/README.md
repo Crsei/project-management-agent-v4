@@ -12,9 +12,8 @@
 | --------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `/`、`/workspace`     | 聊天；Agent / 工作流 / 文档 / 技能 / 运行记录 / 自动化；Files / Git / Terminal / Browser | Hono API；服务端 SQLite 持久化；真实 Provider 驱动 |
 | `/settings/providers` | Provider 实例创建、编辑、删除、登录及凭据管理                                            | 密钥与实例环境变量只在服务端保存                   |
-| `/showcase`           | 75 页目录，及延期 Composer 页的直接路由                                                  | 独立展示实验室；fixture 回执不是后台执行结果       |
 
-Showcase 保留原有 Conversation 23 页、业务 30 页、API Platform 20 页和 Composer 目录。特殊路由 `/showcase/parent-child-conversations`、`/showcase/web-answer`、`/showcase/agent-studio/{builder,integrations,skills}` 不变。生产环境默认关闭 Lab。
+> 历史记录：`/showcase` 展示实验室已于 2026-11-05 从运行时、构建和服务端托管中移除；本文对应章节仅作历史存档，不再是可以启用的功能。
 
 **不是多用户 SaaS。** 所有已授权浏览器共享同一工作区和本机权限。默认仅监听 loopback；远程监听必须配置访问令牌。API、Provider 凭据操作及 PTY 都受同源/访问控制保护，但访问令牌不提供用户隔离、细粒度 RBAC 或支付能力。
 
@@ -22,13 +21,13 @@ Showcase 保留原有 Conversation 23 页、业务 30 页、API Platform 20 页�
 
 | 目录                      | 职责                                                                                            |
 | ------------------------- | ----------------------------------------------------------------------------------------------- |
-| `apps/web`                | 聊天、工作区、Provider 设置和受门禁控制的 Showcase；不在 Vite 内启动执行 worker。               |
+| `apps/web`                | 聊天、工作区、Provider 设置；不在 Vite 内启动执行 worker。                                      |
 | `apps/server`             | Hono API、SQLite、Provider/CLI、PTY、Git、后台执行及自动化；可独立运行，也可托管 Web 静态产物。 |
 | `apps/desktop`            | Electron 宿主，复用 Web；管理本地 Server 或连接明确指定的远程 Server，不另建执行器。            |
 | `apps/marketing`          | 独立静态官网与部署说明；不加载工作区密钥、执行代码或后台订阅。                                  |
 | `packages/contracts`      | 请求、响应、事件等共享类型与协议 schema。                                                       |
 | `packages/client-runtime` | 平台无关 HTTP/流连接、认证头和 WebSocket URL；Web 实际使用该实现。                              |
-| `vendor/*`                | 保留现有项目内供应商源码包，不因分包重写组件。                                                  |
+| `vendor/*`                | 历史记录：曾保留项目内供应商源码包；Showcase 与相关包已按退出计划移除，本页不再指导使用。       |
 
 本轮明确不新增任何移动端，不创建 `apps/mobile`；已有响应式行为保留，不作为新增交付。应用分包不意味着必须分开部署：生产 Server 仍可在同一个 origin 提供 Web 和 `/api`。
 
@@ -141,39 +140,34 @@ Codex 使用真实 app-server 有界 Fork 协议；Claude 使用 SDK 的 `forkSe
 | 单文件    | 256 KiB | 内容截断，`truncated: true`   |
 | 单个 diff | 512 KiB | patch 截断，`truncated: true` |
 
-### 启用展示实验室
+### 展示实验室（历史存档，已移除）
 
-开发环境自动开放。生产默认关闭；开启需要重新构建，启动时读取构建产物 `dist/ui-lab.json`，关闭时 `/showcase` 及其子路径返回 HTTP 404：
+`/showcase`、`VITE_ENABLE_UI_LAB`、构建产物 `ui-lab.json` 与服务端 `/showcase` 门禁已于 2026-11-05 移除；`/showcase` 现在与其它未知路径一样由 SPA 回退处理。`apps/web/public/fixtures` 的媒体仍保留，因为 `THIRD_PARTY_NOTICES.md` 与 `scripts/check-third-party-notices.mjs` 仍引用其许可记录，需与 notices 更新同批删除。以下启用步骤仅作历史记录，不再有效，不得据此重新引入该入口：
 
 ```bash
-pnpm install --no-frozen-lockfile
-VITE_ENABLE_UI_LAB=1 pnpm build
-pnpm start
-# http://localhost:4320/workspace
-# http://localhost:4320/showcase
+# 历史记录（已失效）：VITE_ENABLE_UI_LAB=1 pnpm build
 ```
 
-容器等价命令：`VITE_ENABLE_UI_LAB=1 ./docker.sh build`，然后 `./docker.sh start`。关闭时用 `VITE_ENABLE_UI_LAB=0` 重建并重启服务。仅修改启动时环境变量不会覆盖构建策略。DeepSeek key 可继续放在服务端 `.env.local` 的 `DEEPSEEK_API_KEY`，也可在 `/settings/providers` 保存；两者都不能使用 `VITE_` 前缀。
+DeepSeek key 可继续放在服务端 `.env.local` 的 `DEEPSEEK_API_KEY`，也可在 `/settings/providers` 保存；两者都不能使用 `VITE_` 前缀。
 
 ### 实现位置与状态生命周期
 
-- `apps/web/src/app.tsx`：真实聊天与实验室路由。
-- `apps/web/src/showcase/{conversations,business,platform}`：逐页宿主、目录和懒加载路由；公共壳层负责搜索、主题、语言、场景选择与错误呈现。
-- `vendor/{agent-workspace-views,ui,workspace-protocol}`：从 EasyuseUI 复制的本项目源码包，通过 pnpm workspace 解析；不依赖外部目录或 Next.js。未使用的 Project Management 页面未引入。
-- `apps/web/public/fixtures`：原始音频、视频和 PDF；`apps/web/styles/showcase-tokens.css` 补齐语义角色而不替换现有聊天主题。
-- 只挂载访问过的场景；同页切换场景保留各自编辑，重置只替换当前场景。业务/API 的原有 session cache 在实验室内部导航间保留；Conversation 控制器在离开页面时卸载。刷新重置 fixture，绝不写入真实聊天历史。
-- 展示语言保存在 `agent-workspace:showcase-locale`，主题复用 `agent-workspace:theme`；这些浏览器偏好与服务端聊天/执行数据相互独立。
-- `pnpm lint` 检查应用宿主；vendor 保留上游格式，不做全量重排。`pnpm build` 的 TypeScript 检查覆盖实际导入的 vendor 源码。
+- `apps/web/src/app.tsx`：真实聊天与设置路由；`/showcase` 入口和懒加载页面已删除。
+- 历史记录：`apps/web/src/showcase/{conversations,business,platform}` 曾提供逐页宿主、目录和懒加载路由，已于 2026-11-05 删除；`vendor/{agent-workspace-views,ui,workspace-protocol}` 是当时的复制源码包，按退出计划另行移除。
+- 历史记录：`apps/web/public/fixtures` 的音频、视频和 PDF 与 `apps/web/styles/showcase-tokens.css` 只服务已移除的展示实验室；在 notices/checker 更新前不要删除或继续在正式功能中依赖它们。
 
-### 展示实验室接入时的历史验证范围
 
-- `pnpm lint` 与生产 TypeScript + Vite 构建通过；分词器的动态编码模块使用 `worker.format: "es"`。
+### 展示实验室接入时的历史验证范围（已归档）
+
+以下记录仅描述已移除的 Showcase，不代表当前代码树或当前验收。
+
+- 历史：`pnpm lint` 与生产 TypeScript + Vite 构建通过；分词器的动态编码模块使用 `worker.format: "es"`。
 - 浏览器逐页挂载 **80 个直接路由 / 529 个外层场景**；75 个正式目录项，5 个延期页只支持直接访问。挂载检查无页面错误边界或未处理 JS 异常；这不代表逐页所有业务分支都已验收。
 - 实际交互：问卷选择/提交、草稿的场景隔离与重置；文档接受修改/撤销；本地 API 密钥创建/一次性显示/确认撤销；分词器将 `Hello world` 编码为 `o200k_base` 的 `[13225,2375]`。
 - 真实聊天返回 `integration-ready`，既有会话及消息可从 localStorage 恢复。深浅主题已检查目录、对话与 API 页面截图。
 - `./docker.sh dev` 在只读源码挂载下启动成功；`--configLoader runner` 保留，生产构建命令补上 `tsc --noEmit`。
 - 390×844 移动视口验证目录、中文快速输入搜索（完整保留“分词器”，命中 1 页）及英文切换；修复了输入状态直接绑定异步路由导致的丢字问题。
-- Lab 关闭构建启动后，`/showcase` 与 `/showcase/composer` 实测 HTTP 404；开启构建重新启动后目录可访问。无效页面/场景及重复参数的客户端 404 已验证。
+- 历史：Lab 关闭构建启动后，`/showcase` 与 `/showcase/composer` 实测 HTTP 404；开启构建重新启动后目录可访问。无效页面/场景及重复参数的客户端 404 已验证。现在这些路径统一由 SPA 回退处理，服务端不再有展示门禁。
 - 已知构建提示：部分语言/分词资源与主聊天 chunk 超过 500 kB；按页和 Worker 动态加载，不把该提示伪装为已解决。没有宣称真实支付、语音服务或外部业务系统已接通。
 
 ## 为什么要有这份

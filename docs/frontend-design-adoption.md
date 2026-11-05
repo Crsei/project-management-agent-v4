@@ -13,7 +13,7 @@
 | 影响范围 | `apps/web` 表层：`src/styles/theme.css`、`src/index.css`、`components/ui`、`components/blocks`、`views/pm/*.module.css` 的字面量与状态样式、工作区外壳几何 |
 | 历史采用边界 | 最初表层批次不改 fixture/受控契约；后续真实服务接入已调整路由、会话及日期 metadata 合同，不能继续视为纯样式改动 |
 | 当前数据边界 | `/pm` 由本仓库真实服务提供身份、能力、数据与命令；`/lab/pm` 独立保留固定时钟 2026-01-12T09:00Z、UTC 的确定性 fixture；两者不回退混用 |
-| 交互基元 | Radix UI + Tailwind v4 + Vite 8 + React 19；专用 dnd-kit、FullCalendar、TanStack Table/Virtual、React Flow/ELK、Recharts、Tiptap、cmdk 复用同一主题，清单与备选见 [移植清单](frontend-porting-manifest.md) 第11节 |
+| 交互基元 | Radix UI + Tailwind v4 + Vite 8 + React 19；专用 dnd-kit、FullCalendar、TanStack Table/Virtual、React Flow/ELK、Recharts、Tiptap、cmdk 复用同一主题，组件归属与维护规则见 [UI 归属说明](architecture/ui-ownership.md) |
 
 ## 2. Token 映射
 

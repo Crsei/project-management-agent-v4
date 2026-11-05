@@ -78,7 +78,7 @@ function releaseRows(text) {
     }
     result.set(cells[0], { status: cells[1], evidence: cells[2] });
   }
-  for (const id of ["OWN-LICENSE", "EASYUSE-GRANT", "MISANS-GRANT", "ASSET-ORIGINS", "ARTIFACT-NOTICES", "AGPL-SOURCE"]) {
+  for (const id of ["OWN-LICENSE", "UI-OWNERSHIP", "MISANS-GRANT", "ASSET-ORIGINS", "ARTIFACT-NOTICES", "AGPL-SOURCE"]) {
     if (!result.has(id)) throw new Error(`Release review record cannot be silently removed: ${id}`);
   }
   return result;
@@ -126,13 +126,11 @@ async function main(mode) {
   for (const [original, copy] of [
     ["vendor/t3code/LICENSE", "LICENSE.t3code"],
     ["vendor/t3code/LICENSE", "apps/web/public/LICENSE.t3code"],
-    ["vendor/t3code/LICENSE", "tools/marketing/public/LICENSE.t3code"],
+    ["vendor/t3code/LICENSE", "apps/marketing/public/LICENSE.t3code"],
     ["vendor/openhands-extensions/LICENSE", "vendor/openhands-automations/LICENSE.agent-canvas"],
     ["vendor/openhands-extensions/extensions/LICENSE", "vendor/openhands-automations/LICENSE.extensions"],
     ["LICENSE", "apps/web/public/LICENSE"],
-    ["LICENSE", "tools/marketing/public/LICENSE"],
-    ["vendor/agent-workspace-views/conversations/ui/LICENSE", "apps/web/public/licenses/shadcn/LICENSE"],
-    ["vendor/agent-workspace-views/skills/skill-library/LICENSE.cloudflare", "apps/web/public/licenses/cloudflare/LICENSE"],
+    ["LICENSE", "apps/marketing/public/LICENSE"],
   ]) await check(`Notice copy ${copy}`, () => equalCopy(original, copy));
 
   await check("Host license selection", async () => {
@@ -141,13 +139,12 @@ async function main(mode) {
   });
   for (const relative of [
     "apps/web/public/fonts/Inter-LICENSE.txt",
-    "tools/marketing/public/fonts/dm-sans-OFL.txt",
-    "tools/marketing/public/fonts/jetbrains-mono-OFL.txt",
+    "apps/marketing/public/fonts/dm-sans-OFL.txt",
+    "apps/marketing/public/fonts/jetbrains-mono-OFL.txt",
   ]) await check(`OFL text ${relative}`, () => contains(relative, ["SIL OPEN FONT LICENSE Version 1.1", "Permission is hereby granted, free of charge", "TERMINATION", "DISCLAIMER"]));
   await check("MiSans retained agreement", () => contains("apps/web/public/fonts/MiSans-LICENSE.txt", ["https://hyperos.mi.com/font/en/download/", "MiSans Fonts Intellectual Property License Agreement", "You may not adapt or redevelop", "nor may you redistribute or sell the font software"]));
-  await check("Existing nested source notices", async () => {
-    await contains("vendor/agent-workspace-views/conversations/ui/LICENSE", ["Copyright (c) 2023 shadcn", "Permission is hereby granted", "THE SOFTWARE IS PROVIDED"]);
-    await contains("vendor/agent-workspace-views/skills/skill-library/LICENSE.cloudflare", ["Apache License", "Version 2.0, January 2004", "END OF TERMS AND CONDITIONS"]);
+  await check("Retained shadcn public notice", async () => {
+    await contains("apps/web/public/licenses/shadcn/LICENSE", ["MIT License", "Copyright (c) 2023 shadcn", "Permission is hereby granted, free of charge", "THE SOFTWARE IS PROVIDED \"AS IS\""]);
   });
   await check("Existing supplemental dependency notices", async () => {
     const manifest = await json("vendor/openhands-extensions/dependency-notices.json");
@@ -161,8 +158,7 @@ async function main(mode) {
     "vendor/t3code/SYNC.md", "vendor/cc-switch/LICENSING.md", "vendor/cc-switch/SYNC.md",
     "vendor/openhands-extensions/LICENSING.md", "vendor/openhands-extensions/SYNC.md",
     "vendor/openhands-automations/README.md", "apps/web/public/fonts/MiSans-NOTICE.txt",
-    "apps/web/public/fixtures/api-platform/audio-playground/LICENSE.txt",
-    "tools/marketing/public/THIRD_PARTY_NOTICES.txt",
+    "apps/marketing/public/THIRD_PARTY_NOTICES.txt",
   ]) await check(`Existing legal/provenance record ${relative}`, () => file(relative));
 
   let records;

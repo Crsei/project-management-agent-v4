@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "id": "cc-switch",
+  "selectionAuthority": "vendor/cc-switch/source-manifest.json#selection",
+  "replayAuthority": "vendor/cc-switch/output-inventory.json and its existing exact-byte JSON recipes",
+  "generation": "Read immutable Git objects, preserve complete selected trees, three-way merge source outputs in core, then record the reviewed candidate. Never execute candidate capture/sync/build scripts to authorize a generation.",
+  "dependencyPolicy": "New files inside selected trees are included. Dependencies outside selection require exact --approve-source paths; unresolved resources or computed expressions remain blockers. Host locks are never replaced by upstream locks.",
+  "crossForkPolicy": "OpenHands inventory hostBuildInputs and resource-closure inputs are read-only consumers, including snapshot-only CC files. A changed or deleted consumed input produces BLOCKED_CROSS_FORK; never recapture the other fork.",
+  "derivedPolicy": "Each derived output keeps its original source identity. A changed source requires --reviewed-derived for the exact output after semantic review; the existing exact-byte recipe then records that port without claiming runtime acceptance.",
+  "adapters": [
+    {
+      "id": "headless-context-paths",
+      "category": "security-protocol",
+      "reason": "Native Home/data paths and registered targets come from host_context, not ambient operator Home. Restoring upstream fallback would grant unintended filesystem authority.",
+      "acceptance": "Run isolated context and native-path authorization tests; preserve explicit unbound-target failures and private-file handling.",
+      "removeWhen": "The selected upstream exposes equivalent explicit context and path authorization seams adopted by the host."
+    },
+    {
+      "id": "encrypted-mcp-dao",
+      "category": "security-protocol",
+      "reason": "Headless MCP DAO must open/seal credential-bearing definitions with the host secret codec instead of plaintext SQLite serialization.",
+      "acceptance": "Run secret codec/DAO round-trip and redaction tests using disposable keys only.",
+      "removeWhen": "Upstream supplies an equivalent encrypted storage seam and reviewed data compatibility is demonstrated."
+    },
+    {
+      "id": "agent-assignment-overrides",
+      "category": "product-behavior",
+      "reason": "Host assignments, per-agent option overrides, validation-before-write and partial/unknown sync outcomes are required; configuration persistence is not native sync success.",
+      "acceptance": "Run assignment/override rollback and isolated native projection tests across the supported application matrix.",
+      "removeWhen": "Upstream and host share equivalent assignment, validation and observable partial-success semantics."
+    },
+    {
+      "id": "codex-config-extraction",
+      "category": "host-wiring",
+      "reason": "fork-policy.derivedOutputs records the GUI-free Codex helpers as a real derivation of codex_config.rs; a new upstream input must be reviewed, not mistaken for a local file or overwritten from a same-name upstream path.",
+      "acceptance": "Review the full source diff and run isolated Codex configuration IO/validation tests before full verification.",
+      "removeWhen": "Upstream exposes a directly reusable headless module preserving the registered path contract."
+    }
+  ]
+}

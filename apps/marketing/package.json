@@ -1,0 +1,22 @@
+{
+  "name": "@agent-workspace/marketing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1 --port 4330",
+    "typecheck": "astro check",
+    "build": "astro build",
+    "preview": "astro preview --host 127.0.0.1 --port 4330"
+  },
+  "dependencies": {
+    "astro": "^5.13.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

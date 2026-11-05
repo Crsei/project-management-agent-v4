@@ -210,6 +210,7 @@ process.exit(result.status ?? 1);
       await pnpm('PM production build', ['build']);
       await pnpm('Agent complete types and production build', ['--filter', '@agent-workspace/server', 'build']);
       await pnpm('Complete Web types and production build', ['build:web']);
+      await pnpm('Marketing types', ['typecheck:marketing']);
       await pnpm('Marketing production build', ['build:marketing']);
       await node('Post-build source provenance', ['scripts/check-sources.mjs']);
     }

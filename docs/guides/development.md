@@ -61,7 +61,7 @@ Worker 事件发布达到 10 次失败后保留原事件并隔离该工作区。
 | `apps/server/agent` | Agent API、持久会话、Provider 与 CLI 执行；目录由 PM resolve |
 | `apps/server/gateway.ts` | 公共同源网关、API/WS 代理和统一静态托管 |
 | `apps/web` | 统一 Vite SPA；`/pm`、`/agent`、隔离 `/lab/pm` 与 Storybook |
-| `apps/desktop` / `tools/marketing` | 完整本地服务组的 Electron 宿主 / 静态营销站 |
+| `apps/desktop` / `apps/marketing` | 完整本地服务组的 Electron 宿主 / 静态营销站 |
 | `packages/agent-contracts` / `agent-client-runtime` | Agent 协议与 same-origin 前缀 HTTP/WS 客户端 |
 | `vendor/*` | 单 pnpm workspace 内的固定导入 UI/协议源包，不引用来源仓目录 |
 | `packages/domain` | 状态、验收与图约束 |
@@ -75,7 +75,7 @@ Worker 事件发布达到 10 次失败后保留原事件并隔离该工作区。
 | `tests` | 真实数据库、HTTP、Worker 和恢复验收 |
 | `deploy` | 专用 PostgreSQL Compose 与运行手册 |
 
-PM 后端编译到根 `dist`，Agent 服务编译到 `apps/server/agent/dist`；唯一 Web 产物为 `apps/web/dist`。`pnpm build:v4` 构建 PM、Agent 合同与运行时、Agent 服务及统一 Web。根 `check`、`check:web`、`typecheck:agent`、`test:agent`、`build:desktop`、`build:marketing` 分别覆盖对应工程，不能相互代替。
+PM 后端编译到根 `dist`，Agent 服务编译到 `apps/server/agent/dist`；唯一 Web 产物为 `apps/web/dist`。`pnpm build:v4` 构建 PM、Agent 合同与运行时、Agent 服务及统一 Web。根 `check`、`check:web`、`typecheck:agent`、`test:agent`、`typecheck:marketing`、`build:desktop`、`build:marketing` 分别覆盖对应工程，不能相互代替。
 
 
 
@@ -92,6 +92,19 @@ PM 后端编译到根 `dist`，Agent 服务编译到 `apps/server/agent/dist`；
 严格隔离总入口为 `pnpm check:ci`（等价 `node scripts/check-ci.mjs`）：Linux + Docker + Rust 与 Bubblewrap，默认 `all` 依次覆盖 static/build/rust/backend/agent。后端阶段自建临时 PostgreSQL/真实 MinIO，各阶段使用私有 HOME/目录，不加载本机 `.env`；失败或非豁免跳过返回非零。详见[测试说明](../../tests/README.md)。它不证明真实付费 Provider、原生桌面 GUI、正式签名或生产部署。不要在同一机器重叠运行检查，也不要对业务实例运行 smoke。
 
 `pnpm check:docs` 检查公开 Markdown 的本地链接、锚点、代码围栏和领域 INV/SC 引用；不绑定内部27步计划，也不需要内部历史文件。
+
+### 选定上游源码维护
+
+t3code Provider 与 cc-switch MCP/Skills 沿用现有 vendor、宿主适配器及精确来源账本，不迁移目录、不引入第二套补丁栈。跨版本和同 pin 维护流程见[上游源码维护指南](upstream-source-maintenance.md)；工具默认不提交、不推送、不创建 PR，发现 workflow 初始仅手动触发。
+
+维护工具专项检查为：
+
+```sh
+node --test scripts/upstream-sync/*.test.mjs scripts/upstream-publish.test.mjs
+node_modules/.bin/oxlint --deny-warnings scripts/upstream-sync.mjs scripts/upstream-sync scripts/upstream-publish.mjs scripts/upstream-publish.test.mjs
+```
+
+这些检查覆盖临时 Git 仓库中的来源与发布协议，并实际调用 Linux namespace；远端 GitHub 使用 fixture，不代表真实 PR 权限或实际 Provider 验收。CI 将此专项放在原全仓检查之前；两者结果分开解释。维护流程的 `verify --scope full` 是受影响 profile 的隔离验证，不等于 `check-ci` 全仓通过。
 
 ### 分阶段运行与外部网络范围
 

@@ -26,9 +26,8 @@
 !apps/web/**
 !apps/desktop/
 !apps/desktop/**
-!tools/
-!tools/marketing/
-!tools/marketing/package.json
+!apps/marketing/
+!apps/marketing/package.json
 !patches/
 !patches/**
 !vendor/

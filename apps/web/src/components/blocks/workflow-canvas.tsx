@@ -690,7 +690,7 @@ function CanvasViewport({
       onDragOver={(event) => {
         if (
           !locked &&
-          event.dataTransfer.types.includes("application/easyuseui-node")
+          event.dataTransfer.types.includes("application/x-pm-workflow-node")
         ) {
           event.preventDefault()
           event.dataTransfer.dropEffect = "copy"
@@ -700,7 +700,7 @@ function CanvasViewport({
         event.preventDefault()
         if (locked) return
         const definition = indexes.definitionByType.get(
-          event.dataTransfer.getData("application/easyuseui-node"),
+          event.dataTransfer.getData("application/x-pm-workflow-node"),
         )
         if (definition)
           onCommand?.({

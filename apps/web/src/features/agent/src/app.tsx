@@ -7,7 +7,6 @@ import { SettingsLayout, SettingsNotFound } from "./settings/settings-layout";
 import { agentText } from "./i18n-text.ts";
 import { USAGE_PATH } from "./usage/navigation";
 
-const ShowcaseApp = lazy(() => import("./showcase/app"));
 const GeneralPage = lazy(() => import("./settings/general-page"));
 const ProvidersPage = lazy(() => import("./settings/providers-page"));
 const AppearancePage = lazy(() => import("./settings/appearance-page"));
@@ -20,7 +19,6 @@ const UsageSettings = lazy(() => import("./usage/UsageSettings"));
 const McpClientsPage = lazy(() => import("./settings/mcp-clients-page"));
 const ExtensionsPage = lazy(() => import("./settings/extensions-page"));
 const NativeSkillsPage = lazy(() => import("./settings/extensions-page").then(module => ({ default: module.NativeSkillsPage })));
-export const showcaseEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_UI_LAB === "1";
 
 function UsageRedirect() {
   const location = useLocation();
@@ -97,10 +95,8 @@ export function App() {
       <Route path="storage" element={<StoragePage />} />
       <Route path="*" element={<SettingsNotFound />} />
     </Route>
-    {showcaseEnabled && <Route path="showcase/*" element={<ShowcaseApp />} />}
     <Route path="*" element={<main className="p-8">
       <h1>{agentText("404 · 页面不存在", "404 · Page not found")}</h1>
-      <p>{agentText("展示实验室在生产环境默认关闭。", "The showcase is disabled in production.")}</p>
       <Link to="/agent/workspace">{agentText("返回 AI 对话", "Back to AI chat")}</Link>
     </main>} />
   </Route>

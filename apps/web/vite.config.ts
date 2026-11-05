@@ -49,12 +49,7 @@ export default defineConfig(({ command, mode, isPreview }) => {
   return {
     envDir: workspaceRoot,
     define: { "import.meta.env.PM_LAB_ENABLED": JSON.stringify(labEnabled) },
-    plugins: [react(), tailwindcss(), openHandsProvenancePlugin(), {
-      name: "workspace-lab-policy",
-      generateBundle() {
-        this.emitFile({ type: "asset", fileName: "ui-lab.json", source: JSON.stringify({ enabled: env.VITE_ENABLE_UI_LAB === "1" }) })
-      },
-    }],
+    plugins: [react(), tailwindcss(), openHandsProvenancePlugin()],
     resolve: {
       alias: {
         "@agent": fileURLToPath(new URL("./src/features/agent", import.meta.url)),

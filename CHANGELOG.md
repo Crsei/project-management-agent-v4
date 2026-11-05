@@ -22,6 +22,7 @@
 - Provider 配置映射改为纯投影，由 Host 读取持久化设置，消除驱动注册表的 ESM 初始化循环；隔离 CI 显式使用已校验的原生 sidecar 构建产物。
 - 修复组合框的非受控默认选择，以及受控创建 Sheet 未使用显式关闭焦点目标的问题。
 - 隔离 CI 的真实备份/恢复使用自有 PostgreSQL 容器内的同版本客户端，仅挂载本轮测试临时文件，不依赖宿主 PostgreSQL 客户端或开发者 Docker 配置；明确临时目录必须在 Git 工作树之外。测试数据库销毁使用独立有界清理期限，应用查询限制不变。
+- 增加 t3code / cc-switch 选定源码维护工具、隔离候选与精确 generation 重建、来源绑定与受控 Draft PR 发布器；沿用现有适配边界，不迁移业务源码。新增仓库维护 Skill、只读手动发现 workflow 及协议回归；commit、push、PR 分别授权，定时发现、真实 GitHub 发布与生产升级不自动启用。用法与验收限制见[维护指南](docs/guides/upstream-source-maintenance.md)。
 
 ### 尚未作为发布保证的事项
 

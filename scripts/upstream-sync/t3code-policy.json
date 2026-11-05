@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "id": "t3code",
+  "upstreamUrl": "https://github.com/pingdotgg/t3code.git",
+  "selectionAuthority": "vendor/t3code/source-manifest.json packages[].scope and files[].action; supplemental outputs and every inputs[] tuple in mcp-skills-adaptations.json",
+  "replayAuthority": "Existing integration-patches exact original-line splice JSON and supplemental exact-line-splices/local-bytes recipes only. No second patch stack.",
+  "generation": "Author only in the core-owned isolated candidate, from immutable Git objects and reviewed merged outputs. Advance the production pin and all production-linked derivation references together; retain the independent supplemental snapshot pin. Never recapture drift or run upstream/candidate code.",
+  "reauthoring": "An already recorded maintenance generation may be reauthored at the same pin. Every changed source/output requires its exact current SHA256 approval; guarded sources also require reasoned acceptance, and derived changes require all mapped input identities. Metadata/recipe edits, host inputs, OMP, deletions and mode changes cannot be enrolled through this path. Preserve original generation ancestry and legacy helper guards.",
+  "initialLocalAuthoring": "The first record of a local-authoring candidate requires core-authenticated isolated prepare intent: purpose=local-authoring, initialLocalAuthoring=true, reauthorGeneration=true, all pin identities unchanged, no source changes or source-scope approvals, and exact current hashes for every changed existing output. Validate all original inputs and old recipes before authoring. Without a prior generation, retain immutable source identities and use the current pin as initial ancestry; with a valid same-pin generation, preserve its ancestry, purpose and reviews. Invalid existing generation metadata is never bypassed. This is not blanket same-commit capture.",
+  "resourceProbing": "Match the trusted import scanner's regular-file-or-directory existence semantics for static URL resources, preserving target spelling including trailing slashes. Probe contained paths without reading directory bytes; reject symlinks, nonregular targets and outside-root traversal. Directory locations are references, never permission to copy their contents, and missing ordinary imports remain closure blockers.",
+  "selection": {
+    "completePackages": "Discover every tracked regular file, including new tests, exports, licenses, workers and resources, below ledger complete-package roots.",
+    "selectedSources": "Use ledger exact source/reference inputs, fixed client entrypoints, extraction and supplemental multi-input mappings. New dependencies outside complete packages require explicit scope review; never copy an entire application.",
+    "dependencies": "Regenerate scoped declarations, catalog uses, reachable lock snapshots and original/actual import-resource graphs. Dependency/API/license/opaque resource changes require reviewed compatibility decisions; do not replace the PM lockfile or activate upstream application services."
+  },
+  "protectedPaths": [
+    "vendor/t3code/packages/provider-omp",
+    "vendor/t3code/omp-source.json",
+    "vendor/t3code/third-party-licenses/oh-my-pi.txt",
+    "vendor/cc-switch",
+    "apps/server/cc-switch-host"
+  ],
+  "adapterRequirements": [
+    {
+      "id": "host-environment",
+      "category": "security-protocol",
+      "sourcePaths": ["packages/provider-core/src/server/instanceEnvironment.ts"],
+      "hostBoundary": "apps/server/agent/src/providers/t3code/host-runtime.ts",
+      "reason": "HostProcess.Environment is the authorized inheritance boundary; ambient process.env or external Home fallback would import unrelated credentials/state.",
+      "adapterInsufficiency": "An outer wrapper cannot repair environment reads performed inside a provider or worker before its launch.",
+      "acceptance": "Authorized native Provider Home/environment remains native; isolated instances and workers cannot inherit unapproved host credentials.",
+      "removalCondition": "An equivalent upstream injectable environment boundary is integrated and isolation regression evidence passes."
+    },
+    {
+      "id": "native-protocol-history",
+      "category": "security-protocol",
+      "sourcePaths": ["packages/provider-core/src/server/ProviderAdapter.ts"],
+      "hostBoundary": "apps/server/agent/src/providers/t3code/application.ts",
+      "reason": "Native history/snapshot boundaries participate in the provider protocol and cannot be recreated by a lossy transport wrapper.",
+      "adapterInsufficiency": "The required internal snapshot state is not available at an external wrapper boundary.",
+      "acceptance": "History, cancellation and event errors preserve native semantics and PM scope/revision authorization.",
+      "removalCondition": "Equivalent upstream protocol extensions and retained host behavior have explicit review and regression evidence."
+    },
+    {
+      "id": "mcp-worker-failures",
+      "category": "security-protocol",
+      "sourcePaths": ["apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts"],
+      "hostBoundary": "apps/server/agent/src/providers/t3code/families",
+      "reason": "MCP connection failures must fail explicitly; isolated SDK/worker execution must not fall back to an ambient process or silently report success.",
+      "adapterInsufficiency": "Connection/worker failure handling occurs inside the native adapter lifecycle.",
+      "acceptance": "MCP refusal, worker failure and cancellation propagate; permissions, approvals and receipts stay PM-owned.",
+      "removalCondition": "Upstream supplies equivalent injectable lifecycle/error boundaries with isolated worker/MCP regression evidence."
+    },
+    {
+      "id": "host-auth-invalidation",
+      "category": "host-wiring",
+      "sourcePaths": ["apps/server/src/provider/ProviderAuthService.ts", "apps/server/src/provider/ProviderRegistry.ts"],
+      "hostBoundary": "apps/server/agent/src/providers/t3code/upstream-services",
+      "reason": "Use host invalidation/configuration ports, not the upstream application session repository or a second database.",
+      "adapterInsufficiency": "Restoring the original internal service dependencies bypasses PM ownership even when imports compile.",
+      "acceptance": "PM authentication/audience, lease revisions and provider invalidation remain effective without foreign application services.",
+      "removalCondition": "Equivalent upstream service injection is wired through the existing PM host and accepted behavior remains covered."
+    },
+    {
+      "id": "continuation-identity",
+      "category": "product-behavior",
+      "sourcePaths": ["packages/provider-core/src/server/ProviderContinuationRequests.ts"],
+      "hostBoundary": "apps/server/agent/src/providers/t3code/continuation.ts",
+      "reason": "Continuation records bind the upstream commit. An upgrade is not evidence of cross-version protocol compatibility.",
+      "adapterInsufficiency": "Changing pins cannot migrate native provider state or existing Chat sidecars safely.",
+      "acceptance": "Incompatible continuation remains 409/session_mismatch; never delete history, replay prompts automatically or replace current Chat persistence.",
+      "removalCondition": "A separately reviewed compatible record/native-protocol conversion has concrete acceptance evidence."
+    }
+  ],
+  "review": "Changed derived outputs require a decision covering every changed input, including non-primary inputs. Guarded adapters, package API/dependency and lock/resource/license changes require explicit reviewed source approval and reason. Deferred inputs block a global pin advance.",
+  "verification": "Generation-aware trusted profile replay checks both pins and exact recipes. Legacy capture/sync guards remain unchanged and must never be relaxed to make an upgrade pass. Provenance is not build, packaging, native behavior or publish authorization."
+}

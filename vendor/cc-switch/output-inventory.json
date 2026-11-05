@@ -23,28 +23,28 @@
     },
     {
       "path": "package.json",
-      "sha256": "c66e82c9fc00ecf8a1b16a878e44e9f2e8caa79c5b1fb4416adde8dac7f73a20",
-      "bytes": 5993
+      "sha256": "c93494e3863a29bac77397c4191c973737101d7d1b2a36ef785ffaf2a202e8bb",
+      "bytes": 6159
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "6f213ad559abec7c500735194348dd0a93fb044e408b23beda2754a04a4e6ace",
-      "bytes": 729829
+      "sha256": "bc6100a34484c641f479c35ae84336c52939ba9950193e24a51d7c188cc94240",
+      "bytes": 746899
     },
     {
       "path": "pnpm-workspace.yaml",
-      "sha256": "bae0bdc675332e0e2b993699cfab2df2a9eedd3b147c25fc5898f354cf2298b9",
-      "bytes": 1505
+      "sha256": "ad401876323b9f64813a2fe160053c6f55515a004085701c7c8b44d891401086",
+      "bytes": 1504
     },
     {
       "path": "apps/web/package.json",
-      "sha256": "e69ae8a984c1b4199a8417ffd3c541bb4b9bb270ecd6d7094f5324e67918c1dc",
-      "bytes": 4131
+      "sha256": "5219fe3625f81f83f01663c1e868e60008d8e55ccf0394b59a67f251c0472cf0",
+      "bytes": 4061
     },
     {
       "path": "apps/web/vite.config.ts",
-      "sha256": "7268a77ee31593bcb590852a49406e3719e2a7199fb50cfb6b2c1cbfa1b45efd",
-      "bytes": 5004
+      "sha256": "2fbeb5522d6b4a5bd1eac0ee808b10a36c1d26383cfce6eb7d7c9a68321aaaf4",
+      "bytes": 4790
     },
     {
       "path": "apps/server/agent/package.json",
@@ -93,13 +93,13 @@
     },
     {
       "path": "deploy/Dockerfile",
-      "sha256": "1eeb98fc6f7075414b451fddaa2bcab8cb10e495d7e1c8bcdb7bba68eb0dea0c",
-      "bytes": 4148
+      "sha256": "2bde1ec02ec95bef90eac27c302ff0216e94b27e16990d6ccdd9da4e1dd66d5d",
+      "bytes": 4127
     },
     {
       "path": ".dockerignore",
-      "sha256": "a9a81dd5c646839923c73434042a22beb43d2cbc5dd222884b5ee4b209395728",
-      "bytes": 1356
+      "sha256": "16c9cf369137e4e1b115c411b7534e32fd12863bea630db1d621cacde18f3482",
+      "bytes": 1346
     }
   ],
   "modePolicy": "Canonical 0644/0755 by executable class; special bits, links and nonregular files refused. Existing content must match exactly; no force or fuzzy replay.",
@@ -478,14 +478,14 @@
     },
     {
       "destination": "apps/server/agent/src/server.ts",
-      "sha256": "b8cad6f60c6683fd6559d10849240c91b563a31628db9224bd2a3f2f5e1daba5",
-      "bytes": 3648,
+      "sha256": "106ee2937b31220b1a5af86f6c0a7cafe5b4c59e86d1151cb39b03578b22e923",
+      "bytes": 3044,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/server.ts.json",
-        "sha256": "af82ee66a8c8a1aa25f9f4ad5fe20c39dbd3b5ba993aa5ea0930f882cdc09106"
+        "sha256": "6caebc37ff089e00007ba21a731d4dd21b19bbdbd99189fda042b2e8d1f1d9e7"
       }
     },
     {
@@ -694,14 +694,14 @@
     },
     {
       "destination": "apps/web/src/features/agent/src/app.tsx",
-      "sha256": "7fe1c391dd895b633c2643cc57f6e3534d469efc302d7af21533cf8dc184085a",
-      "bytes": 5946,
+      "sha256": "04e2bbfe69784c367825d9369e277fdf3fde8c42856543697a9b89c5d574760a",
+      "bytes": 5594,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/app.tsx.json",
-        "sha256": "bf5447a61660f4ee706fa297cf750c693aedf2a41ae20acbb54a9ad0adccad5e"
+        "sha256": "ad13e04aea79a70dc62d0ac04e90f1c6057e846bc344080edf904b6eca85a707"
       }
     },
     {
@@ -838,14 +838,14 @@
     },
     {
       "destination": "apps/web/vite.config.ts",
-      "sha256": "7268a77ee31593bcb590852a49406e3719e2a7199fb50cfb6b2c1cbfa1b45efd",
-      "bytes": 5004,
+      "sha256": "2fbeb5522d6b4a5bd1eac0ee808b10a36c1d26383cfce6eb7d7c9a68321aaaf4",
+      "bytes": 4790,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/vite.config.ts.json",
-        "sha256": "c7c559c6f20d8770e46eb317bbb71a592592e81a740b652800d578e7925febdd"
+        "sha256": "842329e961274053d69cfe66f60e6a4231fc6db15dcbcb1c58c64c716550db41"
       }
     },
     {
@@ -15400,7 +15400,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/server.ts.json",
-      "sha256": "af82ee66a8c8a1aa25f9f4ad5fe20c39dbd3b5ba993aa5ea0930f882cdc09106"
+      "sha256": "6caebc37ff089e00007ba21a731d4dd21b19bbdbd99189fda042b2e8d1f1d9e7"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/Cargo.lock.json",
@@ -15472,7 +15472,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/app.tsx.json",
-      "sha256": "bf5447a61660f4ee706fa297cf750c693aedf2a41ae20acbb54a9ad0adccad5e"
+      "sha256": "ad13e04aea79a70dc62d0ac04e90f1c6057e846bc344080edf904b6eca85a707"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/chat/provider-skills-composer.tsx.json",
@@ -15520,7 +15520,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/vite.config.ts.json",
-      "sha256": "c7c559c6f20d8770e46eb317bbb71a592592e81a740b652800d578e7925febdd"
+      "sha256": "842329e961274053d69cfe66f60e6a4231fc6db15dcbcb1c58c64c716550db41"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/package.json.json",

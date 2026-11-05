@@ -108,13 +108,13 @@ export function CalendarDay({
       onDragOver={(e) => {
         if (
           onDropItem &&
-          e.dataTransfer.types.includes("application/x-easyuseui-schedule")
+          e.dataTransfer.types.includes("application/x-pm-schedule")
         )
           e.preventDefault()
       }}
       onDrop={(e) => {
         if (!onDropItem) return
-        const id = e.dataTransfer.getData("application/x-easyuseui-schedule")
+        const id = e.dataTransfer.getData("application/x-pm-schedule")
         if (id) {
           e.preventDefault()
           onDropItem(id, date)

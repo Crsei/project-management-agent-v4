@@ -1,6 +1,5 @@
 import type * as React from "react";
 import { MessagesSquare, SparklesIcon } from "lucide-react";
-import { Link } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -111,14 +110,6 @@ export function ThreadListSidebar({ ...props }: React.ComponentProps<typeof Side
       {props.collapsible !== "none" && <SidebarRail />}
       <SidebarFooter className="aui-sidebar-footer border-t">
         <SidebarMenu>
-          {(import.meta.env.DEV || import.meta.env.VITE_ENABLE_UI_LAB === "1") && (
-            <SidebarMenuItem>
-              <SidebarMenuButton render={<Link to="/agent/showcase" />} tooltip={t("页面与组件展示", "Pages and component showcase")}>
-                <MessagesSquare className="size-4" />
-                <span>{t("页面与组件展示", "Pages and component showcase")}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
           <SidebarMenuItem>
             <div className="aui-sidebar-footer-brand text-muted-foreground flex items-center gap-2.5 px-2.5 py-2 text-xs">
               <SparklesIcon className="size-4 shrink-0" />

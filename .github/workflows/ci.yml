@@ -42,6 +42,15 @@ jobs:
           rustup toolchain install "$RUST_VERSION" --profile minimal --no-self-update
       - name: Install locked workspace dependencies
         run: pnpm install --frozen-lockfile
+      - name: Check upstream maintenance protocols without publication credentials
+        shell: bash
+        run: |
+          PRIVATE_HOME="$(mktemp -d)"
+          trap 'rm -rf "$PRIVATE_HOME"' EXIT
+          env -i PATH="$PATH" HOME="$PRIVATE_HOME" TMPDIR="$RUNNER_TEMP" \
+            GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null CI=true \
+            node --test scripts/upstream-sync/*.test.mjs scripts/upstream-publish.test.mjs
+          node_modules/.bin/oxlint --deny-warnings scripts/upstream-sync.mjs scripts/upstream-sync scripts/upstream-publish.mjs scripts/upstream-publish.test.mjs
       - name: Run complete isolated repository checks
         # Creates its own loopback-random PG16/MinIO containers and synthetic
         # credentials; never loads .env, reuses a service or counts skips as passes.

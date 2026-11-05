@@ -51,6 +51,7 @@ pnpm services:status
 | [外部集成](docs/guides/integrations.md) | SMTP/可信恢复邮箱、私有S3配置/停写维护、出站Webhook接收协议 |
 | [营销站](docs/guides/marketing.md) | 独立静态构建、公开地址配置、素材与许可边界 |
 | [PM 分析 Skills](.agents/skills/README.md) | 需求审阅、计划草稿、证据审阅与项目摘要；不表示 Chat 自动加载 |
+| [上游源码维护](docs/guides/upstream-source-maintenance.md) | t3code / cc-switch 隔离更新、来源重建、维护 Skill 与分阶段 Draft PR 授权 |
 
 桌面原生 CI 在提交 `a063dc0` 的历史通过**不代表最新工作树通过**，也不代表正式签名/公证、真实安装卸载或 GUI 业务验收。没有已确认的正式下载/自动更新地址；unsigned 测试包不得宣传为正式签名版本。
 

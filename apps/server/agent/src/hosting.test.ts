@@ -17,7 +17,6 @@ async function host(t: TestContext, apiOnly: boolean) {
       path.join(webDist, "index.html"),
       "<!doctype html><title>hosting boundary</title>",
     );
-    await writeFile(path.join(webDist, "ui-lab.json"), JSON.stringify({ enabled: false }));
     await writeFile(path.join(webDist, "asset.txt"), "static asset");
   }
   const child = spawn(process.execPath, [fileURLToPath(new URL("./index.ts", import.meta.url))], {
@@ -96,20 +95,17 @@ test("API-only hosting needs no Web build, reports PORT=0 and shuts down through
   assert.equal(code, 0);
 });
 
-test("configured Web hosting is cwd-independent, keeps SPA fallback and enforces build showcase policy", async (t) => {
+test("configured Web hosting is cwd-independent and keeps SPA fallback", async (t) => {
   const { url } = await host(t, false);
   assert.match(await (await fetch(`${url}/workspace`)).text(), /hosting boundary/);
   assert.equal(await (await fetch(`${url}/asset.txt`)).text(), "static asset");
   assert.match(await (await fetch(`${url}/agent/workspace`)).text(), /hosting boundary/);
   assert.equal(await (await fetch(`${url}/agent/asset.txt`)).text(), "static asset");
-  assert.equal((await fetch(`${url}/agent/showcase`)).status, 404);
   const prefixedApi = await fetch(`${url}/agent/api/does-not-exist`, {
     headers: { authorization: `Bearer ${token}` },
   });
   assert.equal(prefixedApi.status, 404);
   assert.doesNotMatch(await prefixedApi.text(), /hosting boundary/);
-  assert.equal((await fetch(`${url}/showcase`)).status, 404);
-  assert.equal((await fetch(`${url}/showcase/example`)).status, 404);
   const missing = await fetch(`${url}/api/does-not-exist`, {
     headers: { authorization: `Bearer ${token}` },
   });

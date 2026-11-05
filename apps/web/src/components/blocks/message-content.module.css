@@ -194,15 +194,10 @@
 .markdown pre code > span {
   display: block;
 }
-/* Token colors resolve the scoped ThemeBoundary without touching next-themes. */
+/* Token colors resolve the scoped theme without touching next-themes. */
 .markdown [data-streamdown="code-block-body"] code span {
   color: var(--shiki-light);
 }
-:global([data-eu-theme="dark"])
-  .markdown
-  [data-streamdown="code-block-body"]
-  code
-  span,
 :global(.dark) .markdown [data-streamdown="code-block-body"] code span {
   color: var(--shiki-dark);
 }

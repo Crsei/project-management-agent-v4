@@ -83,7 +83,7 @@ export function WorkItemCalendarEntry({
       draggable={!compact && editable}
       onDragStart={(e) => {
         if (!compact && editable)
-          e.dataTransfer.setData("application/x-easyuseui-schedule", item.id)
+          e.dataTransfer.setData("application/x-pm-schedule", item.id)
       }}
     >
       <div className={styles.entryMain}>

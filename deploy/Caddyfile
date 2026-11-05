@@ -20,11 +20,6 @@
 		respond "Not Found" 404
 	}
 
-	@agentLab path /agent/showcase /agent/showcase/*
-	handle @agentLab {
-		respond "Not Found" 404
-	}
-
 	# Agent API wins over the Agent SPA. Caddy preserves Host/Origin and upgrades WS.
 	@agentApi path /agent/api /agent/api/*
 	handle @agentApi {

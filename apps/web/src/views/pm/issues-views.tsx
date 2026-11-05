@@ -21,6 +21,7 @@ import {
   SquareCheck,
   X,
 } from "lucide-react"
+import { useParams } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -427,6 +428,7 @@ export function IssueRowActions({ item, catalog, properties, mutation, capabilit
   onPatchItem: (item: WorkItemRecord, patch: WorkItemPatch) => void
 }) {
   const { text } = useText()
+  const params = useParams()
   const trigger = useRef<HTMLButtonElement>(null)
   const [dialog, setDialog] = useState<"properties" | "link" | null>(null)
   const [link, setLink] = useState<{ value: string; copied: boolean } | null>(null)
@@ -434,9 +436,11 @@ export function IssueRowActions({ item, catalog, properties, mutation, capabilit
   const nextState = stateIndex >= 0 ? catalog.states[stateIndex + 1] : undefined
   const copyLink = async () => {
     const url = new URL(window.location.href)
-    url.pathname = "/showcase/project-management/" + detailSlug
+    const workspaceSlug = params.workspaceSlug ?? "execra-ai"
+    url.pathname = `/lab/pm/${encodeURIComponent(workspaceSlug)}/projects/${encodeURIComponent(item.projectId)}/issues/${encodeURIComponent(item.id)}`
+    url.searchParams.set("view", detailSlug === "issue-detail-2" ? "detail2" : "detail1")
     url.searchParams.set("scenario", scenario)
-    url.searchParams.set("entity", item.id)
+    url.searchParams.delete("entity")
     let copied = false
     try { await navigator.clipboard.writeText(url.href); copied = true } catch { /* Show the actual link for manual copy; never claim a failed write succeeded. */ }
     setLink({ value: url.href, copied })

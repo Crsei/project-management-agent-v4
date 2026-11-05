@@ -2,7 +2,6 @@ import { appPreviews } from './task-delivery/app-preview.ts';
 import "./environment.ts";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import path from "node:path";
 import { app } from "./app.ts";
@@ -17,19 +16,6 @@ app.all("/api", (c) => c.json({ error: "API route not found." }, 404));
 app.all("/api/*", (c) => c.json({ error: "API route not found." }, 404));
 if (process.env.AGENT_WORKSPACE_API_ONLY === "0") {
   const webDist = webDistDirectory();
-  let labEnabled: boolean;
-  try {
-    // The build owns this policy; a runtime flag must not expose a gated showcase.
-    labEnabled =
-      JSON.parse(readFileSync(path.join(webDist, "ui-lab.json"), "utf8")).enabled === true;
-  } catch (cause) {
-    throw new Error(
-      `Web build unavailable at ${webDist}. Build the web app or configure AGENT_WORKSPACE_WEB_DIST.`,
-      { cause },
-    );
-  }
-  app.use("/showcase", async (c, next) => (labEnabled ? next() : c.notFound()));
-  app.use("/showcase/*", async (c, next) => (labEnabled ? next() : c.notFound()));
   app.use("/*", serveStatic({ root: webDist }));
   app.get("*", serveStatic({ path: path.join(webDist, "index.html") }));
 }

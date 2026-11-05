@@ -211,7 +211,7 @@ pnpm storage:projects restore --stopped --restored-target \
 - 只有在受控非生产展示环境中，操作者可通过进程环境 `PM_ENABLE_LAB=true` 显式构建带 Lab 的静态产物；不是运行时 URL、localStorage 或浏览器可切换的开关。`PM_ENABLE_LAB` 仅接受 `true`/`false`，无效值导致配置报错。Vite 配置仅读取注入的进程环境，不把 `.env` 里的服务秘密加载到浏览器。
 - 默认生产产物中 Lab 路由不注册，客户端导航进入 not-found；`deploy/Caddyfile` 另在 HTTP 层对 `/lab` 和所有子路径返回 **404**，即使误用了带 Lab 的展示产物也拒绝访问。该生产代理不提供 Lab 开放开关；受控展示应使用独立非生产 preview，不修改此代理。
 - 公共网关和 Caddy 将 `/api`、`/health`、`/openapi.json` 转发 PM API；`/agent/api/*` 优先剥离 `/agent` 到 Agent API，其他页面使用统一 Web 产物。代理保留 Cookie、Host、Origin、Last-Event-ID、SSE 与 WebSocket；`PUBLIC_ORIGIN` 必须精确匹配公共来源（配置为 loopback 时同端口的 localhost / 127.0.0.1 / [::1] 等价）。
-- Caddy 为统一 SPA 提供深链接回退。PM Lab 与 Agent `/agent/showcase/*` 均返回404，不使用 fixture 冒充真实后端。
+- Caddy 为统一 SPA 提供深链接回退。PM Lab 在 HTTP 层返回 404，不使用 fixture 冒充真实后端。
 
 ## PM API / Worker / Agent API / 统一 Web 容器部署
 

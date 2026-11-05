@@ -227,7 +227,7 @@ export const componentMessages = {
     "auth.openPage": "打开页面",
 
     "selection.templateInfo": "技术与模板说明",
-    "selection.stack": "已采用：Next 16.3.8、React 19.3、TypeScript 6、Tailwind 4.3、Base UI 1.8、Lucide 0.577 与六个 EasyuseUI 组件。没有为此模板新增依赖。",
+    "selection.stack": "已采用：Next 16.3.8、React 19.3、TypeScript 6、Tailwind 4.3、Base UI 1.8、Lucide 0.577 与六个本地 UI 组件。没有为此模板新增依赖。",
     "selection.loadingBoundary": "候选按用途一次挂载；文档示例通过显式 loader 懒加载。数据为 fixture；本机保存由适配器负责，Agent 服务接入留给消费项目。",
     "selection.api": "组件 API 与安装",
 
@@ -1823,7 +1823,7 @@ export const componentMessages = {
     "common.unrecognizedThemeColorValue": "无法识别主题颜色：{value0}",
     "styleWorkbenchModel.themeColorIsMissingRgbValues": "主题颜色缺少 RGB 值。",
     "styleWorkbenchModel.couldNotReadCompleteThemeDimensionsConfirmThat":
-      "无法读取完整的主题尺寸，请确认已安装 EasyuseUI theme。",
+      "无法读取完整的主题尺寸，请确认主题已正确加载。",
     "styleWorkbenchModel.on": "开启",
     "styleWorkbenchModel.off": "关闭",
     "styleWorkbenchModel.changed": "已更改",
@@ -2205,7 +2205,7 @@ export const componentMessages = {
     "auth.openPage": "Open page",
 
     "selection.templateInfo": "Technology and template details",
-    "selection.stack": "Adopted: Next 16.3.8, React 19.3, TypeScript 6, Tailwind 4.3, Base UI 1.8, Lucide 0.577 and six EasyuseUI components. No new dependencies for this template.",
+    "selection.stack": "Adopted: Next 16.3.8, React 19.3, TypeScript 6, Tailwind 4.3, Base UI 1.8, Lucide 0.577 and six local UI components. No new dependencies for this template.",
     "selection.loadingBoundary": "Candidate previews mount together by purpose; docs examples use an explicit lazy loader. Data uses fixtures; the adapter owns device storage, and consumer projects provide Agent services.",
     "selection.api": "Component API and installation",
 
@@ -3847,7 +3847,7 @@ export const componentMessages = {
     "styleWorkbenchModel.themeColorIsMissingRgbValues":
       "Theme color is missing RGB values.",
     "styleWorkbenchModel.couldNotReadCompleteThemeDimensionsConfirmThat":
-      "Could not read complete theme dimensions. Confirm that the EasyuseUI theme is installed.",
+      "Could not read complete theme dimensions. Confirm that the theme is loaded correctly.",
     "styleWorkbenchModel.on": "On",
     "styleWorkbenchModel.off": "Off",
     "styleWorkbenchModel.changed": "Changed",

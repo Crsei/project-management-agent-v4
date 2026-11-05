@@ -21,7 +21,7 @@ RUN node -e "const fs=require('node:fs');if(['.env','.env.agent','.local','.git'
     && corepack prepare "$(node -p 'require("./package.json").packageManager')" --activate \
     && node scripts/doctor.mjs \
     && pnpm install --frozen-lockfile \
-    && PM_ENABLE_LAB=false VITE_ENABLE_UI_LAB=0 pnpm build:v4 \
+    && PM_ENABLE_LAB=false pnpm build:v4 \
     && node --input-type=module -e "import {collectNotices} from './apps/desktop/scripts/license-notices.mjs'; await collectNotices(['/app/apps/web'],'/app/apps/web/dist/licenses/dependencies')"
 
 FROM build AS agent-deps

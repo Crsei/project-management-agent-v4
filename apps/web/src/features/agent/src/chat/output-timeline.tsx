@@ -3,7 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { MultiFileDiff } from "@pierre/diffs/react";
 import "@xterm/xterm/css/xterm.css";
-import { Markdown } from "../../../../../../../vendor/agent-workspace-views/conversations/markdown";
+import { Markdown } from "./markdown";
 import type { GenerationOutputStatus, NativeInteractionResponse, NativeOutputItem } from "@agent-workspace/contracts/output";
 import { WorkspaceClientError } from "@agent-workspace/client-runtime";
 import { appendTerminalOutput, EMPTY_TERMINAL_OUTPUT, terminalOutputPlainText } from "@agent-workspace/contracts/terminal-output";
