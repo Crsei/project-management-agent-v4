@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/components/ui/notice.tsx",
+  "beforeSha256": "690b1c4088471631ba8b4caa2127391790e89d5dc9ecbe107f282107878f8a10",
+  "afterSha256": "2d6d135d4824b55cb1644ad6c558210d695d1f3f004e74842062af0f8ff967b4",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 167,
+  "before": "QA==",
+  "after": "Li4vLi4="
+}

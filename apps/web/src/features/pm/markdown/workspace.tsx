@@ -20,7 +20,8 @@ import { DocumentCollection } from './DocumentCollection';
 import { ExternalDocumentManagementDialog } from './ExternalDocumentEditor';
 import type { ExternalManagementIntent } from './external-document-state';
 import type { DocumentTarget } from './document-workbench-state';
-import { FilterCard, type FilterCondition, type FilterField } from '@/components/blocks/filter-card';
+import { FilterCard } from '@/components/blocks/filter-card';
+import type { FilterCondition, FilterField } from '@/lib/filter-model';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadixSelect } from "@/components/ui/radix-select"
 

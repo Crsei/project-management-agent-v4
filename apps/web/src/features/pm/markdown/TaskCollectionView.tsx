@@ -1,32 +1,29 @@
 import { type ReactNode } from 'react';
-import { Bookmark, CalendarDays, Flag, MoreHorizontal, Plus, UserRound } from 'lucide-react';
+import { Bookmark, CalendarDays, Flag, Plus, UserRound } from 'lucide-react';
 import { workflowFor, type FileRecord, type WorkflowDefinition } from '@pm-schema';
-import { PMView, StatusIcon, priorities } from '@pm-views';
-import { usePersonalDashboard, usePmService } from '../service/pm-service';
-import { useAction } from '../service/pm-ui';
+import { PMView, StatusIcon, type ContextMenuRenderer } from '@pm-views';
+import { usePmService } from '../service/pm-service';
 import { useWorkspaceStore } from '@/providers/app-providers';
 import { useDisplayDateTime } from '@/features/workspace/preference-format';
-import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CollectionContextMenu, renderCollectionContextMenu } from './CollectionContextMenu';
+import { TaskMoreActions, TaskTableContextMenu, useTaskRowActions } from './TaskPersonalFields';
 import { TaskPersonalList } from './TaskPersonalList';
 import { taskStateLabel } from './task-status-label';
 import type { TaskScope } from './task-collection-model';
 import type { WorkspaceController } from './controller';
 import type { ScheduleViewProps } from './workspace';
 import './task-list-scope.css';
-import { RadixSelect } from "@/components/ui/radix-select"
 
 const priorityLabels: Record<string, string> = { urgent: '紧急', high: '高', medium: '中', low: '低' };
 
 function TaskRow({ file, controller: c, en, workflow, dueLabel }: { file: FileRecord; controller: WorkspaceController; en: boolean; workflow: WorkflowDefinition | undefined; dueLabel?: string }) {
-  const personal = usePersonalDashboard();
   const { actor } = usePmService();
-  const action = useAction();
-  const watch = personal.data?.watches.find(record => record.data.taskId === file.id);
+  const { actions, watchAction, watched } = useTaskRowActions({ file, controller: c, en });
   const status = workflow?.states.find(state => state.id === file.entity.status);
   const statusLabel = status ? taskStateLabel(status, en) : file.entity.status;
   const project = c.projects.find(project => project.id === file.entity.project)?.entity.title || file.entity.project || (en ? 'Unassigned' : '未关联');
   const assigneeLabel = !file.entity.assignee ? en ? 'Unassigned' : '未分配' : file.entity.assignee === actor?.id ? actor.name : en ? 'Assigned' : '已分配';
-  return <li className={`task-native-row${c.selectedId === file.id ? ' selected' : ''}`} data-testid={`task-${file.id}`}>
+  return <CollectionContextMenu actions={actions} trigger={<li tabIndex={0} className={`task-native-row${c.selectedId === file.id ? ' selected' : ''}`} data-testid={`task-${file.id}`}>
     <button type="button" className="task-list-title" title={file.entity.title} onClick={() => c.select(file.id)}>
       <StatusIcon category={status?.category} />
       <span className="task-list-identity"><span className="mono">{file.id}</span><strong>{file.entity.title}</strong>{c.draftIds.has(file.id) && <small className="draft-pill">{en ? 'Local draft' : '本地草稿'}</small>}</span>
@@ -37,18 +34,11 @@ function TaskRow({ file, controller: c, en, workflow, dueLabel }: { file: FileRe
     <span className="task-row-due"><span className="sr-only">{en ? 'Due: ' : '截止：'}</span>{file.entity.due ? <time dateTime={file.entity.due} title={file.entity.due}>{dueLabel}</time> : '—'}</span>
     {!c.projectId && <span className="task-row-project" title={`${project} · ${file.entity.project || ''}`}><span className="sr-only">{en ? 'Project: ' : '项目：'}</span>{project}</span>}
     <div className="task-row-actions">
-      <button type="button" className="icon-button task-watch" aria-pressed={!!watch} aria-label={`${watch ? en ? 'Unwatch' : '取消关注' : en ? 'Watch' : '关注'} ${file.entity.title}`} disabled={c.writesBlocked || action.locked || !personal.data || !!personal.error || !file.entity.project} onClick={() => { void action.run(() => action.execute(watch ? { commandId: crypto.randomUUID(), commandType: 'UnwatchTask', targetId: watch.id, projectId: file.entity.project!, expectedVersions: { [watch.id]: watch.version }, payload: {} } : { commandId: crypto.randomUUID(), commandType: 'WatchTask', projectId: file.entity.project!, payload: { taskId: file.id } })); }}><Bookmark size={15} fill={watch ? 'currentColor' : 'none'} /></button>
-      <Popover><PopoverTrigger type="button" className="icon-button task-row-edit-trigger" aria-label={`${en ? 'Task actions for' : '任务操作'} ${file.id}`} title={en ? 'Edit task fields' : '编辑任务属性'}><MoreHorizontal size={16} /></PopoverTrigger><PopoverContent className="task-row-editor" align="end" aria-label={`${en ? 'Edit fields for' : '编辑属性'} ${file.id}`}>
-        <h3>{file.id} · {en ? 'Task fields' : '任务属性'}</h3>
-        <label>{en ? 'Status' : '状态'}<RadixSelect aria-label={`${en ? 'Status for' : '状态'} ${file.id}`} value={file.entity.status} disabled={!c.canEdit(file.id)} onChange={event => { void c.patch(file.id, { status: event.target.value }); }}>{workflow?.states.map(state => <option key={state.id} value={state.id} disabled={file.entity.status !== state.id && !workflow.transitions.some(transition => transition.from === file.entity.status && transition.to === state.id)}>{taskStateLabel(state, en)}</option>)}</RadixSelect></label>
-        <label>{en ? 'Priority' : '优先级'}<RadixSelect aria-label={`${en ? 'Priority for' : '优先级'} ${file.id}`} value={file.entity.priority} disabled={!c.canEdit(file.id)} onChange={event => { void c.patch(file.id, { priority: event.target.value }); }}>{priorities.map(priority => <option key={priority} value={priority}>{en ? priority : priorityLabels[priority]}</option>)}</RadixSelect></label>
-        <p><UserRound size={13} aria-hidden="true" />{en ? 'Assignee' : '负责人'}: {assigneeLabel}</p>
-        <PopoverClose type="button" className="task-row-open" onClick={() => c.select(file.id)}>{en ? 'Open task details' : '打开任务详情'}</PopoverClose>
-      </PopoverContent></Popover>
+      <button type="button" className="icon-button task-watch" aria-pressed={watched} aria-label={`${watchAction.label} ${file.entity.title}`} disabled={watchAction.disabled} title={watchAction.reason} onClick={watchAction.onSelect}><Bookmark size={15} fill={watched ? 'currentColor' : 'none'} /></button>
+      <TaskMoreActions file={file} en={en} actions={actions} className="icon-button task-row-edit-trigger" />
     </div>
     <div className="task-mobile-metadata"><span>{statusLabel}</span>{file.entity.priority && <span className={`priority-${file.entity.priority}`}><Flag size={11} aria-hidden="true" />{en ? file.entity.priority : priorityLabels[file.entity.priority] || file.entity.priority}</span>}{file.entity.due && <time dateTime={file.entity.due}><CalendarDays size={11} aria-hidden="true" />{dueLabel}</time>}{!c.projectId && <span className="task-project-association" title={project}>{project}</span>}</div>
-    {action.localError && <p className="task-row-error" role="alert">{action.localError}</p>}
-  </li>;
+  </li>} />;
 }
 
 /** Every scope projects the same authorized files; layout never owns the task set. */
@@ -65,6 +55,9 @@ export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarT
   }
   if (personal && c.prefs.layout === 'list') return <TaskPersonalList controller={c} en={en} today={personal.today} actorId={personal.actorId} />;
   const workflow = workflowFor('work_item', c.configuration);
+  const renderContextMenu: ContextMenuRenderer = (trigger, actions, file) => file?.entity.entity === 'work_item'
+    ? <TaskTableContextMenu key={file.id} file={file} controller={c} en={en} trigger={trigger} />
+    : renderCollectionContextMenu(trigger, actions);
   const board = c.prefs.layout === 'kanban';
   const timeline = c.prefs.layout === 'gantt';
   const scheduled = c.prefs.layout === 'calendar' || c.prefs.layout === 'gantt';
@@ -74,7 +67,7 @@ export function TaskCollectionView({ controller: c, en, renderSchedule, toolbarT
   const terminalDrawers = timeline;
   function render(files: FileRecord[], terminal = false) {
     if (!terminal && (c.prefs.layout === 'calendar' || c.prefs.layout === 'gantt')) return renderSchedule({ files, layout: c.prefs.layout, contextFiles: c.files, configuration: c.configuration, projectId: c.projectId || c.prefs.project || undefined, toolbarTarget, onSelect: c.select, onPatch: c.patch, canEdit: c.canEdit, ...(c.canWrite && !c.writesBlocked && !c.configurationInvalid && !c.busy && (!personal || personal.actorId) ? { onCreate: (due: string) => c.openCreate(workflow?.initial, undefined, { due }) } : {}) });
-    if (!terminal && c.prefs.layout !== 'list') return <PMView {...c.viewProps} files={files} />;
+    if (!terminal && c.prefs.layout !== 'list') return <PMView {...c.viewProps} files={files} renderContextMenu={renderContextMenu} />;
     return <div className={`task-native-table${c.projectId ? ' task-native-table-project' : ''}`}><div className="task-list-columns" aria-hidden="true"><span>{en ? 'Task' : '任务'}</span><span>{en ? 'Status' : '状态'}</span><span>{en ? 'Assignee' : '负责人'}</span><span>{en ? 'Priority' : '优先级'}</span><span>{en ? 'Due' : '截止'}</span>{!c.projectId && <span>{en ? 'Project' : '项目'}</span>}<span /></div><ul className="task-native-list">{files.map(file => <TaskRow key={file.id} file={file} controller={c} en={en} workflow={workflow} dueLabel={file.entity.due ? display.date(file.entity.due) : undefined} />)}</ul></div>;
   }
   if (personal && c.prefs.layout === 'calendar') return <div className="task-collection-content">{render(collection.files)}</div>;

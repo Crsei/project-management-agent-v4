@@ -1,5 +1,7 @@
 # 权限与授权边界
 
+> 适用性：本文件保留v0.1历史提案/稳定编号，不代表完整业务Runner或旧SQL核心规则已启用。当前Markdown任务状态、审核独立性与关系语义以[已采纳ADR](../architecture/adr/0003-markdown-core.md)及[入口第七节](README.md#implementation-plan)为准；Chat thread/generation不能替代历史Session/Run模型。
+
 本文件是 [v0.1 提案](README.md)。以能力定义授权，角色只负责组合能力。身份、角色及授权从受信服务取得，不采信提示词、消息文本或 Agent 自报的角色。
 
 ## 1. 主体与作用域
@@ -64,12 +66,12 @@ RequestApproval/DispatchOperation 由受信执行入口接受 Agent 的请求，
 - 项目审计需要显式 `audit.read`，不能由普通只读权限或“管理员”标签推断。迁移不自动给既有成员追加能力；管理员通过既有成员授权流程显式授予。新工作区初始 owner 仍采用创建时的完整能力集合。
 - 已撤销能力、项目范围或账号后，审计分页、原命令收据及私有缓存都按当前权限重新检查。部署前的操作和外部文件编辑不补造用户归属；当前文件更新时间与 API 审计分开展示。
 
-具体范围、接口及证据见[正式项目页面补齐计划](../implementation/project-backend-completion.md)。
+具体范围、接口及证据见[正式项目页面说明](../guides/project-management.md)。
 
 ## 6. 成员目录与邀请
 
 - `directory.read` 是显式成员目录能力，不随升级自动授予既有成员。普通目录按实际共享项目范围裁剪，隐藏他人邮箱、电话、能力/项目授权明细和撤销记录；仅工作区 `access.manage` 可读完整管理目录与邀请列表。本人可读自己的联系资料。
-- Admin / Member / Guest 只是服务端能力模板，不能作为额外授权依据。Admin 不隐含审核、生命周期或任务完成权限；非模板组合保留为 Custom。精确组合见[成员补齐计划](../implementation/member-backend-completion.md)。
+- Admin / Member / Guest 只是服务端能力模板，不能作为额外授权依据。Admin 不隐含审核、生命周期或任务完成权限；非模板组合保留为 Custom。精确组合见[成员说明](../guides/project-management.md)。
 - 邮件邀请创建、撤销、重发均要求当前工作区 `access.manage`；接受时再次检查邀请人当前能力、邀请状态、期限与项目范围。邀请不绕过账号认证，不允许改写已有账号密码或覆盖已有有效成员授权。
 - 岗位、电话、安全头像使用本人资料的同一 CAS 版本。在线状态复用心跳 TTL；没有认证系统证据时 2FA 返回未知及不可用能力，不由成员管理员任意设置。
 

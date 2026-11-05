@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { validateNativeTemplateArguments } from '../src/automation-native-template-arguments.ts';
+import { validateNativeTemplateArguments } from '../../automation-resources/native-template-arguments.ts'
 
 const issue = { repositories: ['owner/repository'], triggerLabel: 'ready', branchPrefix: 'automation/issue', pullRequestMode: 'draft', githubTokenSecret: 'GITHUB_TOKEN' };
 test('native template arguments reject source-server or unrecognized authority fields', () => {

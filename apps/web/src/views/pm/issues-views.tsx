@@ -1,6 +1,7 @@
 import {
   useState,
   useRef,
+  type ComponentProps,
   type Dispatch,
   type ReactNode,
   type Ref,
@@ -95,7 +96,6 @@ import {
   type IssueOutcome,
 } from "./issues-controller"
 import styles from "./issues-views.module.css"
-import { ComponentProps } from "react"
 
 type Updater<T> = Dispatch<SetStateAction<T>>
 
@@ -784,7 +784,7 @@ export function IssueCreateDialog({
   catalog: WorkItemCatalog
   projects: readonly ProjectCardRecord[]
   writable: boolean
-  finalFocus: ComponentProps<typeof DialogContent>["finalFocus"]
+  finalFocus: ComponentProps<typeof SheetContent>["finalFocus"]
   lockPendingDismissal?: boolean
 }) {
   const { text } = useText()
@@ -880,7 +880,7 @@ export function IssueCreateDialog({
         else close()
       }}
     >
-      <SheetContent size={576} data-pm-create-issue>
+      <SheetContent size={576} finalFocus={finalFocus} data-pm-create-issue>
         <SheetHeader className={styles.createHeader}>
           <SheetTitle>{draft.parentId ? text("新建子问题", "Create sub-issue") : text("新建问题", "Create issue")}</SheetTitle>
         <SheetDescription>

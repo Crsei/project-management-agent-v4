@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/components/features/skills/skill-icon-badge.tsx",
+  "beforeSha256": "8c9417343844f07e396e552cca07554a82f36babe1262de4637eaed543aff742",
+  "afterSha256": "37fdf4bd13f2978e0c45a52be134129f0a57a73418e638f076eb859a259332bb",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 7,
+  "before": "U2tpbGxzSWNvbiBmcm9tICIjL2ljb25zL3NraWxscy5zdmc/cmVhY3QiOwppbXBvcnQgeyBjbiB9IGZyb20gIiM=",
+  "after": "eyBTcGFya2xlcyBhcyBTa2lsbHNJY29uIH0gZnJvbSAibHVjaWRlLXJlYWN0IjsKaW1wb3J0IHsgY24gfSBmcm9tICJAcG0vb3BlbmhhbmRzLXNvdXJjZQ=="
+}

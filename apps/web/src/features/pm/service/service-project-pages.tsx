@@ -5,13 +5,16 @@ import { Badge } from "@/components/ui/badge"
 import { MessageContent } from "@/components/blocks/message-content"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
-import { usePmEntities, usePmEntity, useProjectDirectory } from "./pm-service"
-import { string, today, useText } from "./pm-ui"
+import { usePmCommand, usePmEntities, usePmEntity, usePmService, useProjectDirectory } from "./pm-service"
+import { allowed, string, today, useText, writable } from "./pm-ui"
 import { ProjectFilesPage } from "./project-files"
 import { ProjectAuditHistory } from "./project-audit"
 import { ProjectCoverEditor, ProjectScopeEditor } from "./project-extras"
 import { ProjectTeamAssignment } from "./project-directory"
 import { ProjectFinancialRegion, ProjectHealthRegion, ProjectPortfolioSummary } from "./project-portfolio"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { MilestoneReschedule } from "./dashboard-planning"
+import { PlanningPanel } from "./pm-planning"
 
 const issueViewByLegacyTab: Record<string, string> = {
   board: "kanban",
@@ -63,6 +66,10 @@ export function ServiceProjectOverview() {
   const t = useText()
   const display = useDisplayDateTime()
   const date = today()
+  const { workspace } = usePmService()
+  const command = usePmCommand()
+  const [milestoneDateId, setMilestoneDateId] = useState("")
+  const [planningTarget, setPlanningTarget] = useState<{ id: string; nonce: number } | null>(null)
   const project = projectQuery.data?.kind === "project" ? projectQuery.data : undefined
   const tasks = items.data ?? []
   const completed = tasks.filter(task => ["done", "completed", "cancelled", "canceled"].includes(string(task.data.status))).length
@@ -104,7 +111,17 @@ export function ServiceProjectOverview() {
         </section>
         <section className="rounded-module border bg-surface p-4">
           <h2 className="text-base font-medium">{t("里程碑", "Milestones")}</h2>
-          {milestones.data?.length ? <ul className="mt-3 space-y-2">{milestones.data.map(milestone => <li key={milestone.id} className="flex flex-wrap items-center justify-between gap-2 text-sm"><Button variant="ghost" size="sm" onClick={() => navigate(`${projectRoot}/entities/${encodeURIComponent(milestone.id)}`)}>{string(milestone.data.title) || milestone.id}</Button><span className="text-xs text-muted-foreground">{string(milestone.data.status)} · {display.date(string(milestone.data.due) || null)}</span></li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">{t("没有关联里程碑。", "No linked milestones.")}</p>}
+          {milestones.data?.length ? <ul className="mt-3 space-y-2">{milestones.data.map(milestone => <ContextMenu key={milestone.id}>
+            <ContextMenuTrigger asChild><li tabIndex={0} className="flex flex-wrap items-center justify-between gap-2 text-sm"><Button variant="ghost" size="sm" onClick={() => navigate(`${projectRoot}/entities/${encodeURIComponent(milestone.id)}`)}>{string(milestone.data.title) || milestone.id}</Button><span className="text-xs text-muted-foreground">{string(milestone.data.status)} · {display.date(string(milestone.data.targetDate) || string(milestone.data.due) || null)}</span></li></ContextMenuTrigger>
+            <ContextMenuContent aria-label={t("里程碑操作", "Milestone actions")}>
+              <ContextMenuLabel>{string(milestone.data.title) || milestone.id}</ContextMenuLabel>
+              <ContextMenuItem onSelect={() => navigate(`${projectRoot}/entities/${encodeURIComponent(milestone.id)}`)}>{t("查看里程碑", "View milestone")}</ContextMenuItem>
+              <ContextMenuItem disabled={command.pending || !!command.unknownCommand || !writable(project) || !writable(milestone) || !allowed(workspace, "planning.edit", projectId)} onSelect={() => setMilestoneDateId(milestone.id)}>{t("修改目标日期", "Edit target date")}</ContextMenuItem>
+              <ContextMenuItem onSelect={() => setPlanningTarget(previous => ({ id: milestone.id, nonce: (previous?.nonce ?? 0) + 1 }))}>{t("定位规划记录", "Locate planning record")}</ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">{t("没有关联里程碑。", "No linked milestones.")}</p>}
+          {planningTarget && <div className="mt-4 space-y-3 border-t pt-4"><div className="flex items-center justify-between gap-2"><h3 className="font-medium">{t("项目规划", "Project planning")}</h3><Button variant="ghost" size="sm" onClick={() => setPlanningTarget(null)}>{t("收起规划", "Close planning")}</Button></div><PlanningPanel key={planningTarget.nonce} project={project} focusMilestoneId={planningTarget.id} /></div>}
+          {milestoneDateId && <MilestoneReschedule projectId={projectId} milestoneId={milestoneDateId} open onOpenChange={open => { if (!open) setMilestoneDateId("") }} hideTrigger />}
         </section>
       </div>
       <aside className="min-w-0 space-y-4">

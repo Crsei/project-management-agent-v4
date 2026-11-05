@@ -39,11 +39,10 @@ export function validateAutomationNativeApi(config: AutomationIntegrationConfig)
   if (!config.nativeApi) return;
   if (config.nativeApi.repositories.length < 1 || config.nativeApi.repositories.length > 100) throw new DomainError('validation_failed', 'Native API verification requires one to one hundred explicit repository/project targets');
   if (!['github', 'gitlab'].includes(config.provider)) throw new DomainError('validation_failed', 'Native REST configuration is supported only for GitHub and GitLab');
-  const base = new URL(validateAutomationMcpEndpoint(config.nativeApi.baseUrl)); const mcp = new URL(config.endpoint);
-  if (base.pathname !== '/' || config.provider === 'github' && base.origin !== 'https://api.github.com' || config.provider === 'gitlab' && base.hostname !== mcp.hostname && base.hostname !== 'gitlab.com') throw new DomainError('validation_failed', 'GitHub uses only https://api.github.com; GitLab must use gitlab.com or the explicitly configured MCP hostname, with a clean HTTPS origin');
+  const base = new URL(validateAutomationMcpEndpoint(config.nativeApi.baseUrl));
+  if (base.pathname !== '/' || config.provider === 'github' && base.origin !== 'https://api.github.com') throw new DomainError('validation_failed', 'Native API requires a clean explicitly approved HTTPS origin; GitHub uses only https://api.github.com');
   if (new Set(config.nativeApi.repositories.map(value => value.toLowerCase())).size !== config.nativeApi.repositories.length || config.nativeApi.repositories.some(value => !/^[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*$/.test(value) || value.split('/').some(part => part === '.' || part === '..'))) throw new DomainError('validation_failed', 'Native API repositories must be unique repository/project identifiers, not URLs or paths');
   if (config.provider === 'github' && config.nativeApi.repositories.some(value => value.split('/').length !== 2)) throw new DomainError('validation_failed', 'GitHub targets must use owner/repository identifiers');
-  if (!config.readTools.length && !config.writeTools.length && (mcp.origin !== base.origin || mcp.pathname !== '/')) throw new DomainError('validation_failed', 'A native API-only connection endpoint must be the same approved API root; no unrelated MCP endpoint is required');
 }
 export function automationNativeRequestUrl(config: AutomationIntegrationConfig, input: AutomationProviderRequest): URL {
   validateAutomationNativeApi(config);

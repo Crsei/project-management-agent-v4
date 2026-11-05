@@ -1,9 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import type { Entity } from '@contracts';
 import { Link } from 'react-router';
-import { ArrowDown, ArrowUp, ArrowUpRight, Archive, Briefcase, Code2, Copy, FolderKanban, Globe, Layers, Link2, MoreHorizontal, Palette, Pencil, Rocket, RotateCcw, Share2, Star, Target, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpRight, Archive, Briefcase, ChevronDown, ChevronRight, Code2, Copy, FolderKanban, Globe, Layers, Link2, MoreHorizontal, Palette, Pencil, Rocket, RotateCcw, Share2, Star, Target, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { CoreSessionProvider } from '../markdown/session';
 import { usePmCommand, usePmEntities, usePmService, useProjectExtras } from './pm-service';
 import { useI18n } from '@/lib/i18n-provider';
@@ -140,49 +141,89 @@ function ProjectMenuHost({ children }: { children: ReactNode }) {
   </Context.Provider>;
 }
 
-/** All ten reference entries share the same real-service implementation. */
-export function ProjectMenuButton({ projectId, className = '' }: { projectId: string; className?: string }) {
+type ProjectExpansionAction = { expanded?: boolean; onToggleExpanded?: () => void };
+
+/** Both menu entry points render the same actions and retain the provider's dialogs. */
+function ProjectMenuItems({ projectId, onDialog, contextMenu = false, expanded, onToggleExpanded }: { projectId: string; onDialog: (action: DialogAction) => void; contextMenu?: boolean } & ProjectExpansionAction) {
   const menu = useProjectMenuActions();
   const service = usePmService();
   const command = usePmCommand();
   const t = useText();
   const project = menu.projects.find(candidate => candidate.id === projectId);
-  const [open, setOpen] = useState(false);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const openDialog = (action: DialogAction) => { setOpen(false); requestAnimationFrame(() => { trigger.current?.focus(); menu.openDialog(projectId, action); }); };
-  const name = string(project?.data.name) || projectId;
   const archived = project ? projectArchived(project) : false;
   const position = menu.orderedProjects.findIndex(candidate => candidate.id === projectId);
   const canEdit = !!project && !archived && allowed(service.workspace, 'planning.edit', projectId) && service.capabilities?.business.enabled === true;
   const canLifecycle = !!project && allowed(service.workspace, 'planning.lifecycle', projectId) && service.capabilities?.business.enabled === true;
   const blocked = menu.pending;
-  return <DropdownMenu open={open} onOpenChange={setOpen}><DropdownMenuTrigger render={<Button ref={trigger} type="button" variant="ghost" size="icon" className={`${styles.trigger} ${className}`} aria-label={`${t('项目操作', 'Project actions')}: ${name}`} data-testid={`project-menu-${projectId}`} disabled={!project} onClick={event => event.stopPropagation()} />}><MoreHorizontal aria-hidden="true" className="size-4" /></DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className={styles.menu} onClick={event => event.stopPropagation()} onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus(); }} aria-label={`${t('项目操作', 'Project actions')}: ${name}`}>
-      <DropdownMenuGroup aria-label={t('项目操作', 'Project actions')}>
-        <DropdownMenuItem render={<Link to={service.workspace ? stableProjectPath(service.workspace.id, projectId) : '#'} data-navigation-close />}><ArrowUpRight aria-hidden="true" />{t('打开', 'Open')}</DropdownMenuItem>
-        <DropdownMenuItem disabled={!menu.canFavorite(projectId)} onSelect={() => menu.toggleFavorite(projectId)}><Star aria-hidden="true" className={menu.favorite(projectId) ? 'fill-current' : ''} />{menu.favorite(projectId) ? t('从收藏移除', 'Remove from favorites') : t('添加到收藏', 'Add to favorites')}</DropdownMenuItem>
-        <DropdownMenuItem disabled={blocked || !canEdit} onSelect={() => openDialog('settings')}><Pencil aria-hidden="true" />{t('重命名与编辑', 'Rename & edit')}</DropdownMenuItem>
-        <DropdownMenuItem disabled={command.pending} onSelect={() => openDialog('share')}><Share2 aria-hidden="true" />{t('分享', 'Share')}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => menu.copyLink(projectId)}><Link2 aria-hidden="true" />{t('复制链接', 'Copy link')}</DropdownMenuItem>
-        <DropdownMenuItem disabled={blocked || !canEdit || service.workspace?.projectIds !== null} onSelect={() => openDialog('duplicate')}><Copy aria-hidden="true" />{t('复制项目', 'Duplicate')}</DropdownMenuItem>
-      </DropdownMenuGroup>
-      <DropdownMenuSeparator className={styles.separator} />
-      <DropdownMenuGroup aria-label={t('个人侧栏顺序', 'Personal sidebar order')}>
-        <DropdownMenuItem disabled={blocked || menu.orderPending || position <= 0} onSelect={() => menu.moveProject(projectId, 'up')}><ArrowUp aria-hidden="true" />{t('在侧栏上移', 'Move up in sidebar')}</DropdownMenuItem>
-        <DropdownMenuItem disabled={blocked || menu.orderPending || position < 0 || position >= menu.orderedProjects.length - 1} onSelect={() => menu.moveProject(projectId, 'down')}><ArrowDown aria-hidden="true" />{t('在侧栏下移', 'Move down in sidebar')}</DropdownMenuItem>
-      </DropdownMenuGroup>
-      <DropdownMenuSeparator className={styles.separator} />
-      <DropdownMenuGroup aria-label={t('项目生命周期', 'Project lifecycle')}>
-        <DropdownMenuItem disabled={blocked || !canLifecycle} onSelect={() => openDialog(archived ? 'restore' : 'archive')}>{archived ? <RotateCcw aria-hidden="true" /> : <Archive aria-hidden="true" />}{archived ? t('恢复已归档项目', 'Restore archived project') : t('归档项目', 'Archive project')}</DropdownMenuItem>
-        <DropdownMenuItem disabled={blocked || !canLifecycle} onSelect={() => openDialog('delete')} className="text-destructive data-highlighted:text-destructive"><Trash2 aria-hidden="true" />{t('删除项目', 'Delete project')}</DropdownMenuItem>
-      </DropdownMenuGroup>
-      {blocked && <p role="status" className={styles.hint}>{t('已有写入处理中或结果未知；请先核对原请求。', 'A write is pending or unknown. Reconcile the original request first.')}</p>}
-      {menu.favoritesLoading && <p role="status" className={styles.hint}>{t('正在读取个人收藏…', 'Loading personal favorites…')}</p>}
-      {menu.favoritesError && <p role="alert" className={styles.hint}>{menu.favoritesError}</p>}
-      {!canEdit && <p className={styles.hint}>{t('编辑需要未归档项目与计划编辑权限；永久删除须先归档且无引用。', 'Editing requires an unarchived project and planning-edit permission. Permanent deletion requires archive-first and no references.')}</p>}
-      {!canLifecycle && <p className={styles.hint}>{t('归档、恢复与删除需要当前项目生命周期管理权限。', 'Archiving, restoring and deleting require current project lifecycle-management permission.')}</p>}
+  const Item = contextMenu ? ContextMenuItem : DropdownMenuItem;
+  const Group = contextMenu ? ContextMenuGroup : DropdownMenuGroup;
+  const Separator = contextMenu ? ContextMenuSeparator : DropdownMenuSeparator;
+  return <>
+    <Group aria-label={t('项目操作', 'Project actions')}>
+      <Item asChild><Link to={service.workspace ? stableProjectPath(service.workspace.id, projectId) : '#'} data-navigation-close><ArrowUpRight aria-hidden="true" />{t('打开', 'Open')}</Link></Item>
+      <Item disabled={!menu.canFavorite(projectId)} onSelect={() => menu.toggleFavorite(projectId)}><Star aria-hidden="true" className={menu.favorite(projectId) ? 'fill-current' : ''} />{menu.favorite(projectId) ? t('从收藏移除', 'Remove from favorites') : t('添加到收藏', 'Add to favorites')}</Item>
+      <Item disabled={blocked || !canEdit} onSelect={() => onDialog('settings')}><Pencil aria-hidden="true" />{t('重命名与编辑', 'Rename & edit')}</Item>
+      <Item disabled={command.pending} onSelect={() => onDialog('share')}><Share2 aria-hidden="true" />{t('分享', 'Share')}</Item>
+      <Item onSelect={() => menu.copyLink(projectId)}><Link2 aria-hidden="true" />{t('复制链接', 'Copy link')}</Item>
+      <Item disabled={blocked || !canEdit || service.workspace?.projectIds !== null} onSelect={() => onDialog('duplicate')}><Copy aria-hidden="true" />{t('复制项目', 'Duplicate')}</Item>
+      {onToggleExpanded && <Item onSelect={onToggleExpanded}>{expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}{expanded ? t('收起项目', 'Collapse project') : t('展开项目', 'Expand project')}</Item>}
+    </Group>
+    <Separator className={styles.separator} />
+    <Group aria-label={t('个人侧栏顺序', 'Personal sidebar order')}>
+      <Item disabled={blocked || menu.orderPending || position <= 0} onSelect={() => menu.moveProject(projectId, 'up')}><ArrowUp aria-hidden="true" />{t('在侧栏上移', 'Move up in sidebar')}</Item>
+      <Item disabled={blocked || menu.orderPending || position < 0 || position >= menu.orderedProjects.length - 1} onSelect={() => menu.moveProject(projectId, 'down')}><ArrowDown aria-hidden="true" />{t('在侧栏下移', 'Move down in sidebar')}</Item>
+    </Group>
+    <Separator className={styles.separator} />
+    <Group aria-label={t('项目生命周期', 'Project lifecycle')}>
+      <Item disabled={blocked || !canLifecycle} onSelect={() => onDialog(archived ? 'restore' : 'archive')}>{archived ? <RotateCcw aria-hidden="true" /> : <Archive aria-hidden="true" />}{archived ? t('恢复已归档项目', 'Restore archived project') : t('归档项目', 'Archive project')}</Item>
+      <Item disabled={blocked || !canLifecycle} onSelect={() => onDialog('delete')} className="text-destructive data-highlighted:text-destructive"><Trash2 aria-hidden="true" />{t('删除项目', 'Delete project')}</Item>
+    </Group>
+    {blocked && <p role="status" className={styles.hint}>{t('已有写入处理中或结果未知；请先核对原请求。', 'A write is pending or unknown. Reconcile the original request first.')}</p>}
+    {menu.favoritesLoading && <p role="status" className={styles.hint}>{t('正在读取个人收藏…', 'Loading personal favorites…')}</p>}
+    {menu.favoritesError && <p role="alert" className={styles.hint}>{menu.favoritesError}</p>}
+    {!canEdit && <p className={styles.hint}>{t('编辑需要未归档项目与计划编辑权限；永久删除须先归档且无引用。', 'Editing requires an unarchived project and planning-edit permission. Permanent deletion requires archive-first and no references.')}</p>}
+    {!canLifecycle && <p className={styles.hint}>{t('归档、恢复与删除需要当前项目生命周期管理权限。', 'Archiving, restoring and deleting require current project lifecycle-management permission.')}</p>}
+  </>;
+}
+
+/** All reference entries share the same real-service implementation. */
+export function ProjectMenuButton({ projectId, className = '', expanded, onToggleExpanded }: { projectId: string; className?: string } & ProjectExpansionAction) {
+  const menu = useProjectMenuActions();
+  const t = useText();
+  const project = menu.projects.find(candidate => candidate.id === projectId);
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const dialogHandoff = useRef(false);
+  const openDialog = (action: DialogAction) => {
+    dialogHandoff.current = true;
+    setOpen(false);
+    requestAnimationFrame(() => { trigger.current?.focus({ preventScroll: true }); menu.openDialog(projectId, action); });
+  };
+  const name = string(project?.data.name) || projectId;
+  return <DropdownMenu open={open} onOpenChange={next => { if (next) dialogHandoff.current = false; setOpen(next); }}><DropdownMenuTrigger render={<Button ref={trigger} type="button" variant="ghost" size="icon" className={`${styles.trigger} ${className}`} aria-label={`${t('项目操作', 'Project actions')}: ${name}`} data-testid={`project-menu-${projectId}`} disabled={!project} onClick={event => event.stopPropagation()} />}><MoreHorizontal aria-hidden="true" className="size-4" /></DropdownMenuTrigger>
+    <DropdownMenuContent align="end" className={styles.menu} onClick={event => event.stopPropagation()} onCloseAutoFocus={event => { event.preventDefault(); if (!dialogHandoff.current) trigger.current?.focus({ preventScroll: true }); }} aria-label={`${t('项目操作', 'Project actions')}: ${name}`}>
+      <ProjectMenuItems projectId={projectId} onDialog={openDialog} expanded={expanded} onToggleExpanded={onToggleExpanded} />
     </DropdownMenuContent>
   </DropdownMenu>;
+}
+
+/** No selection, navigation or write occurs until an explicit menu action. */
+export function ProjectContextMenu({ projectId, children, expanded, onToggleExpanded }: { projectId: string; children: ReactElement } & ProjectExpansionAction) {
+  const menu = useProjectMenuActions();
+  const t = useText();
+  const target = useRef<HTMLElement | null>(null);
+  const dialogHandoff = useRef(false);
+  const project = menu.projects.find(candidate => candidate.id === projectId);
+  const openDialog = (action: DialogAction) => {
+    dialogHandoff.current = true;
+    requestAnimationFrame(() => { target.current?.focus({ preventScroll: true }); menu.openDialog(projectId, action); });
+  };
+  return <ContextMenu onOpenChange={open => { if (open) dialogHandoff.current = false; }}>
+    <ContextMenuTrigger ref={element => { target.current = element; }} asChild tabIndex={0} disabled={!project}>{children}</ContextMenuTrigger>
+    <ContextMenuContent className={styles.menu} aria-label={`${t('项目操作', 'Project actions')}: ${string(project?.data.name) || projectId}`} onClick={event => event.stopPropagation()} onCloseAutoFocus={event => { if (dialogHandoff.current) event.preventDefault(); }}>
+      <ProjectMenuItems projectId={projectId} onDialog={openDialog} contextMenu expanded={expanded} onToggleExpanded={onToggleExpanded} />
+    </ContextMenuContent>
+  </ContextMenu>;
 }
 
 const icons = { folder: FolderKanban, briefcase: Briefcase, layers: Layers, rocket: Rocket, globe: Globe, target: Target, code: Code2, palette: Palette };

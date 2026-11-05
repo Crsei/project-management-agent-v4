@@ -23,6 +23,7 @@ import { automationStudioHelperPaths } from './automation-studio-helpers-openapi
 import { automationPmPaths } from './automation-pm-openapi.ts';
 import { workflowTaskTransitionPaths } from './workflow-task-transition-openapi.ts';
 import { agentChatToolResultSchema } from '../../agent-contracts/src/pm-tool-result.ts';
+import { instanceSetupSchemas } from './instance-setup.ts';
 
 // Payload validators remain owned by application commands. This module only
 // describes their wire input and the HTTP adapter's public response envelopes.
@@ -90,6 +91,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
   for (const [name, validator] of Object.entries({
     ...accountSecuritySchemas,
     ...accountRecoverySchemas, ...webhookResponseSchemas,
+    ...instanceSetupSchemas,
     ArtifactCopyOriginResponse: artifactCopyOriginResponseSchema,
     TaskComment: taskCommentSchema, TaskCommentRevision: taskCommentRevisionSchema,
     TaskCommentsPage: taskCommentsPageSchema, TaskCommentHistoryPage: taskCommentHistoryPageSchema,
@@ -280,6 +282,20 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     '/api/v1/workspaces/{workspaceId}/agent-tools/result': { post: { ...secured('Reconcile the original PM tool outcome without redispatch', ref('PmToolCallRecord'), [workspace]), operationId: 'reconcilePmAgentTool', requestBody: { required: true, content: json(ref('PmToolRequest')) } } },
     '/api/v1/workspaces/{workspaceId}/agent-tools/core-files': { get: { ...secured('Read authorized managed PM core files for change observation', object({ files: array(object({ path: text, projectId: coreIdentifier, entityId: nullable(text), content: text })), complete: boolean, error: text }, ['files', 'complete']), [workspace, param('projectId', 'query', coreIdentifier, true)]), operationId: 'listPmAgentCoreFiles', description: 'Incomplete scans include an error and cannot establish file deletions.' } },
     '/openapi.json': { get: { operationId: 'getOpenApi', summary: 'Live contract generated from the command registry', security: [], responses: { 200: response('OpenAPI 3.1 document', { type: 'object', additionalProperties: true }) } } },
+    '/api/v1/setup/status': { get: {
+      operationId: 'setupStatus', summary: 'Read minimal one-time instance setup state', security: [],
+      description: 'Any existing user or workspace permanently closes claiming. Database/schema failures return 503, never an uninitialized result. Registration remains invite-only. No query inputs; no-store and no-referrer.',
+      responses: { 200: response('Authoritative initialized and deployment-prepared state.', ref('InstanceSetupStatus')), ...errors(400, 403, 503) },
+    } },
+    '/api/v1/setup': { post: {
+      operationId: 'setup', summary: 'Consume the deployment token to create the first account and workspace', security: [],
+      description: 'Strict POST JSON, no query, at most 4096 bytes. Requires a 32-byte base64url deployment token; only its digest is stored. Account, workspace, explicit owner membership and completion commit atomically under a singleton lock. No automatic retries or secret persistence. After any unknown result query setupStatus, then use normal password login if initialized; a session failure does not reopen setup.',
+      requestBody: { required: true, content: json(ref('SetupRequest')) },
+      responses: {
+        200: { ...response('Session actor, new workspace and expiry. No token or password in JSON.', ref('SetupResponse')), headers: { 'Set-Cookie': { description: 'Existing pm_v4_session; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.', schema: { type: 'string' } } } },
+        ...errors(400, 403, 409, 413, 429, 503),
+      },
+    } },
     '/api/v1/auth/login': { post: { operationId: 'login', summary: 'Create a server-side session', security: [], requestBody: { required: true, content: json(object({ email: { type: 'string', maxLength: 254 }, password: { type: 'string', maxLength: 256 } })) }, responses: { 200: { ...response('Session actor and expiry; token is only returned in Set-Cookie.', object({ actor: ref('Actor'), expiresAt: timestamp })), headers: { 'Set-Cookie': { description: 'pm_v4_session opaque token; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.', schema: { type: 'string' } } } }, ...errors(400, 401, 403, 429, 503) } } },
     '/api/v1/auth/logout': { post: { ...secured('Revoke the current session and clear pm_v4_session', object({ loggedOut: { const: true } })), operationId: 'logout' } },
     '/api/v1/auth/me': { get: { ...secured('Read the authenticated actor', object({ actor: ref('Actor') })), operationId: 'getMe' } },

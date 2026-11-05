@@ -10,7 +10,7 @@ import { usePmEntities, usePmEntity, usePmService, useProjectExtras } from "./pm
 import { QueryNotice, ServiceGuard, string, usePmReadStatus, useText } from "./pm-ui"
 import { useI18n } from "@/lib/i18n-provider"
 import { usePmNoticeCenter } from "./pm-notice-center"
-import { ProjectIdentityIcon, ProjectMenuButton, useProjectMenuActions } from "./project-menu"
+import { ProjectContextMenu, ProjectIdentityIcon, ProjectMenuButton, useProjectMenuActions } from "./project-menu"
 import { projectArchived } from "./project-menu-model"
 import styles from "./service-project-layout.module.css"
 import { usePmAutomationVisit } from "./use-pm-automation-visit"
@@ -178,15 +178,17 @@ function ProjectSidebarContent({ base, projectId }: { base: string; projectId?: 
               const open = expanded[project.id] === true
               const childrenId = `${id}-${encodeURIComponent(project.id)}-views`
               return <li key={project.id}>
+                <ProjectContextMenu projectId={project.id} expanded={open} onToggleExpanded={() => setExpanded(previous => ({ ...previous, [project.id]: !open }))}>
                 <div className="flex min-w-0 items-center gap-0.5">
                   <Link to={projectBase} data-navigation-close aria-current={current ? "location" : undefined} className={`${styles.projectLink} flex min-w-0 flex-1 items-center rounded-control text-[13px] text-muted-foreground hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring aria-[current=location]:bg-selection aria-[current=location]:text-foreground`}>
                     <span className={styles.projectToken} data-color={projectColor(project.id)} aria-hidden="true"><ProjectIdentityIcon project={project} /></span>
                     <span className="min-w-0 flex-1 truncate" title={name}>{name}</span>
                     {favoriteIds.has(project.id) && <span className={styles.favorite} title={t("已收藏的项目", "Favorite project")}><Star className="size-3 fill-current" aria-hidden="true" /><span className="sr-only">{t("已收藏的项目", "Favorite project")}</span></span>}
                   </Link>
-                  <ProjectMenuButton projectId={project.id} />
+                  <ProjectMenuButton projectId={project.id} expanded={open} onToggleExpanded={() => setExpanded(previous => ({ ...previous, [project.id]: !open }))} />
                   <button type="button" aria-expanded={open} aria-controls={childrenId} aria-label={`${t(open ? "收起项目" : "展开项目", open ? "Collapse project" : "Expand project")}: ${name}`} onClick={() => setExpanded(previous => ({ ...previous, [project.id]: !open }))} className={`${styles.expandProject} flex shrink-0 items-center justify-center rounded-control text-muted-foreground hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}><ChevronRight className={`size-3.5 ${open ? "rotate-90" : ""}`} aria-hidden="true" /></button>
                 </div>
+                </ProjectContextMenu>
                 <ul id={childrenId} hidden={!open} aria-label={`${name}: ${t("项目视图", "Project views")}`} className="ml-[21px] border-l pl-2">
                   {sidebarViews.map(({ key, path, zh, en, icon: Icon }) => <li key={key}><Link to={`${projectBase}${path}`} data-navigation-close aria-current={current && activeView === key ? "page" : undefined} className={`${styles.projectChildLink} flex min-w-0 items-center rounded-control text-[13px] text-muted-foreground hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-selection aria-[current=page]:text-foreground`}><Icon className="size-3.5 shrink-0" aria-hidden="true" />{t(zh, en)}</Link></li>)}
                 </ul>
@@ -250,7 +252,7 @@ function ProjectLayoutContent({ projectId, workspaceSlug }: { projectId: string;
   const inspectingEntity = !!new URLSearchParams(location.search).get("entity")
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-pm-project-workspace={projectId}>
     {!inspectingEntity && <header className="shrink-0 border-b bg-surface px-3 pt-2 sm:px-5">
-      <div className="mb-1 flex min-w-0 items-center justify-between gap-2"><h1 className="min-w-0 break-words text-base font-semibold leading-6" title={projectId}>{name}</h1><ProjectMenuButton projectId={projectId} /></div>
+      <ProjectContextMenu projectId={projectId}><div className="mb-1 flex min-w-0 items-center justify-between gap-2"><h1 className="min-w-0 break-words text-base font-semibold leading-6" title={projectId}>{name}</h1><ProjectMenuButton projectId={projectId} /></div></ProjectContextMenu>
       <ProjectViewNavigation base={base} />
     </header>}
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">

@@ -159,7 +159,7 @@ export function DocumentWorkbench(props: DocumentWorkbenchProps) {
   }
 
   const nativeError = c.accessError || (c.query.isError && !c.query.data ? c.query.error : null);
-  const tree = <DocumentFileTree files={c.files} active={target} en={en} nativeStatus={c.accessError || c.query.isError ? 'error' : c.query.isPending ? 'loading' : 'ready'} nativeError={(c.accessError || c.query.error)?.message} onOpen={next => { void open(next); }} onNavigateEntity={file => { void navigateEntity(file); }} onExternalSourcesChange={sourcesChanged} onManageExternal={intent => { setManagement(intent); if (narrow) setTreeOpen(false); }} />;
+  const tree = <DocumentFileTree files={c.files} active={target} en={en} nativeStatus={c.accessError || c.query.isError ? 'error' : c.query.isPending ? 'loading' : 'ready'} nativeError={(c.accessError || c.query.error)?.message} onOpen={next => { void open(next); }} onNavigateEntity={file => { void navigateEntity(file); }} onExternalSourcesChange={sourcesChanged} onManageExternal={intent => { if (narrow) { treeDialogRef.current?.close(); setTreeOpen(false); } setManagement(intent); }} onSourceSettingsOpen={() => { if (narrow) { treeDialogRef.current?.close(); setTreeOpen(false); } }} />;
   const treeHeading = <div className="document-workbench-tree-heading"><strong>{en ? 'Workspace files' : '工作区文件'}</strong><button type="button" className="icon-button" aria-label={en ? 'Close file explorer' : '关闭文件浏览器'} onClick={() => setTreeOpen(false)}><X size={16} /></button></div>;
 
   return <div className="document-workbench" data-document-workbench data-tree-open={!focusMode && treeOpen}>

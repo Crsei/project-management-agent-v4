@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { automationCatalog, automationCatalogById, automationTemplateMaturity, automationTemplateRecommended } from "../../../../../../../../packages/contracts/src/automation-catalog.ts";
+import { automationCatalog, automationCatalogById, automationTemplateMaturity, automationTemplateRecommended } from "../../../../../../../../packages/automation-resources/catalog.ts";
 import { pmAutomationTemplateIds, type PmAutomationCandidate, type PmAutomationCandidatePreview, type PmAutomationSourceRef, type PmAutomationTask } from "../../../../../../../../packages/contracts/src/automation-pm.ts";
 import { StudioApiError } from "../../../../../../../../packages/contracts/src/automation-studio-client.ts";
 import { studioConfigSchema, studioNativeTemplateRequiresProvider, type StudioCapabilities } from "../../../../../../../../packages/contracts/src/automation-studio.ts";

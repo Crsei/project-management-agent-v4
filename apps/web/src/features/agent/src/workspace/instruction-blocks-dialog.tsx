@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@agent/compone
 import { useAgentText } from "../i18n";
 import { WorkspaceProvider, useWorkspace } from "./provider";
 import { ResourceSyncStatus } from "./resource-status";
-import { SkillsPanel } from "./skills-panel";
+import { InstructionBlocksPanel } from "./instruction-blocks-panel";
 import { AgentsPanel } from "./agents-panel";
 
 function InstructionBlocks({ disabled }: { disabled: boolean }) {
@@ -21,7 +21,7 @@ function InstructionBlocks({ disabled }: { disabled: boolean }) {
       <ResourceSyncStatus />
       {(workspace.storageError || workspace.actionError) && <p role="alert">{workspace.storageError ?? workspace.actionError}</p>}
       <nav className="flex gap-2"><Button size="sm" variant={workspace.panel === "agents" ? "outline" : "default"} onClick={() => workspace.setPanel("skills")}>{t("指令块", "Instruction blocks")}</Button><Button size="sm" variant={workspace.panel === "agents" ? "default" : "outline"} onClick={() => workspace.setPanel("agents")}>{t("Agent 引用", "Agent references")}</Button></nav>
-      {workspace.ready ? workspace.panel === "agents" ? <AgentsPanel /> : <SkillsPanel /> : <p role="status">{t("正在读取原有会话资源…", "Loading existing session resources…")}</p>}
+      {workspace.ready ? workspace.panel === "agents" ? <AgentsPanel /> : <InstructionBlocksPanel /> : <p role="status">{t("正在读取原有会话资源…", "Loading existing session resources…")}</p>}
     </DialogContent></Dialog>
   </>;
 }

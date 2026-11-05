@@ -130,6 +130,7 @@ section.knowledge-graph .kg-flow-menu-body button { text-align: start; }
   box-shadow: 0 2px 6px #0000000c;
   transition: opacity 100ms ease, box-shadow 100ms ease;
 }
+.knowledge-graph .kg-entity-card:focus-visible { outline: 3px solid var(--focus, var(--kg-accent)); outline-offset: 4px; opacity: 1; }
 .knowledge-graph .kg-entity-card.is-selected { border-color: var(--border-hover, #94a3b8); background: var(--surface-hover, #f1f5f9); }
 .knowledge-graph .kg-entity-card.is-center { background: color-mix(in srgb, var(--kg-accent) 7%, var(--kg-background)); }
 .knowledge-graph .kg-entity-card.is-highlighted { box-shadow: 0 2px 8px #00000012; }

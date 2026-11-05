@@ -20,8 +20,8 @@ test('artifact title alone controls display/search/sort; original metadata contr
   assert.equal(entries.length, 1); const entry = entries[0]!;
   assert.equal(entry.name, artifact.data.title); assert.equal(entry.originalFileName, 'second.txt');
   assert.equal(entry.kind, 'doc'); assert.equal(entry.updatedAt, second.createdAt); assert.equal(entry.size, 20);
-  assert.equal(filterAndSort(entries, 'pretending', 'all', 'name').length, 1);
-  assert.equal(filterAndSort(entries, 'second.txt', 'all', 'name').length, 0);
+  assert.equal(filterAndSort(entries, 'pretending', [], 'name').length, 1);
+  assert.equal(filterAndSort(entries, 'second.txt', [], 'name').length, 0);
   assert.equal(entryForFile(entries, first.id)?.versionId, first.id);
   assert.equal(entryForFile(entries, artifact.id)?.versionId, second.id);
 });

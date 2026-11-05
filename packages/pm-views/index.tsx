@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, useDraggable, useDroppable, useDndContext, type DragEndEvent } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table';
-import { Circle, CircleDashed, CheckCircle2, XCircle, LockKeyhole, GitBranch, Plus, CalendarDays, ArrowUpRight, Pencil, Ellipsis, Copy, Archive, RotateCcw, Trash2 } from 'lucide-react';
+import { Circle, CircleDashed, CheckCircle2, XCircle, LockKeyhole, GitBranch, Plus, CalendarDays, ArrowUpRight, Pencil, Ellipsis } from 'lucide-react';
 import { defaultConfiguration, entityKinds, fieldRegistry, workflowFor, statusCategory, type FileRecord, type Status, type Priority, type ViewConfig, type ProtocolConfiguration } from '../pm-schema/index.ts';
 import { relationFields } from '../pm-schema/relations.ts';
 import { applyView, groupChange } from '../pm-schema/query.ts';
@@ -27,21 +27,24 @@ export const PriorityIcon = ({ priority, en }: { priority?: string; en?: boolean
   return <svg width="13" height="13" viewBox="0 0 14 14" role="img" aria-label={en === false ? priorityLabels[priority || ''] || priority || '' : priority || ''} className={`priority-icon priority-${priority || 'none'}`}>{[1.8, 5.7, 9.6].map((x, index) => <rect key={x} x={x} y={12 - (4.5 + index * 3)} width="2.6" height={4.5 + index * 3} rx="1" fill="currentColor" opacity={index < level ? 1 : .18} />)}</svg>;
 };
 export type ArchiveFilter = 'exclude' | 'include' | 'only';
+export type ContextMenuAction = { id: string; label: string; disabled?: boolean; reason?: string; destructive?: boolean; separatorBefore?: boolean; onSelect: () => void };
+export type ContextMenuRenderer = (trigger: React.ReactElement, actions: ContextMenuAction[], file?: FileRecord) => React.ReactNode;
 export function matchesArchive(file: FileRecord, filter: ArchiveFilter = 'exclude') { return filter === 'include' || (filter === 'only' ? !!file.entity.archived : !file.entity.archived); }
-export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null; en?: boolean };
+export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; renderContextMenu?: ContextMenuRenderer; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null; en?: boolean };
 
 export function filterFiles(files: FileRecord[], config: ViewConfig, search = '', archiveFilter: ArchiveFilter = 'exclude', configuration = defaultConfiguration) { return applyView(files, config, { search, archived: archiveFilter, configuration }); }
 export function unresolvedBlockers(file: FileRecord, files: FileRecord[], configuration = defaultConfiguration) { return file.entity.blocked_by.filter(id => { const entity = files.find(f => f.id === id)?.entity; const category = entity && statusCategory(entity, configuration); return category !== 'completed' && category !== 'canceled'; }); }
 function StateSelect({ file, props }: { file: FileRecord; props: ViewProps }) {
   const workflow = workflowFor(file.entity.entity, props.configuration);
   if (!workflow) return <span className="muted">{String(file.entity.document_kind || '—')}</span>;
-  return <RadixSelect aria-label={`Status for ${file.id}`} value={file.entity.status} disabled={!props.canEdit(file.id)} onChange={event => void props.onPatch(file.id, { status: event.target.value })}>{workflow.states.map(state => <option value={state.id} key={state.id} disabled={state.id !== file.entity.status && !workflow.transitions.some(t => t.from === file.entity.status && t.to === state.id)}>{state.label}</option>)}</RadixSelect>;
+  const targets = workflow.states.filter(state => state.id !== file.entity.status && workflow.transitions.some(transition => transition.from === file.entity.status && transition.to === state.id) && props.canEdit(file.id, { status: state.id }));
+  return <RadixSelect aria-label={`Status for ${file.id}`} value={file.entity.status} disabled={!targets.length} onChange={event => void props.onPatch(file.id, { status: event.target.value })}>{workflow.states.map(state => <option value={state.id} key={state.id} disabled={state.id !== file.entity.status && !targets.some(target => target.id === state.id)}>{state.label}</option>)}</RadixSelect>;
 }
 function MoveControls({ file, props }: { file: FileRecord; props: ViewProps }) { return props.onMove && !props.embedded ? <span className="manual-order-controls"><button aria-label={`Move ${file.id} up`} disabled={props.files[0]?.id === file.id} onClick={() => props.onMove?.(file.id, -1)}>↑</button><button aria-label={`Move ${file.id} down`} disabled={props.files.at(-1)?.id === file.id} onClick={() => props.onMove?.(file.id, 1)}>↓</button></span> : null; }
 
 function permitsGroup(file: FileRecord, value: unknown, props: ViewProps): boolean {
-  if (!props.canEdit(file.id)) return false;
-  try { groupChange(file.entity, props.config.group_by || 'status', value, props.configuration); return true; }
+  if (file.entity.entity === 'work_item' && props.config.group_by === 'project' && value !== file.entity.project) return false;
+  try { return props.canEdit(file.id, groupChange(file.entity, props.config.group_by || 'status', value, props.configuration)); }
   catch { return false; }
 }
 
@@ -84,8 +87,16 @@ function TaskCard({ file, props, draggable, groupId, groups, onGroup, landed }: 
     props.onOpenPage?.(file.id);
   }
   function openPage() { if (props.onOpenPage) props.onOpenPage(file.id); else inspect(file.id); }
-  async function copyId() { try { await navigator.clipboard.writeText(file.id); } catch { /* clipboard unavailable */ } setMenuOpen(false); }
-  return <article ref={setNodeRef} onPointerDown={event => listeners?.onPointerDown?.(event)} onDoubleClick={openCard} data-testid={`card-${file.id}`} className={`task-card ${props.selectedId === file.id ? 'selected' : ''}${completed ? ' done' : ''}${isDragging ? ' dragging' : ''}${landed ? ' landed' : ''}`} style={{ transform: transform ? `${CSS.Translate.toString(transform)} rotate(1.2deg)` : undefined }} onClick={event => {
+  async function copyId() { try { await navigator.clipboard.writeText(file.id); } catch { /* clipboard unavailable */ } }
+  const actions: ContextMenuAction[] = [
+    { id: 'open', label: props.en === false ? '打开完整页面' : 'Open page', onSelect: openPage },
+    { id: 'edit', label: props.en === false ? '编辑' : 'Edit', onSelect: () => inspect(file.id) },
+    ...targets.map((target, index) => ({ id: `group:${target.key}`, label: `${props.en === false ? '移动到' : 'Move to'} · ${target.label}`, disabled: !target.allowed, reason: !target.allowed ? (props.en === false ? '当前状态、权限或写入锁不允许此移动' : 'Unavailable for the current workflow, permissions or write state') : undefined, separatorBefore: index === 0, onSelect: () => onGroup(file.id, target.key) })),
+    { id: 'copy', label: props.en === false ? '复制编号' : 'Copy ID', separatorBefore: true, onSelect: copyId },
+    ...(props.onLifecycle ? [{ id: 'lifecycle', label: file.entity.archived ? (props.en === false ? '恢复' : 'Restore') : (props.en === false ? '归档' : 'Archive'), disabled: !canLifecycle, reason: !canLifecycle ? (props.en === false ? '请先处理权限、草稿或待核对的写入' : 'Resolve permissions, drafts or pending writes first') : undefined, separatorBefore: true, onSelect: () => props.onLifecycle?.(file.id, file.entity.archived ? 'restore' : 'archive') }] : []),
+    ...(props.onRequestDelete ? [{ id: 'delete', label: props.en === false ? '删除' : 'Delete', destructive: true, disabled: !canLifecycle, reason: !canLifecycle ? (props.en === false ? '请先处理权限、草稿或待核对的写入' : 'Resolve permissions, drafts or pending writes first') : undefined, onSelect: () => props.onRequestDelete?.(file.id) }] : []),
+  ];
+  const card = <article tabIndex={0} ref={setNodeRef} onPointerDown={event => listeners?.onPointerDown?.(event)} onContextMenu={() => { window.clearTimeout(clickTimer.current ?? undefined); clickTimer.current = null; }} onDoubleClick={openCard} data-testid={`card-${file.id}`} className={`task-card ${props.selectedId === file.id ? 'selected' : ''}${completed ? ' done' : ''}${isDragging ? ' dragging' : ''}${landed ? ' landed' : ''}`} style={{ transform: transform ? `${CSS.Translate.toString(transform)} rotate(1.2deg)` : undefined }} onClick={event => {
     const target = event.target;
     if (target instanceof HTMLElement && target.closest('button, select, input, textarea, a, label')) return;
     selectCard(event);
@@ -98,14 +109,7 @@ function TaskCard({ file, props, draggable, groupId, groups, onGroup, landed }: 
         <button type="button" className="icon-button" aria-label={`${props.en === false ? '编辑' : 'Edit'} ${file.id}`} onClick={() => inspect(file.id)}><Pencil size={12} /></button>
         <button type="button" className="icon-button" aria-label={`${props.en === false ? '更多操作' : 'More actions'} ${file.id}`} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(open => !open)}><Ellipsis size={13} /></button>
         {menuOpen && <div className="card-menu" role="menu" onPointerDown={event => event.stopPropagation()}>
-          <button type="button" role="menuitem" onClick={openPage}><ArrowUpRight size={13} />{props.en === false ? '打开完整页面' : 'Open page'}</button>
-          <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); inspect(file.id); }}><Pencil size={12} />{props.en === false ? '编辑' : 'Edit'}</button>
-          {targets.length > 0 && <><div className="card-menu-sep" /><span className="card-menu-label">{props.en === false ? '移动到' : 'Move to'}</span>{targets.map(target => <button key={target.key} type="button" role="menuitem" disabled={!target.allowed} onClick={() => { setMenuOpen(false); onGroup(file.id, target.key); }}>{target.label}</button>)}</>}
-          <div className="card-menu-sep" />
-          <button type="button" role="menuitem" onClick={() => void copyId()}><Copy size={12} />{props.en === false ? '复制编号' : 'Copy ID'}</button>
-          {canLifecycle && (props.onLifecycle || props.onRequestDelete) && <div className="card-menu-sep" />}
-          {canLifecycle && props.onLifecycle && <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); props.onLifecycle?.(file.id, file.entity.archived ? 'restore' : 'archive'); }}>{file.entity.archived ? <RotateCcw size={12} /> : <Archive size={12} />}{file.entity.archived ? (props.en === false ? '恢复' : 'Restore') : (props.en === false ? '归档' : 'Archive')}</button>}
-          {canLifecycle && props.onRequestDelete && <button type="button" role="menuitem" className="danger" onClick={() => { setMenuOpen(false); props.onRequestDelete?.(file.id); }}><Trash2 size={12} />{props.en === false ? '删除' : 'Delete'}</button>}
+          {actions.map(action => <React.Fragment key={action.id}>{action.separatorBefore && <div className="card-menu-sep" />}<button type="button" role="menuitem" className={action.destructive ? 'danger' : undefined} disabled={action.disabled} title={action.reason} onClick={() => { setMenuOpen(false); action.onSelect(); }}>{action.label}</button></React.Fragment>)}
         </div>}
       </div>
     </div>
@@ -121,6 +125,7 @@ function TaskCard({ file, props, draggable, groupId, groups, onGroup, landed }: 
     </div>
     <MoveControls file={file} props={props} />
   </article>;
+  return props.renderContextMenu ? props.renderContextMenu(card, actions) : card;
 }
 function BoardColumn({ id, value, label, category, files, props, groups, onGroup, landedId }: { id: string; value: unknown; label: string; category?: string; files: FileRecord[]; props: ViewProps; groups: Map<string, { value: unknown; label: string; category?: string }>; onGroup: (id: string, group: string) => void; landedId: string }) {
   const { active } = useDndContext();
@@ -132,7 +137,7 @@ function BoardColumn({ id, value, label, category, files, props, groups, onGroup
   const priorityGroup = props.config.group_by === 'priority' && props.config.entity === 'work_item';
   const creationStatus = statusGroup && typeof value === 'string' && workflow?.states.some(state => state.id === value) ? value : priorityGroup ? workflow?.initial : undefined;
   const create = creationStatus && props.onCreate ? () => props.onCreate?.(creationStatus, priorityGroup ? { ...props.config, filter: { ...props.config.filter, priority: value } } : props.config) : undefined;
-  return <section ref={setNodeRef} data-testid={`column-${String(value ?? 'unset')}`} data-drop-enabled={canDrop} className={`board-column ${isOver ? 'drop-over' : ''}`}>
+  const column = <section tabIndex={0} aria-label={label} ref={setNodeRef} data-testid={`column-${String(value ?? 'unset')}`} data-drop-enabled={canDrop} className={`board-column ${isOver ? 'drop-over' : ''}`}>
     <div className="column-heading"><StatusIcon category={category} /><h3>{label}</h3><span className="count">{files.length}</span>{create && <button className="icon-button column-add" aria-label={`${props.en === false ? '新建' : 'Add'} ${label}`} onClick={create}><Plus size={14} aria-hidden="true" /></button>}</div>
     <div className="column-cards">{files.map(file => {
       const targets = [...groups].map(([key, group]) => ({ key, ...group, allowed: permitsGroup(file, group.value, props) }));
@@ -140,6 +145,7 @@ function BoardColumn({ id, value, label, category, files, props, groups, onGroup
       return <div key={file.id}><TaskCard file={file} props={props} draggable={writable} groupId={id} groups={groups} onGroup={onGroup} landed={landedId === file.id} />{!statusGroup && <label className="card-group-control"><span>{props.config.group_by}</span><RadixSelect aria-label={`Group ${props.config.group_by} for ${file.id}`} value={id} disabled={!writable} onChange={event => onGroup(file.id, event.target.value)}>{targets.map(target => <option key={target.key} value={target.key} disabled={!target.allowed}>{target.label}</option>)}</RadixSelect></label>}</div>;
     })}{!files.length && !create && <div className="column-empty">{props.en === false ? '暂无任务' : 'No tasks'}</div>}{create && <button type="button" className="addcard" onClick={create}><Plus size={14} aria-hidden="true" />{props.en === false ? '新建任务' : 'Add task'}</button>}</div>
   </section>;
+  return create && props.renderContextMenu ? props.renderContextMenu(column, [{ id: 'create', label: `${props.en === false ? '新建任务' : 'Add task'} · ${label}`, onSelect: create }]) : column;
 }
 function Board(props: ViewProps) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor));
@@ -163,7 +169,7 @@ function Board(props: ViewProps) {
   async function moveToGroup(id: string, groupId: string) {
     const file = props.files.find(file => file.id === id);
     const group = groups.get(groupId);
-    if (!file || !group || !props.canEdit(file.id)) return;
+    if (!file || !group || !permitsGroup(file, group.value, props)) return;
     try { const changes = groupChange(file.entity, field, group.value, props.configuration); setError(''); await props.onPatch(file.id, changes); setLandedId(id); window.setTimeout(() => setLandedId(current => current === id ? '' : current), 520); } catch (error) { setError(error instanceof Error ? error.message : String(error)); }
   }
   function drop(event: DragEndEvent) { if (event.over) void moveToGroup(String(event.active.id), String(event.over.id)); }
@@ -189,7 +195,15 @@ function Table(props: ViewProps) {
     ];
   }, [props]);
   const table = useReactTable({ data: props.files, columns, getCoreRowModel: getCoreRowModel() });
-  return <div className="table-scroll"><table className="work-table"><thead>{table.getHeaderGroups().map(group => <tr key={group.id}>{group.headers.map(header => <th key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</th>)}</tr>)}</thead><tbody>{table.getRowModel().rows.map(row => <tr key={row.id} className={props.selectedId === row.original.id ? 'selected' : ''} data-testid={`row-${row.original.id}`}>{row.getVisibleCells().map(cell => <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}</tr>)}</tbody></table>{!props.files.length && <div className="empty-state">No entities match these filters.</div>}</div>;
+  return <div className="table-scroll"><table className="work-table"><thead>{table.getHeaderGroups().map(group => <tr key={group.id}>{group.headers.map(header => <th key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</th>)}</tr>)}</thead><tbody>{table.getRowModel().rows.map(row => {
+    const file = row.original;
+    const trigger = <tr tabIndex={0} className={props.selectedId === file.id ? 'selected' : ''} data-testid={`row-${file.id}`}>{row.getVisibleCells().map(cell => <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}</tr>;
+    const actions: ContextMenuAction[] = [
+      { id: 'open', label: props.en === false ? '打开完整页面' : 'Open page', onSelect: () => (props.onOpenPage ?? props.onSelect)(file.id) },
+      { id: 'inspect', label: props.en === false ? '查看属性' : 'Inspect attributes', onSelect: () => (props.onInspect ?? props.onSelect)(file.id) },
+    ];
+    return <React.Fragment key={row.id}>{props.renderContextMenu ? props.renderContextMenu(trigger, actions, file) : trigger}</React.Fragment>;
+  })}</tbody></table>{!props.files.length && <div className="empty-state">No entities match these filters.</div>}</div>;
 }
 function Tree(props: ViewProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -213,5 +227,5 @@ export function PMView(props: ViewProps) {
   const result = useMemo(() => { try { return { files: filterFiles(props.files, props.config, '', props.archiveFilter, props.configuration), error: '' }; } catch (error) { return { files: [], error: error instanceof Error ? error.message : String(error) }; } }, [props.files, props.config, props.archiveFilter, props.configuration]);
   const next = { ...props, files: result.files, allFiles: props.allFiles || props.files };
   if (result.error) return <div role="alert" className="inline-error">Invalid view: {result.error}</div>;
-  return <div className={`pm-view ${props.embedded ? 'embedded-view' : ''}`} data-testid={`view-${props.config.layout}`}>{props.config.layout === 'table' ? <Table {...next} /> : props.config.layout === 'tree' ? <Tree {...next} /> : props.config.layout === 'graph' ? <KnowledgeGraph files={props.allFiles || props.files} configuration={props.configuration} source={props.graphSource} query={{ ...props.graphQuery, view: props.graphQuery?.view ?? props.config, archived: props.graphQuery?.archived ?? props.archiveFilter }} refreshKey={props.graphRefreshKey} selectedId={props.selectedId} onSelect={props.onSelect} draftIds={props.draftIds} embedded={props.embedded} en={props.en} graphScopeTarget={props.graphScopeTarget} graphToggleTarget={props.graphToggleTarget} /> : <Board {...next} />}</div>;
+  return <div className={`pm-view ${props.embedded ? 'embedded-view' : ''}`} data-testid={`view-${props.config.layout}`}>{props.config.layout === 'table' ? <Table {...next} /> : props.config.layout === 'tree' ? <Tree {...next} /> : props.config.layout === 'graph' ? <KnowledgeGraph files={props.allFiles || props.files} configuration={props.configuration} source={props.graphSource} query={{ ...props.graphQuery, view: props.graphQuery?.view ?? props.config, archived: props.graphQuery?.archived ?? props.archiveFilter }} refreshKey={props.graphRefreshKey} selectedId={props.selectedId} onSelect={props.onSelect} draftIds={props.draftIds} embedded={props.embedded} en={props.en} graphScopeTarget={props.graphScopeTarget} graphToggleTarget={props.graphToggleTarget} renderContextMenu={props.renderContextMenu} /> : <Board {...next} />}</div>;
 }

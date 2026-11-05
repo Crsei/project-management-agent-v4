@@ -7,9 +7,10 @@ import { studioConfigSchema, studioDefinitionSchema, studioExecutionSchema, stud
 import { StudioApiError, StudioClient } from "../../../../../../../../packages/contracts/src/automation-studio-client";
 import { AutomationTransferClient } from "../../../../../../../../packages/contracts/src/automation-transfer-client";
 import { AUTOMATION_TRANSFER_LIMITS, type AutomationBundleUpload } from "../../../../../../../../packages/contracts/src/automation-transfer";
-import { automationCatalogById, automationCatalogSource, automationTemplateLaunchPrompt, automationTemplateTags, type AutomationCatalogField } from "../../../../../../../../packages/contracts/src/automation-catalog";
+import { automationCatalogById, automationCatalogSource, automationTemplateLaunchPrompt, automationTemplateTags } from "../../../../../../../../packages/automation-resources/catalog";
+import type { AutomationCatalogField } from "../../../../../../../../packages/contracts/src/automation-catalog";
 import { automationIntegrationPlugin } from "../../../../../../../../packages/contracts/src/automation-integrations";
-import { validateNativeTemplateArguments } from "../../../../../../../../packages/contracts/src/automation-native-template-arguments";
+import { validateNativeTemplateArguments } from "../../../../../../../../packages/automation-resources/native-template-arguments";
 import { isPmAutomationTemplateId } from "../../../../../../../../packages/contracts/src/automation-pm";
 import { useAgentText } from "../../i18n";
 import { studioPrerequisites, useStudioConnections } from "./studio-setup-dependencies";

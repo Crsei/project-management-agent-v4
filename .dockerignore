@@ -4,10 +4,17 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
+!.node-version
+!rust-toolchain.toml
+!LICENSE
+!LICENSE.t3code
+!THIRD_PARTY_NOTICES.md
 !tsconfig.base.json
 !tsconfig.backend.json
 !tsconfig.agent.json
+!tsconfig.check.json
 !scripts/
+!scripts/**
 !scripts/build-assets.mjs
 !scripts/blob-storage.ts
 !scripts/notification-admin.ts
@@ -18,7 +25,7 @@
 !apps/web/
 !apps/web/**
 !apps/desktop/
-!apps/desktop/package.json
+!apps/desktop/**
 !tools/
 !tools/marketing/
 !tools/marketing/package.json
@@ -32,6 +39,9 @@
 !deploy/Dockerfile
 !deploy/Caddyfile
 !deploy/manage.mjs
+!docs/
+!docs/**
+docs/implementation/
 # Reapply exclusions after recursively allowing package source directories.
 **/node_modules
 **/tests
@@ -41,3 +51,17 @@
 **/*.tsbuildinfo
 **/release
 **/.astro
+# cc-switch originals are provenance inputs, including fixtures; they are never
+# copied from this builder context into the final native runtime image.
+!vendor/cc-switch/tests/
+!vendor/cc-switch/tests/**
+!vendor/cc-switch/src-tauri/tests/
+!vendor/cc-switch/src-tauri/tests/**
+!vendor/cc-switch/**/tests/
+!vendor/cc-switch/**/tests/**
+**/target
+**/.cache
+**/.runtime
+**/releases
+**/node_modules
+**/.env*

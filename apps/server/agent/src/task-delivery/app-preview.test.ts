@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createServer, request } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { AppPreviewManager, allowedPreviewRequest, previewEligible, previewFiles, sandboxArguments } from './app-preview.ts';
+import { AppPreviewManager, allowedPreviewRequest, previewEligible, previewFiles } from './app-preview.ts';
 import { appPreviewActionSchema } from '../../../../../packages/contracts/src/task-app-preview.ts';
 import type { TaskCodeDelivery } from '../../../../../packages/contracts/src/task-code-delivery.ts';
 import { git } from './git.ts';
@@ -21,10 +21,7 @@ test('immutable app snapshot rejects symlinks, hidden files, traversal, submodul
   assert.equal(previewFiles(row('100644', 'app/server.mjs')).length, 1);
   for (const input of ['', row('120000', 'app/server.mjs'), row('100644', 'app/../server.mjs'), row('100644', 'app/.env'), row('160000', 'app/server.mjs'), row('100644', 'app/a.js')]) assert.throws(() => previewFiles(input));
 });
-test('sandbox has no host filesystem, credentials or network; proxy rejects cross-origin writes and rebinding', () => {
-  const args = sandboxArguments('/test/code', '/test/data', '/test/runtime');
-  for (const flag of ['--unshare-all', '--die-with-parent', '--clearenv', '--cap-drop']) assert.ok(args.includes(flag));
-  assert.ok(!args.includes('/root') && !args.includes('/proc') && !args.includes('/etc'));
+test('preview proxy rejects cross-origin writes and rebinding', () => {
   const host = 'example.preview.localhost:4330';
   const req = { headers: { host }, method: 'GET', url: '/' };
   assert.equal(allowedPreviewRequest(req, host), true);
@@ -38,7 +35,10 @@ const probe = (url: string, headers: Record<string, string> = {}) => new Promise
   req.on('error', reject); req.on('timeout', () => req.destroy(new Error('timeout'))); req.end();
 });
 // This opt-in actually exercises Linux namespaces; ordinary unit runs do not claim sandbox proof.
-test('real Linux sandbox, credential stripping, immutable code and persisted restart', { skip: process.env.PM_PREVIEW_SANDBOX_TEST !== '1' }, async () => {
+test('real Linux sandbox, credential stripping, immutable code and persisted restart', { skip: process.env.PM_PREVIEW_SANDBOX_TEST !== '1' }, async t => {
+  const previousSecret = process.env.PM_PREVIEW_SMOKE_SECRET;
+  process.env.PM_PREVIEW_SMOKE_SECRET = 'synthetic-host-only-value';
+  t.after(() => { if (previousSecret === undefined) delete process.env.PM_PREVIEW_SMOKE_SECRET; else process.env.PM_PREVIEW_SMOKE_SECRET = previousSecret; });
   const temp = await realpath(await mkdtemp(path.join(os.tmpdir(), 'pm-preview-test-')));
   const previous = process.env.AGENT_WORKSPACE_DATA_DIR; process.env.AGENT_WORKSPACE_DATA_DIR = path.join(temp, 'private-agent');
   const manager = new AppPreviewManager(0);
@@ -61,6 +61,7 @@ http.createServer(async (req,res)=>{if(req.url==='/health'){res.end('ok');return
     const first = await probe(started.url, { cookie: 'pm_v4_session=synthetic', authorization: 'Bearer synthetic' });
     assert.equal(first.status, 200); assert.equal(first.headers['set-cookie'], undefined); assert.match(String(first.headers['content-security-policy']), /connect-src 'self'/);
     const body = JSON.parse(first.text); assert.equal(body.count, 1); assert.equal(body.network, false); assert.equal(body.cookie, null); assert.equal(body.auth, null); assert.equal(body.home, false); assert.equal(body.codeWritable, false); assert.ok(!body.env.includes('PM_API_URL'));
+    assert.ok(!body.env.includes('PM_PREVIEW_SMOKE_SECRET'), 'an actual inherited host secret must not enter the sandbox');
     assert.equal((await probe(started.url, { origin: 'https://other.invalid' })).status, 403);
     await manager.stop(value.id); assert.equal(manager.state(value.id, true).status, 'stopped'); assert.equal((await probe(started.url)).status, 403);
     const restarted = await manager.start(value, head); assert.equal(JSON.parse((await probe(restarted.url!)).text).count, 2);

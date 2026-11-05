@@ -16,6 +16,10 @@
     "types": ["vite/client", "node"],
     "paths": {
       "@agent/*": ["./src/features/agent/*"],
+      "@pm/openhands-extensions": ["../../vendor/openhands-extensions/src/web/index.tsx"],
+      "@pm/openhands-source/*": ["../../vendor/openhands-extensions/src/*"],
+      "@pm/cc-switch-source/*": ["../../vendor/cc-switch/src/*"],
+      "@openhands/extensions/integrations": ["../../vendor/openhands-extensions/extensions/integrations/index.d.ts"],
       "@/*": ["./src/*"],
       "@contracts": ["../../packages/contracts/src/client.ts"],
       "@pm-schema": ["../../packages/pm-schema/index.ts"],

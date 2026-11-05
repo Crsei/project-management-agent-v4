@@ -1,5 +1,7 @@
 # agent-workspace
 
+> 上游历史说明快照，不是Dovspace当前部署/能力合同。当前使用[根入口](../../README.md)、[Agent指南](../guides/agent-chat.md)和[数据所有权](../architecture/data-ownership.md)，不得据本页旧路径/账号示例迁入数据或开放公网。
+
 **React 19 / Hono / assistant-ui 的单用户 Agent 工作区。** Web 使用 Vite，桌面使用 Electron，官网使用 Astro；执行与数据统一归 Server。支持持久化聊天和顺序工作流、Provider 多账号、原生会话恢复、Fork/上下文回传、定时任务、额度恢复和 GitHub PR 监测。原 Next.js 实现在 `../agent-workspace-next`；旧 localStorage 数据可幂等导入，新的服务端数据契约不再与归档版双向互换。
 
 多应用拆分计划与本轮验收见 [MULTI-APP-PLAN.md](MULTI-APP-PLAN.md)；持久执行功能的上一轮任务与证据见 [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md)。

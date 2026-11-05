@@ -18,3 +18,15 @@ apps/desktop/release/
 test-results/
 playwright-report/
 storybook-static/
+
+# cc-switch native build outputs
+apps/server/cc-switch-host/target/
+vendor/cc-switch/src-tauri/target/
+
+# Local development plans and historical acceptance evidence.
+# Public usage, architecture, domain rules and API contracts remain tracked.
+/EXECUTION-PLAN.zh.md
+/IMPLEMENTATION-CONTRACT.md
+/SCENARIO-MATRIX.zh.md
+/V3-AGENT-CHAT-TASKS.zh.md
+/docs/implementation/

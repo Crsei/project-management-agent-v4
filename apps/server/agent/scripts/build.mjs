@@ -5,9 +5,12 @@ import { isBuiltin } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyHostBuildInputs } from "../../../../vendor/t3code/scripts/host-inputs.mjs";
+import { buildSidecar } from "./cc-switch.mjs";
+import { assertBuildPrerequisites } from "../../../../scripts/doctor.mjs";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const repositoryRoot = path.resolve(packageRoot, "../../..");
+await assertBuildPrerequisites();
 const inventory = JSON.parse(await readFile(path.join(repositoryRoot, "vendor/t3code/sync-inventory.json"), "utf8"));
 const hostBuildInputs = await verifyHostBuildInputs(repositoryRoot, inventory);
 const temporaryOutput = process.env.AGENT_BUILD_OUTDIR;
@@ -73,11 +76,14 @@ const result = await build({
   sourcemap: true,
 });
 
+const ccSwitchNative = await buildSidecar(outputRoot);
+
 // Packaging consumes actual emitted externals and input ownership, not a second dependency list.
 const portablePath = (value, base) => path.relative(base, path.resolve(packageRoot, value)).split(path.sep).join("/");
 await writeFile(path.join(outputRoot, "build-inputs.json"), JSON.stringify({
   version: 1,
   hostBuildInputs,
+  ccSwitchNative: { target: ccSwitchNative.target, manifestSha256: ccSwitchNative.manifestSha256, outputInventorySha256: ccSwitchNative.outputInventorySha256, cargoLockSha256: ccSwitchNative.cargoLockSha256 },
   inputHashes: Object.fromEntries(await Promise.all(Object.keys(result.metafile.inputs).sort().map(async (value) => [
     portablePath(value, repositoryRoot), createHash("sha256").update(await readFile(path.resolve(packageRoot, value))).digest("hex"),
   ]))),

@@ -1,7 +1,7 @@
-import type { Dispatch, ReactNode, SetStateAction } from "react"
+import type { Dispatch, ReactElement, ReactNode, SetStateAction } from "react"
 import type { DataRegionProps } from "@/components/ui/data-region"
 import type { BadgeProps } from "@/components/ui/badge"
-import type { FilterCondition } from "@/components/blocks/filter-card"
+import type { FilterCondition } from "../../lib/filter-model.ts"
 
 /** Service-independent display projection. Business content is never UI copy. */
 export type ProjectCollectionRecord = {
@@ -110,6 +110,8 @@ export type ProjectCollectionViewProps = {
   headerActions?: ReactNode
   /** Secondary per-project action (for example Agent); must not replace the default open/edit actions. */
   renderProjectAction?: (project: ProjectCollectionRecord) => ReactNode
+  /** Host wraps the actual card/list/table node; omitted by standalone fixtures. */
+  renderProjectContextMenu?: (project: ProjectCollectionRecord, target: ReactElement) => ReactNode
   summarySort?: ReactNode
   table?: { hiddenColumns?: readonly ("owner" | "health" | "milestone" | "team" | "updated")[]; sortableKeys?: readonly ("name" | "owner" | "health" | "milestone" | "team" | "updated" | "due")[]; sortKey?: "name" | "owner" | "health" | "milestone" | "team" | "updated" | "due"; sortDir?: "asc" | "desc"; onSort?: (key: "name" | "owner" | "health" | "milestone" | "team" | "updated" | "due") => void; rowActions?: (project: ProjectCollectionRecord) => ReactNode; onOpen?: (projectId: string) => void }
 }

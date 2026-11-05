@@ -1,80 +1,49 @@
 ---
 import "../styles/v4.css";
-import { appLabel, appNote, appUrl, agentWorkspaceUrl } from "../lib/site";
-
-interface Props {
-  title?: string;
-  description?: string;
-}
-
+import { appUrl, sourceUrl } from "../lib/site";
+interface Props { title?: string; description?: string }
 const {
-  title = "Project Management Agent v4",
-  description = "统一项目管理与编码 Agent 的自托管工作台。项目、任务、文档、会话、Provider 与真实执行共用同一套 Web、桌面和服务端。",
+  title = "PM Agent · 项目与 Agent，同一个工作台",
+  description = "把项目、任务与编码 Agent 放在一起。连接你常用的 Agent，在自己的工作台里规划、开发与交付。",
 } = Astro.props;
-
-const navigation = [
-  { href: "#capabilities", label: "已实现能力" },
-  { href: "#evidence", label: "跑通记录" },
-  { href: "#boundaries", label: "边界" },
-  { href: "#placeholders", label: "待补充" },
-];
 ---
-
 <!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#0b0b0d" />
+    <meta name="theme-color" content="#09090b" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>{title}</title>
   </head>
-  <body class="v4-body">
+  <body class="marketing">
     <a class="skip-link" href="#main-content">跳到主要内容</a>
-
-    <header class="site-header">
-      <div class="container header-inner">
-        <a class="brand" href="/" aria-label="Project Management Agent v4 首页">
-          <svg class="brand-mark" viewBox="0 0 24 24" width="26" height="26" fill="none" aria-hidden="true">
-            <path d="M2 2h8v8H2zm12 0h8v8h-8zM2 14h8v8H2z" fill="currentColor" />
-            <path d="M14 14h8v8h-8z" fill="var(--v4-accent)" />
-          </svg>
-          <span class="brand-name">PM<span>Agent</span></span>
-          <span class="brand-version">v4</span>
-        </a>
-
-        <nav class="primary-nav" aria-label="主要导航">
-          {navigation.map(({ href, label }) => <a href={href}>{label}</a>)}
+    <header class="nav">
+      <div class="container nav-inner">
+        <a href="/" class="brand" aria-label="PM Agent 首页"><span class="brand-mark">PM</span><span>Agent</span></a>
+        <nav class="nav-links" aria-label="主要导航">
+          <a class="nav-agents" href="/#agents">Agents</a>
+          <a href="/#open-source">开源</a>
+          <a href="/download/" aria-current={Astro.url.pathname.startsWith('/download') ? 'page' : undefined}>下载</a>
+          <a class="nav-workspace" href={appUrl}>打开工作台 <span aria-hidden="true">↗</span></a>
         </nav>
-
-        <a class="header-cta" href={appUrl}>{appLabel}<span aria-hidden="true">↗</span></a>
       </div>
     </header>
-
-    <main id="main-content" tabindex="-1">
-      <slot />
-    </main>
-
-    <footer class="site-footer">
-      <div class="container footer-top">
-        <div class="footer-brand-block">
-          <a class="footer-brand" href="/">PM Agent v4</a>
-          <p>统一项目管理与编码 Agent 的自托管工作台。</p>
-        </div>
-        <nav class="footer-nav" aria-label="页脚导航">
-          {navigation.map(({ href, label }) => <a href={href}>{label}</a>)}
-          <a href={agentWorkspaceUrl}>Agent 会话 <span aria-hidden="true">↗</span></a>
+    <main id="main-content" tabindex="-1"><slot /></main>
+    <footer class="footer">
+      <div class="container footer-inner">
+        <a class="footer-brand" href="/">PM Agent <span>项目与 Agent，同一个工作台。</span></a>
+        <nav aria-label="页脚导航">
+          <a href="/#agents">Agents</a>
+          {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noopener noreferrer">源码 ↗</a> : <a href="/#open-source">开源</a>}
+          <a href="/download/">下载</a>
+          <a href={appUrl}>工作台 ↗</a>
         </nav>
       </div>
-      <div class="container footer-bottom">
-        <p>静态营销页：不执行 Agent、不读取 Provider 凭据、不修改项目数据。</p>
-        <p>本机入口：<code>{appUrl}</code></p>
-      </div>
-      <div class="container footer-note">{appNote}</div>
     </footer>
   </body>
 </html>

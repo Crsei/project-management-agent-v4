@@ -108,6 +108,7 @@ export type SheetContentProps = Omit<
   style?: CSSProperties
   side?: "left" | "right" | "bottom"
   size?: number
+  finalFocus?: (() => HTMLElement | false | null) | RefObject<HTMLElement | null>
 }
 
 export function SheetContent({
@@ -115,11 +116,11 @@ export function SheetContent({
   size = 352,
   className,
   children,
+  finalFocus: explicitFinalFocus,
   ...props
 }: SheetContentProps) {
   const container = useThemePortalContainer()
-  // Base UI's `finalFocus` targeted the popup element; Radix already restores
-  // focus to the trigger, so only the recorded opener is reasserted.
+  // Trigger-based sheets use the recorded opener; controlled callers may override it.
   const finalFocus = useOverlayFinalFocus()
   const restoreRef = useContext(RestoreFocus)
   const { t } = useI18n()
@@ -145,6 +146,20 @@ export function SheetContent({
               } as CSSProperties
             }
             onCloseAutoFocus={(event) => {
+              if (explicitFinalFocus) {
+                event.preventDefault()
+                const target =
+                  typeof explicitFinalFocus === "function"
+                    ? explicitFinalFocus()
+                    : explicitFinalFocus.current
+                if (target && target.isConnected)
+                  requestAnimationFrame(() =>
+                    requestAnimationFrame(() =>
+                      target.focus({ preventScroll: true }),
+                    ),
+                  )
+                return
+              }
               const restore = restoreRef?.current
               if (restore && restore.isConnected) {
                 event.preventDefault()

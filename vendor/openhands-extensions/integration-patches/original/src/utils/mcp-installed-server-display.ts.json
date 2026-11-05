@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/utils/mcp-installed-server-display.ts",
+  "beforeSha256": "9df4d26ad40763a269610d11d1ccb2ee1230c045c878ae8643ee60964eb42aaf",
+  "afterSha256": "c871a2a75efc06b132155853a0af3e1ce2f88a6d38abe0e0e88ea0f8b89cbb7a",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 141,
+  "before": "Iw==",
+  "after": "QHBtL29wZW5oYW5kcy1zb3VyY2U="
+}

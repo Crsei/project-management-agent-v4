@@ -459,3 +459,114 @@ test("derived usage caches and interrupted writes are classified but never copie
     } finally { f.close(); }
   }
 });
+
+test("extension SQLite/key/Skills restore together, owned paths relocate and native binding authority is invalidated", async () => {
+  for (const secrets of ["include", "exclude"] as const) {
+    const f = fixture();
+    try {
+      const contextId = "11111111-1111-4111-8111-111111111111";
+      const root = path.join(f.source, "cc-switch");
+      const contextRoot = path.join(root, "contexts", contextId);
+      mkdirSync(path.join(contextRoot, "skills", "sample"), { recursive: true, mode: 0o700 });
+      writeFileSync(path.join(root, "secret.key"), Buffer.alloc(32, 7), { mode: 0o600 });
+      writeFileSync(path.join(contextRoot, "skills", "sample", "SKILL.md"), "# Synthetic owned Skill", { mode: 0o600 });
+      const db = new DatabaseSync(path.join(contextRoot, "cc-switch.db"));
+      db.exec("CREATE TABLE mcp_servers(id TEXT PRIMARY KEY,server_config TEXT);");
+      db.prepare("INSERT INTO mcp_servers VALUES (?, ?)").run("synthetic", "encrypted-test-ciphertext");
+      db.close();
+      chmodSync(path.join(contextRoot, "cc-switch.db"), 0o600);
+      writeFileSync(path.join(root, "contexts.json"), JSON.stringify([{
+        id: contextId, kind: "native", label: "Synthetic native target", createdAt: "2026-11-04T00:00:00.000Z",
+        binding: { homeDir: f.home, appDirs: { codex: f.home }, physicalRoots: [f.home],
+          unifiedSkillsRoot: path.join(f.home, ".agents", "skills"), bindingFingerprint: "nonportable-provider-authority",
+          providerInstanceIds: ["codex-a"], apps: ["codex"], sharedProviderInstanceIds: [], warnings: [], label: "Synthetic" },
+      }]), { mode: 0o600 });
+      const manifest = await create(f, secrets);
+      restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      verifyAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      assert.equal(manifest.files.some(member => member.path.startsWith("cc-switch/")), secrets === "include");
+      if (secrets === "exclude") assert.equal(existsSync(path.join(f.target, "cc-switch")), false);
+      else {
+        assert.deepEqual(readFileSync(path.join(f.target, "cc-switch/secret.key")), Buffer.alloc(32, 7));
+        const contexts = JSON.parse(readFileSync(path.join(f.target, "cc-switch/contexts.json"), "utf8"));
+        assert.equal(contexts[0].binding.homeDir, path.join(f.target, "provider-homes", "codex-a"));
+        assert.equal(contexts[0].binding.bindingFingerprint, "");
+        const restored = new DatabaseSync(path.join(f.target, "cc-switch", "contexts", contextId, "cc-switch.db"), { readOnly: true });
+        try { assert.equal(restored.prepare("SELECT server_config FROM mcp_servers WHERE id='synthetic'").get()!.server_config, "encrypted-test-ciphertext"); }
+        finally { restored.close(); }
+      }
+      assert.equal(JSON.parse(readFileSync(path.join(root, "contexts.json"), "utf8"))[0].binding.bindingFingerprint, "nonportable-provider-authority");
+    } finally { f.close(); }
+  }
+});
+
+test("owned extension Skills symlinks survive restore without following external targets", { skip: process.platform === "win32" }, async () => {
+  const f = fixture();
+  try {
+    const master = path.join(f.source, "cc-switch", "contexts", "synthetic", "skills", "sample");
+    mkdirSync(master, { recursive: true, mode: 0o700 });
+    writeFileSync(path.join(master, "SKILL.md"), "# Synthetic linked Skill", { mode: 0o600 });
+    mkdirSync(path.join(f.home, "skills"), { mode: 0o700 });
+    symlinkSync(master, path.join(f.home, "skills", "sample"), "dir");
+    const manifest = await create(f, "include");
+    assert.deepEqual(manifest.links, [{ path: "provider-homes/codex-a/skills/sample", target: "cc-switch/contexts/synthetic/skills/sample" }]);
+    restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+    verifyAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+    assert.equal(realpathSync(path.join(f.target, "provider-homes/codex-a/skills/sample")), path.join(f.target, "cc-switch/contexts/synthetic/skills/sample"));
+    assert.equal(readFileSync(path.join(f.target, "provider-homes/codex-a/skills/sample/SKILL.md"), "utf8"), "# Synthetic linked Skill");
+  } finally { f.close(); }
+});
+
+test("secret-excluded bundles cannot inject an extension key or encrypted configuration", async () => {
+  const f = fixture();
+  try {
+    const manifest = await create(f, "exclude");
+    const member = "cc-switch/secret.key", bytes = Buffer.alloc(32, 9);
+    mkdirSync(path.join(f.bundle, "cc-switch"), { mode: 0o700 });
+    writeFileSync(path.join(f.bundle, member), bytes, { mode: 0o600 });
+    manifest.files.push({ path: member, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+    writeFileSync(path.join(f.bundle, "manifest.json"), JSON.stringify(manifest), { mode: 0o600 });
+    await assert.rejects(async () => restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true }), /Credential-excluded/);
+    assert.equal(existsSync(f.target), false);
+  } finally { f.close(); }
+});
+
+test("Claude MCP backup paths stay authoritative across binding snapshots and are never inferred", async () => {
+  for (const explicitFile of [true, false]) {
+    const f = fixture();
+    try {
+      const contextId = "22222222-2222-4222-8222-222222222222";
+      const homeDir = path.join(f.source, "provider-homes", "claude-a");
+      const appDir = path.join(homeDir, ".claude");
+      const claudeMcpFile = path.join(appDir, ".claude.json");
+      mkdirSync(appDir, { recursive: true, mode: 0o700 });
+      writeFileSync(claudeMcpFile, '{"mcpServers":{}}', { mode: 0o600 });
+      const root = path.join(f.source, "cc-switch");
+      mkdirSync(root, { mode: 0o700 });
+      const binding = {
+        homeDir, appDirs: { claude: appDir }, physicalRoots: [appDir, claudeMcpFile],
+        unifiedSkillsRoot: path.join(homeDir, ".agents", "skills"),
+        bindingFingerprint: "synthetic-current-authority",
+        providerInstanceIds: ["claude-a"], apps: ["claude"], sharedProviderInstanceIds: [], warnings: [], label: "Synthetic",
+        ...(explicitFile ? { claudeMcpFile } : {}),
+      };
+      writeFileSync(path.join(root, "contexts.json"), JSON.stringify([{
+        id: contextId, kind: "native", label: "Synthetic path codec fixture", createdAt: "2026-11-04T00:00:00.000Z",
+        binding, providerBinding: binding,
+        externalTargets: [{ id: "synthetic-external", app: "claude", homeDir, appDir, ...(explicitFile ? { claudeMcpFile } : {}) }],
+      }]), { mode: 0o600 });
+      await create(f, "include");
+      restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      verifyAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      const portable = JSON.parse(readFileSync(path.join(f.bundle, "cc-switch/contexts.json"), "utf8"))[0];
+      const restored = JSON.parse(readFileSync(path.join(f.target, "cc-switch/contexts.json"), "utf8"))[0];
+      for (const field of ["binding", "providerBinding"]) {
+        assert.equal(portable[field].claudeMcpFile, explicitFile ? "agent-backup://provider-homes/claude-a/.claude/.claude.json" : undefined);
+        assert.equal(restored[field].claudeMcpFile, explicitFile ? path.join(f.target, "provider-homes/claude-a/.claude/.claude.json") : undefined);
+        assert.equal(restored[field].bindingFingerprint, "");
+      }
+      assert.equal(restored.externalTargets[0].claudeMcpFile, explicitFile ? path.join(f.target, "provider-homes/claude-a/.claude/.claude.json") : undefined);
+      assert.equal(existsSync(path.join(f.target, "provider-homes/claude-a/.claude.json")), false);
+    } finally { f.close(); }
+  }
+});

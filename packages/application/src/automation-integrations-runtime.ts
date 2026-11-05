@@ -6,13 +6,14 @@ import type { StudioConfig } from '../../contracts/src/automation-studio.ts';
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema } from '../../contracts/src/automation-pm.ts';
 import { automationProviderRequestSchema, automationIntegrationSupportsMcp, automationIntegrationSupportsNativeApi, type AutomationIntegrationRuntimeInput, type AutomationProviderRequest } from '../../contracts/src/automation-integrations.ts';
 import type { AutomationServiceIdentity } from '../../infrastructure/src/automation-execution-client.ts';
-import { createAutomationPrivateStore, automationMcpAdapter, type AutomationMcpTool } from '../../infrastructure/src/automation-integrations.ts';
+import { createAutomationPrivateStore, automationMcpAdapter, assertAutomationIntegrationsAvailable, type AutomationMcpTool } from '../../infrastructure/src/automation-integrations.ts';
 import { automationNativeProviderAdapter, automationNativeRequestUrl, automationNativeRequestIsWrite } from '../../infrastructure/src/automation-integrations-native.ts';
 import { lockWorkspace } from '../../infrastructure/src/database.ts';
 import { authorizeAutomationIntegration } from './automation-integrations-store.ts';
 import { readScopedAutomationConnection, type AutomationIntegrationsOptions } from './automation-integrations.ts';
 import { requireCapability } from './access.ts';
 import { requestHash } from './kernel.ts';
+import { resolveAutomationMcpDefinition } from './automation-integrations-definitions.ts';
 
 type ExecutionRow = { id: string; actor_id: string; workspace_id: string; project_id: string; request_id: string; definition_id: string; definition_revision: number; config_snapshot: StudioConfig; status: string; dispatched_at: Date | null; finished_at: Date | null };
 type OperationRow = { request_hash: string; status: string; result: unknown; connection_id: string; connection_revision: number; project_id: string };
@@ -44,7 +45,7 @@ export function createAutomationIntegrationRuntimeService(options: AutomationInt
   async function scoped<T>(identity: AutomationServiceIdentity, input: AutomationIntegrationRuntimeInput, operation: (sql: PoolClient, row: ExecutionRow, actor: Actor) => Promise<T>): Promise<T> {
     const sql = await options.database().connect();
     try {
-      await sql.query('BEGIN'); await lockWorkspace(sql, identity.workspaceId);
+      await sql.query('BEGIN'); await assertAutomationIntegrationsAvailable(sql); await lockWorkspace(sql, identity.workspaceId);
       const row = (await sql.query<ExecutionRow>('SELECT * FROM automation_studio_executions WHERE id=$1 AND workspace_id=$2 AND actor_id=$3', [identity.executionId, identity.workspaceId, identity.actorId])).rows[0];
       if (!row || input.executionId !== row.id || identity.generationId !== input.generationId || identity.projectId !== row.project_id || identity.requestId !== row.request_id || identity.definitionId !== row.definition_id || identity.definitionRevision !== row.definition_revision) throw new DomainError('not_found_or_forbidden', 'Automation integration execution scope does not match', 404);
       if (row.finished_at || !row.dispatched_at || !['queued', 'running', 'outcome_unknown'].includes(row.status)) throw new DomainError('automation_execution_inactive', 'Integration grant is not active for this execution', 409);
@@ -66,7 +67,11 @@ export function createAutomationIntegrationRuntimeService(options: AutomationInt
       const mechanism = row.config_snapshot.action.kind === 'template' && (connection.config.provider === 'github' || connection.config.provider === 'gitlab') ? 'nativeApi' : 'mcp';
       const supported = mechanism === 'nativeApi' ? automationIntegrationSupportsNativeApi(connection.config) : automationIntegrationSupportsMcp(connection.config);
       if (!supported || connection.verification[mechanism] !== true) throw new DomainError('integration_mechanism_unavailable', `This execution requires an actually verified ${mechanism} connection; the selected mechanism is not available`, 409);
-      connections.push({ row: connection, target: { endpoint: connection.config.endpoint, headers: store.open<Record<string, string>>(connection.private_config, `${row.workspace_id}:${actor.id}:${id}:connection`) } });
+      const target = automationIntegrationSupportsMcp(connection.config) && connection.verification.mcp
+        ? await resolveAutomationMcpDefinition(options.definitionResolver, { actorId: actor.id, workspaceId: row.workspace_id, projectId: row.project_id }, connection.config.mcpDefinition!, connection.mcp_config_fingerprint)
+        : undefined;
+      const nativeHeaders = connection.native_private_config ? store.open<Record<string, string>>(connection.native_private_config, `${row.workspace_id}:${actor.id}:${id}:connection`) : {};
+      connections.push({ row: connection, target, nativeHeaders });
     }
     return connections;
   }
@@ -125,7 +130,7 @@ export function createAutomationIntegrationRuntimeService(options: AutomationInt
           throw new DomainError('integration_outcome_unknown', 'The original provider request may have reached the provider; it was not redispatched. Reconcile its original operation key.', 409);
         }
         let result;
-        try { result = await (options.nativeAdapter ?? automationNativeProviderAdapter)(prepared.connection.row.config, prepared.connection.target.headers, call); }
+        try { result = await (options.nativeAdapter ?? automationNativeProviderAdapter)(prepared.connection.row.config, prepared.connection.nativeHeaders, call); }
         catch {
           await options.database().query("UPDATE automation_integration_operations SET status='outcome_unknown',finished_at=clock_timestamp() WHERE id=$1 AND status='dispatching'", [call.operationId]);
           throw new DomainError('integration_outcome_unknown', 'Provider API result is not confirmed; no automatic retry occurred. Reconcile the original operation key before another external mutation.', 502);
@@ -146,7 +151,7 @@ export function createAutomationIntegrationRuntimeService(options: AutomationInt
         const tools: AutomationMcpTool[] = [];
         for (const connection of connections) {
           if (!automationIntegrationSupportsMcp(connection.row.config) || !connection.row.verification.mcp) continue;
-          const remote = await adapter.list(connection.target);
+          const remote = await adapter.list(connection.target!);
           for (const tool of remote) {
             const write = connection.row.config.writeTools.includes(tool.name);
             if (!write && !connection.row.config.readTools.includes(tool.name)) continue;
@@ -191,10 +196,10 @@ export function createAutomationIntegrationRuntimeService(options: AutomationInt
       let result: unknown;
       try {
         // Metadata drift must not turn a read allowlist entry into an unapproved write.
-        const tools = await adapter.list(prepared.connection.target); const tool = tools.find(candidate => candidate.name === name);
+        const tools = await adapter.list(prepared.connection.target!); const tool = tools.find(candidate => candidate.name === name);
         if (!tool || prepared.connection.row.config.readTools.includes(name) && tool.annotations?.readOnlyHint === false) throw new DomainError('integration_tool_policy_mismatch', 'The current remote tool does not match its explicit approved policy', 409);
         await scoped(identity, input, async (sql, row, actor) => { await preparedConnections(sql, row, actor); });
-        result = await adapter.call(prepared.connection.target, name, call.arguments.arguments);
+        result = await adapter.call(prepared.connection.target!, name, call.arguments.arguments);
       } catch {
         await options.database().query("UPDATE automation_integration_operations SET status='outcome_unknown',finished_at=clock_timestamp() WHERE id=$1 AND status='dispatching'", [call.arguments.operationId]);
         throw new DomainError('integration_outcome_unknown', 'The integration result is not confirmed. No automatic retry occurred; reconcile the original operation UUID before any further external write.', 502);

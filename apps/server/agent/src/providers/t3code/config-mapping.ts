@@ -1,14 +1,45 @@
 import { ProviderDriverKind, ProviderInstanceConfig, ProviderInstanceId, ServerSettings } from "@t3tools/contracts";
 import path from "node:path";
-import type { ProviderDriver } from "@agent-workspace/contracts/provider";
+import type { ProviderConfig, ProviderDriver } from "@agent-workspace/contracts/provider";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { AnyProviderDriver } from "@t3tools/provider-core/server/driver";
 import type { StoredProviderInstance } from "../instances.ts";
-import { getProviderSettings, listStoredInstances } from "../instances.ts";
 import type { ProviderDriverContext } from "../driver-adapter.ts";
 import type { PmProviderBoundaryError } from "./contract.ts";
-import { getUsageSettings } from "../../usage/settings.ts";
+import { ClaudeSettings } from "@t3tools/contracts";
+import { claudeLaunchFlags } from "../../../../../../vendor/t3code/apps/server/src/provider/Drivers/ClaudeLaunchArgs.ts";
+import { BUNDLED_CLAUDE_MODEL_CATALOG, resolveClaudeModelSlug } from "../../../../../../vendor/t3code/apps/server/src/provider/ClaudeModelCatalog.ts";
+import { PiSettings } from "@t3tools/provider-pi/settings";
+import { resolvePiLaunchArgs } from "../../../../../../vendor/t3code/packages/provider-pi/src/server/mcpInjection.ts";
+
+export function validatePiConfig(config: ProviderConfig): ProviderConfig {
+  for (const [key, value] of Object.entries(config)) {
+    if (!["binaryPath", "launchArgs"].includes(key)) throw new Error(`Unknown Pi setting: ${key}.`);
+    if (typeof value !== "string" || value.includes("\0")) throw new Error(`Pi ${key} must be a string without NUL characters.`);
+  }
+  const decoded = Schema.decodeUnknownSync(PiSettings)(config);
+  const launch = resolvePiLaunchArgs(decoded.launchArgs);
+  if (!launch.ok) throw new Error(launch.message);
+  return { binaryPath: decoded.binaryPath, launchArgs: decoded.launchArgs };
+}
+
+/** Native aliases are resolved at the same host boundary as native configuration. */
+export function canonicalProviderModelId(driver: ProviderDriver, modelId: string): string {
+  return driver === "claude" ? resolveClaudeModelSlug(BUNDLED_CLAUDE_MODEL_CATALOG, modelId) : modelId;
+}
+
+export function validateClaudeConfig(config: ProviderConfig): ProviderConfig {
+  const keys = ["binaryPath", "homePath", "launchArgs", "autoCompactWindow", "idleCompaction"];
+  for (const [key, value] of Object.entries(config)) {
+    if (!keys.includes(key)) throw new Error(`Unknown Claude setting: ${key}.`);
+    if (typeof value !== "string" || value.includes("\0")) throw new Error(`Claude ${key} must be a string without NUL characters.`);
+  }
+  const decoded = Schema.decodeUnknownSync(ClaudeSettings)({ ...config, binaryPath: config.binaryPath || "claude" });
+  claudeLaunchFlags(decoded.launchArgs);
+  return { binaryPath: decoded.binaryPath, homePath: decoded.homePath, launchArgs: decoded.launchArgs,
+    autoCompactWindow: decoded.autoCompactWindow, idleCompaction: decoded.idleCompaction };
+}
 
 export function providerBoundaryError(message: string, code = "session_mismatch", status = 409): PmProviderBoundaryError {
   return Object.assign(new Error(message), { code, status });
@@ -61,17 +92,17 @@ export function decodeProviderConfig<R>(driver: AnyProviderDriver<R>, entry: Pro
     Effect.mapError(() => providerBoundaryError("Provider configuration is incompatible with its source schema.", "invalid_config", 409)),
   );
 }
-export function projectProviderSettings(): ServerSettings {
+export function projectProviderSettings(storedInstances: readonly StoredProviderInstance[], healthRefreshIntervalSeconds: number, cursorKeychainUsageEnabled: boolean): ServerSettings {
   // Local historical IDs remain readable; an unrepresentable ID fails explicitly when selected for acquire.
-  const instances = listStoredInstances().filter(instance => Schema.is(ProviderInstanceId)(instance.instanceId));
+  const instances = storedInstances.filter(instance => Schema.is(ProviderInstanceId)(instance.instanceId));
   return Schema.decodeUnknownSync(ServerSettings)({
     providerInstances: Object.fromEntries(instances.map(instance => [instance.instanceId, projectProviderInstance(instance)])),
     favorites: instances.flatMap(instance => (instance.modelPreferences?.favorites ?? []).map(model => ({ provider: instance.instanceId, model }))),
     providerModelPreferences: Object.fromEntries(instances.map(instance => [instance.instanceId, {
       hiddenModels: instance.modelPreferences?.hidden ?? [], modelOrder: instance.modelPreferences?.order ?? [],
     }])),
-    providerHealthRefreshInterval: getProviderSettings().healthRefreshIntervalSeconds * 1000,
-    cursorKeychainUsageEnabled: getUsageSettings().cursorKeychainUsageEnabled,
+    providerHealthRefreshInterval: healthRefreshIntervalSeconds * 1000,
+    cursorKeychainUsageEnabled,
     enableProviderUpdateChecks: true,
     continueThreadsAfterServerUpdate: false,
     enableAgentBrowserAccess: false,

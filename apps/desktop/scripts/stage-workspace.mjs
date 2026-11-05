@@ -8,6 +8,8 @@ import { parse, stringify } from "yaml";
 import { desktopRoot, inside, portable, requireNativeTarget, requirePinnedNode } from "./runtime-manifest.mjs";
 
 import { collectNotices } from "./license-notices.mjs";
+import { nativeTarget, verifySidecar } from "../../server/agent/scripts/cc-switch.mjs";
+import { verifyWebDistribution } from "../../../vendor/openhands-extensions/scripts/web-build.mjs";
 export const repository = resolve(desktopRoot, "../..");
 export function run(command, args, cwd = repository) {
   return new Promise((resolveRun, reject) => {
@@ -74,6 +76,9 @@ export async function stageWorkspace(output, application, {
 } = {}) {
   requirePinnedNode();
   const target = requireNativeTarget();
+  const ccSwitch = nativeTarget();
+  await verifySidecar(agentBuild);
+  await verifyWebDistribution(webDist, repository);
   const previous = await lstat(output).catch((error) => { if (error.code === "ENOENT") return null; throw error; });
   if (previous) throw new Error("Workspace runtime output must be a new directory.");
   const staging = await realpath(await mkdtemp(join(tmpdir(), "pm-desktop-staging-")));
@@ -107,6 +112,7 @@ export async function stageWorkspace(output, application, {
     }
     await relocateLinks(linkRoot);
     await renameAgentManifest(output, target);
+    await verifySidecar(join(output, "apps/server/agent/dist"));
     for (const name of ["apps/server/pm/src", "apps/server/worker/src", "packages", "apps/desktop/src", "vendor/openhands-automations"])
       await cp(join(repository, name), join(output, name), { recursive: true, filter: sourceFilter });
     await cp(join(repository, "apps/server/gateway.ts"), join(output, "apps/server/gateway.ts"));
@@ -118,6 +124,11 @@ export async function stageWorkspace(output, application, {
       "apps/server/agent/dist/desktop-agent-maintenance.mjs", "apps/desktop/src/backend/bootstrap.ts",
       "apps/desktop/src/backend/maintenance.ts", "packages/infrastructure/migrations", "apps/web/dist/index.html",
       "vendor/openhands-automations/interface.json", "vendor/openhands-automations/bundle-index.js",
+      "apps/web/dist/openhands-provenance.json", "apps/web/dist/licenses/openhands/LICENSE",
+      "apps/web/dist/licenses/openhands/extensions/LICENSE",
+      "licenses/provenance/LICENSE", "licenses/provenance/THIRD_PARTY_NOTICES.md",
+      `apps/server/agent/dist/cc-switch/${ccSwitch.target}/${ccSwitch.executable}`,
+      `apps/server/agent/dist/cc-switch/${ccSwitch.target}/native-manifest.json`,
     ]) await access(join(output, name));
     const require = createRequire(join(output, "apps/server/agent/dist/index.mjs"));
     require.resolve("@lydell/node-pty");

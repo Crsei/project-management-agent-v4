@@ -69,7 +69,7 @@ export function DocumentSourceSettings(props: DocumentSourceSettingsProps) {
           {props.scopes.map(scope => <option value={projectKey(scope.projectId)} key={projectKey(scope.projectId)}>{scope.projectId ? `${scope.name} · ${scope.projectId}` : en ? 'Workspace shared documents' : '工作区公共文档'}</option>)}
         </RadixSelect>
       </label>
-      {props.fixedProject && <p className="document-source-hint">{en ? 'Fixed to the current project. Other project and workspace associations will not change.' : '已固定为当前项目，不会修改其他项目或工作区公共文档的关联。'}</p>}
+      {props.fixedProject && <p className="document-source-hint">{props.selectedProjectId ? en ? 'Fixed to the current project. Other project and workspace associations will not change.' : '已固定为当前项目，不会修改其他项目或工作区公共文档的关联。' : en ? 'Fixed to workspace shared documents. Project associations will not change.' : '已固定为工作区公共文档，不会修改任何项目的关联。'}</p>}
       {props.loading && <p role="status" className="document-source-hint">{en ? 'Reading current source permissions…' : '正在读取当前来源权限…'}</p>}
       {props.error && <div className="document-source-error" role="alert">{props.error}<Button type="button" variant="outline" size="sm" disabled={busy || props.loading} onClick={props.onReload}>{en ? 'Read sources again' : '重新读取来源'}</Button></div>}
       {initial ? <SourceSettingsForm key={`${props.workspaceId}:${projectKey(projectId)}`} workspaceId={props.workspaceId} initial={initial} current={current} disabled={props.loading || !!props.error} en={en} onBusy={setBusy} onDirty={setDirty} onSaved={props.onSaved} onCancel={close} closeButton={closeButton} />

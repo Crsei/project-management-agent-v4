@@ -1,7 +1,7 @@
 import { studioNativeTemplateRequiresWorkspace, type StudioConfig } from '../../../../../packages/contracts/src/automation-studio.ts';
 import { getStoredInstance } from '../providers/instances.ts';
 import { isPmAutomationTemplateId } from '../../../../../packages/contracts/src/automation-pm.ts';
-import { pmAutomationTemplateRequiresProvider } from '../../../../../packages/contracts/src/automation-pm-catalog.ts';
+import { pmAutomationTemplateRequiresProvider } from '../../../../../packages/contracts/src/automation-pm.ts';
 import { pmAnalysisProviderSupport } from './native-templates/pm-analysis-policy.ts';
 
 export type AutomationProviderToolRequirement = 'promptConnectors' | 'templateWorkspace';

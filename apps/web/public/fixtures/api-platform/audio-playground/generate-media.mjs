@@ -7,7 +7,7 @@ const directory = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(directory, "../../../../../..")
 const fixturesPath = path.join(
   root,
-  "packages/agent-workspace-views/api-platform/audio-playground/fixtures.ts",
+  "vendor/agent-workspace-views/api-platform/audio-playground/fixtures.ts",
 )
 const fixtures = await readFile(fixturesPath, "utf8")
 const scripts = [...fixtures.matchAll(/script:\s*"([^"]+)"/g)].map(

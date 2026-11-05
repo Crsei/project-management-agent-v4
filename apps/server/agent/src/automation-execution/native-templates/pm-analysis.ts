@@ -6,7 +6,7 @@ import {
   type PmAutomationExecution, type PmAutomationFinding, type PmAutomationResult,
   type PmAutomationSnapshot, type PmAutomationTask, type PmAutomationTemplateId,
 } from '../../../../../../packages/contracts/src/automation-pm.ts';
-import { pmAutomationTemplateRequiresProvider } from '../../../../../../packages/contracts/src/automation-pm-catalog.ts';
+import { pmAutomationTemplateRequiresProvider } from '../../../../../../packages/contracts/src/automation-pm.ts';
 import { PmAnalysisFacts } from './pm-analysis/facts.ts';
 import { DAY_MS, decisionLines, declaredPaths, errorSignature, normalized, pathAllowed, similarity, time, topicLines, unresolvedMessages } from './pm-analysis/source.ts';
 

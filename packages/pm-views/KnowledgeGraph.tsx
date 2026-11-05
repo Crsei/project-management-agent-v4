@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Crosshair, Network, PanelLeft, Search, X } from 'lucide-react';
 import { defaultConfiguration, entityDefinitions, entityKinds, workflowFor } from '../pm-schema/index.ts';
@@ -8,6 +8,7 @@ import type { GraphData, GraphNode, GraphQuery } from '../pm-schema/graph.ts';
 import './knowledge-graph.css';
 import { RadixSelect } from './RadixSelect.tsx';
 import type { GraphCanvasViewState } from './KnowledgeGraphCanvas.tsx';
+import type { ContextMenuAction, ContextMenuRenderer } from './index.tsx';
 
 export type GraphSource = (query: GraphQuery, signal?: AbortSignal) => Promise<GraphData>;
 export interface KnowledgeGraphProps {
@@ -23,6 +24,7 @@ export interface KnowledgeGraphProps {
   refreshKey?: unknown;
   graphScopeTarget?: HTMLElement | null;
   graphToggleTarget?: HTMLElement | null;
+  renderContextMenu?: ContextMenuRenderer;
 }
 
 const GraphCanvas = lazy(() => import('./KnowledgeGraphCanvas.tsx'));
@@ -66,7 +68,7 @@ function ReadonlyNote({ source, hasDrafts, en }: { source: GraphSource | undefin
   </div>;
 }
 
-export function KnowledgeGraph({ files, configuration = defaultConfiguration, source, query, selectedId, onSelect, draftIds, en = false, embedded = false, refreshKey, graphScopeTarget, graphToggleTarget }: KnowledgeGraphProps) {
+export function KnowledgeGraph({ files, configuration = defaultConfiguration, source, query, selectedId, onSelect, draftIds, en = false, embedded = false, refreshKey, graphScopeTarget, graphToggleTarget, renderContextMenu }: KnowledgeGraphProps) {
   const graphId = useId();
   const [centerId, setCenterId] = useQueryControl(query?.centerId, query?.centerId || '', source);
   const [depth, setDepth] = useQueryControl(query?.depth ?? 1, String(query?.depth ?? 1), source);
@@ -183,6 +185,16 @@ export function KnowledgeGraph({ files, configuration = defaultConfiguration, so
     if (!local) { setCenterId(undefined); return; }
     if (!centerId && focusCandidate) setCenterId(focusCandidate);
   }
+  function nodeContextActions(id: string): ContextMenuAction[] {
+    const node = nodeMap.get(id);
+    if (!node) return [];
+    return [
+      { id: 'summary', label: en ? 'Show summary' : '查看摘要', onSelect: () => setInspectorId(id) },
+      { id: 'open', label: node.entity === 'work_item' ? en ? 'Open task' : '打开任务' : en ? 'Open entity' : '打开对象', onSelect: () => onSelect(id) },
+      { id: 'center', label: en ? 'Focus as center' : '设为中心', disabled: id === centerId, onSelect: () => setCenterId(id) },
+      { id: 'locate', label: en ? 'Locate on canvas' : '在画布中定位', onSelect: () => requestFocus(id) },
+    ];
+  }
 
   const scopeSwitch = <div className="kg-scope" role="group" aria-label={en ? 'Graph scope' : '图谱范围'}>
     <button type="button" aria-pressed={!centerId} onClick={() => switchScope(false)}>{en ? 'Global' : '全局'}</button>
@@ -214,57 +226,12 @@ export function KnowledgeGraph({ files, configuration = defaultConfiguration, so
       : !nodes.length
         ? <div className="kg-state" role="status"><strong>{en ? 'No entities match these graph filters.' : '没有实体符合当前图谱筛选条件。'}</strong><p>{centerId ? en ? 'The focused entity may be excluded by the current view, search, or archive filters.' : '中心实体可能被当前视图、搜索或归档条件排除。' : en ? 'Try changing the search, view, or archive filters.' : '请调整搜索、视图或归档条件。'}</p></div>
         : visibleData && visibleData.nodes.length
-          ? <Suspense fallback={<div className="kg-state" role="status">{en ? 'Loading interactive canvas…' : '正在加载交互画布…'}</div>}><GraphCanvas key={viewScope.current.version} data={visibleData} selectedId={inspectorId ?? selectedId} centerId={centerId} draftIds={draftIds} en={en} embedded={embedded} onSelect={selectNode} viewStateRef={viewStateRef} focusRequest={focusRequest} /></Suspense>
+          ? <Suspense fallback={<div className="kg-state" role="status">{en ? 'Loading interactive canvas…' : '正在加载交互画布…'}</div>}><GraphCanvas key={viewScope.current.version} data={visibleData} selectedId={inspectorId ?? selectedId} centerId={centerId} draftIds={draftIds} en={en} embedded={embedded} onSelect={selectNode} renderContextMenu={renderContextMenu} nodeContextActions={nodeContextActions} viewStateRef={viewStateRef} focusRequest={focusRequest} /></Suspense>
           : <div className="kg-state" role="status"><strong>{en ? 'Every entity is hidden by the current status filter.' : '当前状态筛选隐藏了全部实体。'}</strong><p>{en ? 'Re-enable a status group in the entity sidebar.' : '请在左侧实体导航中重新启用一个状态分组。'}</p></div>;
 
   const pageSummary = <span className="kg-page-summary" role="status" aria-live="polite">{visibleNodes.length} {en ? 'entities' : '个实体'} · {visibleData?.links.length ?? 0} {en ? 'relationships' : '条关系'}</span>;
   const sidebarToggle = <button type="button" className="kg-icon-button task-graph-toggle" aria-pressed={sidebarOpen} aria-controls={`${graphId}-sidebar`} aria-label={en ? sidebarOpen ? 'Hide entity navigation' : 'Show entity navigation' : sidebarOpen ? '收起实体导航' : '展开实体导航'} title={en ? 'Entity navigation' : '实体导航'} onClick={() => setSidebarOpen(value => !value)}><PanelLeft size={16} aria-hidden="true" /></button>;
-
-  if (!embedded) return <section className="knowledge-graph knowledge-graph-page" aria-label={en ? 'Relationship graph' : '关系图'} aria-describedby={`${graphId}-provenance`} data-testid="knowledge-graph" data-graph-mode={source ? 'saved' : 'preview'}>
-    {graphScopeTarget && createPortal(<>{scopeSwitch}{pageSummary}</>, graphScopeTarget)}
-    {graphToggleTarget && createPortal(sidebarToggle, graphToggleTarget)}
-    {(!graphScopeTarget || !graphToggleTarget) && <header className="kg-page-head">
-      <div className="kg-page-title"><Network size={16} aria-hidden="true" /><strong>{en ? 'Relationship graph' : '关系图'}</strong></div>
-      <div className="kg-page-actions">
-        {!graphScopeTarget && scopeSwitch}
-        {!graphScopeTarget && pageSummary}
-        {!graphToggleTarget && sidebarToggle}
-      </div>
-    </header>}
-    <div className="kg-workbench">
-      <aside id={`${graphId}-sidebar`} className="kg-sidebar" data-open={sidebarOpen} aria-label={en ? 'Entity navigation and graph filters' : '实体导航与图谱筛选'}>
-        <label className="kg-sidebar-search"><Search size={14} aria-hidden="true" /><span className="sr-only">{en ? 'Search entities' : '搜索实体'}</span><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={en ? 'Search entities…' : '搜索实体…'} /></label>
-        <div className="kg-sidebar-filters">{focusControls}{relationFilter}</div>
-        <nav className="kg-entity-nav" aria-label={en ? 'Entities in the current graph' : '当前图谱中的实体'}>
-          <div className="kg-nav-heading"><span>{en ? 'All entities' : '全部实体'}</span><span>{nodes.length}</span></div>
-          {grouped.map(group => {
-            const hidden = !search && hiddenGroups.has(group.id);
-            return <section className="kg-entity-group" key={group.id}>
-              <button type="button" className="kg-entity-group-heading" aria-pressed={!hidden} aria-label={`${hidden ? en ? 'Show' : '显示' : en ? 'Hide' : '隐藏'} ${en ? group.en : group.zh}`} onClick={() => toggleGroup(group.id)}>
-                <ChevronDown size={13} className={hidden ? 'is-collapsed' : ''} aria-hidden="true" />
-                <span>{en ? group.en : group.zh}</span>
-                <span className="kg-group-count">{group.nodes.length}</span>
-              </button>
-              {!hidden && <ul className="kg-entity-list">
-                {group.nodes.map(node => <li key={node.id} data-selected={inspectorId === node.id || selectedId === node.id || undefined}>
-                  <button type="button" className="kg-entity-open" aria-current={selectedId === node.id ? 'true' : undefined} onClick={() => selectNode(node.id)}>
-                    <i style={{ backgroundColor: `var(--kg-${node.entity})` }} aria-hidden="true" />
-                    <span className="kg-entity-copy"><span className="kg-entity-meta">{node.id} · {en ? entityDefinitions[node.entity].label : entityLabels[node.entity]}</span><strong>{node.title}</strong></span>
-                  </button>
-                  <button type="button" className="kg-entity-locate" aria-label={`${en ? 'Locate' : '定位'} ${node.id}`} title={en ? 'Locate on canvas' : '在画布中定位'} onClick={() => requestFocus(node.id)}><Crosshair size={13} aria-hidden="true" /></button>
-                </li>)}
-              </ul>}
-            </section>;
-          })}
-          {!nodes.length && !loading && !error && <p className="kg-filter-empty">{en ? 'No entities in the current scope.' : '当前范围没有实体。'}</p>}
-        </nav>
-        <details className="kg-sidebar-note" id={`${graphId}-provenance`}>
-          <summary>{source ? en ? 'Read-only' : '只读说明' : en ? 'Preview note' : '预览说明'}</summary>
-          <ReadonlyNote source={source} hasDrafts={hasDrafts} en={en} />
-        </details>
-      </aside>
-      <div className="kg-main" aria-busy={loading}>{canvas}</div>
-      {inspector && <aside className="kg-inspector" aria-label={en ? 'Selected entity' : '选中实体详情'}>
+  const inspectorPanel = inspector && <aside className="kg-inspector" aria-label={en ? 'Selected entity' : '选中实体详情'}>
         <header className="kg-inspector-head">
           <div><span className="kg-inspector-type" style={{ color: `var(--kg-${inspector.entity})` }}>{en ? entityDefinitions[inspector.entity].label : entityLabels[inspector.entity]}</span><strong className="kg-inspector-id">{inspector.id}</strong></div>
           <button type="button" className="kg-icon-button" aria-label={en ? 'Close entity details' : '关闭实体详情'} onClick={() => setInspectorId(undefined)}><X size={15} aria-hidden="true" /></button>
@@ -295,7 +262,56 @@ export function KnowledgeGraph({ files, configuration = defaultConfiguration, so
           </section>
           <p className="kg-inspector-hint">{en ? 'Dragging cards changes only this in-memory layout. Business relationships are read-only.' : '拖动卡片只改变当前内存布局，业务关系为只读。'}</p>
         </div>
-      </aside>}
+      </aside>;
+
+  if (!embedded) return <section className="knowledge-graph knowledge-graph-page" aria-label={en ? 'Relationship graph' : '关系图'} aria-describedby={`${graphId}-provenance`} data-testid="knowledge-graph" data-graph-mode={source ? 'saved' : 'preview'}>
+    {graphScopeTarget && createPortal(<>{scopeSwitch}{pageSummary}</>, graphScopeTarget)}
+    {graphToggleTarget && createPortal(sidebarToggle, graphToggleTarget)}
+    {(!graphScopeTarget || !graphToggleTarget) && <header className="kg-page-head">
+      <div className="kg-page-title"><Network size={16} aria-hidden="true" /><strong>{en ? 'Relationship graph' : '关系图'}</strong></div>
+      <div className="kg-page-actions">
+        {!graphScopeTarget && scopeSwitch}
+        {!graphScopeTarget && pageSummary}
+        {!graphToggleTarget && sidebarToggle}
+      </div>
+    </header>}
+    <div className="kg-workbench">
+      <aside id={`${graphId}-sidebar`} className="kg-sidebar" data-open={sidebarOpen} aria-label={en ? 'Entity navigation and graph filters' : '实体导航与图谱筛选'}>
+        <label className="kg-sidebar-search"><Search size={14} aria-hidden="true" /><span className="sr-only">{en ? 'Search entities' : '搜索实体'}</span><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder={en ? 'Search entities…' : '搜索实体…'} /></label>
+        <div className="kg-sidebar-filters">{focusControls}{relationFilter}</div>
+        <nav className="kg-entity-nav" aria-label={en ? 'Entities in the current graph' : '当前图谱中的实体'}>
+          <div className="kg-nav-heading"><span>{en ? 'All entities' : '全部实体'}</span><span>{nodes.length}</span></div>
+          {grouped.map(group => {
+            const hidden = !search && hiddenGroups.has(group.id);
+            return <section className="kg-entity-group" key={group.id}>
+              <button type="button" className="kg-entity-group-heading" aria-pressed={!hidden} aria-label={`${hidden ? en ? 'Show' : '显示' : en ? 'Hide' : '隐藏'} ${en ? group.en : group.zh}`} onClick={() => toggleGroup(group.id)}>
+                <ChevronDown size={13} className={hidden ? 'is-collapsed' : ''} aria-hidden="true" />
+                <span>{en ? group.en : group.zh}</span>
+                <span className="kg-group-count">{group.nodes.length}</span>
+              </button>
+              {!hidden && <ul className="kg-entity-list">
+                {group.nodes.map(node => {
+                  const row = <li tabIndex={renderContextMenu ? 0 : undefined} data-selected={inspectorId === node.id || selectedId === node.id || undefined}>
+                    <button type="button" className="kg-entity-open" aria-current={selectedId === node.id ? 'true' : undefined} onClick={() => selectNode(node.id)}>
+                      <i style={{ backgroundColor: `var(--kg-${node.entity})` }} aria-hidden="true" />
+                      <span className="kg-entity-copy"><span className="kg-entity-meta">{node.id} · {en ? entityDefinitions[node.entity].label : entityLabels[node.entity]}</span><strong>{node.title}</strong></span>
+                    </button>
+                    <button type="button" className="kg-entity-locate" aria-label={`${en ? 'Locate' : '定位'} ${node.id}`} title={en ? 'Locate on canvas' : '在画布中定位'} onClick={() => requestFocus(node.id)}><Crosshair size={13} aria-hidden="true" /></button>
+                  </li>;
+                  return <Fragment key={node.id}>{renderContextMenu ? renderContextMenu(row, nodeContextActions(node.id)) : row}</Fragment>;
+                })}
+              </ul>}
+            </section>;
+          })}
+          {!nodes.length && !loading && !error && <p className="kg-filter-empty">{en ? 'No entities in the current scope.' : '当前范围没有实体。'}</p>}
+        </nav>
+        <details className="kg-sidebar-note" id={`${graphId}-provenance`}>
+          <summary>{source ? en ? 'Read-only' : '只读说明' : en ? 'Preview note' : '预览说明'}</summary>
+          <ReadonlyNote source={source} hasDrafts={hasDrafts} en={en} />
+        </details>
+      </aside>
+      <div className="kg-main" aria-busy={loading}>{canvas}</div>
+      {inspectorPanel}
     </div>
   </section>;
 
@@ -318,6 +334,7 @@ export function KnowledgeGraph({ files, configuration = defaultConfiguration, so
     </div>
     {data && <div className="kg-summary" role="status" aria-live="polite"><span><strong>{visibleNodes.length}</strong> {en ? 'entities' : '个实体'} · <strong>{visibleData?.links.length ?? 0}</strong> {en ? 'typed relationships' : '条类型关系'}{centerId ? ` · ${centerId} · ${depth} ${en ? 'hop(s)' : '层邻域'}` : en ? ' · Global within current filters' : ' · 当前筛选范围内的全局图'}</span>{visibleDraftCount > 0 && <span className="kg-draft-count">{visibleDraftCount} {en ? 'with unsaved drafts' : '个实体有未保存草稿'}</span>}</div>}
     <div className="kg-body" aria-busy={loading}>{canvas}</div>
+    {inspectorPanel}
     {data && <>
       <ul className="kg-legend" aria-label={en ? 'Entity type legend' : '实体类型图例'}>{entityKinds.filter(kind => kinds.has(kind)).map(kind => <li key={kind}><i style={{ backgroundColor: `var(--kg-${kind})` }} aria-hidden="true" />{en ? entityDefinitions[kind].label : entityLabels[kind]} <span>{kinds.get(kind)}</span></li>)}</ul>
       {!!nodes.length && <details className="kg-node-navigation"><summary>{en ? 'Accessible node navigation' : '无障碍节点导航'} · {nodes.length}</summary><p>{en ? 'Open navigates to the entity. Focus changes only the local graph center.' : '“打开”进入实体；“聚焦”只调整局部图的中心。'}</p><ul>{nodes.map(node => <li key={node.id} data-selected={selectedId === node.id || undefined}><span className="kg-node-type" style={{ backgroundColor: `var(--kg-${node.entity})` }} aria-hidden="true" /><button type="button" className="kg-open-node" aria-current={selectedId === node.id ? 'true' : undefined} onClick={() => onSelect(node.id)} aria-label={`${en ? 'Open' : '打开'} ${node.id}: ${node.title}`}><span>{node.id}</span><strong>{node.title}</strong></button><span className="kg-node-meta">{en ? entityDefinitions[node.entity].label : entityLabels[node.entity]}{node.status ? ` · ${node.status}` : ''}{node.archived ? en ? ' · Archived' : ' · 已归档' : ''}{node.stale ? en ? ' · Stale' : ' · 过期快照' : ''}{draftIds?.has(node.id) ? en ? ' · Unsaved draft' : ' · 未保存草稿' : ''}</span><button type="button" onClick={() => setCenterId(node.id)} aria-pressed={centerId === node.id} aria-label={`${en ? 'Focus graph on' : '聚焦图谱到'} ${node.id}`}>{en ? 'Focus' : '聚焦'}</button></li>)}</ul></details>}

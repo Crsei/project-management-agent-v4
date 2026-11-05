@@ -2,7 +2,7 @@
 // MIT license: vendor/openhands-automations/LICENSE.extensions.
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
-import { validateNativeTemplateArguments } from '../../../../../../packages/contracts/src/automation-native-template-arguments.ts';
+import { validateNativeTemplateArguments } from '../../../../../../packages/automation-resources/native-template-arguments.ts'
 import { NativeTemplateUnknownOutcome, type NativeTemplateContext, type NativeTemplateHandler, type NativeTemplateId, type NativeTemplateState } from './ports.ts';
 
 const WATCHDOG = 'github-delivery-watchdog';

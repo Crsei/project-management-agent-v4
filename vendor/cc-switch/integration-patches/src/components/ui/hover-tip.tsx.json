@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/components/ui/hover-tip.tsx",
+  "beforeSha256": "bcc979572d9203af6e090ad43e238eadc5f60c3f29555c4e8bcd4cb79cb6c678",
+  "afterSha256": "c820e6721a9a280e4971e7d64901a070b31874d504d758ae2f2f735222b7a96e",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 115,
+  "before": "QC9jb21wb25lbnRzL3VpL3Rvb2x0aXAiOwppbXBvcnQgeyBpc0tleWJvYXJkTW9kYWxpdHkgfSBmcm9tICJA",
+  "after": "Li90b29sdGlwIjsKaW1wb3J0IHsgaXNLZXlib2FyZE1vZGFsaXR5IH0gZnJvbSAiLi4vLi4="
+}

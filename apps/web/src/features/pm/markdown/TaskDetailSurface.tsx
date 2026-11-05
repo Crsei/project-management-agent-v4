@@ -50,7 +50,7 @@ export function TaskCompletionAction({ controller: c, en }: { controller: Worksp
   return <button type="button" className={`task-complete ${completed ? 'is-completed' : ''}`} aria-label={label} disabled={!c.canEditTaskDraft || !candidates.length} title={!candidates.length ? (en ? 'No legal transition is configured. Use Status to inspect this workflow.' : '未配置合法转换，请在状态字段查看工作流。') : (en ? `Stage ${candidates[0].label}; explicit Save is required` : `暂存为「${candidates[0].label}」，仍需显式保存`)} onClick={() => { if (candidates[0]) c.patchTaskDraft({ status: candidates[0].id }); }}><Icon size={15} /><span>{completed && !candidates.length ? (en ? 'Completed' : '已完成') : label}</span></button>;
 }
 
-export function TaskDetailSurface({ controller: c, en, onEditSource }: { controller: WorkspaceController; en: boolean; onEditSource: () => void }) {
+export function TaskDetailSurface({ controller: c, en, onEditSource, onOpenDelivery }: { controller: WorkspaceController; en: boolean; onEditSource: () => void; onOpenDelivery: () => void }) {
   const { workspace } = usePmService();
   const uid = useId();
   const canReadDirectory = workspace?.capabilities.includes('directory.read') === true || allowed(workspace, 'access.manage');
@@ -74,14 +74,7 @@ export function TaskDetailSurface({ controller: c, en, onEditSource }: { control
   };
   return <article className="task-detail-surface" data-testid="task-detail-surface" aria-label={t('Task details', '任务详情')}>
     <TaskTitleField value={entity.title} disabled={disabled} invalid={!!issue('title')} describedBy={issue('title') ? `${uid}-title-error` : undefined} en={en} required testId="field-title" className="task-title-input" onValue={title => c.patchTaskDraft({ title })} />
-    {workspace && c.selected.entity.project && <a className="task-delivery-jump" href={`#task-workflow-${c.selected.id}`} onClick={event => {
-      const viewport = event.currentTarget.closest<HTMLElement>('.detail-content');
-      const target = event.currentTarget.closest('article')?.querySelector<HTMLElement>('.task-workflow');
-      if (!viewport || !target) return;
-      event.preventDefault();
-      viewport.scrollTo({ top: viewport.scrollTop + target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 16 });
-      target.querySelector('summary')?.focus({ preventScroll: true });
-    }}>{t('Open delivery workspace', '进入交付工作台')} <span>→</span></a>}
+    {workspace && c.selected.entity.project && <a className="task-delivery-jump" href={`#task-workflow-${c.selected.id}`} onClick={event => { event.preventDefault(); onOpenDelivery(); }}>{t('Open delivery workspace', '进入交付工作台')} <span>→</span></a>}
     {issue('title') && <small className="task-field-error" id={`${uid}-title-error`}>{issue('title')!.message}</small>}
     {disabled && <p className="task-readonly-note" role="status">{c.draftParseError ? t('The source is invalid. Saved values are shown; repair the Markdown source to edit fields.', '源码无效，当前显示已保存的值；请先修复 Markdown 源码。') : entity.archived ? t('Archived task. Restore it in Advanced properties before editing.', '任务已归档，请在高级属性中恢复后再编辑。') : c.ahead ? t('The source changed on disk. Compare and resolve versions before editing fields.', '磁盘源码已更改，请先比较并解决版本冲突。') : c.writesBlocked ? t('A write is pending or unconfirmed. Resolve its original recovery record before editing.', '有写入待确认或结果未知，请先核对原恢复记录。') : t('Task fields are currently read only. Review the access, source or configuration diagnostics.', '任务字段当前只读，请查看权限、源码或配置诊断。')}</p>}
     <dl className="task-properties">

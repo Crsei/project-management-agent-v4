@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { beginProviderAccountOperation, resetAuthState } from "../auth.ts";
 import { getStoredInstance, providerContext, updateProviderInstance } from "../instances.ts";
 import { sanitizeErrorText } from "../verify.ts";
-import { codexProfiles, removeCodexProfile, selectCodexProfile } from "./codex-chatgpt-auth.ts";
+import { codexProfiles, removeCodexProfile, selectCodexProfile } from "../t3code/families/codex-chatgpt-auth.ts";
 
 export const codexSetupRoutes = new Hono();
 function contextFor(instanceId: string) {

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, CalendarClock, Clock3, Filter, GitBranch, LayoutGrid, List, Play, Plus, Search, Workflow } from "lucide-react";
 import { Button } from "@agent/components/ui/button";
 import { Input } from "@agent/components/ui/input";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import type { StudioClient } from "../../../../../../../../packages/contracts/src/automation-studio-client";
 import type { StudioDefinition, StudioExecution } from "../../../../../../../../packages/contracts/src/automation-studio";
 import { useAgentText } from "../../i18n";
@@ -49,14 +50,17 @@ export function StudioDashboard({ definitions, executions, executionError, api, 
     </div>}</div><label className={styles.sort}><span className="sr-only">{t("排序", "Sort")}</span><RadixSelect aria-label={t("排序", "Sort")} value={filters.sort} onChange={event => onFilters({ sort: event.target.value })}><option value="updated">{t("最近更新", "Recently updated")}</option><option value="name">{t("名称", "Name")}</option><option value="lastRun">{t("最近运行", "Last run")}</option><option value="oldest">{t("最早创建", "Oldest first")}</option></RadixSelect></label><div className={styles.viewToggle} role="group" aria-label={t("显示模式", "View mode")}><button type="button" aria-label={t("网格", "Grid")} aria-pressed={filters.view !== "list"} onClick={() => onFilters({ view: "grid" })}><LayoutGrid size={16} /></button><button type="button" aria-label={t("列表", "List")} aria-pressed={filters.view === "list"} onClick={() => onFilters({ view: "list" })}><List size={16} /></button></div></div>
     {!items.length ? <div className={styles.empty}><Workflow size={32} /><h2>{t("把重复工作交给自动化", "Let automations handle the routine")}</h2><p>{t("从模板开始，或创建 Prompt / Python 自动化。浏览不会启动执行。", "Start with a template, or create a prompt / Python automation. Browsing never dispatches a run.")}</p><Button onClick={onTemplates}>{t("浏览模板", "Browse templates")}</Button></div> : !filtered.length ? <div className={styles.empty}><Search size={26} /><h2>{t("没有匹配的自动化", "No matching automations")}</h2><p>{t("搜索和筛选仅应用于已加载的定义。", "Search and filters apply to loaded definitions.")}</p><Button variant="outline" onClick={() => onFilters({ search: "", status: "", trigger: "", tag: "" })}>{t("清除筛选", "Clear filters")}</Button></div> : ["enabled", "paused", "draft"].map(status => {
       const group = filtered.filter(item => item.status === status); if (!group.length) return null;
-      return <section className={styles.group} key={status}><h2>{status === "enabled" ? t("活跃", "Active") : status === "paused" ? t("未活跃", "Inactive") : t("已存草稿", "Saved Drafts")}<span className={styles.count}>{group.length}</span></h2><ul className={filters.view === "list" ? styles.list : styles.grid}>{group.map(item => <DashboardCard key={item.id} item={item} api={api} onAction={action => onAction(action, item)} writable={writableFor(item.config.projectId)} locked={locked} onAccessFailure={onAccessFailure} />)}</ul></section>;
+      return <section className={styles.group} key={status}><h2>{status === "enabled" ? t("活跃", "Active") : status === "paused" ? t("未活跃", "Inactive") : t("已存草稿", "Saved Drafts")}<span className={styles.count}>{group.length}</span></h2><ul className={filters.view === "list" ? styles.list : styles.grid}>{group.map(item => <DashboardCard key={item.id} item={item} api={api} onAction={onAction} writable={writableFor(item.config.projectId)} locked={locked} onAccessFailure={onAccessFailure} />)}</ul></section>;
     })}
     {hasMore && <Button variant="outline" disabled={loadingMore} onClick={onMore}>{loadingMore ? t("正在加载…", "Loading…") : t("加载更多定义", "Load more definitions")}</Button>}
     <button type="button" className={styles.backLink} onClick={onHistory}>{t("查看全部历史（包括已删除定义）", "View all history (including deleted definitions)")}</button>
   </div>;
 }
-function DashboardCard({ item, api, onAction, writable, locked, onAccessFailure }: { item: StudioDefinition; api: StudioClient; onAction: (action: DashboardAction) => void; writable: boolean; locked: boolean; onAccessFailure: (cause: unknown) => void }) {
+function DashboardCard({ item, api, onAction, writable, locked, onAccessFailure }: { item: StudioDefinition; api: StudioClient; onAction: (action: DashboardAction, target: StudioDefinition) => void; writable: boolean; locked: boolean; onAccessFailure: (cause: unknown) => void }) {
   const t = useAgentText();
+  const [contextItem, setContextItem] = useState(item);
+  const [menuItem, setMenuItem] = useState(item);
+  const dialogActionSelected = useRef(false);
   const sample = useAutomationQuery(`studio-card:${item.id}:${item.revision}:${item.lastRunAt}`, async signal => {
     try {
       return (await api.executions(item.id, undefined, { signal })).items.slice(0, 20);
@@ -66,13 +70,61 @@ function DashboardCard({ item, api, onAction, writable, locked, onAccessFailure 
   const completed = runs.filter(run => run.status === "completed").length; const outcomes = runs.filter(run => ["completed", "failed"].includes(run.status)).length;
   const durations = runs.flatMap(run => { const duration = executionDuration(run); return duration === null ? [] : [duration]; });
   const definition = item; const config = definition.config;
-  return <li className={styles.card}>
-    <header className={styles.cardHeader}><button type="button" className={styles.cardTitle} onClick={() => onAction("view")}><h3 title={config.name}>{config.name}</h3></button><div className={styles.cardActions}><button type="button" aria-label={t(`运行 ${config.name}`, `Run ${config.name}`)} disabled={!writable || locked || definition.status === "draft"} onClick={() => onAction("run")}><Play size={15} /></button><details className={styles.menu}><summary aria-label={t(`操作 ${config.name}`, `Actions for ${config.name}`)}>•••</summary><div className={styles.menuPanel}><button type="button" onClick={() => onAction("view")}>{t("查看", "View")}</button><button type="button" disabled={!writable || locked} onClick={() => onAction("edit")}>{t("编辑", "Edit")}</button><button type="button" onClick={() => onAction("export")}>{t("导出", "Export")}</button><button type="button" disabled={!writable || locked} onClick={() => onAction("status")}>{definition.status === "enabled" ? t("暂停", "Turn off") : t("启用", "Turn on")}</button><button type="button" className={styles.dangerText} disabled={!writable || locked} onClick={() => onAction("remove")}>{t("删除", "Delete")}</button></div></details></div></header>
+  const writeReason = !writable
+    ? t("当前项目不可写。", "The current project is not writable.")
+    : locked ? t("正在读取、处理或核对原请求，写入已暂停。", "Writes are paused while loading, processing, or reconciling the original request.") : undefined;
+  function actionReason(action: DashboardAction, target: StudioDefinition) {
+    if (action === "view" || action === "export") return undefined;
+    return writeReason ?? (action === "run" && target.status === "draft" ? t("草稿不能运行；请先完成配置并启用。", "Drafts cannot run; complete configuration and enable first.") : undefined);
+  }
+  function actionsFor(target: StudioDefinition) {
+    return [
+      { id: "view", label: t("查看", "View"), reason: undefined },
+      { id: "edit", label: t("编辑", "Edit"), reason: writeReason },
+      { id: "export", label: t("导出", "Export"), reason: undefined },
+      { id: "status", label: target.status === "enabled" ? t("暂停", "Turn off") : t("启用", "Turn on"), reason: writeReason },
+      { id: "run", label: t("立即运行", "Run now"), reason: actionReason("run", target) },
+      { id: "remove", label: t("删除", "Delete"), reason: writeReason },
+    ] satisfies { id: DashboardAction; label: string; reason: string | undefined }[];
+  }
+  function selectAction(action: DashboardAction, target: StudioDefinition) {
+    if (actionReason(action, target)) return;
+    onAction(action, target);
+  }
+  return <ContextMenu onOpenChange={open => {
+    if (open) { setContextItem(item); dialogActionSelected.current = false; }
+  }}>
+    <ContextMenuTrigger asChild onContextMenu={() => setContextItem(item)}>
+      <li className={styles.card} tabIndex={0} aria-label={t(`自动化 ${config.name}`, `Automation ${config.name}`)}>
+    <header className={styles.cardHeader}>
+      <button type="button" className={styles.cardTitle} onClick={() => selectAction("view", item)}><h3 title={config.name}>{config.name}</h3></button>
+      <div className={styles.cardActions}>
+        <button type="button" aria-label={t(`运行 ${config.name}`, `Run ${config.name}`)} disabled={!!actionReason("run", item)} title={actionReason("run", item)} onClick={() => selectAction("run", item)}><Play size={15} /></button>
+        <details className={styles.menu}>
+          <summary aria-label={t(`操作 ${config.name}`, `Actions for ${config.name}`)} onClick={() => setMenuItem(item)}>•••</summary>
+          <div className={styles.menuPanel}>{actionsFor(menuItem).map(action => (
+            <button key={action.id} type="button" disabled={!!action.reason} title={action.reason} className={action.id === "remove" ? styles.dangerText : undefined} onClick={() => selectAction(action.id, menuItem)}>{action.label}</button>
+          ))}</div>
+        </details>
+      </div>
+    </header>
     <p className={styles.cardDescription}>{config.description || (config.action.kind === "prompt" ? config.action.prompt : config.action.kind === "script" ? config.action.entrypoint : config.action.templateId)}</p>
     <div className={styles.pills}><span className={styles.badge}>{config.action.kind === "prompt" ? "Agent" : config.action.kind === "script" ? "Python" : t("原生模板", "Native template")}</span><span className={styles.badge} title={studioTriggerLabel(config.trigger, t)}>{config.trigger.kind === "manual" ? t("手动", "Manual") : config.trigger.kind === "cron" ? "Cron" : config.trigger.kind === "once" ? t("单次", "Once") : t("事件", "Event")}</span>{config.tags.slice(0, 3).map(tag => <span className={styles.badge} key={tag}>#{tag}</span>)}</div>
     {!!runs.length && !sample.error && <div className={styles.activityStrip} role="img" aria-label={t(`最近 ${runs.length} 次运行状态，由旧到新`, `Latest ${runs.length} run outcomes, oldest to newest`)}>{[...runs].reverse().map(run => <span key={run.id} data-status={run.status} title={`${studioStatusLabel(run.status, t)} · ${automationDateTime(run.startedAt ?? run.createdAt)}`} />)}</div>}
     <div className={styles.cardStatus}>{sample.loading ? <span>{t("读取近期运行…", "Loading recent runs…")}</span> : sample.error ? <button type="button" onClick={sample.refetch}>{t("运行摘要不可用，重试", "Run summary unavailable; retry")}</button> : latest ? <><span className={styles.statusDot} data-status={latest.status} /><span>{studioStatusLabel(latest.status, t)}</span><time dateTime={latest.startedAt ?? latest.createdAt}>{automationDateTime(latest.startedAt ?? latest.createdAt)}</time></> : <span>{t("尚未运行", "Not run yet")}</span>}</div>
     {latest && "error" in latest && latest.error && <p className={styles.cardError} title={latest.error}>{latest.error}</p>}
     <footer className={styles.cardFooter}><span>{outcomes ? `${Math.round(completed / outcomes * 100)}%` : "—"} {t("成功率", "success")}</span><span>{durations.length ? `${(durations.reduce((a, b) => a + b, 0) / durations.length / 1000).toFixed(1)}s` : "—"} {t("平均", "avg")}</span><small>{sample.loading || sample.error ? t("摘要未就绪", "Summary unavailable") : t(`最近 ${runs.length} 条`, `Latest ${runs.length}`)}</small></footer>
-  </li>;
+      </li>
+    </ContextMenuTrigger>
+    <ContextMenuContent aria-label={t(`操作 ${contextItem.config.name}`, `Actions for ${contextItem.config.name}`)} onCloseAutoFocus={event => {
+      if (dialogActionSelected.current) event.preventDefault();
+    }}>
+      {actionsFor(contextItem).map(action => (
+        <ContextMenuItem key={action.id} disabled={!!action.reason} title={action.reason} className={action.id === "remove" ? "text-destructive" : undefined} onSelect={() => {
+          dialogActionSelected.current = ["status", "run", "remove"].includes(action.id);
+          selectAction(action.id, contextItem);
+        }}>{action.label}</ContextMenuItem>
+      ))}
+    </ContextMenuContent>
+  </ContextMenu>;
 }

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/components/features/skills/get-skill-card-description.ts",
+  "beforeSha256": "39a002f101f6191d1256d1cd1baff95590b5011120afa1c9be1aedd3018c8af2",
+  "afterSha256": "0754b8615bdf0823d5c0a0ad2bd3807cc8766a0577cff408e76da9594481c851",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 32,
+  "before": "Iw==",
+  "after": "QHBtL29wZW5oYW5kcy1zb3VyY2U="
+}

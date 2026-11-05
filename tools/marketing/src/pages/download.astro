@@ -1,0 +1,23 @@
+---
+import V4Layout from "../layouts/V4Layout.astro";
+import { appUrl, desktopReleaseUrl, sourceUrl } from "../lib/site";
+const targets = [
+  { name: "macOS", arch: "Apple Silicon", format: ".dmg / .zip · arm64", mark: "M", note: "macOS 15 或更高版本" },
+  { name: "macOS", arch: "Intel", format: ".dmg / .zip · x64", mark: "M", note: "macOS 15 或更高版本" },
+  { name: "Windows", arch: "Windows x64", format: "NSIS 安装包 · .exe", mark: "W", note: "x64 架构" },
+];
+---
+<V4Layout title="下载 PM Agent" description="获取 PM Agent 桌面应用，或在浏览器中打开你自己的工作台。">
+  <section class="download-page container">
+    <header class="download-head"><span class="app-icon" aria-hidden="true">PM</span><h1>下载 PM Agent</h1><p>你的项目与 Agent，随时回到同一个工作台。</p></header>
+    <div class="download-grid">
+      {targets.map((target) => <article class="download-card"><span class="platform-mark" aria-hidden="true">{target.mark}</span><h2>{target.name}</h2><p class="arch">{target.arch}</p><p class="format">{target.format}</p>{desktopReleaseUrl ? <a class="btn btn-primary" href={desktopReleaseUrl} target="_blank" rel="noopener noreferrer">查看发布版本 ↗</a> : <span class="btn btn-disabled" aria-disabled="true">下载链接待补充</span>}<p class="small-note">{target.note}</p></article>)}
+    </div>
+    <p class="download-note">以上为桌面构建目标；实际可下载平台以发布页为准。原生安装、签名与公证仍需对应平台验证。</p>
+    <div class="web-card tile"><div><p class="eyebrow">IN YOUR BROWSER</p><h2>也可以，直接打开浏览器。</h2><p>连接已启动的 PM Agent 服务，继续你的项目。</p></div><a class="btn btn-ghost" href={appUrl}>打开工作台 ↗</a></div>
+    <details class="build-details"><summary>从源码构建 <span aria-hidden="true">＋</span></summary><p>在对应 Windows / macOS 构建环境中，使用 Node.js 24.21.0 和 pnpm 11.9.0。</p><pre><code>pnpm install --frozen-lockfile
+pnpm --filter @agent-workspace/desktop runtime:prepare
+pnpm --filter @agent-workspace/desktop package</code></pre><p>默认生成 unsigned 测试包。Git、Provider CLI 与账号需要另外配置。</p>{sourceUrl && <a class="text-link" href={sourceUrl} target="_blank" rel="noopener noreferrer">浏览源代码 ↗</a>}</details>
+    <a class="back-link" href="/">← 返回首页</a>
+  </section>
+</V4Layout>

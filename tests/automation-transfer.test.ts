@@ -5,7 +5,7 @@ import { decodeAutomationTar, exportAutomationDefinition, parseAutomationTransfe
 import { createConfiguredAutomationGitPort, decryptAutomationGitDocument, encryptAutomationGitDocument } from '../packages/infrastructure/src/automation-git.ts';
 import { studioConfigSchema, studioNativeTemplateIdSchema, studioNativeTemplateRequiresProvider, type StudioDefinition } from '../packages/contracts/src/automation-studio.ts';
 import { isPmAutomationTemplateId, pmAutomationTemplateVersion } from '../packages/contracts/src/automation-pm.ts';
-import { pmAutomationDefaultArguments } from '../packages/contracts/src/automation-pm-catalog.ts';
+import { pmAutomationDefaultArguments } from '../packages/automation-resources/pm-catalog.ts'
 
 const config = studioConfigSchema.parse({ name: 'Portable definition', description: '', projectId: 'PRJ-001', tags: [], templateId: null, action: { kind: 'prompt', providerInstanceId: 'configured-provider', model: 'configured-model', options: {}, prompt: 'Read authorized inputs only', repositories: [], plugins: [], timeoutSeconds: 600 }, trigger: { kind: 'cron', expression: '0 9 * * 1-5', timezone: 'Asia/Shanghai' }, dailyLimit: 10, cooldownMinutes: 0 });
 const definition: StudioDefinition = { id: '00000000-0000-4000-a000-000000000001', revision: 1, config, status: 'enabled', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', lastRunAt: null, nextDueAt: null };

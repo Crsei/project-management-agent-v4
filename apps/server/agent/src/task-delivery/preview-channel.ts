@@ -4,7 +4,7 @@ import type { ChildProcess } from 'node:child_process';
 export const previewRelay = `import { spawn } from 'node:child_process';
 import { request } from 'node:http';
 import { createInterface } from 'node:readline';
-const app = spawn('/usr/local/bin/node', ['--max-old-space-size=128', '/app/server.mjs'], {stdio:'ignore',env:process.env});
+const app = spawn(process.execPath, ['--max-old-space-size=128', '/app/server.mjs'], {stdio:'ignore',env:process.env});
 app.on('error',()=>process.exit(1)); app.on('exit',()=>process.exit(1));
 createInterface({input:process.stdin}).on('line', line=>{
   let input; try { input=JSON.parse(line); } catch { process.exit(1); }

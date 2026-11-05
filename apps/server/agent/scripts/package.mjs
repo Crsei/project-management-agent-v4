@@ -4,6 +4,10 @@ import { createRequire, isBuiltin } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyHostBuildInputs } from "../../../../vendor/t3code/scripts/host-inputs.mjs";
+import { verifySidecar } from "./cc-switch.mjs";
+import { verifyOutputs as verifyCcSwitchOutputs, sha256 as ccSwitchSha256 } from "../../../../vendor/cc-switch/scripts/provenance.mjs";
+import { verifyOutputs as verifyOpenHandsOutputs } from "../../../../vendor/openhands-extensions/scripts/provenance.mjs";
+import { verifyWebDistribution } from "../../../../vendor/openhands-extensions/scripts/web-build.mjs";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const repository = path.resolve(packageRoot, "../../..");
@@ -32,6 +36,17 @@ if (buildInputs.version !== 1) throw new Error("Unsupported build input inventor
 if (JSON.stringify(buildInputs.hostBuildInputs) !== JSON.stringify(hostBuildInputs)) {
   throw new Error("Host build tool provenance changed after build; rebuild from the reviewed toolchain.");
 }
+const ccSwitchSource = await verifyCcSwitchOutputs(repository);
+const ccSwitchNative = await verifySidecar(buildRoot);
+if (ccSwitchNative.outputInventorySha256 !== ccSwitchSha256(ccSwitchSource.inventoryBytes)
+  || buildInputs.ccSwitchNative?.outputInventorySha256 !== ccSwitchNative.outputInventorySha256
+  || buildInputs.ccSwitchNative?.target !== ccSwitchNative.target
+  || buildInputs.ccSwitchNative?.cargoLockSha256 !== ccSwitchNative.cargoLockSha256
+  || buildInputs.ccSwitchNative?.manifestSha256 !== ccSwitchNative.manifestSha256) {
+  throw new Error("cc-switch source/native build identity changed; rebuild the matching native target before packaging.");
+}
+const openHandsSource = await verifyOpenHandsOutputs(repository);
+const openHandsWeb = options.has("--web-dist") ? await verifyWebDistribution(options.get("--web-dist"), repository) : null;
 const diskSdks = { "@anthropic-ai/claude-agent-sdk": "0.3.276", "@cursor/sdk": "1.0.38", "@muse-code/sdk": "1.4.6" };
 // Cursor's createRequire alias is intentionally opaque to esbuild's import metafile.
 // The frozen disk-resource boundary must close these SDKs even without static imports.
@@ -176,7 +191,7 @@ for (const [root, metadata] of [...licenseInputs].sort(([left], [right]) => left
   licenseIndex++;
 }
 const vendorRoot = path.join(repository, "vendor/t3code");
-const provenance = ["LICENSE.t3code", "pnpm-lock.yaml", "vendor/t3code/LICENSE", "vendor/t3code/SYNC.md",
+const provenance = ["LICENSE", "THIRD_PARTY_NOTICES.md", "LICENSE.t3code", "pnpm-lock.yaml", "vendor/t3code/LICENSE", "vendor/t3code/SYNC.md",
   ...(await readdir(vendorRoot)).filter((name) => name.endsWith(".json")).sort().map((name) => `vendor/t3code/${name}`)];
 for (const relative of provenance) {
   const bytes = await readFile(path.join(repository, relative));
@@ -188,6 +203,25 @@ await inventoryTree(path.join(vendorRoot, "integration-patches"), "licenses/prov
 await inventoryTree(path.join(vendorRoot, "scripts"), "licenses/provenance/vendor/t3code/scripts");
 await inventoryTree(path.join(vendorRoot, "third-party/patches"), "licenses/provenance/vendor/t3code/third-party/patches");
 await inventoryTree(path.join(vendorRoot, "third-party-licenses"), "licenses/provenance/vendor/t3code/third-party-licenses");
+const ccSwitchVendor = path.join(repository, "vendor/cc-switch");
+for (const relative of ["LICENSE", "LICENSING.md", "SYNC.md", "source-manifest.json", "fork-policy.json", "output-inventory.json", "resource-closure.json", "upstream-tree.json"]) {
+  const source = path.join(ccSwitchVendor, relative), bytes = await readFile(source);
+  const target = `licenses/provenance/vendor/cc-switch/${relative}`;
+  transfers.push({ target, source, sha256: sha(bytes), mode: 0o644 });
+  fileRecords.push({ path: target, sha256: sha(bytes), bytes: bytes.length, mode: 0o644 });
+}
+await inventoryTree(path.join(ccSwitchVendor, "integration-patches"), "licenses/provenance/vendor/cc-switch/integration-patches");
+await inventoryTree(path.join(ccSwitchVendor, "scripts"), "licenses/provenance/vendor/cc-switch/scripts");
+const openHandsVendor = path.join(repository, "vendor/openhands-extensions");
+for (const relative of ["LICENSE", "extensions/LICENSE", "extensions/source-package.json", "LICENSING.md", "SYNC.md", "source-manifest.json", "supplemental-inputs.json", "fork-policy.json", "output-inventory.json", "resource-closure.json"]) {
+  const source = path.join(openHandsVendor, relative), bytes = await readFile(source);
+  const target = `licenses/provenance/vendor/openhands-extensions/${relative}`;
+  transfers.push({ target, source, sha256: sha(bytes), mode: 0o644 });
+  fileRecords.push({ path: target, sha256: sha(bytes), bytes: bytes.length, mode: 0o644 });
+}
+for (const directory of ["integration-patches", "source-inputs", "scripts"]) {
+  await inventoryTree(path.join(openHandsVendor, directory), `licenses/provenance/vendor/openhands-extensions/${directory}`);
+}
 {
   const source = path.join(packageRoot, "scripts/verify-artifact.mjs");
   const bytes = await readFile(source), target = "tools/verify-artifact.mjs";
@@ -223,6 +257,8 @@ await writeFile(path.join(outputRoot, "package.json"), JSON.stringify({ name: "p
 await writeFile(path.join(outputRoot, "artifact-manifest.json"), JSON.stringify({
   version: 1, upstreamCommit: "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c", platform: process.platform, arch: process.arch,
   entrypoint: "apps/server/agent/dist/index.mjs", effectSingleton: effectRoot ? packages.get(effectRoot).destination : null,
+  ccSwitchNative: { target: ccSwitchNative.target, triple: ccSwitchNative.triple, upstreamCommit: ccSwitchNative.upstreamCommit, outputInventorySha256: ccSwitchNative.outputInventorySha256, manifest: `apps/server/agent/dist/cc-switch/${ccSwitchNative.target}/native-manifest.json` },
+  openHands: { upstreamCommit: openHandsSource.policy.upstreamCommit, outputInventorySha256: sha(openHandsSource.inventoryBytes), webManifestSha256: openHandsWeb?.sha256 ?? null },
   packages: ordered.map((record) => ({ name: record.metadata.name, version: record.metadata.version, license: record.metadata.license ?? null, path: record.destination, dependencies: Object.fromEntries([...record.dependencies].map(([name, root]) => [name, packages.get(root).destination])) })),
   bundled, files: fileRecords.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0), links,
 }, null, 2) + "\n", { flag: "wx" });

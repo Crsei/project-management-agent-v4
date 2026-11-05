@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RadixSelect } from '@/components/ui/radix-select';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { DocumentSource, DocumentSourceMutation } from '../../../../../../packages/contracts/src/document-sources';
 import { useCoreSession, type CoreSession } from './session';
 import { MarkdownUrlImage, MarkdownUrlLink } from './preview-url-components';
@@ -77,6 +78,7 @@ export function ExternalDocumentEditor({ target, en, onBack, onDenied, refreshKe
   const [preview, setPreview] = useState(false);
   const denied = useRef(onDenied); denied.current = onDenied;
   const heading = useRef<HTMLHeadingElement>(null);
+  const [menuRevision, setMenuRevision] = useState<string | null>(null);
   const draft = snapshot.drafts[key];
   const extensions = useMemo(() => [...sourceExtensions, EditorView.contentAttributes.of({ 'aria-label': en ? 'External document source' : '外部文档源码' })], [en]);
   const reload = useCallback(() => setGeneration(value => value + 1), []);
@@ -103,8 +105,9 @@ export function ExternalDocumentEditor({ target, en, onBack, onDenied, refreshKe
   const dirty = !!draft && draft.value !== draft.base.content;
   const pending = store.blocks(target.sourceId);
   const writable = ready && draft.source.canWrite && draft.base.canWrite;
-  const save = async () => {
+  const save = async (expectedRevision = draft?.base.revision) => {
     if (!writable || !dirty || pending || draft.observed) return;
+    if (expectedRevision !== draft.base.revision) { setError(en ? 'The file revision changed. Reopen the menu before saving.' : '文件版本已改变，请重新打开菜单后保存。'); return; }
     setError('');
     try {
       await store.submit(target.sourceId, { operationId: crypto.randomUUID(), sourceRevision: target.revision, action: 'save', path: target.path, expectedRevision: draft.base.revision, content: draft.value });
@@ -114,16 +117,27 @@ export function ExternalDocumentEditor({ target, en, onBack, onDenied, refreshKe
       if (documentSourceAccessLost(cause)) { reload(); window.dispatchEvent(new Event('external-documents-changed')); }
     }
   };
+  const managementReason = !writable ? en ? 'This file is read only or unavailable' : '此文件为只读或不可用' : pending ? en ? 'Reconcile the pending operation first' : '请先核对未决操作' : dirty ? en ? 'Save or explicitly discard the draft first' : '请先保存或明确放弃草稿' : draft?.observed ? en ? 'Compare the changed disk version first' : '请先对照已改变的磁盘版本' : undefined;
+  const managementActions = (['rename', 'move', 'delete'] as const).map(action => ({
+    action,
+    label: action === 'rename' ? en ? 'Rename' : '重命名' : action === 'move' ? en ? 'Move' : '移动' : en ? 'Delete file' : '删除文件',
+    select: () => { if (!managementReason) onManage?.({ action, target }); },
+  }));
   return <section className="external-document-content" aria-label={en ? 'External document' : '外部文档'} aria-busy={read.key !== readKey || !read.ready && !read.error} onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && !event.nativeEvent.isComposing) { event.preventDefault(); void save(); } }}>
     <header className="document-source-content-heading">
       {onBack && <button type="button" className="secondary-button" onClick={onBack}><ArrowLeft size={14} />{en ? 'Back to files' : '返回目录'}</button>}
-      <div><h3 ref={heading} tabIndex={-1}>{ready ? target.path.split('/').at(-1) : en ? 'External document' : '外部文档'}</h3><p>{ready && `${draft.source.name} · `}{en ? 'External documents' : '外部文档'}{ready && !writable ? en ? ' · Read only' : ' · 只读' : ''}{dirty && ready ? en ? ' · Unsaved' : ' · 未保存' : ''}</p>{ready && <code>{target.path}</code>}</div>
+      <ContextMenu onOpenChange={open => { if (open) setMenuRevision(draft?.base.revision ?? null); }}><ContextMenuTrigger asChild><div tabIndex={0}><h3 ref={heading} tabIndex={-1}>{ready ? target.path.split('/').at(-1) : en ? 'External document' : '外部文档'}</h3><p>{ready && `${draft.source.name} · `}{en ? 'External documents' : '外部文档'}{ready && !writable ? en ? ' · Read only' : ' · 只读' : ''}{dirty && ready ? en ? ' · Unsaved' : ' · 未保存' : ''}</p>{ready && <code>{target.path}</code>}</div></ContextMenuTrigger><ContextMenuContent aria-label={en ? 'External document actions' : '外部文档操作'}>
+        <ContextMenuItem disabled={!writable || !dirty || pending || !!draft?.observed} title={pending ? en ? 'Reconcile the pending operation first' : '请先核对未决操作' : draft?.observed ? en ? 'Compare the disk revision first' : '请先对照磁盘版本' : undefined} onSelect={() => void save(menuRevision ?? undefined)}>{en ? 'Save' : '保存'}</ContextMenuItem>
+        <ContextMenuItem disabled={!ready} onSelect={() => setPreview(value => !value)}>{preview ? en ? 'Edit Markdown' : '编辑 Markdown' : en ? 'Preview' : '预览'}</ContextMenuItem>
+        <ContextMenuItem onSelect={reload}>{en ? 'Reload file from disk' : '从磁盘重新读取'}</ContextMenuItem>
+        {onManage && <><ContextMenuSeparator />{managementActions.map(action => <ContextMenuItem key={action.action} disabled={!!managementReason} title={managementReason} onSelect={action.select}>{action.label}</ContextMenuItem>)}</>}
+      </ContextMenuContent></ContextMenu>
       <button type="button" className="secondary-button" onClick={reload}><RefreshCw size={14} />{en ? 'Refresh file' : '刷新文件'}</button>
       {ready && <button type="button" className="secondary-button" aria-pressed={preview} onClick={() => setPreview(value => !value)}>{preview ? en ? 'Edit Markdown' : '编辑 Markdown' : en ? 'Preview' : '预览'}</button>}
       {writable && <button type="button" className="primary-button" disabled={!dirty || pending || !!draft.observed} onClick={() => void save()}><Save size={14} />{en ? 'Save' : '保存'}</button>}
     </header>
     {ready && <p className="document-source-resource-notice">{en ? 'Editing, moving or deleting this physical file affects every folder association that refers to it.' : '编辑、移动或删除此真实文件，会影响所有引用它的文件夹关联。'}</p>}
-    {ready && onManage && <div className="external-document-actions"><button type="button" className="secondary-button" disabled={!writable || pending} onClick={() => onManage({ action: 'create', sourceId: target.sourceId })}><FilePlus2 size={14} />{en ? 'New file' : '新建文件'}</button>{(['rename', 'move', 'delete'] as const).map(action => <button type="button" className="secondary-button" key={action} disabled={!writable || pending || dirty || !!draft.observed} title={dirty ? en ? 'Save or explicitly discard the draft first' : '请先保存或明确放弃草稿' : undefined} onClick={() => onManage({ action, target })}>{action === 'rename' ? en ? 'Rename' : '重命名' : action === 'move' ? en ? 'Move' : '移动' : en ? 'Delete file' : '删除文件'}</button>)}{dirty && <button type="button" className="text-button" disabled={pending} onClick={() => { if (window.confirm(en ? 'Discard this unsaved external document draft and read the current file?' : '确定放弃此未保存的外部文档草稿并读取当前文件吗？')) { store.discard(target); reload(); } }}>{en ? 'Discard draft' : '放弃草稿'}</button>}</div>}
+    {ready && onManage && <div className="external-document-actions"><button type="button" className="secondary-button" disabled={!writable || pending} onClick={() => onManage({ action: 'create', sourceId: target.sourceId })}><FilePlus2 size={14} />{en ? 'New file' : '新建文件'}</button>{managementActions.map(action => <button type="button" className="secondary-button" key={action.action} disabled={!!managementReason} title={managementReason} onClick={action.select}>{action.label}</button>)}{dirty && <button type="button" className="text-button" disabled={pending} onClick={() => { if (window.confirm(en ? 'Discard this unsaved external document draft and read the current file?' : '确定放弃此未保存的外部文档草稿并读取当前文件吗？')) { store.discard(target); reload(); } }}>{en ? 'Discard draft' : '放弃草稿'}</button>}</div>}
     {(error || read.key === readKey && read.error) && <div className="document-source-state document-source-error" role="alert"><p>{error || read.error}</p><button type="button" className="secondary-button" onClick={reload}>{en ? 'Recheck source and file' : '重新核对来源及文件'}</button></div>}
     {read.key === readKey && read.missing && draft && dirty && <div className="document-source-warning">
       <p>{en ? 'The disk file is missing, but this authorized source’s unsaved draft is retained below. Recover it through an explicit new-file operation; a reappearing file will never be overwritten.' : '磁盘文件已不存在，此授权来源内的未保存草稿仍保留在下方。可显式新建文件恢复；如果文件重新出现，绝不会覆盖。'}</p>

@@ -102,6 +102,7 @@ function LifecycleDialog({ action, project, locale, onClose, execute, suspended 
   const command = usePmCommand();
   const projects = usePmEntities('project');
   const t = useText();
+  const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const [base, setBase] = useState(action.artifact);
   const [title, setTitle] = useState(asString(action.artifact.data.title));
   const [kind, setKind] = useState(asString(action.artifact.data.kind));
@@ -166,7 +167,7 @@ function LifecycleDialog({ action, project, locale, onClose, execute, suspended 
     } finally { setBusy(false); }
   }
   return <Dialog open={!suspended} onOpenChange={open => { if (!open && !locked) onClose(); }}>
-    <DialogContent className={styles.uploadDialog}>
+    <DialogContent className={styles.uploadDialog} finalFocus={opener}>
       <DialogTitle>{labels[action.mode]}</DialogTitle>
       <DialogDescription>{copy ? t('创建独立的新成果，只复制当前明确选定版本的字节，不复制证据、审核或历史。', 'Create an independent artifact from this exact selected version, without copying evidence, reviews or history.') : t('只修改成果元数据，不改写任何历史版本、原文件名或证据。', 'Only artifact metadata changes. Historical versions, original filenames and evidence remain unchanged.')}</DialogDescription>
       <form className={styles.dialogBody} onSubmit={event => { event.preventDefault(); void submit(); }}>

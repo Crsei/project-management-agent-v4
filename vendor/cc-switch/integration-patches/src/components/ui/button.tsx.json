@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/components/ui/button.tsx",
+  "beforeSha256": "08c35b15c60b0223bfff233746e695637a9b0b644616428948e1bc1ee983e613",
+  "afterSha256": "5b91c3f8e46472baff65f03d3937540a6858232c0498ca5b0cf4d1517e4b7bf1",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 164,
+  "before": "QA==",
+  "after": "Li4vLi4="
+}

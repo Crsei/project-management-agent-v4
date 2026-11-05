@@ -78,9 +78,9 @@ describe('PostgreSQL authenticated automation events and private connector opera
     let mcpCalls = 0; let nativeProbes = 0;
     const controlledAdapter: AutomationMcpAdapter = { list: async () => { mcpCalls++; throw new Error('API-only must never contact MCP'); }, call: async () => { throw new Error('API-only has no MCP calls'); } };
     const connections = createAutomationIntegrationsService({ database: () => f.pool, core: f.core, privateStore: f.privateStore, adapter: controlledAdapter, nativeAdapter: async () => { nativeProbes++; return { status: 200, body: { full_name: 'owner/approved' }, headers: {} }; } });
-    const connectionId = randomUUID(); const saved = await connections.save(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: 0, config: { projectId: 'PRJ-001', provider: 'github', label: 'Explicit API-only connection', endpoint: 'https://api.github.com', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: true } }, privateHeaders: { Authorization: 'Bearer controlled-private-not-real-provider' } });
+    const connectionId = randomUUID(); const saved = await connections.save(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: 0, config: { projectId: 'PRJ-001', provider: 'github', label: 'Explicit API-only connection', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: true } }, nativePrivateHeaders: { Authorization: 'Bearer controlled-private-not-real-provider' } });
     assert.equal(JSON.stringify(saved).includes('controlled-private'), false);
-    const stored = (await f.pool.query('SELECT private_config FROM automation_integration_connections WHERE id=$1', [connectionId])).rows[0]; assert.equal(stored.private_config.includes('controlled-private'), false);
+    const stored = (await f.pool.query('SELECT native_private_config FROM automation_integration_connections WHERE id=$1', [connectionId])).rows[0]; assert.equal(stored.native_private_config.includes('controlled-private'), false);
     const verified = await connections.verify(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: saved.revision });
     assert.equal(verified.status, 'verified'); assert.deepEqual(verified.verification, { mcp: false, nativeApi: true }); assert.equal(mcpCalls, 0); assert.equal(nativeProbes, 1);
     const config: StudioConfig = { ...f.config, templateId: 'github-delivery-watchdog', action: { kind: 'template', templateId: 'github-delivery-watchdog', arguments: { repositories: ['owner/approved'] }, providerInstanceId: null, model: null, options: {}, repositories: [], plugins: [{ id: `integration:${connectionId}`, version: String(verified.revision) }], timeoutSeconds: 30 } };
@@ -105,8 +105,8 @@ describe('PostgreSQL authenticated automation events and private connector opera
     const connections = createAutomationIntegrationsService({ database: () => f.pool, core: f.core, privateStore: f.privateStore, nativeAdapter: async () => ({ status: 200, body: { full_name: 'owner/approved' }, headers: {} }) });
     const connectionId = randomUUID();
     const saved = await connections.save(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: 0,
-      config: { projectId: 'PRJ-001', provider: 'github', label: 'Revocation race', endpoint: 'https://api.github.com', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: true } },
-      privateHeaders: { Authorization: 'Bearer controlled-not-a-real-credential' },
+      config: { projectId: 'PRJ-001', provider: 'github', label: 'Revocation race', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: true } },
+      nativePrivateHeaders: { Authorization: 'Bearer controlled-not-a-real-credential' },
     });
     const verified = await connections.verify(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: saved.revision });
     const definitionId = await f.definition({ ...f.config, templateId: 'github-delivery-watchdog', action: { kind: 'template', templateId: 'github-delivery-watchdog', arguments: { repositories: ['owner/approved'] }, providerInstanceId: null, model: null, options: {}, repositories: [], plugins: [{ id: `integration:${connectionId}`, version: String(verified.revision) }], timeoutSeconds: 30 } });
@@ -144,9 +144,9 @@ describe('PostgreSQL authenticated automation events and private connector opera
       });
       const connectionId = randomUUID();
       const saved = await connections.save(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: 0,
-        config: { projectId: 'PRJ-001', provider, label: 'Broad connection, narrow PM analysis', endpoint: api, readTools: [], writeTools: [],
+        config: { projectId: 'PRJ-001', provider, label: 'Broad connection, narrow PM analysis', readTools: [], writeTools: [],
           nativeApi: { baseUrl: api, repositories: ['owner/approved', 'owner/other'], allowWrites: true } },
-        privateHeaders: { Authorization: 'Bearer controlled-not-a-real-credential' },
+        nativePrivateHeaders: { Authorization: 'Bearer controlled-not-a-real-credential' },
       });
       const verified = await connections.verify(f.actor, f.workspaceId, connectionId, { requestId: randomUUID(), expectedRevision: saved.revision });
       const arguments_ = { taskIds: ['TASK-001'], repository: { provider, repository: 'owner/approved', ref: null, pullRequestNumber: 7 } };

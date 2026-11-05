@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src-tauri/src/mcp/mod.rs",
+  "beforeSha256": "be9e4407b1b71920cd39d7ba53bfe363115102d4e50a9412cba7c0d7a1ad60a3",
+  "afterSha256": "0ce190dbe88d5c8f4798f135ca2e6d720a8ace397a86d54dd46dc51d65b83525",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 1365,
+  "before": "IHVzZSBvcGVuY29kZTo6ewogICAgaW1wb3J0X2Zyb21fb3BlbmNvZGUsIHJlbW92ZV9zZXJ2ZXJfZnJvbV9vcGVuY29kZSwgc3luY19zaW5nbGVfc2VydmVyX3RvX29wZW5jb2RlLAp9OwoKcHViKGNyYXRlKSBtb2Qga2ltaTsKcHViKGNyYXRlKSBtb2QgbWNvZGU7CnB1YihjcmF0ZSkgbW9kIHBp",
+  "after": "KGNyYXRlKSB1c2UgaGVybWVzOjpzeW5jX3NpbmdsZV9zZXJ2ZXJfdG9faGVybWVzX292ZXJyaWRkZW47CnB1YiB1c2Ugb3BlbmNvZGU6OnsKICAgIGltcG9ydF9mcm9tX29wZW5jb2RlLCByZW1vdmVfc2VydmVyX2Zyb21fb3BlbmNvZGUsIHN5bmNfc2luZ2xlX3NlcnZlcl90b19vcGVuY29kZSwKfTsKCnB1YihjcmF0ZSkgbW9kIGtpbWk7CnB1YihjcmF0ZSkgbW9kIG1jb2RlOwpwdWIoY3JhdGUpIG1vZCBwaTsKcHViKGNyYXRlKSBtb2Qgb3ZlcnJpZGVzOwoKI1tjZmcoZmVhdHVyZSA9ICJoZWFkbGVzcyIpXQpwdWIgbW9kIHNuYXBzaG90"
+}

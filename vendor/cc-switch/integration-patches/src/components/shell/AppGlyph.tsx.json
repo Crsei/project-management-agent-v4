@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/components/shell/AppGlyph.tsx",
+  "beforeSha256": "c9fa06708c76243f7df21443b5448474f4f0172fde4c63c9eeda1128dbb876b1",
+  "afterSha256": "0418cee061dbc045e7f1b08db508b4200be89ea31161e442ba6b49e5ec2368c3",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 78,
+  "before": "QC9saWIvYXBpIjsKaW1wb3J0IHsgUHJvdmlkZXJJY29uIH0gZnJvbSAiQC9jb21wb25lbnRzL1Byb3ZpZGVySWNvbiI7CmltcG9ydCB7IGNuIH0gZnJvbSAiQA==",
+  "after": "Li4vLi4vd2ViL2FwaSI7CmltcG9ydCB7IFByb3ZpZGVySWNvbiB9IGZyb20gIi4uL1Byb3ZpZGVySWNvbiI7CmltcG9ydCB7IGNuIH0gZnJvbSAiLi4vLi4="
+}

@@ -71,6 +71,6 @@ export function registerAgentFileAreaRoutes(app: FastifyInstance, options: Route
     reply.header('Cache-Control', 'private, no-store');
     z.strictObject({}).parse(request.query);
     const scope = agentScopeSchema.parse(request.body);
-    return inScope(request, scope, async context => ({ ...await resolveAgentContext(context, scope), actorId: context.actor.id }));
+    return inScope(request, scope, context => resolveAgentContext(context, scope));
   });
 }

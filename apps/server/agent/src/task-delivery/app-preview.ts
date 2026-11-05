@@ -1,6 +1,7 @@
 import { PreviewChannel, previewRelay } from './preview-channel.ts';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { existsSync } from 'node:fs';
 import { access, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
@@ -27,12 +28,13 @@ export function previewEligible(v: TaskCodeDelivery): boolean {
 }
 export function sandboxArguments(code: string, data: string, runtime: string): string[] {
   return ['--unshare-all', '--die-with-parent', '--new-session', '--cap-drop', 'ALL',
-    '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--symlink', 'usr/lib', '/lib',
+    '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin', '--ro-bind', '/lib', '/lib',
+    ...(existsSync('/lib64') ? ['--ro-bind', '/lib64', '/lib64'] : []), '--ro-bind', process.execPath, '/node',
     // No host /proc, /etc, home, Git metadata, PM data, or credentials are mounted.
     '--dev', '/dev', '--tmpfs', '/tmp', '--ro-bind', code, '/app', '--bind', data, '/data', '--tmpfs', '/runtime', '--ro-bind', path.join(runtime, 'relay.mjs'), '/relay.mjs',
-    '--chdir', '/app', '--clearenv', '--setenv', 'PATH', '/usr/local/bin:/usr/bin:/bin', '--setenv', 'HOME', '/tmp',
+    '--chdir', '/app', '--setenv', 'PATH', '/usr/local/bin:/usr/bin:/bin', '--setenv', 'HOME', '/tmp',
     '--setenv', 'DATA_DIR', '/data', '--setenv', 'PREVIEW_SOCKET', '/runtime/app.sock',
-    '--', '/usr/local/bin/node', '--max-old-space-size=128', '/relay.mjs'];
+    '/node', '--max-old-space-size=128', '/relay.mjs'];
 }
 export function allowedPreviewRequest(req: Pick<IncomingMessage, 'headers' | 'method' | 'url'>, host: string): boolean {
   return req.headers.host === host && (!req.headers.origin || req.headers.origin === `http://${host}`) && (req.headers['sec-fetch-site'] !== 'cross-site' || req.method === 'GET' && req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document')
@@ -71,7 +73,7 @@ export class AppPreviewManager {
   }
   async supported(v: TaskCodeDelivery): Promise<boolean> {
     if (!previewEligible(v) || process.platform !== 'linux') return false;
-    try { await access('/usr/bin/bwrap'); await access('/usr/bin/prlimit'); await access('/usr/local/bin/node'); previewFiles(await git(v.git!.directory, 'ls-tree', '-rz', v.head!, '--', 'app/')); return true; } catch { return false; }
+    try { await access('/usr/bin/bwrap'); await access('/usr/bin/prlimit'); await access(process.execPath); previewFiles(await git(v.git!.directory, 'ls-tree', '-rz', v.head!, '--', 'app/')); return true; } catch { return false; }
   }
   async start(v: TaskCodeDelivery, head: string): Promise<AppPreviewState> {
     if (this.busy.has(v.id)) limited('预览操作正在处理中，请刷新核对。');
@@ -102,6 +104,7 @@ export class AppPreviewManager {
       }
       await this.listen();
       // Resource limits supplement namespaces; this is a bounded local demo, not a production Runner.
+      // Start with no inherited environment; this also works on Bubblewrap versions without --clearenv.
       const child = spawn('/usr/bin/prlimit', ['--cpu=600', '--nofile=128', '--fsize=16777216', '--', '/usr/bin/bwrap', ...sandboxArguments(code, data, runtime)], { env: {}, stdio: ['pipe', 'pipe', 'ignore'] });
       entry.child = child; entry.channel = new PreviewChannel(child);
       const current = entry;

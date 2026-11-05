@@ -1,8 +1,10 @@
 # 业务不变量
 
+> 适用性：本文件保留v0.1历史提案/稳定编号，不代表完整业务Runner或旧SQL核心规则已启用。当前Markdown任务状态、审核独立性与关系语义以[已采纳ADR](../architecture/adr/0003-markdown-core.md)及[入口第七节](README.md#implementation-plan)为准；Chat thread/generation不能替代历史Session/Run模型。
+
 这些规则是 [v0.1 提案](README.md) 的可验证约束。UI 隐藏按钮、提示词约束或读模型过滤都不能替代服务端检查。拒绝命令不得发布成功事件。
 
-当前 Markdown 核心对任务状态、审核独立性与跨项目任务依赖的规则，以[已采纳 ADR](../implementation/markdown-integration-adr.zh.md)为准；下表保留 v0.1 历史编号，不能据此重新引入已移除的 SQL 核心守卫。Dashboard 新增能力遵守本页末尾的补充规则。
+当前 Markdown 核心对任务状态、审核独立性与跨项目任务依赖的规则，以[已采纳 ADR](../architecture/adr/0003-markdown-core.md)为准；下表保留 v0.1 历史编号，不能据此重新引入已移除的 SQL 核心守卫。Dashboard 新增能力遵守本页末尾的补充规则。
 
 | 编号 | 必须保持的规则 | 责任与检查边界 | 验收 |
 | --- | --- | --- | --- |
@@ -35,7 +37,7 @@
 
 ## Dashboard 补充规则
 
-实施范围和十二项验收见 [Dashboard 后端补齐计划](../implementation/dashboard-backend-completion.md)；属于当前人工项目管理接入，不开放 Agent。
+实施范围和十二项验收见 [Dashboard 后端说明](../guides/project-management.md)；属于当前人工项目管理接入，不开放 Agent。
 
 | 编号 | 必须保持的规则 | 验证边界 |
 | --- | --- | --- |
@@ -48,7 +50,7 @@
 
 ## 正式项目页面补充规则
 
-范围与验收见[项目后端补齐计划](../implementation/project-backend-completion.md)和[项目菜单计划](../implementation/project-sidebar-menu-plan.zh.md)，不把展示样例、团队关联或附件上传当作项目完成依据。
+范围与验收见[项目后端说明](../guides/project-management.md)和[项目菜单说明](../guides/project-management.md)，不把展示样例、团队关联或附件上传当作项目完成依据。
 
 | 编号 | 必须保持的规则 | 验证边界 |
 | --- | --- | --- |
@@ -65,7 +67,7 @@
 
 ## 成员目录与邀请补充规则
 
-范围与验收见[成员补齐计划](../implementation/member-backend-completion.md)。
+范围与验收见[成员说明](../guides/project-management.md)。
 
 | 编号 | 必须保持的规则 | 验证边界 |
 | --- | --- | --- |
@@ -76,7 +78,7 @@
 
 ## 正式 Teams 页面补充规则
 
-范围与验收见[Teams 补齐计划](../implementation/teams-backend-completion.md)。
+范围与验收见[Teams 说明](../guides/project-management.md)。
 
 | 编号 | 必须保持的规则 | 验证边界 |
 | --- | --- | --- |

@@ -100,8 +100,8 @@ test("explicit access loss redacts the current membership without fabricating a 
 test("API-only verification enables native workflows without pretending MCP is connected", () => {
   const connection: AutomationIntegrationConnection = {
     id: "connection", revision: 3, projectId: "PRJ-001", provider: "github", label: "Authorized repository API",
-    endpoint: "https://api.github.com", readTools: [], writeTools: [], nativeApi: { baseUrl: "https://api.github.com", repositories: ["org/repo"], allowWrites: true },
-    status: "verified", verification: { mcp: false, nativeApi: true }, hasCredentials: true, lastCheckedAt: "2026-11-01T00:00:00.000Z", lastError: null, createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z",
+    readTools: [], writeTools: [], nativeApi: { baseUrl: "https://api.github.com", repositories: ["org/repo"], allowWrites: true },
+    status: "verified", verification: { mcp: false, nativeApi: true }, hasCredentials: true, mcpConfigFingerprint: null, lastCheckedAt: "2026-11-01T00:00:00.000Z", lastError: null, createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z",
   };
   assert.equal(studioConnectionSupportsAction(connection, "template"), true);
   assert.equal(studioConnectionSupportsAction(connection, "prompt"), false);
@@ -113,11 +113,13 @@ test("API-only verification enables native workflows without pretending MCP is c
 test("MCP and native API probes cannot substitute for each other on a dual-channel connector", () => {
   const connection: AutomationIntegrationConnection = {
     id: "connection", revision: 4, projectId: "PRJ-001", provider: "gitlab", label: "Dual channel",
-    endpoint: "https://gitlab.example.test/mcp", readTools: ["get_issue"], writeTools: [], nativeApi: { baseUrl: "https://gitlab.example.test/api/v4", repositories: ["group/project"], allowWrites: false },
-    status: "verified", verification: { mcp: true, nativeApi: false }, hasCredentials: true, lastCheckedAt: "2026-11-01T00:00:00.000Z", lastError: null, createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z",
+    mcpDefinition: { contextId: "private-project", serverId: "gitlab" }, readTools: ["get_issue"], writeTools: [], nativeApi: { baseUrl: "https://gitlab.example.test", repositories: ["group/project"], allowWrites: false },
+    status: "verified", verification: { mcp: true, nativeApi: false }, hasCredentials: true, mcpConfigFingerprint: "a".repeat(64), lastCheckedAt: "2026-11-01T00:00:00.000Z", lastError: null, createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z",
   };
   assert.equal(studioConnectionSupportsAction(connection, "prompt"), true);
   assert.equal(studioConnectionSupportsAction(connection, "script"), true);
+  assert.equal(studioConnectionSupportsAction({ ...connection, mcpConfigFingerprint: null }, "prompt"), false);
+  assert.equal(studioConnectionSupportsAction({ ...connection, mcpDefinition: undefined }, "script"), false);
   assert.equal(studioConnectionSupportsAction(connection, "template"), false);
   assert.equal(studioConnectionSupportsAction({ ...connection, verification: { mcp: false, nativeApi: true } }, "prompt"), false);
   assert.equal(studioConnectionSupportsAction({ ...connection, verification: { mcp: true, nativeApi: true } }, "template"), true);

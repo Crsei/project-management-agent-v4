@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react"
 import FullCalendar from "@fullcalendar/react"
 import dayGridPlugin from "@fullcalendar/daygrid"
 import timeGridPlugin from "@fullcalendar/timegrid"
@@ -8,6 +8,7 @@ import zhCnLocale from "@fullcalendar/core/locales/zh-cn"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ContextMenuItem, ContextMenuLabel, ContextMenuPopup, isNativeContextTarget, useContextMenu } from "@/components/ui/context-menu"
 import { useI18n } from "@/lib/i18n-provider"
 import { addDays, dateOnly, itemDates, itemRange, itemTitle, ScheduleEditor, type ScheduleItem, type ScheduleProps } from "./service-collection-shared"
 import styles from "./service-collections.module.css"
@@ -25,6 +26,8 @@ export function ServiceCalendar<T extends ScheduleItem>({ items, onOpen, onSched
   const [selectedId, setSelectedId] = useState("")
   const [selection, setSelection] = useState<{ start: string; due: string } | undefined>()
   const [notice, setNotice] = useState("")
+  const contextMenu = useContextMenu<{ type: "event"; item: T } | { type: "day"; due: string }>()
+  const editor = useRef<HTMLDivElement>(null)
   const selected = items.find((item) => item.id === selectedId)
   const byId = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
   const events = useMemo<EventInput[]>(() => items.flatMap((item) => {
@@ -55,6 +58,34 @@ export function ServiceCalendar<T extends ScheduleItem>({ items, onOpen, onSched
     onSchedule(item, nextStart, nextDue)
     setNotice(en ? "Schedule requested. Displayed dates remain unchanged until server confirmation." : "已请求更新日程，服务端确认前仍显示原日期。")
   }
+  function calendarTarget(target: EventTarget | null) {
+    if (!(target instanceof Element) || isNativeContextTarget(target)) return null
+    const eventElement = target.closest<HTMLElement>("[data-calendar-event]")
+    if (eventElement) {
+      const item = byId.get(eventElement.dataset.calendarEvent ?? "")
+      return item ? { element: eventElement, target: { type: "event" as const, item } } : null
+    }
+    const day = target.closest<HTMLElement>("[data-calendar-date]")
+    const due = dateOnly(day?.dataset.calendarDate)
+    return day && due && onCreate ? { element: day, target: { type: "day" as const, due } } : null
+  }
+  function openCalendarMenu(event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>) {
+    if ("key" in event && event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return
+    const target = calendarTarget(event.target)
+    if (!target) return
+    if ("key" in event) {
+      event.preventDefault(); event.stopPropagation()
+      const bounds = target.element.getBoundingClientRect()
+      contextMenu.openAt({ x: bounds.left, y: bounds.bottom }, target.target, target.element)
+    } else contextMenu.open(event, target.target, target.element)
+  }
+  function editDates(item: T) {
+    selectItem(item.id)
+    requestAnimationFrame(() => {
+      editor.current?.scrollIntoView({ block: "nearest" })
+      editor.current?.querySelector<HTMLElement>("input:not(:disabled), button:not(:disabled)")?.focus()
+    })
+  }
   return <div className={`${styles.root} ${shell.root}`} aria-busy={pending}>
     <div className={`${styles.toolbar} ${shell.toolbar}`}>
       <div className={`${styles.navigation} ${shell.navigation}`}>
@@ -74,7 +105,7 @@ export function ServiceCalendar<T extends ScheduleItem>({ items, onOpen, onSched
     {hourly && <p className={styles.hint}>{en ? "Hourly layout is for orientation only; the service does not store start/end times. Use the all-day row." : "小时布局仅作参考；服务端不保存具体时间，请使用全天行。"}</p>}
     {!onSchedule && <p className={styles.hint}>{en ? "Read-only schedule: editing is unavailable with the current capabilities." : "只读日程：当前能力不支持修改日期。"}</p>}
     {!items.length && <p className={styles.empty}>{en ? "No work items to schedule." : "暂无可排期的工作项。"}</p>}
-    <div className={`${styles.calendar} ${shell.frame}`}>
+    <div className={`${styles.calendar} ${shell.frame}`} onContextMenu={openCalendarMenu} onKeyDown={openCalendarMenu}>
       <FullCalendar ref={calendar} plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]} initialView="dayGridMonth" headerToolbar={false} locale={en ? "en" : zhCnLocale} firstDay={weekStartsOn} slotLabelFormat={{ hour: "numeric", minute: "2-digit", hour12: timeFormat === "12" }} height="auto" timeZone="UTC" events={events} editable={Boolean(onSchedule) && !pending} selectable={Boolean(onSchedule || onCreate) && !pending} selectAllow={(range) => range.allDay} eventAllow={(range) => range.allDay} selectMirror dayMaxEvents={4} nowIndicator={false} navLinks={false} buttonText={{ today: en ? "Today" : "今天", month: en ? "Month" : "月", week: en ? "Week" : "周", day: en ? "Day" : "日" }} allDayText={en ? "All day" : "全天"} moreLinkText={(count) => en ? `+${count} more` : `另 ${count} 项`} noEventsText={en ? "No scheduled work items" : "暂无已排期工作项"}
         now={today}
         initialDate={today}
@@ -82,6 +113,8 @@ export function ServiceCalendar<T extends ScheduleItem>({ items, onOpen, onSched
         datesSet={(info) => setTitle(info.view.title)}
         eventClick={({ event }) => { const item = byId.get(event.id); if (item) { selectItem(item.id); onOpen(item) } }}
         eventClassNames={({ event }) => event.id === selectedId ? [styles.selectedEvent] : []}
+        eventDidMount={({ el, event }) => { el.dataset.calendarEvent = event.id }}
+        dayCellDidMount={({ el, date }) => { el.dataset.calendarDate = date.toISOString().slice(0, 10); if (onCreate) el.tabIndex = 0 }}
         eventDrop={(info) => requestDates(info.event, info.revert)}
         dateClick={info => {
           const due = dateOnly(info.dateStr);
@@ -96,7 +129,18 @@ export function ServiceCalendar<T extends ScheduleItem>({ items, onOpen, onSched
         }}
       />
     </div>
-    {selected && <ScheduleEditor key={`${selected.id}:${selection?.start ?? ""}:${selection?.due ?? ""}`} item={selected} onSchedule={onSchedule} pending={pending} initialDates={selection} />}
+    {selected && <div ref={editor}><ScheduleEditor key={`${selected.id}:${selection?.start ?? ""}:${selection?.due ?? ""}`} item={selected} onSchedule={onSchedule} pending={pending} initialDates={selection} /></div>}
+    <ContextMenuPopup menu={contextMenu} aria-label={en ? "Calendar actions" : "日历操作"}>
+      {contextMenu.target?.type === "event" && <>
+        <ContextMenuLabel>{itemTitle(contextMenu.target.item)}</ContextMenuLabel>
+        <ContextMenuItem onSelect={() => { const target = contextMenu.target; if (target?.type === "event") onOpen(target.item) }}>{en ? "Open task" : "打开任务"}</ContextMenuItem>
+        <ContextMenuItem disabled={!onSchedule || pending || contextMenu.target.item.scheduleReadOnly || contextMenu.target.item.data.archivedAt != null || contextMenu.target.item.scheduleFields?.start === false && contextMenu.target.item.scheduleFields?.due === false} title={en ? "Uses the existing date editor and explicit Save." : "使用现有日期编辑器，并显式保存。"} onSelect={() => { const target = contextMenu.target; if (target?.type === "event") editDates(target.item) }}>{en ? "Edit dates" : "编辑日期"}</ContextMenuItem>
+      </>}
+      {contextMenu.target?.type === "day" && <>
+        <ContextMenuLabel>{contextMenu.target.due}</ContextMenuLabel>
+        <ContextMenuItem disabled={pending || !onCreate} onSelect={() => { const target = contextMenu.target; if (target?.type === "day") onCreate?.(target.due) }}>{en ? "Create task due on this date" : "新建此日截止的任务"}</ContextMenuItem>
+      </>}
+    </ContextMenuPopup>
     <p role="status" className={styles.hint}>{pending ? (en ? "Saving…" : "正在保存…") : notice}</p>
   </div>
 }

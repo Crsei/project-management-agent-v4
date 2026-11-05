@@ -4341,6 +4341,10 @@ paths:
                       - workspaceId
                       - projectId
                     additionalProperties: false
+                  actorId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
                   workspaceName:
                     type: string
                   projectName:
@@ -4351,6 +4355,7 @@ paths:
                     type: string
                 required:
                   - scope
+                  - actorId
                   - workspaceName
                   - projectName
                   - path
@@ -16539,10 +16544,12 @@ paths:
             pattern: ^PRJ-\d+$
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -16717,10 +16724,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -16978,10 +16987,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -17108,10 +17119,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -17208,10 +17221,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -17314,10 +17329,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -17574,10 +17591,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -18135,10 +18154,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -18739,10 +18760,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -19322,10 +19345,12 @@ paths:
             default: bundle
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -19391,10 +19416,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -19490,10 +19517,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -19560,10 +19589,12 @@ paths:
             pattern: ^PRJ-\d+$
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -19622,10 +19653,21 @@ paths:
                           type: string
                           minLength: 1
                           maxLength: 160
-                        endpoint:
-                          type: string
-                          maxLength: 2048
-                          format: uri
+                        mcpDefinition:
+                          type: object
+                          properties:
+                            contextId:
+                              type: string
+                              minLength: 1
+                              maxLength: 100
+                            serverId:
+                              type: string
+                              minLength: 1
+                              maxLength: 300
+                          required:
+                            - contextId
+                            - serverId
+                          additionalProperties: false
                         readTools:
                           maxItems: 100
                           type: array
@@ -19690,6 +19732,10 @@ paths:
                           additionalProperties: false
                         hasCredentials:
                           type: boolean
+                        mcpConfigFingerprint:
+                          type:
+                            - string
+                            - "null"
                         lastCheckedAt:
                           type:
                             - string
@@ -19706,7 +19752,6 @@ paths:
                         - projectId
                         - provider
                         - label
-                        - endpoint
                         - readTools
                         - writeTools
                         - id
@@ -19714,6 +19759,7 @@ paths:
                         - status
                         - verification
                         - hasCredentials
+                        - mcpConfigFingerprint
                         - lastCheckedAt
                         - lastError
                         - createdAt
@@ -19725,6 +19771,83 @@ paths:
                   - providers
                   - connections
                   - privateStorageAvailable
+                additionalProperties: false
+        "400":
+          description: Rejected, authorization changed, conflict, or deployment capability unavailable
+        "401":
+          description: Rejected, authorization changed, conflict, or deployment capability unavailable
+        "403":
+          description: Rejected, authorization changed, conflict, or deployment capability unavailable
+        "404":
+          description: Rejected, authorization changed, conflict, or deployment capability unavailable
+        "409":
+          description: Rejected, authorization changed, conflict, or deployment capability unavailable
+        "503":
+          description: Rejected, authorization changed, conflict, or deployment capability unavailable
+  /api/v1/workspaces/{workspaceId}/automations/integrations/definitions:
+    get:
+      operationId: listAutomationManagedMcpDefinitions
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: projectId
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^PRJ-\d+$
+      description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
+        dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
+      responses:
+        "200":
+          description: Current status or accepted persistent operation (not fabricated completion)
+          content:
+            application/json:
+              schema:
+                $schema: https://json-schema.org/draft/2020-12/schema
+                type: object
+                properties:
+                  contextId:
+                    type: string
+                  definitions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        contextId:
+                          type: string
+                        serverId:
+                          type: string
+                        name:
+                          type: string
+                        configFingerprint:
+                          type: string
+                        transport:
+                          type: string
+                          const: streamable-http
+                      required:
+                        - contextId
+                        - serverId
+                        - name
+                        - configFingerprint
+                        - transport
+                      additionalProperties: false
+                required:
+                  - contextId
+                  - definitions
                 additionalProperties: false
         "400":
           description: Rejected, authorization changed, conflict, or deployment capability unavailable
@@ -19759,10 +19882,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -19800,10 +19925,21 @@ paths:
                       type: string
                       minLength: 1
                       maxLength: 160
-                    endpoint:
-                      type: string
-                      maxLength: 2048
-                      format: uri
+                    mcpDefinition:
+                      type: object
+                      properties:
+                        contextId:
+                          type: string
+                          minLength: 1
+                          maxLength: 100
+                        serverId:
+                          type: string
+                          minLength: 1
+                          maxLength: 300
+                      required:
+                        - contextId
+                        - serverId
+                      additionalProperties: false
                     readTools:
                       maxItems: 100
                       type: array
@@ -19844,11 +19980,10 @@ paths:
                     - projectId
                     - provider
                     - label
-                    - endpoint
                     - readTools
                     - writeTools
                   additionalProperties: false
-                privateHeaders:
+                nativePrivateHeaders:
                   type: object
                   propertyNames:
                     type: string
@@ -19888,10 +20023,21 @@ paths:
                     type: string
                     minLength: 1
                     maxLength: 160
-                  endpoint:
-                    type: string
-                    maxLength: 2048
-                    format: uri
+                  mcpDefinition:
+                    type: object
+                    properties:
+                      contextId:
+                        type: string
+                        minLength: 1
+                        maxLength: 100
+                      serverId:
+                        type: string
+                        minLength: 1
+                        maxLength: 300
+                    required:
+                      - contextId
+                      - serverId
+                    additionalProperties: false
                   readTools:
                     maxItems: 100
                     type: array
@@ -19956,6 +20102,10 @@ paths:
                     additionalProperties: false
                   hasCredentials:
                     type: boolean
+                  mcpConfigFingerprint:
+                    type:
+                      - string
+                      - "null"
                   lastCheckedAt:
                     type:
                       - string
@@ -19972,7 +20122,6 @@ paths:
                   - projectId
                   - provider
                   - label
-                  - endpoint
                   - readTools
                   - writeTools
                   - id
@@ -19980,6 +20129,7 @@ paths:
                   - status
                   - verification
                   - hasCredentials
+                  - mcpConfigFingerprint
                   - lastCheckedAt
                   - lastError
                   - createdAt
@@ -20018,10 +20168,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -20069,10 +20221,21 @@ paths:
                     type: string
                     minLength: 1
                     maxLength: 160
-                  endpoint:
-                    type: string
-                    maxLength: 2048
-                    format: uri
+                  mcpDefinition:
+                    type: object
+                    properties:
+                      contextId:
+                        type: string
+                        minLength: 1
+                        maxLength: 100
+                      serverId:
+                        type: string
+                        minLength: 1
+                        maxLength: 300
+                    required:
+                      - contextId
+                      - serverId
+                    additionalProperties: false
                   readTools:
                     maxItems: 100
                     type: array
@@ -20137,6 +20300,10 @@ paths:
                     additionalProperties: false
                   hasCredentials:
                     type: boolean
+                  mcpConfigFingerprint:
+                    type:
+                      - string
+                      - "null"
                   lastCheckedAt:
                     type:
                       - string
@@ -20153,7 +20320,6 @@ paths:
                   - projectId
                   - provider
                   - label
-                  - endpoint
                   - readTools
                   - writeTools
                   - id
@@ -20161,6 +20327,7 @@ paths:
                   - status
                   - verification
                   - hasCredentials
+                  - mcpConfigFingerprint
                   - lastCheckedAt
                   - lastError
                   - createdAt
@@ -20199,10 +20366,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -20250,10 +20419,21 @@ paths:
                     type: string
                     minLength: 1
                     maxLength: 160
-                  endpoint:
-                    type: string
-                    maxLength: 2048
-                    format: uri
+                  mcpDefinition:
+                    type: object
+                    properties:
+                      contextId:
+                        type: string
+                        minLength: 1
+                        maxLength: 100
+                      serverId:
+                        type: string
+                        minLength: 1
+                        maxLength: 300
+                    required:
+                      - contextId
+                      - serverId
+                    additionalProperties: false
                   readTools:
                     maxItems: 100
                     type: array
@@ -20318,6 +20498,10 @@ paths:
                     additionalProperties: false
                   hasCredentials:
                     type: boolean
+                  mcpConfigFingerprint:
+                    type:
+                      - string
+                      - "null"
                   lastCheckedAt:
                     type:
                       - string
@@ -20334,7 +20518,6 @@ paths:
                   - projectId
                   - provider
                   - label
-                  - endpoint
                   - readTools
                   - writeTools
                   - id
@@ -20342,6 +20525,7 @@ paths:
                   - status
                   - verification
                   - hasCredentials
+                  - mcpConfigFingerprint
                   - lastCheckedAt
                   - lastError
                   - createdAt
@@ -20380,10 +20564,12 @@ paths:
             pattern: ^PRJ-\d+$
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -20497,10 +20683,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -20669,10 +20857,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       requestBody:
         required: true
         content:
@@ -20804,10 +20994,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -20892,10 +21084,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -20952,10 +21146,12 @@ paths:
             format: uuid
       description: Creator-private with current PM workspace/project authorization. Import creates draft only. Git uses a
         dedicated checkout, never the business worktree; readable remote does not prove push permission or encryption
-        validity. Connections require explicit endpoint/tool allowlists and private credentials, verification is an
-        actual remote read, and revocation blocks future calls. Webhook definitions bind an exact project/source/key and
-        raw-body verification. Private secrets are never returned or exported. Unknown external writes reconcile their
-        original identity, never blindly retry.
+        validity. MCP connections bind an existing managed definition and explicit tool allowlists; endpoint/header
+        editing belongs only to unified configuration. Native API credentials remain separately sealed and project
+        scoped. Verification performs an explicit remote read, freezes the exact managed fingerprint, and configuration
+        changes or revocation block future calls. Webhook definitions bind an exact project/source/key and raw-body
+        verification. Private secrets are never returned or exported. Unknown external writes reconcile their original
+        identity, never blindly retry.
       responses:
         "200":
           description: Current status or accepted persistent operation (not fabricated completion)
@@ -55260,6 +55456,110 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+  /api/v1/setup/status:
+    get:
+      operationId: setupStatus
+      summary: Read minimal one-time instance setup state
+      security: []
+      description: Any existing user or workspace permanently closes claiming. Database/schema failures return 503, never an
+        uninitialized result. Registration remains invite-only. No query inputs; no-store and no-referrer.
+      responses:
+        "200":
+          description: Authoritative initialized and deployment-prepared state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceSetupStatus"
+        "400":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/setup:
+    post:
+      operationId: setup
+      summary: Consume the deployment token to create the first account and workspace
+      security: []
+      description: Strict POST JSON, no query, at most 4096 bytes. Requires a 32-byte base64url deployment token; only its
+        digest is stored. Account, workspace, explicit owner membership and completion commit atomically under a
+        singleton lock. No automatic retries or secret persistence. After any unknown result query setupStatus, then use
+        normal password login if initialized; a session failure does not reopen setup.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupRequest"
+      responses:
+        "200":
+          description: Session actor, new workspace and expiry. No token or password in JSON.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupResponse"
+          headers:
+            Set-Cookie:
+              description: Existing pm_v4_session; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.
+              schema:
+                type: string
+        "400":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/auth/login:
     post:
       operationId: login
@@ -60695,6 +60995,85 @@ components:
         - status
         - closedThroughAttemptNo
         - recordedAt
+      additionalProperties: false
+    InstanceSetupStatus:
+      type: object
+      properties:
+        initialized:
+          type: boolean
+        setupAllowed:
+          type: boolean
+        registrationMode:
+          type: string
+          const: invite_only
+      required:
+        - initialized
+        - setupAllowed
+        - registrationMode
+      additionalProperties: false
+    SetupRequest:
+      type: object
+      properties:
+        setupToken:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          writeOnly: true
+        email:
+          type: string
+          maxLength: 254
+          format: email
+          pattern: ^(?:[A-Za-z0-9_'+\-]+\.)*[A-Za-z0-9_'+\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+        password:
+          type: string
+          minLength: 12
+          maxLength: 256
+          writeOnly: true
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        workspaceName:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+        - setupToken
+        - email
+        - password
+        - name
+        - workspaceName
+      additionalProperties: false
+    SetupResponse:
+      type: object
+      properties:
+        actor:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            email:
+              type: string
+            name:
+              type: string
+          required:
+            - id
+            - email
+            - name
+          additionalProperties: false
+        workspaceId:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        expiresAt:
+          type: string
+          format: date-time
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+      required:
+        - actor
+        - workspaceId
+        - expiresAt
       additionalProperties: false
     ArtifactCopyOriginResponse:
       type: object

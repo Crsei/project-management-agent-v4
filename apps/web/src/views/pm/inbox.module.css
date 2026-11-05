@@ -145,6 +145,18 @@
   border-bottom: 0;
   padding-right: 6.5rem;
 }
+.notificationRow {
+  position: relative;
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+.notificationRow .listButton {
+  border-bottom: 0;
+  padding-right: 3.5rem;
+}
+.notificationRow[data-inline-actions="true"] .listButton {
+  padding-right: 8.5rem;
+}
 .rowActions {
   position: absolute;
   right: 0.75rem;

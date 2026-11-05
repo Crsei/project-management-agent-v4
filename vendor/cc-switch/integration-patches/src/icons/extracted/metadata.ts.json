@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/icons/extracted/metadata.ts",
+  "beforeSha256": "4b617394f9844c8bb1c21665538b09c16a22fde64ee59f8c287f694c09593b91",
+  "afterSha256": "1b66f3ccfc86dac87f9e8b7f94eff90a689c4719249c119654e7b58bdd0539ff",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 54,
+  "before": "eyBJY29uTWV0YWRhdGEgfSBmcm9tICJA",
+  "after": "dHlwZSB7IEljb25NZXRhZGF0YSB9IGZyb20gIi4uLy4u"
+}

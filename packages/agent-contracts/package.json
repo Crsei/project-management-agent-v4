@@ -7,6 +7,11 @@
   ],
   "type": "module",
   "exports": {
+    "./extensions": {
+      "types": "./dist/extensions.d.ts",
+      "development": "./src/extensions.ts",
+      "default": "./dist/extensions.js"
+    },
     "./mcp-apps": {
       "types": "./dist/mcp-apps.d.ts",
       "development": "./src/mcp-apps.ts",

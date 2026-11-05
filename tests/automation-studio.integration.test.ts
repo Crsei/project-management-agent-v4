@@ -46,7 +46,10 @@ async function fixture(signal: AbortSignal) {
       async query() { queries++; return completed; },
       async cancel() { cancels++; return { ...completed, status: 'cancelled' }; },
     };
-    const service = createAutomationStudioService({ database: () => pool, core, runtime });
+    const service = createAutomationStudioService({ database: () => pool, core, runtime, definitionResolver: {
+      list: async () => ({ contextId: 'controlled-project', definitions: [{ contextId: 'controlled-project', serverId: 'github', name: 'Controlled MCP fixture', configFingerprint: 'a'.repeat(64), transport: 'streamable-http' }] }),
+      resolve: async () => { throw new Error('Studio metadata must not request definition credentials'); },
+    } });
     return { pool, owner, workspaceId, core, runtime, service, scope, stats: () => ({ dispatches, queries, cancels, lastRequest }), loseDispatch: () => { loseDispatch = true; }, create: () => service.create(owner, workspaceId, { requestId: randomUUID(), config }) };
   });
 }
@@ -163,8 +166,8 @@ describe('PostgreSQL Studio definitions, immutable results and unknown-safe disp
   it('filters API-only plugin capabilities by action and Worker rejects unsuitable frozen prompt refs before dispatch', { timeout: 60000 }, async t => {
     const f = await fixture(t.signal); t.after(f.scope.close);
     const connectionId = randomUUID(), plugin = { id: `integration:${connectionId}`, version: '1' };
-    const connection = { projectId: config.projectId, provider: 'github', label: 'Controlled native API fixture', endpoint: 'https://api.github.com', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['org/repository'], allowWrites: false } };
-    await f.pool.query("INSERT INTO automation_integration_connections(id,workspace_id,actor_id,project_id,config,private_config,has_credentials,status,verification) VALUES($1,$2,$3,$4,$5::jsonb,'controlled-no-credentials',false,'verified',$6::jsonb)", [connectionId, f.workspaceId, f.owner.id, config.projectId, JSON.stringify(connection), JSON.stringify({ mcp: false, nativeApi: true })]);
+    const connection = { projectId: config.projectId, provider: 'github', label: 'Controlled native API fixture', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['org/repository'], allowWrites: false } };
+    await f.pool.query("INSERT INTO automation_integration_connections(id,workspace_id,actor_id,project_id,config,native_private_config,has_credentials,status,verification) VALUES($1,$2,$3,$4,$5::jsonb,'controlled-no-credentials',false,'verified',$6::jsonb)", [connectionId, f.workspaceId, f.owner.id, config.projectId, JSON.stringify(connection), JSON.stringify({ mcp: false, nativeApi: true })]);
     assert.ok((await f.service.capabilities(f.owner, f.workspaceId, config.projectId)).plugins.some(item => item.id === plugin.id));
     assert.ok((await f.service.capabilities(f.owner, f.workspaceId, config.projectId, 'template')).plugins.some(item => item.id === plugin.id));
     for (const kind of ['prompt', 'script'] as const) assert.equal((await f.service.capabilities(f.owner, f.workspaceId, config.projectId, kind)).plugins.some(item => item.id === plugin.id), false);
@@ -182,8 +185,8 @@ describe('PostgreSQL Studio definitions, immutable results and unknown-safe disp
   it('gates the selected Provider protocol before activation, affected Test queue and Worker dispatch without network under SQL locks', { timeout: 60000 }, async t => {
     const f = await fixture(t.signal); t.after(f.scope.close);
     const connectionId = randomUUID(), plugin = { id: `integration:${connectionId}`, version: '1' };
-    const connection = { projectId: config.projectId, provider: 'github', label: 'Controlled MCP fixture', endpoint: 'https://mcp.example.test/github', readTools: ['read_repository'], writeTools: [] };
-    await f.pool.query("INSERT INTO automation_integration_connections(id,workspace_id,actor_id,project_id,config,private_config,has_credentials,status,verification) VALUES($1,$2,$3,$4,$5::jsonb,'controlled-no-credentials',false,'verified',$6::jsonb)", [connectionId, f.workspaceId, f.owner.id, config.projectId, JSON.stringify(connection), JSON.stringify({ mcp: true, nativeApi: false })]);
+    const connection = { projectId: config.projectId, provider: 'github', label: 'Controlled MCP fixture', mcpDefinition: { contextId: 'controlled-project', serverId: 'github' }, readTools: ['read_repository'], writeTools: [] };
+    await f.pool.query("INSERT INTO automation_integration_connections(id,workspace_id,actor_id,project_id,config,native_private_config,has_credentials,status,verification,mcp_config_fingerprint) VALUES($1,$2,$3,$4,$5::jsonb,'',false,'verified',$6::jsonb,$7)", [connectionId, f.workspaceId, f.owner.id, config.projectId, JSON.stringify(connection), JSON.stringify({ mcp: true, nativeApi: false }), 'a'.repeat(64)]);
     const originalCapabilities = f.runtime.capabilities;
     let support: boolean | null = true;
     f.runtime.capabilities = async scope => {

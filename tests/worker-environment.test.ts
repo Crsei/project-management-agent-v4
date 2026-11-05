@@ -7,6 +7,7 @@ import { readInvitationMailConfig } from '../packages/infrastructure/src/invitat
 import { runtimeConfig } from '../packages/infrastructure/src/runtime-config.ts';
 import { readWebhookConfig } from '../packages/infrastructure/src/webhook-config.ts';
 import { assertV4WorkerTestDatabase, outboxWorkerEnvironment } from './worker-environment.ts';
+import { ciPostgresLabel, matchesCiPostgres } from '../scripts/ci-postgres.ts';
 
 it('Worker and automation fixtures keep the v4 loopback database boundary', () => {
   for (const host of ['127.0.0.1', 'localhost', '[::1]']) assert.doesNotThrow(() => assertV4WorkerTestDatabase(`postgres://fixture@${host}:55444/fixture`));
@@ -20,6 +21,36 @@ it('Worker and automation fixtures keep the v4 loopback database boundary', () =
     assert.equal(error.message.includes('private-database-url-not-for-logs'), false);
     return true;
   });
+});
+
+it('random CI ports require the exact running owned container, allocation and synthetic database identity', () => {
+  const id = 'a'.repeat(64), owner = '123:456:00000000-0000-4000-8000-000000000001', password = 'b'.repeat(64);
+  const database = 'pm_ci_00000000000040008000000000000001';
+  const source = `postgresql://pm_ci:${password}@127.0.0.1:49152/${database}`;
+  const container = {
+    Id: id, State: { Running: true },
+    Config: { Labels: { [ciPostgresLabel]: owner }, Env: ['POSTGRES_USER=pm_ci', `POSTGRES_DB=${database}`, `POSTGRES_PASSWORD=${password}`] },
+    NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: '127.0.0.1', HostPort: '49152' }] } },
+  };
+  assert.equal(matchesCiPostgres(source, container, id, owner), true);
+  assert.equal(matchesCiPostgres(`${source}?options=-c%20search_path%3Dtest_owned`, container, id, owner), true);
+  for (const foreign of [
+    source.replace(':49152/', ':55443/'), source.replace('127.0.0.1', 'example.test'),
+    source.replace(database, 'project_management'), source.replace(password, 'c'.repeat(64)),
+    source.replace('pm_ci:', 'postgres:'), source.replace('postgresql:', 'https:'),
+    `${source}?host=example.test`, `${source}?port=55443`, `${source}?database=project_management`,
+    `${source}?user=postgres`, `${source}?password=foreign`, `${source}?hostaddr=127.0.0.1`,
+    `${source}?options=-c%20search_path%3Dtest_first&options=-c%20search_path%3Dtest_second`,
+    `${source}#unverified-fragment`,
+  ]) assert.equal(matchesCiPostgres(foreign, container, id, owner), false);
+  for (const change of [
+    { Id: 'c'.repeat(64) }, { State: { Running: false } },
+    { Config: { ...container.Config, Labels: { [ciPostgresLabel]: 'foreign-owner' } } },
+    { NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: '0.0.0.0', HostPort: '49152' }] } } },
+    { NetworkSettings: { Ports: { '5432/tcp': [{ HostIp: '127.0.0.1', HostPort: '5432' }] } } },
+  ]) assert.equal(matchesCiPostgres(source, { ...container, ...change }, id, owner), false);
+  assert.equal(matchesCiPostgres(source, null, id, owner), false);
+  assert.equal(matchesCiPostgres(source, container, id, 'not-an-owner'), false);
 });
 
 it('outbox Workers receive only their real database and isolated read-only core configuration', () => {

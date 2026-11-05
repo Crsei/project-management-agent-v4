@@ -3,7 +3,8 @@ import { ListFilter } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
+import { FilterCard } from "@/components/blocks/filter-card"
+import type { FilterCondition, FilterField } from "@/lib/filter-model"
 import type { ControlledInvitation, ControlledMember, PeopleRoleOption } from "./people-controlled-contracts"
 
 export type MemberDirectoryText = (zh: string, en: string) => string

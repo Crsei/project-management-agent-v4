@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useI18n } from "@/lib/i18n-provider"
-import { useMemo, type ReactNode } from "react"
+import { Fragment, useMemo, type ReactNode } from "react"
 import type { ProjectCollectionRecord, ProjectCollectionViewProps } from "./project-collection-contracts"
 import { projectHealthBand } from "./project-health"
 import { ProjectListFourSurface } from "./project-list-4-surface"
@@ -72,11 +72,12 @@ export function ProjectCollectionRows({ props, onSelect }: { props: ProjectColle
         const rowActions = config?.rowActions ? config.rowActions(project) : capabilities.edit(project.id) ? <Button variant="ghost" size="sm" onClick={(event) => actions.edit(project.id, event.currentTarget)}>{en ? "Edit" : "编辑"}</Button> : null
         const projectAction = props.renderProjectAction?.(project)
         const rowActionNodes = <>{projectAction}{rowActions}</>
-        return <TableRow key={project.id} className={styles.tableRow} data-pm-project-row={project.id} data-selected={interaction.selectedId === project.id || undefined} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button,a,input,[role=menuitem]")) return; actions.setInteraction((previous) => ({ ...previous, selectedId: project.id })) }}>
+        const row = <TableRow className={styles.tableRow} data-pm-project-row={project.id} data-selected={interaction.selectedId === project.id || undefined} onClick={(event) => { if (event.target instanceof Element && event.target.closest("button,a,input,[role=menuitem]")) return; actions.setInteraction((previous) => ({ ...previous, selectedId: project.id })) }}>
           <TableCell><Button variant="ghost" className={styles.projectButton} onClick={() => { if (config?.onOpen) config.onOpen(project.id); else if (capabilities.openFullDetails) actions.openFullDetails(project.id) }} disabled={!config?.onOpen && !capabilities.openFullDetails}><span className={styles.projectIcon}><FolderKanban aria-hidden="true" /></span><span className={styles.projectCell}><strong className={styles.projectCellTitle} title={project.title}>{project.title}</strong><span className={styles.projectIdentifier}>{project.identifier}</span></span></Button></TableCell>
           {visibleColumns.map((column) => <TableCell key={column.key} data-pm-project-column={column.key}>{column.key === "updated" ? <span className={styles.updatedCell}>{column.cell(project)}<span className={styles.inlineActions}>{rowActionNodes}</span></span> : column.cell(project)}</TableCell>)}
           {!hasUpdated && <TableCell className={styles.rowActionCell}>{rowActionNodes}</TableCell>}
         </TableRow>
+        return <Fragment key={project.id}>{props.renderProjectContextMenu ? props.renderProjectContextMenu(project, row) : row}</Fragment>
       })}</TableBody>
     </Table>
   </TableContainer>

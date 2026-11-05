@@ -1,6 +1,7 @@
 // Adapted from t3code d53873b6 ChatComposer, useComposerMenuItems,
 // useComposerCommandKey, SkillInlineText and useProviderWorkspaceSnapshotRefresh. MIT; LICENSE.t3code.
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useAui, useAuiState } from "@assistant-ui/react";
 import { acceptThreadSettings } from "@agent/hooks/use-chat-settings";
 import type { ProviderSkillsSnapshot } from "@agent-workspace/contracts/provider";
@@ -17,6 +18,7 @@ const TTL = 5 * 60_000;
 
 export function useProviderSkillsComposer(instanceId: string, disabled: boolean) {
   const t = useAgentText();
+  const location = useLocation();
   const aui = useAui();
   const state = usePmChatState();
   const localId = useAuiState(s => s.threads.mainThreadId);
@@ -66,6 +68,14 @@ export function useProviderSkillsComposer(instanceId: string, disabled: boolean)
     void refresh(false);
     return () => controller.current?.abort();
   }, [key, available]);
+  useEffect(() => {
+    const changed = (event: Event) => {
+      const detail = (event as CustomEvent<{ providerInstanceIds?: string[] }>).detail;
+      if (detail?.providerInstanceIds?.includes(instanceId)) void refresh(true);
+    };
+    window.addEventListener("agent-native-configuration-changed", changed);
+    return () => window.removeEventListener("agent-native-configuration-changed", changed);
+  }, [instanceId, refresh]);
   useEffect(() => {
     if (!snapshot?.pending) return;
     const timer = window.setTimeout(() => void refresh(false), 10_000);
@@ -159,6 +169,8 @@ export function useProviderSkillsComposer(instanceId: string, disabled: boolean)
     inputAria: { "aria-controls": visible ? menuId : undefined, "aria-expanded": !!visible, "aria-activedescendant": visible && items[index] ? `${menuId}-${index}` : undefined, "aria-autocomplete": "list" as const },
     surface: <div className="native-skills-composer">
       <div className="native-skills-toolbar"><button type="button" onClick={() => setDirectoryOpen(value => !value)} aria-expanded={directoryOpen}>{t("原生 Skills / 命令", "Native Skills / commands")}</button><button type="button" disabled={!available || result.loading} onClick={() => void refresh(true)}>{t("刷新目录", "Refresh catalog")}</button><button type="button" disabled={!remoteId || disabled || running || restarting} onClick={() => void restart()}>{restarting ? t("正在重启…", "Restarting…") : t("重启原生 session", "Restart native session")}</button></div>
+      <Link to={`/agent/settings/skills?provider=${encodeURIComponent(instanceId)}`} state={{ settingsReturnTo: `${location.pathname}${location.search}${location.hash}` }}>{t("管理原生 Skills（cc-switch）", "Manage native Skills (cc-switch)")}</Link>
+      {snapshot?.nativeConfiguration?.reloadRequired && <p role="status">{t("原生配置已变更；已安装不等于当前会话已加载。活跃执行保持不变。请刷新目录，并按需显式重启原生 session 或新建对话。", "Native configuration changed; installed does not mean loaded in this session. Active executions are preserved. Refresh the catalog and explicitly restart the native session or start a new chat when needed.")}</p>}
       {tokens.length > 0 && <div className="native-skill-chips" aria-label={t("原生 Skill 引用", "Native Skill references")}>{tokens.map(token => { const skill = current && snapshot ? snapshot.skills.find(skill => skill.name === token.value && isProviderSkillUserInvocable(skill)) : undefined; return <button key={`${token.start}:${token.value}`} type="button" data-invalid={invalid.some(p => p.name === token.value)} title={skill?.path ?? token.source} onClick={() => remove(token.value)}>{skill ? formatProviderSkillDisplayName(skill) : `$${token.value}`} <span aria-label={t("移除引用", "Remove reference")}>×</span></button>; })}</div>}
       {pickedCommands.length > 0 && <div className="native-skill-chips">{pickedCommands.map(command => <button key={command.name} type="button" data-invalid={invalid.includes(command)} onClick={() => removeCommand(command.name)}>/{command.name} ×</button>)}</div>}
       {snapshot?.invocation.skillSyntax === "leading-mention" && <p>{t("此 Provider 每条消息仅原生调用开头的一个 Skill；选择会将引用放在消息最前面。", "This provider natively invokes only one leading Skill per message; selecting places its reference at the start.")}</p>}

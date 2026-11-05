@@ -7,7 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { ProviderInstanceId } from "@t3tools/contracts";
-import { migrateCodexManagedState } from "./codex-persistence.ts";
+import { migrateCodexManagedState } from "../t3code/families/codex-persistence.ts";
 import { createProviderInstance, getStoredInstance, migrateProviderStartupState, providerContext, updateProviderInstance } from "../instances.ts";
 import { closeStore } from "../../durable/store.ts";
 import { makePmProviderPlatformLayer } from "../t3code/host-runtime.ts";

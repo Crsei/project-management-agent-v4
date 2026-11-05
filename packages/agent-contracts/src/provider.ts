@@ -11,6 +11,12 @@ import type { ServerProviderSkill, ServerProviderSlashCommand } from "@t3tools/c
 
 /** Provider-native discovery is distinct from saved WorkspaceSkill instructions. */
 export type ProviderSkillsRefreshInput = { scope: AgentScope; fresh?: boolean };
+export type ProviderNativeConfigurationChange = {
+  changedAt: string;
+  reason: string;
+  reloadRequired: true;
+  liveExecutionsPreserved: true;
+};
 export type ProviderSkillsSnapshot = {
   instanceId: string;
   revision: number;
@@ -21,6 +27,8 @@ export type ProviderSkillsSnapshot = {
   commands: readonly ServerProviderSlashCommand[];
   invocation: { skills: boolean; commands: boolean; skillSyntax: "mention" | "leading-mention" | "none"; commandAllowlist?: readonly string[] };
   error?: { code: string; message: string };
+  /** Discovery refresh is not a native session reload; existing executions keep their loaded state. */
+  nativeConfiguration?: ProviderNativeConfigurationChange;
 };
 
 export type ProviderDriver =

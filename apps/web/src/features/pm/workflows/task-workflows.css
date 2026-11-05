@@ -46,6 +46,8 @@
 .workflow-node > span { font-size: 10px; color: var(--muted-foreground); overflow-wrap: anywhere; }
 .workflow-node.selected { outline: 2px solid var(--primary); }
 .workflow-node.active { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent); }
+.workflow-node:focus-visible, .workflow-node-records li:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.workflow-properties:focus-visible { outline: 2px solid var(--primary); outline-offset: -3px; }
 .workflow-node[data-state=succeeded] { border-color: #22a06b; }
 .workflow-node[data-state=failed] { border-color: var(--destructive); }
 .workflow-node .react-flow__handle { width: 10px; height: 10px; background: var(--primary); }

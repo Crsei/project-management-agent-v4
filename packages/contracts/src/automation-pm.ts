@@ -13,6 +13,35 @@ export const pmAutomationTemplateIdSchema = z.enum(pmAutomationTemplateIds);
 export type PmAutomationTemplateId = z.infer<typeof pmAutomationTemplateIdSchema>;
 export function isPmAutomationTemplateId(id: string): id is PmAutomationTemplateId { return (pmAutomationTemplateIds as readonly string[]).includes(id); }
 export const pmAutomationTemplateVersion = '1.0.0';
+/** Exhaustive capability admission: adding an ID cannot silently create a no-model handler. */
+export const pmAutomationTemplateCapabilities = {
+  'pm-duplicate-tasks': { requiresProvider: true, requiresWorkspace: false },
+  'pm-requirement-review': { requiresProvider: true, requiresWorkspace: false },
+  'pm-stalled-tasks': { requiresProvider: false, requiresWorkspace: false },
+  'pm-ready-dependencies': { requiresProvider: false, requiresWorkspace: false },
+  'pm-execution-status-review': { requiresProvider: false, requiresWorkspace: false },
+  'pm-task-overlap': { requiresProvider: false, requiresWorkspace: false },
+  'pm-run-summary': { requiresProvider: false, requiresWorkspace: false },
+  'pm-run-failure-investigation': { requiresProvider: false, requiresWorkspace: false },
+  'pm-session-followups': { requiresProvider: true, requiresWorkspace: false },
+  'pm-pr-acceptance-coverage': { requiresProvider: false, requiresWorkspace: false },
+  'pm-parallel-run-overlap': { requiresProvider: false, requiresWorkspace: false },
+  'pm-repeated-failure-hypothesis': { requiresProvider: false, requiresWorkspace: false },
+  'pm-decision-record': { requiresProvider: true, requiresWorkspace: false },
+  'pm-scope-drift': { requiresProvider: false, requiresWorkspace: false },
+  'pm-requirement-change-impact': { requiresProvider: false, requiresWorkspace: false },
+  'pm-session-knowledge': { requiresProvider: true, requiresWorkspace: false },
+  'pm-cross-task-failures': { requiresProvider: false, requiresWorkspace: false },
+  'pm-next-phase-plan': { requiresProvider: true, requiresWorkspace: false },
+  'pm-project-digest': { requiresProvider: false, requiresWorkspace: false },
+  'pm-project-stagnation': { requiresProvider: false, requiresWorkspace: false },
+  'pm-milestone-readiness': { requiresProvider: false, requiresWorkspace: false },
+  'pm-since-last-visit': { requiresProvider: false, requiresWorkspace: false },
+  'pm-goal-drift': { requiresProvider: true, requiresWorkspace: false },
+  'pm-next-actions': { requiresProvider: true, requiresWorkspace: false },
+} as const satisfies Record<PmAutomationTemplateId, { requiresProvider: boolean; requiresWorkspace: false }>;
+export const pmAutomationSemanticTemplateIds: readonly PmAutomationTemplateId[] = pmAutomationTemplateIds.filter(id => pmAutomationTemplateCapabilities[id].requiresProvider);
+export function pmAutomationTemplateRequiresProvider(id: PmAutomationTemplateId): boolean { return pmAutomationTemplateCapabilities[id].requiresProvider; }
 const id = z.string().trim().min(1).max(300);
 const uuid = z.uuid().toLowerCase();
 const projectId = z.string().regex(/^PRJ-\d+$/);

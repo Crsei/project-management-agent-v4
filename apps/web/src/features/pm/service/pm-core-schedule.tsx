@@ -8,6 +8,7 @@ import { dateOnly, type ScheduleItem } from "../components/service-collection-sh
 import { taskStateLabel } from "../markdown/task-status-label"
 import { usePmService } from "./pm-service"
 import { useText } from "./pm-ui"
+import { MilestoneReschedule } from "./dashboard-planning"
 
 export type CoreScheduleViewProps = {
   files: FileRecord[]
@@ -86,6 +87,7 @@ export function CoreScheduleView({ files, layout, onSelect, onPatch, canEdit, on
   const timeline = useMemo(() => layout === "gantt" ? createCoreTimelineMetadata({ files, contextFiles, configuration, projectId, en: locale === "en", actor }) : null, [files, contextFiles, configuration, projectId, locale, actor, layout])
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [milestoneDateId, setMilestoneDateId] = useState("")
   const saving = useRef(false)
   const items = useMemo<CoreScheduleItem[]>(() => files.map(file => {
     const kind = file.entity.entity
@@ -154,6 +156,7 @@ export function CoreScheduleView({ files, layout, onSelect, onPatch, canEdit, on
   const calendar = <ServiceCalendar<CoreScheduleItem> items={items} onOpen={item => onSelect(item.id)} onSchedule={items.some(item => !item.scheduleReadOnly) ? (item, start, due) => { void schedule(item, start, due) } : undefined} pending={pending} onCreate={onCreate} today={today} />
   return <div className={layout === "gantt" ? "flex min-h-0 min-w-0 flex-1 flex-col gap-3" : "min-w-0 space-y-3"}>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    {layout === "calendar" ? calendar : <ServiceGantt<CoreScheduleItem> items={items} onOpen={item => onSelect(item.id)} onSchedule={items.some(item => !item.scheduleReadOnly) ? (item, start, due) => { void schedule(item, start, due) } : undefined} pending={pending} today={today} defaultGroupBy={projectId ? "status" : "project"} milestones={timeline?.milestones} onOpenMilestone={onSelect} toolbarTarget={toolbarTarget} />}
+    {layout === "calendar" ? calendar : <ServiceGantt<CoreScheduleItem> items={items} onOpen={item => onSelect(item.id)} onSchedule={items.some(item => !item.scheduleReadOnly) ? (item, start, due) => { void schedule(item, start, due) } : undefined} pending={pending} today={today} defaultGroupBy={projectId ? "status" : "project"} milestones={timeline?.milestones} onOpenMilestone={onSelect} onEditMilestoneDates={setMilestoneDateId} canEditMilestoneDates={canEdit} toolbarTarget={toolbarTarget} />}
+    {milestoneDateId && <MilestoneReschedule milestoneId={milestoneDateId} open onOpenChange={open => { if (!open) setMilestoneDateId("") }} hideTrigger />}
   </div>
 }

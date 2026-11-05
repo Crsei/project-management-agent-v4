@@ -6,6 +6,8 @@
   "include": [
     "apps/server/pm/src/**/*.ts",
     "apps/server/worker/src/**/*.ts",
+    "apps/server/gateway.ts",
+    "apps/server/gateway.test.ts",
     "packages/domain/src/**/*.ts",
     "packages/application/src/**/*.ts",
     "packages/contracts/src/**/*.ts",
@@ -18,6 +20,9 @@
     "packages/application/tests/**/*.ts",
     "packages/contracts/tests/**/*.ts",
     "packages/infrastructure/tests/**/*.ts",
+    "packages/pm-cli/**/*.ts",
+    "scripts/bootstrap.ts",
+    "scripts/smoke.ts",
     "tests/**/*.ts",
     "scripts/local-project*.ts"
   ],

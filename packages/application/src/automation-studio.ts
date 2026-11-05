@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { studioConfigSchema, studioNativeTemplateRequiresProvider, studioRequiredProviderToolFeature, type StudioActionKind, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioExecution, type StudioExecutionEvent, type StudioExecutionPort, type StudioPage, type StudioReceipt, type StudioValidation } from '../../contracts/src/automation-studio.ts';
-import { validateNativeTemplateArguments } from '../../contracts/src/automation-native-template-arguments.ts';
+import { validateNativeTemplateArguments } from '../../automation-resources/native-template-arguments.ts'
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema } from '../../contracts/src/automation-pm.ts';
 import { DomainError, type Actor } from '../../domain/src/core.ts';
 import { lockWorkspace } from '../../infrastructure/src/database.ts';
@@ -13,6 +13,7 @@ import { appendStudioEvent, assertStudioConfig, enqueueStudioExecution, studioAu
 import { reconcileStudioExecution } from './automation-studio-worker.ts';
 import { createAutomationIntegrationsService } from './automation-integrations.ts';
 import { validatePmAutomationScope } from './automation-pm.ts';
+import type { AutomationDefinitionResolver } from './automation-integrations-definitions.ts';
 export { enqueueAutomationStudioEvent } from './automation-studio-store.ts';
 
 type ReceiptRow = { request_hash: string; project_ids: string[]; http_status: number; result: unknown };
@@ -37,7 +38,7 @@ export interface AutomationStudioService {
   cancel(actor: Actor, workspaceId: string, id: string, input: { requestId: string }): Promise<StudioExecution>;
   receipt(actor: Actor, workspaceId: string, requestId: string): Promise<StudioReceipt>;
 }
-export function createAutomationStudioService(options: { database: () => Pool; core: NotificationCorePort; runtime: StudioExecutionPort }): AutomationStudioService {
+export function createAutomationStudioService(options: { database: () => Pool; core: NotificationCorePort; runtime: StudioExecutionPort; definitionResolver?: AutomationDefinitionResolver }): AutomationStudioService {
   const integrations = createAutomationIntegrationsService(options);
   async function scoped<T>(actor: Actor, workspaceId: string, operation: (sql: PoolClient) => Promise<T>): Promise<T> {
     const sql = await options.database().connect();

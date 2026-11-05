@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { AlertTriangle, ChevronDown, FileText, LoaderCircle, X } from 'lucide-react';
 import type { FileRecord } from '@pm-schema';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../../components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../../components/ui/dialog';
 import { documentTargetKey, type DocumentTarget, type DocumentTabStatus, type DocumentWorkbenchLifecycle } from './document-workbench-state';
@@ -56,13 +57,16 @@ export function DocumentTabs({ tabs, active, files, en, statuses, authorizedExte
         const selected = key === activeKey;
         const name = label(target);
         const description = statusLabel(target);
-        return <div key={key} className={`document-tab ${selected ? 'is-active' : ''}`}>
+        return <ContextMenu key={key}><ContextMenuTrigger asChild><div className={`document-tab ${selected ? 'is-active' : ''}`} tabIndex={-1}>
           <button type="button" id={`${prefix}-tab-${index}`} ref={button => { if (button) buttons.current.set(key, button); else buttons.current.delete(key); }} role="tab" tabIndex={selected || !activeKey && index === 0 ? 0 : -1} aria-selected={selected} aria-controls={panelId} aria-label={`${name}${description ? ` · ${description}` : ''}`} title={`${name}${description ? ` · ${description}` : ''}`} onClick={() => onActivate(target)}>
             {status?.saving ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : status?.unknown || status?.error ? <AlertTriangle size={14} aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}
             <span className="document-tab-label">{name}</span>{status?.dirty && <span className="document-tab-dirty" aria-hidden="true">●</span>}
           </button>
           <button type="button" className="document-tab-close" aria-label={en ? `Close ${name}` : `关闭 ${name}`} title={en ? 'Close document · Delete on tab' : '关闭文档 · 标签上按 Delete'} onClick={() => { focusAfterClose.current = key; onClose(target); }}><X size={13} /></button>
-        </div>;
+        </div></ContextMenuTrigger><ContextMenuContent aria-label={name}>
+          <ContextMenuItem onSelect={() => onActivate(target)}>{en ? 'Activate document' : '切换到此文档'}</ContextMenuItem>
+          <ContextMenuItem onSelect={() => { focusAfterClose.current = key; onClose(target); }}>{en ? 'Close document' : '关闭此文档'}</ContextMenuItem>
+        </ContextMenuContent></ContextMenu>;
       })}
     </div>
     {tabs.length > 0 && <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="document-tabs-overflow" aria-label={en ? 'List all open documents' : '列出全部已打开文档'} title={en ? 'All open documents' : '全部已打开文档'}><ChevronDown size={16} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="document-tabs-menu">{tabs.map(target => <DropdownMenuItem key={documentTargetKey(target)} onSelect={() => onActivate(target)}><span className="document-tab-label">{label(target)}</span>{documentTargetKey(target) === activeKey && <span aria-hidden="true">✓</span>}<small>{statusLabel(target)}</small></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>}

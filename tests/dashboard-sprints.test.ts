@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import path from 'node:path';
 import { createDashboardFixture, dashboardDatabaseUrl, type DashboardFixture } from './dashboard-fixture.ts';
 import type { Command, Entity } from '../packages/domain/src/core.ts';
 import type { SprintsDashboard, SprintSummary } from '../packages/domain/src/dashboard-sprints.ts';
@@ -109,7 +108,7 @@ describe('dashboard sprint real HTTP and CLI behavior', { skip: !dashboardDataba
     t.after(() => fixture.close());
     const parent = await project(fixture, 'CLI sprint project');
     const member = await task(fixture, parent.id, 'CLI-assigned task');
-    const env = { ...process.env, PM_API_URL: fixture.origin, PM_WORKSPACE_ID: fixture.workspaceId, PM_SESSION_TOKEN: '', PM_EMAIL: fixture.owner.email, PM_PASSWORD: 'isolated-dashboard-test-password', PM_ACCESS_FILE: path.join(fixture.coreRoot, 'unused-test-access-file') };
+    const env = { ...process.env, PM_API_URL: fixture.origin, PM_WORKSPACE_ID: fixture.workspaceId, PM_SESSION_TOKEN: '', PM_EMAIL: fixture.owner.email, PM_PASSWORD: 'isolated-dashboard-test-password' };
     const created = await exec(process.execPath, ['packages/pm-cli/index.ts', 'entity', 'create', '--entity', 'cycle', '--title', 'CLI native cycle', '--project', parent.id, '--start', '2026-10-01', '--due', '2026-10-14'], { cwd: process.cwd(), env });
     const native = JSON.parse(created.stdout) as FileRecord;
     await exec(process.execPath, ['packages/pm-cli/index.ts', 'task', 'update', member.id, '--cycle', native.id], { cwd: process.cwd(), env });

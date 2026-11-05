@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { automationCatalog, automationTemplateMaturity, automationTemplateSource, automationTemplateTriggers } from '../src/automation-catalog.ts';
-import { pmAutomationCatalog, pmAutomationDefaultArguments, pmAutomationRecommendedIds } from '../src/automation-pm-catalog.ts';
-import { validateNativeTemplateArguments } from '../src/automation-native-template-arguments.ts';
+import { automationCatalog, automationTemplateMaturity, automationTemplateSource, automationTemplateTriggers } from '../../automation-resources/catalog.ts';
+import { pmAutomationCatalog, pmAutomationDefaultArguments, pmAutomationRecommendedIds } from '../../automation-resources/pm-catalog.ts';
+import { validateNativeTemplateArguments } from '../../automation-resources/native-template-arguments.ts';
 import {
   pmAutomationArgumentsSchema, pmAutomationCandidateSchema, pmAutomationCoverageKindSchema, pmAutomationCoverageSchema,
   pmAutomationExecutionSchema, pmAutomationPlanSchema, pmAutomationResultSchema, pmAutomationReviewReceiptSchema, pmAutomationSnapshotSchema,

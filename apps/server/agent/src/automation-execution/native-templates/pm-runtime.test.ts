@@ -10,7 +10,9 @@ import { ProviderInstanceId, ThreadId } from '@t3tools/contracts';
 import type { NativeOutputItem } from '@agent-workspace/contracts/output';
 import type { StudioExecutionRequest } from '../../../../../../packages/contracts/src/automation-studio.ts';
 import { pmAutomationCoverageKindSchema, pmAutomationTemplateIds, pmAutomationSnapshotSchema, pmAutomationPublishSchema, type PmAutomationSnapshot, type PmAutomationSourceRef, type PmAutomationResult, type PmAutomationAgentEvidence } from '../../../../../../packages/contracts/src/automation-pm.ts';
-import type { ClaudeAgentSdkQueryOpenInput, ClaudeAgentSdkQueryRunnerShape, ClaudeAgentSdkQuerySession } from '../../../../../../vendor/t3code/apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts';
+import { restrictPmAnalysisQueries } from '../../providers/t3code/families/claude.ts';
+type ClaudeAgentSdkQueryRunnerShape = Parameters<typeof restrictPmAnalysisQueries>[0];
+type ClaudeAgentSdkQueryOpenInput = Parameters<ClaudeAgentSdkQueryRunnerShape['open']>[0];
 import type { ChatGeneration } from '../../durable/chat-runtime.ts';
 import { initializeNativeOutput, emitNativeOutput } from '../../durable/native-output.ts';
 import { ensureThread, updateThread } from '../../durable/threads.ts';
@@ -20,7 +22,7 @@ import { automationRequestFingerprint, pmAnalysisRequestForNativeThread, registe
 import { queuePmAgentTerminal, stopPmAgentSignals } from '../pm-signals.ts';
 import { collectPmAgentEvidence, pmGenerationTaskAssociations, pmNativeTestEvidence, pmNativeTestsComplete } from './pm-evidence.ts';
 import { parsePmPullRequestCoverage, collectPmPullRequestEvidence } from './pm-external.ts';
-import { pmAnalysisProviderSupport, restrictPmAnalysisQueries } from './pm-analysis-policy.ts';
+import { pmAnalysisProviderSupport } from './pm-analysis-policy.ts';
 import { resolvePmAnalysisChatSnapshot } from './pm-analysis-chat.ts';
 import { createPmAutomationBridge, preparedPmAutomationResult } from './pm-bridge.ts';
 import { createNativeTemplateState } from './state.ts';
@@ -101,7 +103,7 @@ test('authenticated PR collection uses GET-only selected repo/head and rejects a
 test('Claude original query runner enforces no tools only for a private trusted binding; normal Chat retains its exact options', async () => {
   const host = makePmProviderRuntimeHost(), instanceId = ProviderInstanceId.make('claude-fixture'), threadId = ThreadId.make('analysis-thread');
   const captured: ClaudeAgentSdkQueryOpenInput[] = [];
-  const original = { open: (input: ClaudeAgentSdkQueryOpenInput) => Effect.sync(() => { captured.push(input); return {} as ClaudeAgentSdkQuerySession; }) } as unknown as ClaudeAgentSdkQueryRunnerShape;
+  const original = { open: (input: ClaudeAgentSdkQueryOpenInput) => Effect.sync(() => { captured.push(input); return {}; }) } as unknown as ClaudeAgentSdkQueryRunnerShape;
   const runner = restrictPmAnalysisQueries(original, host, instanceId);
   const input = { threadId, providerSessionId: 'fixture-session', options: { sessionId: 'native-session', model: 'fixture-model', cwd: '/private/empty', permissionMode: 'default', tools: { type: 'preset', preset: 'claude_code' }, settingSources: ['project'], mcpServers: { unsafe: { command: 'unsafe' } }, hooks: {}, extraArgs: { 'dangerously-skip-permissions': null } } } as unknown as ClaudeAgentSdkQueryOpenInput;
   await Effect.runPromise(runner.open(input)); assert.equal(captured[0], input);

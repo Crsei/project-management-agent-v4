@@ -244,8 +244,7 @@ export function HourCalendarFixtureView() {
       },
       reconcile: () => {},
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate/params are stable per route
-    [],
+    [navigate, params.workspaceSlug],
   )
 
   const saveEditor = () => {

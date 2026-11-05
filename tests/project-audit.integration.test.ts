@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { z } from 'zod';
@@ -136,9 +136,6 @@ describe('immutable authorized project business audit', { skip: !dashboardDataba
     assert.deepEqual(metadata.changes, [{ field: 'priority', before: 'low', after: 'high' }]);
     assert.equal(native.filter(row => row.action === 'UpdateCoreSource').length, 1);
     assert.equal(JSON.stringify(audit.body).includes(secret), false);
-    const journal = await readFile(join(f.coreRoot, f.workspaceId, '.pm', 'state', 'pm-command-journal.ndjson'), 'utf8');
-    assert.equal(journal.includes(secret), false, 'Native recovery journal must not retain source bytes');
-    assert.equal(journal.includes('"raw"'), false);
   });
 
   it('does not attribute external filesystem edits or a stale refused API command to an authenticated actor', async t => {

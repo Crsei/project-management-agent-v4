@@ -1,6 +1,5 @@
 import type { ComponentProps } from "react"
 import * as ProgressPrimitive from "@radix-ui/react-progress"
-import { useI18n } from "../../lib/i18n-provider"
 import { cn } from "../../lib/utils"
 export type ProgressProps = Omit<
   React.ComponentProps<typeof ProgressPrimitive.Root>,

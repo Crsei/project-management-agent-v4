@@ -5,9 +5,15 @@ const usage = `Offline Agent maintenance (no HTTP exports; never stops processes
   pnpm agent:backup restore --bundle <backup-dir> --target <separate-empty-dir> --stopped
   pnpm agent:backup verify --bundle <backup-dir> [--target <restored-dir>] --stopped
 
-include: private 0700/0600 bundle includes API credentials, provider-private credentials/identity, instance env and dedicated in-data-dir CLI homes.
+include: private 0700/0600 bundle includes API credentials, provider-private credentials/identity, instance env, dedicated in-data-dir CLI homes
+and the matching cc-switch encrypted SQLite snapshots, native encryption key, context registry, Skills/master copies and backups.
 exclude: omits those secrets plus endpoint/executable overrides; restores durable history/settings/model config and Agent attachments,
 clears native resume references, and requires explicit endpoint/credential configuration and CLI re-login.
+The cc-switch subtree is excluded as a unit in exclude mode. PM_AUTOMATION_INTEGRATIONS_KEY remains deployment-owned:
+restore its matching protected deployment configuration separately with the PM backup; never print it or pass it as a CLI argument.
+Owned extension/CLI Home paths relocate to the restore target; external paths are references, not copied content.
+Restored native extension bindings require explicit user rebind before native writes. Owned Skills symlinks restore as links,
+never by following them outside Agent data; Windows requires permission to create the same symlink kind.
 Both modes contain private conversations. Neither mode includes .env.agent, global/external CLI homes,
 PM PostgreSQL/Markdown/attachments or user project/source files; keep a separate existing PM backup.
 Both modes retain provider-attachments and omit rebuildable provider-cache probes.

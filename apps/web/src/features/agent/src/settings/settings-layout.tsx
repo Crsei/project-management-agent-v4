@@ -1,6 +1,6 @@
 import { Component, Suspense, createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useBeforeUnload, useBlocker, useLocation } from "react-router-dom";
-import { ArrowLeft, ChartNoAxesCombined, ChevronRight, Database, FolderOpen, History, Info, Loader2, MessageSquare, Moon, Palette, Plug, RefreshCw, Server, Settings2, ShieldAlert, Sun } from "lucide-react";
+import { ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronRight, Database, FolderOpen, History, Info, Loader2, MessageSquare, Moon, Palette, Plug, RefreshCw, Server, Settings2, ShieldAlert, Sun } from "lucide-react";
 import { Button } from "@agent/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@agent/components/ui/dialog";
 import { useTheme } from "@agent/hooks/use-theme";
@@ -67,7 +67,9 @@ export function SettingsNotice({ kind, children, onRetry }: {
 const pages = [
   { id: "general", title: ["通用", "General"], icon: Settings2, group: "偏好设置" },
   { id: "providers", title: ["提供商", "Providers"], icon: Plug, group: "偏好设置" },
-  { id: "mcp-clients", title: ["MCP 客户端", "MCP clients"], icon: Plug, group: "偏好设置" },
+  { id: "mcp-servers", title: ["MCP 服务器", "MCP servers"], icon: Server, group: "自定义" },
+  { id: "skills", title: ["Skills", "Skills"], icon: FolderOpen, group: "自定义" },
+  { id: "mcp-clients", title: ["已授权 MCP 客户端", "Authorized MCP clients"], icon: Plug, group: "偏好设置" },
   { id: "usage", title: ["用量", "Usage"], icon: ChartNoAxesCombined, group: "偏好设置" },
   { id: "usage/config", title: ["用量与价格", "Usage"], icon: Database, group: "偏好设置" },
   { id: "appearance", title: ["外观", "Appearance"], icon: Palette, group: "偏好设置" },
@@ -78,6 +80,7 @@ const pages = [
 ] as const;
 const groups = [
   ["偏好设置", "Preferences"],
+  ["自定义", "Customize"],
   ["会话与上下文", "Sessions & context"],
   ["本机服务", "Local service"],
 ] as const;
@@ -122,6 +125,9 @@ export function SettingsLayout() {
   const [guardState, setGuardState] = useState<SettingsGuardState>("clean");
   const heading = useRef<HTMLHeadingElement>(null);
   const navigation = useRef<HTMLElement>(null);
+  const navigationId = useId();
+  const mobileNavigationTrigger = useRef<HTMLButtonElement>(null);
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const page = pages.find((item) => location.pathname.replace(/\/+$/, "") === `/agent/settings/${item.id}`);
   const returnTo = workspaceReturnTo(location.state, location.search);
   const navigationState = useMemo(() => ({ settingsReturnTo: returnTo }), [returnTo]);
@@ -153,6 +159,7 @@ export function SettingsLayout() {
 
   const pageTitle = page ? t(page.title[0], page.title[1]) : t("页面不存在", "Page not found");
   const fullBleed = page?.id === "usage";
+  const extensionPage = page?.id === "mcp-servers" || page?.id === "skills";
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -165,15 +172,16 @@ export function SettingsLayout() {
   }, [location.pathname, pageTitle, t]);
 
   return <SettingsGuardContext.Provider value={registerGuard}>
-    <div className={`settings-shell ${pmTheme.page}`}>
+    <div className={`settings-shell ${pmTheme.page}`} data-extensions-page={extensionPage || undefined}>
       <a className="settings-skip-link" href="#settings-content">{t("跳至设置内容", "Skip to settings")}</a>
-      <aside className="settings-sidebar" aria-label={t("Agent 设置", "Agent settings")}>
+      <aside className="settings-sidebar" aria-label={t("Agent 设置", "Agent settings")} onKeyDown={event => { if (event.key === "Escape" && mobileNavigationOpen) { event.preventDefault(); event.stopPropagation(); setMobileNavigationOpen(false); mobileNavigationTrigger.current?.focus(); } }}>
         <Link to={returnTo} className="settings-product"><MessageSquare aria-hidden="true" /><span>Agent Chat</span></Link>
         <p className="settings-nav-caption">{t("设置", "Settings")}</p>
-        <nav ref={navigation} className="settings-navigation" aria-label={t("设置页面", "Settings pages")}>
+        <button ref={mobileNavigationTrigger} type="button" className="settings-mobile-navigation-toggle" aria-expanded={mobileNavigationOpen} aria-controls={navigationId} onClick={() => setMobileNavigationOpen(open => !open)}><span>{t("设置页面", "Settings pages")}</span><strong>{pageTitle}</strong><ChevronDown aria-hidden="true" /></button>
+        <nav id={navigationId} ref={navigation} className="settings-navigation" data-mobile-open={mobileNavigationOpen || undefined} aria-label={t("设置页面", "Settings pages")}>
           {groups.map((group) => <div className="settings-nav-group" key={group[0]}>
             <p>{t(group[0], group[1])}</p>
-            {pages.filter((item) => item.group === group[0] && !item.id.includes("/")).map((item) => <NavLink key={item.id} end={item.id !== "usage"} to={{ pathname: `/agent/settings/${item.id}`, search: location.search }} state={navigationState}>
+            {pages.filter((item) => item.group === group[0] && !item.id.includes("/")).map((item) => <NavLink key={item.id} end={item.id !== "usage"} to={{ pathname: `/agent/settings/${item.id}`, search: location.search }} state={navigationState} onClick={() => setMobileNavigationOpen(false)}>
               <item.icon aria-hidden="true" /><span>{t(item.title[0], item.title[1])}</span>
             </NavLink>)}
           </div>)}
@@ -187,7 +195,7 @@ export function SettingsLayout() {
         {fullBleed ? <SettingsContentBoundary key={location.pathname}>
           <Suspense fallback={<p role="status" className="p-8">{t("正在加载用量…", "Loading usage…")}</p>}><Outlet /></Suspense>
         </SettingsContentBoundary> : <>
-          <header className="settings-breadcrumb"><span>{t("设置", "Settings")}</span><ChevronRight aria-hidden="true" /><h1 ref={heading} tabIndex={-1}>{pageTitle}</h1>
+          <header className="settings-breadcrumb"><span>{t("设置", "Settings")}</span><ChevronRight aria-hidden="true" /><h1 ref={heading} tabIndex={-1}>{extensionPage ? t("自定义", "Customize") : pageTitle}</h1>
             <span className="settings-draft-status" role="status">{guardState === "busy" ? t("操作进行中", "Working") : guardState === "dirty" ? t("有未保存的修改", "Unsaved changes") : ""}</span>
           </header>
           <div className="settings-content">

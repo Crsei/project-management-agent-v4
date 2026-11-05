@@ -1,6 +1,12 @@
 import { GitBranch, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@agent/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import type {
   GitChangedFile,
   GitDiffResponse,
@@ -66,6 +72,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
   const [diffError, setDiffError] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffRevision, setDiffRevision] = useState(0);
+  const [menuFile, setMenuFile] = useState<GitChangedFile | null>(null);
 
   const statusRequest = useRef<AbortController | null>(null);
   const diffRequest = useRef<AbortController | null>(null);
@@ -161,6 +168,10 @@ export function GitPanel({ active = true }: { active?: boolean }) {
 
   function changeMode(mode: DiffMode) {
     setSelection((current) => (current && current.mode !== mode ? { ...current, mode } : current));
+  }
+
+  function selectDiff(path: string, mode: DiffMode) {
+    setSelection({ path, mode });
   }
 
   const files = status?.files ?? [];
@@ -283,19 +294,18 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                 )}
               </p>
             ) : null}
-            {files.map((file) => (
+            {files.map((file) => {
+              const target = menuFile?.path === file.path ? menuFile : file;
+              return <ContextMenu key={file.path} onOpenChange={(isOpen) => {
+                if (isOpen) setMenuFile(file);
+              }}>
+                <ContextMenuTrigger asChild onContextMenu={() => setMenuFile(file)}>
               <button
-                key={file.path}
                 type="button"
                 className="inspector-tree-row"
                 aria-selected={selection?.path === file.path}
                 title={`${statusTitle(t)[file.status]} ${file.path}`}
-                onClick={() =>
-                  setSelection({
-                    path: file.path,
-                    mode: file.unstaged ? "worktree" : "staged",
-                  })
-                }
+                onClick={() => selectDiff(file.path, file.unstaged ? "worktree" : "staged")}
               >
                 <span className="inspector-badge" data-tone={STATUS_TONE[file.status]}>
                   {STATUS_TEXT[file.status]}
@@ -314,7 +324,24 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                   {stagingLabel(t, file)}
                 </span>
               </button>
-            ))}
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  {target.unstaged ? (
+                    <ContextMenuItem onSelect={() => selectDiff(target.path, "worktree")}>
+                      {t("查看工作区差异", "View unstaged diff")}
+                    </ContextMenuItem>
+                  ) : null}
+                  {target.staged ? (
+                    <ContextMenuItem onSelect={() => selectDiff(target.path, "staged")}>
+                      {t("查看已暂存差异", "View staged diff")}
+                    </ContextMenuItem>
+                  ) : null}
+                  <ContextMenuItem disabled={loading} title={loading ? t("正在读取 Git 状态。", "Git status is loading.") : undefined} onSelect={() => void loadStatus()}>
+                    {t("刷新 Git 状态", "Refresh Git status")}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>;
+            })}
           </div>
 
           <div className="inspector-toolbar" style={{ flexShrink: 0 }}>

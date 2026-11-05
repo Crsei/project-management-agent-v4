@@ -56,6 +56,7 @@ export function ServiceNotifications({ variant }: { variant: "inbox3" | "inbox4"
   return (
     <ServiceGuard>
       <NotificationInboxView
+        key={origin}
         variant={variant}
         interactive
         securityNotice={securityNotice}

@@ -2,7 +2,7 @@ import { studioRequiredProviderToolFeature, type StudioCapabilities, type Studio
 import type { AutomationCatalogField, AutomationCatalogTemplate } from "../../../../../../../../packages/contracts/src/automation-catalog";
 import { automationIntegrationSupportsMcp, automationIntegrationSupportsNativeApi, type AutomationIntegrationConnection } from "../../../../../../../../packages/contracts/src/automation-integrations.ts";
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema, type PmAutomationArguments } from "../../../../../../../../packages/contracts/src/automation-pm.ts";
-import { pmAutomationDefaultArguments } from "../../../../../../../../packages/contracts/src/automation-pm-catalog.ts";
+import { pmAutomationDefaultArguments } from "../../../../../../../../packages/automation-resources/pm-catalog.ts";
 
 export type StudioFrequency = "manual" | "once" | "hourly" | "daily" | "weekdays" | "weekly" | "custom" | "event";
 export type StudioFormValues = Record<string, string | number | boolean | null | string[] | PmAutomationArguments["repository"]>;
@@ -13,7 +13,7 @@ export type StudioDraftState = { version: 1; config: StudioConfig; baseline: Stu
 export function studioConnectionSupportsAction(connection: AutomationIntegrationConnection, kind: StudioConfig["action"]["kind"]): boolean {
   if (connection.status !== "verified") return false;
   if (kind === "template" && (connection.provider === "github" || connection.provider === "gitlab")) return automationIntegrationSupportsNativeApi(connection) && connection.verification?.nativeApi === true;
-  return automationIntegrationSupportsMcp(connection) && connection.verification?.mcp === true;
+  return automationIntegrationSupportsMcp(connection) && Boolean(connection.mcpConfigFingerprint) && connection.verification?.mcp === true;
 }
 /** Model availability does not imply that this Provider can receive the required PM/connector/workspace tools. */
 export function studioProviderToolReadiness(config: StudioConfig, capabilities: StudioCapabilities | null): { featureId: string | null; available: boolean; reason: string | null } {

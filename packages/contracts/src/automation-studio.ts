@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema, pmAutomationTemplateIds, pmAutomationTemplateVersion } from './automation-pm.ts';
-import { pmAutomationTemplateCapabilities, pmAutomationTemplateRequiresProvider } from './automation-pm-catalog.ts';
+import { pmAutomationTemplateCapabilities, pmAutomationTemplateRequiresProvider } from './automation-pm.ts';
 
 const uuid = z.uuid().toLowerCase();
 const timestamp = z.iso.datetime();

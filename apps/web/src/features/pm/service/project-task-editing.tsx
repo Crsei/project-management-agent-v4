@@ -12,12 +12,13 @@ import { useCoreSession, useCreationDrafts, useSessionDrafts, type Draft } from 
 import { ServiceGantt } from "../components/service-gantt"
 import { ServiceCalendar } from "../components/service-calendar"
 import type { ScheduleItem } from "../components/service-collection-shared"
-import { usePmCommand, usePmService } from "./pm-service"
+import { usePlanningDashboard, usePmCommand, usePmService } from "./pm-service"
 import { allowed, useText } from "./pm-ui"
 import { adoptProjectTaskDraft, hasUncertainProjectTaskDraft, observeProjectTaskDraft, prepareProjectTaskPatch, projectTaskChangesSchema, projectTaskDraftValue, projectTaskWriteProblem, readProjectTaskDraft, type ProjectTaskChanges, type ProjectTaskDraft, type ProjectTaskField, type ProjectTaskWriteContext } from "./project-task-editing-model"
 import { hasUncertainCreationDrafts } from "../markdown/creation-model"
 import { createCoreTimelineMetadata } from "./pm-core-schedule"
 import { RadixSelect } from "@/components/ui/radix-select"
+import { MilestoneReschedule } from "./dashboard-planning"
 
 export type { ProjectTaskChanges, ProjectTaskDraft, ProjectTaskField } from "./project-task-editing-model"
 export interface ProjectTaskEditing {
@@ -313,6 +314,8 @@ export function ProjectTaskInlineActions({ editing, item }: { editing: ProjectTa
 export function ProjectTimeline({ projectId, items, onOpen, editing }: ProjectTimelineProps) {
   const { locale } = useI18n()
   const { actor } = usePmService()
+  const planning = usePlanningDashboard()
+  const [milestoneDateId, setMilestoneDateId] = useState("")
   const matching = editing?.projectId === projectId ? editing : undefined
   const visibleIds = new Set(items.map(item => item.id))
   const timelineFiles = matching?.files.filter(file => visibleIds.has(file.id)) ?? []
@@ -321,7 +324,8 @@ export function ProjectTimeline({ projectId, items, onOpen, editing }: ProjectTi
   if (!matching) return <ServiceGantt items={items.map(item => ({ id: item.id, version: item.version, scheduleReadOnly: true, data: { title: item.title, status: item.stateId, projectId, assigneeId: item.assigneeIds[0], assigneeName: item.assigneeIds[0] === actor?.id ? actor.name : undefined, startDate: item.startDate, dueDate: item.dueDate } }))} onOpen={onOpen} defaultGroupBy="status" />
   return <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-pm-project-timeline>
     <ProjectTaskEditingNotice editing={matching} onOpen={onOpen} />
-    <ServiceGantt<ProjectTimelineItem> items={timelineItems} onOpen={onOpen} onSchedule={(item, start, due) => { void matching.schedule(item, start, due).catch(() => {}) }} pending={matching.pending} defaultGroupBy="status" milestones={timeline?.milestones} onOpenMilestone={id => onOpen({ id })} />
+    <ServiceGantt<ProjectTimelineItem> items={timelineItems} onOpen={onOpen} onSchedule={(item, start, due) => { void matching.schedule(item, start, due).catch(() => {}) }} pending={matching.pending} defaultGroupBy="status" milestones={timeline?.milestones} onOpenMilestone={id => onOpen({ id })} onEditMilestoneDates={setMilestoneDateId} canEditMilestoneDates={id => !matching.locked && planning.data?.milestones.some(milestone => milestone.id === id && milestone.editable) === true} />
+    {milestoneDateId && <MilestoneReschedule projectId={projectId} milestoneId={milestoneDateId} open onOpenChange={open => { if (!open) setMilestoneDateId("") }} hideTrigger />}
   </div>
 }
 

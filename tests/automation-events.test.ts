@@ -7,7 +7,7 @@ import { createAutomationPrivateStore, validateAutomationPrivateHeaders } from '
 import { automationNativeRequestUrl, probeAutomationNativeApi } from '../packages/infrastructure/src/automation-integrations-native.ts';
 import { DomainError } from '../packages/domain/src/core.ts';
 import { automationIntegrationConfigSchema, automationIntegrationSupportsMcp, automationIntegrationSupportsNativeApi, type AutomationIntegrationConfig } from '../packages/contracts/src/automation-integrations.ts';
-import { automationCatalogById } from '../packages/contracts/src/automation-catalog.ts';
+import { automationCatalogById } from '../packages/automation-resources/catalog.ts'
 
 const rejected = (code: string) => (error: unknown) => error instanceof DomainError && error.code === code;
 describe('automation event authentication, isolation and source filters', () => {
@@ -64,19 +64,19 @@ describe('automation event authentication, isolation and source filters', () => 
     assert.throws(() => validateAutomationPrivateHeaders({ Authorization: 'Bearer x\r\nInjected: yes' }), rejected('validation_failed'));
   });
   it('accepts only real GitHub/GitLab API-only configs and probes credentials without MCP discovery', async () => {
-    const config = automationIntegrationConfigSchema.parse({ projectId: 'PRJ-001', provider: 'github', label: 'Native only', endpoint: 'https://api.github.com', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: false } });
+    const config = automationIntegrationConfigSchema.parse({ projectId: 'PRJ-001', provider: 'github', label: 'Native only', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: false } });
     assert.equal(automationIntegrationSupportsMcp(config), false); assert.equal(automationIntegrationSupportsNativeApi(config), true);
     let probes = 0;
     await probeAutomationNativeApi(config, { authorization: 'Bearer controlled-test-token' }, async (_config, _headers, request) => { probes++; assert.equal(request.path, '/repos/owner/approved'); assert.equal(request.method, 'GET'); return { status: 200, body: { full_name: 'owner/approved' }, headers: {} }; });
     assert.equal(probes, 1);
-    const gitlab = { ...config, provider: 'gitlab' as const, endpoint: 'https://gitlab.com', nativeApi: { baseUrl: 'https://gitlab.com', repositories: ['group/project'], allowWrites: false } };
+    const gitlab = { ...config, provider: 'gitlab' as const, nativeApi: { baseUrl: 'https://gitlab.com', repositories: ['group/project'], allowWrites: false } };
     await probeAutomationNativeApi(gitlab, { 'private-token': 'controlled-test-token' }, async (_config, _headers, request) => { assert.equal(request.path, '/projects/group%2Fproject'); return { status: 200, body: { id: 42, path_with_namespace: 'group/project' }, headers: {} }; });
     await assert.rejects(probeAutomationNativeApi(config, { authorization: 'Bearer controlled-expired-token' }, async () => ({ status: 401, body: { error: 'rejected' }, headers: {} })), rejected('integration_authentication_failed'));
     assert.equal(automationIntegrationConfigSchema.safeParse({ ...config, provider: 'slack' }).success, false);
     assert.equal(automationIntegrationConfigSchema.safeParse({ ...config, nativeApi: undefined }).success, false);
   });
   it('binds native provider paths and writes to explicit repositories and fixed hosts', () => {
-    const config: AutomationIntegrationConfig = { projectId: 'PRJ-001', provider: 'github', label: 'GitHub private', endpoint: 'https://mcp.example.org/mcp', readTools: ['get_issue'], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: false } };
+    const config: AutomationIntegrationConfig = { projectId: 'PRJ-001', provider: 'github', label: 'GitHub private', mcpDefinition: { contextId: 'private-project', serverId: 'github' }, readTools: ['get_issue'], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: false } };
     const call = { provider: 'github' as const, operationId: randomUUID(), method: 'GET' as const, path: '/repos/owner/approved/issues?per_page=100' };
     assert.equal(automationNativeRequestUrl(config, call).origin, 'https://api.github.com');
     assert.throws(() => automationNativeRequestUrl(config, { ...call, path: '/repos/owner/other/issues' }), rejected('integration_repository_forbidden'));
@@ -95,7 +95,7 @@ describe('automation event authentication, isolation and source filters', () => 
     assert.throws(() => automationNativeRequestUrl({ ...config, nativeApi: { ...config.nativeApi!, allowWrites: true } }, { ...call, path: '/repos/owner/approved/rules/branches/main', method: 'POST' }), rejected('integration_repository_forbidden'));
   });
   it('permits native label creation without granting label-definition deletion or cross-repository writes', () => {
-    const config = automationIntegrationConfigSchema.parse({ projectId: 'PRJ-001', provider: 'github', label: 'Native labels', endpoint: 'https://api.github.com', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: false } });
+    const config = automationIntegrationConfigSchema.parse({ projectId: 'PRJ-001', provider: 'github', label: 'Native labels', readTools: [], writeTools: [], nativeApi: { baseUrl: 'https://api.github.com', repositories: ['owner/approved'], allowWrites: false } });
     const call = { provider: 'github' as const, operationId: randomUUID(), method: 'GET' as const, path: '/repos/owner/approved/labels?per_page=100' };
     assert.equal(automationNativeRequestUrl(config, call).pathname, '/repos/owner/approved/labels');
     assert.throws(() => automationNativeRequestUrl(config, { ...call, method: 'POST' }), rejected('integration_external_write_forbidden'));

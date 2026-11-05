@@ -132,7 +132,6 @@ export function McpAppFrame({ app, generationStatus }: { app: McpAppMetadata; ge
     if (!snapshot || !documentBinding || !bound || !ready || closed || invalid) return;
     const abort = new AbortController();
     let alive = true;
-    let documentBridge: ReturnType<typeof makeMcpAppDocumentBridge> | undefined;
     loads.current = 0;
     const assertLive = () => { if (!alive || !latest.current.bound || abort.signal.aborted) throw new McpAppHostRefusal("This App is no longer active."); };
     const request = async <T,>(suffix: string, body?: unknown): Promise<T> => {
@@ -206,7 +205,7 @@ export function McpAppFrame({ app, generationStatus }: { app: McpAppMetadata; ge
       onRequestTeardown: () => { if (latest.current.mode === "fullscreen") setMode("inline"); else void host.teardown().then(() => { if (alive) setClosed(true); }); },
       onSizeChanged: size => { if (latest.current.mode !== "fullscreen" && size.height !== undefined) setHeight(clampMcpAppHeight(size.height)); },
     });
-    documentBridge = makeMcpAppDocumentBridge({
+    const documentBridge = makeMcpAppDocumentBridge({
       capability: documentBinding.capability,
       source: () => frameRef.current?.contentWindow ?? null,
       receive: message => { if (alive) host.receive(message); },

@@ -1,9 +1,10 @@
-import { useId, useState } from "react"
+import { useId, useRef, useState, type KeyboardEvent } from "react"
 import type { PlanningDashboard } from "@contracts"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { usePlanningDashboard } from "./pm-service"
 import { Choice, CommandNotice, Field, Form, entitySchema, useAction, useDraftState, useText } from "./pm-ui"
+import { ContextMenuItem, ContextMenuLabel, ContextMenuPopup, isNativeContextTarget, useContextMenu } from "@/components/ui/context-menu"
 
 type Project = PlanningDashboard["projects"][number]
 type Task = PlanningDashboard["tasks"][number]
@@ -14,12 +15,12 @@ function ReadNotice({ pending, error, retry }: { pending: boolean; error: Error 
   return <>{pending && <p role="status">{t("加载规划数据…", "Loading planning data…")}</p>}{error && <div role="alert" className="space-y-2 text-sm"><p>{error.message}</p><Button variant="outline" size="sm" onClick={() => { void retry() }}>{t("重试读取", "Retry read")}</Button></div>}</>
 }
 
-function DependencyEditor({ project, projects }: { project: Project; projects: Project[] }) {
+function DependencyEditor({ project, projects, open, onOpenChange, hideTrigger = false }: { project: Project; projects: Project[]; open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean }) {
   const t = useText(); const action = useAction()
   const [base, setBase] = useDraftState(`project-dependencies:${project.id}`, "base", project)
   const [selected, setSelected] = useDraftState(`project-dependencies:${project.id}`, "selected", project.dependsOn)
   const canEdit = project.editable && !project.hasUnavailableDependencies
-  return <Dialog><DialogTrigger render={<Button size="sm" variant="outline" disabled={!canEdit} />}>{t("编辑项目依赖", "Edit project dependencies")}</DialogTrigger><DialogContent><DialogTitle>{project.title}</DialogTitle><DialogDescription>{t("箭头指向前置项目。每个关联端点都需要规划权限；不会更改任务依赖。", "Arrows point to prerequisite projects. Every endpoint requires planning permission; task blockers remain unchanged.")}</DialogDescription>
+  return <Dialog open={open} onOpenChange={onOpenChange}>{!hideTrigger && <DialogTrigger render={<Button size="sm" variant="outline" disabled={!canEdit} />}>{t("编辑项目依赖", "Edit project dependencies")}</DialogTrigger>}<DialogContent><DialogTitle>{project.title}</DialogTitle><DialogDescription>{t("箭头指向前置项目。每个关联端点都需要规划权限；不会更改任务依赖。", "Arrows point to prerequisite projects. Every endpoint requires planning permission; task blockers remain unchanged.")}</DialogDescription>
     <Form disabled={action.locked || !canEdit} onSubmit={async () => {
       const receipt = await action.execute({ commandId: crypto.randomUUID(), commandType: "SetProjectDependencies", targetId: project.id, projectId: project.id, expectedVersions: { [project.id]: base.version }, payload: { dependsOn: selected } })
       if (receipt.status !== "committed") throw new Error(receipt.error.message)
@@ -32,8 +33,13 @@ function DependencyEditor({ project, projects }: { project: Project; projects: P
 }
 
 /** Formal project graph only. A → B means A depends on B; this is not the task blocker graph. */
-export function ProjectDependenciesPanel({ projectId, projectIds, onSelectProject }: { projectId?: string; projectIds?: string[]; onSelectProject?: (id: string) => void }) {
+export function ProjectDependenciesPanel({ projectId, projectIds, onSelectProject, onOpenProject }: { projectId?: string; projectIds?: string[]; onSelectProject?: (id: string) => void; onOpenProject?: (id: string) => void }) {
   const query = usePlanningDashboard(); const t = useText(); const [selected, setSelected] = useState(""); const markerId = useId().replace(/:/g, "")
+  const contextMenu = useContextMenu<{ project: Project; prerequisite?: Project }>()
+  const summary = useRef<HTMLDivElement>(null)
+  const [editingProjectId, setEditingProjectId] = useState("")
+  const [locatedRelation, setLocatedRelation] = useState<{ projectId: string; prerequisiteId: string } | null>(null)
+  const action = useAction()
   const select = (id: string) => { if (onSelectProject) onSelectProject(id); else setSelected(id) }
   const allProjects = query.data?.projects ?? []
   const displayIds = projectIds ? new Set(projectIds) : null
@@ -41,8 +47,21 @@ export function ProjectDependenciesPanel({ projectId, projectIds, onSelectProjec
   const current = projectId ? projects.find(item => item.id === projectId) : projects.find(item => item.id === selected) ?? projects[0]
   const columns = projects.length > 1 ? 2 : 1
   const height = Math.max(120, Math.ceil(projects.length / columns) * 86)
-  const positions = new Map(projects.map((project, index) => [project.id, { x: 12 + index % columns * 300, y: 16 + Math.floor(index / columns) * 86 }]))
+  const positions = new Map(projects.map((project, index) => [project.id, { x: 12 + index % columns * 300, y: 16 + Math.floor(index / columns) * 86, project }]))
   const currentDependencies = current?.dependsOn.filter(id => positions.has(id)) ?? []
+  const editingProject = allProjects.find(project => project.id === editingProjectId)
+  const contextProject = projects.find(project => project.id === contextMenu.target?.project.id)
+  function locateProject(project: Project, prerequisite?: Project) {
+    select(project.id)
+    setLocatedRelation(prerequisite ? { projectId: project.id, prerequisiteId: prerequisite.id } : null)
+    requestAnimationFrame(() => { summary.current?.scrollIntoView({ block: "nearest" }); summary.current?.focus({ preventScroll: true }) })
+  }
+  function keyboardMenu(event: KeyboardEvent<SVGElement>, target: { project: Project; prerequisite?: Project }) {
+    if (isNativeContextTarget(event.target) || event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return
+    event.preventDefault(); event.stopPropagation()
+    const bounds = event.currentTarget.getBoundingClientRect()
+    contextMenu.openAt({ x: bounds.left, y: bounds.bottom }, target, event.currentTarget)
+  }
   return <section className="min-w-0 space-y-3" aria-label={t("项目依赖图", "Project dependency graph")}>
     <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-medium">{t("项目依赖", "Project dependencies")}</h3><p className="text-xs text-muted-foreground">{t("A → B：A 依赖 B；与任务阻塞图区分。", "A → B: A depends on B; separate from task blockers.")}</p></div>{current && <DependencyEditor key={current.id} project={current} projects={allProjects} />}</div>
     <ReadNotice pending={query.isPending} error={query.error} retry={query.refetch} />
@@ -54,16 +73,32 @@ export function ProjectDependenciesPanel({ projectId, projectIds, onSelectProjec
         if (!end || id === project.id) return null
         const dx = end.x - start.x; const dy = end.y - start.y
         const edge = Math.min(dx ? 140 / Math.abs(dx) : Infinity, dy ? 28 / Math.abs(dy) : Infinity)
-        return <line key={`${project.id}:${id}`} x1={start.x + 136 + dx * edge} y1={start.y + 24 + dy * edge} x2={end.x + 136 - dx * edge} y2={end.y + 24 - dy * edge} stroke="currentColor" strokeOpacity=".5" strokeWidth="1.5" markerEnd={`url(#${markerId})`} />
+        const prerequisite = end.project
+        const x1 = start.x + 136 + dx * edge, y1 = start.y + 24 + dy * edge
+        const x2 = end.x + 136 - dx * edge, y2 = end.y + 24 - dy * edge
+        return <g key={`${project.id}:${id}`} role="img" tabIndex={0} aria-label={`${project.title} → ${prerequisite.title}`} onContextMenu={event => contextMenu.open(event, { project, prerequisite }, event.currentTarget)} onKeyDown={event => keyboardMenu(event, { project, prerequisite })}>
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="14" />
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeOpacity=".5" strokeWidth="1.5" markerEnd={`url(#${markerId})`} />
+        </g>
       }))}
       {projects.map(project => {
         const point = positions.get(project.id)!
-        return <g key={project.id} transform={`translate(${point.x} ${point.y})`} role="button" tabIndex={0} aria-label={project.title} aria-pressed={project.id === current?.id} onClick={() => select(project.id)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(project.id) } }} className="cursor-pointer outline-none focus:stroke-primary">
+        return <g key={project.id} transform={`translate(${point.x} ${point.y})`} role="button" tabIndex={0} aria-label={project.title} aria-pressed={project.id === current?.id} onClick={() => select(project.id)} onContextMenu={event => contextMenu.open(event, { project }, event.currentTarget)} onKeyDown={event => { keyboardMenu(event, { project }); if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(project.id) } }} className="cursor-pointer outline-none focus:stroke-primary">
           <rect width="272" height="48" rx="8" fill="var(--color-surface, Canvas)" stroke="currentColor" strokeWidth={project.id === current?.id ? 2 : 1} opacity={project.id === current?.id ? 1 : .75} /><text x="12" y="19" fontSize="12" fill="currentColor">{project.title.length > 32 ? `${project.title.slice(0, 31)}…` : project.title}</text><text x="12" y="36" fontSize="10" fill="currentColor" opacity=".65">{project.id} · {project.dependsOn.filter(id => positions.has(id)).length} {t("个前置", "prerequisites")}</text>
         </g>
       })}
     </svg></div>}
-    {current && <div className="flex flex-wrap items-start gap-2 text-sm"><span className="font-medium break-words">{current.title}</span><span className="text-muted-foreground">{currentDependencies.length ? currentDependencies.map(id => projects.find(item => item.id === id)!.title).join(" · ") : t("没有可见前置项目", "No visible prerequisites")}</span>{current.dependsOn.length > currentDependencies.length && <p className="w-full text-xs text-muted-foreground">{t("部分前置项目不在当前显示筛选中。", "Some prerequisites are outside the current display filter.")}</p>}{current.hasUnavailableDependencies && <p role="status" className="w-full text-amber-700">{t("部分前置项目不可用或不可见；不能将此图视为完整，也不能覆盖依赖。", "Some prerequisites are unavailable or hidden; this graph is incomplete and dependencies cannot be overwritten.")}</p>}</div>}
+    {current && <div ref={summary} tabIndex={-1} className="flex flex-wrap items-start gap-2 text-sm"><span className="font-medium break-words">{current.title}</span><span className="text-muted-foreground">{currentDependencies.length ? currentDependencies.map(id => projects.find(item => item.id === id)!.title).join(" · ") : t("没有可见前置项目", "No visible prerequisites")}</span>{current.dependsOn.length > currentDependencies.length && <p className="w-full text-xs text-muted-foreground">{t("部分前置项目不在当前显示筛选中。", "Some prerequisites are outside the current display filter.")}</p>}{current.hasUnavailableDependencies && <p role="status" className="w-full text-amber-700">{t("部分前置项目不可用或不可见；不能将此图视为完整，也不能覆盖依赖。", "Some prerequisites are unavailable or hidden; this graph is incomplete and dependencies cannot be overwritten.")}</p>}</div>}
+    {current && locatedRelation?.projectId === current.id && currentDependencies.includes(locatedRelation.prerequisiteId) && <p role="status" className="text-sm">{t("已定位前置关系", "Located prerequisite")}: {current.title} → {positions.get(locatedRelation.prerequisiteId)?.project.title}</p>}
+    {editingProject && <DependencyEditor key={editingProject.id} project={editingProject} projects={allProjects} open onOpenChange={open => { if (!open) setEditingProjectId("") }} hideTrigger />}
+    <ContextMenuPopup menu={contextMenu} aria-label={t("项目依赖操作", "Project dependency actions")}>
+      {contextProject && <>
+        <ContextMenuLabel>{contextMenu.target?.prerequisite ? `${contextProject.title} → ${contextMenu.target.prerequisite.title}` : contextProject.title}</ContextMenuLabel>
+        {onOpenProject && <ContextMenuItem onSelect={() => onOpenProject(contextProject.id)}>{t("打开项目", "Open project")}</ContextMenuItem>}
+        <ContextMenuItem onSelect={() => locateProject(contextProject, contextMenu.target?.prerequisite)}>{contextMenu.target?.prerequisite ? t("定位前置关系面板", "Locate prerequisite panel") : t("查看前置项目", "View prerequisites")}</ContextMenuItem>
+        <ContextMenuItem disabled={action.locked || !contextProject.editable || contextProject.hasUnavailableDependencies} title={contextProject.hasUnavailableDependencies ? t("部分前置端点不可用，不能覆盖依赖。", "Some prerequisites are unavailable; dependencies cannot be overwritten.") : undefined} onSelect={() => setEditingProjectId(contextProject.id)}>{t("管理前置项目", "Manage prerequisites")}</ContextMenuItem>
+      </>}
+    </ContextMenuPopup>
   </section>
 }
 
@@ -107,8 +142,8 @@ function MilestoneDateForm({ milestone }: { milestone: Milestone }) {
 }
 
 /** Compact quick-action trigger; only targetDate is submitted, preserving Markdown prose and criteria. */
-export function MilestoneReschedule({ projectId, milestoneId }: { projectId?: string; milestoneId?: string }) {
+export function MilestoneReschedule({ projectId, milestoneId, open, onOpenChange, hideTrigger = false }: { projectId?: string; milestoneId?: string; open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean }) {
   const query = usePlanningDashboard(); const t = useText()
   const milestones = query.data?.milestones.filter(item => (!projectId || item.projectId === projectId) && (!milestoneId || item.id === milestoneId)) ?? []
-  return <Dialog><DialogTrigger render={<Button variant="outline" size="sm" />}>{t("里程碑改期", "Reschedule milestone")}</DialogTrigger><DialogContent><DialogTitle>{t("里程碑改期", "Reschedule milestone")}</DialogTitle><DialogDescription>{t("只更新日期，不替换正文或达成标准；旧版本不会覆盖新版本。", "Updates dates only, preserving prose and achievement criteria; stale versions cannot overwrite newer edits.")}</DialogDescription><ReadNotice pending={query.isPending} error={query.error} retry={query.refetch} />{query.data && !milestones.length && <p className="py-3 text-sm text-muted-foreground">{t("没有可见里程碑。", "No visible milestones.")}</p>}<div className="space-y-5 py-3">{milestones.map(item => <MilestoneDateForm key={item.id} milestone={item} />)}</div><CommandNotice /></DialogContent></Dialog>
+  return <Dialog open={open} onOpenChange={onOpenChange}>{!hideTrigger && <DialogTrigger render={<Button variant="outline" size="sm" />}>{t("里程碑改期", "Reschedule milestone")}</DialogTrigger>}<DialogContent><DialogTitle>{t("里程碑改期", "Reschedule milestone")}</DialogTitle><DialogDescription>{t("只更新日期，不替换正文或达成标准；旧版本不会覆盖新版本。", "Updates dates only, preserving prose and achievement criteria; stale versions cannot overwrite newer edits.")}</DialogDescription><ReadNotice pending={query.isPending} error={query.error} retry={query.refetch} />{query.data && !milestones.length && <p className="py-3 text-sm text-muted-foreground">{t("没有可见里程碑。", "No visible milestones.")}</p>}<div className="space-y-5 py-3">{milestones.map(item => <MilestoneDateForm key={item.id} milestone={item} />)}</div><CommandNotice /></DialogContent></Dialog>
 }

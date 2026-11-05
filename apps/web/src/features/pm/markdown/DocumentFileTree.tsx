@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, FilePlus2, FileText, Folder, LoaderCircle, LocateFixed, LockKeyhole, RefreshCw, Search, X } from 'lucide-react';
 import { entityDefinitions, entityKinds, type EntityKind, type FileRecord } from '@pm-schema';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { DocumentSource } from '../../../../../../packages/contracts/src/document-sources';
 import { useCoreSession } from './session';
 import { useDocumentSourceCatalog, useDocumentSourceFiles, type DocumentSourceRead } from './DocumentSources';
@@ -8,6 +9,7 @@ import { buildDocumentRows, type ExternalDocumentRow } from './document-collecti
 import { documentTargetKey, type DocumentTarget } from './document-workbench-state';
 import { useExternalDocumentSession } from './ExternalDocumentEditor';
 import type { ExternalManagementIntent } from './external-document-state';
+import { DocumentSourceSettings } from './DocumentSourceSettings';
 import './document-file-tree.css';
 
 export interface DocumentFileTreeProps {
@@ -20,12 +22,13 @@ export interface DocumentFileTreeProps {
   nativeError?: string;
   onExternalSourcesChange?: (sources: readonly DocumentSource[] | null) => void;
   onManageExternal: (intent: ExternalManagementIntent) => void;
+  onSourceSettingsOpen?: () => void;
 }
 
 type Directory = { directories: Map<string, Directory>; files: ExternalDocumentRow[] };
 const kindLabels: Record<EntityKind, string> = { project: '项目', work_item: '工作项', document: '文档', cycle: '迭代', milestone: '里程碑', module: '模块', requirement: '需求', release: '发布', goal: '目标' };
 
-export function DocumentFileTree({ files, active, en, onOpen, onNavigateEntity, nativeStatus = 'ready', nativeError, onExternalSourcesChange, onManageExternal }: DocumentFileTreeProps) {
+export function DocumentFileTree({ files, active, en, onOpen, onNavigateEntity, nativeStatus = 'ready', nativeError, onExternalSourcesChange, onManageExternal, onSourceSettingsOpen }: DocumentFileTreeProps) {
   const session = useCoreSession();
   // This is the workspace explorer, not the collection route's fixed project scope.
   const catalog = useDocumentSourceCatalog(true, undefined, en);
@@ -34,6 +37,8 @@ export function DocumentFileTree({ files, active, en, onOpen, onNavigateEntity, 
   const currentReads = useDocumentSourceFiles(catalog.workspaceId, catalog.sources, catalog.status === 'ready', readKey, en);
   const [search, setSearch] = useState('');
   const [locateMissing, setLocateMissing] = useState(false);
+  const [settingsSource, setSettingsSource] = useState<DocumentSource | null>(null);
+  const [menuNative, setMenuNative] = useState<FileRecord | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const sourceListener = useRef(onExternalSourcesChange);
   sourceListener.current = onExternalSourcesChange;
@@ -98,21 +103,23 @@ export function DocumentFileTree({ files, active, en, onOpen, onNavigateEntity, 
             : <><ul>{[...groups].map(([scope, group]) => <li key={scope}><details open><summary><Folder size={14} /><span><Highlight value={group.label} query={query} /></span></summary><ul>{entityKinds.filter(kind => group.kinds.has(kind)).map(kind => <li key={kind}><details open><summary><span><Highlight value={en ? entityDefinitions[kind].label : kindLabels[kind]} query={query} /></span><small>{group.kinds.get(kind)!.length}</small></summary><ul>{group.kinds.get(kind)!.map(file => {
               const target: DocumentTarget = { kind: 'native', id: file.id };
               const key = documentTargetKey(target);
-              return <li key={file.id}><button type="button" className="document-file-tree-file" data-document-target={key} aria-current={key === activeKey ? 'true' : undefined} disabled={kind !== 'document' && !onNavigateEntity} title={`${file.entity.title} · ${file.id} · ${file.path}`} onClick={() => kind === 'document' ? onOpen(target) : onNavigateEntity?.(file)}><FileText size={14} /><span><strong><Highlight value={file.entity.title} query={query} /></strong><small><Highlight value={file.id} query={query} />{file.entity.archived ? en ? ' · Archived' : ' · 已归档' : ''}</small></span></button></li>;
+              const captured = menuNative?.id === file.id ? menuNative : file;
+              return <li key={file.id}><ContextMenu onOpenChange={open => { if (open) setMenuNative(file); }}><ContextMenuTrigger asChild><button type="button" className="document-file-tree-file" data-document-target={key} aria-current={key === activeKey ? 'true' : undefined} disabled={kind !== 'document' && !onNavigateEntity} title={`${file.entity.title} · ${file.id} · ${file.path}`} onClick={() => kind === 'document' ? onOpen(target) : onNavigateEntity?.(file)}><FileText size={14} /><span><strong><Highlight value={file.entity.title} query={query} /></strong><small><Highlight value={file.id} query={query} />{file.entity.archived ? en ? ' · Archived' : ' · 已归档' : ''}</small></span></button></ContextMenuTrigger><ContextMenuContent aria-label={captured.entity.title}><ContextMenuItem disabled={captured.entity.entity !== 'document' && !onNavigateEntity} onSelect={() => captured.entity.entity === 'document' ? onOpen({ kind: 'native', id: captured.id }) : onNavigateEntity?.(captured)}>{en ? 'Open' : '打开'}</ContextMenuItem></ContextMenuContent></ContextMenu></li>;
             })}</ul></details></li>)}</ul></details></li>)}</ul>{!visibleNativeCount && <p className="document-file-tree-state" role="status">{query ? en ? 'No matching PM documents.' : '没有匹配的PM文档。' : en ? 'No authorized PM documents.' : '没有有权访问的PM文档。'}</p>}</>}
       </details>
       <details open className="document-file-tree-section"><summary><FileText size={15} /><strong>{en ? 'External documents' : '外部文档'}</strong></summary>
         {catalog.status === 'pending' ? <p className="document-file-tree-state" role="status"><LoaderCircle size={14} className="spin" />{en ? 'Checking all authorized sources…' : '正在核对全部授权来源…'}</p>
           : catalog.status === 'error' ? <div className="document-file-tree-state document-file-tree-error" role="alert"><p>{en ? 'Source catalog failed; the file collection is not known to be empty.' : '来源目录读取失败，不能判断文件集合为空。'} {catalog.error}</p><button type="button" onClick={catalog.reload}>{en ? 'Retry sources' : '重试来源'}</button></div>
             : !configured.length ? <p className="document-file-tree-state" role="status">{en ? 'No external directory is configured in your authorized scopes. Configure one in document source settings.' : '有权访问的范围尚未配置外部目录，可在文档来源设置中配置。'}</p>
-              : <ul>{configured.map(source => <ExternalSourceBranch key={`${readKey}:${source.sourceId}:${source.revision}`} source={source} rows={externalRows.filter(row => row.sourceId === source.sourceId)} read={currentReads[source.sourceId]} scopeName={catalog.scopes.find(scope => scope.projectId === source.projectId)?.name || source.projectId || (en ? 'Workspace common documents' : '工作区公共文档')} query={query} activeKey={activeKey} en={en} onOpen={onOpen} onRefresh={catalog.reload} onManage={onManageExternal} />)}</ul>}
+              : <ul>{configured.map(source => <ExternalSourceBranch key={`${readKey}:${source.sourceId}:${source.revision}`} source={source} rows={externalRows.filter(row => row.sourceId === source.sourceId)} read={currentReads[source.sourceId]} scopeName={catalog.scopes.find(scope => scope.projectId === source.projectId)?.name || source.projectId || (en ? 'Workspace common documents' : '工作区公共文档')} query={query} activeKey={activeKey} en={en} onOpen={onOpen} onRefresh={catalog.reload} onManage={onManageExternal} onSettings={source => { setSettingsSource(source); onSourceSettingsOpen?.(); catalog.reload(); }} />)}</ul>}
       </details>
     </div>
     <p className="document-file-tree-boundary">{en ? 'Authorized PM files and configured Markdown sources only. Not a disk browser.' : '仅显示授权 PM 文件及已配置 Markdown 来源，不浏览任意磁盘目录。'}</p>
+    {settingsSource && <DocumentSourceSettings key={settingsSource.projectId || 'workspace'} workspaceId={catalog.workspaceId} sources={catalog.sources} scopes={catalog.scopes} selectedProjectId={settingsSource.projectId} fixedProject loading={catalog.status === 'pending'} error={catalog.error} en={en} onClose={() => setSettingsSource(null)} onReload={catalog.reload} onSaved={() => { setSettingsSource(null); catalog.reload(); window.dispatchEvent(new Event('external-documents-changed')); }} />}
   </div>;
 }
 
-function ExternalSourceBranch({ source, rows, read, scopeName, query, activeKey, en, onOpen, onRefresh, onManage }: { source: DocumentSource; rows: ExternalDocumentRow[]; read?: DocumentSourceRead; scopeName: string; query: string; activeKey: string; en: boolean; onOpen: (target: DocumentTarget) => void; onRefresh: () => void; onManage: (intent: ExternalManagementIntent) => void }) {
+function ExternalSourceBranch({ source, rows, read, scopeName, query, activeKey, en, onOpen, onRefresh, onManage, onSettings }: { source: DocumentSource; rows: ExternalDocumentRow[]; read?: DocumentSourceRead; scopeName: string; query: string; activeKey: string; en: boolean; onOpen: (target: DocumentTarget) => void; onRefresh: () => void; onManage: (intent: ExternalManagementIntent) => void; onSettings: (source: DocumentSource) => void }) {
   const sourceId = source.sourceId;
   const scopeLabel = `${source.name} · ${scopeName}`;
   const matching = useMemo(() => !query || scopeLabel.toLocaleLowerCase().includes(query) ? rows : rows.filter(row => row.searchText.includes(query)), [rows, query, scopeLabel]);
@@ -141,7 +148,10 @@ function ExternalSourceBranch({ source, rows, read, scopeName, query, activeKey,
         ? en ? 'All pages loaded.' : '已加载全部分页。'
         : query ? en ? 'No matching Markdown files; all pages loaded.' : '没有匹配的 Markdown 文件，已加载全部分页。'
           : en ? 'No Markdown files; all pages loaded.' : '没有 Markdown 文件，已加载全部分页。';
-  return <li><details open className="document-file-tree-source"><summary><Folder size={14} /><span><Highlight value={scopeLabel} query={query} /></span><small>{rows.length}</small></summary>
+  return <li><details open className="document-file-tree-source"><ContextMenu><ContextMenuTrigger asChild><summary><Folder size={14} /><span><Highlight value={scopeLabel} query={query} /></span><small>{rows.length}</small></summary></ContextMenuTrigger><ContextMenuContent aria-label={scopeLabel}>
+    <ContextMenuItem disabled={!source.canWrite || source.status !== 'available'} title={!source.canWrite ? en ? 'This source is read only' : '此来源为只读' : source.status !== 'available' ? en ? 'The source directory is unavailable' : '来源目录不可用' : undefined} onSelect={() => onManage({ action: 'create', sourceId })}>{en ? 'Create Markdown file…' : '新建 Markdown 文件…'}</ContextMenuItem>
+    <ContextMenuSeparator /><ContextMenuItem onSelect={() => onSettings(source)}>{en ? 'Document source settings…' : '文档来源设置…'}</ContextMenuItem>
+  </ContextMenuContent></ContextMenu>
     <p className="document-file-tree-source-kind">{source.canWrite ? en ? 'External · Editable' : '外部 · 可编辑' : en ? 'External · Read only' : '外部 · 只读'}</p>
     {source.canWrite && source.status === 'available' && <button type="button" className="secondary-button external-tree-create" onClick={() => onManage({ action: 'create', sourceId })}><FilePlus2 size={14} />{en ? 'New file' : '新建文件'}</button>}
     {source.status === 'unavailable' ? <p className="document-file-tree-state document-file-tree-error" role="alert">{en ? 'Configured directory unavailable; no fallback directory is used.' : '已配置目录不可用，不会使用替代目录。'} {source.reason}</p>
@@ -159,13 +169,21 @@ function ExternalSourceBranch({ source, rows, read, scopeName, query, activeKey,
 function ExternalDirectory({ tree, query, activeKey, onOpen, en, onManage }: { tree: Directory; query: string; activeKey: string; onOpen: (target: DocumentTarget) => void; en: boolean; onManage: (intent: ExternalManagementIntent) => void }) {
   const directories = useMemo(() => [...tree.directories].sort(([left], [right]) => left.localeCompare(right)), [tree]);
   const files = useMemo(() => [...tree.files].sort((left, right) => left.title.localeCompare(right.title) || left.entry.path.localeCompare(right.entry.path)), [tree]);
+  const actions = [
+    { action: 'rename' as const, label: en ? 'Rename' : '重命名' },
+    { action: 'move' as const, label: en ? 'Move' : '移动' },
+    { action: 'delete' as const, label: en ? 'Delete' : '删除' },
+  ];
+  const [menuRow, setMenuRow] = useState<ExternalDocumentRow | null>(null);
   return <>
     {directories.map(([name, directory]) => <li key={`directory:${name}`}><details open><summary><Folder size={13} /><span><Highlight value={name} query={query} /></span></summary><ul><ExternalDirectory tree={directory} query={query} activeKey={activeKey} onOpen={onOpen} en={en} onManage={onManage} /></ul></details></li>)}
     {files.map(row => {
       const target: DocumentTarget = { kind: 'external', sourceId: row.sourceId, revision: row.revision, path: row.entry.path };
       const key = documentTargetKey(target);
       const active = row.associations.some(alias => documentTargetKey({ kind: 'external', sourceId: alias.sourceId, revision: alias.revision, path: alias.entry.path }) === activeKey);
-      return <li key={row.key}><button type="button" className="document-file-tree-file" data-document-target={active ? activeKey : key} aria-current={active ? 'true' : undefined} title={`${row.entry.path} · ${row.projectLabel}`} onClick={() => onOpen(target)}><FileText size={14} /><span><strong><Highlight value={row.title} query={query} /></strong><small><Highlight value={row.projectLabel} query={query} /></small></span>{!row.canWrite && <LockKeyhole size={11} />}</button>{row.canWrite && <div className="external-tree-actions">{(['rename', 'move', 'delete'] as const).map(action => <button type="button" key={action} aria-label={`${action === 'rename' ? en ? 'Rename' : '重命名' : action === 'move' ? en ? 'Move' : '移动' : en ? 'Delete' : '删除'} ${row.entry.path}`} onClick={() => onManage({ action, target })}>{action === 'rename' ? en ? 'Rename' : '改名' : action === 'move' ? en ? 'Move' : '移动' : en ? 'Delete' : '删除'}</button>)}</div>}</li>;
+      const captured = menuRow?.key === row.key ? menuRow : row;
+      const capturedTarget: DocumentTarget = { kind: 'external', sourceId: captured.sourceId, revision: captured.revision, path: captured.entry.path };
+      return <li key={row.key}><ContextMenu onOpenChange={open => { if (open) setMenuRow(row); }}><ContextMenuTrigger asChild><button type="button" className="document-file-tree-file" data-document-target={active ? activeKey : key} aria-current={active ? 'true' : undefined} title={`${row.entry.path} · ${row.projectLabel}`} onClick={() => onOpen(target)}><FileText size={14} /><span><strong><Highlight value={row.title} query={query} /></strong><small><Highlight value={row.projectLabel} query={query} /></small></span>{!row.canWrite && <LockKeyhole size={11} />}</button></ContextMenuTrigger><ContextMenuContent aria-label={captured.entry.path}><ContextMenuItem onSelect={() => onOpen(capturedTarget)}>{en ? 'Open' : '打开'}</ContextMenuItem><ContextMenuSeparator />{actions.map(({ action, label }) => <ContextMenuItem key={action} disabled={!captured.canWrite} title={!captured.canWrite ? en ? 'This source is read only' : '此来源为只读' : undefined} onSelect={() => onManage({ action, target: capturedTarget })}>{label}</ContextMenuItem>)}</ContextMenuContent></ContextMenu>{row.canWrite && <div className="external-tree-actions">{actions.map(({ action, label }) => <button type="button" key={action} aria-label={`${label} ${row.entry.path}`} onClick={() => onManage({ action, target })}>{label}</button>)}</div>}</li>;
     })}
   </>;
 }

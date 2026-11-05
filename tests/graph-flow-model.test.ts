@@ -55,7 +55,7 @@ test('node positions, lane assignments and neighbor ordering are deterministic u
   for (const direction of ['RIGHT', 'DOWN'] as const) {
     const original = buildFlowGraph(data, direction);
     const reversed = buildFlowGraph({ ...data, nodes: [...data.nodes].reverse(), links: [...data.links].reverse() }, direction);
-    const rotated = buildFlowGraph({ ...data, nodes: [...data.nodes.slice(1), data.nodes[0]], links: [...data.links.slice(3), ...data.links.slice(0, 3)] }, direction);
+    const rotated = buildFlowGraph({ ...data, nodes: [...data.nodes.slice(1), data.nodes[0]!], links: [...data.links.slice(3), ...data.links.slice(0, 3)] }, direction);
     assert.deepEqual(reversed, original);
     assert.deepEqual(rotated, original);
   }
@@ -99,8 +99,8 @@ test('horizontal and vertical fallback grids are finite and non-overlapping', ()
         `${node.id} must not overlap ${other.id} in the ${direction} fallback`);
       }
     }
-    const first = model.nodes[0].position;
-    const second = model.nodes[1].position;
+    const first = model.nodes[0]!.position;
+    const second = model.nodes[1]!.position;
     if (direction === 'RIGHT') {
       assert.ok(second.x > first.x);
       assert.equal(second.y, first.y);
@@ -129,13 +129,15 @@ test('frozen DTOs are not mutated and later React Flow edits cannot change DTOs 
   for (const node of model.nodes) {
     assert.notEqual(node.data.entity, data.nodes.find(entity => entity.id === node.id));
   }
-  model.nodes[0].position.x = -1000;
-  model.nodes[0].data.entity.title = 'Changed only in this flow';
-  model.nodes[0].data.degree = 900;
-  model.nodes[0].style!.width = 1;
-  model.edges[0].source = 'CHANGED';
-  model.edges[0].data!.kind = 'changed';
-  model.edges[0].data!.lane = 99;
+  const changedNode = model.nodes[0]!;
+  const changedEdge = model.edges[0]!;
+  changedNode.position.x = -1000;
+  changedNode.data.entity.title = 'Changed only in this flow';
+  changedNode.data.degree = 900;
+  changedNode.style!.width = 1;
+  changedEdge.source = 'CHANGED';
+  changedEdge.data!.kind = 'changed';
+  changedEdge.data!.lane = 99;
   model.neighbors.get('DOC-1')!.clear();
   assert.deepEqual(data, snapshot);
   assert.deepEqual(independent, buildFlowGraph(snapshot, 'RIGHT'));

@@ -1,0 +1,2270 @@
+{
+  "version": 1,
+  "agentCanvas": {
+    "repository": "https://github.com/OpenHands/OpenHands",
+    "commit": "b4a3f45a28f6b6c387a8deb3dc7c18b4393c59c1",
+    "license": "MIT",
+    "copyright": "OpenHands contributors"
+  },
+  "extensions": {
+    "name": "@openhands/extensions",
+    "version": "0.36.0",
+    "resolved": "https://registry.npmjs.org/@openhands/extensions/-/extensions-0.36.0.tgz",
+    "integrity": "sha512-/DPlbK1RWEpA568p9VC2MLFprFOKTXEC4q0gvX0nHqy8Gn0SXlkkBVLf/znchMds/T3jvvIctyLwvDVXl7oQJg==",
+    "license": "MIT"
+  },
+  "files": [
+    {
+      "source": "LICENSE",
+      "blob": "f6f60f52368bcc96f82fbe59ec65049c2c3af9db",
+      "mode": 420,
+      "destination": "LICENSE",
+      "sha256": "e1d1fa9f3a8d7bef24449d488fcd8f00f8f272cac297bb9bed161eb6175b876a",
+      "bytes": 1096,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "LICENSE",
+      "destination": "extensions/LICENSE",
+      "mode": 420,
+      "sha256": "fe425248fc51d1d1805ab1442ba8add98d770ad8a132051eaac8c93d7eee3ebe",
+      "bytes": 1066,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/README.md",
+      "destination": "extensions/integrations/README.md",
+      "mode": 420,
+      "sha256": "dfd3f3fca14581fd4776ad97deb0fe27342ec56106bebb4f703d14d0de59158d",
+      "bytes": 4064,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog-index.js",
+      "destination": "extensions/integrations/catalog-index.js",
+      "mode": 420,
+      "sha256": "1982accca2602db01dabc8bfae5194900af1558dc105b824475adace91a2397d",
+      "bytes": 6592,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog.schema.json",
+      "destination": "extensions/integrations/catalog.schema.json",
+      "mode": 420,
+      "sha256": "36838a731f6c7a017de0f7fd07fc94616f23dc722d404354d398f6ff7c8ab8d6",
+      "bytes": 11548,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/airtable.json",
+      "destination": "extensions/integrations/catalog/airtable.json",
+      "mode": 420,
+      "sha256": "663f27eb6211ab51b45b792f6d88ab76d5449f69aefd75ebe8aa6e9ae84109e6",
+      "bytes": 1293,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/apify.json",
+      "destination": "extensions/integrations/catalog/apify.json",
+      "mode": 420,
+      "sha256": "d829861b6abef37fe23f6a3648f74679b53070d413fe4440999fbab45ddc6587",
+      "bytes": 979,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/asana.json",
+      "destination": "extensions/integrations/catalog/asana.json",
+      "mode": 420,
+      "sha256": "8d5f34e44c07e16abadfe46ec139495b2a75fadb289e8c67552869f7046ab616",
+      "bytes": 886,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/atlassian-rovo.json",
+      "destination": "extensions/integrations/catalog/atlassian-rovo.json",
+      "mode": 420,
+      "sha256": "c87bb41cf7810520256ad5f113b666b046ec6d43fa302023c7b98852976828e9",
+      "bytes": 1761,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/atlassian.json",
+      "destination": "extensions/integrations/catalog/atlassian.json",
+      "mode": 420,
+      "sha256": "27cbeab16c3494e32484ccfe5a8729bc7b1f7de351dc6d951cd30703a4d6b028",
+      "bytes": 3720,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/bitbucket.json",
+      "destination": "extensions/integrations/catalog/bitbucket.json",
+      "mode": 420,
+      "sha256": "178ceaeeaa71e5451949271edb93e5d0265333ff9e94c484a5db65a0672af7d2",
+      "bytes": 1813,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/box.json",
+      "destination": "extensions/integrations/catalog/box.json",
+      "mode": 420,
+      "sha256": "f4ecee4f06e57467ac2071fbd2e256020481ed995428b95f7ca0226358675ab8",
+      "bytes": 919,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/brave-search.json",
+      "destination": "extensions/integrations/catalog/brave-search.json",
+      "mode": 420,
+      "sha256": "d3040e09a8f7c14a7d32f31f11018951e23e2c64b36ea649996ab7bae0af57f6",
+      "bytes": 1057,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/browser-mcp.json",
+      "destination": "extensions/integrations/catalog/browser-mcp.json",
+      "mode": 420,
+      "sha256": "5e6ce07913890346e97d5a5ee4d39d674af236cf221359b941c366bade71dda1",
+      "bytes": 627,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/canva.json",
+      "destination": "extensions/integrations/catalog/canva.json",
+      "mode": 420,
+      "sha256": "8520f6aacb301e5a964758bad060f3ed372695349aa98b6396c10010a11a3969",
+      "bytes": 909,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/clickhouse.json",
+      "destination": "extensions/integrations/catalog/clickhouse.json",
+      "mode": 420,
+      "sha256": "d188edf0e7e758d5c972baab7a7707131944f91e27e3959295379fcc9c0920ae",
+      "bytes": 1396,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/cloudflare-bindings.json",
+      "destination": "extensions/integrations/catalog/cloudflare-bindings.json",
+      "mode": 420,
+      "sha256": "f05948bccbda854b2f4d25945d40927d4868eae6899c1306e54a246bc2661131",
+      "bytes": 707,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/cloudflare-browser-rendering.json",
+      "destination": "extensions/integrations/catalog/cloudflare-browser-rendering.json",
+      "mode": 420,
+      "sha256": "a1ad4ac7d878f3b605dd6171b4c5a368df67214e6229d0c1c46e4226141985de",
+      "bytes": 684,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/cloudflare-builds.json",
+      "destination": "extensions/integrations/catalog/cloudflare-builds.json",
+      "mode": 420,
+      "sha256": "9dd12a7633a1b382cb3fa585e32a0e897d15271d849a69d1a72c3681df0c088e",
+      "bytes": 664,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/cloudflare-docs.json",
+      "destination": "extensions/integrations/catalog/cloudflare-docs.json",
+      "mode": 420,
+      "sha256": "d38c449e29098991db06f833752a4c9fb4857a5c442eb11f0034f6159212fe60",
+      "bytes": 656,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/cloudflare-observability.json",
+      "destination": "extensions/integrations/catalog/cloudflare-observability.json",
+      "mode": 420,
+      "sha256": "974dc05865de5b308eb345be5c03cec2ccc3fbf9b0e1d670b4d478d5fa2b1e73",
+      "bytes": 696,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/confluence.json",
+      "destination": "extensions/integrations/catalog/confluence.json",
+      "mode": 420,
+      "sha256": "2cc48b347bb316915312f36dcc7b33730bf930ec8006beea8ec98023e2a79838",
+      "bytes": 981,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/datadog.json",
+      "destination": "extensions/integrations/catalog/datadog.json",
+      "mode": 420,
+      "sha256": "6ada63280ac38fe29ddc9ee954ff53f648e89bac275c7da81a510b2e0d686035",
+      "bytes": 2618,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/deepwiki.json",
+      "destination": "extensions/integrations/catalog/deepwiki.json",
+      "mode": 420,
+      "sha256": "82a6f5ddca326de4ab202267cca780973ab3dfb24b28ac7f36fbc112a318847a",
+      "bytes": 584,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/discord.json",
+      "destination": "extensions/integrations/catalog/discord.json",
+      "mode": 420,
+      "sha256": "8989e6115b086b6fc3cc5242a3ec7cfb25dcf42f3b36feb6343f26b44f796511",
+      "bytes": 944,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/elevenlabs.json",
+      "destination": "extensions/integrations/catalog/elevenlabs.json",
+      "mode": 420,
+      "sha256": "5252fe79c2971193af18b66cb331992464618d3325542d8a70350e0dac4f9bc8",
+      "bytes": 1152,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/everything.json",
+      "destination": "extensions/integrations/catalog/everything.json",
+      "mode": 420,
+      "sha256": "2ec5ff126b6f09e245db16572a1966689581be2c3ef1d45e024ef459c0ab18c5",
+      "bytes": 673,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/exa.json",
+      "destination": "extensions/integrations/catalog/exa.json",
+      "mode": 420,
+      "sha256": "4bd91229d7c79225d73e97f61479d5f1c8eff30ec9681d45bb3972b06038ae3f",
+      "bytes": 948,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/fetch.json",
+      "destination": "extensions/integrations/catalog/fetch.json",
+      "mode": 420,
+      "sha256": "36d76cd073f4b2e0f707867c6b4c4395312dbe1ddaa4d8aa0512bc5eefd29c7a",
+      "bytes": 635,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/figma.json",
+      "destination": "extensions/integrations/catalog/figma.json",
+      "mode": 420,
+      "sha256": "6e81f2a0cf14548c8e1a5de6e1b140724de9ed9788016cc72cda91e20d32a213",
+      "bytes": 1829,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/filesystem.json",
+      "destination": "extensions/integrations/catalog/filesystem.json",
+      "mode": 420,
+      "sha256": "f1f3af0e45824bace8076a6b72216d5f4e94672de898c323240fca2c937f5f1c",
+      "bytes": 1136,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/firecrawl.json",
+      "destination": "extensions/integrations/catalog/firecrawl.json",
+      "mode": 420,
+      "sha256": "76e9daa819f269fa06d087b396e7adf3e2971cd0c4ec33f4179188da0e5430c9",
+      "bytes": 951,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/git.json",
+      "destination": "extensions/integrations/catalog/git.json",
+      "mode": 420,
+      "sha256": "155975aa29d992030c2b8913c37a9363c11c335491242d442ff9a6da66e9133b",
+      "bytes": 1031,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/github.json",
+      "destination": "extensions/integrations/catalog/github.json",
+      "mode": 420,
+      "sha256": "1c5c709685db922fef1381c8f18f873e577cd1ff11ce74c9522d4d2f41c96ffe",
+      "bytes": 2839,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/gitlab.json",
+      "destination": "extensions/integrations/catalog/gitlab.json",
+      "mode": 420,
+      "sha256": "32c498d2f7ad78ec506c59b9bb90183feb11f2ce3aeb26ff74454b27c93b1170",
+      "bytes": 2942,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/gmail.json",
+      "destination": "extensions/integrations/catalog/gmail.json",
+      "mode": 420,
+      "sha256": "c040eba1af61073c67672260d242de620f4551dec3fa285a2e13f7edc4781fcd",
+      "bytes": 976,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/google-calendar.json",
+      "destination": "extensions/integrations/catalog/google-calendar.json",
+      "mode": 420,
+      "sha256": "947505fbf79dae20f62f3c8ebf00916d5c9fa5b932e5822c1cef41e88d1b887a",
+      "bytes": 1024,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/google-docs.json",
+      "destination": "extensions/integrations/catalog/google-docs.json",
+      "mode": 420,
+      "sha256": "f7cb6480b9c8f0ff86526c5aa7b6b4a59164de6538aef027d1cbc897bcd4073d",
+      "bytes": 1057,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/google-drive.json",
+      "destination": "extensions/integrations/catalog/google-drive.json",
+      "mode": 420,
+      "sha256": "54668770ba862240b50e874ed90a8be21b2b51705d939e79990e6778b480fe32",
+      "bytes": 1015,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/google-sheets.json",
+      "destination": "extensions/integrations/catalog/google-sheets.json",
+      "mode": 420,
+      "sha256": "655c1c4c167b512ad9178bd7f546f87575069e8f02d33cfbf1ea0aa007a94ad5",
+      "bytes": 1031,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/granola.json",
+      "destination": "extensions/integrations/catalog/granola.json",
+      "mode": 420,
+      "sha256": "c4c7faa7a2fcac186a2000ac9f85f760fecf39993fbc5e88fa7f7cf7690781c5",
+      "bytes": 1465,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/hubspot.json",
+      "destination": "extensions/integrations/catalog/hubspot.json",
+      "mode": 420,
+      "sha256": "e3d07f7e1f9b06b7e70ebcf06f133fadee59f3d7ae2391d4e8fc0fde11090c29",
+      "bytes": 1159,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/huggingface.json",
+      "destination": "extensions/integrations/catalog/huggingface.json",
+      "mode": 420,
+      "sha256": "2f194849f50240903f00da372a2c4562fca90c723e1110a4a4da8f80011efcb6",
+      "bytes": 717,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/intercom.json",
+      "destination": "extensions/integrations/catalog/intercom.json",
+      "mode": 420,
+      "sha256": "7cc872b492b33570cd46d95967ebde275eb335780a779a426401768ccbb4112c",
+      "bytes": 983,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/jira.json",
+      "destination": "extensions/integrations/catalog/jira.json",
+      "mode": 420,
+      "sha256": "981d36cd1c91c68c1dc86acadca60552bdc90a7b46a54cd96a55ae7cb1077469",
+      "bytes": 993,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/kagi.json",
+      "destination": "extensions/integrations/catalog/kagi.json",
+      "mode": 420,
+      "sha256": "977e3e3ef9a79d8ecbd4865f7ea473289a4d730ff764fcb1e18ad97491dbd3f0",
+      "bytes": 999,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/linear.json",
+      "destination": "extensions/integrations/catalog/linear.json",
+      "mode": 420,
+      "sha256": "ca2d5f82d109020f8c95f61fa3c316bd207c96196795a8f061759a0fe0f234ca",
+      "bytes": 2274,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/memory.json",
+      "destination": "extensions/integrations/catalog/memory.json",
+      "mode": 420,
+      "sha256": "08578858f71d1742dedf76a4e1a671be71c9ca18357690a65da66e337b3beac9",
+      "bytes": 652,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/microsoft-outlook.json",
+      "destination": "extensions/integrations/catalog/microsoft-outlook.json",
+      "mode": 420,
+      "sha256": "a582b37b8f4708a8fda52654b88916c0b954e0a778e4d1d8cfc98955d626d79a",
+      "bytes": 1527,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/microsoft-teams.json",
+      "destination": "extensions/integrations/catalog/microsoft-teams.json",
+      "mode": 420,
+      "sha256": "bcd2104d494036b8cdd904a0defd093f3abf23c6d85e6630dd712049a2331781",
+      "bytes": 1483,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/miro.json",
+      "destination": "extensions/integrations/catalog/miro.json",
+      "mode": 420,
+      "sha256": "7dab8981a9e8790360ea1a1d6cddc7b6ea00fbb872f26b41aa9abc3765372606",
+      "bytes": 1055,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/monday.json",
+      "destination": "extensions/integrations/catalog/monday.json",
+      "mode": 420,
+      "sha256": "fa8d91860e2a9351cf463ddc7b8d38eaa4071ff9a85d8c3526180fedb15fbce1",
+      "bytes": 1003,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/mongodb.json",
+      "destination": "extensions/integrations/catalog/mongodb.json",
+      "mode": 420,
+      "sha256": "1ff0e9f14ecee1f1769b325a338b526e5271e2dbf30a535174e23e3827457bde",
+      "bytes": 1168,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/neon.json",
+      "destination": "extensions/integrations/catalog/neon.json",
+      "mode": 420,
+      "sha256": "8f75d4027fae45d8c859cd014ca4d0c5316a7b402312a19ffcc53a7d1323d18c",
+      "bytes": 999,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/netlify.json",
+      "destination": "extensions/integrations/catalog/netlify.json",
+      "mode": 420,
+      "sha256": "39b3d9c879c167075b9973adf7e28d9ab201855db9a62f092204e03e6ac52d05",
+      "bytes": 923,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/notion.json",
+      "destination": "extensions/integrations/catalog/notion.json",
+      "mode": 420,
+      "sha256": "f312b6dfa87a0534ac3a145041fbdf71cb48ab8c5fa0f372e141ad5aa85cfcce",
+      "bytes": 2148,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/obsidian.json",
+      "destination": "extensions/integrations/catalog/obsidian.json",
+      "mode": 420,
+      "sha256": "801c2ce0d9fffea93ac269479946e854f4d8139d157e7d7f85f529fefc49e13b",
+      "bytes": 1043,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/okta.json",
+      "destination": "extensions/integrations/catalog/okta.json",
+      "mode": 420,
+      "sha256": "83eebbd2af116a78020989164bcc34dd72fd5fe2b194c403ff23705a66481a72",
+      "bytes": 948,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/onedrive.json",
+      "destination": "extensions/integrations/catalog/onedrive.json",
+      "mode": 420,
+      "sha256": "830acdf9c850af3ec602b7825aa46cdd747befe4bb2ae756d336b5be7fda76a9",
+      "bytes": 1463,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/ordinal.json",
+      "destination": "extensions/integrations/catalog/ordinal.json",
+      "mode": 420,
+      "sha256": "3b03a903f9f2c9e5e0d6a48143622e84a28020c0ca9702329fe7e652975ee6d9",
+      "bytes": 993,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/paypal.json",
+      "destination": "extensions/integrations/catalog/paypal.json",
+      "mode": 420,
+      "sha256": "c6f5070523f7331293d30deba56b6b1d89cfdb0afd8949d214ecf6d5af54b21b",
+      "bytes": 574,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/playwright.json",
+      "destination": "extensions/integrations/catalog/playwright.json",
+      "mode": 420,
+      "sha256": "10c622346e86ef2726cc2f3b644130af722038fc60eefe420fe5f4c6604a57ff",
+      "bytes": 632,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/posthog.json",
+      "destination": "extensions/integrations/catalog/posthog.json",
+      "mode": 420,
+      "sha256": "2eacf74cc5b1c76f755990a950b5364f693cb5a4b4a095798503bb052c1a620f",
+      "bytes": 2692,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/quickbooks.json",
+      "destination": "extensions/integrations/catalog/quickbooks.json",
+      "mode": 420,
+      "sha256": "04085e959bc9b0b73257bddefcdb14a1e2cee5ef664a2c56f34a5f9f02fd880d",
+      "bytes": 3256,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/redis.json",
+      "destination": "extensions/integrations/catalog/redis.json",
+      "mode": 420,
+      "sha256": "60784571ded7de7d0ce7a706de55bf97e13c9edd42e89f00af76391f756cee50",
+      "bytes": 1134,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/reportportal.json",
+      "destination": "extensions/integrations/catalog/reportportal.json",
+      "mode": 420,
+      "sha256": "e52965a053fbe67c917d8689a48b83c3b4820fc4455dfdaa6acbecdb2f43c7c3",
+      "bytes": 2569,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/resend.json",
+      "destination": "extensions/integrations/catalog/resend.json",
+      "mode": 420,
+      "sha256": "fd3bb6871fa0cc945556e146ee61f9de207cd64bf245b7feca5050dc03b211c1",
+      "bytes": 1176,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/salesforce.json",
+      "destination": "extensions/integrations/catalog/salesforce.json",
+      "mode": 420,
+      "sha256": "5a62578829c1fd64b6e1198db6e2dff57f861cc6d0ca232f47bb9f06aafd50e2",
+      "bytes": 1389,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/sentry.json",
+      "destination": "extensions/integrations/catalog/sentry.json",
+      "mode": 420,
+      "sha256": "b17b227afd4f714b555433cf66995120cb138183173a0e2f8f34be1f019af34e",
+      "bytes": 3069,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/sequential-thinking.json",
+      "destination": "extensions/integrations/catalog/sequential-thinking.json",
+      "mode": 420,
+      "sha256": "e6e57c8088333d312157ed21cb6757e191d3b65594901eb2adc3e1068088ae30",
+      "bytes": 721,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/sharepoint.json",
+      "destination": "extensions/integrations/catalog/sharepoint.json",
+      "mode": 420,
+      "sha256": "6f9e633795710f4a103edd25a5d061c8ed6c90192e6be0c62adb493e73653006",
+      "bytes": 1471,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/slack.json",
+      "destination": "extensions/integrations/catalog/slack.json",
+      "mode": 420,
+      "sha256": "70f30a1171838d7d6830e091cb2e2c414331b4d19ae28f1d05073f2ec70209da",
+      "bytes": 3532,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/sonarqube.json",
+      "destination": "extensions/integrations/catalog/sonarqube.json",
+      "mode": 420,
+      "sha256": "7e33fc4fbaaae3671fc398c9d05942a110b59801930ac95d188b0acb5454bb24",
+      "bytes": 2854,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/stripe.json",
+      "destination": "extensions/integrations/catalog/stripe.json",
+      "mode": 420,
+      "sha256": "27474066345a625f7fe87865557a23955d377ea075e63f8f4e91ff9eff08a801",
+      "bytes": 1495,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/supabase.json",
+      "destination": "extensions/integrations/catalog/supabase.json",
+      "mode": 420,
+      "sha256": "119e31b373d79e8815b6bdcf73344ad2721f52e6a278c0a98ccb5775b612f013",
+      "bytes": 1838,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/superhuman-mail.json",
+      "destination": "extensions/integrations/catalog/superhuman-mail.json",
+      "mode": 420,
+      "sha256": "9cd4372f5cdbb07bd5c9f80f161bbf287dcdc8fafbb82bb4693359aedd761323",
+      "bytes": 894,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/tavily.json",
+      "destination": "extensions/integrations/catalog/tavily.json",
+      "mode": 420,
+      "sha256": "5ac09cc736cda27a9ec4d49b6f27a9ec390b992d69dd29b3829299a723185eea",
+      "bytes": 1095,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/time.json",
+      "destination": "extensions/integrations/catalog/time.json",
+      "mode": 420,
+      "sha256": "d1b2ab6750fa29bb88200823082c2d6bc34ab3f64db4acb1b469068b2b996eb4",
+      "bytes": 607,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/trello.json",
+      "destination": "extensions/integrations/catalog/trello.json",
+      "mode": 420,
+      "sha256": "0b4675fafaa03211b70c815c56d580d7d88203e3b57a61fa8b4a2a06b2d65d32",
+      "bytes": 968,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/vanta.json",
+      "destination": "extensions/integrations/catalog/vanta.json",
+      "mode": 420,
+      "sha256": "63601b9c3aa36cc3abc8900f30776ed738be0f7fb0de68654c247406876fa4ef",
+      "bytes": 1928,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/vercel.json",
+      "destination": "extensions/integrations/catalog/vercel.json",
+      "mode": 420,
+      "sha256": "9874fd14c524a2888ae7f610b78dca63db48f875af7d47f59fbdebb92385a5d2",
+      "bytes": 905,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/webflow.json",
+      "destination": "extensions/integrations/catalog/webflow.json",
+      "mode": 420,
+      "sha256": "9f0a9620befdc42033f94fc4a6f0a3926f2292a8064dcd9cd91d3ff6557197aa",
+      "bytes": 1022,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/xero.json",
+      "destination": "extensions/integrations/catalog/xero.json",
+      "mode": 420,
+      "sha256": "60f934943cbb0816643d11a8060005ae6d342009f5a7719e7918dd6bbc4a82c5",
+      "bytes": 948,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/catalog/zoom.json",
+      "destination": "extensions/integrations/catalog/zoom.json",
+      "mode": 420,
+      "sha256": "dd608eb2d8a68eb6a277c394f41c75ca2ee12943fd228475353536c8454f5fa7",
+      "bytes": 877,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/icons/salesforce.svg",
+      "destination": "extensions/integrations/icons/salesforce.svg",
+      "mode": 420,
+      "sha256": "e312ca8b1364cb714f1eb2c49ee1c8cd5ef097178bdc026f570e564006f1dff5",
+      "bytes": 560,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/icons/slack.svg",
+      "destination": "extensions/integrations/icons/slack.svg",
+      "mode": 420,
+      "sha256": "5cd4624c48c56272fdc31a10fb81b6d54124162e7649234cf3fc2cb04d7f52ef",
+      "bytes": 1139,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/index.d.ts",
+      "destination": "extensions/integrations/index.d.ts",
+      "mode": 420,
+      "sha256": "1f51c7a68282a4447fd9c5699a8a2b6c0df3833b71f827013b6981c381230136",
+      "bytes": 5815,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "integrations/index.js",
+      "destination": "extensions/integrations/index.js",
+      "mode": 420,
+      "sha256": "f73307b4f7de2a240685d40349d46ec8725269a04f30caace5e94869fc528834",
+      "bytes": 1508,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "package.json",
+      "destination": "extensions/source-package.json",
+      "mode": 420,
+      "sha256": "92b7e3cd599e9d5c171b76d3185127b21979157328b85bc59da0dafe70ccfe15",
+      "bytes": 2292,
+      "origin": "extensions-npm"
+    },
+    {
+      "source": "public/locales/en/openhands.json",
+      "destination": "public/locales/en/openhands.json",
+      "snapshot": "source-inputs/locales/en.json",
+      "mode": 420,
+      "sha256": "a2d21236ad4084b6925e8c9d33da2225089e56e15b7466c85285fe20a460caa8",
+      "bytes": 150786,
+      "origin": "agent-canvas-generated-locale"
+    },
+    {
+      "source": "public/locales/zh-CN/openhands.json",
+      "destination": "public/locales/zh-CN/openhands.json",
+      "snapshot": "source-inputs/locales/zh-CN.json",
+      "mode": 420,
+      "sha256": "fcfbc49d56b1356ee3c59a5098900c9a1029f4b9299570471b74ea6815bc09cd",
+      "bytes": 147970,
+      "origin": "agent-canvas-generated-locale"
+    },
+    {
+      "source": "public/locales/zh-TW/openhands.json",
+      "destination": "public/locales/zh-TW/openhands.json",
+      "snapshot": "source-inputs/locales/zh-TW.json",
+      "mode": 420,
+      "sha256": "a4245ab7a0b84528329d20b2d06b727654c38a20e1687a8e913ede87e2daa5a2",
+      "bytes": 148570,
+      "origin": "agent-canvas-generated-locale"
+    },
+    {
+      "source": "src/components/features/mcp-logo-badge.tsx",
+      "blob": "e8bc93f1ea105581b7ca7ed17da663952c30a769",
+      "mode": 420,
+      "destination": "src/components/features/mcp-logo-badge.tsx",
+      "sha256": "7b98f2ab6055b039ab590aab6b63a9bc341b6beb15e870b72e782ad7e680f9f4",
+      "bytes": 2356,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/custom-server-editor.tsx",
+      "blob": "d840faa4ab5a91f2f83711b01057d6cb20442386",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/custom-server-editor.tsx",
+      "sha256": "68994ebe6098cb4575dd0352e69348e63f717c2a41cb09fabfe5fe3bc9569218",
+      "bytes": 10191,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/index.ts",
+      "blob": "d696d7657d051bb4b95874a9b411f312947718e2",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/index.ts",
+      "sha256": "0b120331e768e655817cc2d26fef52f2d9265e37bc9c12f27fe8617fe63a902b",
+      "bytes": 538,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/install-server-modal.tsx",
+      "blob": "2bc3d5258638c2516930e7f77db0e29daa747ac3",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/install-server-modal.tsx",
+      "sha256": "1de7724969077d9a7b1a59ee46946616ab49f46d04def07db8d90b3e7cd8e3c1",
+      "bytes": 33544,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/installed-server-card.tsx",
+      "blob": "c9c9b8304b3a448302c3470d5cd89c861514fca9",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/installed-server-card.tsx",
+      "sha256": "959670bd0eae962bfe43814086969753cbba7b1b07ec7a4e24eb2833933d7c3b",
+      "bytes": 4569,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/installed-servers-section.tsx",
+      "blob": "076a60cdc9d4b648128175f00ae04575253361df",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/installed-servers-section.tsx",
+      "sha256": "36fd94eb683825e66bf5f72ae5e7dc804f29220379acd9755500c32884901d9d",
+      "bytes": 2587,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/marketplace-card.tsx",
+      "blob": "9adb86d2fe821cde4e0a1022ad70d60caac381b2",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/marketplace-card.tsx",
+      "sha256": "9268d5c99fe118ce831b768081b04717db79b75088f2bd91f48da58c7482cc2b",
+      "bytes": 2778,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/marketplace-section.tsx",
+      "blob": "35e8ec1180949ed87ecf51cdee0ac74313985203",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/marketplace-section.tsx",
+      "sha256": "1958a79c41e8d1b6db8b8e635c1e9b2fc738f486528ebd48df31b9f81026fb84",
+      "bytes": 2165,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/mcp-logo-stack-badge.tsx",
+      "blob": "6dc18586af64ef5e934b6212b4c1288ca8c69783",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/mcp-logo-stack-badge.tsx",
+      "sha256": "c18fb272625aa16a1ee0b9f9af41a672a8d54a7f53af06fcd324ce0548147c14",
+      "bytes": 2497,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/mcp-section-filter-dropdown.tsx",
+      "blob": "d1e5cfcafbd39557e11fd9b30eec5ba02ea36cc1",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/mcp-section-filter-dropdown.tsx",
+      "sha256": "9390d5f10116b105c95170ac952c68d3f28301bafa9b1a0bc301406a6a6fbadf",
+      "bytes": 995,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/mcp-section-filter.ts",
+      "blob": "a887959c759feab2cb84804067420149e4707733",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/mcp-section-filter.ts",
+      "sha256": "3110d2994f8469ef3645a95c953d38344ee39f90569b596010e7c071444a0da5",
+      "bytes": 169,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/mcp-server-health.tsx",
+      "blob": "2f7284743a253d8d45f5bdadefe8916c7c4d97fb",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/mcp-server-health.tsx",
+      "sha256": "838e977b25fcce2e5164b91182096942dd6d7841e4cec68d04b2e3d7cbb47688",
+      "bytes": 6929,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/mcp-toolbar.tsx",
+      "blob": "5c979b059923158b034ac1380fc97c69d25c0b8d",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/mcp-toolbar.tsx",
+      "sha256": "81fea00c4d9997b7c924f6f9b2564191b3a02338f32ca9184689cfa7042ba8c8",
+      "bytes": 2403,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/native-integration-panel.tsx",
+      "blob": "8f80adcb92b27a08fdcd894d5ee6e94e446e1e3f",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/native-integration-panel.tsx",
+      "sha256": "389f0a5c0bf994967ca4d2129abcb52495b070072d00ac1aff01d20bbe0d5296",
+      "bytes": 4991,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/mcp-page/save-as-secret-toggle.tsx",
+      "blob": "5a1eaf343dea07ac93aad0cd2e7fdca05a6e0ca0",
+      "mode": 420,
+      "destination": "src/components/features/mcp-page/save-as-secret-toggle.tsx",
+      "sha256": "74ffd925b788f5eb5c8eabb6e3c574fc940866e6c1e3d0a82c3995bd036e2112",
+      "bytes": 2554,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/settings/brand-button.tsx",
+      "blob": "0926b404e1a998c484598232af95e559ee7f3cb9",
+      "mode": 420,
+      "destination": "src/components/features/settings/brand-button.tsx",
+      "sha256": "dc7d26a079505d37840e4b276e5fc055d690b348935b9c00baa1d7a3d8336602",
+      "bytes": 2359,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/add-skill-modal.tsx",
+      "blob": "5542d4cbacc191311a82e1126c861f78fc02da5f",
+      "mode": 420,
+      "destination": "src/components/features/skills/add-skill-modal.tsx",
+      "sha256": "91767fed75bbc73fa39ef8649a03089568047a20858c87a08cd9549e59fcd4ca",
+      "bytes": 6979,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/build-skill-pills.tsx",
+      "blob": "c18da4e03323be09c617c37d35edb54bace00f71",
+      "mode": 420,
+      "destination": "src/components/features/skills/build-skill-pills.tsx",
+      "sha256": "fcc820eadd46906c87919e03d730274fd165eafb35cd2c87256ea9bb90bce092",
+      "bytes": 5370,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/extensions-mobile-hub.tsx",
+      "blob": "5a79a36a4c3507e507bb4c57aec03cd4e3bbe919",
+      "mode": 420,
+      "destination": "src/components/features/skills/extensions-mobile-hub.tsx",
+      "sha256": "969289113f0d7c22ad06a53e21fc0819a7ad356ae506135816dd7d4a3b33ecd3",
+      "bytes": 3158,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/extensions-navigation.tsx",
+      "blob": "bf4dc35cbd64e7076b823e8d428adabbd7287a84",
+      "mode": 420,
+      "destination": "src/components/features/skills/extensions-navigation.tsx",
+      "sha256": "5bb3d53088e21e1747bab269fadde55023b3cd12efc62a4704b5c26a88ce9347",
+      "bytes": 5946,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/get-skill-card-description.ts",
+      "blob": "e495cdcfebb3567c440e6feed68177f3157d4cda",
+      "mode": 420,
+      "destination": "src/components/features/skills/get-skill-card-description.ts",
+      "sha256": "39a002f101f6191d1256d1cd1baff95590b5011120afa1c9be1aedd3018c8af2",
+      "bytes": 1880,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/get-skill-chat-launch-message.ts",
+      "blob": "b54bcfc06e4e8c0e3e3e8518eb77055718c39247",
+      "mode": 420,
+      "destination": "src/components/features/skills/get-skill-chat-launch-message.ts",
+      "sha256": "7ad4f8112f279554786f329814ac5616c624798751b645a9dbcb8f8d5b0ba47e",
+      "bytes": 355,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/is-copyable-skill-source.ts",
+      "blob": "3218999b36f46f9e49c11c298cbf783db39f4827",
+      "mode": 420,
+      "destination": "src/components/features/skills/is-copyable-skill-source.ts",
+      "sha256": "891c37392faa070a935e36d0a0748966df80d5d7c92fd6e48985641a53c4f09a",
+      "bytes": 604,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skill-card-pill-row.tsx",
+      "blob": "40d3d9fbda06001333f4a7b318a5c6bbd0c8b0ed",
+      "mode": 420,
+      "destination": "src/components/features/skills/skill-card-pill-row.tsx",
+      "sha256": "26b209c0b822b270544c6fdccd824bc84d0be9b24a34364c8d65cb457ac6c3db",
+      "bytes": 9300,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skill-card.tsx",
+      "blob": "6f19324ea04913da9997a9993f0f75524f7abbfa",
+      "mode": 420,
+      "destination": "src/components/features/skills/skill-card.tsx",
+      "sha256": "0aae53d6bad1f4c25a9364454dba200fa2b3d66eb82961223a70e47fc1b9e7b2",
+      "bytes": 5148,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skill-detail-modal.tsx",
+      "blob": "74173df4068ddbddfe2edeac35a2ea84fa6ef829",
+      "mode": 420,
+      "destination": "src/components/features/skills/skill-detail-modal.tsx",
+      "sha256": "06dc4ba9650f00bf2a5b42abe213c707295b963e3171b3abbe4ec8f6c9e4c138",
+      "bytes": 7693,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skill-facet-rail.tsx",
+      "blob": "cb96cd726e6ce6fa3c75d1a60cf9d3c8c81aa8f1",
+      "mode": 420,
+      "destination": "src/components/features/skills/skill-facet-rail.tsx",
+      "sha256": "93a2796bb7336d7471d024614911d04d287fd45b18bdb3ba0c00448ce79e496a",
+      "bytes": 2187,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skill-facet-row.tsx",
+      "blob": "8cda9b80ade911cc6b8164c14a6750613a57d8ec",
+      "mode": 420,
+      "destination": "src/components/features/skills/skill-facet-row.tsx",
+      "sha256": "fd72c333bc72cf786e92dc45c80db9cd18b2f5a2ec4a7a948400273108d4f7e9",
+      "bytes": 1961,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skill-filter.ts",
+      "blob": "3407ad808281fc592af6dbdc38947fcc20179bcb",
+      "mode": 420,
+      "destination": "src/components/features/skills/skill-filter.ts",
+      "sha256": "9dd9aea5b345d92d0ab2ab0ff13679f19866584384ad391c7db494f3a1cfc049",
+      "bytes": 12298,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skill-filters-modal.tsx",
+      "blob": "f2c26394a1e40e929f8fd23ad41a040f4d1f9b95",
+      "mode": 420,
+      "destination": "src/components/features/skills/skill-filters-modal.tsx",
+      "sha256": "0f76340fe527f2183b2229280e29f8ab6598a0c80e8071ee6ae78b8fdb5dd8b0",
+      "bytes": 2108,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skill-icon-badge.tsx",
+      "blob": "e2f31e6ee75d28b0f0fed5fe376c51af38081e0e",
+      "mode": 420,
+      "destination": "src/components/features/skills/skill-icon-badge.tsx",
+      "sha256": "8c9417343844f07e396e552cca07554a82f36babe1262de4637eaed543aff742",
+      "bytes": 746,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skill-type-badge.tsx",
+      "blob": "79c6bb1429ca318f916b4e66e03ab733f590e05b",
+      "mode": 420,
+      "destination": "src/components/features/skills/skill-type-badge.tsx",
+      "sha256": "c0547c10df2116959dffd5f376753f9a04954d13cf1f9c45fc7f4650646fa029",
+      "bytes": 1108,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/features/skills/skills-toolbar.tsx",
+      "blob": "dcbdadf800a2bdc51df035da958c09cae763c93a",
+      "mode": 420,
+      "destination": "src/components/features/skills/skills-toolbar.tsx",
+      "sha256": "31688860c3828de694eb31369521f809854920f46de94c183f3e163a91a77801",
+      "bytes": 2720,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/shared/buttons/circle-plus-check-toggle.tsx",
+      "blob": "58dccbc86fce89abd242f3794eee363f475eb8ba",
+      "mode": 420,
+      "destination": "src/components/shared/buttons/circle-plus-check-toggle.tsx",
+      "sha256": "1171413800b765ca0825f0347c3648091ee19f1850cd26adc2610b352dc3c839",
+      "bytes": 3820,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/shared/compact-section-navigation.tsx",
+      "blob": "e23e8686c0cfb720546f9abc620b9e3846d1c374",
+      "mode": 420,
+      "destination": "src/components/shared/compact-section-navigation.tsx",
+      "sha256": "aedd268d01366d270cf370253793b0061efc6fdc6fa0ced59c2b3fd9d65978ab",
+      "bytes": 3009,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/components/shared/navigation-link.tsx",
+      "blob": "2f145d9f9357acc811c5c3f5a68b39859577a60a",
+      "mode": 420,
+      "destination": "src/components/shared/navigation-link.tsx",
+      "sha256": "a8accd5a0a22843264c3e59e255e79f6edad1b1df414892a5248439698161b45",
+      "bytes": 2678,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/constants/skills-docs.ts",
+      "blob": "cddd47cfe1bc9d17f79deeeb720913d36c033c28",
+      "mode": 420,
+      "destination": "src/constants/skills-docs.ts",
+      "sha256": "98c37150e7860d1d75bb970114ceb18583a36db10f79e2f86d496f79c06dbf48",
+      "bytes": 284,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/hooks/use-mcp-server-health.ts",
+      "blob": "aa117f7f376515b73747c414fde4948d345acc90",
+      "mode": 420,
+      "destination": "src/hooks/use-mcp-server-health.ts",
+      "sha256": "6e96b3cf3e207285f2dcc956382454e939dfe84eb15e0fd81a953adc5e9391db",
+      "bytes": 1305,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/activity.svg",
+      "blob": "161729d381ca8b21df730df0726e5509bd7f36e0",
+      "mode": 420,
+      "destination": "src/icons/activity.svg",
+      "sha256": "fef38932870b9e820e2fa1e8c502ab4a6a25c3299ffc3d63326ba7e2a2b33f2a",
+      "bytes": 336,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/angle-down-solid.svg",
+      "blob": "5fb0103c43d9deff0c1307810d8871d59e0ea9c5",
+      "mode": 420,
+      "destination": "src/icons/angle-down-solid.svg",
+      "sha256": "1797e2b75c25e74b8a291fe63a509cbf67d2f44eebaaf70877c1d23440e4b5f7",
+      "bytes": 400,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/angle-up-solid.svg",
+      "blob": "070408c9ddba7fd31f44a79641ab3b0bb567adae",
+      "mode": 420,
+      "destination": "src/icons/angle-up-solid.svg",
+      "sha256": "e85994adcbb2b554ee0134073abaccc73940119f97dc183983ced1e14b1d7aa8",
+      "bytes": 400,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/arrow-down-curve.svg",
+      "blob": "fa8f2e0a68bef4b66224b50050f608015c633231",
+      "mode": 420,
+      "destination": "src/icons/arrow-down-curve.svg",
+      "sha256": "61e06fa1f076295402502ead2540009e07278665d46781f2df56047d6bc77bad",
+      "bytes": 666,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/arrow-send.svg",
+      "blob": "461c2ca70626be6a5b353f1ce0e7f50d6faaa162",
+      "mode": 420,
+      "destination": "src/icons/arrow-send.svg",
+      "sha256": "e64d955d0099a5dc26afa1359601cdca9040affbe9cf912ddf7e89d5040a27af",
+      "bytes": 342,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/automations.svg",
+      "blob": "62c57aa7ccef09c10c9b62ed31e01714c5289b16",
+      "mode": 420,
+      "destination": "src/icons/automations.svg",
+      "sha256": "53750974adf413e097f9f0aa84c8b1e71706be4dd1cd2314e8dd1a2b559e9514",
+      "bytes": 2541,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/bell.svg",
+      "blob": "b5d7f207d86c4e93499c067eee5b867b39be67c2",
+      "mode": 420,
+      "destination": "src/icons/bell.svg",
+      "sha256": "837ba02b9cc0f924caf34a39902f4c6f427e5fa6ae554f583b338c66c0b3cab8",
+      "bytes": 396,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/block-drawer-left.svg",
+      "blob": "6de386826e5a9cef88603bc5f64029d103faa229",
+      "mode": 420,
+      "destination": "src/icons/block-drawer-left.svg",
+      "sha256": "39c8e7897e789a1fe833bb7da5838dda569cf6fc38a43a2c4475dc11a57cdcb4",
+      "bytes": 476,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/calendar.svg",
+      "blob": "dd391d7531d87e226a720637084e51e3e9d5fb38",
+      "mode": 420,
+      "destination": "src/icons/calendar.svg",
+      "sha256": "96cd375d30b53e8527ecc224e97240ebd917f3f489ae3b9f7becba48c0b22cf0",
+      "bytes": 407,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/carret-right-fill.svg",
+      "blob": "d7563ea172b274b4678dcf181ace47f4be4d6201",
+      "mode": 420,
+      "destination": "src/icons/carret-right-fill.svg",
+      "sha256": "010a4ef8fd39a02dd1398ba7e9e55ae73fcfdcd3b274c8a2f33b0e4f5bd8d115",
+      "bytes": 331,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/check-circle-solid.svg",
+      "blob": "a07362b4ab3ffedd69b7e4addb70e0d3aff1c6b9",
+      "mode": 420,
+      "destination": "src/icons/check-circle-solid.svg",
+      "sha256": "c8c44e33e6a453081db0fabebadd9ed5d6408bb556dce4620c695509f646c96e",
+      "bytes": 317,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/check-circle.svg",
+      "blob": "6eff56672c6585eb85e747f250e3d61d46327732",
+      "mode": 420,
+      "destination": "src/icons/check-circle.svg",
+      "sha256": "1f8a73c42a72d7ba60d9fc92bff32fe7509bbbf55340825a0bf736a3d62547f6",
+      "bytes": 244,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/checkmark.svg",
+      "blob": "bfda5c9741b3825f1a105292108f2c26c8703464",
+      "mode": 420,
+      "destination": "src/icons/checkmark.svg",
+      "sha256": "18b6420ddf3e573e194cfa564236b3d47eec484e1b35801a44f2a6cd0f9b7f7a",
+      "bytes": 1169,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/chevron-down-small.svg",
+      "blob": "9d473af09fb3dd47abe8c8bbe5b126e36a264e00",
+      "mode": 420,
+      "destination": "src/icons/chevron-down-small.svg",
+      "sha256": "24e6651a8c0e0e74b105f1ffbaaeb49ad1491ab69ab087d574509c2ba98e77c7",
+      "bytes": 289,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/chevron-down.svg",
+      "blob": "908fcc2d131d11e4eb62dc86d490e08ba6009738",
+      "mode": 420,
+      "destination": "src/icons/chevron-down.svg",
+      "sha256": "8ce6856a973c5a43eb6d4eaf207fa4cdfefdecde2bbc1a39745f09b581a5ab39",
+      "bytes": 208,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/chevron-left-small.svg",
+      "blob": "f1de9057389f34b537ab646037e3df689d8c18f5",
+      "mode": 420,
+      "destination": "src/icons/chevron-left-small.svg",
+      "sha256": "2a1f1a4319495b5700fa62827791fd355f478b30bf6a6a2c24f251c393c48f18",
+      "bytes": 290,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/circle-error.svg",
+      "blob": "1d5c28176ee3a9a7511be7dcf77a6096c2133c04",
+      "mode": 420,
+      "destination": "src/icons/circle-error.svg",
+      "sha256": "4ac07db6c513ab84c48f7d98459475a3f6b8c5332af18b45d7069628146c3dd7",
+      "bytes": 871,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/clock.svg",
+      "blob": "6db21960c03a6be03569c2bfd33e471c8c892ae0",
+      "mode": 420,
+      "destination": "src/icons/clock.svg",
+      "sha256": "d853f3dfdd046f3197b35fb6d2baddaccd568d95620375aafe9d8e4b1b05d0e5",
+      "bytes": 225,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/close.svg",
+      "blob": "ca36561a29175846fc00892454fc2199aa3639ee",
+      "mode": 420,
+      "destination": "src/icons/close.svg",
+      "sha256": "050c58fd8979f610be2e7903fc5ad5c029bcaf39b43a25825794d0b222ffabd7",
+      "bytes": 327,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/code-pill.tsx",
+      "blob": "351184ad4ff7a907a323f8f3f17abbaf86abe942",
+      "mode": 420,
+      "destination": "src/icons/code-pill.tsx",
+      "sha256": "9de668a0499b03e89329f9548a515f9df5f691eeb25e78288e53d0e43a306f3e",
+      "bytes": 1040,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/code-tag.svg",
+      "blob": "690c0ad615d7a8ecba0fa087d9f832067c8ac5bf",
+      "mode": 420,
+      "destination": "src/icons/code-tag.svg",
+      "sha256": "96de7461b5d629d539ae42246a6dca400ba3c5b3454cd25b5d77496f6f535665",
+      "bytes": 385,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/code.svg",
+      "blob": "c70db4913be4046c41b25293fcb5920734da4d93",
+      "mode": 420,
+      "destination": "src/icons/code.svg",
+      "sha256": "4d395768a3513085f47f0a5a0fe1ceba76e362a0c2ec88aa99a8067f14a7e717",
+      "bytes": 392,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/cog.svg",
+      "blob": "0a424e353e1ec933ff837896d7828c5c6fbadd7e",
+      "mode": 420,
+      "destination": "src/icons/cog.svg",
+      "sha256": "3785c5594074e09fca87414a88f14b36031f451bcae9a8b71cd8f462ba9e4a53",
+      "bytes": 1349,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/copy.svg",
+      "blob": "9c3d31d89351b0ace8452b35ac487d1b2deed1bd",
+      "mode": 420,
+      "destination": "src/icons/copy.svg",
+      "sha256": "2c1235ad39407ba43c21413a9b17ca86d6db1caa0d10ef00718c913a9cec3f5a",
+      "bytes": 495,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/debug-stackframe-dot.svg",
+      "blob": "f7480e7156ca32111e1845bf9b9e7e3f03af3ea2",
+      "mode": 420,
+      "destination": "src/icons/debug-stackframe-dot.svg",
+      "sha256": "b12831cd0fa4f37e999db568f3b0d3de7bc739735a0b77821bfe7b99b4f29c1b",
+      "bytes": 443,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/docker.svg",
+      "blob": "d00756539eb4807759f3fd532ecbdf9f07e707ba",
+      "mode": 420,
+      "destination": "src/icons/docker.svg",
+      "sha256": "d5d446285c2fc639f7327d4923e892acbe65c582e25a728c1c5004297c112190",
+      "bytes": 1566,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/document.svg",
+      "blob": "96cb7a6a3818035c7f1e8e10abb0ca5fecb09305",
+      "mode": 420,
+      "destination": "src/icons/document.svg",
+      "sha256": "77e960fb9d06759d3d65f4f46c2c695309c6aadd287b2e98364744e84af77bdd",
+      "bytes": 642,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/double-check.svg",
+      "blob": "6205a25f890c2dbac26869c6245634dbc34f63c5",
+      "mode": 420,
+      "destination": "src/icons/double-check.svg",
+      "sha256": "8a1593d998f4dc9ab086f0b9d0065ad4c939907017a5a7cbffacbb5a43bf0461",
+      "bytes": 348,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/download.svg",
+      "blob": "70698157de94a3506b92d05afac0ccb296fe226a",
+      "mode": 420,
+      "destination": "src/icons/download.svg",
+      "sha256": "406083020cb21f111fbc8aec3535746fca494c5f3b662f4631bb72f2a2cdc165",
+      "bytes": 286,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/exclamation-circle.svg",
+      "blob": "b20b01a3917d5193dba868b3f4808d1baa9af9a3",
+      "mode": 420,
+      "destination": "src/icons/exclamation-circle.svg",
+      "sha256": "f03a9b23cf129bd812e1c1b76050f1200bbe29204d541ba834a9ef38cb4a0c7a",
+      "bytes": 256,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/external-link.svg",
+      "blob": "b67e911517714be9b2375fd528e163400bacbadc",
+      "mode": 420,
+      "destination": "src/icons/external-link.svg",
+      "sha256": "d21260efcca36479653a354f4648cc33ba3f003b28c4d3f3b9512f66109af0b3",
+      "bytes": 562,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/file.svg",
+      "blob": "a2430bf157ca6353258730629f90e1d46f59bb36",
+      "mode": 420,
+      "destination": "src/icons/file.svg",
+      "sha256": "052352be6eb512a7fb0f930bf5db0a42f0075dc139cbc750d98c010880890228",
+      "bytes": 308,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/fishing-hook.svg",
+      "blob": "f0cb29135c68bb9eb61d5602386457a73d405e1a",
+      "mode": 420,
+      "destination": "src/icons/fishing-hook.svg",
+      "sha256": "8608b79576a8559b5621516c6aa9d7958c9dd34e9f7584561df6823c14d437d7",
+      "bytes": 324,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/folder.svg",
+      "blob": "4b533347d0d6c48cec36b7152fa7b519b2975cf6",
+      "mode": 420,
+      "destination": "src/icons/folder.svg",
+      "sha256": "98c2ff45596b00d40b3084264acb560af02b9ba8a1d9e2dee443328224a3babe",
+      "bytes": 2740,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/git-branch.svg",
+      "blob": "1f7fc2fc7e179df6805faad81a64ed1e7d202cb0",
+      "mode": 420,
+      "destination": "src/icons/git-branch.svg",
+      "sha256": "72ffeb9e66784cf1c67a9044f877cc10539f01c5da00a4d7ca0d8cdc77adcab3",
+      "bytes": 363,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/globe.svg",
+      "blob": "0284351300f98c4565ec40bab959d7e179c5a2e7",
+      "mode": 420,
+      "destination": "src/icons/globe.svg",
+      "sha256": "86729b52692d9b8088ca7c98ca4d92bfb1bc89163b7b0e550d3ba6217ddddee7",
+      "bytes": 2055,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/image.svg",
+      "blob": "31c200cf07c65ca7126a808e582ef971c0d29038",
+      "mode": 420,
+      "destination": "src/icons/image.svg",
+      "sha256": "db8dbaed4b91e58d3dad426c7c5a66b5ecdff138ea3fffbf54abacd5d5b7d12a",
+      "bytes": 708,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/info-circle.svg",
+      "blob": "f970e9f079e4795dd25b3a8e824394448f38071c",
+      "mode": 420,
+      "destination": "src/icons/info-circle.svg",
+      "sha256": "fde943f97e0db044ecd06a3d73692c63a5150cc463070844e2a6dda20d8f5c7c",
+      "bytes": 758,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/kebab-vertical.svg",
+      "blob": "dc0958d997d2b88daca3a7745517fd2c46bd0c82",
+      "mode": 420,
+      "destination": "src/icons/kebab-vertical.svg",
+      "sha256": "7bf0d083f241d1c19798a63c83bc4ca239ece873d87cc5bf366c624252786364",
+      "bytes": 192,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/key.svg",
+      "blob": "43187754af117a72efa8fa5ef12b45c0916c7eba",
+      "mode": 420,
+      "destination": "src/icons/key.svg",
+      "sha256": "6e69787896564eb6b29745b1ac975b55286654815c3315f30fac8040937320a1",
+      "bytes": 2039,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/lesson-plan.svg",
+      "blob": "bcae38c071ac3c216b87c74e5d40b8cb236d02a0",
+      "mode": 420,
+      "destination": "src/icons/lesson-plan.svg",
+      "sha256": "21681ea8096ee7e1cc43a466aace44534a456ee6c7d6f28222fd419a19de3b8c",
+      "bytes": 1484,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/lightbulb.svg",
+      "blob": "54d3e182f7e42052797ca57cb49dc46983171f32",
+      "mode": 420,
+      "destination": "src/icons/lightbulb.svg",
+      "sha256": "0e456acc311faa9dc0b145d2b79c3a0f6f1ee841a563b384257f479ab29b53e1",
+      "bytes": 1852,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/link-external.svg",
+      "blob": "6941629a8a85563cc54a1044857cbe05a916148d",
+      "mode": 420,
+      "destination": "src/icons/link-external.svg",
+      "sha256": "84e44300ec29c914d584f88fc812558e74077dc21c4a7fe2a6be58cb2f922af9",
+      "bytes": 338,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/loading-outer.svg",
+      "blob": "4c2d56aff0749714e8daff66aba9736e175f168f",
+      "mode": 420,
+      "destination": "src/icons/loading-outer.svg",
+      "sha256": "880296b11568b47bde6152ad5d0b69386e484e5196121f2f7c08a4bff28b3f36",
+      "bytes": 269,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/lock.svg",
+      "blob": "4e1c35b55ae47f7aef903af196c8e9ae6eafbe47",
+      "mode": 420,
+      "destination": "src/icons/lock.svg",
+      "sha256": "db524bfd9451cc81447a99b3f3d4792a9d2275ffb182f64cdec770e65d162947",
+      "bytes": 472,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/memory_icon.svg",
+      "blob": "dd809d34cebb5dd3ed13e0db8ff9fca90eb86796",
+      "mode": 420,
+      "destination": "src/icons/memory_icon.svg",
+      "sha256": "eec8a53956112d6cc881319f4e6ab312f6f7840abf29bf0b7ba93d21e3589ad8",
+      "bytes": 1090,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/message-square-share.svg",
+      "blob": "8ff454c22407c946dbf0f0c75311c12c90757140",
+      "mode": 420,
+      "destination": "src/icons/message-square-share.svg",
+      "sha256": "8243a5e5f2c7843d2dd5f5a8cc9f5e91fb534e136da194f7a78d4028c93c1972",
+      "bytes": 331,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/modal-close.svg",
+      "blob": "0430d644115f14a1ed6975d3a10d3413a666039b",
+      "mode": 420,
+      "destination": "src/icons/modal-close.svg",
+      "sha256": "df078636b6454de5e3bb4c521bd0f943b7965e368ea3fe4325e757ed14afec08",
+      "bytes": 226,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/npm.svg",
+      "blob": "0545acf4d2bf2f8aa615c8f2a5d42cc0c6f19266",
+      "mode": 420,
+      "destination": "src/icons/npm.svg",
+      "sha256": "f0e55e39a3e432a823f065b49caa10d0df6858eb1df6eb7eac09559b8a6d053c",
+      "bytes": 359,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/pause.svg",
+      "blob": "d9facf9504f33801fa506f3d7e5183e62c34873b",
+      "mode": 420,
+      "destination": "src/icons/pause.svg",
+      "sha256": "35746eec81f177238083c582776d5584d8913000f30bc237eef347516327259a",
+      "bytes": 370,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/pill-fill.svg",
+      "blob": "ef3ec962ee8fbfa3aee63934e68aaf901e3cceb3",
+      "mode": 420,
+      "destination": "src/icons/pill-fill.svg",
+      "sha256": "addd8f126c85fedd94cd080e4dbd892dc9ce710e6fddcf6dd1357261a69746c3",
+      "bytes": 552,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/pill.svg",
+      "blob": "50dfba747bf78e31893882c004d099c952ade0b4",
+      "mode": 420,
+      "destination": "src/icons/pill.svg",
+      "sha256": "4d24f62a3d17534fd438a0e93533e78c170bc87590277ceb83e340362a013fa3",
+      "bytes": 817,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/play-circle.svg",
+      "blob": "7150676a16ae6b62b7f88f1b4378571a9250522d",
+      "mode": 420,
+      "destination": "src/icons/play-circle.svg",
+      "sha256": "53880aa6e13cc2017bb870d36bc0e644fea0e9d1764c60987c9dc0e016e4453f",
+      "bytes": 1017,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/play-solid.svg",
+      "blob": "9fbc31a9788835d1a64ea321bdd2afe7ca9a7e43",
+      "mode": 420,
+      "destination": "src/icons/play-solid.svg",
+      "sha256": "cb23223800b42665a8a017a893c0497fa0855d83639ece743f48a2eff4404040",
+      "bytes": 313,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/play.svg",
+      "blob": "1bad9d88ae3b57466f8a5743e2d2a261b971b2e8",
+      "mode": 420,
+      "destination": "src/icons/play.svg",
+      "sha256": "f579f31380eacbd04ddfa291fc0fd50fab6309eb690a184105381ea9fdcf0171",
+      "bytes": 251,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/plus.svg",
+      "blob": "a3c0dffd5841b7a237aeb68f4dc9482b229c3ac9",
+      "mode": 420,
+      "destination": "src/icons/plus.svg",
+      "sha256": "f10eb6fd7e7ded45a14d07abe1a36fa1ccba8531cb997bacd3ccc2951acbfdc8",
+      "bytes": 1351,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/power.svg",
+      "blob": "f8f8b8d561bcc13bd90ca9ae8d0a7273c0d261b5",
+      "mode": 420,
+      "destination": "src/icons/power.svg",
+      "sha256": "ea7f948580b73cdb7fd93a75ecd5cec7cdd10fe691c5b2567dbc5f904c14bd78",
+      "bytes": 218,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/pr-status.svg",
+      "blob": "b9a9711a6385fbd42b01ccbea963548f63ce1f0a",
+      "mode": 420,
+      "destination": "src/icons/pr-status.svg",
+      "sha256": "3bac8275bf12dfddd40e15e755bbbdeff22244dc758e41341cf28f0642a4dcfb",
+      "bytes": 1779,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/profile.svg",
+      "blob": "a3ed9941d6850a5a2ae9086223f21b28733476ec",
+      "mode": 420,
+      "destination": "src/icons/profile.svg",
+      "sha256": "d48fa49dd1806654112a6ddc5a85baedd5b0aa4d61429c1567bfba1bfa2ae62d",
+      "bytes": 1187,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/puzzle.svg",
+      "blob": "2e7b29504a992563c7817366e33c54b4f2c8dd12",
+      "mode": 420,
+      "destination": "src/icons/puzzle.svg",
+      "sha256": "2ef2db60c7a95ff6ec8a4352cb33bee7fd35b38db098534a0f0f9d0c5bed6d08",
+      "bytes": 1256,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/repo-forked.svg",
+      "blob": "e55d9f7165b1feaa948973040d70519b4a132681",
+      "mode": 420,
+      "destination": "src/icons/repo-forked.svg",
+      "sha256": "8906bd50770a28d5baafe5b8d4f1cd19f2aaee772b861e0a3818a36760f709f1",
+      "bytes": 2976,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/repo.svg",
+      "blob": "232302b4fb41260a8f6f2260f50b04404c1fbd3c",
+      "mode": 420,
+      "destination": "src/icons/repo.svg",
+      "sha256": "dd234df75dd17cf43a853bfa1f7bf910cf927b8245e7a239211a629b361f117a",
+      "bytes": 1080,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/robot.svg",
+      "blob": "19b2253013f2c28b9fb6aec491b3630a3c235ae0",
+      "mode": 420,
+      "destination": "src/icons/robot.svg",
+      "sha256": "bdb70e37e6d3ce2393e20ed1fb99893ccc8374729daf06a8111a9d512d97ec69",
+      "bytes": 3232,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/search.svg",
+      "blob": "9a476e804bf18e8fc18ad5702ab61b0339f5c5c8",
+      "mode": 420,
+      "destination": "src/icons/search.svg",
+      "sha256": "3a8d60332848c8fe317deb02ff4815d75c058082318863d13f4f2809c0400991",
+      "bytes": 232,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/send.svg",
+      "blob": "7850ef44b01daede64833c9bd05dc0b58785e401",
+      "mode": 420,
+      "destination": "src/icons/send.svg",
+      "sha256": "9b9e6169cfdd3874b3fdc3c11b6e4e6dafc8c92e08e42ca4d104a83058f6ac71",
+      "bytes": 811,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/server-process.svg",
+      "blob": "f9b7afbe224027f0e95249da59adf1aa45e1595f",
+      "mode": 420,
+      "destination": "src/icons/server-process.svg",
+      "sha256": "7c01586ec9e61e1d232c32ad33c6e51233c6d8cf70a2148c433f12d8aaae2292",
+      "bytes": 2667,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/server.svg",
+      "blob": "ae5961a4c3591572d25b486ddfe92ed262ece252",
+      "mode": 420,
+      "destination": "src/icons/server.svg",
+      "sha256": "5e19bb4f388b89d5d4591cedc69e9d4efa2aa6731882f52ac789408a6e3475f7",
+      "bytes": 3477,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/settings-gear.svg",
+      "blob": "f30d545dd1685fef4aafa191488134ccff057870",
+      "mode": 420,
+      "destination": "src/icons/settings-gear.svg",
+      "sha256": "9daa77f76ea8d62f63a537c448f9855e0502b9622d2e76646fb2d3e7055cccbe",
+      "bytes": 2058,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/settings.svg",
+      "blob": "ef366cac9e2e619d4b6ccd82e5ea42a0915d62be",
+      "mode": 420,
+      "destination": "src/icons/settings.svg",
+      "sha256": "b853c99a18cecd91ae1d0d24064836cb8e6275ed1ce1698b126bd0a52583cd87",
+      "bytes": 3520,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/skills.svg",
+      "blob": "7942464212d2078fc7dc827e228cc91db189c1a0",
+      "mode": 420,
+      "destination": "src/icons/skills.svg",
+      "sha256": "35cd5c3a81b56e02559ea6d27a1ab2673dee599057efb6052fa4729076108089",
+      "bytes": 582,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/slack.svg",
+      "blob": "aef7dfeeaead6423fd7304865b0362e3fb2e56c6",
+      "mode": 420,
+      "destination": "src/icons/slack.svg",
+      "sha256": "657c9cb38fc8ca168ee419037937cee90597652c6e4607bfcb9d8802b1006cb9",
+      "bytes": 1152,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/sparkle.svg",
+      "blob": "73e65f2bda4f109c63aa3aac07caba874bc005a7",
+      "mode": 420,
+      "destination": "src/icons/sparkle.svg",
+      "sha256": "5557004d7a132c3ba649451390106158ae8d21a4e37b8974eb7799c2d0a4984c",
+      "bytes": 568,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/stop-circle.svg",
+      "blob": "6645c26ee940e661c1f480780f48ac6607c96a69",
+      "mode": 420,
+      "destination": "src/icons/stop-circle.svg",
+      "sha256": "b6e288e7ce58967bb38fe5a4bde547bf852c9e2b2255b01cb077c28886c21d16",
+      "bytes": 371,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/success.svg",
+      "blob": "ff27cfcfcf614d8bb13663fb68c4bf4de93f9054",
+      "mode": 420,
+      "destination": "src/icons/success.svg",
+      "sha256": "13c126496ceee0c265dd3fa56a1789309aeedb4bb159dfd998081d0268eb6a36",
+      "bytes": 1216,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/tachometer-fast.svg",
+      "blob": "fc1422550c4c1d15a66e528b0ba60fc8134183b1",
+      "mode": 420,
+      "destination": "src/icons/tachometer-fast.svg",
+      "sha256": "53ff69342be067ee823bacd1bbdd79d4303a8b34aad33556c63a089ed8c9e853",
+      "bytes": 2248,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/terminal.svg",
+      "blob": "b17ba769113789e010c9bc451a1d8d61e5b2234e",
+      "mode": 420,
+      "destination": "src/icons/terminal.svg",
+      "sha256": "0590933fc151dce06d5e1ce3f21d09d51a69b4e618a8e878ae0433df1598e5ea",
+      "bytes": 376,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/three-dots-vertical.svg",
+      "blob": "e73d6c64082c7b90b7ebd098aec10182b2e4316b",
+      "mode": 420,
+      "destination": "src/icons/three-dots-vertical.svg",
+      "sha256": "b8e048b8469dfc1487087b17017a84b37e6f767ea21b14aba4a361efe0e2e1db",
+      "bytes": 603,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/tools.svg",
+      "blob": "9104c82bf6c6502b7f3d88743527815d753420a5",
+      "mode": 420,
+      "destination": "src/icons/tools.svg",
+      "sha256": "5c72cff28494629a2b5bd1ccc638537b39f5fcb9b02ded0dbac4839b25ac5912",
+      "bytes": 2938,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/trash.svg",
+      "blob": "786b6e331a058203f371fedabfe2e99174268d49",
+      "mode": 420,
+      "destination": "src/icons/trash.svg",
+      "sha256": "247b9174c132ca62dfc741bb779ffccfdb50eaffaf018bc9b60cf4277e76a3b1",
+      "bytes": 306,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-arrow-down.svg",
+      "blob": "74d77aac9bb396c31df661033b987b0eb255d53d",
+      "mode": 420,
+      "destination": "src/icons/u-arrow-down.svg",
+      "sha256": "27e80c47ce231787a6007ca2d6211657a40490c43a651bde39dc01bb47aebdbf",
+      "bytes": 290,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-arrow-up.svg",
+      "blob": "63481958e4314d5db9b1d18dc808494c2de27b3c",
+      "mode": 420,
+      "destination": "src/icons/u-arrow-up.svg",
+      "sha256": "26985c541f6ff393d3ff2a61eda652c1c210e34d920da054972b2a4bfa18f456",
+      "bytes": 287,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-check-circle-half.svg",
+      "blob": "ed80d0eb7e02dc9194fe3a0f8bfcbfeb1317b11b",
+      "mode": 420,
+      "destination": "src/icons/u-check-circle-half.svg",
+      "sha256": "349331bcff1bea56ed73bd3909ce727d44f42f6ab849ff874630ba3076f4dd91",
+      "bytes": 4080,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-check-circle.svg",
+      "blob": "e98e0c8f37140b911d04e146da82a812c353b88e",
+      "mode": 420,
+      "destination": "src/icons/u-check-circle.svg",
+      "sha256": "6e0d9c045e718596dfce98f4e36c23fc5b31cefb8c208d84f315a4abcb904956",
+      "bytes": 1951,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-circle.svg",
+      "blob": "c562817d9b3e7ed2dcea4764662ce6dc8f6052ab",
+      "mode": 420,
+      "destination": "src/icons/u-circle.svg",
+      "sha256": "dc8fa76ce8dc63fb36e48f9852f0f9fae7347622367e97a59e4ef87d1632f99a",
+      "bytes": 1114,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-circuit.svg",
+      "blob": "6b1441342795e0f2e7829fe655d52e8cd10cac21",
+      "mode": 420,
+      "destination": "src/icons/u-circuit.svg",
+      "sha256": "7257801a733a533f89820f01f03a659aae4ef7173a66b2b3c8b9378b1c617680",
+      "bytes": 4422,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-clock-three.svg",
+      "blob": "a966e3b79a0bb8aea3b21dcbf4b168ceab0813cd",
+      "mode": 420,
+      "destination": "src/icons/u-clock-three.svg",
+      "sha256": "2a0b5ef02518ee011b66b364335bc2f4309ce176624f945f1d4d4ea1b6f9b243",
+      "bytes": 1506,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-close.svg",
+      "blob": "f0a017c13b592775c3f14be8acfa332dbbb0edef",
+      "mode": 420,
+      "destination": "src/icons/u-close.svg",
+      "sha256": "3b1f3b0bb71fd16661d61783695b11bd0a152346661b5739faca29578c561883",
+      "bytes": 356,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-code-branch.svg",
+      "blob": "042277d9cfb44d40a7a32f2b731a5d55747b92d2",
+      "mode": 420,
+      "destination": "src/icons/u-code-branch.svg",
+      "sha256": "eae9561b4dd07812af71d5dffd77fd8e49199ce176405dd5c54d618718a6a902",
+      "bytes": 3060,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-delete.svg",
+      "blob": "a33262c573ea0cd97e9e2484dde293a4dd9e7782",
+      "mode": 420,
+      "destination": "src/icons/u-delete.svg",
+      "sha256": "a5a29d8b17d5f70eff330ecfd844cd4ab17e2ec7e833b8c761803213bb4c3652",
+      "bytes": 836,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-download.svg",
+      "blob": "575f4e0a8b6914e3bf461d89f88800e81d564256",
+      "mode": 420,
+      "destination": "src/icons/u-download.svg",
+      "sha256": "100e7ca8d50e1882cea04abd79228fda09a4455c7b1cbda63b95b8190d232eb5",
+      "bytes": 690,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-edit.svg",
+      "blob": "9e2c2c9505e6573dd7cd8215b8267ac383db4680",
+      "mode": 420,
+      "destination": "src/icons/u-edit.svg",
+      "sha256": "48237f4a2708bba3155fcfbeb61d6bc8bf88b1cb470528f3ddb15615f81fd148",
+      "bytes": 528,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-plus.svg",
+      "blob": "5fca2644365af4441c612542e45d2d3b53981410",
+      "mode": 420,
+      "destination": "src/icons/u-plus.svg",
+      "sha256": "bbf454ce8f15941783f7423087f36846ed49a64ec938c74614d5426a603002cb",
+      "bytes": 578,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-pr.svg",
+      "blob": "e1fe070782b026b874d5b9b51489f796e09ad930",
+      "mode": 420,
+      "destination": "src/icons/u-pr.svg",
+      "sha256": "3f60677f11ce2ba9c7c4520420dc00bc6f2289d74d7f604cfc886b2feba6dcd7",
+      "bytes": 1749,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-puzzle-piece.svg",
+      "blob": "fb06a27303d2fa8a8b498bf54cd91c42d0da61a2",
+      "mode": 420,
+      "destination": "src/icons/u-puzzle-piece.svg",
+      "sha256": "b0632518649a619ddcb21dfcb3f24d6114a49ac5b66895467d4cbd32b4e2bb49",
+      "bytes": 2642,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-refresh.svg",
+      "blob": "9e3a2051d2628738b0c559acfe61b17e546a8be5",
+      "mode": 420,
+      "destination": "src/icons/u-refresh.svg",
+      "sha256": "6d21172ea29f5b23d27ebc79b84930a013cd210f88ef206c6a04d23801b3e773",
+      "bytes": 762,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-robot.svg",
+      "blob": "6ad5fcc71abeb25378d4796c5d7e139b2a49f5a4",
+      "mode": 420,
+      "destination": "src/icons/u-robot.svg",
+      "sha256": "9eb9db3d6a04f6903fb2cbd00815620a3196dc114813392b6d1490ad697a4df8",
+      "bytes": 2833,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-tools.svg",
+      "blob": "9104c82bf6c6502b7f3d88743527815d753420a5",
+      "mode": 420,
+      "destination": "src/icons/u-tools.svg",
+      "sha256": "5c72cff28494629a2b5bd1ccc638537b39f5fcb9b02ded0dbac4839b25ac5912",
+      "bytes": 2938,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-warning.svg",
+      "blob": "10148311412e6167ac80810ee7bb3965efee4774",
+      "mode": 420,
+      "destination": "src/icons/u-warning.svg",
+      "sha256": "d03390c56d66a3e1e3b43268f0f21f623a307d2f4779d3f089b475e6f7ddba52",
+      "bytes": 692,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/u-water.svg",
+      "blob": "e2a3a9b9d65c11e972df0c7a4af3fd188c57a3fd",
+      "mode": 420,
+      "destination": "src/icons/u-water.svg",
+      "sha256": "50ae2c42b88a55e6b5b73b265e4fec6082a6052226217af2813b9f227852b51d",
+      "bytes": 4942,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/user.svg",
+      "blob": "7c1fff4533300fc72647188aa06a1d7abe6e34c2",
+      "mode": 420,
+      "destination": "src/icons/user.svg",
+      "sha256": "efae6d0ba43ee0d28ac5a2d60a1a1dbb970b91e9b35ff7a1fd5defbdbdbfe096",
+      "bytes": 584,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/vscode.svg",
+      "blob": "cb5ac0ec7df67368ec4b0a85dcd076e28ad20cac",
+      "mode": 420,
+      "destination": "src/icons/vscode.svg",
+      "sha256": "1c97493862431562ecc77a6ecd3fe0aa8691db6c1439aec3f18c2e21dd5ece72",
+      "bytes": 606,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/warning.svg",
+      "blob": "dc404bc1c7acf3a9fa27947cf3ed0bed287db752",
+      "mode": 420,
+      "destination": "src/icons/warning.svg",
+      "sha256": "c85e9b64bd7e02facb3fa7160db97d933392f76ec090dc40d5acdbab27ac378d",
+      "bytes": 568,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/x-circle-solid.svg",
+      "blob": "f673bbf0b1e56eb3cbe4165bf6af0c8232ccc2b6",
+      "mode": 420,
+      "destination": "src/icons/x-circle-solid.svg",
+      "sha256": "2df1e0bb42e0179ecd0a80684664154ed673f73d433f94b6ede2ab3006d0cad2",
+      "bytes": 404,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/x-circle.svg",
+      "blob": "6ddf2d1a6b4d74d7b24327cb0e878030fa639e7d",
+      "mode": 420,
+      "destination": "src/icons/x-circle.svg",
+      "sha256": "acb2914aaaccb10fe48babfeffdea45b09ab6a38441666a538b6a708858556e0",
+      "bytes": 251,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/icons/x-mark.svg",
+      "blob": "bec56202175bc4dd7e358ca25d6e8e5429aad481",
+      "mode": 420,
+      "destination": "src/icons/x-mark.svg",
+      "sha256": "e7b5c55fdfe3abcee2dbb8525d539632238544e8b8d4330499e604e5b8381ff8",
+      "bytes": 202,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/routes/mcp.tsx",
+      "blob": "155826f07ad708875658ec50067c7a0d48fed3d8",
+      "mode": 420,
+      "destination": "src/routes/mcp.tsx",
+      "sha256": "e6e96d372bd07d23e2d4835924e16f9c03c930c2752e6ab6bfad295c2bb73513",
+      "bytes": 6990,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/routes/skills-plugins.tsx",
+      "blob": "7a15cc98350025409e71da004d182c2a4f41d71b",
+      "mode": 420,
+      "destination": "src/routes/skills-plugins.tsx",
+      "sha256": "c65ce80c4dc7add32beabba88e9e7352621e56259369d1438778c2272bd69dd8",
+      "bytes": 9027,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/routes/skills-settings.tsx",
+      "blob": "096b480eeb335c02da05c6cbb3f808df86bec6b5",
+      "mode": 420,
+      "destination": "src/routes/skills-settings.tsx",
+      "sha256": "cbaea402311929dc1254feaa41362e0973bf63d81ac954a8db2d082448b91b10",
+      "bytes": 12171,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/tailwind.css",
+      "blob": "bde5c21a6d44bd6fd33f04552bc7c1468de68e16",
+      "mode": 420,
+      "destination": "src/tailwind.css",
+      "sha256": "9dac543683548b46f247fedb7e7e12b0d4f670b592006c150455b3b152b59941",
+      "bytes": 27259,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/types/mcp-auth.ts",
+      "blob": "f8f841cd33f0105e0d094417c0e6e71bf8a64885",
+      "mode": 420,
+      "destination": "src/types/mcp-auth.ts",
+      "sha256": "7dfe0544da26e513d06a41d0a03a0b323fb8436ca3217b8c458abfc340619370",
+      "bytes": 861,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/types/mcp-health.ts",
+      "blob": "a048e082014f81eb5bb2147ac486925569904f8b",
+      "mode": 420,
+      "destination": "src/types/mcp-health.ts",
+      "sha256": "c6263d8658f271373a5981c5075842f43fb8a7097db5cf7d671eeac530b7970e",
+      "bytes": 855,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/types/mcp-server.ts",
+      "blob": "927bda0b9b1bed32206466bfafa62dd3565ff4d8",
+      "mode": 420,
+      "destination": "src/types/mcp-server.ts",
+      "sha256": "9183aaa5d357a64d23d2d1c5f7359f7ef91dc300243528598a6c401a161761a0",
+      "bytes": 1964,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/types/settings.ts",
+      "blob": "19ba6dc0fe9e6e1c6c970c8a3e3bebb5a52e5ab4",
+      "mode": 420,
+      "destination": "src/types/settings.ts",
+      "sha256": "bd324d0b8320f59729f7ce417746cbe60f1c7bc1c83c313b503c3ee9656160be",
+      "bytes": 5913,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/extension-module-card-classes.ts",
+      "blob": "f7ee6103b9a67d6e58963a3534803737d0d93893",
+      "mode": 420,
+      "destination": "src/utils/extension-module-card-classes.ts",
+      "sha256": "39248de71d7333cab7027c9db11404d9303fcb48d63a8a2c4a51befb98cd59e0",
+      "bytes": 1202,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/mcp-config.ts",
+      "blob": "09a7aa30032987684dab95ce725be8dc1f38a6e9",
+      "mode": 420,
+      "destination": "src/utils/mcp-config.ts",
+      "sha256": "5f4c02bf87986795fd3ddb6aa681c26dce781ababc5d78e972ed6ee8e49df48d",
+      "bytes": 13998,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/mcp-credential-validation.ts",
+      "blob": "e1558fe366f9e8a7c6a26a9754a895ae1bfb9387",
+      "mode": 420,
+      "destination": "src/utils/mcp-credential-validation.ts",
+      "sha256": "878941ac376f8476094540196b6432816fe5eaed86dffcb2c5e7b8502d4c49a2",
+      "bytes": 3498,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/mcp-installed-server-display.test.ts",
+      "blob": "b7292ff9fd19cea6bc4d29f0cece3b8dd34c0193",
+      "mode": 420,
+      "destination": "src/utils/mcp-installed-server-display.test.ts",
+      "sha256": "5b5bd5da6a504502e151bad661e498d8adf429d183a5005151b7249ca92fc76c",
+      "bytes": 2301,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/mcp-installed-server-display.ts",
+      "blob": "d9951c1a5a9d1f209a40f803754546fdc8625466",
+      "mode": 420,
+      "destination": "src/utils/mcp-installed-server-display.ts",
+      "sha256": "9df4d26ad40763a269610d11d1ccb2ee1230c045c878ae8643ee60964eb42aaf",
+      "bytes": 912,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/mcp-installed-servers.ts",
+      "blob": "bcee63ba66e4f67220d91b199b7b97f38bbf320c",
+      "mode": 420,
+      "destination": "src/utils/mcp-installed-servers.ts",
+      "sha256": "e245547b21e2437ee9d59e8e5486690466bc540868fd6f7438c39f6b6e476516",
+      "bytes": 969,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/mcp-marketplace-utils.ts",
+      "blob": "d6073823d8d884d5666310104ada7717c506d041",
+      "mode": 420,
+      "destination": "src/utils/mcp-marketplace-utils.ts",
+      "sha256": "b9091f726eb1aed41bde3c482e801b9f7209c782e4c1d37989a3a7a9006a4887",
+      "bytes": 10762,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/mcp-server-health-key.ts",
+      "blob": "be224dfdeb246cb0e9c51a16517c6c7bc698fa78",
+      "mode": 420,
+      "destination": "src/utils/mcp-server-health-key.ts",
+      "sha256": "831db5fd67cda3e0cb35cf188061bad33a2365c532dafa6ec082ee917559100a",
+      "bytes": 1549,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/mcp-server-name.ts",
+      "blob": "a4984d33eddd6f7d9fdd8685dbf093bfcc34a8c7",
+      "mode": 420,
+      "destination": "src/utils/mcp-server-name.ts",
+      "sha256": "296dbee8ba2aa21bdcfc66768266fd8ce3940e0d817378e1a365fb8305abf09a",
+      "bytes": 413,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/mcp-test-error-message.ts",
+      "blob": "19c48a7caabb98805e463111db2890ddf3547cf0",
+      "mode": 420,
+      "destination": "src/utils/mcp-test-error-message.ts",
+      "sha256": "6c590672556e2bc946b8eb58350573fb255ed7e4553bfc31063372316b681a09",
+      "bytes": 1255,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/settings-like-page-layout-classes.ts",
+      "blob": "feec4ae17e4af5e415b62f3707901053cec5c18d",
+      "mode": 420,
+      "destination": "src/utils/settings-like-page-layout-classes.ts",
+      "sha256": "59ee332c71a2a3ed9ea628ec5a739c321da2abb3d19f38825c825046d553ff03",
+      "bytes": 1009,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/skill-category.ts",
+      "blob": "afb61baed705cbaad6bf1b674d6bbcd7014a42ca",
+      "mode": 420,
+      "destination": "src/utils/skill-category.ts",
+      "sha256": "7bebfaf5741fad270609ad36c9f985c53e7d67eab83edb7950a0b2e517f3acde",
+      "bytes": 2185,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/skill-enablement.ts",
+      "blob": "09407d74a34c5bdb415b5ddf77c406e7b8fe07c9",
+      "mode": 420,
+      "destination": "src/utils/skill-enablement.ts",
+      "sha256": "4dd91e28061482ab505bc8a922b8bd869ddadc712e1a0561e986433832c064a1",
+      "bytes": 7845,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/skill-install-events.ts",
+      "blob": "1af157309aa54a0ecb0330d7cd2d052432235e88",
+      "mode": 420,
+      "destination": "src/utils/skill-install-events.ts",
+      "sha256": "33e0089a0b0bc3833a042a2c652937bf3951bdbfa758d853733ad0c5db238b23",
+      "bytes": 2098,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/skill-key.ts",
+      "blob": "b122dae05bf88449859675bede08f1771cde51ff",
+      "mode": 420,
+      "destination": "src/utils/skill-key.ts",
+      "sha256": "8c385c3644fc2cc779b34f1a4e1319c51c8115866e4001be76a1bd77a7206adc",
+      "bytes": 617,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/skill-scope.ts",
+      "blob": "6819f7dc3efe494c6f9af287f05fc2cdb5556299",
+      "mode": 420,
+      "destination": "src/utils/skill-scope.ts",
+      "sha256": "4abf0aba10ad2f249a1f1dbd60d7234692f084e27b01b403b52a0d4181770b28",
+      "bytes": 3145,
+      "origin": "agent-canvas-git"
+    },
+    {
+      "source": "src/utils/utils.ts",
+      "blob": "7e76d0dc77ea879b173674bf6071aaf868ea4429",
+      "mode": 420,
+      "destination": "src/utils/utils.ts",
+      "sha256": "82eb654253b2d8e8a408bc19fc91592476baf04a070bc775d051b65b3f48c3b9",
+      "bytes": 20636,
+      "origin": "agent-canvas-git"
+    }
+  ]
+}

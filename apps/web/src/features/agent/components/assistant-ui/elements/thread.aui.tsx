@@ -23,6 +23,12 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import type { ProviderOptionSelection } from "@agent-workspace/contracts/provider";
 import { resolveProviderModelSelection } from "@agent-workspace/client-runtime/providers";
 import { cn } from "@agent/lib/utils";
@@ -65,7 +71,7 @@ import {
   RefreshCwIcon,
   SquareIcon,
 } from "lucide-react";
-import { useRef, useState, type FC, type ReactNode } from "react";
+import { useRef, useState, type FC, type ReactElement, type ReactNode } from "react";
 import styles from "./composer-layout.module.css";
 
 
@@ -175,7 +181,10 @@ export const Thread: FC<ThreadProps> = (props) => {
           </div>}
 
           <div data-slot="aui_message-group" className="mb-16 flex flex-col gap-y-7 empty:hidden">
-            <ThreadPrimitive.Messages>{() => <ThreadMessage providerInstanceId={props.providerInstanceId} />}</ThreadPrimitive.Messages>
+            <ThreadPrimitive.Messages>{() => <ThreadMessage
+              providerInstanceId={props.providerInstanceId}
+              actionsDisabled={!!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailableReason || history.status === "error" || historyMissing}
+            />}</ThreadPrimitive.Messages>
           </div>
 
           <ThreadPrimitive.ViewportFooter
@@ -197,13 +206,15 @@ export const Thread: FC<ThreadProps> = (props) => {
   );
 };
 
-const ThreadMessage: FC<{ providerInstanceId: string }> = ({ providerInstanceId }) => {
+const ThreadMessage: FC<{ providerInstanceId: string; actionsDisabled: boolean }> = ({ providerInstanceId, actionsDisabled }) => {
   const role = useAuiState((s) => s.message.role);
   const isEditing = useAuiState((s) => s.message.composer.isEditing);
+  const runtimeBlocked = useAuiState((s) => s.thread.isRunning || s.thread.isLoading || s.thread.isDisabled || s.thread.isSendDisabled || s.thread.voice !== undefined);
+  const disabled = actionsDisabled || runtimeBlocked;
 
-  if (isEditing) return <EditComposer providerInstanceId={providerInstanceId} />;
-  if (role === "user") return <UserMessage />;
-  return <AssistantMessage />;
+  if (isEditing) return <EditComposer providerInstanceId={providerInstanceId} disabled={disabled} />;
+  if (role === "user") return <UserMessage actionsDisabled={disabled} />;
+  return <AssistantMessage actionsDisabled={disabled} />;
 };
 
 const ThreadScrollToBottom: FC = () => {
@@ -478,17 +489,19 @@ const MessageError: FC = () => {
   );
 };
 
-const AssistantMessage: FC = () => {
+const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
   const ACTION_BAR_PT = "pt-1.5";
   const ACTION_BAR_HEIGHT = `min-h-7.5 ${ACTION_BAR_PT}`;
   const durable = useAuiState((s) => s.message.metadata.custom.durable) as { generationId?: unknown; nativeOutput?: unknown } | undefined;
   const generationId = durable?.nativeOutput === true && typeof durable.generationId === "string" ? durable.generationId : undefined;
 
   return (
+    <MessageContextMenu actionsDisabled={actionsDisabled} role="assistant">
     <MessagePrimitive.Root
       data-slot="aui_assistant-message-root"
       data-role="assistant"
-      className="fade-in slide-in-from-bottom-1 animate-in relative -mb-7.5 pb-7.5 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
+      tabIndex={0}
+      className="fade-in slide-in-from-bottom-1 animate-in focus-visible:outline-ring/50 relative -mb-7.5 pb-7.5 duration-150 focus-visible:outline-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
     >
       <div
         data-slot="aui_assistant-message-content"
@@ -538,13 +551,70 @@ const AssistantMessage: FC = () => {
         className={cn("ms-2 flex items-center", ACTION_BAR_HEIGHT)}
       >
         <BranchPicker />
-        <AssistantActionBar />
+        <AssistantActionBar actionsDisabled={actionsDisabled} />
       </div>
     </MessagePrimitive.Root>
+    </MessageContextMenu>
   );
 };
 
-const AssistantActionBar: FC = () => {
+const messageMenuItemClassName = "aui-action-bar-more-item hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-50 flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none";
+
+/** Both entry points keep the message runtime's capability and text guards. */
+const MessageMenuActions: FC<{
+  variant: "context" | "dropdown";
+  role: "assistant" | "user";
+  actionsDisabled: boolean;
+  onEdit?: () => void;
+}> = ({ variant, role, actionsDisabled, onEdit }) => {
+  const t = useAgentText();
+  const Item = variant === "context" ? ContextMenuItem : ActionBarMorePrimitive.Item;
+  return <>
+    <ActionBarPrimitive.Copy asChild>
+      <Item className={messageMenuItemClassName}><CopyIcon className="size-4" />{t("复制", "Copy")}</Item>
+    </ActionBarPrimitive.Copy>
+    <ActionBarPrimitive.ExportMarkdown asChild>
+      <Item className={messageMenuItemClassName}><DownloadIcon className="size-4" />{t("导出为 Markdown", "Export as Markdown")}</Item>
+    </ActionBarPrimitive.ExportMarkdown>
+    {role === "assistant" ? <>
+      <AuiIf condition={(s) => s.thread.capabilities.speech && s.message.speech == null}>
+        <ActionBarPrimitive.Speak asChild>
+          <Item className={messageMenuItemClassName}><AudioLinesIcon className="size-4" />{t("朗读", "Read aloud")}</Item>
+        </ActionBarPrimitive.Speak>
+      </AuiIf>
+      <AuiIf condition={(s) => s.message.speech != null}>
+        <ActionBarPrimitive.StopSpeaking asChild>
+          <Item className={messageMenuItemClassName}><SquareIcon className="size-4" />{t("停止朗读", "Stop reading")}</Item>
+        </ActionBarPrimitive.StopSpeaking>
+      </AuiIf>
+      <ActionBarPrimitive.Reload asChild disabled={actionsDisabled} onClick={(event) => { if (actionsDisabled) event.preventDefault(); }}>
+        <Item className={messageMenuItemClassName} title={actionsDisabled ? t("会话正在运行、读取或尚未就绪，暂时不能重新生成。", "The session is running, loading, or not ready; regeneration is unavailable.") : undefined}><RefreshCwIcon className="size-4" />{t("重新生成", "Regenerate")}</Item>
+      </ActionBarPrimitive.Reload>
+    </> : <ActionBarPrimitive.Edit asChild disabled={actionsDisabled} onClick={(event) => { if (actionsDisabled) event.preventDefault(); }}>
+      <Item className={messageMenuItemClassName} title={actionsDisabled ? t("会话正在运行、读取或尚未就绪，暂时不能编辑。", "The session is running, loading, or not ready; editing is unavailable.") : undefined} onSelect={onEdit}><PencilIcon className="size-4" />{t("编辑", "Edit")}</Item>
+    </ActionBarPrimitive.Edit>}
+  </>;
+};
+
+const MessageContextMenu: FC<{
+  children: ReactElement;
+  role: "assistant" | "user";
+  actionsDisabled: boolean;
+}> = ({ children, role, actionsDisabled }) => {
+  const t = useAgentText();
+  const editing = useRef(false);
+  return <ContextMenu onOpenChange={(open) => { if (open) editing.current = false; }}>
+    <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+    <ContextMenuContent
+      aria-label={role === "assistant" ? t("助手消息操作", "Assistant message actions") : t("用户消息操作", "User message actions")}
+      onCloseAutoFocus={(event) => { if (editing.current) event.preventDefault(); }}
+    >
+      <MessageMenuActions variant="context" role={role} actionsDisabled={actionsDisabled} onEdit={() => { editing.current = true; }} />
+    </ContextMenuContent>
+  </ContextMenu>;
+};
+
+const AssistantActionBar: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
@@ -571,7 +641,7 @@ const AssistantActionBar: FC = () => {
           <SquareIcon className="size-3.5 fill-current" />
         </TooltipIconButton>
       </ActionBarPrimitive.StopSpeaking>
-      <ActionBarPrimitive.Reload asChild>
+      <ActionBarPrimitive.Reload asChild disabled={actionsDisabled}>
         <TooltipIconButton tooltip="Refresh">
           <RefreshCwIcon />
         </TooltipIconButton>
@@ -588,24 +658,21 @@ const AssistantActionBar: FC = () => {
           sideOffset={6}
           className="aui-action-bar-more-content bg-popover/95 text-popover-foreground data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:animate-in data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:animate-out data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] overflow-hidden rounded-xl border p-1.5 shadow-lg backdrop-blur-sm"
         >
-          <ActionBarPrimitive.ExportMarkdown asChild>
-            <ActionBarMorePrimitive.Item className="aui-action-bar-more-item hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none">
-              <DownloadIcon className="size-4" />
-              Export as Markdown
-            </ActionBarMorePrimitive.Item>
-          </ActionBarPrimitive.ExportMarkdown>
+          <MessageMenuActions variant="dropdown" role="assistant" actionsDisabled={actionsDisabled} />
         </ActionBarMorePrimitive.Content>
       </ActionBarMorePrimitive.Root>
     </ActionBarPrimitive.Root>
   );
 };
 
-const UserMessage: FC = () => {
+const UserMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
   return (
+    <MessageContextMenu actionsDisabled={actionsDisabled} role="user">
     <MessagePrimitive.Root
       data-slot="aui_user-message-root"
-      className="fade-in slide-in-from-bottom-1 animate-in grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2"
+      className="fade-in slide-in-from-bottom-1 animate-in focus-visible:outline-ring/50 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 focus-visible:outline-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2"
       data-role="user"
+      tabIndex={0}
     >
       <UserMessageAttachments />
 
@@ -622,7 +689,7 @@ const UserMessage: FC = () => {
           )}
         </MessagePrimitive.Quote>
         <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
-          <UserActionBar />
+          <UserActionBar actionsDisabled={actionsDisabled} />
         </div>
       </div>
 
@@ -631,17 +698,18 @@ const UserMessage: FC = () => {
         className="col-span-full col-start-1 -me-1 justify-end"
       />
     </MessagePrimitive.Root>
+    </MessageContextMenu>
   );
 };
 
-const UserActionBar: FC = () => {
+const UserActionBar: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
   return (
     <ActionBarPrimitive.Root
       hideWhenRunning
       autohide="not-last"
       className="aui-user-action-bar-root flex flex-col items-end"
     >
-      <ActionBarPrimitive.Edit asChild>
+      <ActionBarPrimitive.Edit asChild disabled={actionsDisabled}>
         <TooltipIconButton tooltip="Edit" className="aui-user-action-edit">
           <PencilIcon />
         </TooltipIconButton>
@@ -650,7 +718,7 @@ const UserActionBar: FC = () => {
   );
 };
 
-const EditComposer: FC<{ providerInstanceId: string }> = ({ providerInstanceId }) => {
+const EditComposer: FC<{ providerInstanceId: string; disabled: boolean }> = ({ providerInstanceId, disabled }) => {
   const { preferences } = useChatBrowserPreferences();
   const aui = useAui();
   const [limitsRequest, setLimitsRequest] = useState(0);
@@ -660,7 +728,7 @@ const EditComposer: FC<{ providerInstanceId: string }> = ({ providerInstanceId }
       data-slot="aui_edit-composer-wrapper"
       className="flex flex-col px-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
     >
-      <ComposerPrimitive.Root className="aui-edit-composer-root border-border focus-within:border-ring/60 ms-auto flex w-full max-w-[85%] cursor-text flex-col rounded-(--bubble-radius) border bg-(--composer-bg) shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color] dark:shadow-none" onSubmit={(event) => { if (handleUsageCommand()) event.preventDefault(); }}>
+      <ComposerPrimitive.Root className="aui-edit-composer-root border-border focus-within:border-ring/60 ms-auto flex w-full max-w-[85%] cursor-text flex-col rounded-(--bubble-radius) border bg-(--composer-bg) shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color] dark:shadow-none" onSubmit={(event) => { if (disabled || handleUsageCommand()) event.preventDefault(); }}>
         <ComposerPrimitive.Input
           className="aui-edit-composer-input text-foreground min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-base outline-none"
           autoFocus
@@ -675,7 +743,7 @@ const EditComposer: FC<{ providerInstanceId: string }> = ({ providerInstanceId }
               Cancel
             </Button>
           </ComposerPrimitive.Cancel>
-          <ComposerPrimitive.Send asChild onClick={(event) => { if (handleUsageCommand()) event.preventDefault(); }}>
+          <ComposerPrimitive.Send asChild disabled={disabled} onClick={(event) => { if (disabled || handleUsageCommand()) event.preventDefault(); }}>
             <Button size="sm" className="h-8 px-3">
               Update
             </Button>

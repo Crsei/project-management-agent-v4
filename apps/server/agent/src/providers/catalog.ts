@@ -4,7 +4,7 @@ import { getStoredInstance, listStoredInstances, providerContext, providerDataDi
 import { getNativeProviderAdapter } from "./driver-registry.ts";
 import type { ProviderDriverStatus } from "./driver-adapter.ts";
 import { sanitizeErrorText } from "./verify.ts";
-import { BUNDLED_CLAUDE_MODEL_CATALOG, resolveClaudeModelSlug } from "../../../../../vendor/t3code/apps/server/src/provider/ClaudeModelCatalog.ts";
+import { canonicalProviderModelId } from "./t3code/config-mapping.ts";
 import { beginProviderStatus } from "./auth.ts";
 import { OMP_STATUS_TIMEOUT_MS } from "@t3tools/provider-omp/server/status";
 
@@ -61,7 +61,7 @@ export function resolveCatalogModel(instanceId: string, modelId: string): Provid
     throw Object.assign(new Error("所选原生 Agent 已删除或不再受支持，请明确重新选择。"), { status: 400, code: "unknown_provider" });
   if (!instance.enabled)
     throw Object.assign(new Error("所选 Agent 已停用，请先明确启用或重新选择。"), { status: 409, code: "provider_disabled" });
-  const canonicalId = instance.driver === "claude" ? resolveClaudeModelSlug(BUNDLED_CLAUDE_MODEL_CATALOG, modelId) : modelId;
+  const canonicalId = canonicalProviderModelId(instance.driver, modelId);
   const models = getProviderModels(instanceId);
   const model = models.find(entry => entry.id === modelId) ?? models.find(entry => entry.aliases?.includes(modelId) || entry.id === canonicalId);
   if (!model)

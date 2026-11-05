@@ -48,7 +48,7 @@ export async function createDocumentSourcesBrowserFixture(options: { databaseUrl
     const address = reservation.address();
     assert.ok(address && typeof address !== 'string', 'Browser fixture must own a loopback TCP listener');
     const publicPort = address.port, origin = `http://127.0.0.1:${publicPort}`;
-    const fixture = await scope.acquire(() => createLocalProjectFixture({ databaseUrl: options.databaseUrl, signal: scope.signal, publicOrigin: origin }), owned => owned.close());
+    const fixture = await scope.acquire(() => createLocalProjectFixture({ ...(options.databaseUrl === undefined ? {} : { databaseUrl: options.databaseUrl }), signal: scope.signal, publicOrigin: origin }), owned => owned.close());
     const a = await createDocumentProject(fixture, 'Smoke project A', 'smoke-native-a');
     const b = await createDocumentProject(fixture, 'Smoke project B', 'smoke-native-b');
     const c = await createDocumentProject(fixture, 'Smoke empty selectable project', 'smoke-native-c');
@@ -116,7 +116,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   for (const event of ['SIGINT', 'SIGTERM', 'disconnect'] as const) process.once(event, () => { void stop().catch(() => { process.exitCode = 1; }); });
   process.on('message', message => { if (message && typeof message === 'object' && 'event' in message && message.event === 'close') void stop().catch(() => { process.exitCode = 1; }); });
   try {
-    owned = await createDocumentSourcesBrowserFixture({ signal: controller.signal, webDist: process.env.DOCUMENT_SOURCES_BROWSER_WEB_DIST });
+    const webDist = process.env.DOCUMENT_SOURCES_BROWSER_WEB_DIST;
+    owned = await createDocumentSourcesBrowserFixture({ signal: controller.signal, ...(webDist === undefined ? {} : { webDist }) });
     controller.signal.throwIfAborted();
     const sent = Promise.withResolvers<void>();
     process.send!({ event: 'ready', setup: owned.setup }, error => error ? sent.reject(new Error('Browser fixture IPC delivery failed')) : sent.resolve());

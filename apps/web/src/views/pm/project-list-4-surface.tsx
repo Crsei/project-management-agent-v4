@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { Fragment, useMemo } from "react"
 import { ChevronRight, Globe } from "lucide-react"
 import type { BadgeProps } from "@/components/ui/badge"
 import { useI18n } from "@/lib/i18n-provider"
@@ -36,7 +36,8 @@ export function ProjectListFourSurface({ props, onSelect }: {
   const en = locale === "en"
   const formatter = useMemo(() => new Intl.DateTimeFormat(en ? "en-US" : locale, { month: "short", day: "numeric", year: "numeric" }), [en, locale])
   return <ul className={styles.projectList} data-pm-summary-list>
-    {props.readModel.projects.map((project) => <li key={project.id} className={styles.projectItem} data-selected={props.interaction.selectedId === project.id || undefined}>
+    {props.readModel.projects.map((project) => {
+      const row = <li className={styles.projectItem} data-selected={props.interaction.selectedId === project.id || undefined}>
       <button type="button" className={styles.projectRow} data-pm-summary-row={project.id} aria-current={props.interaction.selectedId === project.id ? "true" : undefined} onClick={(event) => onSelect(project, event.currentTarget)}>
         <span className={styles.projectMain}>
           <span className={styles.projectTitleLine}>
@@ -52,7 +53,9 @@ export function ProjectListFourSurface({ props, onSelect }: {
         <ChevronRight className={styles.rowChevron} aria-hidden="true" />
       </button>
       {props.renderProjectAction && <span className={styles.projectAction}>{props.renderProjectAction(project)}</span>}
-    </li>)}
+      </li>
+      return <Fragment key={project.id}>{props.renderProjectContextMenu ? props.renderProjectContextMenu(project, row) : row}</Fragment>
+    })}
   </ul>
 }
 

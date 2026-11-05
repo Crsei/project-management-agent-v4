@@ -1,0 +1,26 @@
+{
+  "name": "@pm/openhands-extensions",
+  "version": "1.34.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/web/index.tsx",
+    "./styles.css": "./src/web/management.css"
+  },
+  "peerDependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-router-dom": "7.18.4",
+    "@tanstack/react-query": "5.104.1"
+  },
+  "dependencies": {
+    "@agent-workspace/contracts": "workspace:*",
+    "@pm/cc-switch-ui": "workspace:*",
+    "clsx": "2.1.1",
+    "i18next": "^25.5.2",
+    "lucide-react": "^1.52.0",
+    "react-i18next": "^16.0.0",
+    "tailwind-merge": "3.5.0"
+  }
+}

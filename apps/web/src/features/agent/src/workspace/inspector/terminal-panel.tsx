@@ -4,6 +4,13 @@ import { Terminal } from "@xterm/xterm";
 import type { ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { Button } from "@agent/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import type {
   TerminalClientMessage,
   TerminalServerMessage,
@@ -129,6 +136,7 @@ export function TerminalPanel({ active = true }: { active?: boolean }) {
   const connectionIdRef = useRef(0);
   const disposedRef = useRef(false);
   const exitedRef = useRef(false);
+  const menuActionSelected = useRef(false);
 
   const [status, setStatus] = useState<TerminalStatus>("connecting");
   const [readyInfo, setReadyInfo] = useState<ReadyInfo | null>(null);
@@ -409,9 +417,17 @@ export function TerminalPanel({ active = true }: { active?: boolean }) {
     terminalRef.current?.focus();
   };
 
+  const terminalActions = [
+    { id: "clear", label: t("清屏", "Clear"), description: t("仅清除本地终端显示，不发送命令。", "Clears the local terminal display without sending a command."), onSelect: handleClear },
+    { id: "restart", label: t("重启 Shell", "Restart shell"), description: t("结束当前终端 Shell 并启动新 Shell；正在运行的工作可能中断。", "Terminates the current terminal shell and starts a new shell; running work may be interrupted."), onSelect: handleRestart },
+    { id: "reconnect", label: t("重新连接", "Reconnect"), description: t("重新建立连接并启动新 Shell，不会恢复旧 Shell。当前 Shell 可能被结束。", "Reconnects with a new shell, not the old shell. The current shell may be terminated."), onSelect: handleReconnect },
+  ];
+
   return (
     <div className="inspector-panel">
-      <div className="inspector-toolbar">
+      <ContextMenu onOpenChange={(isOpen) => { if (isOpen) menuActionSelected.current = false; }}>
+        <ContextMenuTrigger asChild>
+      <div className="inspector-toolbar" tabIndex={0} aria-label={t("终端工具", "Terminal tools")}>
         <span
           className="flex shrink-0 items-center gap-1.5 text-xs"
           role="status"
@@ -429,16 +445,29 @@ export function TerminalPanel({ active = true }: { active?: boolean }) {
           </span>
         )}
         <span className="inspector-toolbar-spacer" />
-        <Button type="button" variant="ghost" size="sm" onClick={handleClear}>
-          {t("清屏", "Clear")}
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={handleRestart}>
-          {t("重启", "Restart")}
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={handleReconnect}>
-          {t("重新连接", "Reconnect")}
-        </Button>
+        {terminalActions.map((action) => (
+          <Button key={action.id} type="button" variant="ghost" size="sm" title={action.description} onClick={action.onSelect}>
+            {action.label}
+          </Button>
+        ))}
       </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent onCloseAutoFocus={(event) => {
+          if (menuActionSelected.current) event.preventDefault();
+        }}>
+          <ContextMenuLabel className="max-w-72 whitespace-normal px-3 py-1.5 text-xs text-muted-foreground">
+            {t("重启或重新连接会启动新 Shell，可能中断当前工作。", "Restarting or reconnecting starts a new shell and may interrupt current work.")}
+          </ContextMenuLabel>
+          {terminalActions.map((action) => (
+            <ContextMenuItem key={action.id} title={action.description} onSelect={() => {
+              menuActionSelected.current = true;
+              action.onSelect();
+            }}>
+              {action.label}
+            </ContextMenuItem>
+          ))}
+        </ContextMenuContent>
+      </ContextMenu>
       {errorText && (
         <p className="text-xs text-destructive" role="alert">
           {errorText}
@@ -456,7 +485,7 @@ export function TerminalPanel({ active = true }: { active?: boolean }) {
           )}
         </p>
       )}
-      <div ref={containerRef} className="inspector-terminal" />
+      <div ref={containerRef} className="inspector-terminal" data-native-context-menu />
     </div>
   );
 }

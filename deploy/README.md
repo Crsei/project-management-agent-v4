@@ -1,12 +1,15 @@
 # v4 部署
 
+> 当前运行合同与历史证据分开：本文后部0024批次是历史记录，不证明最新工作树或生产部署。Agent仅面向可信本机单操作者，尚无PM成员会话隔离，cwd/Terminal不是文件沙箱。会话与持久化仍暂沿用Agent Chat，统一设计尚未收口；私有恢复journal/备份可含任务正文和自动化快照，不是脱敏日志。
+
 独立 `project-management-agent-v4`：公共入口 `3224`、PM API `4194`、Agent API `4325`、Web 开发上游 `4326`、PostgreSQL `55444`。本机 server 网关、PM API、Worker、Agent API 与统一 Web 产物共同组成服务组；生产 Caddy/Compose 使用同一份 Web 产物。数据库、项目及应用私有 Agent 状态与 v3 分离；原生 CLI 按服务用户的 Home / 环境规则运行。真实 Provider/CLI 和生产部署验收必须分别验证。
 
 ## 启动与配置
 
-在项目根目录使用 Node 24、pnpm 11.9.0：
+在项目根目录使用Node 24.21.0、pnpm 11.9.0、Rust 1.95.0和[原生编译工具](../docs/guides/development.md#工具链与隔离聚合入口)：
 
 ```bash
+node scripts/doctor.mjs
 pnpm install --frozen-lockfile
 pnpm setup:local
 pnpm db:up
@@ -21,7 +24,54 @@ pnpm services:status
 
 `setup:local` 创建 0600 的 `.env`、`.env.worker`、`.env.agent` 并随机生成新 v4 数据库密码，已有文件不覆盖，不自动复制账号或 Provider 凭据。独立应用数据在本仓 `.local/`；Agent 默认 `.local/agent-data`，不复用 `~/.agent-workspace`。本机服务与桌面启动器继承宿主原生 CLI 环境，实例设置覆盖同名变量；空 Home 不创建独立原生账号目录。容器仅能继承容器服务进程实际可见的配置，不会自动挂载宿主 Home。新安装显式选择 Local，仍须停写绑定；`blob-target.json` 的绝对 BLOB_ROOT 必须与 API 配置一致。已有成果使用 `bind --adopt` 全量核验，不能用 `--new` 冒充空库。数据库 Compose project 为 `project-management-agent-v4-backend`，宿主默认55444。
 
-管理员信息在 `.local/access.json`，内容不输出日志。正式业务命令需要登录会话、当前成员能力和版本。新账号通过 `pnpm account:create --email EMAIL --name NAME` 生成，需另由管理员显式授予 Workspace/Project 能力。
+`pnpm bootstrap` 仅为**空库**准备一次性 Web 设置：将随机令牌持久化到 `.local/setup-token`（0600），数据库仅保存摘要；终端只显示文件路径，不生成账号或明文密码。启动后打开本实例 `/pm`，从私有文件安全取用令牌，输入姓名、邮箱、密码和工作区名称完成设置。默认仅邀请注册；有账号或工作区的旧库直接 no-op，不读取、改写或删除既有凭据，不重置密码。数据库/schema 错误不会当作空库。正式业务命令仍需真实登录会话、当前成员能力和版本；新成员使用工作区邀请，现有受控 `account:create` 入口仍须管理员显式授权。
+
+### 首次设置令牌与恢复
+
+重复运行 bootstrap 复用同一有效令牌。脚本先持久化并刷新私有令牌文件，再提交数据库摘要；数据库失败或进程中断后保留文件供原样重试。文件及其目录不能是符号链接，令牌文件必须归当前用户所有、为普通单链接 0600 文件，`.local` 必须为私有目录；不安全路径不会自动 chmod 或覆盖。不要将令牌放入日志、URL、环境文件、前端配置或工单。完成设置后数据库永远关闭首次认领；设置响应丢失时先刷新状态，再使用刚设的账号密码登录，不能再次 bootstrap 另建账号。
+
+保护不只检查 `.local`：祖先目录也不能可被组/其他用户写入，唯一例外是 root 拥有的 sticky 共享祖先（例如系统 `/tmp`）；脚本不会自动 chmod 用户的挂载盘或仓库祖先。若当前磁盘树含 0777 祖先，新空库必须改从**安全、私有的工作目录**调用 bootstrap 脚本的绝对路径，并保留同一目标数据库/schema 配置，例如在该安全目录由秘密管理器提供原 `DATABASE_URL` 后执行 `node /absolute/repository/scripts/bootstrap.ts`。令牌会写入该工作目录的 `.local/setup-token`，后续重复准备仍须使用同一安全工作目录；不能仅修改 `TMPDIR` 就假定仓库工作目录已安全，也不能为了通过检查放宽私有路径保护。旧库状态查询成功时仍直接 no-op，不触碰令牌路径。
+
+pending 状态遇到不同令牌会拒绝，**不会自动轮转**。丢失 `.local/setup-token` 时优先从安全备份恢复原文件及 0600 权限。如果原令牌确实无法恢复，仅数据库 owner 可按下面步骤显式恢复尚未初始化的实例：
+
+1. 停止本实例 API 以及所有 bootstrap 进程，核对目标是本实例拥有的正确数据库/schema，保持其他实例不受影响。
+2. 在该数据库同一连接执行下列事务；任一步异常都应回滚并停止。它只允许账号、工作区和完成标记均不存在时清除 pending 摘要，绝不能用于已有实例。
+
+```sql
+BEGIN;
+SELECT pg_advisory_xact_lock(hashtextextended('project-management:instance-setup', 724631));
+LOCK TABLE users, workspaces IN SHARE ROW EXCLUSIVE MODE;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM users)
+     OR EXISTS (SELECT 1 FROM workspaces)
+     OR EXISTS (SELECT 1 FROM instance_setup WHERE completed_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'Refusing setup recovery for an initialized instance';
+  END IF;
+  DELETE FROM instance_setup WHERE singleton AND completed_at IS NULL;
+END
+$$;
+COMMIT;
+```
+
+3. 仅由操作者显式移走不可用的 `.local/setup-token`（如存在），再运行 bootstrap 准备新令牌，最后恢复 API。不要读取、修改或删除旧账号访问文件；脚本不会替你清理。若原令牌文件仍可用，复用它即可，无需生成另一个。
+
+### CLI 登录与隔离验收
+
+```bash
+PM_API_URL=http://127.0.0.1:4194 pnpm pm login --email you@example.com
+# 密码从终端隐藏输入；没有 --password 参数，不要把密码写入 shell 历史。
+PM_API_URL=http://127.0.0.1:4194 pnpm pm task list
+PM_API_URL=http://127.0.0.1:4194 pnpm pm logout
+```
+
+CLI 凭据优先级为 `PM_SESSION_TOKEN` > **完整** `PM_EMAIL` + `PM_PASSWORD` > 当前服务 origin 的已保存会话；不从旧访问文件读取密码，没有旧文件覆盖变量。`login` 使用邮箱/密码建立有期限会话，仅保存服务器返回的令牌及到期时间，绝不保存密码。`PM_SESSION_TOKEN` 供显式自动化请求使用，不会被悄悄持久化。自动化密码只能通过私有进程环境/秘密管理器提供，不要放进参数、日志或版本库。
+
+默认会话目录为 `${XDG_CONFIG_HOME:-$HOME/.config}/dovspace/pm-cli`；`PM_CLI_SESSION_DIR` 可选择绝对私有目录。目录为 0700、每个服务文件为 0600，并拒绝符号链接、硬链接及不安全权限。规范化的 origin（协议、主机、端口）分别保存会话，`localhost` 与 `127.0.0.1` 是不同 CLI origin；退出只清当前 origin。远程必须 HTTPS，HTTP 仅限回环；重定向不会收到秘密。过期会话要求重新登录。
+
+`logout` 真实调用服务端撤销，成功或服务端已返回未认证后才删除当前 origin 的本地文件；连接/服务错误保留文件并返回失败，不伪报已撤销。若显式环境凭据和保存会话不同，两者都核对退出，其他 origin 不受影响。迁移已有安装时，先显式登录，按账号安全入口更改已暴露密码并核对恢复邮箱，切换自动化后由用户自行清理旧访问文件；此批次不自动改密码或清理文件。
+
+`pnpm smoke` / `pnpm smoke:verify` 使用相同显式凭据或安全 CLI 会话来源，目标为 `PUBLIC_ORIGIN`，未设则取 `PM_API_URL`，最后才使用本机公共入口。`PM_WORKSPACE_ID` 选择工作区；省略时创建验收只接受唯一授权工作区，verify 可复用证据中仍被授权的工作区。先对**隔离实例/数据库**执行 login，再以相同 origin 运行 smoke；不要在既有业务库创建验收数据。smoke 仅撤销自己通过密码创建的临时会话，不撤销调用者传入的令牌/保存会话。隔离测试可将 `PM_CLI_SESSION_DIR` 指向 mkdtemp 下的 0700 目录，不能借用真实用户 Home 或旧凭据。
 
 | 配置 | 默认/职责 |
 | --- | --- |
@@ -81,9 +131,9 @@ pnpm storage:projects recover --stopped --operation-id ORIGINAL_OPERATION_UUID
 
 ### 私有 S3、通知与 Webhook
 
-- S3 配置与受控维护步骤见 [S01–S08](../docs/implementation/service-s3-blobstore-plan.zh.md)。只使用显式凭据、私有桶/prefix、条件单次 PUT 与真实字节校验；下载仍经当前授权 API，不返回长期对象直链。`SOURCE_S3_*`/`TARGET_S3_*` 凭据仅用于维护角色，描述符及 manifest 不保存秘密。绑定/迁移/激活前停止 API、Worker 和外部核心写入者。
+- S3 配置与受控维护步骤见 [公开集成配置与协议](../docs/guides/integrations.md)。只使用显式凭据、私有桶/prefix、条件单次 PUT 与真实字节校验；下载仍经当前授权 API，不返回长期对象直链。`SOURCE_S3_*`/`TARGET_S3_*` 凭据仅用于维护角色，描述符及 manifest 不保存秘密。绑定/迁移/激活前停止 API、Worker 和外部核心写入者。
 - API 是唯一 Workspace/文件事实导入进程；Worker 只读核心文件并独立消费通知事实，不初始化第二个 Workspace/watcher。`pnpm notifications:status --workspace WORKSPACE_UUID` 查看实际进度，失败事实只在修复后用原序列显式处理；不伪造停机期间未观测的历史。
-- Webhook 默认禁用。API/Worker 使用同一批准目标元数据，只有 Worker 挂载签名密钥；需要有效接收器协议、持久去重/收据及核对屏障。`unknown` 不自动重新投递；恢复数据库后的外部账本对齐是启用门禁，不能靠更换 deliveryId 绕过。配置与操作边界见 [W01–W09](../docs/implementation/service-webhook-plan.zh.md)。
+- Webhook 默认禁用。API/Worker 使用同一批准目标元数据，只有 Worker 挂载签名密钥；需要有效接收器协议、持久去重/收据及核对屏障。`unknown` 不自动重新投递；恢复数据库后的外部账本对齐是启用门禁，不能靠更换 deliveryId 绕过。配置与操作边界见 [公开集成配置与协议](../docs/guides/integrations.md)。
 
 ### 成员邀请 SMTP
 
@@ -106,7 +156,7 @@ pnpm storage:projects recover --stopped --operation-id ORIGINAL_OPERATION_UUID
 
 ### 独立可信恢复邮箱
 
-找回与邀请使用不同门禁及队列。API/Worker 需一致设置 `ACCOUNT_RECOVERY_WEB_ORIGIN` 与独立的 `ACCOUNT_RECOVERY_TOKEN_KEY`，以及上述 SMTP 传输；精确选项见 [R01–R10](../docs/implementation/service-password-recovery-plan.zh.md)。历史登录邮箱和已接受邀请不自动成为可信恢复邮箱。匿名申请保持统一响应，令牌仅经邮件 fragment/页面内存及 POST body 传递；密码重置撤销全部旧会话。生产 Caddy 对账号路径设置 no-store、no-referrer 与限制性 CSP，并从错误日志中移除原请求对象，避免查询串令牌被代理记录。真实外部收信、域名/TLS 与旧备份凭据重新开放仍需单独批准及验收。
+找回与邀请使用不同门禁及队列。API/Worker 需一致设置 `ACCOUNT_RECOVERY_WEB_ORIGIN` 与独立的 `ACCOUNT_RECOVERY_TOKEN_KEY`，以及上述 SMTP 传输；精确选项见 [公开集成配置与协议](../docs/guides/integrations.md)。历史登录邮箱和已接受邀请不自动成为可信恢复邮箱。匿名申请保持统一响应，令牌仅经邮件 fragment/页面内存及 POST body 传递；密码重置撤销全部旧会话。生产 Caddy 对账号路径设置 no-store、no-referrer 与限制性 CSP，并从错误日志中移除原请求对象，避免查询串令牌被代理记录。真实外部收信、域名/TLS 与旧备份凭据重新开放仍需单独批准及验收。
 
 ## 运行与恢复
 
@@ -152,7 +202,7 @@ pnpm storage:projects restore --stopped --restored-target \
 原参数重放会核对已有完整文件和仅包含批准新根变化的映射；不会覆盖冲突文件或自动再次撤销后来合法会话。磁盘部分写入、额外文件或字节冲突保留证据并失败，不能把它们当作已完成恢复。
 
 
-`0024` 之前含非空 `project_audit` 的历史备份不能直接声称单步恢复通过：需在全新目标库分段 `pre-data → 仅应用0024函数作用域元数据修复 → data → post-data`，保留原 dump、业务行及 CHECK/触发器。应用 `0024` 后生成的新备份携带正确函数作用域。已观察的原备份恢复步骤、摘要与边界见[本轮真实证据索引第五节](../docs/implementation/service-completion-and-acceptance.zh.md#real-acceptance-evidence)。
+`0024` 之前含非空 `project_audit` 的历史备份不能直接声称单步恢复通过：需在全新目标库分段 `pre-data → 仅应用0024函数作用域元数据修复 → data → post-data`，保留原 dump、业务行及 CHECK/触发器。应用 `0024` 后生成的新备份携带正确函数作用域。该历史过程留在本机证据中；不得据此推断新版本/当前目标已经恢复通过，仍须在独立目标按本手册核对全部约束与摘要。
 
 ## 生产 Web、同源 API 与 Lab 门禁
 
@@ -177,7 +227,7 @@ pnpm storage:projects restore --stopped --restored-target \
 | storage | maintenance profile 下的编译后维护 CLI；仅停写时显式绑定/核验/迁移/激活/恢复，不随 API 启动自动修复绑定。 |
 | Web | 多阶段构建后的静态产物与 Caddy 同源反代；只在 loopback 发布临时可配置端口，不注入数据库或 SMTP 凭据。 |
 
-`deploy/Dockerfile` 使用 Node24/pnpm11.9.0 单锁文件构建 PM 与 Agent。PM 后端携带生产依赖、产物及迁移入口；Agent 镜像通过 pnpm deploy 携带独立生产图；Web 镜像包含统一静态构建和 Caddy。`.dockerignore` 排除秘密、`.local`、node_modules 与历史产物；不将凭据放入 ARG/COPY/前端变量。生产构建与部署须另行验收。
+`deploy/Dockerfile` 使用 Node24.21.0/pnpm11.9.0及根pin的Rust工具链 单锁文件构建 PM 与 Agent。PM 后端携带生产依赖、产物及迁移入口；Agent 镜像通过 pnpm deploy 携带独立生产图；Web 镜像包含统一静态构建和 Caddy。`.dockerignore` 排除秘密、`.local`、node_modules 与历史产物；不将凭据放入 ARG/COPY/前端变量。生产构建与部署须另行验收。
 
 默认镜像来自官方仓库；若宿主 Docker daemon 的仓库镜像配置不可达，可由操作者显式设置 `PM_NODE_IMAGE`、`PM_CADDY_IMAGE` 为批准的同版本镜像来源（或固定 digest），不改 daemon、不静默替换运行时。本机实际使用 `docker.m.daocloud.io/library/node:24-bookworm-slim` 与 `docker.m.daocloud.io/library/caddy:2`，这是受控替代来源的烟测，不证明任意镜像/网络环境可用。
 
@@ -219,7 +269,7 @@ docker compose --env-file /secure/pm-deploy.env -f deploy/compose.app.yaml build
 docker compose --env-file /secure/pm-deploy.env -f deploy/compose.app.yaml run --rm migrate
 # 在维护目录准备 target.json；Local 容器根为 /var/lib/pm/blobs，S3 则填写明确的无凭据描述符。
 docker compose --env-file /secure/pm-deploy.env -f deploy/compose.app.yaml run --rm storage bind --new --stopped --target-config /maintenance/target.json
-# 首次账号使用原有、受控的源代码管理入口，不由镜像自动生成或打印口令。
+# 首次设置由受控管理宿主准备私有一次性令牌；镜像不会生成或打印口令。
 # 仅在全新安装执行；私有 host 配置需连接同一个库的管理员可达地址。
 node --env-file=/secure/pm-runtime-host.env scripts/bootstrap.ts
 docker compose --env-file /secure/pm-deploy.env -f deploy/compose.app.yaml up -d --wait
@@ -227,7 +277,7 @@ curl --fail http://127.0.0.1:3224/health/ready
 curl -i http://127.0.0.1:3224/lab/pm
 ```
 
-源代码 bootstrap 前需 `pnpm install --frozen-lockfile`；复用既有账号入口，管理员访问文件仍只写入当前管理宿主 `.local/access.json`（0600），不进入镜像。已有安装跳过 bootstrap。不要对已有业务库执行 smoke 创建验收数据，实际验收应另建隔离 schema/临时内容根。
+源代码 bootstrap 前需 `pnpm install --frozen-lockfile`；管理宿主只保存 `.local/setup-token`（0600），不进入镜像、不输出令牌。它需连接同一个目标库，启动后在正式 HTTPS Web 入口完成首次设置；已有安装可跳过，误运行也不会重置已有账号。重复准备/丢失 pending 令牌按上面的受控恢复步骤处理。不要对已有业务库执行 smoke 创建验收数据，实际验收应另建隔离 schema/临时内容根。
 
 升级先构建新镜像，记录本 v4 容器ID，再 `stop web agent api worker`（仅本应用 Compose）并用 `docker wait` 核对全部退出；迁移成功后显式 `up -d --no-build --force-recreate --wait`。迁移失败不启动新进程、不改历史迁移，未知请求沿原ID核对；日志不导出环境、Cookie、令牌或口令。
 
@@ -237,7 +287,7 @@ curl -i http://127.0.0.1:3224/lab/pm
 
 ### 容器数据备份与恢复边界
 
-本机 `pnpm backup[:verify] --stopped` 不能直接覆盖这组容器卷。容器部署必须先阻断写入并停止 API、Worker 和外部核心写入者；由数据库 owner 执行 scoped custom-format dump，记录同一 SQL/core checkpoint，再通过实际 provider 全量核验、导出引用对象。S3 不能用复制 `blob-data` 卷代替导出。维护 CLI 通过 `storage` profile 运行，迁移日志/摘要写入 `/maintenance`；配置说明见 [S3 备份与恢复计划](../docs/implementation/service-s3-blobstore-plan.zh.md)。备份包含镜像标识、迁移摘要与私有配置恢复说明；加密 key 单独秘密备份，不进入公共 manifest。约束/摘要错误必须停止，不关闭约束掩盖失败。
+本机 `pnpm backup[:verify] --stopped` 不能直接覆盖这组容器卷。容器部署必须先阻断写入并停止 API、Worker 和外部核心写入者；由数据库 owner 执行 scoped custom-format dump，记录同一 SQL/core checkpoint，再通过实际 provider 全量核验、导出引用对象。S3 不能用复制 `blob-data` 卷代替导出。维护 CLI 通过 `storage` profile 运行，迁移日志/摘要写入 `/maintenance`；配置说明见 [公开集成配置与协议](../docs/guides/integrations.md)。备份包含镜像标识、迁移摘要与私有配置恢复说明；加密 key 单独秘密备份，不进入公共 manifest。约束/摘要错误必须停止，不关闭约束掩盖失败。
 
 恢复使用**新数据库、新核心根及新存储身份**。导入 SQL/core/对象后，必须执行受控 `restore-rebind`，核对原 epoch、备份 manifest 与 SQL/core 摘要，在目标库同一事务中完成恢复围栏和绑定激活；不能直接改环境指向新桶后启动。保留 UID/GID 1000 的必要目录权限；核验当前及历史引用字节、原收据和核心状态后，才在临时入口执行真实登录/下载/SSE。恢复目标默认不获得旧凭据信任批准，Webhook 接收端账本也不能仅靠恢复 PM 库推定同步。下方较早的容器恢复记录不能替代新增围栏或目标生产环境演练。
 
@@ -248,7 +298,7 @@ curl -i http://127.0.0.1:3224/lab/pm
 有界性能记录只报告实际样本数、并发、请求范围、测量环境及延迟分位数；健康/API 小样本不是负载测试或 SLO。真实硬件显示缩放、IME/触摸设备、公网目标/域名/TLS/边缘代理、HA/故障域、共享存储拓扑、容量与可用性 SLO 均待讨论。完整 INF-01（容器备份恢复）、INF-03（长连接/慢客户端/大规模并发）、INF-06（公网 HTTPS Cookie/来源）不能由本机烟测提前关闭。
 
 <a id="release-acceptance-evidence"></a>
-## 本轮隔离部署实际证据
+## 历史隔离部署证据（0024批次，非当前发布验收）
 
 本轮实际构建了 backend/Web 两个镜像 target，并在独立 `pm-release-*` PostgreSQL、网络与命名卷中运行；浏览器使用隔离主机 `pm-release.localhost:33165`。不复用默认业务库/卷，不占默认 Web/API/PG 端口。最后 API 镜像在接收超时修复后增量重建并停写切换，既有恢复库/卷不重置。
 
@@ -276,4 +326,4 @@ curl -i http://127.0.0.1:3224/lab/pm
 
 没有注册系统级开机启动服务，也未验收公开互联网、多机共享存储或高可用部署。本机 Node 进程方式仍由管理脚本启动，宿主重启后需再次执行 `services:start`；数据库及新增应用 Compose 的长驻服务配置 `unless-stopped`，但未演练宿主/Docker daemon 整机重启。两种管理方式不可同时启动 API 进程共享同一 CORE 根目录。
 
-孤立/过期上传仍保留，不自动 GC；未实现通用 job 编排。私有 S3 已提供显式绑定、停写迁移与 provider 感知备份，但目标供应商、凭据、加密/保留策略及生产恢复仍需配置与验收。不能按文件年龄删除可能被历史成果引用的内容。完整剩余项见实施计划。
+孤立/过期上传仍保留，不自动 GC；未实现通用 job 编排。私有 S3 已提供显式绑定、停写迁移与 provider 感知备份，但目标供应商、凭据、加密/保留策略及生产恢复仍需配置与验收。不能按文件年龄删除可能被历史成果引用的内容。当前范围见[公开能力指南](../docs/guides/project-management.md)，生产门禁不能用历史结果关闭。

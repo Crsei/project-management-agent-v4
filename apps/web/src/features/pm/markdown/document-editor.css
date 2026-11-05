@@ -10,8 +10,7 @@
 .document-content-editor button:focus-visible { outline: 2px solid var(--primary, #635bce); outline-offset: 2px; }
 .document-toolbar-divider { width: 1px; height: 21px; background: var(--border, #e3e7ee); margin: 0 3px; }
 .document-layout-controls { display: flex; align-items: center; margin-inline-start: auto; gap: 2px; }
-.document-format-toolbar > .document-context-anchor { position: fixed; width: 1px; height: 1px; min-width: 0; min-height: 0; padding: 0; border: 0; pointer-events: none; opacity: 0; }
-.document-menu { min-width: 190px; max-width: min(320px, calc(100vw - 20px)); max-height: min(580px, var(--radix-dropdown-menu-content-available-height, 75dvh)); overflow-y: auto; overscroll-behavior: contain; font-size: 12px; }
+.document-menu { min-width: 190px; max-width: min(320px, calc(100vw - 20px)); max-height: min(580px, var(--radix-popper-available-height, var(--radix-dropdown-menu-content-available-height, 75dvh))); overflow-y: auto; overscroll-behavior: contain; font-size: 12px; }
 .document-menu [role^="menuitem"] { min-height: 34px; font-size: 12px; }
 .document-command-reason { display: block; max-width: 230px; white-space: normal; font-size: 10px; line-height: 1.4; padding-block: 3px; opacity: .8; }
 .document-menu kbd { margin-inline-start: auto; padding-inline-start: 12px; font-size: 10px; opacity: .65; }

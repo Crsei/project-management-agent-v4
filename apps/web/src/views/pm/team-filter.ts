@@ -1,4 +1,4 @@
-import type { FilterCondition } from "@/components/blocks/filter-card"
+import type { FilterCondition } from "../../lib/filter-model.ts"
 import type { ControlledTeam, TeamCollectionInteraction } from "./people-controlled-contracts"
 
 /** Conditions the team surface understands; anything else is ignored. */

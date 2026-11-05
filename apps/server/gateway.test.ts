@@ -28,7 +28,7 @@ test('gateway preserves API paths, headers, streaming and unified static fallbac
   await mkdir(path.join(directory, 'assets'));
   await writeFile(path.join(directory, 'index.html'), '<title>unified web</title>');
   await writeFile(path.join(directory, 'assets', 'app.js'), 'asset');
-  const requests: { path?: string; host?: string; origin?: string; cookie?: string }[] = [];
+  const requests: { path: string | undefined; host: string | undefined; origin: string | undefined; cookie: string | undefined }[] = [];
   const streamResponse: { current?: http.ServerResponse } = {};
   const pm = http.createServer((req, res) => {
     requests.push({ path: req.url, host: req.headers.host, origin: req.headers.origin, cookie: req.headers.cookie });
@@ -72,7 +72,7 @@ test('gateway preserves API paths, headers, streaming and unified static fallbac
 
 test('gateway forwards WebSocket upgrades and Vite dev traffic without changing Origin', async t => {
   const agent = http.createServer();
-  let agentRequest: { url?: string; host?: string; origin?: string } | undefined;
+  let agentRequest: { url: string | undefined; host: string | undefined; origin: string | undefined } | undefined;
   agent.on('upgrade', (req, socket) => {
     agentRequest = { url: req.url, host: req.headers.host, origin: req.headers.origin };
     socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\nhello');

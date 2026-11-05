@@ -1,0 +1,102 @@
+.openhands-extensions .oh-mcp-page { display: flex; min-width: 0; flex-direction: column; gap: 28px; padding: 0 0 20px; color: var(--oh-foreground); }
+.openhands-extensions .oh-mcp-page-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.openhands-extensions .oh-mcp-page-header > div:first-child { flex: 1 1 300px; max-width: 700px; }
+.openhands-extensions .oh-mcp-page h2 { font-size: 24px; font-weight: 600; line-height: 1.3; margin: 0 0 8px; }
+.openhands-extensions .oh-mcp-page h3 { font-size: 16px; font-weight: 600; margin: 0; }
+.openhands-extensions .oh-mcp-page-header p, .openhands-extensions .oh-mcp-context-note { font-size: 13px; line-height: 1.7; color: var(--oh-muted); margin: 0; }
+.openhands-extensions .oh-mcp-actions, .openhands-extensions .oh-mcp-heading, .openhands-extensions .oh-mcp-section-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.openhands-extensions .oh-mcp-section-heading { justify-content: space-between; }
+.openhands-extensions .oh-mcp-actions { font-size: 12px; }
+.openhands-extensions .oh-mcp-actions button, .openhands-extensions .oh-mcp-options button, .openhands-extensions .oh-mcp-page-header button, .openhands-extensions .oh-mcp-error > button, .openhands-extensions .oh-mcp-refresh { padding: 8px 12px; border: 1px solid var(--oh-border); border-radius: 8px; background: var(--oh-color-base-secondary); color: var(--oh-foreground); cursor: pointer; line-height: 1.5; font-size: 12px; }
+.openhands-extensions .oh-mcp-actions button:hover:not(:disabled), .openhands-extensions .oh-mcp-options button:hover:not(:disabled) { background: var(--oh-color-tertiary); }
+.openhands-extensions .oh-mcp-actions button:disabled, .openhands-extensions .oh-mcp-options button:disabled, .openhands-extensions .oh-mcp-page-header button:disabled, .openhands-extensions .oh-mcp-refresh:disabled { opacity: .45; cursor: not-allowed; }
+.openhands-extensions .oh-mcp-actions .oh-mcp-primary, .openhands-extensions .oh-mcp-options [aria-pressed=true] { background: var(--oh-accent); color: var(--oh-accent-foreground); border-color: var(--oh-accent); }
+.openhands-extensions .oh-mcp-installed-section { display: flex; flex-direction: column; gap: 16px; }
+.openhands-extensions .oh-mcp-installed-list { display: flex; flex-direction: column; gap: 8px; }
+.openhands-extensions .oh-mcp-marketplace-card { min-height: 156px; padding: 20px; }
+.openhands-extensions .oh-mcp-installed-row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; min-width: 0; cursor: pointer; }
+.openhands-extensions .oh-mcp-installed-title { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; font-size: 13px; }
+.openhands-extensions .oh-mcp-installed-title strong, .openhands-extensions .oh-mcp-agent-summary { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.openhands-extensions .oh-mcp-agent-summary { color: var(--oh-muted); font-size: 12px; }
+.openhands-extensions .oh-mcp-row-states { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; max-width: 46%; font-size: 11px; color: var(--oh-muted); text-align: end; overflow-wrap: anywhere; }
+.openhands-extensions .oh-mcp-icon-button { display: inline-flex; padding: 8px; border-radius: 8px; border: 0; background: transparent; color: var(--oh-muted); cursor: pointer; }
+.openhands-extensions .oh-mcp-count, .openhands-extensions .oh-mcp-badge { display: inline-flex; border-radius: 6px; background: var(--oh-color-tertiary); padding: 3px 7px; font-size: 11px; color: var(--oh-muted); font-weight: 400; line-height: 1.5; }
+.openhands-extensions .oh-mcp-count { margin-inline-start: 6px; }
+.openhands-extensions .oh-mcp-muted { color: var(--oh-muted); font-size: 12px; line-height: 1.6; }
+.openhands-extensions .oh-mcp-warning { color: var(--warning-text, #a96f18); font-size: 12px; line-height: 1.6; }
+.openhands-extensions .oh-mcp-error, .openhands-extensions .oh-mcp-danger { color: var(--danger, #c85050); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+.openhands-extensions .oh-mcp-form { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.openhands-extensions .oh-mcp-form label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; line-height: 1.6; }
+.openhands-extensions .oh-mcp-form small { color: var(--oh-muted); }
+.openhands-extensions .oh-mcp-form .oh-mcp-checkbox, .openhands-extensions .oh-mcp-checkbox { display: inline-flex; flex-direction: row; align-items: center; gap: 7px; font-size: 12px; }
+.openhands-extensions .oh-mcp-form input:not([type=checkbox]), .openhands-extensions .oh-mcp-form textarea, .openhands-extensions .oh-mcp-form select, .openhands-extensions .oh-mcp-section-filter, .openhands-extensions .oh-mcp-actions select, .openhands-extensions .oh-mcp-installed-filters select, .openhands-extensions .oh-mcp-catalog-filter select, .openhands-extensions .oh-mcp-import-entry select { width: 100%; min-width: 0; border: 1px solid var(--oh-border); border-radius: 8px; padding: 9px 10px; background: var(--oh-color-base-secondary); color: var(--oh-foreground); font-size: 12px; }
+.openhands-extensions .oh-mcp-form textarea, .openhands-extensions :is(.oh-mcp-drawer, .oh-mcp-install-dialog, .oh-mcp-import-dialog) pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.6; }
+.openhands-extensions .oh-mcp-form textarea { resize: vertical; }
+.openhands-extensions .oh-mcp-section-filter { width: auto; min-width: 145px; }
+.openhands-extensions .oh-mcp-actions select { width: auto; max-width: 180px; }
+.openhands-extensions .oh-mcp-form a, .openhands-extensions .oh-mcp-context-note a { text-decoration: underline; text-underline-offset: 3px; }
+.openhands-extensions .oh-mcp-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.openhands-extensions .oh-mcp-option-reason { display: block; max-width: 420px; margin-top: 6px; font-size: 11px; line-height: 1.6; color: var(--oh-muted); }
+.openhands-extensions .oh-mcp-drawer { max-width: min(100vw, 680px); }
+.openhands-extensions .oh-mcp-drawer-section { display: flex; flex-direction: column; gap: 14px; padding-block: 14px; border-bottom: 1px solid var(--oh-border); }
+.openhands-extensions .oh-mcp-drawer-section p { margin: 0; font-size: 12px; line-height: 1.6; }
+.openhands-extensions .oh-mcp-drawer-section h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.openhands-extensions :is(.oh-mcp-drawer, .oh-mcp-install-dialog, .oh-mcp-import-dialog) details summary { cursor: pointer; font-size: 12px; color: var(--oh-muted); }
+.openhands-extensions :is(.oh-mcp-drawer, .oh-mcp-install-dialog, .oh-mcp-import-dialog) pre { overflow: auto; max-height: 300px; border-radius: 8px; background: var(--oh-color-tertiary); padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.openhands-extensions .oh-mcp-prewrap { white-space: pre-wrap; }
+.openhands-extensions .oh-mcp-import-list { display: flex; min-height: 0; flex-direction: column; gap: 14px; overflow-y: auto; }
+.openhands-extensions .oh-mcp-import-entry { padding: 14px; border: 1px solid var(--oh-border); border-radius: 10px; display: flex; flex-direction: column; gap: 9px; font-size: 12px; }
+.openhands-extensions .oh-mcp-advanced { display: flex; flex-direction: column; min-height: 560px; height: min(780px, 85vh); border: 1px solid var(--oh-border); border-radius: 12px; overflow: hidden; }
+.openhands-extensions :is(.oh-mcp-install-dialog, .oh-mcp-import-dialog) { display: flex; flex-direction: column; overflow: hidden; }
+.openhands-extensions .oh-mcp-install-dialog > form { min-height: 0; overflow-y: auto; padding-inline: 2px; }
+.openhands-extensions .oh-mcp-import-list { flex: 1; }
+.openhands-extensions .oh-mcp-page :is(button, select, input, [role=button]):focus-visible, .openhands-extensions :is(.oh-mcp-drawer, .oh-mcp-install-dialog, .oh-mcp-import-dialog) :is(button, summary, select, input, textarea, a):focus-visible { outline: 2px solid var(--oh-accent); outline-offset: 3px; }
+.openhands-extensions :is(.oh-mcp-installed-row, .oh-mcp-marketplace-card)[aria-disabled=true] { opacity: .6; cursor: default; }
+.openhands-extensions .oh-mcp-section-heading > div { flex: 1 1 260px; min-width: 0; }
+.openhands-extensions .oh-mcp-section-description { margin: 5px 0 0; font-size: 12px; line-height: 1.6; color: var(--oh-muted); }
+.openhands-extensions .oh-mcp-installed-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.openhands-extensions .oh-mcp-installed-filters select { width: auto; max-width: 200px; }
+.openhands-extensions .oh-mcp-catalog-filter { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--oh-muted); }
+.openhands-extensions .oh-mcp-catalog-filter select { width: auto; min-width: 110px; }
+.openhands-extensions .oh-mcp-context-note { padding: 12px 14px; border: 1px solid var(--oh-border); border-radius: 10px; background: var(--oh-color-base-secondary); }
+.openhands-extensions .oh-mcp-context-note p { margin: 0 0 5px; }
+.openhands-extensions .oh-mcp-form fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
+.openhands-extensions .oh-mcp-drawer > div:first-child { padding: 24px 48px 20px 24px; border-bottom: 1px solid var(--oh-border); }
+.openhands-extensions .oh-mcp-drawer > .oh-mcp-form { padding: 0 24px 24px; }
+.openhands-extensions .oh-mcp-drawer-section { padding-block: 22px; }
+.openhands-extensions .oh-mcp-shared-section { gap: 10px; }
+.openhands-extensions .oh-mcp-agent-section { gap: 16px; }
+.openhands-extensions .oh-mcp-assignment { padding: 12px 14px; border: 1px solid var(--oh-border); border-radius: 9px; background: var(--oh-color-base-secondary); }
+.openhands-extensions .oh-mcp-assignment input { width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--oh-accent); }
+.openhands-extensions .oh-mcp-compatible { color: var(--success-text, #317a51); font-size: 12px; }
+.openhands-extensions .oh-mcp-saved-states { display: flex; flex-wrap: wrap; gap: 7px; }
+.openhands-extensions .oh-mcp-saved-states [data-sync-state=synced], .openhands-extensions [data-probe-state=connected] { color: var(--success-text, #317a51); }
+.openhands-extensions .oh-mcp-saved-states :is([data-sync-state=pending], [data-sync-state=unavailable]) { color: var(--warning-text, #a96f18); }
+.openhands-extensions .oh-mcp-saved-states [data-sync-state=error], .openhands-extensions [data-probe-state=disconnected] { color: var(--danger, #c85050); }
+.openhands-extensions .oh-mcp-config-details, .openhands-extensions .oh-mcp-context-details { padding: 10px 12px; border: 1px solid var(--oh-border); border-radius: 8px; }
+.openhands-extensions .oh-mcp-context-details > .oh-mcp-form { padding-top: 14px; }
+.openhands-extensions .oh-mcp-drawer .oh-mcp-definition-description { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; color: var(--oh-muted); }
+.openhands-extensions .oh-mcp-form .oh-mcp-connection-options { display: flex; flex-direction: column; gap: 10px; }
+.openhands-extensions .oh-mcp-connection-options legend { font-size: 12px; font-weight: 600; margin-bottom: 10px; }
+.openhands-extensions .oh-mcp-options > div { flex: 1 1 200px; }
+.openhands-extensions .oh-mcp-options button { width: 100%; text-align: start; }
+.openhands-extensions .oh-mcp-import-selection, .openhands-extensions .oh-mcp-import-result { padding: 12px 14px; border-radius: 9px; background: var(--oh-color-base-secondary); font-size: 12px; line-height: 1.6; margin: 0; }
+.openhands-extensions .oh-mcp-import-result p { margin-bottom: 0; }
+.openhands-extensions .oh-mcp-import-entry[data-classification=conflict] { border-inline-start: 3px solid var(--warning-text, #a96f18); }
+.openhands-extensions .oh-mcp-import-entry p { margin: 0; }
+.openhands-extensions .oh-mcp-import-entry label { display: flex; flex-direction: column; gap: 6px; }
+.openhands-extensions .oh-mcp-import-entry .oh-mcp-section-heading strong { overflow-wrap: anywhere; min-width: 0; }
+.openhands-extensions .oh-mcp-import-dialog > .oh-mcp-actions { padding-top: 12px; border-top: 1px solid var(--oh-border); }
+@media (max-width: 620px) {
+  .openhands-extensions .oh-mcp-page { padding: 0 0 12px; gap: 22px; }
+  .openhands-extensions .oh-mcp-installed-row { gap: 10px; padding: 12px; flex-wrap: wrap; }
+  .openhands-extensions .oh-mcp-row-states { flex-basis: 100%; max-width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; padding-inline-start: 46px; text-align: start; gap: 6px 10px; }
+  .openhands-extensions .oh-mcp-icon-button { position: absolute; inset-inline-end: 16px; }
+  .openhands-extensions .oh-mcp-installed-row { position: relative; padding-inline-end: 42px; }
+  .openhands-extensions [data-testid=mcp-toolbar] { flex-wrap: wrap; }
+  .openhands-extensions .oh-mcp-section-filter { flex: 1; }
+  .openhands-extensions .oh-mcp-drawer > div:first-child { padding-inline-start: 18px; }
+  .openhands-extensions .oh-mcp-drawer > .oh-mcp-form { padding-inline: 18px; }
+  .openhands-extensions .oh-mcp-catalog-filter { width: 100%; justify-content: space-between; }
+  .openhands-extensions .oh-mcp-advanced { height: 82vh; }
+}

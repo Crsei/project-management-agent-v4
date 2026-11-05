@@ -1,4 +1,4 @@
-import { validateNativeTemplateArguments } from '../../../../../../packages/contracts/src/automation-native-template-arguments.ts';
+import { validateNativeTemplateArguments } from '../../../../../../packages/automation-resources/native-template-arguments.ts'
 import { pmAutomationTemplateIds } from '../../../../../../packages/contracts/src/automation-pm.ts';
 import { pmAutomationHandlers } from './pm-runtime.ts';
 import { contentHandlers } from './content.ts';

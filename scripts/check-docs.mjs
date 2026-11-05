@@ -6,13 +6,26 @@ import { toString } from 'mdast-util-to-string';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
 
+import { loadInventory, sha256 } from '../vendor/cc-switch/scripts/provenance.mjs';
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const excluded = new Set(['node_modules', '.git', '.ref', '.next', 'dist', '.local', '.runtime', 'coverage']);
+const excluded = new Set(['node_modules', '.git', '.ref', '.next', 'dist', '.local', '.runtime', '.omp', 'target', 'coverage']);
+const historicalRootDocuments = new Set([
+  'EXECUTION-PLAN.zh.md',
+  'IMPLEMENTATION-CONTRACT.md',
+  'SCENARIO-MATRIX.zh.md',
+  'V3-AGENT-CHAT-TASKS.zh.md',
+]);
+const repositoryPath = file => path.relative(root, file).split(path.sep).join('/');
+const internalDocument = file => {
+  const relative = repositoryPath(file);
+  return historicalRootDocuments.has(relative) || relative === 'docs/implementation' || relative.startsWith('docs/implementation/');
+};
 async function markdownFiles(directory) {
   const result = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (excluded.has(entry.name)) continue;
     const target = path.join(directory, entry.name);
+    if (excluded.has(entry.name) || internalDocument(target)) continue;
     if (entry.isDirectory()) result.push(...await markdownFiles(target));
     else if (entry.isFile() && entry.name.endsWith('.md')) result.push(target);
   }
@@ -41,69 +54,103 @@ async function documentAnchors(file) {
   return anchors;
 }
 
+function documentLinks(text) {
+  const links = [];
+  const pending = [markdownParser.parse(text)];
+  while (pending.length) {
+    const node = pending.pop();
+    if (node.type === 'link' || node.type === 'image' || node.type === 'definition') links.push(node.url);
+    if (node.children) pending.push(...node.children);
+  }
+  return links;
+}
+
 const errors = [];
-let optionalReferences = 0;
+let upstreamSourceReferences = 0;
+let upstreamAnchorsUnchecked = 0;
+const ccSwitch = await loadInventory(root);
+const sourceSnapshots = new Map(ccSwitch.manifest.files.filter(entry => entry.path.endsWith('.md')).map(entry => [`vendor/cc-switch/${entry.path}`, entry]));
+const upstreamTree = JSON.parse(await readFile(path.join(root, 'vendor/cc-switch/upstream-tree.json'), 'utf8'));
+if (upstreamTree.upstreamCommit !== ccSwitch.manifest.commit) throw new Error('Wrong pinned upstream document tree.');
+const upstreamPaths = new Set(upstreamTree.paths);
 const files = await markdownFiles(root);
 for (const file of files) {
   const text = await readFile(file, 'utf8');
-  const label = path.relative(root, file);
+  const label = repositoryPath(file);
+  const snapshot = sourceSnapshots.get(label);
+  const immutableSnapshot = snapshot && sha256(Buffer.from(text)) === snapshot.sha256;
   if ((text.match(/^```/gm)?.length ?? 0) % 2) errors.push(`${label}: unbalanced fence`);
-  for (const match of text.matchAll(/\]\(([^)]+)\)/g)) {
-    const href = match[1];
-    if (/^[a-z][a-z\d+.-]*:/i.test(href)) continue;
-    const [filePart, anchor] = href.split('#');
-    const target = filePart ? path.resolve(path.dirname(file), filePart) : file;
-    if (path.relative(root, target).startsWith('..')) {
-      optionalReferences++;
+  for (const href of documentLinks(text)) {
+    if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith('//')) continue;
+    const hash = href.indexOf('#');
+    const filePart = (hash < 0 ? href : href.slice(0, hash)).split('?')[0];
+    const anchor = hash < 0 ? '' : href.slice(hash + 1);
+    let target;
+    try {
+      target = filePart ? path.resolve(path.dirname(file), decodeURIComponent(filePart)) : file;
+    } catch {
+      errors.push(`${label}: invalid local URL ${href}`);
+      continue;
+    }
+    const relative = path.relative(root, target);
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      errors.push(`${label}: link outside portable repository ${href}`);
+      continue;
+    }
+    // Reject even when a local ignored copy exists: release archives do not contain it.
+    if (internalDocument(target)) {
+      errors.push(`${label}: public document depends on internal history ${href}`);
       continue;
     }
     try {
       await stat(target);
-      if (anchor) {
-        if (!(await documentAnchors(target)).has(decodeURIComponent(anchor))) {
-          errors.push(`${label}: unresolved anchor ${href}`);
-        }
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+      const repositoryTarget = repositoryPath(target);
+      const upstreamPath = repositoryTarget.startsWith('vendor/cc-switch/') ? repositoryTarget.slice('vendor/cc-switch/'.length) : null;
+      if (immutableSnapshot && upstreamPath && (upstreamPaths.has(upstreamPath) || upstreamTree.paths.some(entry => entry.startsWith(upstreamPath.replace(/\/$/, '') + '/')))) {
+        upstreamSourceReferences++;
+        if (anchor) upstreamAnchorsUnchecked++;
+      } else errors.push(`${label}: missing ${href}${immutableSnapshot ? ' (also not a tracked path in the pinned upstream source tree)' : ''}`);
+      continue;
+    }
+    if (anchor) {
+      try {
+        if (!(await documentAnchors(target)).has(decodeURIComponent(anchor))) errors.push(`${label}: unresolved anchor ${href}`);
+      } catch (error) {
+        errors.push(`${label}: unreadable anchor target ${href} (${error.code ?? error.name})`);
       }
-    } catch {
-      errors.push(`${label}: missing ${href}`);
     }
   }
 }
 
 const design = path.join(root, 'docs/domain-design');
-const plan = await readFile(path.join(design, 'README.md'), 'utf8');
-const expected = [
-  ...Array.from({ length: 13 }, (_, i) => `B${String(i + 1).padStart(2, '0')}`),
-  ...Array.from({ length: 7 }, (_, i) => `U${String(i + 1).padStart(2, '0')}`),
-  ...Array.from({ length: 7 }, (_, i) => `X${String(i + 1).padStart(2, '0')}`),
-];
-const steps = [...plan.matchAll(/^\| ([BUX]\d{2}) [^|]+\|([^|]+)\|/gm)];
-if (JSON.stringify(steps.map((s) => s[1])) !== JSON.stringify(expected)) {
-  errors.push('Plan step IDs/order do not match the 27-step baseline');
-}
-for (const step of steps) {
-  for (const dependency of step[2].matchAll(/\b[BUX]\d{2}\b/g)) {
-    const index = expected.indexOf(dependency[0]);
-    if (index < 0 || index >= expected.indexOf(step[1])) {
-      errors.push(`${step[1]}: invalid dependency ${dependency[0]}`);
-    }
-  }
-}
 const invariantText = await readFile(path.join(design, 'invariants.md'), 'utf8');
 const scenarioText = await readFile(path.join(design, 'scenarios.md'), 'utf8');
-const definitions = new Set([
-  ...invariantText.matchAll(/^\| (INV-\d+) \|/gm),
-  ...scenarioText.matchAll(/^\| (SC-\d+) \|/gm),
-].map((match) => match[1]));
-for (const file of files.filter((f) => f.startsWith(`${design}${path.sep}`))) {
-  for (const reference of (await readFile(file, 'utf8')).matchAll(/\b(?:INV|SC)-\d+\b/g)) {
-    if (!definitions.has(reference[0])) errors.push(`${file}: unknown ${reference[0]}`);
+const definitionPattern = /^\| ((?:[A-Z][A-Z\d]*-)*(?:INV|SC)-\d+) \|/gm;
+const definitions = new Set();
+for (const text of [invariantText, scenarioText]) {
+  for (const match of text.matchAll(definitionPattern)) {
+    if (definitions.has(match[1])) errors.push(`Duplicate domain definition ${match[1]}`);
+    definitions.add(match[1]);
+  }
+}
+for (const prefix of ['INV', 'SC']) {
+  for (let number = 1; number <= 20; number++) {
+    const id = `${prefix}-${String(number).padStart(2, '0')}`;
+    if (!definitions.has(id)) errors.push(`Missing domain definition ${id}`);
+  }
+}
+for (const file of files.filter(file => file.startsWith(`${design}${path.sep}`))) {
+  for (const reference of (await readFile(file, 'utf8')).matchAll(/(?<![\w-])(?:[A-Z][A-Z\d]*-)*(?:INV|SC)-\d+\b/g)) {
+    if (!definitions.has(reference[0])) errors.push(`${repositoryPath(file)}: unknown ${reference[0]}`);
   }
 }
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exitCode = 1;
 } else {
-  console.log(`Checked ${files.length} Markdown files, 27 plan steps and domain references.`);
-  console.log(`${optionalReferences} optional links outside this repository excluded from portable checks.`);
+  console.log(`Checked ${files.length} public Markdown files, local links/anchors and domain INV/SC definitions/references.`);
+  console.log('Internal plans and historical evidence are not required and cannot be linked from public documents.');
+  console.log(`${upstreamSourceReferences} links in hash-verified immutable cc-switch source snapshots point to tracked upstream files outside the selected local snapshot; ${upstreamAnchorsUnchecked} upstream-only anchors remain unchecked. These are source references, not local product resource closure.`);
 }

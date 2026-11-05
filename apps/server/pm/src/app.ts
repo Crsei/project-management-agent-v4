@@ -40,6 +40,7 @@ import { projectAuditOptionsSchema, readProjectAudit, type ProjectAuditWrite } f
 import { readMemberDirectory } from '../../../../packages/application/src/member-directory.ts';
 import type { InvitationMailConfig } from '../../../../packages/infrastructure/src/invitation-mail.ts';
 import { registerInvitationRoutes } from './invitation-routes.ts';
+import { registerInstanceSetupRoutes } from './instance-setup-routes.ts';
 import { readTeamDirectory } from '../../../../packages/application/src/team-directory.ts';
 import { readTeamWorkload } from '../../../../packages/application/src/team-workload.ts';
 import { registerWorkspaceIdentityRoutes } from './workspace-identity-routes.ts';
@@ -70,6 +71,7 @@ import { createPmAutomationMutationPort } from './automation-pm-mutations.ts';
 import { createAutomationStudioService } from '../../../../packages/application/src/automation-studio.ts';
 import { authorizeAutomationStudioService } from '../../../../packages/application/src/automation-studio-auth.ts';
 import { createConfiguredAutomationExecutionPort, verifyAutomationServiceBearer } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
+import { createAutomationDefinitionClient } from '../../../../packages/infrastructure/src/automation-integrations-definitions.ts';
 import type { StudioExecutionPort } from '../../../../packages/contracts/src/automation-studio.ts';
 import { registerAgentFileAreaRoutes } from './agent-file-area-routes.ts';
 import { registerDocumentSourceRoutes } from './document-source-routes.ts';
@@ -143,7 +145,8 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     return coreWorkspaces.rootFor(workspaceId);
   });
   const automationRuntime = options.automationRuntime ?? createConfiguredAutomationExecutionPort();
-  const automationStudio = createAutomationStudioService({ database, core: notificationCore, runtime: automationRuntime });
+  const automationDefinitions = createAutomationDefinitionClient();
+  const automationStudio = createAutomationStudioService({ database, core: notificationCore, runtime: automationRuntime, definitionResolver: automationDefinitions });
   const controller = new AbortController();
   const abort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', abort, { once: true });
@@ -374,6 +377,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   });
   app.get('/api/v1/capabilities', async () => ({ stage: pool ? 'backend' : 'bootstrap', business: { enabled: Boolean(pool) }, database: { enabled: Boolean(pool) }, storage: { enabled: Boolean(pool && options.blobStorageLocator) }, markdownCore: { enabled: Boolean(pool) }, localProjects: { enabled: Boolean(pool && localProjects.enabled) }, worker: { enabled: Boolean(pool) }, realtime: { enabled: Boolean(pool) }, execution: { enabled: false }, accountRecovery: { request: { enabled: Boolean(pool && options.accountRecoveryMail) }, verification: { enabled: Boolean(pool && options.accountRecoveryMail) } } }));
   app.get('/openapi.json', async () => buildOpenApi(registry));
+  registerInstanceSetupRoutes(app, { database, cookieOptions });
   app.post('/api/v1/auth/login', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const body = z.strictObject({ email: z.string().max(254), password: z.string().max(256) }).parse(request.body);
@@ -397,7 +401,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   registerAutomationRoutes(app, { database, actor, core: notificationCore });
   registerAutomationStudioRoutes(app, { database, actor, core: notificationCore, runtime: automationRuntime, studio: automationStudio });
   registerAutomationGitSyncRoutes(app, { database, actor, core: notificationCore, studio: automationStudio });
-  registerAutomationEventsRoutes(app, { database, actor, core: notificationCore, ...(options.publicOrigin ? { publicOrigin: options.publicOrigin } : {}) });
+  registerAutomationEventsRoutes(app, { database, actor, core: notificationCore, definitionResolver: automationDefinitions, ...(options.publicOrigin ? { publicOrigin: options.publicOrigin } : {}) });
   const chatTools = coreWorkspaces ? createAgentChatTools({
     database, coreWorkspaces, executeCommand: executeNativeCommand, readCommandReceipt: readNativeCommandReceipt,
     readComments: (principal, workspaceId, taskId, input) => applicationRead(principal, workspaceId, ctx => readTaskComments(ctx, taskId, input)),

@@ -5,7 +5,7 @@ import { ProviderInstanceId, ServerSettingsError, ThreadId, type ServerSettings 
 import * as Stream from "effect/Stream";
 import path from "node:path";
 import { mkdir } from "node:fs/promises";
-import { acquireProviderSettingsSnapshot, providerDataDirectory, subscribeProviderSettingsChanges } from "../instances.ts";
+import { acquireProviderSettingsSnapshot, listStoredInstances, providerDataDirectory, subscribeProviderSettingsChanges } from "../instances.ts";
 import { projectProviderSettings, providerBoundaryError } from "./config-mapping.ts";
 import { ProviderHost } from "@t3tools/provider-core/server/ProviderHost";
 import type { ProviderRuntimeHostService } from "@t3tools/provider-core/server/ProviderRuntimeHost";
@@ -19,6 +19,7 @@ import { resolveExtractedTextPath } from "./upstream-services/document-text.ts";
 import { ServerSettingsService } from "./upstream-services/server-settings.ts";
 import { ServerSecretStore } from "./upstream-services/server-secret-store.ts";
 import { makePmCodexUsageHistoryLayer } from "./upstream-services/usage-history.ts";
+import { getUsageSettings } from "../../usage/settings.ts";
 
 export function makePmProviderHostServices(context: ProviderDriverContext, runtimeHost: ProviderRuntimeHostService): Omit<ProviderHost["Service"], "paths"> {
   const settings = makePmServerSettings();
@@ -81,19 +82,22 @@ export function makePmServerConfigLayer(context: ProviderDriverContext) {
 export function makePmServerSettings(): ServerSettingsService["Service"] {
   const settingsPath = providerDataDirectory() + "/provider-instances.json";
   const failure = (cause: unknown) => new ServerSettingsError({ settingsPath, operation: "read-file", cause });
-  const getSettings = Effect.try({ try: projectProviderSettings, catch: failure });
+  const readSettings = () => projectProviderSettings(
+    listStoredInstances(), getProviderSettings().healthRefreshIntervalSeconds, getUsageSettings().cursorKeychainUsageEnabled,
+  );
+  const getSettings = Effect.try({ try: readSettings, catch: failure });
   const subscribeChanges = Effect.gen(function* () {
     const queue = yield* Effect.acquireRelease(Queue.unbounded<ServerSettings>(), Queue.shutdown);
     yield* Effect.acquireRelease(Effect.sync(() => subscribeProviderSettingsChanges(() => {
       // A failed read never publishes an empty or partially decoded instance map.
-      try { Queue.offerUnsafe(queue, projectProviderSettings()); } catch { /* retain the last valid snapshot */ }
+      try { Queue.offerUnsafe(queue, readSettings()); } catch { /* retain the last valid snapshot */ }
     })), unsubscribe => Effect.sync(unsubscribe));
     return Stream.fromQueue(queue);
   });
   return {
     getSettings,
     withSettingsSnapshot: use => Effect.acquireUseRelease(
-      Effect.try({ try: () => acquireProviderSettingsSnapshot(projectProviderSettings), catch: failure }),
+      Effect.try({ try: () => acquireProviderSettingsSnapshot(readSettings), catch: failure }),
       snapshot => use(snapshot.value),
       snapshot => Effect.sync(snapshot.release),
     ),

@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   closeSync, constants, copyFileSync, existsSync, lstatSync, mkdirSync,
-  mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, renameSync,
-  rmdirSync, rmSync, unlinkSync, writeFileSync,
+  mkdtempSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync,
+  rmdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -17,6 +17,7 @@ type SecretPolicy = "include" | "exclude";
 type JsonObject = Record<string, unknown>;
 type Coverage = { records: number; events: number; threads: number; histories: number; messages: number; settings: number; digest: string };
 type BundleFile = { path: string; bytes: number; sha256: string };
+type BundleLink = { path: string; target: string };
 export type AgentBackupManifest = {
   format: "agent-offline-backup";
   version: 1;
@@ -26,6 +27,7 @@ export type AgentBackupManifest = {
   coverage: Coverage;
   providerInstances: number;
   files: BundleFile[];
+  links?: BundleLink[];
   exclusions: string[];
 };
 const DATABASE = "workspace.sqlite";
@@ -33,6 +35,8 @@ const CONFIG = "provider-instances.json";
 const CREDENTIALS = "providers.json";
 const USAGE_SOURCES = "usage-sources.json";
 const CURSOR_USAGE_CACHE = "cursor-usage-cache.json";
+const EXTENSIONS = "cc-switch";
+const EXTENSION_REGISTRY = "cc-switch/contexts.json";
 // Rebuildable usage-only projections are deliberately not portable history.
 const DERIVED_USAGE_CACHES = ["usage-transcript-cache-v1.json", "native-database-usage-cache-v1.json"];
 const derivedUsageCache = (name: string) => DERIVED_USAGE_CACHES.includes(name)
@@ -62,7 +66,7 @@ function readJson(filename: string): JsonObject {
 }
 function safeRelative(value: unknown): string {
   if (typeof value !== "string" || !safeRelativePath(value)
-    || !(value === USAGE_SOURCES || value === CURSOR_USAGE_CACHE || /^(?:workspace\.sqlite|provider-instances\.json|providers\.json|(?:provider-homes|provider-private|provider-attachments)\/.+)$/.test(value)))
+    || !(value === USAGE_SOURCES || value === CURSOR_USAGE_CACHE || /^(?:workspace\.sqlite|provider-instances\.json|providers\.json|(?:provider-homes|provider-private|provider-attachments|cc-switch)\/.+)$/.test(value)))
     throw new Error("Unsafe backup member path.");
   return value;
 }
@@ -133,7 +137,7 @@ function copyRestricted(source: string, target: string): void {
   copyFileSync(source, target, constants.COPYFILE_EXCL);
   makePrivatePath(target);
 }
-function walk(root: string, prefix = ""): string[] {
+function walk(root: string, prefix = "", links: BundleLink[] = []): string[] {
   const result: string[] = [];
   const names = readdirSync(path.join(root, prefix)).sort();
   if (process.platform === "win32") cacheWindowsPathAttributes(names.map(name => path.join(root, prefix, name)));
@@ -142,9 +146,14 @@ function walk(root: string, prefix = ""): string[] {
     const relative = prefix ? `${prefix}/${name}` : name;
     const filename = path.join(root, relative);
     const info = lstatSync(filename);
-    if (info.isSymbolicLink()) throw new Error("Backup refuses symbolic links.");
+    if (info.isSymbolicLink()) {
+      const link = links.find(entry => entry.path === relative);
+      if (!link || !samePath(path.resolve(path.dirname(filename), readlinkSync(filename)), path.join(root, link.target)))
+        throw new Error("Backup refuses symbolic links.");
+      continue;
+    }
     if (process.platform === "win32") assertNoWindowsReparsePath(filename, lstatSync(filename, { bigint: true }));
-    if (info.isDirectory()) result.push(...walk(root, relative));
+    if (info.isDirectory()) result.push(...walk(root, relative, links));
     else { regular(filename); result.push(relative); }
   }
   return result;
@@ -285,6 +294,114 @@ function relocateConfiguration(bytes: Uint8Array, target: string): string {
   }
   return json(config);
 }
+
+function mapExtensionRegistry(bytes: Uint8Array, root: string, restoring: boolean): string {
+  let parsed: unknown;
+  try { parsed = JSON.parse(Buffer.from(bytes).toString("utf8")); }
+  catch { throw new Error("Invalid private extension registry; content was not logged."); }
+  if (!Array.isArray(parsed)) throw new Error("Invalid extension context registry.");
+  const ids = new Set<string>();
+  const map = (value: unknown): string => {
+    if (typeof value !== "string" || value.includes("\0")) throw new Error("Invalid extension binding path.");
+    if (restoring && value.startsWith(HOME_PREFIX)) {
+      const member = safeRelative(value.slice(HOME_PREFIX.length));
+      if (!member.startsWith("provider-homes/") && !member.startsWith("cc-switch/")) throw new Error("Invalid extension owned path mapping.");
+      return path.join(root, member);
+    }
+    if (!path.isAbsolute(value)) throw new Error("Extension binding paths must be absolute.");
+    const member = path.relative(root, value).split(path.sep).join("/");
+    if (!restoring && (member.startsWith("provider-homes/") || member.startsWith("cc-switch/"))
+      && safeRelativePath(member)) return HOME_PREFIX + safeRelative(member);
+    return value;
+  };
+  const contexts = parsed.map(item => {
+    const context = { ...object(item) };
+    if (typeof context.id !== "string" || !/^(?:[0-9a-f-]{36}|pm-[0-9a-f]{32})$/.test(context.id)
+      || ids.has(context.id) || !["native", "project"].includes(String(context.kind))) throw new Error("Invalid extension context metadata.");
+    ids.add(context.id);
+    if (context.kind === "native") {
+      for (const field of ["binding", "providerBinding"]) {
+        if (context[field] === undefined && field !== "binding") continue;
+        const binding = { ...object(context[field]) };
+        for (const key of ["homeDir", "unifiedSkillsRoot"]) binding[key] = map(binding[key]);
+        if (binding.claudeMcpFile !== undefined) binding.claudeMcpFile = map(binding.claudeMcpFile);
+        binding.appDirs = Object.fromEntries(Object.entries(object(binding.appDirs)).map(([app, value]) => [app, map(value)]));
+        if (!Array.isArray(binding.physicalRoots)) throw new Error("Invalid extension ownership roots.");
+        binding.physicalRoots = binding.physicalRoots.map(map);
+        // Fingerprints attest live Provider authority, not portable path strings.
+        // Restoration must require explicit rebind before any native write.
+        if (restoring) binding.bindingFingerprint = "";
+        context[field] = binding;
+      }
+      if (context.externalTargets !== undefined) {
+        if (!Array.isArray(context.externalTargets)) throw new Error("Invalid external target snapshots.");
+        context.externalTargets = context.externalTargets.map(item => {
+          const target = { ...object(item) };
+          for (const key of ["homeDir", "appDir", "unifiedSkillsRoot", "claudeMcpFile"]) if (target[key] !== undefined) target[key] = map(target[key]);
+          if (target.physicalRoots !== undefined) {
+            if (!Array.isArray(target.physicalRoots)) throw new Error("Invalid external ownership roots.");
+            target.physicalRoots = target.physicalRoots.map(map);
+          }
+          return target;
+        });
+      }
+    } else if (context.binding !== undefined) throw new Error("Project extension contexts cannot own native targets.");
+    return context;
+  });
+  return json(contexts);
+}
+function ownedSkillLink(source: string, member: string): BundleLink {
+  const filename = path.join(source, member);
+  const target = path.resolve(path.dirname(filename), readlinkSync(filename));
+  const relativeTarget = path.relative(source, target).split(path.sep).join("/");
+  if (!(member.startsWith("cc-switch/") || member.startsWith("provider-homes/"))
+    || !(relativeTarget.startsWith("cc-switch/") || relativeTarget.startsWith("provider-homes/")) || !safeRelativePath(relativeTarget)
+    || !(member.startsWith("cc-switch/") || member.split("/").includes("skills"))
+    || !existsSync(target) || !pathContains(source, realpathSync(target)))
+    throw new Error("Backup refuses symbolic links outside owned extension Skills.");
+  return { path: safeRelative(member), target: safeRelative(relativeTarget) };
+}
+async function copyOwnedTree(source: string, staging: string, prefix: string, links: BundleLink[]): Promise<void> {
+  const root = path.join(source, prefix);
+  directory(root);
+  async function visit(member: string): Promise<void> {
+    const filename = path.join(source, member), info = lstatSync(filename);
+    if (info.isSymbolicLink()) { links.push(ownedSkillLink(source, member)); return; }
+    if (process.platform === "win32") assertNoWindowsReparsePath(filename, lstatSync(filename, { bigint: true }));
+    if (info.isDirectory()) {
+      mkdirSync(path.join(staging, member), { recursive: true, mode: 0o700 });
+      for (const name of readdirSync(filename).sort()) {
+        if (!safePathComponent(name)) throw new Error("Unsupported backup file name.");
+        await visit(`${member}/${name}`);
+      }
+    } else if (/^cc-switch\/contexts\/[^/]+\/cc-switch\.db-(?:wal|shm)$/.test(member)) {
+      // The matching SQLite backup below incorporates WAL state.
+    } else if (/^cc-switch\/contexts\/[^/]+\/cc-switch\.db$/.test(member)) {
+      regular(filename);
+      const destination = path.join(staging, member);
+      mkdirSync(path.dirname(destination), { recursive: true, mode: 0o700 });
+      const db = new DatabaseSync(filename, { readOnly: true });
+      try { await backup(db, destination); } finally { db.close(); }
+      makePrivatePath(destination);
+    } else if (member === EXTENSION_REGISTRY) {
+      restrictedWrite(path.join(staging, member), mapExtensionRegistry(readFileSync(filename), source, false));
+    } else copyRestricted(filename, path.join(staging, member));
+  }
+  await visit(prefix);
+}
+function restoredBytes(bundle: string, member: string, target: string): Uint8Array {
+  const bytes = readFileSync(path.join(bundle, member));
+  return member === CONFIG ? Buffer.from(relocateConfiguration(bytes, target))
+    : member === EXTENSION_REGISTRY ? Buffer.from(mapExtensionRegistry(bytes, target, true)) : bytes;
+}
+function restoreOwnedLinks(root: string, links: BundleLink[]): void {
+  for (const link of links) {
+    const filename = path.join(root, safeRelative(link.path));
+    const target = path.join(root, safeRelative(link.target));
+    mkdirSync(path.dirname(filename), { recursive: true, mode: 0o700 });
+    symlinkSync(path.relative(path.dirname(filename), target), filename, lstatSync(target).isDirectory() ? "dir" : "file");
+  }
+}
 function excludeNativeSessions(db: DatabaseSync): void {
   const update = db.prepare("UPDATE records SET value = ? WHERE namespace = ? AND key = ?");
   for (const row of db.prepare("SELECT namespace, key, value FROM records WHERE namespace IN ('chat:threads', 'chat:generations', 'durable:runs')").all()) {
@@ -337,7 +454,7 @@ export async function createAgentBackup(options: { source: string; bundle: strin
   regular(path.join(source, DATABASE));
   // Check root classification before reading any credentials/home contents.
   for (const name of readdirSync(source)) {
-    if (!derivedUsageCache(name) && ![DATABASE, `${DATABASE}-wal`, `${DATABASE}-shm`, CONFIG, CREDENTIALS, USAGE_SOURCES, CURSOR_USAGE_CACHE, "provider-homes", "provider-private", "provider-attachments", "provider-cache", "workspace.lock", "agent-restore.json"].includes(name))
+    if (!derivedUsageCache(name) && ![DATABASE, `${DATABASE}-wal`, `${DATABASE}-shm`, CONFIG, CREDENTIALS, USAGE_SOURCES, CURSOR_USAGE_CACHE, EXTENSIONS, "provider-homes", "provider-private", "provider-attachments", "provider-cache", "workspace.lock", "agent-restore.json"].includes(name))
       throw new Error("Unclassified Agent data file found; backup refuses to silently omit persistent data.");
   }
   const release = acquireOfflineLock(source);
@@ -374,12 +491,12 @@ export async function createAgentBackup(options: { source: string; bundle: strin
     }
     // Attachments are durable private conversation data, not credentials. Native
     // probe caches are rebuildable; the private store (including identity) is not.
+    const links: BundleLink[] = [];
     for (const name of options.secrets === "include"
-      ? ["provider-homes", "provider-private", "provider-attachments"] : ["provider-attachments"]) {
+      ? ["provider-homes", "provider-private", "provider-attachments", EXTENSIONS] : ["provider-attachments"]) {
       const root = path.join(source, name);
       if (!existsSync(root)) continue;
-      directory(root);
-      for (const relative of walk(root)) copyRestricted(path.join(root, relative), path.join(staging!, name, relative));
+      await copyOwnedTree(source, staging!, name, links);
     }
     const files = walk(staging!).map((relative) => {
       safeRelative(relative);
@@ -388,13 +505,14 @@ export async function createAgentBackup(options: { source: string; bundle: strin
     });
     const manifest: AgentBackupManifest = {
       format: "agent-offline-backup", version: 1, createdAt: new Date().toISOString(), secrets: options.secrets, privateData: true,
-      coverage: inspectDatabase(path.join(staging!, DATABASE)), providerInstances, files,
+      coverage: inspectDatabase(path.join(staging!, DATABASE)), providerInstances, files, ...(links.length ? { links } : {}),
       exclusions: ["PM database, Markdown, PM attachments and user project/source files (use the existing PM backup separately)",
         ".env.agent and all process/global environment, browser cookies/preferences, external/global provider homes",
         "workspace.lock and worker_owner execution ownership; provider probe observations",
         "rebuildable provider-cache probes, transcript/database usage scan caches and interrupted atomic-write temporary files",
         "MCP OAuth codes/tokens/consent challenges and live App context; copied client grants retain audit metadata but are revoked in both secret modes and require fresh consent",
-        ...(options.secrets === "exclude" ? ["providers.json, provider-private credential/identity store, all provider home contents, instance env and native config secrets/endpoints/executable/argument overrides; native resume/fork references are cleared; providers remain disabled until explicitly reconfigured and enabled; hub management keys are removed and hubs disabled"] : [])],
+        "Extension project decryption key PM_AUTOMATION_INTEGRATIONS_KEY remains deployment-owned and must match the separate PM restore; native context bindings require explicit rebind after restore; external native roots/Unified Skills outside Agent data are references only",
+        ...(options.secrets === "exclude" ? ["providers.json, provider-private credential/identity store, all provider home contents, instance env and native config secrets/endpoints/executable/argument overrides; all cc-switch encrypted definitions, native encryption key, registry, Skills and backups are omitted together; native resume/fork references are cleared; providers remain disabled until explicitly reconfigured and enabled; hub management keys are removed and hubs disabled"] : [])],
     };
     restrictedWrite(path.join(staging!, "manifest.json"), json(manifest));
     privateBundle(staging!);
@@ -426,9 +544,22 @@ function loadBundle(value: string): { root: string; manifest: AgentBackupManifes
     paths.add(relative);
     const bytes = readFileSync(path.join(root, relative));
     if (bytes.length !== member.bytes || sha256(bytes) !== member.sha256) throw new Error("Backup file checksum verification failed.");
-    if (manifest.secrets === "exclude" && (relative === CREDENTIALS || relative === CURSOR_USAGE_CACHE || relative.startsWith("provider-homes/") || relative.startsWith("provider-private/")))
+    if (manifest.secrets === "exclude" && (relative === CREDENTIALS || relative === CURSOR_USAGE_CACHE || relative.startsWith("provider-homes/") || relative.startsWith("provider-private/") || relative.startsWith("cc-switch/")))
       throw new Error("Credential-excluded bundle contains credential files.");
   }
+  if (manifest.links !== undefined && !Array.isArray(manifest.links)) throw new Error("Invalid owned Skills link inventory.");
+  const linkPaths = new Set<string>();
+  for (const raw of manifest.links ?? []) {
+    const link = object(raw), member = safeRelative(link.path), target = safeRelative(link.target);
+    const ownedMember = member.startsWith("cc-switch/") || member.startsWith("provider-homes/") && member.split("/").includes("skills");
+    if (manifest.secrets !== "include" || !ownedMember || !(target.startsWith("cc-switch/") || target.startsWith("provider-homes/"))
+      || member === target || paths.has(member) || linkPaths.has(member)
+      || [...linkPaths].some(other => member.startsWith(other + "/") || other.startsWith(member + "/"))
+      || [...paths].some(file => file.startsWith(member + "/"))
+      || ![...paths].some(file => file === target || file.startsWith(target + "/"))) throw new Error("Unsafe owned Skills link inventory.");
+    linkPaths.add(member);
+  }
+  if (paths.has(EXTENSION_REGISTRY)) mapExtensionRegistry(readFileSync(path.join(root, EXTENSION_REGISTRY)), path.join(os.tmpdir(), "agent-restore-verification-only"), true);
   if (!paths.has(DATABASE)) throw new Error("Backup is missing its database.");
   const actual = walk(root).filter((relative) => relative !== "manifest.json");
   if (actual.length !== paths.size || actual.some((relative) => !paths.has(relative))) throw new Error("Backup contains unlisted files.");
@@ -462,7 +593,7 @@ function loadBundle(value: string): { root: string; manifest: AgentBackupManifes
 function compareTarget(bundle: string, target: string, manifest: AgentBackupManifest): Coverage {
   const expected = new Set(manifest.files.map((entry) => entry.path));
   assertPrivatePath(target);
-  for (const relative of walk(target)) {
+  for (const relative of walk(target, "", manifest.links ?? [])) {
     if (relative === "workspace.lock" || relative === "agent-restore.json") continue;
     if (!expected.has(relative)) throw new Error("Restore target contains unverified files.");
   }
@@ -471,9 +602,13 @@ function compareTarget(bundle: string, target: string, manifest: AgentBackupMani
     regular(filename);
     assertPrivatePath(filename);
     const bytes = readFileSync(filename);
-    const expectedHash = entry.path === CONFIG
-      ? sha256(relocateConfiguration(readFileSync(path.join(bundle, CONFIG)), target)) : entry.sha256;
+    const expectedHash = sha256(restoredBytes(bundle, entry.path, target));
     if (sha256(bytes) !== expectedHash) throw new Error("Restored file verification failed.");
+  }
+  for (const link of manifest.links ?? []) {
+    const filename = path.join(target, link.path);
+    if (!lstatSync(filename).isSymbolicLink() || !samePath(path.resolve(path.dirname(filename), readlinkSync(filename)), path.join(target, link.target)))
+      throw new Error("Restored owned Skills link verification failed.");
   }
   const result = inspectDatabase(path.join(target, DATABASE));
   if (JSON.stringify(result) !== JSON.stringify(manifest.coverage)) throw new Error("Restored histories/settings verification failed.");
@@ -498,8 +633,10 @@ export function restoreAgentBackup(options: { bundle: string; target: string; st
     makePrivatePath(staging);
     for (const entry of manifest.files) {
       const relative = safeRelative(entry.path);
-      if (relative === CONFIG) restrictedWrite(path.join(staging, CONFIG), relocateConfiguration(readFileSync(path.join(root, CONFIG)), target));
-      else copyRestricted(path.join(root, relative), path.join(staging, relative));
+      if (relative === CONFIG || relative === EXTENSION_REGISTRY) {
+        mkdirSync(path.dirname(path.join(staging, relative)), { recursive: true, mode: 0o700 });
+        restrictedWrite(path.join(staging, relative), Buffer.from(restoredBytes(root, relative, target)).toString("utf8"));
+      } else copyRestricted(path.join(root, relative), path.join(staging, relative));
     }
     // Create only application-owned directories. External native homes remain untouched.
     if (existsSync(path.join(staging, CONFIG))) {
@@ -518,7 +655,7 @@ export function restoreAgentBackup(options: { bundle: string; target: string; st
     // Staging config is already mapped to final target; compare it against that explicit mapping.
     for (const entry of manifest.files) {
       const bytes = readFileSync(path.join(staging, entry.path));
-      const expectedHash = entry.path === CONFIG ? sha256(relocateConfiguration(readFileSync(path.join(root, CONFIG)), target)) : entry.sha256;
+      const expectedHash = sha256(restoredBytes(root, entry.path, target));
       if (sha256(bytes) !== expectedHash) throw new Error("Isolated restore verification failed.");
     }
     const restored = inspectDatabase(path.join(staging, DATABASE));
@@ -527,6 +664,7 @@ export function restoreAgentBackup(options: { bundle: string; target: string; st
       restoredAt: new Date().toISOString(), secrets: manifest.secrets, requiresLogin: manifest.secrets === "exclude",
       backupManifestSha256: sha256(readFileSync(path.join(root, "manifest.json"))), exclusions: manifest.exclusions }));
     privateBundle(staging);
+    restoreOwnedLinks(staging, manifest.links ?? []);
     release(); locked = false;
     if (readdirSync(target).length !== 0) throw new Error("Restore target changed during maintenance; refusing overwrite.");
     if (!sameFileIdentity(targetIdentity, directoryIdentity(target))) throw new Error("Restore target directory was replaced during maintenance.");

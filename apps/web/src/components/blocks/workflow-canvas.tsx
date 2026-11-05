@@ -23,6 +23,7 @@ import {
 import "@xyflow/react/dist/style.css"
 import { Hand, MousePointer2, Scan, ZoomIn, ZoomOut } from "lucide-react"
 import { Button } from "../ui/button"
+import { ContextMenuItem, ContextMenuPopup, isNativeContextTarget, useContextMenu } from "../ui/context-menu"
 import { CanvasNode, type CanvasNodeProps } from "../ui/canvas-node"
 import { CanvasEdge } from "../ui/canvas-edge"
 import { CanvasFrame } from "./canvas-frame"
@@ -91,6 +92,14 @@ const edgeTypes = { canvas: CanvasEdge }
 const noIssues: CanvasIssue[] = []
 const noFrames: string[] = []
 const noPorts: CanvasNodeDefinition["ports"] = []
+export type CanvasContextMenuTarget = {
+  kind: "node" | "frame" | "note" | "edge" | "pane"
+  id?: string
+  x: number
+  y: number
+  origin: "pointer" | "keyboard"
+  trigger: HTMLElement | SVGElement
+}
 export type WorkflowCanvasProps = {
   document: CanvasDocument
   definitions: CanvasNodeDefinition[]
@@ -101,7 +110,7 @@ export type WorkflowCanvasProps = {
   issues?: CanvasIssue[]
   execution?: CanvasExecutionSnapshot
   executionVisuals?: CanvasExecutionVisuals
-  onContextMenu?: () => void
+  onContextMenu?: (target: CanvasContextMenuTarget) => boolean | void
   focusRequest?: { id: string; request: number }
   viewport?: CanvasDocument["viewport"]
   onViewportChange?: (viewport: NonNullable<CanvasDocument["viewport"]>) => void
@@ -160,7 +169,34 @@ function CanvasViewport({
   showEdgeLabels = true,
   showEdgeArrows = false,
 }: WorkflowCanvasProps) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
+  const contextMenu = useContextMenu<CanvasContextMenuTarget>()
+  const rightPointer = useRef<{ x: number; y: number; moved: boolean; down: boolean; pending?: CanvasContextMenuTarget } | null>(null)
+  function showContext(target: CanvasContextMenuTarget) {
+    if (onContextMenu && onContextMenu(target) !== false) {
+      contextMenu.close()
+      return true
+    }
+    if (target.kind !== "pane" && (target.kind !== "node" || !target.id || !onOpenNode)) return false
+    contextMenu.openAt({ x: target.x, y: target.y }, target, target.trigger)
+    return true
+  }
+  function requestContext(event: { target: EventTarget | null; clientX: number; clientY: number; preventDefault(): void; stopPropagation(): void }, kind: CanvasContextMenuTarget["kind"], id?: string) {
+    if (isNativeContextTarget(event.target) || (kind !== "pane" && !onContextMenu && !(kind === "node" && onOpenNode))) return
+    const element = event.target instanceof Element ? event.target.closest<HTMLElement>(".react-flow__node, .react-flow__edge") : null
+    const trigger = element ?? surface.current
+    if (!trigger) return
+    const target: CanvasContextMenuTarget = { kind, id, x: event.clientX, y: event.clientY, origin: "pointer", trigger }
+    if (rightPointer.current?.moved) { event.preventDefault(); return }
+    if (rightPointer.current?.down) {
+      rightPointer.current.pending = target
+      event.preventDefault()
+      event.stopPropagation()
+    } else if (showContext(target)) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+  }
 
   const fitToNodes = () => {
     if (fitViewOptions) void flow.fitView({ duration: 0, ...fitViewOptions })
@@ -630,12 +666,27 @@ function CanvasViewport({
       data-canvas-editor-context
       tabIndex={0}
       onPointerDownCapture={(event) => {
+        if (event.button === 2) rightPointer.current = { x: event.clientX, y: event.clientY, moved: false, down: true }
         if (
           event.target instanceof Element &&
           event.target.closest(".react-flow__pane")
         )
           event.currentTarget.focus({ preventScroll: true })
       }}
+      onPointerMoveCapture={event => {
+        const pointer = rightPointer.current
+        if (pointer && (Math.abs(event.clientX - pointer.x) > 5 || Math.abs(event.clientY - pointer.y) > 5)) pointer.moved = true
+      }}
+      onPointerUpCapture={event => {
+        const pointer = rightPointer.current
+        if (!pointer || event.button !== 2) return
+        pointer.down = false
+        if (pointer.pending) {
+          if (!pointer.moved) showContext(pointer.pending)
+          rightPointer.current = null
+        }
+      }}
+      onPointerCancel={() => { rightPointer.current = null }}
       onDragOver={(event) => {
         if (
           !locked &&
@@ -667,6 +718,18 @@ function CanvasViewport({
           })
       }}
       onKeyDownCapture={(event) => {
+        if (!event.nativeEvent.isComposing && !isNativeContextTarget(event.target) && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) {
+          const trigger = event.target instanceof Element ? event.target.closest<HTMLElement>(".react-flow__node, .react-flow__edge") ?? event.currentTarget : event.currentTarget
+          const id = trigger.dataset.id
+          const node = id ? flow.getNode(id) : undefined
+          const kind: CanvasContextMenuTarget["kind"] = node?.type === "frame" ? "frame" : node?.type === "note" ? "note" : node ? "node" : trigger.classList.contains("react-flow__edge") ? "edge" : "pane"
+          const box = trigger.getBoundingClientRect()
+          if (showContext({ kind, id, x: box.left + 8, y: box.bottom, origin: "keyboard", trigger })) {
+            event.preventDefault()
+            event.stopPropagation()
+          }
+          return
+        }
         if (
           locked ||
           event.nativeEvent.isComposing ||
@@ -836,20 +899,9 @@ function CanvasViewport({
           publishSelection({ nodeIds: [], edgeIds: [edge.id] })
         }
         onPaneClick={() => publishSelection({ nodeIds: [], edgeIds: [] })}
-        onNodeContextMenu={(event, node) => {
-          event.preventDefault()
-          select(node)
-          onContextMenu?.()
-        }}
-        onEdgeContextMenu={(event, edge) => {
-          event.preventDefault()
-          publishSelection({ nodeIds: [], edgeIds: [edge.id] })
-          onContextMenu?.()
-        }}
-        onPaneContextMenu={(event) => {
-          event.preventDefault()
-          onContextMenu?.()
-        }}
+        onNodeContextMenu={(event, node) => requestContext(event, node.type === "frame" ? "frame" : node.type === "note" ? "note" : "node", node.id)}
+        onEdgeContextMenu={(event, edge) => requestContext(event, "edge", edge.id)}
+        onPaneContextMenu={event => requestContext(event, "pane")}
       >
         <ViewportPortal>
           {guides.map((guide) => (
@@ -887,6 +939,16 @@ function CanvasViewport({
         </Panel>
         {(showMiniMap ?? presentation !== "media") && <MiniMap pannable zoomable nodeColor="var(--canvas-node-surface)" nodeStrokeColor="var(--canvas-node-border)" maskColor="var(--canvas-minimap-mask)" ariaLabel={t("workflowCanvas.workflowMinimap")} />}
       </ReactFlow>
+      <ContextMenuPopup menu={contextMenu} aria-label={locale.startsWith("zh") ? "画布操作" : "Canvas actions"}>
+        {contextMenu.target?.kind === "pane" ? <>
+          <ContextMenuItem disabled={!document.nodes.length} onSelect={fitToNodes}>{t("workflowCanvas.fitAllNodes")}</ContextMenuItem>
+          <ContextMenuItem onSelect={() => { void flow.zoomIn({ duration: 0 }) }}>{t("workflowCanvas.zoomIn")}</ContextMenuItem>
+          <ContextMenuItem onSelect={() => { void flow.zoomOut({ duration: 0 }) }}>{t("workflowCanvas.zoomOut")}</ContextMenuItem>
+        </> : <ContextMenuItem disabled={!contextMenu.target?.id || !document.nodes.some(node => node.id === contextMenu.target?.id)} onSelect={() => {
+          const id = contextMenu.target?.id
+          if (id && document.nodes.some(node => node.id === id)) onOpenNode?.(id)
+        }}>{locale.startsWith("zh") ? "打开对象详情" : "Open object details"}</ContextMenuItem>}
+      </ContextMenuPopup>
     </div>
   )
 }

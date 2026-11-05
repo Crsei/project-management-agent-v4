@@ -109,13 +109,13 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
 
   const capabilitiesQuery = useQuery({
     queryKey: ["pm-public", instance, "capabilities"],
-    queryFn: ({ signal }) => client.getCapabilities({ signal }),
+    queryFn: ({ signal }) => client.getCapabilities({ signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) }),
     retry: false,
     refetchOnWindowFocus: true,
   })
   const workspacesQuery = useQuery({
     queryKey: pmKeys.workspaces(instance, actor?.id ?? "anonymous"),
-    queryFn: ({ signal }) => client.listWorkspaces({ signal }).then((result) => result.items),
+    queryFn: ({ signal }) => client.listWorkspaces({ signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) }).then((result) => result.items),
     enabled: actor !== null,
     retry: false,
     refetchOnWindowFocus: true,
@@ -143,13 +143,16 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const controller = new AbortController()
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)])
     authRequest.current = controller
     const sequence = ++authSequence.current
-    void client.getMe({ signal: controller.signal }).then(async ({ actor: current }) => {
+    void client.getMe({ signal }).then(async ({ actor: current }) => {
       if (controller.signal.aborted || sequence !== authSequence.current) return
+      signal.throwIfAborted()
       let recoveryError: Error | null = null
       try { await commands.restore(current.id) } catch (error) { recoveryError = asPmError(error) }
       if (controller.signal.aborted || sequence !== authSequence.current) return
+      signal.throwIfAborted()
       actorRef.current = current
       setActor(current)
       setSessionError(recoveryError)
@@ -161,7 +164,7 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
     }).finally(() => {
       if (!controller.signal.aborted && sequence === authSequence.current) setSessionLoading(false)
     })
-    return () => { controller.abort(); streamRequest.current?.abort() }
+    return () => { controller.abort(); authRequest.current?.abort(); streamRequest.current?.abort() }
   }, [client, commands])
 
   useEffect(() => {
@@ -232,38 +235,87 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
   }, [endSession])
 
   const refresh = useCallback(async () => {
-    const sequence = authSequence.current
+    const sequence = ++authSequence.current
+    authRequest.current?.abort()
+    const controller = new AbortController()
+    authRequest.current = controller
+    const capabilitiesKey = ["pm-public", instance, "capabilities"]
+    const deadline = window.setTimeout(() => controller.abort(new DOMException("Session refresh timed out", "TimeoutError")), 20_000)
+    let refreshingSnapshots = false
+    const cancelSnapshots = () => {
+      // Snapshot query functions own their own signals. Cancelling their query
+      // propagates abort to transport and prevents late cache writes.
+      if (refreshingSnapshots) void queryClient.cancelQueries({ queryKey: pmKeys.private(instance) })
+    }
+    controller.signal.addEventListener("abort", cancelSnapshots, { once: true })
     setSessionError(null)
     // Keep authenticated consumers mounted during refresh, including their
     // reconciliation guards and unsaved drafts.
     setSessionLoading(actorRef.current === null)
     try {
-      const { actor: current } = await client.getMe()
+      const { actor: current } = await client.getMe({ signal: controller.signal })
+      controller.signal.throwIfAborted()
       if (sequence !== authSequence.current) return
       if (actorRef.current?.id !== current.id) {
         actorRef.current = null
         setActor(null)
         clearPrivate()
       }
-      try { await commands.restore(current.id) } catch (error) { setSessionError(asPmError(error)) }
+      try { await commands.restore(current.id) } catch (error) {
+        if (!controller.signal.aborted && sequence === authSequence.current) setSessionError(asPmError(error))
+      }
+      controller.signal.throwIfAborted()
       if (sequence !== authSequence.current) return
       actorRef.current = current
       setActor(current)
       setBlockedWorkspace(null)
       setReadFailures({})
+      // Replace existing in-flight reads: a deduplicated request may have been
+      // started without this refresh's deadline.
+      const workspaceKey = pmKeys.workspaces(instance, current.id)
       await Promise.all([
-        queryClient.fetchQuery({ queryKey: pmKeys.workspaces(instance, current.id), queryFn: ({ signal }) => client.listWorkspaces({ signal }).then((result) => result.items), staleTime: 0, retry: false }),
-        queryClient.fetchQuery({ queryKey: ["pm-public", instance, "capabilities"], queryFn: ({ signal }) => client.getCapabilities({ signal }), staleTime: 0, retry: false }),
+        queryClient.cancelQueries({ queryKey: workspaceKey, exact: true }),
+        queryClient.cancelQueries({ queryKey: capabilitiesKey, exact: true }),
       ])
-      if (sequence === authSequence.current) await queryClient.invalidateQueries({ queryKey: pmKeys.private(instance) }, { throwOnError: true })
+      controller.signal.throwIfAborted()
+      await Promise.all([
+        queryClient.fetchQuery({ queryKey: workspaceKey, queryFn: ({ signal }) => client.listWorkspaces({ signal: AbortSignal.any([signal, controller.signal]) }).then((result) => result.items), staleTime: 0, retry: false }),
+        queryClient.fetchQuery({ queryKey: capabilitiesKey, queryFn: ({ signal }) => client.getCapabilities({ signal: AbortSignal.any([signal, controller.signal]) }), staleTime: 0, retry: false }),
+      ])
+      controller.signal.throwIfAborted()
+      if (sequence !== authSequence.current) return
+      refreshingSnapshots = true
+      await queryClient.invalidateQueries({ queryKey: pmKeys.private(instance) }, { throwOnError: true })
+      controller.signal.throwIfAborted()
     } catch (cause) {
-      const error = asPmError(cause)
+      let error = asPmError(cause)
+      if (error instanceof ApiError && error.status === 401 && !actorRef.current && sequence === authSequence.current && !controller.signal.aborted) {
+        // A normal anonymous response must not leave a previous public-service
+        // failure cached forever. Re-read under the same deadline before
+        // confirming anonymity; a failed public read remains a real error.
+        try {
+          await queryClient.cancelQueries({ queryKey: capabilitiesKey, exact: true })
+          controller.signal.throwIfAborted()
+          await queryClient.fetchQuery({ queryKey: capabilitiesKey, queryFn: ({ signal }) => client.getCapabilities({ signal: AbortSignal.any([signal, controller.signal]) }), staleTime: 0, retry: false })
+          controller.signal.throwIfAborted()
+        } catch (capabilitiesCause) {
+          error = asPmError(capabilitiesCause)
+        }
+      }
+      // Rejecting one parallel read must also stop the other owned reads.
+      if (!controller.signal.aborted) controller.abort(error)
       if (sequence === authSequence.current) {
-        if (error instanceof ApiError && error.status === 401) endSession(error)
+        // Anonymous checks are expected during first-use recovery. Keep a real
+        // expired authenticated session visible, but do not notify signed-out
+        // users that their nonexistent session has expired.
+        if (error instanceof ApiError && error.status === 401) endSession(actorRef.current ? error : null)
         else setSessionError(error)
       }
       throw error
     } finally {
+      window.clearTimeout(deadline)
+      controller.signal.removeEventListener("abort", cancelSnapshots)
+      if (authRequest.current === controller) authRequest.current = null
       if (sequence === authSequence.current) setSessionLoading(false)
     }
   }, [clearPrivate, client, commands, endSession, instance, queryClient])

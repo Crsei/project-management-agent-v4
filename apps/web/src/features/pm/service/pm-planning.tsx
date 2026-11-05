@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react"
 import { z } from "zod"
 import type { Entity } from "@contracts"
 import { Button } from "@/components/ui/button"
@@ -5,19 +6,70 @@ import { usePmCommand, usePmEntities, usePmService } from "./pm-service"
 import { Form, Field, Choice, QueryNotice, useText, string, strings, objects, required, entityReference, lines, makeCommand, allowed, writable, useDraftState } from "./pm-ui"
 import { WorkItemForm } from "./pm-forms"
 import { CoreBusinessPanel } from "./pm-core-business-panel"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { MilestoneReschedule } from "./dashboard-planning"
 
-export function PlanningPanel({ project }: { project: Entity }) {
+export function PlanningPanel({ project, focusMilestoneId }: { project: Entity; focusMilestoneId?: string }) {
   const draftScope = `planning:${project.id}`
   const { workspace } = usePmService(); const command = usePmCommand(); const t = useText(); const milestones = usePmEntities("milestone", project.id); const conversations = usePmEntities("conversation", project.id); const intents = usePmEntities("intent", project.id); const decisions = usePmEntities("decision", project.id)
   const [milestoneTitle, setMilestoneTitle] = useDraftState(draftScope, "milestoneTitle", ""); const [criteria, setCriteria] = useDraftState(draftScope, "criteria", ""); const [date, setDate] = useDraftState(draftScope, "date", ""); const [conversationTitle, setConversationTitle] = useDraftState(draftScope, "conversationTitle", ""); const [summary, setSummary] = useDraftState(draftScope, "summary", ""); const [goal, setGoal] = useDraftState(draftScope, "goal", ""); const [conversationId, setConversationId] = useDraftState(draftScope, "conversationId", ""); const [sourceIds, setSourceIds] = useDraftState<string[]>(draftScope, "sourceIds", []); const [decisionReason, setDecisionReason] = useDraftState(draftScope, "decisionReason", ""); const [supersedes, setSupersedes] = useDraftState(draftScope, "supersedes", "");
   const locked = command.pending || !!command.unknownCommand || !writable(project); const selectedConversation = conversations.data?.find(row => row.id === conversationId)
-  return <div className="space-y-4"><CoreBusinessPanel title={t("里程碑", "Milestones")}><Form title={t("创建里程碑", "Create milestone")} disabled={locked || !allowed(workspace, "planning.edit", project.id)} onSubmit={async () => { await command.execute(makeCommand("CreateMilestone", { title: required.max(300).parse(milestoneTitle), criteria: z.array(required).min(1).max(100).parse(lines(criteria)), targetDate: date ? z.iso.date().parse(date) : null }, undefined, project.id)) }}><Field label={t("里程碑标题", "Milestone title")} value={milestoneTitle} onChange={setMilestoneTitle} required /><Field label={t("达成标准（每行一项）", "Achievement criteria (one per line)")} value={criteria} onChange={setCriteria} multiline required /><Field label={t("目标日期", "Target date")} value={date} onChange={setDate} type="date" /></Form><QueryNotice query={milestones}>{milestones.data?.map(milestone => <MilestoneActions key={milestone.id} milestone={milestone} />)}</QueryNotice></CoreBusinessPanel>
+  return <div className="space-y-4"><CoreBusinessPanel title={t("里程碑", "Milestones")}><Form title={t("创建里程碑", "Create milestone")} disabled={locked || !allowed(workspace, "planning.edit", project.id)} onSubmit={async () => { await command.execute(makeCommand("CreateMilestone", { title: required.max(300).parse(milestoneTitle), criteria: z.array(required).min(1).max(100).parse(lines(criteria)), targetDate: date ? z.iso.date().parse(date) : null }, undefined, project.id)) }}><Field label={t("里程碑标题", "Milestone title")} value={milestoneTitle} onChange={setMilestoneTitle} required /><Field label={t("达成标准（每行一项）", "Achievement criteria (one per line)")} value={criteria} onChange={setCriteria} multiline required /><Field label={t("目标日期", "Target date")} value={date} onChange={setDate} type="date" /></Form><QueryNotice query={milestones}>{milestones.data?.map(milestone => <MilestoneActions key={milestone.id} milestone={milestone} disabled={locked} focused={milestone.id === focusMilestoneId} />)}</QueryNotice></CoreBusinessPanel>
   <CoreBusinessPanel title={t("人工对话", "Human conversations")}><Form title={t("创建对话", "Create conversation")} disabled={locked || !allowed(workspace, "intent.propose", project.id)} onSubmit={async () => { await command.execute(makeCommand("CreateConversation", { title: required.max(300).parse(conversationTitle) }, undefined, project.id)) }}><Field label={t("对话标题", "Conversation title")} value={conversationTitle} onChange={setConversationTitle} required /></Form><QueryNotice query={conversations}>{conversations.data?.map(conversation => <Conversation key={conversation.id} conversation={conversation} />)}</QueryNotice></CoreBusinessPanel>
   <CoreBusinessPanel title={t("意图与显式决策", "Intents and explicit decisions")}><Form title={t("提出意图（不会自动建项）", "Propose intent (does not create work)")} disabled={locked || !allowed(workspace, "intent.propose", project.id)} onSubmit={async () => { await command.execute(makeCommand("ProposeIntent", { summary: required.max(1000).parse(summary), goal: required.parse(goal), conversationId: conversationId || null, sourceMessageRefs: objects(selectedConversation?.data.messages).filter(message => sourceIds.includes(string(message.id))).map(message => ({ messageId: string(message.id), contentVersion: Number(message.contentVersion) })) }, undefined, project.id)) }}><Field label={t("意图摘要", "Intent summary")} value={summary} onChange={setSummary} required /><Field label={t("意图目标", "Intent goal")} value={goal} onChange={setGoal} multiline required /><Choice label={t("来源对话", "Source conversation")} value={conversationId} onChange={value => { setConversationId(value); setSourceIds([]) }} options={[{ value: "", label: "—" }, ...(conversations.data ?? []).map(row => ({ value: row.id, label: string(row.data.title) }))]} />{objects(selectedConversation?.data.messages).map(message => <label key={string(message.id)} className="flex gap-2 text-sm"><input type="checkbox" checked={sourceIds.includes(string(message.id))} onChange={event => setSourceIds(event.target.checked ? [...sourceIds, string(message.id)] : sourceIds.filter(id => id !== message.id))} />{string(message.content)}</label>)}</Form><QueryNotice query={intents}>{intents.data?.map(intent => <IntentActions key={intent.id} intent={intent} />)}</QueryNotice>
   <Form title={t("项目决策记录", "Project decision record")} disabled={locked || !allowed(workspace, "intent.decide", project.id)} onSubmit={async () => { await command.execute(makeCommand("RecordDecision", { subjectRef: { kind: "project", id: project.id }, decisionType: supersedes ? "supersede" : "note", reason: required.parse(decisionReason), basisRefs: [], supersedesDecisionId: supersedes || null }, undefined, project.id)) }}><Field label={t("决策理由", "Decision reason")} value={decisionReason} onChange={setDecisionReason} multiline required /><Choice label={t("替代历史决策（可选）", "Supersede historical decision (optional)")} value={supersedes} onChange={setSupersedes} options={[{ value: "", label: "—" }, ...(decisions.data ?? []).map(row => ({ value: row.id, label: `${string(row.data.reason)} · ${row.id}` }))]} /></Form><QueryNotice query={decisions}>{decisions.data?.map(decision => <details key={decision.id}><summary>{string(decision.data.decisionType)} · {string(decision.data.reason)}</summary><pre className="overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(decision.data, null, 2)}</pre></details>)}</QueryNotice></CoreBusinessPanel></div>
 }
 function Conversation({ conversation }: { conversation: Entity }) { const draftScope = `conversation:${conversation.id}`; const { workspace } = usePmService(); const command = usePmCommand(); const t = useText(); const [content, setContent] = useDraftState(draftScope, "content", ""); return <details className="rounded border p-3"><summary>{string(conversation.data.title)}</summary><ol className="space-y-3 py-3">{objects(conversation.data.messages).map(message => <li key={string(message.id)} className="whitespace-pre-wrap break-words text-sm"><p>{string(message.content)}</p><small>{string(message.authorId)} · {string(message.createdAt)} · v{Number(message.contentVersion)}</small></li>)}</ol><Form label={t("追加消息", "Append message")} disabled={command.pending || !!command.unknownCommand || !allowed(workspace, "intent.propose", conversation.projectId)} onSubmit={async () => { await command.execute(makeCommand("AppendMessage", { content: required.parse(content) }, conversation, conversation.projectId!)); setContent("") }}><Field label={t("消息内容", "Message content")} value={content} onChange={setContent} multiline required /></Form></details> }
-function MilestoneActions({ milestone }: { milestone: Entity }) { const draftScope = `milestone:${milestone.id}`; const { workspace } = usePmService(); const command = usePmCommand(); const t = useText(); const [reason, setReason] = useDraftState(draftScope, "reason", ""); const [operation, setOperation] = useDraftState(draftScope, "operation", "AchieveMilestone"); const [checks, setChecks] = useDraftState<Record<number, string>>(draftScope, "checks", {}); const planned = milestone.data.status === "planned"; const selected = planned ? operation : "ReopenMilestone"; return <details className="rounded border p-3"><summary>{string(milestone.data.title)} · {string(milestone.data.status)} · {string(milestone.data.targetDate)}</summary><Form disabled={command.pending || !!command.unknownCommand || !allowed(workspace, "planning.lifecycle", milestone.projectId)} onSubmit={async () => { const payload = { reason: required.parse(reason) }; await command.execute(selected === "AchieveMilestone" ? makeCommand("AchieveMilestone", { ...payload, criteriaChecks: strings(milestone.data.criteria).map((_, criterionIndex) => ({ criterionIndex, explanation: required.parse(checks[criterionIndex] ?? "") })) }, milestone, milestone.projectId!) : makeCommand(selected === "CancelMilestone" ? "CancelMilestone" : "ReopenMilestone", payload, milestone, milestone.projectId!)) }}><Choice label={t("里程碑操作", "Milestone action")} value={selected} onChange={setOperation} options={(planned ? ["AchieveMilestone", "CancelMilestone"] : ["ReopenMilestone"]).map(value => ({ value, label: value }))} /><Field label={t("原因", "Reason")} value={reason} onChange={setReason} required />{selected === "AchieveMilestone" && strings(milestone.data.criteria).map((criterion, index) => <Field key={index} label={criterion} value={checks[index] ?? ""} onChange={value => setChecks(previous => ({ ...previous, [index]: value }))} required />)}</Form></details> }
+function MilestoneActions({ milestone, disabled, focused }: { milestone: Entity; disabled: boolean; focused: boolean }) {
+  const draftScope = `milestone:${milestone.id}`
+  const { workspace } = usePmService()
+  const command = usePmCommand()
+  const t = useText()
+  const [reason, setReason] = useDraftState(draftScope, "reason", "")
+  const [operation, setOperation] = useDraftState(draftScope, "operation", "AchieveMilestone")
+  const [checks, setChecks] = useDraftState<Record<number, string>>(draftScope, "checks", {})
+  const [dateOpen, setDateOpen] = useState(false)
+  const details = useRef<HTMLDetailsElement>(null)
+  const planned = milestone.data.status === "planned"
+  const selected = planned ? operation : "ReopenMilestone"
+  const locked = disabled || command.pending || !!command.unknownCommand
+  useEffect(() => {
+    if (!focused || !details.current) return
+    details.current.open = true
+    details.current.scrollIntoView({ block: "nearest" })
+    details.current.querySelector("summary")?.focus()
+  }, [focused])
+  function showMilestone(expand: boolean) {
+    if (!details.current) return
+    if (expand) details.current.open = true
+    details.current.scrollIntoView({ block: "nearest" })
+    details.current.querySelector("summary")?.focus()
+  }
+  return <>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <details ref={details} className="rounded border p-3">
+          <summary>{string(milestone.data.title)} · {string(milestone.data.status)} · {string(milestone.data.targetDate)}</summary>
+          <Form disabled={command.pending || !!command.unknownCommand || !allowed(workspace, "planning.lifecycle", milestone.projectId)} onSubmit={async () => {
+            const payload = { reason: required.parse(reason) }
+            await command.execute(selected === "AchieveMilestone" ? makeCommand("AchieveMilestone", { ...payload, criteriaChecks: strings(milestone.data.criteria).map((_, criterionIndex) => ({ criterionIndex, explanation: required.parse(checks[criterionIndex] ?? "") })) }, milestone, milestone.projectId!) : makeCommand(selected === "CancelMilestone" ? "CancelMilestone" : "ReopenMilestone", payload, milestone, milestone.projectId!))
+          }}>
+            <Choice label={t("里程碑操作", "Milestone action")} value={selected} onChange={setOperation} options={(planned ? ["AchieveMilestone", "CancelMilestone"] : ["ReopenMilestone"]).map(value => ({ value, label: value }))} />
+            <Field label={t("原因", "Reason")} value={reason} onChange={setReason} required />
+            {selected === "AchieveMilestone" && strings(milestone.data.criteria).map((criterion, index) => <Field key={index} label={criterion} value={checks[index] ?? ""} onChange={value => setChecks(previous => ({ ...previous, [index]: value }))} required />)}
+          </Form>
+        </details>
+      </ContextMenuTrigger>
+      <ContextMenuContent aria-label={t("里程碑操作", "Milestone actions")}>
+        <ContextMenuLabel>{string(milestone.data.title) || milestone.id}</ContextMenuLabel>
+        <ContextMenuItem onSelect={() => showMilestone(true)}>{t("查看里程碑与操作", "View milestone and actions")}</ContextMenuItem>
+        <ContextMenuItem disabled={locked || !writable(milestone) || !allowed(workspace, "planning.edit", milestone.projectId)} title={t("使用现有里程碑改期表单，并显式保存。", "Use the existing reschedule form and save explicitly.")} onSelect={() => { if (!details.current?.closest("fieldset:disabled")) setDateOpen(true) }}>{t("修改目标日期", "Edit target date")}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => showMilestone(false)}>{t("定位规划记录", "Locate planning record")}</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+    {dateOpen && <MilestoneReschedule milestoneId={milestone.id} open={dateOpen} onOpenChange={setDateOpen} hideTrigger />}
+  </>
+}
 function IntentActions({ intent }: { intent: Entity }) {
   const draftScope = `intent:${intent.id}`
   const { workspace, actor } = usePmService(); const command = usePmCommand(); const t = useText(); const [reason, setReason] = useDraftState(draftScope, "reason", ""); const [summary, setSummary] = useDraftState(draftScope, "summary", string(intent.data.summary)); const [goal, setGoal] = useDraftState(draftScope, "goal", string(intent.data.goal)); const [converting, setConverting] = useDraftState(draftScope, "converting", false); const [action, setAction] = useDraftState(draftScope, "action", "AcceptIntent"); const [base, setBase] = useDraftState(draftScope, "base", intent);

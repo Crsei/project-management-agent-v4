@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ProviderAuthInteraction, ProviderAuthMethod, ProviderCapabilities, ProviderDriver, ProviderModel, ProviderSkillsSnapshot } from "@agent-workspace/contracts/provider";
+import type { ProviderAuthInteraction, ProviderAuthMethod, ProviderCapabilities, ProviderDriver, ProviderModel, ProviderNativeConfigurationChange, ProviderSkillsSnapshot } from "@agent-workspace/contracts/provider";
 import { PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS, ProviderSetupError, type ProviderAuthState, type ServerProvider } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Cause from "effect/Cause";
@@ -28,6 +28,19 @@ import { livePiWorkspace } from "../../../../../../vendor/t3code/packages/provid
 import { liveAcpWorkspace } from "../../../../../../vendor/t3code/packages/provider-acp/src/server/liveWorkspace.ts";
 import { normalizeAcpRegistryCommands } from "../../../../../../vendor/t3code/packages/provider-acp-registry/src/server/probe.ts";
 import { closeMcpAppSessionsForInstance } from "../../mcp-apps/live.ts";
+
+type SkillsInvalidator = (instanceIds: ReadonlySet<string>, change: ProviderNativeConfigurationChange) => void;
+const skillsInvalidators = new Map<string, Set<SkillsInvalidator>>();
+
+/** Configuration mutation only: no account revision, host invalidation, session close or native dispatch. */
+export function invalidateProviderSkillsSnapshots(instanceIds: readonly string[], reason: string): ProviderNativeConfigurationChange {
+  const change: ProviderNativeConfigurationChange = {
+    changedAt: new Date().toISOString(), reason, reloadRequired: true, liveExecutionsPreserved: true,
+  };
+  const ids = new Set(instanceIds);
+  for (const invalidate of skillsInvalidators.get(providerDataDirectory()) ?? []) invalidate(ids, change);
+  return change;
+}
 
 export type PmProviderInstallationMethods = {
   readonly [Action in "prepare" | "removeInstallation"]?: (
@@ -139,7 +152,17 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
   const admitted = new Set<Promise<unknown>>();
   // The scoped cache is private to this application lifetime and never reused across PM actors or scopes.
   const skillSnapshots = new Map<string, ProviderSkillsSnapshot>();
-  const skillClaims = new Map<string, symbol>();
+  const skillClaims = new Map<string, { instanceId: string }>();
+  const skillChanges = new Map<string, ProviderNativeConfigurationChange>();
+  const invalidateSkills: SkillsInvalidator = (instanceIds, change) => {
+    for (const id of instanceIds) skillChanges.set(id, change);
+    for (const [key, snapshot] of skillSnapshots) if (instanceIds.has(snapshot.instanceId)) skillSnapshots.delete(key);
+    // An in-flight old scan must never repopulate a post-mutation cache.
+    for (const [key, claim] of skillClaims) if (instanceIds.has(claim.instanceId)) skillClaims.delete(key);
+  };
+  const invalidators = skillsInvalidators.get(root) ?? new Set<SkillsInvalidator>();
+  skillsInvalidators.set(root, invalidators);
+  invalidators.add(invalidateSkills);
   let closing: Promise<void> | undefined;
   const runMaintenance = <A>(context: ProviderDriverContext, task: (signal: AbortSignal) => Promise<A>, signal?: AbortSignal): Promise<A> => {
     if (shutdownController.signal.aborted)
@@ -164,6 +187,11 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
   const shutdown = () => {
     if (closing) return closing;
     // Individual callers retain their original result/error; shutdown owns settlement, not success.
+    invalidators.delete(invalidateSkills);
+    if (!invalidators.size) skillsInvalidators.delete(root);
+    skillSnapshots.clear();
+    skillClaims.clear();
+    skillChanges.clear();
     closing = Promise.allSettled(admitted).then(() => undefined);
     shutdownController.abort(new Error("Provider application is shutting down."));
     return closing;
@@ -298,6 +326,9 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
     refreshSkills: async (context, scope, actorId, fresh = false, signal) => {
       const key = JSON.stringify([context.instanceId, context.revision, context.cwd, actorId ?? null, scope.workspaceId, scope.projectId]);
       const previous = skillSnapshots.get(key);
+      const configurationChange = skillChanges.get(context.instanceId);
+      const withConfiguration = (snapshot: ProviderSkillsSnapshot): ProviderSkillsSnapshot =>
+        configurationChange ? { ...snapshot, nativeConfiguration: configurationChange } : snapshot;
       if (shutdownController.signal.aborted || providerDataDirectory() !== root)
         throw providerBoundaryError("Provider application is not accepting discovery.", "provider_host_closed", 503);
       signal?.throwIfAborted();
@@ -306,9 +337,12 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
         throw providerBoundaryError("Provider instance or configuration changed.", "session_mismatch", 409);
       if (!fresh && previous && !previous.pending && !previous.error &&
           Date.now() - Date.parse(previous.checkedAt) < PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS) {
-        if (context.driver === "opencode") return previous;
+        if (context.driver === "opencode") return withConfiguration(previous);
         // A cached inventory remains subject to the current instance lease.
-        return use(context, "status", lease => lease.assertCurrent.pipe(Effect.as(previous)), signal);
+        const cached = await use(context, "status", lease => lease.assertCurrent.pipe(Effect.as(previous)), signal);
+        if (skillChanges.get(context.instanceId) !== configurationChange)
+          throw providerBoundaryError("Native configuration changed during workspace discovery.", "discovery_superseded", 409);
+        return withConfiguration(cached);
       }
       if (context.driver === "opencode") {
         const active = actorId && listRecords<ChatGeneration>("chat:generations").find(item =>
@@ -317,12 +351,12 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
           item.executionSnapshot.actorId === actorId && item.executionSnapshot.scope.workspaceId === scope.workspaceId &&
           item.executionSnapshot.scope.projectId === scope.projectId &&
           liveOpenCodeInventory(context.instanceId, item.threadId, item.id, context.cwd));
-        if (!active) return { instanceId: context.instanceId, revision: context.revision, cwd: context.cwd,
+        if (!active) return withConfiguration({ instanceId: context.instanceId, revision: context.revision, cwd: context.cwd,
           checkedAt: previous?.checkedAt ?? new Date().toISOString(), pending: true, skills: previous?.skills ?? [], commands: previous?.commands ?? [],
           invocation: { skills: true, commands: true, skillSyntax: "mention" },
-          error: { code: "safe_discovery_unavailable", message: "OpenCode discovery is available when a matching authorized native Chat session is running." } };
+          error: { code: "safe_discovery_unavailable", message: "OpenCode discovery is available when a matching authorized native Chat session is running." } });
       }
-      const claim = Symbol();
+      const claim = { instanceId: context.instanceId };
       skillClaims.set(key, claim);
       try {
         const result = await use(context, "status", lease => Effect.gen(function* () {
@@ -331,6 +365,8 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
             ? { skills: false, commands: false, skillSyntax: "none", commandAllowlist: ["session"] }
             : { skills: true, commands: true, skillSyntax: context.driver === "pi" || context.driver === "grok" ? "leading-mention" : "mention" };
           const base = { instanceId: context.instanceId, revision: context.revision, cwd: context.cwd, checkedAt, invocation };
+          // Source discovery caches may be cleared; live runtimes/threads and account identity may not.
+          if ((fresh || configurationChange) && lease.instance.invalidateCaches) yield* lease.instance.invalidateCaches;
           if (!lease.instance.snapshotForCwd) {
             const machine = yield* lease.instance.snapshot.getSnapshot;
             const generation = actorId && listRecords<ChatGeneration>("chat:generations").find(item =>
@@ -417,7 +453,6 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
               return { ...base, pending: false, skills: scanned.success.skills, commands: scanned.success.slashCommands };
             }
           }
-          if (fresh && lease.instance.invalidateCaches) yield* lease.instance.invalidateCaches;
           const scanned = yield* lease.instance.snapshotForCwd(context.cwd).pipe(Effect.result);
           yield* lease.assertCurrent;
           if (scanned._tag === "Failure") {
@@ -441,7 +476,7 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
           skillSnapshots.set(key, result);
           while (skillSnapshots.size > 32) skillSnapshots.delete(skillSnapshots.keys().next().value!);
         }
-        return result;
+        return withConfiguration(result);
       } finally {
         if (skillClaims.get(key) === claim) skillClaims.delete(key);
       }

@@ -1,5 +1,7 @@
 # 领域术语
 
+> 适用性：本文件保留v0.1历史提案/稳定编号，不代表完整业务Runner或旧SQL核心规则已启用。当前Markdown任务状态、审核独立性与关系语义以[已采纳ADR](../architecture/adr/0003-markdown-core.md)及[入口第七节](README.md#implementation-plan)为准；Chat thread/generation不能替代历史Session/Run模型。
+
 本文件服从 [版本与提案范围](README.md)。英文名是契约中的规范概念名；中文用于产品交流。相同英文名在不同模块不得暗含不同生命周期。
 
 | 术语 | 定义 | 不应混同 |

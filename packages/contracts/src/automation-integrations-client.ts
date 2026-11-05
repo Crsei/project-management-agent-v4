@@ -1,5 +1,5 @@
 import { AutomationApiError } from './automation-client.ts';
-import type { AutomationEventEndpoint, AutomationEventReceipt, AutomationIntegrationConnection, AutomationIntegrationList, AutomationIntegrationReceipt, AutomationIntegrationOperation, automationEventSaveSchema, automationIntegrationSaveSchema } from './automation-integrations.ts';
+import type { AutomationEventEndpoint, AutomationEventReceipt, AutomationIntegrationConnection, AutomationIntegrationList, AutomationIntegrationReceipt, AutomationIntegrationOperation, AutomationMcpDefinitionList, automationEventSaveSchema, automationIntegrationSaveSchema } from './automation-integrations.ts';
 import type { z } from 'zod';
 
 /** No automatic retries: query receipt with the original requestId after an uncertain mutation. */
@@ -16,6 +16,7 @@ export function createAutomationIntegrationsClient(options: { baseUrl?: string; 
   };
   return {
     list: (workspaceId: string, projectId?: string) => send<AutomationIntegrationList>(workspaceId, 'GET', '/integrations' + (projectId ? '?projectId=' + encodeURIComponent(projectId) : '')),
+    definitions: (workspaceId: string, projectId: string) => send<AutomationMcpDefinitionList>(workspaceId, 'GET', '/integrations/definitions?projectId=' + encodeURIComponent(projectId)),
     save: (workspaceId: string, id: string, input: z.infer<typeof automationIntegrationSaveSchema>) => send<AutomationIntegrationConnection>(workspaceId, 'PUT', '/integrations/' + encodeURIComponent(id), input),
     verify: (workspaceId: string, id: string, requestId: string, expectedRevision: number) => send<AutomationIntegrationConnection>(workspaceId, 'POST', `/integrations/${encodeURIComponent(id)}/verify`, { requestId, expectedRevision }),
     revoke: (workspaceId: string, id: string, requestId: string, expectedRevision: number) => send<AutomationIntegrationConnection>(workspaceId, 'POST', `/integrations/${encodeURIComponent(id)}/revoke`, { requestId, expectedRevision }),

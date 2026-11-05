@@ -1,0 +1,5 @@
+# Host builds run from apps/server/cc-switch-host, outside the vendored upstream.
+# Keep its compiler pinned here; vendor/cc-switch/rust-toolchain.toml is a source snapshot.
+[toolchain]
+channel = "1.95.0"
+profile = "minimal"

@@ -2,10 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEve
 import { useLocation, useParams } from 'react-router';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
-import { ArrowLeft, ArrowUpRight, AlertTriangle, Code2, FileText, Link, LoaderCircle, Save, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, AlertTriangle, Code2, FileText, Link, LoaderCircle, MoreHorizontal, Save, X } from 'lucide-react';
 import type { FileRecord } from '@pm-schema';
 import type { GraphQuery } from '@pm-schema/graph';
-import { KnowledgeGraph } from '@pm-views';
+import { KnowledgeGraph, type ContextMenuAction } from '@pm-views';
 import type { WorkspaceController } from './controller';
 import { useDetailState, type DetailTab } from './session';
 import { Diagnostics } from './Diagnostics';
@@ -19,6 +19,7 @@ import { PersonalMentionPicker } from '../service/PersonalMentionPicker';
 import { EntityAgentPanelAction } from '../agent/agent-entry';
 import { getDocumentEditorPosition, retainDocumentEditorPosition } from './document-workbench-state';
 import { documentSaveRecovery } from './document-save-model';
+import { CollectionActionMenu, CollectionContextMenu, renderCollectionContextMenu } from './CollectionContextMenu';
 
 const HIDDEN_DETAIL_TABS: Readonly<Partial<Record<DetailTab, true>>> = { properties: true, relations: true, business: true, context: true };
 
@@ -38,6 +39,7 @@ export function EntityDetail({ controller: c, en, fullPage = false, onClose, onE
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
   const [copyState, setCopyState] = useState<{ id: string; status: 'copied' | 'failed' } | null>(null);
   const [discardVersion, setDiscardVersion] = useState(0);
+  const [taskSection, setTaskSection] = useState<{ id: string; section: 'delivery' | 'advanced' } | null>(null);
   const task = c.selected?.entity.entity === 'work_item' && !c.unsupported;
   const isDocument = c.selected?.entity.entity === 'document' && !c.unsupported;
   const lifecycleRef = useRef({ save: c.saveDocument, session: c.session, id: c.selectedId, isDocument });
@@ -74,6 +76,37 @@ export function EntityDetail({ controller: c, en, fullPage = false, onClose, onE
     ...(isDocument && tab !== 'source' ? [] : [{ id: 'source' as const, label: en ? 'Source' : '源码' }]),
     ...(!c.unsupported ? [{ id: 'graph' as const, label: en ? 'Graph' : '关系图' }] : []),
   ];
+  useLayoutEffect(() => {
+    if (!taskSection || taskSection.id !== c.selectedId || tab !== 'content') return;
+    const viewport = contentPane.current;
+    const target = viewport?.querySelector<HTMLElement>(taskSection.section === 'delivery' ? '.task-workflow' : '.task-advanced-properties');
+    if (viewport && target) {
+      if (target instanceof HTMLDetailsElement) target.open = true;
+      viewport.scrollTo({ top: viewport.scrollTop + target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 16 });
+      target.querySelector('summary')?.focus({ preventScroll: true });
+    }
+    setTaskSection(null);
+  }, [taskSection, c.selectedId, tab]);
+  function openTaskSection(section: 'delivery' | 'advanced') {
+    setDetail({ tab: 'content' });
+    setTaskSection({ id: c.selectedId, section });
+  }
+  const editTaskSource = () => setDetail({ tab: 'source' });
+  async function copyTaskLink() {
+    try {
+      const url = new URL(`/pm/${encodeURIComponent(workspaceSlug || '')}${c.projectId ? `/projects/${encodeURIComponent(c.projectId)}` : ''}/entities/${encodeURIComponent(c.selectedId)}`, window.location.origin);
+      await navigator.clipboard.writeText(url.href);
+      setCopyState({ id: c.selectedId, status: 'copied' });
+    } catch { setCopyState({ id: c.selectedId, status: 'failed' }); }
+  }
+  const openTaskPage = () => { if (onExpand) onExpand(); else c.viewProps.onOpenPage?.(c.selectedId); };
+  const taskActions: ContextMenuAction[] = [
+    { id: 'copy-link', label: en ? 'Copy task link' : '复制任务链接', onSelect: () => { void copyTaskLink(); } },
+    { id: 'open-page', label: en ? 'Open full page · same draft' : '全页打开 · 保留草稿', disabled: fullPage || !onExpand && !c.viewProps.onOpenPage, reason: fullPage ? (en ? 'Already on the full task page' : '当前已是任务完整页面') : undefined, onSelect: openTaskPage },
+    { id: 'markdown', label: en ? 'Open Markdown · shared draft' : '打开 Markdown · 共享草稿', separatorBefore: true, onSelect: editTaskSource },
+    { id: 'delivery', label: en ? 'Open delivery workspace' : '进入交付工作台', disabled: !c.selected?.entity.project, reason: !c.selected?.entity.project ? (en ? 'A saved source project is required' : '需要已保存的所属项目') : undefined, onSelect: () => openTaskSection('delivery') },
+    { id: 'advanced', label: en ? 'Advanced properties & lifecycle' : '高级属性与生命周期', onSelect: () => openTaskSection('advanced') },
+  ];
   function navigateTabs(event: KeyboardEvent<HTMLDivElement>) {
     if (c.unsupported || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
@@ -108,27 +141,22 @@ export function EntityDetail({ controller: c, en, fullPage = false, onClose, onE
     change.changes.iterChanges((from, to, _from, _to, insert) => changes.push({ from, to, insert: insert.toString() }));
     c.updateDraft(applyBodyChanges(current, changes));
   }} editable={!sourceReadonly} readOnly={sourceReadonly} basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true, highlightSelectionMatches: true }} aria-label={en ? 'Markdown source' : 'Markdown 源码'} /></div>;
-  const taskSurface = task && <TaskDetailSurface key={`${c.selectedId}:${discardVersion}`} controller={c} en={en} onEditSource={() => setDetail({ tab: 'source' })} />;
+  const taskSurface = task && <TaskDetailSurface key={`${c.selectedId}:${discardVersion}`} controller={c} en={en} onEditSource={editTaskSource} onOpenDelivery={() => openTaskSection('delivery')} />;
   const agentProjectId = c.selected?.entity.entity === 'project' ? c.selected.id : c.selected?.entity.project;
   const agentTaskId = c.selected?.entity.entity === 'work_item' ? c.selected.id : undefined;
   const agentAction = c.selected && !c.unsupported ? <EntityAgentPanelAction entityId={c.selected.id} projectId={agentProjectId} taskId={agentTaskId} title={c.entity?.title ?? c.selected.entity.title} hasDraft={!!c.draft} /> : null;
   return <section className={`entity-detail ${fullPage ? 'entity-detail-full' : ''} ${task ? 'task-entity-detail' : ''} ${task && tab === 'source' ? 'is-source-split' : ''}`} aria-label={task ? (en ? 'Task detail' : '任务详情') : (en ? 'Entity detail' : '对象详情')} data-testid="entity-detail">
-    {task ? <header className="task-detail-toolbar">
+    {task ? <CollectionContextMenu actions={taskActions} trigger={<header tabIndex={0} className="task-detail-toolbar" aria-label={en ? 'Task header actions' : '任务标题操作'}>
       {fullPage && <button type="button" className="icon-button" aria-label={en ? 'Back to collection' : '返回集合'} onClick={onClose}><ArrowLeft size={16} /></button>}
       <div className="task-toolbar-identity">{c.entity?.project && <><button type="button" className="task-project-link" title={c.projects.find(file => file.id === c.entity?.project)?.entity.title || c.entity.project} onClick={() => c.wikiLink(c.entity!.project!)}>{c.projects.find(file => file.id === c.entity?.project)?.entity.title || c.entity.project}</button><span aria-hidden="true">/</span></>}<span className="mono">{c.selectedId}</span></div>
       <TaskCompletionAction controller={c} en={en} />
       <TaskDetailWatch controller={c} en={en} />
       {agentAction}
-      <button type="button" className="icon-button" aria-label={en ? 'Copy task link' : '复制任务链接'} title={en ? 'Copy task link' : '复制任务链接'} onClick={async () => {
-        try {
-          const url = new URL(`/pm/${encodeURIComponent(workspaceSlug || '')}${c.projectId ? `/projects/${encodeURIComponent(c.projectId)}` : ''}/entities/${encodeURIComponent(c.selectedId)}`, window.location.origin);
-          await navigator.clipboard.writeText(url.href);
-          setCopyState({ id: c.selectedId, status: 'copied' });
-        } catch { setCopyState({ id: c.selectedId, status: 'failed' }); }
-      }}><Link size={15} /></button>
-      {!fullPage && onExpand && <button type="button" className="icon-button" aria-label={en ? 'Expand entity' : '展开对象'} title={en ? 'Open full page · same draft' : '全页打开 · 保留草稿'} data-testid="expand-entity" onClick={onExpand}><ArrowUpRight size={16} /></button>}
+      <button type="button" className="icon-button" aria-label={en ? 'Copy task link' : '复制任务链接'} title={en ? 'Copy task link' : '复制任务链接'} onClick={() => { void copyTaskLink(); }}><Link size={15} /></button>
+      <CollectionActionMenu actions={taskActions} trigger={<button type="button" className="icon-button" aria-label={en ? 'More task actions' : '更多任务操作'}><MoreHorizontal size={16} /></button>} />
+      {!fullPage && onExpand && <button type="button" className="icon-button" aria-label={en ? 'Expand entity' : '展开对象'} title={en ? 'Open full page · same draft' : '全页打开 · 保留草稿'} data-testid="expand-entity" onClick={openTaskPage}><ArrowUpRight size={16} /></button>}
       <button type="button" className="icon-button" aria-label={fullPage ? (en ? 'Close task and return' : '关闭任务并返回') : (en ? 'Close inspector' : '关闭详情')} onClick={onClose}><X size={16} /></button>
-    </header> : <div className="detail-heading">
+    </header>} /> : <div className="detail-heading">
       {fullPage && <button className="icon-button" aria-label={en ? 'Back to collection' : '返回集合'} onClick={onClose}><ArrowLeft size={18} /></button>}
       <div className="detail-identity"><div className="detail-identity-meta"><FileText size={13} /><span className="mono">{c.selected?.id || c.unsupported?.id || c.selectedId}</span>{c.entity?.archived && <span className="draft-pill">{en ? 'Archived' : '已归档'}</span>}{c.draft && <span className="draft-pill">{en ? 'Draft' : '草稿'}</span>}</div><h2>{c.entity?.title || c.source?.path.split('/').pop() || (en ? 'Entity unavailable' : '对象不可用')}</h2></div>
       {isDocument && tab === 'source' && <button type="button" className="secondary-button" data-testid="return-document-content" onClick={() => setDetail({ tab: 'content' })}><FileText size={15} />{en ? 'Editable content' : '可编辑内容'}</button>}
@@ -156,7 +184,7 @@ export function EntityDetail({ controller: c, en, fullPage = false, onClose, onE
         {tab === 'source' && !isDocument && (task ? <div className="task-source-live"><section className="task-source-pane" aria-label={en ? 'Shared Markdown source' : '共享 Markdown 源码'}><div className="task-source-pane-heading"><Code2 size={13} /><span>{en ? 'Markdown source · shared draft' : 'Markdown 源码 · 共享草稿'}</span><button type="button" className="text-button" onClick={() => setDetail({ tab: 'content' })}>{en ? 'Task view' : '任务视图'}</button></div>{sourceEditor}</section><section className="task-live-pane" aria-label={en ? 'Live task preview' : '实时任务预览'}><div className="task-source-pane-heading"><span>{en ? 'Live task · unsaved until Save' : '实时任务 · 显式保存后生效'}</span></div>{taskSurface}</section></div> : sourceEditor)}
         {tab === 'content' && !isDocument && (task ? taskSurface : c.entity && <Preview raw={c.raw} body={c.entity.body} viewProps={{ ...c.viewProps, files: c.projected, allFiles: c.projected }} disabled={!c.selected || !c.canEdit(c.selectedId)} onToggle={line => void c.toggleChecklist(line)} onLink={c.wikiLink} />)}
         {(['properties', 'relations', 'context'] as string[]).includes(tab) && c.selected && c.entity && <Properties key={`${c.selected.id}:${tab}`} file={c.selected} entity={c.entity} files={c.files} configuration={c.configuration} disabled={task ? !c.canEditTaskDraft : isDocument ? sourceReadonly || c.draftParseError || !!c.selected.stale || !!c.entity.archived : !c.canEdit(c.selectedId)} lifecycleDisabled={!c.canManageLifecycle(c.selectedId) || (task || isDocument) && c.draftInvalid} dirty={!!c.draft} draftMode={task || isDocument} excludeFields={isDocument ? ['assignee'] : undefined} section={tab as 'properties' | 'relations' | 'context'} en={en} onPatch={changes => { if (task) c.patchTaskDraft(changes); else if (isDocument) c.patchDocumentDraft(changes); else void c.patch(c.selectedId, changes); }} onLink={c.wikiLink} onLifecycle={action => { if (action === 'delete') { c.setDeleteTarget(c.selected!); c.setDeleteConfirmation(''); c.setError(''); c.setRequestDiagnostics([]); } else void c.lifecycle(c.selected!, action); }} onContext={() => void c.loadContext()} />}
-        {tab === 'graph' && c.selected && <KnowledgeGraph files={c.files} configuration={c.configuration} source={c.graphSource} query={graphQuery} refreshKey={c.graphRefreshKey} selectedId={c.selected.id} draftIds={c.draftIds} onSelect={c.select} en={en} embedded={!fullPage} />}
+        {tab === 'graph' && c.selected && <KnowledgeGraph files={c.files} configuration={c.configuration} source={c.graphSource} query={graphQuery} refreshKey={c.graphRefreshKey} selectedId={c.selected.id} draftIds={c.draftIds} onSelect={c.select} en={en} embedded={!fullPage} renderContextMenu={renderCollectionContextMenu} />}
         {tab === 'business' && c.selected && <>{(c.draft || c.configurationInvalid || c.selected.stale || c.draftInvalid) && <div className="property-hint">{en ? 'Resolve the source draft or diagnostics before changing business state.' : '请先处理源码草稿或诊断，再修改业务状态。'}</div>}<fieldset disabled={!!c.draft || c.draftInvalid || sourceReadonly || !!c.selected.stale}>{renderBusiness(c.selected)}</fieldset></>}
       </div>
       <div className="detail-actions">{!isDocument && <span className="mono">{c.source.revision.slice(0, 7)}</span>}<div>{(c.draft || task && c.draftDiagnostics.some(issue => issue.severity === 'error')) && !c.unsupported && <button className="text-button" onClick={() => { if (window.confirm(en ? 'Discard your unsaved draft and input, and load the latest disk version?' : '放弃未保存的草稿与输入，并加载最新磁盘版本？')) { c.removeDraft(c.selectedId); setDiscardVersion(version => version + 1); } }}>{en ? 'Discard' : '放弃'}</button>}<button className="save-button" data-testid="save-file" disabled={!c.selected || !!c.unsupported || !c.draft || c.draftInvalid || sourceReadonly} onClick={() => void c.save()}>{c.busy === c.selectedId ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}{c.unsupported || sourceReadonly ? (en ? 'Read only' : '只读') : c.draftDiagnostics.some(issue => issue.severity === 'error') ? (en ? 'Fix draft to save' : '修复草稿后保存') : c.draft ? (en ? 'Save changes' : '保存更改') : (en ? 'Saved' : '已保存')}<kbd>⌘ S</kbd></button></div></div>

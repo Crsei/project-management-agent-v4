@@ -1,5 +1,7 @@
 # 前端移植清单：EasyuseUI Project Management → 本项目前端
 
+> 历史设计/移植与分批验收记录：各段状态、路由和测试仅对应原日期，不是当前功能矩阵或当前工作树通过声明。当前用法见[PM指南](guides/project-management.md)，当前安全与存储边界见[架构](architecture/context.md)。
+
 版本：0.2 · 更新日期：2026-10-17 · 状态：独立前端已接真实服务；展示与业务证据分开，最终前端回归待汇总
 
 ## 1. 目标与决策
@@ -58,13 +60,13 @@
 | `/pm/[w]/projects/[p]` | 项目详情、规划/里程碑、对话/意图与依赖 | `detail1/2` |
 | `/pm/[w]/projects/[p]/issues`、`/pm/[w]/issues` | 项目或工作区任务集合 | `list1/2,board1/2/3,calendar1/2,gantt1,spreadsheet1`；专用 `dnd-board,calendar,hour-calendar,gantt,table,dependencies,tree` |
 | `/pm/[w]/projects/[p]/issues/[i]` | 任务详情、元数据、真实成果与审核闭环 | `detail1/2`；审核通过仍须显式完成 |
-| `/pm/[w]/members` | 真实脱敏目录、角色/能力及项目范围、本人资料、既有团队/加入时间/TTL 在线状态、SMTP 邀请闭环 | SMTP 未配置禁用邀请；2FA 无可信来源时保持未知；见[补齐计划](implementation/member-backend-completion.md) |
+| `/pm/[w]/members` | 真实脱敏目录、角色/能力及项目范围、本人资料、既有团队/加入时间/TTL 在线状态、SMTP 邀请闭环 | SMTP 未配置禁用邀请；2FA 无可信来源时保持未知；见[说明](guides/project-management.md) |
 | `/pm/[w]/teams` | 明示未支持团队；显示真实按成员分派工作量 | 创建团队/发送邀请禁用 |
 | `/pm/[w]/notifications` | 真实变更事件活动 | 不是邮件，也无通知已读/归档语义 |
 | `/pm/[w]/projects/[p]/events` | FullCalendar 小时布局与全天任务日期 | 此任务日历不混入会议；Dashboard 1 的 Meetings 单独读取真实项目会议时刻 |
 | `/pm/[w]/whiteboard` | 个人本地白板 | 不提供服务端保存或多人协作 |
 | `/pm/[w]/settings` | 原工作流/字段、迁移/备份、诊断与 `?section=preferences` | 保留旧入口；新设置页提供返回链接 |
-| `/pm/[w]/settings/:page` | 24 页、7 分组设置中心 | 真实本人资料五字段、版本/收据恢复及浏览器偏好；成员/团队/权限/项目接回已有管理入口，无后端合同的写入口禁用，详见[完整设置设计清单](implementation/settings-completion-plan.zh.md) |
+| `/pm/[w]/settings/:page` | 24 页、7 分组设置中心 | 真实本人资料五字段、版本/收据恢复及浏览器偏好；成员/团队/权限/项目接回已有管理入口，无后端合同的写入口禁用，详见[完整设置设计清单](guides/project-management.md) |
 | `/` | 重定向 `/pm` | — |
 
 `/lab/pm` 使用独立路由树与示例工作区 `execra-ai`，保留原 32 项全部页面设计（包括邮件等仅展示页面），并提供 24 个设置页。`?scenario=empty/loading/refresh-error/readonly/long-content` 是原 Lab 视图场景，不改变正式服务事实；设置页不接此场景参数。邀请接受以当前路由权威 `/pm/invitations/accept` 为准。
@@ -125,7 +127,7 @@ pnpm --filter @pm/web build-storybook
 
 ## 10. 2026-10-17：采用工作台设计模式（表层）
 
-决策：按 [AI 与项目协作工作台设计模式](../../DESIGN-PATTERNS.md) 更新本应用表层，落地范围、Token 映射、局部例外与验收证据登记在 [前端设计模式采用记录](frontend-design-adoption.md)。
+决策：按 外部历史设计提案 `DESIGN-PATTERNS.md`（不作为公开构建依赖） 更新本应用表层，落地范围、Token 映射、局部例外与验收证据登记在 [前端设计模式采用记录](frontend-design-adoption.md)。
 
 | 项 | 本次改动 | 仍保持 |
 | --- | --- | --- |
@@ -172,7 +174,7 @@ pnpm --filter @pm/web build-storybook
 
 ### 接入证据与待完成门槛
 
-真实浏览器已完成人工交付闭环、刷新后同一对象读取、文件下载摘要核对、原 commandId 响应丢失恢复、双会话日期冲突与只读用户 SSE 更新；详细结果见 [交付记录](implementation/backend-delivery.md)。Storybook 已抽查指针/键盘看板、日期编辑、图布局、白板恢复、Markdown、虚拟表格与甘特刻度；这些只证明组件交互，不能替代业务服务证据。
+真实浏览器已完成人工交付闭环、刷新后同一对象读取、文件下载摘要核对、原 commandId 响应丢失恢复、双会话日期冲突与只读用户 SSE 更新；详细结果见 [说明](guides/project-management.md)。Storybook 已抽查指针/键盘看板、日期编辑、图布局、白板恢复、Markdown、虚拟表格与甘特刻度；这些只证明组件交互，不能替代业务服务证据。
 
 最新响应式、ELK Worker、跨视图草稿、布局切换及离线提示修改后的 `pnpm check:web` 已通过；Storybook 构建通过。Lab **32/32** 真实浏览器巡检无 pageerror，并复验项目/任务跨视图状态。390px 窄屏导航抽屉与详情元数据复访通过；正式服务补验成员项目授权/撤销、离线提示、HTTP 503 旧快照及重试恢复。生产构建 preview 验证真实图布局与后端读取。构建仍提示大 chunk；未宣称生产部署、真实 Agent、团队/邀请/邮件或完整 G1/G2 已验收。
 
@@ -255,7 +257,7 @@ pnpm --filter @pm/web build-storybook
 - 四页复用对应参照 CSS 和 `DashboardView` 区域布局，服务专用组件只接收命名的 `ServiceDashboardProps` 授权查询快照。旧通用状态图、项目树及活动 Panel 的 Dashboard 适配代码已删除；不导入 Lab fixture/controller。
 - 正式外壳也采用 256px 侧栏、中性配色、Inter 和 56px 页头；移动端为 48px 页头及可自动关闭的导航抽屉。Dashboard 1–4 切换入口就在正式侧栏；其他正在修改的项目列表布局保持不变。
 - 个人页以当前 actor 的创建/分配关系计算任务；概览以实际起止日期及里程碑 `targetDate` 排期；指挥中心展示当前任务状态、项目、成员和事件元数据；依赖页仅展示授权工作项之间的真实同项目前置关系，并保留显式依赖编辑对话框。
-- 本次布局切换时工时、关注、会议、便签、财务、健康/关键路径与在线状态尚未接入；后续已补齐真实服务，范围与证据见 [Dashboard 后端补齐计划](implementation/dashboard-backend-completion.md)。没有记录仍显示明确空态，任务完成比例不冒充健康度。
+- 本次布局切换时工时、关注、会议、便签、财务、健康/关键路径与在线状态尚未接入；后续已补齐真实服务，范围与证据见 [Dashboard 后端说明](guides/project-management.md)。没有记录仍显示明确空态，任务完成比例不冒充健康度。
 - 核心项目/任务读取错误参与页面错误与重试，成员/里程碑/事件读取错误在各自卡片内显示。成功的空快照仍显示真实零值和卡内空态；未加载或无权限不显示为零。未知依赖端点在展示及导出中不泄露 ID/名称。
 - 正式路径浏览器验证覆盖 1440×1000、390×844、浅/深色与中/英文；四页无文档横向溢出。已实际检查个人创建/分配范围区分、项目搜索/范围、排期窗口、里程碑钻取、状态明细、依赖筛选/缩放/选择、移动侧栏切换与自动关闭。
 - 四页均演练空快照、成员权限缺失、任务读取等待、读取失败后重试恢复；等待状态不产生零任务假象。依赖导出验证包含 8 个授权节点、3 条真实同项目前置边，缺失/跨项目关系不导出，缺失端点标识不出现在页面、编辑器或导出 JSON 中。
@@ -294,7 +296,7 @@ pnpm --filter @pm/web build-storybook
 - 邀请包含创建、真实投递状态、显式重发/撤销；`/pm/invitations/accept` 不依赖已有登录，fragment token 只保存在内存。响应未知保留原 commandId 并核对接受收据，不重新申请成员权限。
 - 实际浏览器使用隔离 PostgreSQL、HTTP API、真实 loopback SMTP 接收端和独立 Worker 验证邀请→接受→普通账号登录→脱敏目录。额外验证接受提交已生效但响应被中断后的收据恢复、同一路径重新打开 fragment 链接、资料与头像刷新保留、角色保存、重发和撤销。
 - 三个正式变体实测桌面 1440×1000、移动 390×844；Member 3 邀请表单保留内边距与桌面双列，Member 2 多操作页头在手机改为正常文档流，避免覆盖原工具栏。另查看英文/深色表面。证据位于 `.local/evidence/member-backend/`；不使用 mock API，不覆盖默认前端构建。
-- 上一节的显式测试响应仅属复刻历史，不替代本节真实服务验收；最终检查与 SMTP 未配置、2FA 未接入等边界统一记录在[成员补齐计划](implementation/member-backend-completion.md)。
+- 上一节的显式测试响应仅属复刻历史，不替代本节真实服务验收；最终检查与 SMTP 未配置、2FA 未接入等边界统一记录在[成员说明](guides/project-management.md)。
 
 ## 17. Team List 1–3 在线参照复刻
 
@@ -341,7 +343,7 @@ pnpm --filter @pm/web build-storybook
 | Profile / `profile` | 姓名、用户名、邮箱、生日、语言、时区、更新按钮 | `usePersonalDashboard` + `UpdateSelfProfile` 保存真实姓名/时区，带 expectedVersions、共享命令收据与草稿；用户名、邮箱修改和生日未提供接口 |
 | Billing / `billing` | 用户名/城市、Card/PayPal/Apple Pay、支付方式明细、继续与复核 | 正式全部禁用；Lab 仅示例掩码卡，不采集完整卡号/CVC，不扣款 |
 | Plans / `plans` | 月付/年付/终身选择、价格/折扣、功能/资源、详情和订阅确认 | 正式不伪造套餐/价格/权益；Lab 显示示例金额并仅确认预览，不创建订阅 |
-| Plugins / `plugins` | 2026-10-22 替换原关联应用页：19 项目录、分类/搜索/详情、权限与接入说明 | SMTP 邀请配置状态读取真实管理员接口；其他适配器明确未实现，Lab 只读且不再模拟连接。见[适配计划与验收](implementation/plugin-settings-adaptation-plan.zh.md) |
+| Plugins / `plugins` | 2026-10-22 替换原关联应用页：19 项目录、分类/搜索/详情、权限与接入说明 | SMTP 邀请配置状态读取真实管理员接口；其他适配器明确未实现，Lab 只读且不再模拟连接。见[适配说明与验收](guides/project-management.md) |
 | Notifications / `notifications` | 消息范围单选、四类邮件开关、移动端覆盖/锁屏预览、保存/重置 | 正式无投递偏好接口，控件禁用并链接真实活动；Lab 安全邮件强制开启仅是演示，不发送消息、不影响业务 SSE |
 
 桌面使用设置侧栏，窄屏改为原生选择器；未知子页明确报错。主侧栏和命令菜单进入新页面；旧 `/settings` 的配置、迁移、诊断、外观/布局入口未替换。共享滚动容器建立定位上下文，避免视觉隐藏表单控件扩大文档高度。
@@ -373,7 +375,7 @@ pnpm --filter @pm/web build-storybook
 
 ## 20. Teams 1–3 正式后端接入
 
-本节接替第 17 节的“事实缺失、写入口禁用”阶段；布局参照保持不变，正式页面不再使用测试响应验收。实施分工和最终检查/激活状态见 [Teams 补齐计划](implementation/teams-backend-completion.md)。
+本节接替第 17 节的“事实缺失、写入口禁用”阶段；布局参照保持不变，正式页面不再使用测试响应验收。实施分工和最终检查/激活状态见 [Teams 说明](guides/project-management.md)。
 
 - Team 1：真实标识/说明/工作方向/响应目标，成员与维护者、项目关联、可见开放任务数及实际活动时间；新增、编辑、归档通过版本化命令。SSE 并发变化保留草稿并锁定保存，显式采用当前版本后才可重新提交。
 - Team 2：复用脱敏成员目录、本人资料、邀请和在线 TTL；按真实团队分组，不把团队称为部门。邀请入口依赖管理权限和可用 SMTP；管理页提供既有撤销/显式重发。
@@ -407,5 +409,5 @@ pnpm --filter @pm/web build-storybook
 - Profile 复用真实姓名、岗位、电话、时区、头像合同；PNG/JPEG/WebP 不超过 256 KiB，保留完整草稿、CAS 和原命令收据恢复。账号邮箱只读。成员、团队、角色权限及项目生命周期不建立第二套业务实现。
 - 改密、MFA、其他设备撤销、工作区改名/删除、支付/订阅/发票、OAuth 和提醒投递没有正式合同，页面明确未知/不可用且禁用。通知 14 个事件选项在正式模式为未知状态；Lab 的通知/账单样例不写真实服务。
 - 已运行 `pnpm check:web`、workspace/小时日历定向 ESLint，以及任务集合、项目任务编辑、团队前端模型、个人 Dashboard 集成测试（26 项通过、0 跳过）。构建仍提示大 chunk 和 `workflow-canvas.tsx` 混合导入，不代表已完成性能优化。
-- 隔离 schema/API/Web 验证：正式与 Lab 各 24 页，1440px 与 390px 共 96 次页面遍历无文档横向溢出；4 个原生管理入口可用。真实资料持久化/头像移除、SSE 并发冲突、提交成功但响应丢失后的原收据恢复、当前会话退出及未登录隔离均已观察。完整 29 项清单、限制和证据见[设置中心交付清单](implementation/settings-completion-plan.zh.md)。
+- 隔离 schema/API/Web 验证：正式与 Lab 各 24 页，1440px 与 390px 共 96 次页面遍历无文档横向溢出；4 个原生管理入口可用。真实资料持久化/头像移除、SSE 并发冲突、提交成功但响应丢失后的原收据恢复、当前会话退出及未登录隔离均已观察。完整 29 项清单、限制和证据见[设置中心交付清单](guides/project-management.md)。
 

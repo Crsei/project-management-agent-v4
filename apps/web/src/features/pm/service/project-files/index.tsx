@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react"
 import { useSearchParams } from "react-router"
 import { ApiError, CommandOutcomeUnknown, type ArtifactVisibility, type Command, type CommandReceipt, type Entity } from "@contracts"
 import { z } from "zod"
@@ -8,8 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty } from "@/components/ui/empty"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
+import { FilterCard } from "@/components/blocks/filter-card"
+import type { FilterCondition, FilterField } from "@/lib/filter-model"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { usePmCommand, usePmEntities, usePmService, useProjectDirectory } from "../pm-service"
@@ -103,20 +105,55 @@ async function copyText(value: string): Promise<boolean> {
   }
 }
 
-function FileMenu({ entry, t, onPreview, onDownload, onCopyLink, onAction, canManage, canCopy, locked }: { entry: FileEntry; t: (zh: string, en: string) => string; onPreview: () => void; onDownload: () => void; onCopyLink: () => void; onAction: (mode: FileLifecycleAction["mode"]) => void; canManage: boolean; canCopy: boolean; locked: boolean }) {
-  return <DropdownMenu>
-    <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className={styles.more} aria-label={`${t("文件操作", "File actions")} ${entry.name}`} />}>
+type FileMenuProps = {
+  entry: FileEntry
+  t: (zh: string, en: string) => string
+  onPreview: () => void
+  onDownload: () => void
+  onCopyLink: () => void
+  onAction: (mode: FileLifecycleAction["mode"]) => void
+  canManage: boolean
+  canCopy: boolean
+  locked: boolean
+  children: (menuButton: ReactNode) => ReactElement
+}
+
+function FileMenuActions({ entry, t, onPreview, onDownload, onCopyLink, onAction, canManage, canCopy, locked, contextMenu = false }: Omit<FileMenuProps, "children"> & { contextMenu?: boolean }) {
+  const Item = contextMenu ? ContextMenuItem : DropdownMenuItem
+  return <>
+    <Item onSelect={onPreview}><Eye size={14} />{t("预览", "Preview")}</Item>
+    <Item onSelect={onDownload}><Download size={14} />{t("下载", "Download")}</Item>
+    <Item onSelect={onCopyLink}><Link2 size={14} />{t("复制链接", "Copy link")}</Item>
+    {canManage && !entry.hidden && <Item disabled={locked} onSelect={() => onAction("rename")}>{t("修改显示名", "Rename display title")}</Item>}
+    {canManage && <Item disabled={locked} onSelect={() => onAction(entry.hidden ? "restore" : "hide")}>{entry.hidden ? t("恢复", "Restore") : t("隐藏", "Hide")}</Item>}
+    {canCopy && <Item disabled={locked} onSelect={() => onAction("copy")}>{t(`复制最新版本 v${entry.versionCount}`, `Copy latest version v${entry.versionCount}`)}</Item>}
+  </>
+}
+
+/** A single artifact/action scope supplies both the ellipsis and its real row. */
+function FileMenu({ children, ...props }: FileMenuProps) {
+  const button = useRef<HTMLButtonElement>(null)
+  const target = useRef<HTMLElement | null>(null)
+  const dialogHandoff = useRef(false)
+  const handoff = (run: () => void, opener: HTMLElement | null) => {
+    dialogHandoff.current = true
+    requestAnimationFrame(() => { opener?.focus({ preventScroll: true }); run() })
+  }
+  const resetHandoff = (open: boolean) => { if (open) dialogHandoff.current = false }
+  const menuButton = <DropdownMenu onOpenChange={resetHandoff}>
+    <DropdownMenuTrigger render={<Button ref={button} variant="ghost" size="icon-sm" className={styles.more} aria-label={`${props.t("文件操作", "File actions")} ${props.entry.name}`} onClick={event => event.stopPropagation()} />}>
       <MoreHorizontal size={14} />
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end">
-      <DropdownMenuItem onSelect={onPreview}><Eye size={14} />{t("预览", "Preview")}</DropdownMenuItem>
-      <DropdownMenuItem onSelect={onDownload}><Download size={14} />{t("下载", "Download")}</DropdownMenuItem>
-      <DropdownMenuItem onSelect={onCopyLink}><Link2 size={14} />{t("复制链接", "Copy link")}</DropdownMenuItem>
-      {canManage && !entry.hidden && <DropdownMenuItem disabled={locked} onSelect={() => onAction("rename")}>{t("修改显示名", "Rename display title")}</DropdownMenuItem>}
-      {canManage && <DropdownMenuItem disabled={locked} onSelect={() => onAction(entry.hidden ? "restore" : "hide")}>{entry.hidden ? t("恢复", "Restore") : t("隐藏", "Hide")}</DropdownMenuItem>}
-      {canCopy && <DropdownMenuItem disabled={locked} onSelect={() => onAction("copy")}>{t(`复制最新版本 v${entry.versionCount}`, `Copy latest version v${entry.versionCount}`)}</DropdownMenuItem>}
+    <DropdownMenuContent align="end" onClick={event => event.stopPropagation()} onCloseAutoFocus={event => { if (dialogHandoff.current) event.preventDefault() }}>
+      <FileMenuActions {...props} onPreview={() => handoff(props.onPreview, button.current)} onAction={mode => handoff(() => props.onAction(mode), button.current)} />
     </DropdownMenuContent>
   </DropdownMenu>
+  return <ContextMenu onOpenChange={resetHandoff}>
+    <ContextMenuTrigger ref={element => { target.current = element }} asChild tabIndex={0}>{children(menuButton)}</ContextMenuTrigger>
+    <ContextMenuContent aria-label={`${props.t("文件操作", "File actions")} ${props.entry.name}`} onClick={event => event.stopPropagation()} onCloseAutoFocus={event => { if (dialogHandoff.current) event.preventDefault() }}>
+      <FileMenuActions {...props} contextMenu onPreview={() => handoff(props.onPreview, target.current)} onAction={mode => handoff(() => props.onAction(mode), target.current)} />
+    </ContextMenuContent>
+  </ContextMenu>
 }
 
 export function ProjectFilesPage({ project, open, onOpenChange }: { project: Entity; open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -548,7 +585,7 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
           ? <Empty icon={<SearchX size={20} />} title={t("没有匹配的文件", "No results found")} description={t("没有文件符合当前搜索或筛选条件。", "No files match the current search or filters.")} />
           : view === "grid"
             ? <ul className={styles.grid} aria-label={t("文件", "Files")}>
-                {filtered.map(entry => <li key={entry.id} className={styles.card} data-pm-file>
+                {filtered.map(entry => <FileMenu key={entry.id} entry={entry} t={t} onPreview={() => openPreview(entry, entry.latest.id)} onDownload={() => { void download(entry.latest) }} onCopyLink={() => copyLink(entry.latest)} canManage={canManage} canCopy={canCopy} locked={locked} onAction={mode => setLifecycleAction({ mode, artifact: entry.artifact, version: entry.latest, scope: actionScope })}>{menuButton => <li className={styles.card} data-pm-file>
                   <button type="button" className={styles.cardButton} aria-label={`${t("预览", "Preview")} ${entry.name}`} onClick={() => openPreview(entry, entry.latest.id)}>
                     <FilePreviewArt kind={entry.kind} name={entry.originalFileName} />
                     <span className={styles.cardInfo}>
@@ -556,8 +593,8 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
                       <span className={styles.fileMeta}>{entry.hidden && `${t("已隐藏", "Hidden")} · `}{entry.originalFileName} · {[formatFileSize(entry.size), uploaderName(entry.uploaderId), formatRelativeTime(entry.updatedAt, locale)].filter(Boolean).join(" · ")}{entry.versionCount > 1 ? ` · v${entry.versionCount}` : ""}</span>
                     </span>
                   </button>
-                  <FileMenu entry={entry} t={t} onPreview={() => openPreview(entry, entry.latest.id)} onDownload={() => { void download(entry.latest) }} onCopyLink={() => copyLink(entry.latest)} canManage={canManage} canCopy={canCopy} locked={locked} onAction={mode => setLifecycleAction({ mode, artifact: entry.artifact, version: entry.latest, scope: actionScope })} />
-                </li>)}
+                  {menuButton}
+                </li>}</FileMenu>)}
               </ul>
             : <div className={styles.tableWrap} role="region" aria-label={t("文件表格", "Files table")} tabIndex={0}>
                 <table className={styles.table}>
@@ -565,14 +602,14 @@ export function ProjectFilesPage({ project, open, onOpenChange }: { project: Ent
                   <tbody>
                     {filtered.map(entry => {
                       const uploader = uploaderName(entry.uploaderId)
-                      return <tr key={entry.id} data-pm-file>
+                      return <FileMenu key={entry.id} entry={entry} t={t} onPreview={() => openPreview(entry, entry.latest.id)} onDownload={() => { void download(entry.latest) }} onCopyLink={() => copyLink(entry.latest)} canManage={canManage} canCopy={canCopy} locked={locked} onAction={mode => setLifecycleAction({ mode, artifact: entry.artifact, version: entry.latest, scope: actionScope })}>{menuButton => <tr data-pm-file>
                         <td><button type="button" className={styles.nameButton} title={`${entry.name} · ${entry.originalFileName}`} onClick={() => openPreview(entry, entry.latest.id)}><FileTypeIcon kind={entry.kind} size={14} /><span className={styles.nameText}>{entry.name}{entry.hidden && ` · ${t("已隐藏", "Hidden")}`}</span>{entry.versionCount > 1 && <span className={styles.versionBadge}>v{entry.versionCount}</span>}</button><small className={styles.fileMeta}>{entry.originalFileName}</small></td>
                         <td>{kindLabel(entry.kind, en)}</td>
                         <td className={styles.numeric}>{formatFileSize(entry.size) || "—"}</td>
                         <td><span className={styles.uploader}>{uploader !== "—" && <Avatar name={uploader} size={24} />}<span>{uploader}</span></span></td>
                         <td className={styles.date} title={display.dateTime(entry.updatedAt)}>{formatRelativeTime(entry.updatedAt, locale)}</td>
-                        <td className={styles.actions}><FileMenu entry={entry} t={t} onPreview={() => openPreview(entry, entry.latest.id)} onDownload={() => { void download(entry.latest) }} onCopyLink={() => copyLink(entry.latest)} canManage={canManage} canCopy={canCopy} locked={locked} onAction={mode => setLifecycleAction({ mode, artifact: entry.artifact, version: entry.latest, scope: actionScope })} /></td>
-                      </tr>
+                        <td className={styles.actions}>{menuButton}</td>
+                      </tr>}</FileMenu>
                     })}
                   </tbody>
                 </table>

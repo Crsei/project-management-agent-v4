@@ -44,3 +44,5 @@ export const workspaceNote = appNote;
 
 // Public, build-time links only. Never put access tokens or provider keys here.
 export const desktopReleaseUrl = publicUrl(import.meta.env.PUBLIC_DESKTOP_RELEASE_URL, true)?.href;
+
+export const sourceUrl = publicUrl(import.meta.env.PUBLIC_SOURCE_URL, true)?.href;

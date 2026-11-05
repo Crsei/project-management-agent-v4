@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { open, readFile } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { parseDocument } from 'yaml';
 import type { Diagnostic, FileRecord, UnsupportedFile } from '../pm-schema/index.ts';
+import { authenticate, CliAuthError, loginCli, logoutCli, serviceOrigin } from './auth.ts';
 
 const HELP = `Markdown PM Lab — operate the same live workspace as the browser
 
 Usage:
+  pm login [--email EMAIL]
+  pm logout
   pm protocol
   pm file ID
   pm context ID
@@ -69,9 +72,16 @@ the configuration with CAS (--revision absent creates the first config).
 Migration preview never changes business files; inspect its diff/diagnostics
 before apply. Apply and restore both require matching revision and confirmation.
 PM_API_URL defaults to http://127.0.0.1:4194 and must point at this v4 PM API.
-Authentication (first match wins): PM_SESSION_TOKEN, PM_EMAIL + PM_PASSWORD,
-or .local/access.json (PM_ACCESS_FILE overrides). PM_WORKSPACE_ID selects the
-workspace; otherwise the CLI uses the single workspace the account can access.
+Authentication (first match wins): PM_SESSION_TOKEN, complete PM_EMAIL + PM_PASSWORD,
+or a private, unexpired session saved by pm login for this service origin.
+Login prompts for a hidden password (no password command-line option).
+Session storage defaults to $XDG_CONFIG_HOME/dovspace/pm-cli, or
+~/.config/dovspace/pm-cli. PM_CLI_SESSION_DIR selects an absolute private directory.
+Remote services require
+HTTPS; HTTP is allowed only on loopback. Logout revokes the server session and
+removes only this origin's saved session; failures retain local credentials.
+PM_WORKSPACE_ID selects the workspace; otherwise the CLI uses the single
+workspace the account can access.
 Commands operate on /api/v1/workspaces/{workspaceId}/core, the Markdown core.
 `;
 
@@ -89,8 +99,8 @@ export class CliError extends Error {
     this.name = 'CliError';
     this.code = code;
     this.diagnostics = diagnostics;
-    this.status = status;
-    this.current = current;
+    if (status !== undefined) this.status = status;
+    if (current !== undefined) this.current = current;
   }
 }
 
@@ -142,12 +152,13 @@ function migrationIdentifier(value: string | undefined): string {
 function parseOptions(args: string[], allowed: readonly string[]): Record<string, string> {
   const options: Record<string, string> = {};
   for (let index = 0; index < args.length; index++) {
-    const match = /^--([a-z-]+)(?:=(.*))?$/.exec(args[index]);
-    if (!match || !allowed.includes(match[1])) throw new Error(`Unknown option: ${args[index]}`);
+    const match = /^--([a-z-]+)(?:=(.*))?$/.exec(args[index]!);
+    if (!match || !match[1] || !allowed.includes(match[1])) throw new Error('Unknown or unsupported option. Run pm --help.');
+    const name = match[1];
     const value = match[2] ?? args[++index];
-    if (value === undefined || value.startsWith('--')) throw new Error(`Missing value for --${match[1]}`);
-    if (match[1] in options) throw new Error(`Repeated option: --${match[1]}`);
-    options[match[1]] = value;
+    if (value === undefined || value.startsWith('--')) throw new Error(`Missing value for --${name}`);
+    if (name in options) throw new Error(`Repeated option: --${name}`);
+    options[name] = value;
   }
   return options;
 }
@@ -212,49 +223,16 @@ function errorText(value: unknown): string | undefined {
   return undefined;
 }
 
-async function authenticate(service: string): Promise<Record<string, string>> {
-  const token = process.env.PM_SESSION_TOKEN?.trim();
-  if (token) return { Authorization: `Bearer ${token}` };
-  let email = process.env.PM_EMAIL?.trim();
-  let password = process.env.PM_PASSWORD;
-  if (!email || !password) {
-    const file = process.env.PM_ACCESS_FILE ?? '.local/access.json';
-    try {
-      const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
-      if (parsed && typeof parsed === 'object') {
-        if (!email && 'email' in parsed && typeof parsed.email === 'string') email = parsed.email;
-        if (!password && 'password' in parsed && typeof parsed.password === 'string') password = parsed.password;
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new CliError('CLI_AUTH_REQUIRED', `Cannot read ${file}: ${(error as Error).message}`);
-    }
-  }
-  if (!email || !password) throw new CliError('CLI_AUTH_REQUIRED', 'Set PM_SESSION_TOKEN or PM_EMAIL/PM_PASSWORD, or provide .local/access.json');
-  let response: Response;
-  try {
-    response = await fetch(`${service}/api/v1/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }), signal: AbortSignal.timeout(15_000) });
-  } catch (error) { throw new CliError('CLI_CONNECTION_FAILED', `Cannot reach ${service}: ${(error as Error).message}`); }
-  if (!response.ok) {
-    const payload: unknown = await response.json().catch(() => undefined);
-    const message = payload && typeof payload === 'object' && 'error' in payload ? errorText(payload.error) : undefined;
-    throw new CliError('CLI_AUTH_FAILED', `Login failed (HTTP ${response.status})${message ? `: ${message}` : ''}`);
-  }
-  const cookie = (response.headers.getSetCookie?.() ?? []).map(value => value.split(';')[0]).filter(Boolean).join('; ');
-  if (!cookie) throw new CliError('CLI_AUTH_FAILED', 'Login did not return a session cookie');
-  return { Cookie: cookie };
-}
 
 async function connectionFor(): Promise<Connection> {
   if (connection) return connection;
   const pending = (async (): Promise<Connection> => {
-    const service = (process.env.PM_API_URL ?? 'http://127.0.0.1:4194').replace(/\/+$/, '').replace(/\/api$/, '');
-    const url = new URL(service);
-    if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash || url.username || url.password) throw new Error('PM_API_URL must be an HTTP(S) service URL without credentials, query, or fragment');
-    const headers = await authenticate(service);
+    const service = serviceOrigin();
+    const headers = (await authenticate(service)).headers;
     const workspaceId = process.env.PM_WORKSPACE_ID?.trim();
     if (!workspaceId) {
       let response: Response;
-      try { response = await fetch(`${service}/api/v1/workspaces`, { headers, signal: AbortSignal.timeout(15_000) }); }
+      try { response = await fetch(`${service}/api/v1/workspaces`, { headers, redirect: 'error', signal: AbortSignal.timeout(15_000) }); }
       catch (error) { throw new CliError('CLI_CONNECTION_FAILED', `Cannot reach ${service}: ${(error as Error).message}`); }
       if (!response.ok) throw new CliError('CLI_AUTH_FAILED', `Cannot list workspaces (HTTP ${response.status})`);
       const payload: unknown = await response.json();
@@ -279,7 +257,7 @@ async function request<T>(endpoint: string, method = 'GET', body?: unknown, idem
   let response: Response;
   try {
     response = await fetch(`${target.base}${endpoint}`, {
-      method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000),
+      method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'error', signal: AbortSignal.timeout(15000),
     });
   } catch (error) { throw new CliError('CLI_CONNECTION_FAILED', `Cannot reach ${target.base}: ${(error as Error).message}`); }
   const text = await response.text();
@@ -300,6 +278,17 @@ async function request<T>(endpoint: string, method = 'GET', body?: unknown, idem
 async function executeCli(args: string[]): Promise<void> {
   if (!args.length || args.includes('--help') || args[0] === 'help' || args[0] === '-h') {
     console.log(HELP);
+    return;
+  }
+  if (args[0] === 'login') {
+    const options = parseOptions(args.slice(1), ['email']);
+    if (options.email !== undefined) nonempty(options.email, '--email');
+    console.log(JSON.stringify(await loginCli(options.email), null, 2));
+    return;
+  }
+  if (args[0] === 'logout') {
+    if (args.length !== 1) throw new Error('Usage: pm logout');
+    console.log(JSON.stringify(await logoutCli(), null, 2));
     return;
   }
   if (args[0] === 'protocol') {
@@ -363,7 +352,7 @@ async function executeCli(args: string[]): Promise<void> {
   }
   const scope = args[0];
   if (scope !== 'task' && scope !== 'entity') throw new Error(`Unknown command: ${scope}. Run pm --help.`);
-  const action = args[1];
+  const action = args[1] ?? '';
   if (action === 'list') {
     const options = parseOptions(args.slice(2), ['project', 'status', 'priority', 'q', 'sort', 'archived', ...(scope === 'entity' ? ['entity'] : [])]);
     archiveFilter(options.archived);
@@ -411,9 +400,11 @@ async function executeCli(args: string[]): Promise<void> {
 }
 
 export async function runCli(args: string[]): Promise<void> {
+  connection = undefined;
   try { await executeCli(args); }
   catch (error) {
     if (error instanceof CliError) throw error;
+    if (error instanceof CliAuthError) throw new CliError(error.code, error.message);
     throw new CliError('CLI_INVALID_ARGUMENT', (error as Error).message);
   }
 }

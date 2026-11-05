@@ -7,6 +7,7 @@ import type { GraphData, GraphNode } from '../pm-schema/graph.ts';
 import { buildFlowGraph, GRAPH_NODE_HEIGHT, GRAPH_NODE_WIDTH } from './graph-flow-model.ts';
 import type { GraphDirection, GraphFlowEdge, GraphFlowModel, GraphFlowNode } from './graph-flow-model.ts';
 import { layoutFlowGraph } from './graph-flow-layout.ts';
+import type { ContextMenuAction, ContextMenuRenderer } from './index.tsx';
 import '@xyflow/react/dist/style.css';
 import './knowledge-graph-flow.css';
 
@@ -26,6 +27,8 @@ interface CanvasProps {
   onSelect: (id: string) => void;
   viewStateRef?: React.MutableRefObject<GraphCanvasViewState | undefined>;
   focusRequest?: { id: string; nonce: number };
+  renderContextMenu?: ContextMenuRenderer;
+  nodeContextActions: (id: string) => ContextMenuAction[];
 }
 interface RelationStyle { color: string; dash?: string; width: number }
 interface Presentation {
@@ -37,6 +40,9 @@ interface Presentation {
   activeEdgeId?: string;
   highlighted?: Set<string>;
   showLabels: boolean;
+  renderContextMenu?: ContextMenuRenderer;
+  nodeContextActions?: (id: string) => ContextMenuAction[];
+  onInspectEdge?: (id: string) => void;
 }
 const PresentationContext = createContext<Presentation>({ en: false, showLabels: false });
 const entityLabels: Record<EntityKind, string> = { project: '项目', work_item: '工作项', document: '文档', cycle: '周期', milestone: '里程碑', module: '模块', requirement: '需求', release: '发布', goal: '目标' };
@@ -68,11 +74,11 @@ function nodeDescription(node: GraphNode, degree: number, en: boolean, draft: bo
 }
 
 const EntityCard = memo(function EntityCard({ id, data, sourcePosition = Position.Right, targetPosition = Position.Left }: NodeProps<GraphFlowNode>) {
-  const { en, selectedId, centerId, draftIds, activeNodeId, highlighted } = useContext(PresentationContext);
+  const { en, selectedId, centerId, draftIds, activeNodeId, highlighted, renderContextMenu, nodeContextActions } = useContext(PresentationContext);
   const node = data.entity;
   const draft = draftIds?.has(id);
   const classes = ['kg-entity-card', highlighted && !highlighted.has(id) && 'is-muted', activeNodeId === id && 'is-highlighted', selectedId === id && 'is-selected', centerId === id && 'is-center', draft && 'is-draft'].filter(Boolean).join(' ');
-  return <div className={classes} style={{ '--kg-entity-color': `var(--kg-${node.entity})` } as React.CSSProperties}>
+  const card = <div className={classes} tabIndex={renderContextMenu ? 0 : undefined} role={renderContextMenu ? 'button' : undefined} aria-label={nodeDescription(node, data.degree, en, !!draft)} style={{ '--kg-entity-color': `var(--kg-${node.entity})` } as React.CSSProperties}>
     <Handle id="in" type="target" position={targetPosition} isConnectable={false} />
     <div className="kg-entity-heading"><span className="kg-entity-type">{en ? entityDefinitions[node.entity].label : entityLabels[node.entity]}</span><span className="kg-entity-id">{id}</span></div>
     <strong className="kg-entity-title" title={node.title}>{node.title}</strong>
@@ -80,6 +86,7 @@ const EntityCard = memo(function EntityCard({ id, data, sourcePosition = Positio
     {(node.archived || node.stale || draft) && <div className="kg-entity-marks">{node.archived && <span>{en ? 'Archived' : '归档'}</span>}{node.stale && <span>{en ? 'Stale' : '过期'}</span>}{draft && <span className="kg-entity-draft">{en ? 'Draft' : '草稿'}</span>}</div>}
     <Handle id="out" type="source" position={sourcePosition} isConnectable={false} />
   </div>;
+  return renderContextMenu ? renderContextMenu(card, nodeContextActions?.(id) ?? []) : card;
 });
 
 /** Route outside the cards for back edges and self references; never reverse the DTO edge. */
@@ -124,16 +131,19 @@ function relationshipPath({ source, target, sourceX: sx, sourceY: sy, targetX: t
   return [`M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tx} ${ty}`, (sx + 3 * c1x + 3 * c2x + tx) / 8, (sy + 3 * c1y + 3 * c2y + ty) / 8];
 }
 const RelationshipEdge = memo(function RelationshipEdge(props: EdgeProps<GraphFlowEdge>) {
-  const { activeNodeId, activeEdgeId, showLabels } = useContext(PresentationContext);
+  const { en, activeNodeId, activeEdgeId, showLabels, renderContextMenu, onInspectEdge } = useContext(PresentationContext);
   const kind = props.data?.kind ?? '';
   const style = relationStyle(kind);
   const active = activeEdgeId === props.id || activeNodeId === props.source || activeNodeId === props.target;
   const muted = !!(activeNodeId || activeEdgeId) && !active;
   const [path, labelX, labelY] = relationshipPath(props);
-  return <>
+  const edge = <g tabIndex={renderContextMenu ? 0 : undefined} role={renderContextMenu ? 'img' : undefined} aria-label={`${props.source} → ${props.target} · ${kind}`}>
     <BaseEdge id={props.id} path={path} markerEnd={props.markerEnd} interactionWidth={20} style={{ stroke: style.color, strokeWidth: active ? style.width + 1 : style.width, strokeDasharray: style.dash, opacity: muted ? .32 : active ? 1 : .68 }} />
     {showLabels || active ? <EdgeLabelRenderer><div className={`kg-relationship-label${active ? ' is-active' : ''}${muted ? ' is-muted' : ''}`} style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, borderColor: style.color }} title={`${props.source} → ${props.target} · ${kind}`}><strong>{kind}</strong></div></EdgeLabelRenderer> : null}
-  </>;
+  </g>;
+  return renderContextMenu ? renderContextMenu(edge, [
+    { id: 'relation', label: en ? 'Show relationship info' : '查看关系信息', onSelect: () => onInspectEdge?.(props.id) },
+  ]) : edge;
 });
 const nodeTypes = { entity: EntityCard };
 const edgeTypes = { relationship: RelationshipEdge };
@@ -165,7 +175,7 @@ function focusedElement(target: EventTarget | null) {
   return target instanceof Element ? target.closest<HTMLElement | SVGElement>('.react-flow__node[data-id], .react-flow__edge[data-id]') : null;
 }
 
-function GraphCanvasBody({ data, selectedId, centerId, draftIds, en, embedded, onSelect, viewStateRef, focusRequest }: CanvasProps) {
+function GraphCanvasBody({ data, selectedId, centerId, draftIds, en, embedded, onSelect, viewStateRef, focusRequest, renderContextMenu, nodeContextActions }: CanvasProps) {
   const [cache] = useState<GraphCanvasViewState>(() => {
     if (viewStateRef?.current) return viewStateRef.current;
     const next: GraphCanvasViewState = { positions: new Map(), direction: 'RIGHT' };
@@ -182,6 +192,7 @@ function GraphCanvasBody({ data, selectedId, centerId, draftIds, en, embedded, o
   const [hoverEdgeId, setHoverEdgeId] = useState<string>();
   const [focusNodeId, setFocusNodeId] = useState<string>();
   const [focusEdgeId, setFocusEdgeId] = useState<string>();
+  const [inspectedEdgeId, setInspectedEdgeId] = useState<string>();
   const [zoom, setZoom] = useState(cache.viewport?.zoom ?? 1);
   const surface = useRef<HTMLDivElement>(null);
   const interaction = useRef(0);
@@ -195,10 +206,10 @@ function GraphCanvasBody({ data, selectedId, centerId, draftIds, en, embedded, o
   const model = useMemo(() => {
     const result = buildFlowGraph(data, direction);
     return { ...result,
-      nodes: result.nodes.map(node => ({ ...node, className: 'kg-flow-node', selectable: false, deletable: false, connectable: false, focusable: true, ariaRole: 'button' as const, ariaLabel: `${en ? 'Open' : '打开'} · ${nodeDescription(node.data.entity, node.data.degree, en, !!draftIds?.has(node.id))}`, domAttributes: { 'aria-roledescription': en ? 'entity card' : '实体卡片' } })),
-      edges: result.edges.map(edge => ({ ...edge, selectable: false, deletable: false, reconnectable: false, focusable: true, ariaLabel: `${edge.source} → ${edge.target} · ${edge.data?.kind ?? ''}`, domAttributes: { 'aria-roledescription': en ? 'directed relationship' : '有向关系' }, markerEnd: { type: MarkerType.ArrowClosed, color: relationStyle(edge.data?.kind ?? '').color, width: 18, height: 18 } })),
+      nodes: result.nodes.map(node => ({ ...node, className: 'kg-flow-node', selectable: false, deletable: false, connectable: false, focusable: !renderContextMenu, ariaRole: 'button' as const, ariaLabel: `${en ? 'Open' : '打开'} · ${nodeDescription(node.data.entity, node.data.degree, en, !!draftIds?.has(node.id))}`, domAttributes: { 'aria-roledescription': en ? 'entity card' : '实体卡片' } })),
+      edges: result.edges.map(edge => ({ ...edge, selectable: false, deletable: false, reconnectable: false, focusable: !renderContextMenu, ariaLabel: `${edge.source} → ${edge.target} · ${edge.data?.kind ?? ''}`, domAttributes: { 'aria-roledescription': en ? 'directed relationship' : '有向关系' }, markerEnd: { type: MarkerType.ArrowClosed, color: relationStyle(edge.data?.kind ?? '').color, width: 18, height: 18 } })),
     };
-  }, [data, direction, en, draftIds]);
+  }, [data, direction, en, draftIds, renderContextMenu]);
   const job = useMemo<LayoutJob>(() => ({ model, force: settings.attempt !== consumedAttempt.current }), [model, settings.attempt]);
   const prepared = useMemo(() => prepareNodes(job.model, cache, direction), [job, cache, direction]);
   const initial = useMemo<RenderState>(() => ({ job, nodes: prepared.nodes, status: job.force || prepared.retained.size !== model.nodes.length ? 'loading' : 'ready' }), [job, prepared, model.nodes.length]);
@@ -333,9 +344,9 @@ function GraphCanvasBody({ data, selectedId, centerId, draftIds, en, embedded, o
     setRendered(previous => previous.job === job ? { ...previous, nodes: applyNodeChanges(allowed, previous.nodes) } : previous);
   }, [cache, cacheIsCurrent, job]);
   const activeNodeId = focusNodeId ?? hoverNodeId;
-  const activeEdgeId = focusEdgeId ?? hoverEdgeId;
+  const activeEdgeId = focusEdgeId ?? hoverEdgeId ?? inspectedEdgeId;
   const highlighted = useMemo(() => activeNodeId ? new Set([activeNodeId, ...(model.neighbors.get(activeNodeId) ?? [])]) : undefined, [activeNodeId, model.neighbors]);
-  const presentation = useMemo<Presentation>(() => ({ en, selectedId, centerId, draftIds, activeNodeId, activeEdgeId, highlighted, showLabels }), [en, selectedId, centerId, draftIds, activeNodeId, activeEdgeId, highlighted, showLabels]);
+  const presentation = useMemo<Presentation>(() => ({ en, selectedId, centerId, draftIds, activeNodeId, activeEdgeId, highlighted, showLabels, renderContextMenu, nodeContextActions, onInspectEdge: setInspectedEdgeId }), [en, selectedId, centerId, draftIds, activeNodeId, activeEdgeId, highlighted, showLabels, renderContextMenu, nodeContextActions]);
   const nodeIndex = useMemo(() => new Map(model.nodes.map(node => [node.id, node])), [model.nodes]);
   const edgeIndex = useMemo(() => new Map(model.edges.map(edge => [edge.id, edge])), [model.edges]);
   const relations = useMemo(() => [...new Set(data.links.map(edge => edge.kind))].sort(), [data.links]);

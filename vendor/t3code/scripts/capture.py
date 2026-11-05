@@ -46,6 +46,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--source", required=True)
 parser.add_argument("--review-actions", action="store_true", help="Explicitly authorize updating copy-verbatim/copy-then-patch dispositions only; immutable source metadata is never changed.")
 parser.add_argument("--allow-local", action="append", default=[], help="Explicit reviewed vendor metadata/local addition to enroll; never use for adapted upstream modules.")
+parser.add_argument("--allow-host-input", action="append", default=[], help="Explicit reviewed host build tool/configuration to enroll; hashes are calculated only during this authoring operation.")
 arguments = parser.parse_args()
 vendor = Path(__file__).resolve().parent.parent
 repository = vendor.parent.parent
@@ -178,7 +179,15 @@ inventory["summary"] = {
     "existingAdditionalAssets": len(assets),
     "outputFilesExcludingSelf": len(recipes),
 }
-for entry in inventory.get("runtimeResources", {}).get("hostBuildInputs", []):
+host_inputs = inventory.setdefault("runtimeResources", {}).setdefault("hostBuildInputs", [])
+host_paths = {entry["path"] for entry in host_inputs}
+for relative in arguments.allow_host_input:
+    # Enrolling a path is not approving its previous bytes; the exact current
+    # regular contained file is read below, before any publication happens.
+    if relative not in host_paths:
+        host_inputs.append({"path": relative})
+        host_paths.add(relative)
+for entry in host_inputs:
     entry["sha256"] = digest(safe_file(repository, entry["path"]).read_bytes())
 # All immutable/local inputs are read and all recipes constructed before publication.
 for relative, data in sorted(patches.items()):

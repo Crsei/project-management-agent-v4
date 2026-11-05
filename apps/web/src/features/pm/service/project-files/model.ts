@@ -1,5 +1,5 @@
 import type { Entity } from "../../../../../../../packages/contracts/src/client.ts"
-import type { FilterCondition } from "../../../../components/blocks/filter-card"
+import type { FilterCondition } from "../../../../lib/filter-model.ts"
 
 export type FileKind = "fig" | "pdf" | "zip" | "img" | "sheet" | "doc" | "code" | "other"
 export type FileSort = "newest" | "name" | "type"

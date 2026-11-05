@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/config/mcpPresets.ts",
+  "beforeSha256": "a710fe1500297658a6a5f4ea2c6ab69ea6b8595f87ccc85be5be31bc1db93b63",
+  "afterSha256": "76fe17a59042421f7dd030e2f72c22a10e21fc69f8605ef3f93d9ee878a24fef",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 80,
+  "before": "QA==",
+  "after": "Li4="
+}

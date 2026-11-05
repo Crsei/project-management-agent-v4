@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react"
+import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react"
 import { createPortal } from "react-dom"
 import { Anchor as PopoverAnchor } from "@radix-ui/react-popover"
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Crosshair, Diamond, FolderKanban, UserRound, X } from "lucide-react"
@@ -9,6 +9,7 @@ import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { addDays, dateOnly, dayNumber, itemDates, itemRange, itemStatus, itemText, itemTitle, ScheduleEditor, statusLabel, todayDate, type ScheduleItem, type ScheduleProps } from "./service-collection-shared"
 import styles from "./service-gantt.module.css"
 import { RadixSelect } from "@/components/ui/radix-select"
+import { ContextMenuItem, ContextMenuLabel, ContextMenuPopup, ContextMenuSeparator, isNativeContextTarget, useContextMenu } from "@/components/ui/context-menu"
 
 type Scale = "week" | "month" | "quarter"
 type GroupBy = "status" | "assignee" | "project" | "none"
@@ -27,6 +28,8 @@ export type ServiceGanttProps<T extends ScheduleItem> = ScheduleProps<T> & {
   defaultGroupBy?: GroupBy
   milestones?: readonly TimelineMilestone[]
   onOpenMilestone?: (id: string) => void
+  onEditMilestoneDates?: (id: string) => void
+  canEditMilestoneDates?: (id: string) => boolean
   toolbarTarget?: HTMLElement | null
 }
 
@@ -86,7 +89,7 @@ function moveAnchor(anchor: string, scale: Scale, direction: number) {
 
 const noMilestones: readonly TimelineMilestone[] = []
 
-export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule, pending = false, today: suppliedToday, defaultGroupBy = "project", milestones = noMilestones, onOpenMilestone, toolbarTarget }: ServiceGanttProps<T>) {
+export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule, pending = false, today: suppliedToday, defaultGroupBy = "project", milestones = noMilestones, onOpenMilestone, onEditMilestoneDates, canEditMilestoneDates, toolbarTarget }: ServiceGanttProps<T>) {
   const { locale } = useI18n()
   const en = locale === "en"
   const weekStartsOn = useWorkspaceStore(state => state.weekStartsOn)
@@ -105,6 +108,7 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
   const scheduleDescriptionId = useId()
   const milestoneTitleId = useId()
   const selected = items.find(item => item.id === selectedId)
+  const contextMenu = useContextMenu<{ kind: "task"; item: T; element: HTMLElement } | { kind: "milestones"; list: readonly TimelineMilestone[]; element: HTMLElement }>()
   const selectedMilestones = milestones.filter(milestone => selectedMilestoneIds.includes(milestone.id))
   const period = useMemo(() => timelinePeriod(anchor, scale, weekStartsOn), [anchor, scale, weekStartsOn])
   const width = period.days * period.dayWidth
@@ -212,6 +216,22 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
     setSelectedId("")
     onOpen(item)
   }
+  function openTimelineMenu(event: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>) {
+    if ("key" in event && event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return
+    if (!(event.target instanceof Element) || isNativeContextTarget(event.target)) return
+    const element = event.target.closest<HTMLElement>("[data-gantt-task], [data-gantt-milestones]")
+    if (!element) return
+    const anchorElement = event.target.closest<HTMLElement>("button") ?? element.querySelector<HTMLElement>("button") ?? element
+    const item = items.find(candidate => candidate.id === element.dataset.ganttTask)
+    const list = element.dataset.ganttMilestones === "all" ? milestones : milestones.filter(milestone => milestone.date === element.dataset.ganttMilestones)
+    const target = item ? { kind: "task" as const, item, element: anchorElement } : list.length ? { kind: "milestones" as const, list, element: anchorElement } : null
+    if (!target) return
+    if ("key" in event) {
+      event.preventDefault(); event.stopPropagation()
+      const bounds = anchorElement.getBoundingClientRect()
+      contextMenu.openAt({ x: bounds.left, y: bounds.bottom }, target, anchorElement)
+    } else contextMenu.open(event, target, anchorElement)
+  }
 
   const monthFormat = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: "UTC" })
   const weekFormat = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", timeZone: "UTC" })
@@ -241,7 +261,7 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
   </div>
 
   const todayX = (dayNumber(today) - dayNumber(period.start) + 0.5) * period.dayWidth
-  return <div className={styles.root} aria-busy={pending}>
+  return <div className={styles.root} aria-busy={pending} onContextMenu={openTimelineMenu} onKeyDown={openTimelineMenu}>
     {toolbarTarget ? createPortal(controls, toolbarTarget) : <div className={styles.localToolbar}>{controls}</div>}
     {!hasRows ? <div className={styles.empty}><CalendarDays size={28} strokeWidth={1.2} aria-hidden="true" /><strong>{en ? "Nothing on the timeline" : "时间线暂无内容"}</strong><p>{en ? "Tasks and their saved schedules will appear here." : "任务及其已保存的日程将在此显示。"}</p></div> : <div ref={viewport} className={styles.viewport} tabIndex={0} role="region" aria-label={en ? "Scrollable task timeline" : "可滚动任务时间线"}>
       <div className={styles.timeline} style={{ "--timeline-width": `${width}px` } as CSSProperties}>
@@ -255,10 +275,10 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
         <div className={styles.body}>
           <div className={styles.taskLane}>
             {rows.map(row => {
-              if (row.type === "milestones") return <button type="button" key="milestones" className={`${styles.laneRow} ${styles.groupRow} ${styles.milestoneHeading}`} onClick={event => selectMilestones(milestones, event.currentTarget)}><Diamond size={12} aria-hidden="true" />{en ? "Milestones" : "里程碑"}<span className={styles.count}>{milestones.length}</span></button>
+              if (row.type === "milestones") return <button type="button" key="milestones" data-gantt-milestones="all" className={`${styles.laneRow} ${styles.groupRow} ${styles.milestoneHeading}`} onClick={event => selectMilestones(milestones, event.currentTarget)}><Diamond size={12} aria-hidden="true" />{en ? "Milestones" : "里程碑"}<span className={styles.count}>{milestones.length}</span></button>
               if (row.type === "group") return <div key={`group:${row.key}`} className={`${styles.laneRow} ${styles.groupRow}`}>{groupBy === "project" ? <FolderKanban size={13} aria-hidden="true" /> : groupBy === "assignee" ? <UserRound size={13} aria-hidden="true" /> : null}<span className={styles.truncate}>{row.title}</span><span className={styles.count}>{row.count}</span></div>
               const item = row.item
-              return <div key={item.id} className={styles.laneRow} data-selected={selectedId === item.id || undefined} data-category={category(item)}>
+              return <div key={item.id} className={styles.laneRow} data-gantt-task={item.id} tabIndex={0} data-selected={selectedId === item.id || undefined} data-category={category(item)}>
                 <StatusIcon item={item} locale={locale} />
                 <button type="button" className={styles.taskTitle} title={itemTitle(item)} onClick={() => openItem(item)}>{itemTitle(item)}</button>
                 <Assignee item={item} />
@@ -282,11 +302,11 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
               const left = Math.max(0, start)
               const barWidth = Math.min(width, finish) - left
               const editable = Boolean(onSchedule) && !item.scheduleReadOnly && item.data.archivedAt == null && (item.scheduleFields?.start !== false || item.scheduleFields?.due !== false)
-              if (!range || barWidth <= 0 || start >= width) return <div key={item.id} className={styles.scheduleState} style={{ top }}>
+              if (!range || barWidth <= 0 || start >= width) return <div key={item.id} data-gantt-task={item.id} tabIndex={0} className={styles.scheduleState} style={{ top }}>
                 <button type="button" className={styles.scheduleAction} onClick={event => range ? goToDate(range.start) : selectSchedule(item, event.currentTarget)}>{range ? `${display.date(range.start)} · ${en ? "Go to date" : "跳转日期"}` : dates.start && dates.due ? (en ? `Invalid date range · ${editable ? "edit" : "view"}` : `日期范围异常 · ${editable ? "编辑" : "查看"}`) : (en ? `Unscheduled · ${editable ? "set dates" : "view dates"}` : `未排期 · ${editable ? "设置日期" : "查看日期"}`)}</button>
               </div>
               const detail = `${en ? "Start" : "开始"}: ${dates.start ? display.date(dates.start) : "—"} · ${en ? "Due (inclusive)" : "截止（含当天）"}: ${dates.due ? display.date(dates.due) : "—"}`
-              return <div key={item.id}>
+              return <div key={item.id} data-gantt-task={item.id}>
                 <button type="button" className={styles.bar} data-category={category(item)} data-partial={!dates.start || !dates.due || undefined} data-clipped-start={start < 0 || undefined} data-clipped-end={finish > width || undefined} aria-pressed={selectedId === item.id} aria-label={`${itemTitle(item)} · ${detail} · ${en ? "View or edit dates" : "查看或编辑日期"}`} title={`${itemTitle(item)} · ${taskStatus(item, locale)} · ${detail}`} style={{ left, top: top + 6, width: barWidth, ...(itemText(item, "color") ? { "--bar-color": itemText(item, "color") } : {}) } as CSSProperties} onClick={event => selectSchedule(item, event.currentTarget)}>
                   {barWidth > 110 && <><Assignee item={item} /><span className={styles.truncate}>{itemTitle(item)}</span></>}
                 </button>
@@ -297,7 +317,7 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
               if (point.x < 0 || point.x >= width) return null
               const room = Math.min(milestonePoints[index + 1]?.x ?? width, width) - point.x - 24
               const title = `${point.list.map(milestone => `${milestone.title}${milestone.projectTitle || milestone.projectId ? ` (${milestone.projectTitle || milestone.projectId})` : ""}`).join(" · ")} · ${display.date(point.date)}`
-              return <button type="button" key={point.date} className={styles.milestone} style={{ left: point.x - 6, top: 9 }} title={title} aria-label={`${en ? "Milestone" : "里程碑"}: ${title}`} onClick={event => selectMilestones(point.list, event.currentTarget)}><span className={styles.diamond} aria-hidden="true" />{room >= 28 && <span className={styles.milestoneLabel} style={{ maxWidth: room }}>{point.list[0]!.title}{point.list.length > 1 ? ` +${point.list.length - 1}` : ""}</span>}</button>
+              return <button type="button" key={point.date} data-gantt-milestones={point.date} className={styles.milestone} style={{ left: point.x - 6, top: 9 }} title={title} aria-label={`${en ? "Milestone" : "里程碑"}: ${title}`} onClick={event => selectMilestones(point.list, event.currentTarget)}><span className={styles.diamond} aria-hidden="true" />{room >= 28 && <span className={styles.milestoneLabel} style={{ maxWidth: room }}>{point.list[0]!.title}{point.list.length > 1 ? ` +${point.list.length - 1}` : ""}</span>}</button>
             })}
             <svg className={styles.dependencies} width={width} height={rows.length * 36} viewBox={`0 0 ${width} ${rows.length * 36}`} aria-hidden="true">{dependencyPaths.map(path => <g key={path.key}><path d={path.curve} strokeDasharray={path.reversed ? "3 3" : undefined} /><path d={path.arrow} /></g>)}</svg>
           </div>
@@ -324,6 +344,23 @@ export function ServiceGantt<T extends ScheduleItem>({ items, onOpen, onSchedule
         </li>)}</ul>
       </PopoverContent>}
     </Popover>
+    <ContextMenuPopup menu={contextMenu} aria-label={en ? "Timeline actions" : "时间线操作"}>
+      {contextMenu.target?.kind === "task" && <>
+        <ContextMenuLabel>{itemTitle(contextMenu.target.item)}</ContextMenuLabel>
+        <ContextMenuItem onSelect={() => { const target = contextMenu.target; if (target?.kind === "task") openItem(target.item) }}>{en ? "Open task" : "打开任务"}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => { const target = contextMenu.target; if (target?.kind === "task") selectSchedule(target.item, target.element) }}>{en ? "View dates" : "查看日期"}</ContextMenuItem>
+        <ContextMenuItem disabled={!onSchedule || pending || contextMenu.target.item.scheduleReadOnly || contextMenu.target.item.data.archivedAt != null || contextMenu.target.item.scheduleFields?.start === false && contextMenu.target.item.scheduleFields?.due === false} title={en ? "Uses the existing date popover; save explicitly." : "使用现有日期浮层，修改后显式保存。"} onSelect={() => { const target = contextMenu.target; if (target?.kind === "task") selectSchedule(target.item, target.element) }}>{en ? "Edit dates" : "编辑日期"}</ContextMenuItem>
+        <ContextMenuItem disabled={!itemRange(contextMenu.target.item)} title={!itemRange(contextMenu.target.item) ? en ? "No valid saved date." : "尚无有效的已保存日期。" : undefined} onSelect={() => { const target = contextMenu.target; const range = target?.kind === "task" ? itemRange(target.item) : null; if (range) goToDate(range.start) }}>{en ? "Go to date" : "跳转日期"}</ContextMenuItem>
+      </>}
+      {contextMenu.target?.kind === "milestones" && contextMenu.target.list.map((milestone, index) => <div key={milestone.id}>
+        {index > 0 && <ContextMenuSeparator />}
+        <ContextMenuLabel>{milestone.title}</ContextMenuLabel>
+        {onOpenMilestone && <ContextMenuItem onSelect={() => onOpenMilestone(milestone.id)}>{en ? "Open milestone" : "打开里程碑"}</ContextMenuItem>}
+        <ContextMenuItem onSelect={() => { const target = contextMenu.target; if (target?.kind === "milestones") selectMilestones([milestone], target.element) }}>{en ? "View milestone date" : "查看里程碑日期"}</ContextMenuItem>
+        {onEditMilestoneDates && <ContextMenuItem disabled={pending || canEditMilestoneDates?.(milestone.id) === false} title={canEditMilestoneDates?.(milestone.id) === false ? en ? "This milestone is read-only or has an unsaved draft." : "此里程碑只读或存在未保存草稿。" : undefined} onSelect={() => onEditMilestoneDates(milestone.id)}>{en ? "Edit milestone date" : "修改里程碑日期"}</ContextMenuItem>}
+        <ContextMenuItem disabled={!dateOnly(milestone.date)} onSelect={() => goToDate(milestone.date)}>{en ? "Locate date" : "定位日期"}</ContextMenuItem>
+      </div>)}
+    </ContextMenuPopup>
     {pending && <span role="status" className={styles.saving}>{en ? "Saving dates…" : "正在保存日期…"}</span>}
   </div>
 }

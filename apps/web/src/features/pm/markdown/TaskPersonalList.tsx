@@ -7,7 +7,8 @@ import { usePmService } from '../service/pm-service';
 import { allowed } from '../service/pm-ui';
 import { taskStateLabel } from './task-status-label';
 import type { WorkspaceController } from './controller';
-import { TaskCompletionControl, TaskDateEditor, TaskDueControl, TaskMoreActions, TaskPriorityControl, TaskStatusControl } from './TaskPersonalFields';
+import { TaskCompletionControl, TaskDateEditor, TaskDueControl, TaskMoreActions, TaskPriorityControl, TaskStatusControl, useTaskRowActions } from './TaskPersonalFields';
+import { CollectionContextMenu } from './CollectionContextMenu';
 import styles from './TaskPersonalList.module.css';
 
 interface PersonalListProps {
@@ -26,7 +27,8 @@ function PersonalTaskRow({ file, controller: c, en, today, onOpenDate }: {
 }) {
   const project = c.projects.find(candidate => candidate.id === file.entity.project);
   const projectLabel = project?.entity.title || (file.entity.project ? en ? 'Project unavailable' : '项目不可用' : en ? 'No project' : '未关联项目');
-  return <li className={`${styles.row}${c.selectedId === file.id ? ` ${styles.selected}` : ''}`} data-completed={statusCategory(file.entity, c.configuration) === 'completed' || undefined} data-testid={`task-${file.id}`}>
+  const { actions } = useTaskRowActions({ file, controller: c, en });
+  return <CollectionContextMenu actions={actions} trigger={<li tabIndex={0} className={`${styles.row}${c.selectedId === file.id ? ` ${styles.selected}` : ''}`} data-completed={statusCategory(file.entity, c.configuration) === 'completed' || undefined} data-testid={`task-${file.id}`}>
     <span className={styles.spacer} aria-hidden="true" />
     <div className={styles.completionCell}><TaskCompletionControl file={file} controller={c} en={en} today={today} /></div>
     <button type="button" className={styles.titleButton} title={`${file.id} · ${file.entity.title}`} onClick={() => c.select(file.id)}>
@@ -40,8 +42,8 @@ function PersonalTaskRow({ file, controller: c, en, today, onOpenDate }: {
       <div className={styles.cell}><TaskPriorityControl file={file} controller={c} en={en} today={today} /></div>
       <div className={styles.cell}><TaskDueControl file={file} controller={c} en={en} today={today} onOpen={onOpenDate} /></div>
     </div>
-    <div className={styles.actions}><TaskMoreActions file={file} controller={c} en={en} today={today} /></div>
-  </li>;
+    <div className={styles.actions}><TaskMoreActions file={file} en={en} actions={actions} /></div>
+  </li>} />;
 }
 
 /** Ownership, date groups and sort order belong to the authorized collection model. */

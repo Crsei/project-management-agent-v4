@@ -17,6 +17,7 @@ import { automationExecutionRoutes } from "./automation-execution/index.ts";
 import { mcpOAuthRoutes, mcpIntrospectionRoutes } from "./mcp/routes.ts";
 import { mcpRoutes } from "./mcp/server.ts";
 import { mcpAppRoutes } from "./mcp-apps/routes.ts";
+import { extensionRoutes, extensionDefinitionRoutes } from "./extensions/index.ts";
 
 /** API application; imports alone never start listeners or background workers. */
 export const app = new Hono()
@@ -24,9 +25,11 @@ export const app = new Hono()
   .route("/", mcpOAuthRoutes)
   .route("/", mcpRoutes)
   .route("/internal/automation-executions", automationExecutionRoutes)
+  .route("/internal/extensions/definitions", extensionDefinitionRoutes)
   .route("/api", accessRoutes)
   .use("/api/*", accessGuard)
   .route("/api", mcpAppRoutes)
+  .route("/api", extensionRoutes)
   .route("/api", chatRoutes)
   .route("/api", taskDeliveryRoutes)
   .route("/api", taskWorkflowRoutes)

@@ -223,10 +223,10 @@ export function AgentsPanel() {
                 />
               </label>
               <fieldset className="live-panel-field">
-                <legend className="mb-2 text-sm font-medium">附加技能</legend>
+                <legend className="mb-2 text-sm font-medium">附加指令块</legend>
                 {state.skills.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    尚无技能，可在技能面板创建可复用的指令。
+                    尚无指令块，可在指令块入口创建可复用的会话指令。
                   </p>
                 ) : (
                   state.skills.map((skill) => (
@@ -251,15 +251,15 @@ export function AgentsPanel() {
                           }));
                         }}
                       />
-                      <span className="min-w-0 break-words">{skill.name || "未命名技能"}</span>
+                      <span className="min-w-0 break-words">{skill.name || "未命名指令块"}</span>
                     </label>
                   ))
                 )}
                 <Button variant="ghost" onClick={() => setPanel("skills")}>
-                  管理技能
+                  管理指令块
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  系统指令与所有选中技能合并后最多 16,000 字符，超限时不会发送请求。
+                  系统指令与所有选中指令块合并后最多 16,000 字符，超限时不会发送请求。
                 </p>
               </fieldset>
               <div className="live-panel-actions">

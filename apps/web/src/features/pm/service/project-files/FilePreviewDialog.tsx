@@ -1,8 +1,9 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import type { Entity } from "@contracts"
-import { Download, Link2 } from "lucide-react"
+import { Copy, Download, Eye, Link2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
 import { usePmService } from "../pm-service"
 import { usePmNoticeCenter } from "../pm-notice-center"
@@ -31,6 +32,7 @@ type FilePreviewDialogProps = {
 export function FilePreviewDialog({ entry, initialVersionId, locale, t, uploaderName, onOpenChange, onCopyLink, canManage, canCopy, locked, onAction }: FilePreviewDialogProps) {
   const { client, workspace } = usePmService()
   const display = useDisplayDateTime()
+  const opener = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null)
   const [selectedId, setSelectedId] = useState(initialVersionId ?? entry.latest.id)
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -59,7 +61,7 @@ export function FilePreviewDialog({ entry, initialVersionId, locale, t, uploader
   }
 
   return <Dialog open onOpenChange={onOpenChange}>
-    <DialogContent className={styles.previewDialog}>
+    <DialogContent className={styles.previewDialog} finalFocus={opener}>
       <DialogTitle className={styles.previewTitle} title={entry.name}>{entry.name}</DialogTitle>
       <DialogDescription>{kindLabel(selectedKind, en)}{size ? ` · ${size}` : ""} · {uploader} · {formatRelativeTime(selected.createdAt, locale)}</DialogDescription>
       <div className={styles.previewBody}>
@@ -78,14 +80,7 @@ export function FilePreviewDialog({ entry, initialVersionId, locale, t, uploader
         {origin.error && <p role="alert" className={styles.warning}>{t("来源读取失败；不影响独立副本下载。", "Origin could not be read; the independent copy can still be downloaded.")}<Button size="sm" variant="outline" onClick={() => { void origin.refetch() }}>{t("重试读取来源", "Retry origin")}</Button></p>}
         {entry.versions.length > 1 && <div className={styles.versionList} role="list" aria-label={t("版本历史", "Version history")}>
           <p className={styles.sectionLabel}>{t("版本历史", "Version history")}</p>
-          {entry.versions.map((version, index) => <div key={version.id} className={styles.versionRow} role="listitem">
-            <button type="button" className={styles.versionButton} aria-pressed={version.id === selected.id} onClick={() => setSelectedId(version.id)}>
-              <FileTypeIcon kind={classifyFile(typeof version.data.fileName === "string" ? version.data.fileName : entry.name, typeof version.data.mediaType === "string" ? version.data.mediaType : "")} size={14} />
-              <span>v{entry.versions.length - index}</span>
-              <span className={styles.versionMeta}>{String(version.data.fileName)} · {formatFileSize(version.data.size) || t("大小未知", "Size unavailable")} · {formatRelativeTime(version.createdAt, locale)}</span>
-            </button>
-            <Button variant="ghost" size="icon-sm" aria-label={`${t("下载", "Download")} v${entry.versions.length - index}`} onClick={() => { void download(version) }}><Download size={14} /></Button>
-          </div>)}
+          {entry.versions.map((version, index) => <FileVersionRow key={version.id} version={version} number={entry.versions.length - index} name={entry.name} selected={version.id === selected.id} locale={locale} t={t} canCopy={canCopy} locked={locked} onView={() => setSelectedId(version.id)} onDownload={() => { void download(version) }} onCopyLink={() => { void copy(version) }} onCopy={() => onAction("copy", version)} />)}
         </div>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
       </div>
@@ -99,4 +94,44 @@ export function FilePreviewDialog({ entry, initialVersionId, locale, t, uploader
       </div>
     </DialogContent>
   </Dialog>
+}
+
+/** Each row closes over its own immutable version, never the preview selection. */
+function FileVersionRow({ version, number, name, selected, locale, t, canCopy, locked, onView, onDownload, onCopyLink, onCopy }: {
+  version: Entity
+  number: number
+  name: string
+  selected: boolean
+  locale: string
+  t: (zh: string, en: string) => string
+  canCopy: boolean
+  locked: boolean
+  onView: () => void
+  onDownload: () => void
+  onCopyLink: () => void
+  onCopy: () => void
+}) {
+  const target = useRef<HTMLDivElement>(null)
+  const dialogHandoff = useRef(false)
+  return <ContextMenu onOpenChange={open => { if (open) dialogHandoff.current = false }}>
+    <ContextMenuTrigger asChild tabIndex={0}>
+      <div ref={target} className={styles.versionRow} role="listitem">
+        <button type="button" className={styles.versionButton} aria-pressed={selected} onClick={onView}>
+          <FileTypeIcon kind={classifyFile(typeof version.data.fileName === "string" ? version.data.fileName : name, typeof version.data.mediaType === "string" ? version.data.mediaType : "")} size={14} />
+          <span>v{number}</span>
+          <span className={styles.versionMeta}>{String(version.data.fileName)} · {formatFileSize(version.data.size) || t("大小未知", "Size unavailable")} · {formatRelativeTime(version.createdAt, locale)}</span>
+        </button>
+        <Button variant="ghost" size="icon-sm" aria-label={`${t("下载", "Download")} v${number}`} onClick={onDownload}><Download size={14} /></Button>
+      </div>
+    </ContextMenuTrigger>
+    <ContextMenuContent aria-label={`${t("版本操作", "Version actions")} v${number}`} onCloseAutoFocus={event => { if (dialogHandoff.current) event.preventDefault() }}>
+      <ContextMenuItem onSelect={onView}><Eye size={14} />{t(`查看版本 v${number}`, `View version v${number}`)}</ContextMenuItem>
+      <ContextMenuItem onSelect={onDownload}><Download size={14} />{t(`下载版本 v${number}`, `Download version v${number}`)}</ContextMenuItem>
+      <ContextMenuItem onSelect={onCopyLink}><Link2 size={14} />{t("复制此版本链接", "Copy this version link")}</ContextMenuItem>
+      {canCopy && <ContextMenuItem disabled={locked} onSelect={() => {
+        dialogHandoff.current = true
+        requestAnimationFrame(() => { target.current?.focus({ preventScroll: true }); onCopy() })
+      }}><Copy size={14} />{t(`复制所选版本 v${number}`, `Copy selected version v${number}`)}</ContextMenuItem>}
+    </ContextMenuContent>
+  </ContextMenu>
 }

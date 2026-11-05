@@ -27,7 +27,7 @@ it('requires explicit two-level scope, strict LocalDirectory and a nonnegative c
 it('preflights default creation without writes and rejects missing parents, symlinks and traversal', t => {
   const root = mkdtempSync(path.join(tmpdir(), 'pm-chat-root-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const config: AgentDirectoryConfiguration = { enabled: false, dataRoot: root, defaultParent: null, allowedRoots: [], backupRoot: root, coreRoot: root, chatSpaceRoot: path.join(root, '.pmv4') };
-  const scope = { workspaceId: randomUUID(), projectId: null };
+  const scope = { workspaceId: randomUUID(), projectId: null, actorId: randomUUID() };
   const expected = path.join(config.chatSpaceRoot, 'workspaces', scope.workspaceId, 'workspace');
   assert.equal(defaultAgentDirectory(config, config.chatSpaceRoot, scope), expected);
   assert.throws(() => lstatSync(config.chatSpaceRoot), { code: 'ENOENT' });

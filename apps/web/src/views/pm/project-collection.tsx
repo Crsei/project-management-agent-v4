@@ -18,7 +18,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FilterToolbar } from "@/components/blocks/filter-toolbar"
-import { FilterCard, type FilterField } from "@/components/blocks/filter-card"
+import { FilterCard } from "@/components/blocks/filter-card"
+import type { FilterField } from "@/lib/filter-model"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuCheckboxItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu"
 import { useI18n } from "@/lib/i18n-provider"
@@ -169,6 +170,7 @@ function ProjectCard({
   onStar,
   readModel,
   renderProjectAction,
+  renderProjectContextMenu,
 }: {
   project: ProjectCollectionRecord
   locale: "zh-CN" | "en"
@@ -178,6 +180,7 @@ function ProjectCard({
   onStar: () => void
   readModel: ProjectCollectionViewProps["readModel"]
   renderProjectAction?: ProjectCollectionViewProps["renderProjectAction"]
+  renderProjectContextMenu?: ProjectCollectionViewProps["renderProjectContextMenu"]
 }) {
   const en = locale === "en"
   const title = project.title
@@ -196,7 +199,7 @@ function ProjectCard({
         : en
           ? `${days} days left`
           : `剩余 ${days} 天`
-  return (
+  const card = (
     <article
       className={styles.card}
       data-pm-project={project.id}
@@ -293,6 +296,7 @@ function ProjectCard({
       </div>
     </article>
   )
+  return renderProjectContextMenu ? renderProjectContextMenu(project, card) : card
 }
 
 /** Controlled rendering only: the caller supplies all facts, capabilities and actions. */
@@ -599,6 +603,7 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
               readonly={!capabilities.star(project.id)}
               readModel={readModel}
               renderProjectAction={props.renderProjectAction}
+              renderProjectContextMenu={props.renderProjectContextMenu}
               onSelect={(element) => openDetail(project, element)}
               onStar={() => { if (capabilities.star(project.id)) actions.star(project.id) }}
             /> : <ProjectCard
@@ -609,6 +614,7 @@ export function ProjectCollectionView(props: ProjectCollectionViewProps) {
               readonly={!capabilities.star(project.id)}
               readModel={readModel}
               renderProjectAction={props.renderProjectAction}
+              renderProjectContextMenu={props.renderProjectContextMenu}
               onSelect={(element) => openDetail(project, element)}
               onStar={() => { if (capabilities.star(project.id)) actions.star(project.id) }}
             />

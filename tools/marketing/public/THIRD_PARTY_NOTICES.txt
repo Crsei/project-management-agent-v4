@@ -1,0 +1,39 @@
+Marketing website: third-party notices and release status
+
+The host project's own code is licensed under AGPL-3.0-only; see LICENSE in the
+source distribution. Third-party components retain their respective licenses.
+This notice does not relicense third-party materials, establish unknown rights,
+or approve public redistribution. Actual releases and network deployments must
+also satisfy applicable corresponding-source and legal-notice obligations.
+
+T3 Code visual/source adaptations
+  The repository README and marketing stylesheet identify t3code/apps/marketing
+  as the reference/source of visual adaptations and local harness icons.
+  Upstream: https://github.com/pingdotgg/t3code
+  Retained full notice: /LICENSE.t3code
+  MIT License; Copyright (c) 2026 T3 Tools Inc.
+  The Provider source-manifest does not inventory the marketing files. Their
+  exact upstream revision/byte provenance is not yet recorded. Preserving this
+  MIT notice does not establish rights in every third-party brand icon.
+
+DM Sans
+  Copyright 2014 The DM Sans Project Authors
+  https://github.com/googlefonts/dm-fonts
+  SIL Open Font License 1.1: /fonts/dm-sans-OFL.txt
+  Applies to the bundled DM Sans font software, not the host application.
+
+JetBrains Mono
+  Copyright 2020 The JetBrains Mono Project Authors
+  https://github.com/JetBrains/JetBrainsMono
+  SIL Open Font License 1.1: /fonts/jetbrains-mono-OFL.txt
+  Applies to the bundled JetBrains Mono font software, not the host application.
+
+Names, logos and trademarks identify their respective products. No sponsorship,
+endorsement or trademark license is claimed. The six local brand SVGs and the
+font download/subset versions still require an exact provenance review.
+
+Release review remains blocked. See THIRD_PARTY_NOTICES.md#release-blockers in
+the source distribution for the maintained source, asset and final-package
+licensing blockers. This static notice is not a second source manifest or an
+approval to publish. Keep this file, LICENSE.t3code and both font license files
+when distributing the static website.

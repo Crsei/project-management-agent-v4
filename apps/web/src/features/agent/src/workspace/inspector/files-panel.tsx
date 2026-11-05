@@ -9,6 +9,12 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button } from "@agent/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import type {
   InspectorFileResponse,
   InspectorTreeResponse,
@@ -43,6 +49,7 @@ export function FilesPanel({ active = true }: { active?: boolean }) {
   const [fileLoading, setFileLoading] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [wrap, setWrap] = useState(false);
+  const [treeMenuTarget, setTreeMenuTarget] = useState<{ path: string; expanded: boolean } | null>(null);
 
   const mounted = useRef(false);
   const treeRequests = useRef(new Map<string, AbortController>());
@@ -163,8 +170,8 @@ export function FilesPanel({ active = true }: { active?: boolean }) {
     if (!wasActive && active) refreshRef.current();
   }, [active]);
 
-  function toggleDirectory(path: string) {
-    if (expanded.has(path)) {
+  function setDirectoryExpanded(path: string, nextExpanded: boolean) {
+    if (!nextExpanded) {
       setExpanded((current) => {
         const next = new Set(current);
         next.delete(path);
@@ -174,6 +181,10 @@ export function FilesPanel({ active = true }: { active?: boolean }) {
     }
     setExpanded((current) => new Set(current).add(path));
     if (!trees[path] && !dirLoading.has(path)) void loadTree(path);
+  }
+
+  function toggleDirectory(path: string) {
+    setDirectoryExpanded(path, !expanded.has(path));
   }
 
   function openDirectory(path: string) {
@@ -206,8 +217,13 @@ export function FilesPanel({ active = true }: { active?: boolean }) {
         {tree.entries.map((entry) => {
           const directory = entry.kind === "directory";
           const open = directory && expanded.has(entry.path);
+          const menuExpanded = treeMenuTarget?.path === entry.path ? treeMenuTarget.expanded : open;
           return (
             <div key={entry.path}>
+              <ContextMenu onOpenChange={(isOpen) => {
+                if (isOpen) setTreeMenuTarget({ path: entry.path, expanded: open });
+              }}>
+                <ContextMenuTrigger asChild onContextMenu={() => setTreeMenuTarget({ path: entry.path, expanded: open })}>
               <button
                 type="button"
                 className="inspector-tree-row"
@@ -242,6 +258,26 @@ export function FilesPanel({ active = true }: { active?: boolean }) {
                   </span>
                 ) : null}
               </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onSelect={() => directory ? setDirectoryExpanded(entry.path, !menuExpanded) : selectFile(entry.path)}>
+                    {directory
+                      ? menuExpanded ? t("折叠目录", "Collapse directory") : t("展开目录", "Expand directory")
+                      : t("查看文件", "View file")}
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    disabled={directory ? dirLoading.has(entry.path) : fileLoading && selectedPath === entry.path}
+                    title={(directory ? dirLoading.has(entry.path) : fileLoading && selectedPath === entry.path) ? t("正在读取，请稍候。", "A read is in progress; please wait.") : undefined}
+                    onSelect={() => {
+                      if (directory) {
+                        void loadTree(entry.path);
+                      } else selectFile(entry.path);
+                    }}
+                  >
+                    {directory ? t("刷新目录", "Refresh directory") : t("刷新文件内容", "Refresh file contents")}
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
               {directory && open ? (
                 <>
                   {!trees[entry.path] && dirLoading.has(entry.path) ? (

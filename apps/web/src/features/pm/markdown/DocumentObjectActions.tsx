@@ -20,6 +20,7 @@ export interface DocumentObjectActionsProps {
   selection: DocumentObjectSelection;
   disabled: boolean;
   onInsert: (markdown: string) => void;
+  request?: { section: 'task' | 'objects' | 'attachments'; source: DocumentObjectSource; token: number } | null;
 }
 
 function TaskConversionForm({ action, store, controller, en, canConfirm, onCreated, onClose }: { action: DocumentTaskAction; store: DocumentObjectStore; controller: WorkspaceController; en: boolean; canConfirm: boolean; onCreated: (file: FileRecord) => void; onClose: () => void }) {
@@ -100,7 +101,7 @@ function TaskConversionForm({ action, store, controller, en, canConfirm, onCreat
   </section>;
 }
 
-export function DocumentObjectActions({ controller, en, selection, disabled, onInsert }: DocumentObjectActionsProps) {
+export function DocumentObjectActions({ controller, en, selection, disabled, onInsert, request }: DocumentObjectActionsProps) {
   const service = usePmService();
   const command = usePmCommand();
   const session = controller.session;
@@ -120,6 +121,8 @@ export function DocumentObjectActions({ controller, en, selection, disabled, onI
   const automaticInsertion = useRef<(() => void) | null>(null);
   const [fileSource, setFileSource] = useState<DocumentObjectSource | null>(null);
   const active = useRef(true);
+  const panel = useRef<HTMLDetailsElement>(null);
+  const [panelSource, setPanelSource] = useState<DocumentObjectSource | null>(null);
   const latest = useRef({ controller, selection, disabled, onInsert, service });
   latest.current = { controller, selection, disabled, onInsert, service };
   const t = (zh: string, english: string) => en ? english : zh;
@@ -159,6 +162,14 @@ export function DocumentObjectActions({ controller, en, selection, disabled, onI
       if (active.current) setMessage(cause instanceof Error ? cause.message : String(cause));
     });
   }, [locked, journal, session.namespace, store]);
+  useEffect(() => {
+    if (!request || !panel.current) return;
+    setPanelSource(request.source);
+    panel.current.open = true;
+    const section = panel.current.querySelector<HTMLElement>(`[data-document-object-section="${request.section}"]`);
+    section?.scrollIntoView({ block: 'nearest' });
+    section?.querySelector<HTMLElement>('input:not([disabled]), button:not([disabled]), [data-slot="select-trigger"]:not([disabled])')?.focus({ preventScroll: true });
+  }, [request]);
 
   function currentSource(): DocumentObjectSource {
     const now = latest.current;
@@ -198,7 +209,7 @@ export function DocumentObjectActions({ controller, en, selection, disabled, onI
     setMessage(t('已插入共享草稿；请显式保存文档。', 'Inserted into the shared draft; explicitly save the document.'));
   }
   async function prepareTask() {
-    const source = currentSource();
+    const source = panelSource ?? currentSource();
     requireSource(source);
     const title = documentTaskTitle(source.selection.text);
     const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(source))))].map(value => value.toString(16).padStart(2, '0')).join('');
@@ -240,7 +251,7 @@ export function DocumentObjectActions({ controller, en, selection, disabled, onI
     try {
       if (locked || !uploadAllowed) throw new Error(t('当前文档、项目或权限不允许上传。', 'The current document, project, or capabilities do not allow uploads.'));
       if (!chosen.size || chosen.size > 8 * 1024 * 1024) throw new Error(t('文件必须为 1 字节至 8 MiB。', 'The file must contain 1 byte to 8 MiB.'));
-      const source = currentSource(); requireSource(source);
+      const source = panelSource ?? currentSource(); requireSource(source);
       setFile(chosen); setFileSource(source); setMessage('');
     } catch (cause) { setMessage(cause instanceof Error ? cause.message : String(cause)); }
   }
@@ -315,23 +326,24 @@ export function DocumentObjectActions({ controller, en, selection, disabled, onI
   try { sameSource = !!conversion && documentObjectSourceMatches(conversion.source, currentSource()); } catch { /* Invalid source remains read-only. */ }
   if (!controller.selected || controller.accessError || !allowed(service.workspace, 'domain.read', controller.selected.entity.entity === 'project' ? controller.selected.id : controller.selected.entity.project)) return <p role="status">{t('当前无权读取源文档；对象与恢复内容已隐藏。', 'The source document is not currently readable; object actions and private recovery content are hidden.')}</p>;
 
-  return <details className="document-object-actions" data-testid="document-object-actions">
+  return <details ref={panel} className="document-object-actions" data-testid="document-object-actions" onToggle={event => { if (!event.currentTarget.open) setPanelSource(null); }}>
     <summary>{t('对象、任务与附件', 'Objects, tasks and attachments')}</summary>
     <div className="document-object-panel">
       {message && <p role="status" className="document-object-notice">{message}</p>}
+      {panelSource && <p className="document-object-notice">{t('操作固定于打开菜单时的文档、版本与选区；如果正文或选区改变，请重新打开菜单。', 'Actions retain the document, revision and selection used to open the menu. Reopen it if the text or selection changes.')}</p>}
       {store.persistenceError() && <p role="alert">{t('恢复存储不可用；禁止新写入。不要清除未知请求记录。', 'Recovery storage is unavailable; new writes are blocked. Do not clear uncertain request records.')} <button type="button" onClick={() => store.refresh()}>{t('重读恢复记录', 'Reload recovery records')}</button></p>}
-      <section><h4>{t('授权对象链接与正式关联', 'Authorized object links and relations')}</h4><input aria-label={t('搜索授权对象', 'Search authorized objects')} data-testid="document-object-search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('ID 或标题', 'ID or title')} />
-        <ul className="document-object-results">{targets.map(target => <li key={target.id}><span>{target.entity.title} · <code>{target.id}</code></span><button type="button" disabled={locked} onClick={() => { void perform(async () => { const source = currentSource(); requireSource(source); latest.current.onInsert(documentWikiLink(target.id, target.entity.title)); }); }}>{t('插入双链', 'Insert wiki link')}</button><button type="button" disabled={locked || target.entity.archived || target.stale || !!target.error} onClick={() => { void perform(async () => { const source = currentSource(); requireSource(source); controller.updateDraft(relatedDocumentDraft(source.raw, target.id, controller.configuration)); setMessage(t('related_to 已更新共享草稿，尚未保存；正文未丢弃。', 'related_to updated in the shared draft, not saved; the body is preserved.')); }); }}>{t('正式关联', 'Relate formally')}</button></li>)}</ul>
+      <section data-document-object-section="objects"><h4>{t('授权对象链接与正式关联', 'Authorized object links and relations')}</h4><input aria-label={t('搜索授权对象', 'Search authorized objects')} data-testid="document-object-search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('ID 或标题', 'ID or title')} />
+        <ul className="document-object-results">{targets.map(target => <li key={target.id}><span>{target.entity.title} · <code>{target.id}</code></span><button type="button" disabled={locked} onClick={() => { void perform(async () => { const source = panelSource ?? currentSource(); requireSource(source); latest.current.onInsert(documentWikiLink(target.id, target.entity.title)); }); }}>{t('插入双链', 'Insert wiki link')}</button><button type="button" disabled={locked || target.entity.archived || target.stale || !!target.error} onClick={() => { void perform(async () => { const source = panelSource ?? currentSource(); requireSource(source); controller.updateDraft(relatedDocumentDraft(source.raw, target.id, controller.configuration)); setMessage(t('related_to 已更新共享草稿，尚未保存；正文未丢弃。', 'related_to updated in the shared draft, not saved; the body is preserved.')); }); }}>{t('正式关联', 'Relate formally')}</button></li>)}</ul>
       </section>
-      <section><h4>{t('选区或清单转任务', 'Selection or checklist to task')}</h4><button type="button" data-testid="document-convert-task" disabled={locked || !selection.text.trim() || store.persistenceError()} onClick={() => { void perform(prepareTask); }}>{t('检查并准备任务…', 'Review and prepare task…')}</button>
+      <section data-document-object-section="task"><h4>{t('选区或清单转任务', 'Selection or checklist to task')}</h4><button type="button" data-testid="document-convert-task" disabled={locked || !(panelSource?.selection.text ?? selection.text).trim() || store.persistenceError()} onClick={() => { void perform(prepareTask); }}>{t('检查并准备任务…', 'Review and prepare task…')}</button>
         {conversion?.kind === 'task' && conversion.source.id === controller.selectedId && !conversion.inserted && <TaskConversionForm key={conversion.draftId} action={conversion} store={store} controller={controller} en={en} canConfirm={!locked && sameSource} onCreated={created => taskCreated(conversion, created)} onClose={() => setConversionId(null)} />}
       </section>
-      <section><h4>{t('图片与附件', 'Images and attachments')}</h4><label>{t('附件项目', 'Attachment project')}<RadixSelect aria-label={t('附件项目', 'Attachment project')} value={attachmentProject} disabled={running || command.pending} onChange={event => { setAttachmentProject(event.target.value); setFile(null); setFileSource(null); }}><option value="">{t('请选择项目', 'Choose a project')}</option>{projects.data?.filter(candidate => allowed(service.workspace, 'domain.read', candidate.id)).map(candidate => <option key={candidate.id} value={candidate.id}>{String(candidate.data.title || candidate.id)}</option>)}</RadixSelect></label>
+      <section data-document-object-section="attachments"><h4>{t('图片与附件', 'Images and attachments')}</h4><label>{t('附件项目', 'Attachment project')}<RadixSelect aria-label={t('附件项目', 'Attachment project')} value={attachmentProject} disabled={running || command.pending} onChange={event => { setAttachmentProject(event.target.value); setFile(null); setFileSource(null); }}><option value="">{t('请选择项目', 'Choose a project')}</option>{projects.data?.filter(candidate => allowed(service.workspace, 'domain.read', candidate.id)).map(candidate => <option key={candidate.id} value={candidate.id}>{String(candidate.data.title || candidate.id)}</option>)}</RadixSelect></label>
         <div className="document-object-drop" data-testid="document-attachment-drop" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={event => { if (!event.dataTransfer.files.length) return; event.preventDefault(); if (event.dataTransfer.files.length !== 1) { setMessage(t('每次选择一个文件，以便逐项核对。', 'Choose one file at a time so each outcome can be reconciled.')); return; } chooseFile(event.dataTransfer.files[0]); }}><label>{t('选择或拖入文件（最大 8 MiB）', 'Choose or drop a file (maximum 8 MiB)')}<input type="file" data-testid="document-attachment-file" disabled={locked || !uploadAllowed || store.persistenceError()} onChange={event => { chooseFile(event.target.files?.[0]); event.currentTarget.value = ''; }} /></label></div>
         {file && <p>{file.name} · {file.size} B <button type="button" data-testid="document-upload-confirm" disabled={locked || !uploadAllowed || store.persistenceError()} onClick={() => { void perform(uploadFile); }}>{t('确认上传并登记', 'Confirm upload and registration')}</button><button type="button" onClick={() => { setFile(null); setFileSource(null); }}>{t('取消', 'Cancel')}</button></p>}
         {!uploadAllowed && <p>{t('上传需要可写的项目、delivery.write 和真实存储能力；已有授权附件仍可引用。', 'Uploading requires a writable project, delivery.write and real storage capability. Authorized existing attachments can still be referenced.')}</p>}
         {(versions.error || projects.error) && <p role="alert">{(versions.error || projects.error)?.message}<button type="button" onClick={() => { void versions.refetch(); void projects.refetch(); }}>{t('重读附件', 'Reload attachments')}</button></p>}
-        {attachmentProject && <ul className="document-object-results">{versions.data?.map(version => <li key={version.id}><span>{String(version.data.fileName || version.id)} · <code>{version.id}</code></span><button type="button" disabled={locked} onClick={() => { void perform(async () => { const source = currentSource(); requireSource(source); latest.current.onInsert(documentAttachmentMarkdown(version.id, String(version.data.fileName || version.id), String(version.data.mediaType || ''))); }); }}>{t('插入此不可变版本', 'Insert this immutable version')}</button></li>)}</ul>}
+        {attachmentProject && <ul className="document-object-results">{versions.data?.map(version => <li key={version.id}><span>{String(version.data.fileName || version.id)} · <code>{version.id}</code></span><button type="button" disabled={locked} onClick={() => { void perform(async () => { const source = panelSource ?? currentSource(); requireSource(source); latest.current.onInsert(documentAttachmentMarkdown(version.id, String(version.data.fileName || version.id), String(version.data.mediaType || ''))); }); }}>{t('插入此不可变版本', 'Insert this immutable version')}</button></li>)}</ul>}
       </section>
       {!!entries.length && <section><h4>{t('源文档操作恢复', 'Source document recovery')}</h4><ul className="document-object-recovery">{entries.map(action => <li key={action.id}>
         <strong>{action.kind === 'task' ? t('任务创建', 'Task creation') : action.name}</strong> · {action.kind === 'task' ? action.taskId || t('草稿或待核对', 'Draft or unconfirmed') : action.phase}

@@ -1,4 +1,5 @@
-import { automationTemplateSource, automationTemplateTags, automationTemplateTriggers, type AutomationCatalogTemplate } from "../../../../../../../../packages/contracts/src/automation-catalog.ts";
+import { automationTemplateSource, automationTemplateTags, automationTemplateTriggers } from "../../../../../../../../packages/automation-resources/catalog.ts";
+import type { AutomationCatalogTemplate } from "../../../../../../../../packages/contracts/src/automation-catalog.ts";
 
 export type StudioTemplateFilters = { query: string; source: string; category: string; integration: string; trigger: string };
 /** Pure browsing: selection/filtering never creates a session, saves a definition or dispatches a run. */

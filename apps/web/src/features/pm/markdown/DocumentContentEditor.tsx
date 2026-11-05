@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { useLocation } from 'react-router';
@@ -11,12 +11,14 @@ import { foldAll, foldCode, unfoldAll, unfoldCode } from '@codemirror/language';
 import { Bold, ChevronDown, Code2, Columns2, Eye, Italic, List, ListTree, MoreHorizontal, Redo2, Search, Undo2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '../../../components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../../../components/ui/dialog';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuPopup, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger, useContextMenu } from '@/components/ui/context-menu';
 import type { WorkspaceController } from './controller';
 import type { DocumentCommandDefinition, DocumentEdit } from './document-editing-types';
 import { applyDocumentCommand, documentCommands } from './document-commands';
 import { applyStructureCommand, documentStructureCommandReasons, scanDocumentBlocks, scanDocumentOutline, structureCommands } from './document-structure';
 import { applyBodyChanges, bodyEditorText, bodyOffsetFromEditor, editorOffsetFromBody, splitDocumentBody, type BodyChange } from './document-body';
-import { DocumentObjectActions } from './DocumentObjectActions';
+import { DocumentObjectActions, type DocumentObjectActionsProps } from './DocumentObjectActions';
+import { captureDocumentObjectSource } from './document-object-model';
 import { Preview } from './Preview';
 import { getDocumentEditorPosition, retainDocumentEditorPosition } from './document-workbench-state';
 import './document-editor.css';
@@ -24,7 +26,7 @@ import { RadixSelect } from "@/components/ui/radix-select"
 
 const commands = [...documentCommands, ...structureCommands];
 const structureIds: Record<string, true> = Object.fromEntries(structureCommands.map(command => [command.id, true]));
-type Target = { id: string; scope: string; raw: string; from: number; to: number };
+type Target = { id: string; scope: string; raw: string; revision: string; from: number; to: number; selection?: { from: number; to: number } };
 type CommandGroup = { label: string; labelEn: string; commands?: DocumentCommandDefinition[]; children?: CommandGroup[] };
 const byIds = (ids: string[]) => commands.filter(command => ids.includes(command.id));
 const groups: CommandGroup[] = [
@@ -74,13 +76,19 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
   const [history, setHistory] = useState({ undo: 0, redo: 0 });
   const [layout, setLayout] = useState<'split' | 'edit' | 'preview'>(() => getDocumentEditorPosition(c.session, c.selectedId, 'body')?.layout ?? 'preview');
   const [outlineOpen, setOutlineOpen] = useState(false);
-  const [menu, setMenu] = useState<{ target: Target; x?: number; y?: number } | null>(null);
+  const [menu, setMenu] = useState<{ target: Target } | null>(null);
+  const editorMenu = useContextMenu<Target>();
+  const [rangeMenu, setRangeMenu] = useState<Target | null>(null);
+  const [objectRequest, setObjectRequest] = useState<DocumentObjectActionsProps['request']>(null);
   const [palette, setPalette] = useState<{ target: Target; query: string; index: number } | null>(null);
   const [input, setInput] = useState<{ target: Target; command: DocumentCommandDefinition; value: string } | null>(null);
   const [error, setError] = useState('');
   const outline = useMemo(() => scanDocumentOutline(body), [body]);
   const blocks = useMemo(() => scanDocumentBlocks(body), [body]);
   const commandReasons = useMemo(() => documentStructureCommandReasons(body, selection), [body, selection]);
+  const menuTarget = editorMenu.target ?? menu?.target;
+  const menuCommandReasons = useMemo<Record<string, string | null>>(() => menuTarget ? documentStructureCommandReasons(splitDocumentBody(menuTarget.raw)?.body ?? '', menuTarget) : {}, [menuTarget]);
+  const rangeCommandReasons = useMemo<Record<string, string | null>>(() => rangeMenu ? documentStructureCommandReasons(splitDocumentBody(rangeMenu.raw)?.body ?? '', rangeMenu) : {}, [rangeMenu]);
   const label = (english: string, zh: string) => en ? english : zh;
   const commandLabel = (command: DocumentCommandDefinition) => en ? command.labelEn : command.label;
   const positionState = useRef({ layout });
@@ -124,12 +132,13 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
     const raw = controller.session.drafts.getSnapshot()[controller.selectedId]?.raw ?? controller.selected?.raw ?? '';
     const currentBody = splitDocumentBody(raw)?.body ?? '';
     const range = view.current?.state.selection.main;
-    return { id: controller.selectedId, scope: controller.session.scope, raw, from: bodyOffsetFromEditor(currentBody, range?.from ?? 0), to: bodyOffsetFromEditor(currentBody, range?.to ?? 0) };
+    return { id: controller.selectedId, scope: controller.session.scope, raw, revision: controller.draft?.revision ?? controller.selected?.revision ?? '', from: bodyOffsetFromEditor(currentBody, range?.from ?? 0), to: bodyOffsetFromEditor(currentBody, range?.to ?? 0) };
   }
 
   function requireTarget(expected: Target, write = true) {
     const current = target();
-    if (!view.current?.dom.isConnected || current.id !== expected.id || current.scope !== expected.scope || current.raw !== expected.raw || current.from !== expected.from || current.to !== expected.to) throw new Error(label('The document or selection changed. Select the intended text and try again.', '文档或选区已更改，请重新选择目标文字后重试。'));
+    const selection = expected.selection ?? expected;
+    if (!view.current?.dom.isConnected || current.id !== expected.id || current.scope !== expected.scope || current.raw !== expected.raw || current.revision !== expected.revision || current.from !== selection.from || current.to !== selection.to) throw new Error(label('The document, revision or selection changed. Select the intended text and try again.', '文档、版本或选区已更改，请重新选择目标文字后重试。'));
     if (view.current.composing) throw new Error(label('Finish composing text before applying a command.', '请先完成输入法组字，再执行命令。'));
     if (write && !latest.current.canEditSourceDraft) throw new Error(label('Editing is locked. Resolve the access, revision or pending-write notice first.', '编辑已锁定，请先处理权限、版本冲突或待确认写入。'));
     const parts = splitDocumentBody(current.raw);
@@ -199,15 +208,28 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
   }
 
   const handlers = useRef({ openPalette, context: (event: MouseEvent, editor: EditorView) => {
+    if (!(event.target instanceof Element) || !event.target.closest('.cm-content')) return false;
     event.preventDefault();
-    const position = editor.posAtCoords({ x: event.clientX, y: event.clientY });
+    event.stopPropagation();
     const range = editor.state.selection.main;
+    const position = event.clientX || event.clientY ? editor.posAtCoords({ x: event.clientX, y: event.clientY }) : null;
     if (position !== null && (position < range.from || position > range.to || range.empty)) editor.dispatch({ selection: { anchor: position } });
-    setMenu({ target: target(), x: event.clientX, y: event.clientY });
+    const caret = editor.coordsAtPos(editor.state.selection.main.head);
+    const bounds = editor.contentDOM.getBoundingClientRect();
+    setMenu(null);
+    editorMenu.openAt({ x: event.clientX || caret?.left || bounds.left + 8, y: event.clientY || caret?.bottom || bounds.top + 20 }, target(), editor.contentDOM);
+    return true;
+  }, keyboardContext: (editor: EditorView) => {
+    const caret = editor.coordsAtPos(editor.state.selection.main.head);
+    const bounds = editor.contentDOM.getBoundingClientRect();
+    setMenu(null);
+    editorMenu.openAt({ x: caret?.left ?? bounds.left + 8, y: caret?.bottom ?? bounds.top + 20 }, target(), editor.contentDOM);
     return true;
   } });
   const extensions = useMemo(() => [markdown(), EditorView.lineWrapping, search(), Prec.highest(keymap.of([
     { key: 'Mod-p', run: () => { handlers.current.openPalette(); return true; }, stopPropagation: true },
+    { key: 'Shift-F10', run: editor => handlers.current.keyboardContext(editor), stopPropagation: true },
+    { key: 'ContextMenu', run: editor => handlers.current.keyboardContext(editor), stopPropagation: true },
     { key: '/', run: editor => {
       if (editor.state.readOnly || editor.composing) return false;
       const range = editor.state.selection.main;
@@ -228,16 +250,71 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
     setHistory(previous => previous.undo === undoCount && previous.redo === redoCount ? previous : { undo: undoCount, redo: redoCount });
   }
 
-  function historyAction(action: typeof undo) {
-    try { const { editor } = requireTarget(target()); action(editor); editor.focus(); setError(''); }
+  function historyAction(action: typeof undo, expected = target()) {
+    try { const { editor } = requireTarget(expected); action(editor); editor.focus(); setError(''); }
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   }
 
-  function renderGroup(group: CommandGroup) {
-    return <DropdownMenuSub key={group.labelEn}><DropdownMenuSubTrigger>{en ? group.labelEn : group.label}</DropdownMenuSubTrigger><DropdownMenuSubContent className="document-menu">{group.children?.map(renderGroup)}{group.commands?.map(command => {
-      const reason = disabled ? readonlyReason : commandReasons[command.id];
-      return <DropdownMenuItem key={command.id} disabled={!!reason} title={reason || undefined} aria-label={reason ? `${commandLabel(command)} · ${reason}` : undefined} onSelect={() => run(command, menu?.target ?? target())}><span>{commandLabel(command)}{reason && <small className="document-command-reason">{reason}</small>}</span></DropdownMenuItem>;
-    })}</DropdownMenuSubContent></DropdownMenuSub>;
+  function renderGroup(group: CommandGroup, expected: Target, context: boolean) {
+    const Sub = context ? ContextMenuSub : DropdownMenuSub;
+    const SubTrigger = context ? ContextMenuSubTrigger : DropdownMenuSubTrigger;
+    const SubContent = context ? ContextMenuSubContent : DropdownMenuSubContent;
+    const Item = context ? ContextMenuItem : DropdownMenuItem;
+    return <Sub key={group.labelEn}><SubTrigger>{en ? group.labelEn : group.label}</SubTrigger><SubContent className="document-menu">{group.children?.map(child => renderGroup(child, expected, context))}{group.commands?.map(command => {
+      const reason = disabled ? readonlyReason : menuCommandReasons[command.id];
+      return <Item key={command.id} disabled={!!reason} title={reason || undefined} aria-label={reason ? `${commandLabel(command)} · ${reason}` : undefined} onSelect={() => run(command, expected)}><span>{commandLabel(command)}{reason && <small className="document-command-reason">{reason}</small>}</span></Item>;
+    })}</SubContent></Sub>;
+  }
+
+  function openObjectSection(section: 'task' | 'objects' | 'attachments', expected: Target) {
+    try {
+      const { body: text } = requireTarget(expected, false);
+      setObjectRequest({ section, source: captureDocumentObjectSource(expected.id, expected.raw, expected.revision, { from: expected.from, to: expected.to, text: text.slice(expected.from, expected.to) }), token: (objectRequest?.token ?? 0) + 1 });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+  }
+
+  function renderEditingMenu(expected: Target, context: boolean) {
+    const Item = context ? ContextMenuItem : DropdownMenuItem;
+    const Separator = context ? ContextMenuSeparator : DropdownMenuSeparator;
+    return <>
+      <Item disabled={disabled || !history.undo} onSelect={() => historyAction(undo, expected)}>{label('Undo', '撤销')}</Item>
+      <Item disabled={disabled || !history.redo} onSelect={() => historyAction(redo, expected)}>{label('Redo', '重做')}</Item>
+      <Separator className="document-menu-separator" />
+      {(['cut', 'copy', 'paste', 'plain-paste'] as const).map(action => <Item key={action} disabled={action !== 'copy' && disabled || ['copy', 'cut'].includes(action) && expected.from === expected.to} onSelect={() => void clipboard(action, expected)}>{action === 'cut' ? label('Cut', '剪切') : action === 'copy' ? label('Copy', '复制') : action === 'paste' ? label('Paste Markdown text', '粘贴 Markdown 文本') : label('Paste as plain text', '纯文本粘贴')}</Item>)}
+      <Separator className="document-menu-separator" />{groups.map(group => renderGroup(group, expected, context))}
+      <Separator className="document-menu-separator" />
+      <Item disabled={expected.from === expected.to} title={expected.from === expected.to ? label('Select text or a checklist item first', '请先选择文字或检查项') : undefined} onSelect={() => openObjectSection('task', expected)}>{label('Review and prepare task…', '检查并准备任务…')}</Item>
+      <Item onSelect={() => openObjectSection('objects', expected)}>{label('Authorized objects and relations…', '授权对象与关联…')}</Item>
+      <Item onSelect={() => openObjectSection('attachments', expected)}>{label('Images and attachments…', '图片与附件…')}</Item>
+      <Separator className="document-menu-separator" />
+      <Item onSelect={() => { if (view.current) openSearchPanel(view.current); }}>{label('Find / replace', '查找 / 替换')}</Item>
+      <Item onSelect={() => setPalette({ target: expected, query: '', index: 0 })}>{label('Search all commands…', '搜索全部命令…')}<kbd>Ctrl/⌘ P</kbd></Item>
+    </>;
+  }
+
+  function renderRangeMenu(range: { from: number; to: number }, trigger: ReactElement) {
+    const expected = rangeMenu?.from === range.from && rangeMenu.to === range.to ? rangeMenu : null;
+    return <ContextMenu key={`${range.from}:${range.to}`} onOpenChange={open => {
+      if (!open) return;
+      const current = target();
+      setRangeMenu({ ...current, raw: c.raw, from: range.from, to: range.to, selection: { from: current.from, to: current.to } });
+    }}><ContextMenuTrigger asChild>{trigger}</ContextMenuTrigger><ContextMenuContent className="document-menu" aria-label={label('Document structure actions', '文档结构操作')}>
+      <ContextMenuItem onSelect={() => {
+        if (!expected) return;
+        try {
+          const { editor, body: text } = requireTarget(expected, false);
+          setLayout('edit');
+          editor.dispatch({ selection: EditorSelection.range(editorOffsetFromBody(text, expected.from), editorOffsetFromBody(text, expected.to)), scrollIntoView: true });
+          requestAnimationFrame(() => editor.focus());
+        } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+      }}>{label('Reveal source range', '定位源码范围')}</ContextMenuItem>
+      <ContextMenuItem onSelect={() => { if (expected) void clipboard('copy', expected); }}>{label('Copy Markdown source', '复制 Markdown 源码')}</ContextMenuItem>
+      <ContextMenuSeparator />
+      {expected && structureCommands.map(command => {
+        const reason = disabled ? readonlyReason : rangeCommandReasons[command.id];
+        return <ContextMenuItem key={command.id} disabled={!!reason || !expected} title={reason || undefined} onSelect={() => { if (expected) run(command, expected); }}><span>{commandLabel(command)}{reason && <small className="document-command-reason">{reason}</small>}</span></ContextMenuItem>;
+      })}
+    </ContextMenuContent></ContextMenu>;
   }
 
   function dropBlock(destination: number) {
@@ -266,7 +343,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
   }
 
   const readonlyReason = !split ? label('The YAML boundary is invalid; repair the Markdown source.', 'YAML 分隔符无效，请修复 Markdown 源码。') : c.selected?.entity.archived ? label('Archived document. Editing is locked.', '文档已归档，编辑已锁定。') : c.ahead || c.conflict?.id === c.selectedId ? label('Disk changed. Compare versions before editing; your draft is retained.', '磁盘版本已更改，请先比较版本；当前草稿已保留。') : c.writesBlocked ? label('A write is pending or its result is unknown. Resolve its recovery record first.', '写入待确认或结果未知，请先处理原始恢复记录。') : c.configurationInvalid ? label('Workspace configuration has errors. Repair it before editing.', '工作区配置有错误，请先修复配置。') : c.query.isError || c.accessError ? label('Workspace access or refresh failed. Your draft is retained; editing is locked.', '工作区访问或刷新失败，草稿已保留，编辑暂时锁定。') : c.busy ? label('Saving or updating. Editing will resume when it finishes.', '正在保存或更新，完成后可继续编辑。') : label('You do not have write access. The document remains readable.', '当前没有写入权限，仍可阅读文档。');
-  const insertionTarget = { id: c.selectedId, scope: c.session.scope, raw: c.raw, ...selection };
+  const insertionTarget = { id: c.selectedId, scope: c.session.scope, raw: c.raw, revision: c.draft?.revision ?? c.selected?.revision ?? '', ...selection };
   const filtered = commands.filter(command => `${command.id} ${command.label} ${command.labelEn}`.toLocaleLowerCase().includes(palette?.query.toLocaleLowerCase() ?? ''));
   const block = blocks.find(candidate => selection.from >= candidate.from && selection.from < candidate.to);
 
@@ -279,13 +356,8 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
           const command = commands.find(candidate => candidate.id === id);
           return command && <button type="button" key={id} aria-label={commandLabel(command)} title={disabled ? readonlyReason : commandLabel(command)} disabled={disabled} onPointerDown={event => event.preventDefault()} onClick={() => run(command)}><Icon size={16} /></button>;
         })}
-        <DropdownMenu open={!!menu} onOpenChange={open => { if (open) setMenu(current => current ?? { target: target() }); else setMenu(null); }}><DropdownMenuTrigger asChild><button type="button" aria-label={label('All formatting and editing commands', '全部格式与编辑命令')} title={label('Formatting menu · also available by right-click', '格式菜单 · 也可右键打开')} className={menu?.x !== undefined ? 'document-context-anchor' : ''} style={menu?.x !== undefined ? { left: menu.x, top: menu.y } : undefined}><MoreHorizontal size={16} /><ChevronDown size={11} /></button></DropdownMenuTrigger><DropdownMenuContent className="document-menu" align="start" onCloseAutoFocus={event => event.preventDefault()}>
-          <DropdownMenuItem disabled={disabled || !history.undo} onSelect={() => historyAction(undo)}>{label('Undo', '撤销')}</DropdownMenuItem>
-          <DropdownMenuItem disabled={disabled || !history.redo} onSelect={() => historyAction(redo)}>{label('Redo', '重做')}</DropdownMenuItem>
-          <DropdownMenuSeparator className="document-menu-separator" />
-          {(['cut', 'copy', 'paste', 'plain-paste'] as const).map(action => <DropdownMenuItem key={action} disabled={action !== 'copy' && disabled || ['copy', 'cut'].includes(action) && selection.from === selection.to} onSelect={() => void clipboard(action, menu?.target ?? target())}>{action === 'cut' ? label('Cut', '剪切') : action === 'copy' ? label('Copy', '复制') : action === 'paste' ? label('Paste Markdown text', '粘贴 Markdown 文本') : label('Paste as plain text', '纯文本粘贴')}</DropdownMenuItem>)}
-          <DropdownMenuSeparator className="document-menu-separator" />{groups.map(renderGroup)}
-          <DropdownMenuSeparator className="document-menu-separator" /><DropdownMenuItem onSelect={() => { if (view.current) openSearchPanel(view.current); }}>{label('Find / replace', '查找 / 替换')}</DropdownMenuItem><DropdownMenuItem onSelect={openPalette}>{label('Search all commands…', '搜索全部命令…')}<kbd>Ctrl/⌘ P</kbd></DropdownMenuItem>
+        <DropdownMenu open={!!menu} onOpenChange={open => { if (open) { editorMenu.close(); setMenu({ target: target() }); } else setMenu(null); }}><DropdownMenuTrigger asChild><button type="button" aria-label={label('All formatting and editing commands', '全部格式与编辑命令')} title={label('Formatting menu · also available by right-click', '格式菜单 · 也可右键打开')}><MoreHorizontal size={16} /><ChevronDown size={11} /></button></DropdownMenuTrigger><DropdownMenuContent className="document-menu" align="start" onCloseAutoFocus={event => event.preventDefault()}>
+          {menu && renderEditingMenu(menu.target, false)}
         </DropdownMenuContent></DropdownMenu>
         <RadixSelect aria-label={label('Heading or paragraph style', '标题或段落样式')} value="" disabled={disabled} onChange={event => { const command = commands.find(candidate => candidate.id === event.target.value); if (command) run(command); }}><option value="">{label('Paragraph', '段落')}</option>{byIds(['paragraph', 'heading-1', 'heading-2', 'heading-3', 'heading-4', 'heading-5', 'heading-6', 'blockquote', 'task-list', 'strike', 'link', 'image', 'table', 'highlight-yellow']).map(command => <option key={command.id} value={command.id}>{commandLabel(command)}</option>)}</RadixSelect>
         <span className="document-toolbar-divider" />
@@ -303,7 +375,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
         <strong>{label('Outline', '大纲')}</strong>
         {layout !== 'preview' && <div className="document-fold-controls">{([[foldAll, 'Fold all', '全部折叠'], [unfoldAll, 'Unfold all', '全部展开'], [foldCode, 'Fold current block', '折叠当前块'], [unfoldCode, 'Unfold current block', '展开当前块']] as const).map(([action, english, zh]) => <button type="button" key={english} onClick={() => { if (view.current) action(view.current); }}>{label(english, zh)}</button>)}</div>}
         {!outline.length && <p>{label('No Markdown headings yet.', '还没有 Markdown 标题。')}</p>}
-        {outline.map(heading => <button type="button" key={heading.from} style={{ paddingInlineStart: `${8 + (heading.level - 1) * 10}px` }} onClick={() => {
+        {outline.map(heading => renderRangeMenu(heading, <button type="button" style={{ paddingInlineStart: `${8 + (heading.level - 1) * 10}px` }} onClick={() => {
           if (layout === 'preview') {
             const match = Array.from(document.querySelectorAll<HTMLElement>('.document-preview-pane .markdown-preview h1, .document-preview-pane .markdown-preview h2, .document-preview-pane .markdown-preview h3, .document-preview-pane .markdown-preview h4, .document-preview-pane .markdown-preview h5, .document-preview-pane .markdown-preview h6')).find(element => element.textContent?.trim() === heading.title);
             (match || previewPane.current)?.scrollIntoView({ block: 'start' });
@@ -314,11 +386,11 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
           const position = editorOffsetFromBody(body, heading.from);
           editor.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: 'start' }) });
           editor.focus();
-        }}>{heading.title}</button>)}
+        }}>{heading.title}</button>))}
         {layout !== 'preview' && <>
           <strong>{label('Blocks · drag to reorder', '内容块 · 拖动排序')}</strong>
           <p>{label('Select a block to use the Move up/down buttons, or drag it onto another block.', '选择内容块后可用上移/下移按钮，也可拖到另一个内容块上。')}</p>
-          {blocks.map((range, index) => <button type="button" key={`${range.from}:${range.to}`} draggable={!disabled} aria-label={`${label('Select or drag block', '选择或拖动内容块')} ${index + 1}: ${range.kind}`} disabled={disabled} onClick={() => {
+          {blocks.map((range, index) => renderRangeMenu(range, <button type="button" draggable={!disabled} aria-label={`${label('Select or drag block', '选择或拖动内容块')} ${index + 1}: ${range.kind}`} onClick={() => {
             const editor = view.current;
             if (!editor) return;
             editor.dispatch({ selection: EditorSelection.range(editorOffsetFromBody(body, range.from), editorOffsetFromBody(body, range.to)), scrollIntoView: true });
@@ -330,7 +402,7 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
             draggedBlock.current = { target: target(), index };
             event.dataTransfer.effectAllowed = 'move';
             event.dataTransfer.setData('application/x-pm-document-block', String(index));
-          }} onDragOver={event => { if (!disabled && draggedBlock.current) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }} onDrop={event => { event.preventDefault(); dropBlock(index); }} onDragEnd={() => { draggedBlock.current = null; }}>⠿ {index + 1} · {range.kind}<small>{body.slice(range.from, range.to).replace(/\s+/g, ' ').slice(0, 60)}</small></button>)}
+          }} onDragOver={event => { if (!disabled && draggedBlock.current) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; } }} onDrop={event => { event.preventDefault(); dropBlock(index); }} onDragEnd={() => { draggedBlock.current = null; }}>⠿ {index + 1} · {range.kind}<small>{body.slice(range.from, range.to).replace(/\s+/g, ' ').slice(0, 60)}</small></button>))}
         </>}
       </aside>}
       <section className="document-body-pane" aria-label={label('Editable Markdown body', '可编辑 Markdown 正文')}>
@@ -370,10 +442,11 @@ export function DocumentContentEditor({ controller: c, en, onSource }: { control
       }} onLink={c.wikiLink} /></section>
     </div>
     {layout !== 'preview' && block && <div className="document-block-controls" role="group" aria-label={label('Current block actions', '当前块操作')}><span>{`${label('Block', '块')} · ${block.kind}`}</span>{byIds(['block-move-up', 'block-move-down', 'block-duplicate', 'block-delete']).map(command => <button type="button" key={command.id} disabled={disabled || !!commandReasons[command.id]} title={disabled ? readonlyReason : commandReasons[command.id] || undefined} onPointerDown={event => event.preventDefault()} onClick={() => run(command)}>{commandLabel(command)}</button>)}</div>}
-    {layout !== 'preview' && <DocumentObjectActions controller={c} en={en} selection={{ ...selection, text: body.slice(selection.from, selection.to) }} disabled={disabled || c.draftInvalid} onInsert={markdownText => {
+    {layout !== 'preview' && <DocumentObjectActions controller={c} en={en} request={objectRequest} selection={{ ...selection, text: body.slice(selection.from, selection.to) }} disabled={disabled || c.draftInvalid} onInsert={markdownText => {
       const { body: text } = requireTarget(insertionTarget);
       apply({ text: text.slice(0, insertionTarget.from) + markdownText + text.slice(insertionTarget.to), selection: { from: insertionTarget.from + markdownText.length, to: insertionTarget.from + markdownText.length } }, insertionTarget);
     }} />}
+    <ContextMenuPopup menu={editorMenu} className="document-menu">{editorMenu.target && renderEditingMenu(editorMenu.target, true)}</ContextMenuPopup>
     {layout !== 'preview' && <p className="document-editor-hint">{label('Markdown is the source of truth, including the H1 title. Real-time saving is on: edits save automatically after they settle, and Save or Ctrl/⌘ S writes immediately. At line start, / opens commands.', 'Markdown（含 H1 标题）是唯一正文来源。实时保存已开启：停止输入后自动写入，也可点击保存或 Ctrl/⌘ S 立即写入。行首输入 / 打开命令。')}</p>}
     <Dialog open={!!palette} onOpenChange={open => { if (!open) setPalette(null); }}><DialogContent className="document-command-dialog" finalFocus={() => view.current?.contentDOM ?? null}><DialogTitle>{label('Editor commands', '编辑器命令')}</DialogTitle><DialogDescription>{label('Search all formatting, insertion and structural commands. Applies to the selection you opened this menu with.', '搜索全部格式、插入和结构命令，操作打开菜单时的选区。')}</DialogDescription><input autoFocus aria-label={label('Search editor commands', '搜索编辑器命令')} value={palette?.query ?? ''} onChange={event => setPalette(current => current && { ...current, query: event.target.value, index: 0 })} onKeyDown={event => {
       if (!palette || !filtered.length) return;

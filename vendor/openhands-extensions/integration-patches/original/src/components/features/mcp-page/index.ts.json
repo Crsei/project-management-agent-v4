@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/components/features/mcp-page/index.ts",
+  "beforeSha256": "0b120331e768e655817cc2d26fef52f2d9265e37bc9c12f27fe8617fe63a902b",
+  "afterSha256": "697fc7c8f4cd111c63e1599f90895ca6f90baabf7030ae231ce930f30fbcf5f8",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 318,
+  "before": "U2F2ZUFzU2VjcmV0VG9nZ2xlIH0gZnJvbSAiLi9zYXZlLWFzLXNlY3JldC10b2dnbGUiOwpleHBvcnQgeyA=",
+  "after": ""
+}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "destination": "vendor/openhands-extensions/scripts/web-build.d.mts",
+  "sha256": "a9ab20a3a267de598873017740f248f3647bda214f906bd095c324d7d157e483",
+  "mode": 420,
+  "encoding": "base64",
+  "content": "LyoqIFN0cnVjdHVyYWxseSBjb21wYXRpYmxlIHdpdGggVml0ZSBQbHVnaW47IG5vIHRvb2xpbmctb25seSBydW50aW1lIGRlcGVuZGVuY3kuICovCmV4cG9ydCBkZWNsYXJlIGZ1bmN0aW9uIG9wZW5IYW5kc1Byb3ZlbmFuY2VQbHVnaW4oKTogeyBuYW1lOiBzdHJpbmc7IGFwcGx5OiAiYnVpbGQiOyBlbmZvcmNlOiAicG9zdCIgfTsKZXhwb3J0IGRlY2xhcmUgZnVuY3Rpb24gdmVyaWZ5V2ViRGlzdHJpYnV0aW9uKGRpcmVjdG9yeTogc3RyaW5nLCByb290Pzogc3RyaW5nKTogUHJvbWlzZTx7CiAgaW52ZW50b3J5OiB7IHZlcnNpb246IG51bWJlcjsgb3V0cHV0SW52ZW50b3J5U2hhMjU2OiBzdHJpbmc7IGZpbGVzOiBBcnJheTx7IHBhdGg6IHN0cmluZzsgc2hhMjU2OiBzdHJpbmc7IGJ5dGVzOiBudW1iZXIgfT4gfTsKICBzaGEyNTY6IHN0cmluZzsKICBvdXRwdXRJbnZlbnRvcnlTaGEyNTY6IHN0cmluZzsKfT47Cg=="
+}

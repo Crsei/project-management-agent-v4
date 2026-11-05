@@ -94,7 +94,7 @@ export function Combobox<
   children,
   ...props
 }: ComboboxProps<Value, Multiple>) {
-  const [uncontrolledValue, setUncontrolledValue] = useState<unknown>(null)
+  const [uncontrolledValue, setUncontrolledValue] = useState<unknown>(defaultValue ?? null)
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [highlighted, setHighlighted] = useState(0)
@@ -221,11 +221,10 @@ export function ComboboxList({
       className={cn("max-h-60 overflow-auto py-1", className)}
     >
       {typeof children === "function"
-        ? context.visible.map((item, index) =>
+        ? context.visible.map((item) =>
             (children as (item: unknown) => ReactNode)(item),
           )
         : children}
-      {context.visible.length === 0 && children === undefined ? null : null}
     </div>
   )
 }

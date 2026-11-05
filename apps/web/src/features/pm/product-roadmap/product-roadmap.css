@@ -405,6 +405,15 @@
     color-mix(in srgb, var(--selection-marker) 22%, transparent);
 }
 
+.roadmap-node:focus-visible,
+.roadmap-card[tabindex="-1"]:focus-visible,
+.roadmap-node-detail:focus-visible,
+.roadmap-confirm[tabindex="-1"]:focus-visible,
+.roadmap-card fieldset:focus-visible {
+  outline: 2px solid var(--selection-marker);
+  outline-offset: 3px;
+}
+
 .roadmap-node-grip {
   display: flex;
   justify-content: space-between;

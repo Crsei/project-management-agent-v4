@@ -4,16 +4,7 @@ import { useI18n } from "@/lib/i18n-provider"
 import styles from "./filter-card.module.css"
 import { RadixSelect } from "@/components/ui/radix-select"
 
-export type FilterOperator = "is" | "isNot"
-export type FilterCondition = { field: string; operator: FilterOperator; values: string[] }
-export type FilterOption = { value: string; label: string }
-export type FilterField = {
-  id: string
-  label: string
-  options: readonly FilterOption[]
-  /** Render a single-select value instead of a checkbox list. */
-  single?: boolean
-}
+import type { FilterCondition, FilterField, FilterOperator } from "../../lib/filter-model"
 
 export type FilterCardProps = {
   title: string

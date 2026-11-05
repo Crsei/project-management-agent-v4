@@ -7,7 +7,8 @@ import { OpenCodeSettings } from "@t3tools/provider-opencode/settings";
 import { OmpSettings } from "@t3tools/provider-omp/settings";
 import type { StoredProviderInstance } from "../instances.ts";
 import type { ProviderDriverContext } from "../driver-adapter.ts";
-import { projectProviderInstance, toT3DriverKind, fromT3DriverKind } from "./config-mapping.ts";
+import { canonicalProviderModelId, validateClaudeConfig, validatePiConfig, projectProviderInstance, toT3DriverKind, fromT3DriverKind } from "./config-mapping.ts";
+import { resolveProviderNativeHome } from "./native-paths.ts";
 
 const instance: StoredProviderInstance = { instanceId: "account-original", driver: "opencode", label: "Account", enabled: true,
   config: { binaryPath: "bin/opencode", serverUrl: "", serverPassword: "private-test-only" },
@@ -92,4 +93,24 @@ test("OMP keeps its independent native environment and requires no default model
   assert.equal(current.homeDirectory, omp.homeDirectory);
   assert.equal(Object.hasOwn(mapped.config as object, "model"), false);
   assert.equal(fromT3DriverKind(toT3DriverKind("pi")), "pi");
+});
+
+test("host configuration boundary retains pinned aliases and original argument validation", () => {
+  assert.equal(canonicalProviderModelId("claude", "SoNnEt"), "claude-sonnet-5-5");
+  assert.equal(canonicalProviderModelId("claude", "registered-custom-model"), "registered-custom-model");
+  assert.equal(canonicalProviderModelId("codex", "sonnet"), "sonnet");
+  assert.equal(validateClaudeConfig({}).binaryPath, "claude");
+  for (const validate of [validateClaudeConfig, validatePiConfig]) {
+    assert.throws(() => validate({ unknownSetting: "not accepted" }), /Unknown/);
+    assert.throws(() => validate({ binaryPath: "bad\0path" }), /NUL/);
+  }
+});
+
+test("native Home boundary preserves managed, direct and explicit overlay precedence without reading credentials", () => {
+  const cwd = path.resolve("/authorized/project"), userHome = path.resolve("/native/user"), managed = path.resolve("/private/managed");
+  assert.equal(resolveProviderNativeHome("codex", { setupMode: "managed" }, { CODEX_HOME: "/ignored" }, cwd, userHome, managed), managed);
+  assert.equal(resolveProviderNativeHome("codex", {}, { CODEX_HOME: "profiles/codex" }, cwd, userHome, managed), path.resolve(cwd, "profiles/codex"));
+  assert.equal(resolveProviderNativeHome("codex", { homePath: "~/shared", shadowHomePath: "overlay" }, { CODEX_HOME: "/ignored" }, cwd, userHome, managed), path.resolve(cwd, "overlay"));
+  assert.equal(resolveProviderNativeHome("claude", { homePath: "~/claude-profile" }, { CLAUDE_CONFIG_DIR: "/ignored" }, cwd, userHome, managed), path.join(userHome, "claude-profile"));
+  assert.equal(resolveProviderNativeHome("pi", {}, {}, cwd, userHome, managed), userHome);
 });

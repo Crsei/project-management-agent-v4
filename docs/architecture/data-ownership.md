@@ -1,22 +1,33 @@
 # 数据所有权与一致性
 
-| 数据 | 所有者 | 持久化与保护 |
+本页描述当前权威，不沿用早期 SQL 核心 `entities` 一表拥有全部任务的描述。历史取舍保留在 [ADR-0002](adr/0002-first-stage-backend.md)；后续已采纳的文件权威决策见 [ADR-0003](adr/0003-markdown-core.md)。
+
+| 数据 | 权威与保存位置 | 保护 / 可重建性 |
 | --- | --- | --- |
-| 用户/会话/成员授权 | 身份与访问模块 | users/sessions/memberships；会话只存摘要，成员变更保留版本及事件 |
-| 规划、意图、交付聚合 | 对应应用模块 | entities 关系元数据 + JSONB；Zod、类型/作用域引用触发器、唯一索引和不可变历史保护 |
-| 命令结果 | 命令内核 | command_receipts，业务与收据同事务；同主体/Workspace/commandId 唯一且不可覆盖 |
-| 待发布事件 | 命令内核 | outbox 与业务同事务；按聚合序号排序，原事件身份不因重试改变 |
-| 客户端变更流 | Worker | events，Workspace 内连续 cursor 与 eventId 唯一；发布标记、事件和游标同事务 |
-| 成果字节 | BlobStore | 服务端 objectKey；先落盘/fsync 再登记；当前不自动删除孤立或过期文件 |
+| 九类核心实体、正文和正式关系 | 未映射项目在 `CORE_WORKSPACE_ROOT/<workspaceId>`；已登记本地项目在所选目录 `.pm/core/` | Markdown为权威，稳定 `PRJ-001` / `TASK-102` 等ID，不用SQL任务副本代替 |
+| 工作流、字段、保存视图、排序 | 共享工作区 `.pm/config.yaml` / `.pm/views/` | 权威配置；合法缺省使用内置配置，但已存在内容必须校验 |
+| 统一ID、幂等、墓碑、目录映射、事实观测与恢复 | 共享工作区 `.pm/state/`；项目 `.pm/project.json` 固定workspace/project/storageId | 不可当缓存删除；私有恢复journal可含任务正文前后内容/自动化快照，不是脱敏日志；缺失已有state/身份时拒绝空白初始化 |
+| 核心查询索引 | `.pm/cache/index.sqlite` | 可从权威文件重建；不是Agent聊天数据库 |
+| 用户、认证会话、成员/能力 | PostgreSQL身份/访问模块 | 会话存摘要；当前授权逐次检查；历史成员引用不自动获得现行权限 |
+| Intent/Decision、评论、审核/证据/提交、Dashboard与项目协作附加事实 | PostgreSQL所属应用模块 | 保留不可变历史和当前版本；不能覆盖核心状态或创建SQL任务权威副本 |
+| 命令结果、审计、outbox与变更流 | PostgreSQL `command_receipts` /审计/事件表 | 原主体/workspace/commandId收据；原生文件写入与SQL审计使用journal恢复，不伪称跨介质原子提交 |
+| 附件元数据与字节 | 元数据/引用在PostgreSQL；已登记项目字节在 `.pm/attachments`，旧项目在原Local/S3 | 持久storageId/marker定位历史版本；不可变字节、SHA-256及8MiB上限；不自动物理GC |
+| Chat线程/消息/输出、Provider附属续聊、工具/任务交付/工作流等记录 | Agent私有SQLite `durable/store.ts`及应用拥有目录 | 单进程所有权和CAS；不是PM任务事实源，不按PM成员实现多租户会话隔离 |
+| Provider账号/原生历史 | 驱动原生Home/外部环境，或明确选择的应用私有managed状态 | 不统一搬入应用目录，不自动复制/删外部账号；缓存/用量记录不能证明远端余额或执行成功 |
+| 浏览器草稿、偏好、个人白板 | 当前origin/账号/workspace及功能定义的浏览器存储或内存 | 非跨设备统一持久化；外部文档正文草稿仅内存，刷新前须显式保存 |
 
-首版在同一 Workspace 上采用事务级 advisory lock，锁键使用 `$1::uuid::text` 规范化。项目关闭、依赖图、审核/撤回、权限变更和事件发布因此共享串行边界。这个选择限制同工作区写吞吐，后续优化必须保留已有并发验收。
+## 一致性与身份
 
-业务 UUID 输入在 schema 层转小写，expectedVersions 的键同样规范化；不改写普通文字。JSONB 中关键业务唯一引用在数据库索引中 cast 为 UUID，防止文本大小写形成两个业务身份。
+同一Workspace的受控写入仍使用规范化UUID的PostgreSQL advisory lock串行协调，并执行文件revision/CAS、幂等journal和SQL审计恢复。文件系统写入不能由数据库rollback撤回；外部编辑、Git、Provider或接收器也不是本地事务的一部分。响应未知保留原请求和冻结输入，查询/恢复原结果，不能仅因404或超时换键重放。
 
-成员的历史引用与当前授权分开：已有 owner/assignee 被撤销权限后仍是合法历史引用；新分派和开始工作要求当前有效成员。恢复归档不能被历史撤权卡死。重开项目可以显式提交新的完整 definition，并将旧定义保存到 lifecycleHistory。
+核心ID与PM附加对象UUID分开。查询和授权依据当前权威文件/成员范围，异步投影和目录位置不是授权；历史owner/assignee/审核引用与当前有效成员资格分开。当前任务完成按原生配置工作流和独立能力执行，Submission/Review是独立附加流程，不恢复旧SQL的强制完成前置。
 
-实体列表与游标使用同一 REPEATABLE READ 快照。SSE 的 cursor 是 Workspace 级 bigint，用字符串传输、按数据库数字列排序，不能按文本排序，也不能使用聚合序号代替流游标。事件保留默认 7 天，过期返回 410 `cursor_expired`，客户端重新读取快照后续订。
+SQL SSE使用Workspace级数字cursor，以字符串传输但按数字排序；核心SSE、通知delivery cursor和事实sequence各有含义，不可混用。SQL事件默认保留7天，过期410后重读快照。失败outbox达到10次隔离相关Workspace；修复后由操作员受审计重试原事件，不跳过或伪造成功。
 
-命令收据、审核、提交和决策首版不做过期清理。会话默认 8 小时；Worker 清理过期会话。失败事件达到 10 次后隔离整个相关 Workspace 的发布，保持顺序；本机操作员通过受审计 CLI 查询和重试，禁止直接跳过失败事件。
+## 单写与备份
 
-备份先用 pg_dump 获取一致数据库快照，再复制不可变 blob。因为内容先于 DB 提交持久化且目前不做物理删除，该顺序可完整覆盖被快照引用的内容；可能多备份孤立文件，但不能少备份有效成果。恢复验证使用新建的临时数据库，核对全部成果摘要后仅删除该临时库。
+核心只支持单API/单宿主本地文件系统写者。Worker读取核心事实，不初始化第二个Workspace/watcher；S3只改变不可变附件的存储，不实现核心多写或HA。目录缺盘、身份冲突、符号链接或损坏拒绝访问，不创建空替代根。
+
+私有恢复journal/备份可能含description前后内容、任务正文和自动化来源快照，不能按公开审计日志处理或上传。完整PM备份必须在API/Worker及外部核心编辑器停写后覆盖同一SQL/core checkpoint、全部登记项目托管 `.pm`、共享配置/state、引用附件及存储身份。Agent离线备份另行处理私有SQLite/会话，不能替代PM完整备份；外部源码/文档目录/Provider Home和浏览器存储不因此自动纳入。恢复使用新库/新根/新存储身份并核对摘要、账号信任、通知和外发围栏，不覆盖源业务实例。操作见[部署手册](../../deploy/README.md)和[Agent备份指南](../guides/agent-chat.md#agent-离线备份与恢复)。
+
+**会话与持久化尚未统一设计收口，当前仍暂沿用Agent Chat。** SQLite、PostgreSQL、Markdown和外部副作用之间没有全系统原子提交/撤销保证；恢复检查通过也不证明Provider已登录或业务验收完成。

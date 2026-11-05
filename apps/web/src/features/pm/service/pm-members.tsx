@@ -49,6 +49,20 @@ export function ServiceMembers() {
   const invitationBlocked = !canManage || !invitationQuery.data || !!invitationQuery.error
   const smtpEnabled = invitationQuery.data?.enabled === true
   const all = (query.data?.members ?? []).map(member => directoryMemberRecord(member, workspace?.ownerId, query.estimatedServerNow, query.data!.presenceTtlMs))
+  const membersById = new Map(all.map(member => [member.membershipId, member]))
+  const currentMember = (member: ControlledMember) => {
+    const current = membersById.get(member.membershipId)
+    return current?.userId === member.userId ? current : undefined
+  }
+  const canOpenMember = (member: ControlledMember) => !readBlocked && !!currentMember(member)
+  const canCopyContact = (member: ControlledMember, kind: "email" | "phone" | "contact") => {
+    const current = currentMember(member)
+    return !readBlocked && !!current && (kind === "email" ? !!current.email : kind === "phone" ? !!current.phone : !!current.email || !!current.phone)
+  }
+  const canEditMemberRole = (member: ControlledMember) => {
+    const current = currentMember(member)
+    return canManage && !locked && !!current && current.role !== memberRoleValues.unknown
+  }
   const roles = [
     { value: memberRoleValues.admin, label: "Admin" }, { value: memberRoleValues.member, label: "Member" },
     { value: memberRoleValues.guest, label: "Guest" }, { value: memberRoleValues.custom, label: "Custom" },
@@ -78,7 +92,8 @@ export function ServiceMembers() {
   )
   const selectedEditor = query.data?.members.find(member => member.userId === editor?.userId)
   const manage = (member: ControlledMember, mode: "role" | "capabilities") => {
-    if (canManage && !locked) setEditor({ userId: member.userId, mode })
+    const current = currentMember(member)
+    if (current && canManage && !locked && (mode !== "role" || current.role !== memberRoleValues.unknown)) setEditor({ userId: current.userId, mode })
   }
   const invitationAction = (row: ControlledInvitation, kind: "revoke" | "resend") => {
     const invitation = invitationItems.find(item => item.id === row.id)
@@ -114,40 +129,44 @@ export function ServiceMembers() {
         teams: [], teamsAvailable: true, roles,
         invitations, invitationsData: canManage ? queryData({ ...invitationQuery, data: invitationQuery.data?.items }, invitations.length) : { state: "empty" },
         invitationsNotice: invitationNotice, suggestedContacts: null, totalMemberCount: all.length,
-        sortOptions, teamOptions, copyReceipt: copyReceipt && all.some(member => member.userId === copyReceipt.membershipId) ? copyReceipt : null,
+        sortOptions, teamOptions, copyReceipt: copyReceipt && all.some(member => member.membershipId === copyReceipt.membershipId) ? copyReceipt : null,
         data: filtersActive ? { ...memberData, emptyTitle: t("没有匹配的成员", "No matching members"), emptyDescription: t("当前搜索和筛选下没有成员。清除条件以查看全部可见成员。", "No members match the current search and filters. Clear conditions to see all visible members.") } : memberData,
         sourceDescription: t("目录按当前授权范围脱敏；团队不授予权限。2FA 没有权威来源，状态与筛选明确不可用。", "The directory is redacted to your current access scope. Teams grant no permissions. No authoritative 2FA source is configured; its status and filters are unavailable."),
       }}
       interaction={effectiveState}
       capabilities={{
         invite: canManage && !locked && !invitationBlocked && smtpEnabled,
-        editRole: member => canManage && !locked && member.role !== memberRoleValues.unknown,
-        memberOpen: () => !readBlocked, reconcileInvitation: !command.pending,
-        manageAccess: () => canManage && !locked, filterPresence: !!query.data, filterSecurity: false, filterRole: roleAvailable,
-        copyContact: (member, kind) => !readBlocked && (kind === "email" ? !!member.email : kind === "phone" ? !!member.phone : !!member.email || !!member.phone),
+        editRole: canEditMemberRole,
+        memberOpen: canOpenMember, reconcileInvitation: !command.pending,
+        manageAccess: member => canManage && !locked && !!currentMember(member), filterPresence: !!query.data, filterSecurity: false, filterRole: roleAvailable,
+        copyContact: canCopyContact,
         cancelInvitation: row => !locked && !invitationBlocked && row.status !== "accepted" && row.status !== "revoked",
         resendInvitation: row => !locked && !invitationBlocked && row.status !== "accepted" && row.status !== "revoked" && smtpEnabled && row.deliveryStatus !== "sending",
       }}
       actions={{
         setInteraction,
-        memberOpen: member => setInteraction(previous => ({ ...previous, selectedId: member.membershipId, detailOpen: true })),
+        memberOpen: member => { if (canOpenMember(member)) setInteraction(previous => ({ ...previous, selectedId: member.membershipId, detailOpen: true })) },
         memberWorkload: member => {
+          const current = currentMember(member)
+          if (!current || !canOpenMember(current)) return
           setInteraction(previous => ({ ...previous, detailOpen: false }))
           const next = new URLSearchParams(searchParams)
           next.set("tab", "workload")
-          next.set("memberId", member.userId)
+          next.set("memberId", current.userId)
           next.delete("teamId")
           next.delete("profile")
           next.delete("panel")
           setSearchParams(next)
         },
-        editRole: member => { setInteraction(previous => ({ ...previous, detailOpen: false })); manage(member, "role") },
+        editRole: member => { if (canEditMemberRole(member)) { setInteraction(previous => ({ ...previous, detailOpen: false })); manage(member, "role") } },
         manageAccess: member => manage(member, "capabilities"),
         invite: () => setPanel("panel", "invitations"),
         reconcileInvitation: () => { if (command.unknownCommand) void command.reconcile().catch(() => undefined); else void invitationQuery.refetch() },
         cancelInvitation: row => invitationAction(row, "revoke"), resendInvitation: row => invitationAction(row, "resend"),
         copyContact: (member, kind) => {
-          const value = kind === "email" ? member.email : kind === "phone" ? member.phone : [member.email, member.phone].filter(Boolean).join("\n")
+          const current = currentMember(member)
+          if (!current || !canCopyContact(current, kind)) return
+          const value = kind === "email" ? current.email : kind === "phone" ? current.phone : [current.email, current.phone].filter(Boolean).join("\n")
           if (!value) return
           void (async () => {
             let ok = false

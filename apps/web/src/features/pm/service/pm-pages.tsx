@@ -17,11 +17,10 @@ import { ServiceDashboard1 } from "./service-dashboard-1"
 import { ServiceDashboard2 } from "./service-dashboard-2"
 import { ServiceDashboard3 } from "./service-dashboard-3"
 import { ServiceDashboard4 } from "./service-dashboard-4"
-import type { ServiceDashboardProps } from "./service-dashboard-contract"
+import type { DependencyEditorTarget, ServiceDashboardProps } from "./service-dashboard-contract"
 import { pmKeys, refreshPmSnapshots } from "./pm-data"
 import { DashboardPresenceHeartbeat } from "./dashboard-time"
-import { PmLoginPage } from "./pm-auth-page"
-import { PmWorkspacePicker } from "./pm-workspace-picker"
+import { PmFirstUsePage } from "./pm-first-use-page"
 import { workspaceSettingsPages } from "./settings/settings-catalog"
 import { LocalProjectStorageSettings } from "./local-project-settings"
 export { ServiceEvents } from "./service-events"
@@ -81,8 +80,7 @@ export function ServiceWorkspaceSettings() {
 }
 
 export function ServiceHome() {
-  const { actor } = usePmService()
-  return actor ? <PmWorkspacePicker /> : <PmLoginPage />
+  return <PmFirstUsePage />
 }
 
 
@@ -197,7 +195,7 @@ export function ServiceDashboard() {
     surface, projects, issues: items, milestones, members, changes, actor,
     openEntity: id => paths.entity(id, items.data?.some(item => item.id === id) ?? false),
     openActivity,
-    dependencyEditor: <DependencyPanel items={filtered} />,
+    renderDependencyEditor: target => <DependencyPanel items={filtered} target={target} />,
   }
   return <ServiceGuard><div className="flex min-h-0 min-w-0 flex-1 flex-col">
     <CommandNotice />
@@ -209,7 +207,7 @@ export function ServiceDashboard() {
   </div></ServiceGuard>
 }
 
-function DependencyPanel({ items }: { items: Entity[] }) { const { workspace } = usePmService(); const action = useAction(); const paths = usePaths(); const editable = (item: Entity) => writable(item) && allowed(workspace, "planning.edit", item.projectId); const canEdit = items.some(editable); return <><ServiceDependencyGraph items={items} onOpen={paths.issue} pending={action.locked} onAdd={canEdit ? (item, prerequisiteId) => { if (editable(item)) void action.run(() => action.execute(makeCommand("AddDependency", { prerequisiteId }, item, item.projectId!))) } : undefined} onRemove={canEdit ? (item, prerequisiteId) => { if (editable(item)) void action.run(() => action.execute(makeCommand("RemoveDependency", { prerequisiteId }, item, item.projectId!))) } : undefined} />{action.localError && <p role="alert">{action.localError}</p>}</> }
+function DependencyPanel({ items, target }: { items: Entity[]; target?: DependencyEditorTarget | undefined }) { const { workspace } = usePmService(); const action = useAction(); const paths = usePaths(); const editable = (item: Entity) => writable(item) && allowed(workspace, "planning.edit", item.projectId); const canEdit = items.some(editable); return <><ServiceDependencyGraph items={items} onOpen={paths.issue} pending={action.locked} canEdit={editable} focusTarget={target} onAdd={canEdit ? (item, prerequisiteId) => { if (editable(item)) void action.run(() => action.execute(makeCommand("AddDependency", { prerequisiteId }, item, item.projectId!))) } : undefined} onRemove={canEdit ? (item, prerequisiteId) => { if (editable(item)) void action.run(() => action.execute(makeCommand("RemoveDependency", { prerequisiteId }, item, item.projectId!))) } : undefined} />{action.localError && <p role="alert">{action.localError}</p>}</> }
 
 
 

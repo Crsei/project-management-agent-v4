@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "destination": "apps/server/cc-switch-host/src/proxy.rs",
+  "sha256": "40f108c286e2d9cbf64016ce82f5e5d6cd15a9025137d73e47c2e0a70c67876a",
+  "mode": 420,
+  "encoding": "base64",
+  "content": "I1twYXRoID0gIi4uLy4uLy4uLy4uL3ZlbmRvci9jYy1zd2l0Y2gvc3JjLXRhdXJpL3NyYy9wcm94eS9odHRwX2NsaWVudC5ycyJdCnB1YiBtb2QgaHR0cF9jbGllbnQ7Cg=="
+}

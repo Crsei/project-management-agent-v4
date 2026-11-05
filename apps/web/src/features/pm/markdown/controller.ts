@@ -18,6 +18,7 @@ import { splitTaskFilterView, taskFilterWhere, type TaskFilterCondition } from '
 import { patchTaskDraftRaw, toggleTaskChecklistRaw } from './task-detail-model';
 import { patchDocumentDraftRaw } from './document-body';
 import { adoptDocumentSave, completeDocumentSave, documentSaveRecovery, hasUncertainDocumentSave, observeDocumentSave, type DocumentWriteStatus } from './document-save-model';
+import { renderCollectionContextMenu } from './CollectionContextMenu';
 
 export type CollectionLayout = ViewConfig['layout'] | 'list' | 'calendar' | 'gantt';
 export interface Preferences { entity: EntityKind | ''; layout: CollectionLayout; project: string; priority: string; status: string; sort: string; sortDirection: 'asc' | 'desc'; archived: ArchiveFilter; editorWidth: number; groupBy: 'status' | 'priority'; conditions: TaskFilterCondition[] }
@@ -504,22 +505,31 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   });
-  const canMutate = (id: string) => !writesBlocked && !hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) && !hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) && !accessError && !query.isError && !configurationInvalid && !busy && !drafts[id] && !!files.find(file => file.id === id && !file.stale) && !unsupportedFiles.some(file => file.id === id);
+  // Menu callbacks retain the clicked revision, but permission and recovery locks remain live.
+  const mutationState = { writesBlocked, accessError, queryError: query.isError, configurationInvalid, busy, files, unsupportedFiles, canWrite: options.canWrite, canLifecycle: options.canLifecycle, actor, capabilities, configuration, workspace };
+  const liveMutationState = useRef(mutationState);
+  liveMutationState.current = mutationState;
+  const canMutate = (id: string) => {
+    const current = liveMutationState.current;
+    const currentDrafts = session.drafts.getSnapshot();
+    return !current.writesBlocked && !hasUncertainProjectTaskDraft(currentDrafts) && !hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) && !current.accessError && !current.queryError && !current.configurationInvalid && !current.busy && !currentDrafts[id] && !!current.files.find(file => file.id === id && !file.stale) && !current.unsupportedFiles.some(file => file.id === id);
+  };
   const canEdit = (id: string, changes?: Record<string, unknown>) => {
-    const file = files.find(file => file.id === id);
+    const current = liveMutationState.current;
+    const file = current.files.find(file => file.id === id);
     if (!file || file.entity.archived || !canMutate(id)) return false;
-    if (file.entity.entity !== 'work_item' || !changes || Object.keys(changes).length !== 1 || typeof changes.status !== 'string') return options.canWrite;
-    if (!actor || capabilities?.business.enabled !== true) return false;
-    const workflow = workflowFor('work_item', configuration);
+    if (file.entity.entity !== 'work_item' || !changes || Object.keys(changes).length !== 1 || typeof changes.status !== 'string') return current.canWrite;
+    if (!current.actor || current.capabilities?.business.enabled !== true) return false;
+    const workflow = workflowFor('work_item', current.configuration);
     const before = workflow?.states.find(state => state.id === file.entity.status);
     const after = workflow?.states.find(state => state.id === changes.status);
     if (!before || !after || !workflow?.transitions.some(transition => transition.from === before.id && transition.to === after.id)) return false;
     // Match core-routes status authorization without requiring planning.edit for completion/reopen.
     const capability = after.category === 'completed' ? 'workitem.complete'
       : after.category === 'canceled' || before.category === 'completed' || before.category === 'canceled' ? 'workitem.cancel_reopen' : 'planning.edit';
-    return allowed(workspace, capability, file.entity.project);
+    return allowed(current.workspace, capability, file.entity.project);
   };
-  const canManageLifecycle = (id: string) => options.canLifecycle && canMutate(id);
+  const canManageLifecycle = (id: string) => liveMutationState.current.canLifecycle && canMutate(id);
   function taskDraftSource() {
     const current = client.getQueryData<WorkspaceSnapshot>(queryKey);
     if (!current || !options.canWrite || busy || accessError || query.isError || writesBlocked || command.pending || command.unknownCommand || hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) || hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()) || current.configurationErrors.some(issue => issue.severity === 'error')) return;
@@ -614,7 +624,8 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     options.onNavigateEntity(file, anchor);
   }
   function openCreate(status: Status | undefined | null, origin?: ViewConfig, initial?: { assignee?: string; due?: string; watch?: boolean; priority?: string }) {
-    if (status !== null && !options.canWrite) return;
+    const current = liveMutationState.current;
+    if (status !== null && (!current.canWrite || current.configurationInvalid || current.busy || current.writesBlocked || current.accessError || current.queryError || hasUncertainProjectTaskDraft(session.drafts.getSnapshot()) || hasUncertainCreationDrafts(session.creationDrafts.getSnapshot()))) return;
     if (status !== null) {
       const scope = { kind: origin ? origin.entity || 'work_item' : prefs.entity || 'work_item', project: options.projectId || (origin ? origin.project || '' : prefs.project), ...(!options.projectId && options.taskContext?.scope === 'mine' && options.taskContext.actorId ? { assignee: options.taskContext.actorId } : {}), ...(!options.projectId && options.taskContext?.scope === 'important' ? { watch: true } : {}), ...(origin?.group_by === 'priority' && typeof origin.filter?.priority === 'string' ? { priority: origin.filter.priority } : {}), ...initial };
       if (scope.kind === 'work_item' && options.onCreatePage) {
@@ -625,7 +636,7 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     }
     setCreateStatus(status); setError(''); setRequestDiagnostics([]);
   }
-  const viewProps: ViewProps = { files: matching, allFiles: config.layout === 'graph' ? files : projected, config, configuration, archiveFilter: prefs.archived, selectedId, draftIds, graphSource, graphQuery, graphRefreshKey, en: options.en, canEdit, canLifecycle: canManageLifecycle, onLifecycle: (id, action) => { const file = files.find(candidate => candidate.id === id); if (file) void lifecycle(file, action); }, onRequestDelete: id => { const file = files.find(candidate => candidate.id === id); if (file) { setDeleteTarget(file); setDeleteConfirmation(''); setError(''); setRequestDiagnostics([]); } }, onSelect: select, onInspect: inspect, onOpenPage: id => { const file = files.find(candidate => candidate.id === id); if (file) options.onNavigateEntity(file); }, onPatch: patch, onCreate: options.canWrite ? openCreate : undefined, onMove: options.canWrite && activeView && !configurationInvalid && !busy && !writesBlocked && (!options.taskContext || options.taskContext.scope === 'all') ? moveItem : undefined };
+  const viewProps: ViewProps = { files: matching, allFiles: config.layout === 'graph' ? files : projected, config, configuration, archiveFilter: prefs.archived, selectedId, draftIds, graphSource, graphQuery, graphRefreshKey, renderContextMenu: renderCollectionContextMenu, en: options.en, canEdit, canLifecycle: canManageLifecycle, onLifecycle: (id, action) => { const file = files.find(candidate => candidate.id === id); if (file) void lifecycle(file, action); }, onRequestDelete: id => { const file = files.find(candidate => candidate.id === id); if (file && canManageLifecycle(id)) { setDeleteTarget(file); setDeleteConfirmation(''); setError(''); setRequestDiagnostics([]); } }, onSelect: select, onInspect: inspect, onOpenPage: id => { const file = files.find(candidate => candidate.id === id); if (file) options.onNavigateEntity(file); }, onPatch: patch, onCreate: options.canWrite && !configurationInvalid && !busy && !writesBlocked && !accessError && !query.isError ? openCreate : undefined, onMove: options.canWrite && activeView && !configurationInvalid && !busy && !writesBlocked && (!options.taskContext || options.taskContext.scope === 'all') ? moveItem : undefined };
   async function lifecycle(file: FileRecord, action: 'archive' | 'restore' | 'delete') {
     if (!canManageLifecycle(file.id)) return;
     setBusy(file.id); setError(''); setRequestDiagnostics([]);

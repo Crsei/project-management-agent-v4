@@ -3,6 +3,14 @@ import * as https from 'node:https';
 import { DomainError } from '../../domain/src/core.ts';
 import { normalizeWebhookUrl } from './webhook-config.ts';
 import { resolveWebhookAddresses } from './webhook-transport.ts';
+import type { SqlExecutor } from '../../application/src/ports.ts';
+
+/** Namespace/salt identify this deployment schema's offline lock; normal work holds its shared transaction peer. */
+export const AUTOMATION_INTEGRATION_MAINTENANCE_LOCK = [20971, 7] as const;
+export async function assertAutomationIntegrationsAvailable(sql: SqlExecutor): Promise<void> {
+  const row = (await sql.query<{ available: boolean }>("SELECT pg_try_advisory_xact_lock_shared($1,hashtext(current_schema() || ':' || $2::text)) AS available", [...AUTOMATION_INTEGRATION_MAINTENANCE_LOCK])).rows[0];
+  if (!row?.available) throw new DomainError('integration_maintenance_active', 'Managed integration migration is active; no integration configuration, grant or execution was started', 409);
+}
 
 export type AutomationPrivateStore = { available: boolean; seal(value: unknown, identity: string): string; open<T>(value: string, identity: string): T };
 /** Explicit deployment key only. No file, global Provider config or source credentials are consulted. */

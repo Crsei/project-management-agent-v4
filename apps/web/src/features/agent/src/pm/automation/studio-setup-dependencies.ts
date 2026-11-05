@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createAutomationIntegrationsClient } from "../../../../../../../../packages/contracts/src/automation-integrations-client.ts";
 import type { AutomationIntegrationConnection } from "../../../../../../../../packages/contracts/src/automation-integrations";
-import { automationTemplateTags, type AutomationCatalogTemplate } from "../../../../../../../../packages/contracts/src/automation-catalog.ts";
+import { automationTemplateTags } from "../../../../../../../../packages/automation-resources/catalog.ts";
+import type { AutomationCatalogTemplate } from "../../../../../../../../packages/contracts/src/automation-catalog.ts";
 import type { StudioCapabilities, StudioConfig } from "../../../../../../../../packages/contracts/src/automation-studio";
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema } from "../../../../../../../../packages/contracts/src/automation-pm.ts";
 import { studioConnectionSupportsAction } from "./studio-setup.ts";
@@ -14,12 +15,14 @@ export function useStudioConnections(workspaceId: string, projectId?: string) {
   const [loading, setLoading] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
+    const refreshOnFocus = () => setRevision(value => value + 1);
+    window.addEventListener("focus", refreshOnFocus);
     let current = true;
     setConnections([]); setError("");
-    if (!projectId) { setLoading(false); return; }
+    if (!projectId) { setLoading(false); return () => window.removeEventListener("focus", refreshOnFocus); }
     setLoading(true);
     void client.list(workspaceId, projectId).then(value => { if (current) setConnections(value.connections); }, (reason: unknown) => { if (current) setError(reason instanceof Error ? reason.message : "Cannot load integration status"); }).finally(() => { if (current) setLoading(false); });
-    return () => { current = false; };
+    return () => { current = false; window.removeEventListener("focus", refreshOnFocus); };
   }, [client, workspaceId, projectId, revision]);
   return { connections, error, loading, refresh: () => setRevision(value => value + 1) };
 }

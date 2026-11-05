@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { Bookmark, CalendarDays, Check, Flag, MoreHorizontal, UserRound, X } from 'lucide-react';
+import { CalendarDays, Check, Flag, MoreHorizontal, X } from 'lucide-react';
 import { fieldRegistry, workflowFor, type FileRecord } from '@pm-schema';
-import { priorities, StatusIcon } from '@pm-views';
+import { priorities, StatusIcon, type ContextMenuAction } from '@pm-views';
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useDisplayDateTime } from '@/features/workspace/preference-format';
 import { dateOnly, ScheduleEditor, type ScheduleItem } from '../components/service-collection-shared';
@@ -10,6 +10,7 @@ import { usePersonalDashboard, usePmService, type PmService } from '../service/p
 import { allowed, useAction } from '../service/pm-ui';
 import { taskStateLabel } from './task-status-label';
 import type { WorkspaceController } from './controller';
+import { CollectionActionMenu, CollectionContextMenu } from './CollectionContextMenu';
 import styles from './TaskPersonalFields.module.css';
 
 type TaskFieldProps = { file: FileRecord; controller: WorkspaceController; en: boolean; today?: string | null };
@@ -229,38 +230,62 @@ export function TaskDateEditor({ file, controller: c, en, anchor, onClose }: { f
   </Popover>;
 }
 
-export function TaskMoreActions({ file, controller: c, en }: TaskFieldProps) {
+/** Row menus write saved collection fields; they never edit the detail draft. */
+export function useTaskRowActions({ file, controller: c, en }: TaskFieldProps) {
   const personal = usePersonalDashboard();
-  const { actor, workspace } = usePmService();
+  const { workspace, capabilities } = usePmService();
   const action = useAction();
+  const patch = useTaskPatch(file, c, en);
   const sending = useRef(false);
   const watch = personal.data?.watches.find(record => record.data.taskId === file.id);
   const watchReason = (c.writesBlocked || action.locked ? en ? 'Reconcile the pending or unknown original command first.' : '请先核对待处理或结果未知的原命令。' : null)
+    || (capabilities?.business.enabled !== true ? en ? 'Personal watch commands are unavailable.' : '个人关注命令当前不可用。' : null)
     || (!personal.data || personal.error ? en ? 'Personal watches are unavailable. Refresh your personal dashboard before changing them.' : '个人关注数据不可用，请先重新读取个人面板。' : null)
     || (!file.entity.project || !allowed(workspace, 'domain.read', file.entity.project) ? en ? 'An accessible source project is required to change watches.' : '修改关注需要可访问的所属项目。' : null);
-  const assignee = !file.entity.assignee ? en ? 'Unassigned' : '未分配' : file.entity.assignee === actor?.id ? actor.name : en ? 'Assigned' : '已分配';
-  return <Popover>
-    <PopoverTrigger type="button" className={styles.icon} aria-label={`${en ? 'More actions for' : '更多操作'} ${file.id}`} title={en ? 'More task actions' : '更多任务操作'}><MoreHorizontal size={16} aria-hidden="true" /></PopoverTrigger>
-    <PopoverContent className={styles.menu} align="end" aria-label={`${en ? 'Task actions for' : '任务操作'} ${file.id}`}>
-      <h3 className={styles.menuTitle}>{file.id}</h3>
-      <PopoverClose type="button" className={styles.choice} onClick={() => c.select(file.id)}>{en ? 'Open task details' : '打开任务详情'}</PopoverClose>
-      <button type="button" className={styles.choice} aria-pressed={!!watch} disabled={!!watchReason} title={watchReason || undefined} onClick={() => {
-        if (sending.current || watchReason) return;
-        sending.current = true;
-        void action.run(async () => {
-          try {
-            await action.execute(watch
-              ? { commandId: crypto.randomUUID(), commandType: 'UnwatchTask', targetId: watch.id, projectId: file.entity.project!, expectedVersions: { [watch.id]: watch.version }, payload: {} }
-              : { commandId: crypto.randomUUID(), commandType: 'WatchTask', projectId: file.entity.project!, payload: { taskId: file.id } });
-          } catch (cause) {
-            c.setError(cause instanceof Error ? cause.message : String(cause));
-            throw cause;
-          } finally { sending.current = false; }
-        });
-      }}><Bookmark size={14} fill={watch ? 'currentColor' : 'none'} aria-hidden="true" /><span>{watch ? en ? 'Unwatch task' : '取消关注' : en ? 'Watch task' : '关注任务'}</span></button>
-      {watchReason && <p className={styles.hint}>{watchReason}</p>}
-      <p className={styles.assignee}><UserRound size={13} aria-hidden="true" /><span>{en ? 'Assignee' : '负责人'}: {assignee}</span></p>
-      {action.localError && <p className={styles.error} role="alert">{action.localError}</p>}
-    </PopoverContent>
-  </Popover>;
+  const liveWatch = useRef({ action, c, watchReason, watch });
+  liveWatch.current = { action, c, watchReason, watch };
+  const toggleWatch = () => {
+    const current = liveWatch.current;
+    if (sending.current || current.watchReason) return;
+    if (current.watch?.id !== watch?.id || current.watch?.version !== watch?.version) {
+      current.c.setError(en ? 'Your watch state changed. Reopen this task menu before trying again.' : '个人关注状态已改变，请重新打开此任务菜单后再操作。');
+      return;
+    }
+    sending.current = true;
+    void current.action.run(async () => {
+      try {
+        await current.action.execute(watch
+          ? { commandId: crypto.randomUUID(), commandType: 'UnwatchTask', targetId: watch.id, projectId: file.entity.project!, expectedVersions: { [watch.id]: watch.version }, payload: {} }
+          : { commandId: crypto.randomUUID(), commandType: 'WatchTask', projectId: file.entity.project!, payload: { taskId: file.id } });
+      } catch (cause) {
+        current.c.setError(cause instanceof Error ? cause.message : String(cause));
+        throw cause;
+      } finally { sending.current = false; }
+    });
+  };
+  const watchAction: ContextMenuAction = { id: 'watch', label: watch ? en ? 'Unwatch task' : '取消关注' : en ? 'Watch task' : '关注任务', disabled: !!watchReason, reason: watchReason || undefined, onSelect: toggleWatch };
+  const workflow = workflowFor('work_item', c.configuration);
+  const actions: ContextMenuAction[] = [
+    { id: 'inspect', label: en ? 'Open task details / attributes' : '打开任务详情与属性', onSelect: () => c.select(file.id) },
+    ...(c.viewProps.onOpenPage ? [{ id: 'open', label: en ? 'Open full page' : '打开完整页面', onSelect: () => c.viewProps.onOpenPage?.(file.id) }] : []),
+    watchAction,
+    ...(workflow?.states.map((state, index) => {
+      const reason = transitionProblem(file, c, workspace, state.id, en) || writeProblem(file, c, en, { status: state.id });
+      return { id: `status:${state.id}`, label: `${en ? 'Status' : '状态'} · ${taskStateLabel(state, en)}`, separatorBefore: index === 0, disabled: patch.pending || !!reason, reason: reason || undefined, onSelect: () => { void patch.run({ status: state.id }, file); } };
+    }) ?? []),
+    ...priorities.map((priority, index) => {
+      const reason = writeProblem(file, c, en) || (priority === file.entity.priority ? en ? 'Current saved priority.' : '当前已保存优先级。' : null);
+      return { id: `priority:${priority}`, label: `${en ? 'Priority' : '优先级'} · ${priorityLabels[priority]?.[en ? 0 : 1] || priority}`, separatorBefore: index === 0, disabled: patch.pending || !!reason, reason: reason || undefined, onSelect: () => { void patch.run({ priority }, file); } };
+    }),
+  ];
+  return { actions, watchAction, watched: !!watch };
+}
+
+export function TaskMoreActions({ file, en, actions, className }: { file: FileRecord; en: boolean; actions: ContextMenuAction[]; className?: string }) {
+  return <CollectionActionMenu actions={actions} trigger={<button type="button" className={className ?? styles.icon} aria-label={`${en ? 'More actions for' : '更多操作'} ${file.id}`} title={en ? 'More task actions' : '更多任务操作'}><MoreHorizontal size={16} aria-hidden="true" /></button>} />;
+}
+
+export function TaskTableContextMenu({ file, controller, en, trigger }: TaskFieldProps & { trigger: React.ReactElement }) {
+  const { actions } = useTaskRowActions({ file, controller, en });
+  return <CollectionContextMenu trigger={trigger} actions={actions} />;
 }

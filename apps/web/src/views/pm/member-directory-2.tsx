@@ -1,14 +1,15 @@
-import { ArrowUpDown, CircleCheck, CircleDashed, CircleHelp, Mail, MoreHorizontal, Phone, Plus, Shield, SlidersHorizontal } from "lucide-react"
+import { ArrowUpDown, CircleCheck, CircleDashed, CircleHelp, Mail, Phone, Plus, Shield, SlidersHorizontal } from "lucide-react"
 import { Avatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { DataRegion } from "@/components/ui/data-region"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useI18n } from "@/lib/i18n-provider"
 import { ControlledFeedback } from "./controlled-presentation"
 import type { MemberDirectorySort, MemberDirectoryViewProps } from "./people-controlled-contracts"
 import { PeopleRoleLabel } from "./people-views"
 import { PmPage, PmSearch } from "./presentation-page"
 import { MemberDirectoryFilter, memberDirectoryFilterFields } from "./member-directory-filters"
+import { MemberDirectoryActionsMenu, MemberDirectoryContextMenu } from "./member-directory-actions"
 import styles from "./member-list-2.module.css"
 
 export function MemberList2View(props: MemberDirectoryViewProps) {
@@ -93,26 +94,12 @@ export function MemberList2View(props: MemberDirectoryViewProps) {
       <ul className={styles.grid} data-view={state.display} data-pm-contact-grid aria-label={text("成员联系卡片", "Member contact cards")}>
         {model.members.map((member) => {
           const selected = state.selectedIds.includes(member.membershipId)
-          const triggerId = `pm-member-actions-${member.membershipId}`
-          const memberTrigger = () => document.getElementById(triggerId)
           const email = member.email.trim()
           const phone = member.phone?.trim()
           const presenceLabel = member.presence === "available" ? text("在线", "Available") : member.presence === "away" ? text("离开", "Away") : member.presence === "offline" ? text("离线", "Offline") : text("在线状态未知", "Presence unknown")
-          const canManageAccess = !loading && !!actions.manageAccess && !!capabilities.manageAccess?.(member)
           const PresenceIcon = member.presence === "available" ? CircleCheck : member.presence ? CircleDashed : CircleHelp
-          return <li key={member.membershipId} className={styles.card} data-pm-contact-card data-member-id={member.membershipId} data-selected={selected}>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button id={triggerId} variant="ghost" size="icon" className={styles.memberActions} aria-label={text(`${member.name} (${member.membershipId}) 的操作`, `Actions for ${member.name} (${member.membershipId})`)} />}><MoreHorizontal aria-hidden="true" /></DropdownMenuTrigger>
-              <DropdownMenuContent className={styles.menu} align="end">
-                <DropdownMenuItem disabled={!capabilities.memberOpen(member)} onClick={() => actions.memberOpen(member, memberTrigger())}>{text("成员明细", "Member details")}</DropdownMenuItem>
-                <DropdownMenuItem disabled={loading || !capabilities.editRole(member)} onClick={() => actions.editRole(member, memberTrigger())}>{text("更改角色", "Change role")}</DropdownMenuItem>
-                <DropdownMenuItem disabled={!canManageAccess} onClick={() => {
-                  if (canManageAccess) actions.manageAccess!(member, memberTrigger())
-                }}>{text("管理访问", "Manage access")}</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => actions.setInteraction((previous) => ({ ...previous, selectedIds: previous.selectedIds.includes(member.membershipId) ? previous.selectedIds.filter((id) => id !== member.membershipId) : [...previous.selectedIds, member.membershipId] }))}>{selected ? text("取消选择成员", "Deselect member") : text("选择成员", "Select member")}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          return <MemberDirectoryContextMenu key={member.membershipId} surface={props} member={member} selectable><li tabIndex={0} aria-label={`${member.name} (${member.email || member.membershipId})`} className={styles.card} data-pm-contact-card data-member-id={member.membershipId} data-selected={selected}>
+            <MemberDirectoryActionsMenu surface={props} member={member} selectable className={styles.memberActions} menuClassName={styles.menu} />
             <div className={styles.cardTop} data-pm-contact-top>
               <span className={styles.avatarWrap} data-pm-person-avatar aria-hidden="true"><Avatar name={member.name} src={member.avatarDataUrl ?? undefined} size={40} className={styles.avatar} />{member.presence && <span className={styles.presenceDot} data-presence={member.presence} />}</span>
               <div className={styles.identity}>
@@ -126,7 +113,7 @@ export function MemberList2View(props: MemberDirectoryViewProps) {
               {email ? <a href={`mailto:${encodeURIComponent(email).replace(/%40/g, "@")}`} aria-label={text(`给 ${member.name} (${member.membershipId}) 发邮件`, `Email ${member.name} (${member.membershipId})`)} title={email}><Mail aria-hidden="true" />{text("邮件", "Email")}</a> : <Button variant="ghost" disabled title={text("邮箱未提供", "Email unavailable")} aria-label={text(`${member.name} 的邮箱未提供`, `Email unavailable for ${member.name}`)}><Mail aria-hidden="true" />{text("邮件", "Email")}</Button>}
               {phone ? <a href={`tel:${encodeURIComponent(phone)}`} aria-label={text(`致电 ${member.name} (${member.membershipId})`, `Call ${member.name} (${member.membershipId})`)} title={phone}><Phone aria-hidden="true" />{text("电话", "Call")}</a> : <Button variant="ghost" disabled title={text("电话未提供", "Phone unavailable")} aria-label={text(`${member.name} 的电话未提供`, `Phone unavailable for ${member.name}`)}><Phone aria-hidden="true" />{text("电话", "Call")}</Button>}
             </div>
-          </li>
+          </li></MemberDirectoryContextMenu>
         })}
       </ul>
     </DataRegion>

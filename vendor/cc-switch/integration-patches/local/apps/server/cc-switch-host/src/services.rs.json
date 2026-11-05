@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "destination": "apps/server/cc-switch-host/src/services.rs",
+  "sha256": "41b034a82bdd3a0ee0dc649825de954dc91948e4291daef582603def235e3247",
+  "mode": 420,
+  "encoding": "base64",
+  "content": "I1twYXRoID0gIi4uLy4uLy4uLy4uL3ZlbmRvci9jYy1zd2l0Y2gvc3JjLXRhdXJpL3NyYy9zZXJ2aWNlcy9tY3AucnMiXQpwdWIgbW9kIG1jcDsKI1twYXRoID0gIi4uLy4uLy4uLy4uL3ZlbmRvci9jYy1zd2l0Y2gvc3JjLXRhdXJpL3NyYy9zZXJ2aWNlcy9za2lsbC5ycyJdCnB1YiBtb2Qgc2tpbGw7CiNbcGF0aCA9ICIuLi8uLi8uLi8uLi92ZW5kb3IvY2Mtc3dpdGNoL3NyYy10YXVyaS9zcmMvc2VydmljZXMvbWNwX2Nvbm5lY3Rpdml0eS5ycyJdCnB1YiBtb2QgbWNwX2Nvbm5lY3Rpdml0eTsKcHViIHVzZSBtY3A6Ok1jcFNlcnZpY2U7Cg=="
+}

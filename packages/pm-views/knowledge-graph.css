@@ -316,6 +316,18 @@ section.knowledge-graph .kg-inspector .kg-inspector-relations li button {
   white-space: normal;
 }
 section.knowledge-graph .kg-inspector .kg-inspector-relations li button:hover { background: var(--surface-hover, #f1f5f9); }
+.knowledge-graph-embedded .kg-inspector { max-height: 320px; min-width: 0; overflow: auto; border-top: 1px solid var(--border, #d8dee7); padding: 12px; background: var(--surface, #ffffff); }
+.knowledge-graph-embedded .kg-inspector-head,
+.knowledge-graph-embedded .kg-inspector-head > div,
+.knowledge-graph-embedded .kg-inspector-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.knowledge-graph-embedded .kg-inspector-head { justify-content: space-between; }
+.knowledge-graph-embedded .kg-inspector-body { display: grid; gap: 12px; padding-top: 12px; overflow-wrap: anywhere; }
+.knowledge-graph-embedded .kg-inspector-body h2 { margin: 0; font-size: 14px; }
+.knowledge-graph-embedded .kg-inspector-props { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; font-size: 11px; }
+.knowledge-graph-embedded .kg-inspector-props > div { display: contents; }
+.knowledge-graph-embedded .kg-inspector-props dt { color: var(--muted-foreground, #64748b); }
+.knowledge-graph-embedded .kg-inspector-props dd { margin: 0; }
+.knowledge-graph-embedded .kg-inspector-relations ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .knowledge-graph-page .kg-relation-kind { color: var(--kg-accent); font: 10px/1.4 var(--font-mono, monospace); }
 .knowledge-graph-page .kg-relation-direction { color: var(--muted-foreground, #64748b); }
 .knowledge-graph-page .kg-relation-other { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

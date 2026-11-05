@@ -213,6 +213,8 @@ export class LocalServer {
         agent: join(this.serverRoot, "apps/server/agent/dist/index.mjs"),
         gateway: join(this.serverRoot, "apps/server/gateway.ts"),
       };
+      const ccSwitchBinary = join(this.serverRoot, "apps/server/agent/dist/cc-switch", `${process.platform}-${process.arch}`, process.platform === "win32" ? "cc-switch-host.exe" : "cc-switch-host");
+      await access(ccSwitchBinary).catch(() => { throw new Error("Bundled native configuration service is missing. Rebuild or reinstall the matching OS/CPU application."); });
       for (const file of [...Object.values(entries), join(this.webRoot, "index.html")]) {
         await access(file).catch(() => { throw new Error(`Missing application asset: ${file}. Build the complete desktop runtime or reinstall the application.`); });
         this.assertActive();
@@ -288,6 +290,7 @@ export class LocalServer {
           ...Object.fromEntries(["HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]])),
           HOST: "127.0.0.1", PORT: String(ports.agent),
           AGENT_WORKSPACE_API_ONLY: "1", AGENT_WORKSPACE_DATA_DIR: join(dataDir, "agent-data"),
+          CC_SWITCH_HOST_BINARY: ccSwitchBinary,
           AGENT_WORKSPACE_PROJECT_ROOT: projectRoot, AGENT_WORKSPACE_WEB_DIST: this.webRoot, AGENT_WORKSPACE_ACCESS_TOKEN: this.token,
           PM_CHAT_SPACE_ROOT: join(dataDir, "chat-spaces"),
         },

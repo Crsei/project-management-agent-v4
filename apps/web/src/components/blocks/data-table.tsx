@@ -3,7 +3,7 @@ import {
   columnWidth,
   type DataTableColumnConfig,
 } from "../../lib/data-table-model"
-import type { ReactNode } from "react"
+import { Fragment, type ReactElement, type ReactNode } from "react"
 import styles from "./data-table.module.css"
 import { Button } from "../ui/button"
 import { Checkbox } from "../ui/checkbox"
@@ -42,6 +42,8 @@ export type DataTableProps<T> = {
   activationMode?: "primary-cell" | "separate"
   getRowId: (row: T) => string
   getRowLabel: (row: T) => string
+  /** Wrap the actual row without adding table DOM; omitted consumers stay unchanged. */
+  renderRow?: (row: T, element: ReactElement) => ReactNode
   caption: string
   selectedIds?: readonly string[]
   onSelectionChange?: (ids: string[]) => void
@@ -63,6 +65,7 @@ export function DataTable<T>({
   activationMode = "primary-cell",
   getRowId,
   getRowLabel,
+  renderRow,
   caption,
   selectedIds = [],
   onSelectionChange,
@@ -190,12 +193,14 @@ export function DataTable<T>({
             <TableBody>
               {rows.map((row) => {
                 const id = getRowId(row)
-                return (
+                const element = (
                   <TableRow
                     key={id}
                     data-row-id={id}
                     data-selected={selected.has(id)}
                     data-active={activeRowId === id}
+                    tabIndex={renderRow ? 0 : undefined}
+                    aria-label={renderRow ? getRowLabel(row) : undefined}
                   >
                     {onSelectionChange && (
                       <TableCell>
@@ -252,6 +257,7 @@ export function DataTable<T>({
                     ))}
                   </TableRow>
                 )
+                return renderRow ? <Fragment key={id}>{renderRow(row, element)}</Fragment> : element
               })}
             </TableBody>
           </Table>

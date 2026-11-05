@@ -1,5 +1,5 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react"
-import type { FilterCondition } from "@/components/blocks/filter-card"
+import type { FilterCondition } from "../../lib/filter-model.ts"
 import type { PmControlledData, PmControlledSurface, ControlledIssueRecord } from "./controlled-contracts"
 import type { ProjectCollectionRecord } from "./project-collection-contracts"
 

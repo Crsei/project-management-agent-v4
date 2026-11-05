@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "tests/components/SkillsStorageSheet.test.tsx",
+  "beforeSha256": "1bb3c39db08a56ebf6028117e23ff10c9d464c869180bb109f0b1f8a206bd88a",
+  "afterSha256": "bde7ef8d6a81e098fc2fd5786eb1e502fb5946cb5a9db0cfb259513ad980d61b",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 1057,
+  "before": "Q2NTd2l0Y2hTa2lsbHNEaXI6ICgpID0+ICh7IGRhdGE6ICIvVXNlcnMvamFzb24vLmNjLXN3aXRjaC9za2lsbHMiIH0pLAogIHVzZQ==",
+  "after": ""
+}

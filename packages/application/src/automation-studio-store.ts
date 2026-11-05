@@ -4,6 +4,7 @@ import { automationIntegrationSupportsMcp, automationIntegrationSupportsNativeAp
 import { DomainError, type Actor } from '../../domain/src/core.ts';
 import type { NotificationCorePort } from '../../pm-core/readonly.ts';
 import type { SqlExecutor } from './ports.ts';
+import { assertAutomationIntegrationsAvailable } from '../../infrastructure/src/automation-integrations.ts';
 import { automationSnapshot, authorizeAutomationProject } from './automation-report.ts';
 import { nextStudioDue } from './automation-studio-schedule.ts';
 
@@ -36,6 +37,7 @@ export function assertStudioConfig(config: StudioConfig, now: Date): void {
   if (!action.files.length && !action.content.trim()) throw new DomainError('script_content_missing', 'Script bytes must be included; a bundle reference alone is not executable', 400);
 }
 export async function enqueueStudioExecution(sql: SqlExecutor, row: StudioDefinitionRow, input: { requestId: string; trigger: StudioExecution['trigger']; payload?: Record<string, unknown>; sourceKey?: string; dueAt?: Date }): Promise<StudioExecution> {
+  if (row.config.action.plugins.some(plugin => plugin.id.startsWith('integration:'))) await assertAutomationIntegrationsAvailable(sql);
   const result = await sql.query<StudioExecutionRow>('INSERT INTO automation_studio_executions(id,workspace_id,actor_id,definition_id,project_id,definition_revision,config_snapshot,request_id,trigger,payload,source_key,due_at) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10::jsonb,$11,$12) ON CONFLICT(definition_id,source_key) DO NOTHING RETURNING *', [randomUUID(), row.workspace_id, row.actor_id, row.id, row.project_id, row.revision, JSON.stringify(row.config), input.requestId, input.trigger, input.payload === undefined ? null : JSON.stringify(input.payload), input.sourceKey ?? null, input.dueAt ?? null]);
   const execution = result.rows[0] ?? (await sql.query<StudioExecutionRow>('SELECT * FROM automation_studio_executions WHERE definition_id=$1 AND source_key=$2', [row.id, input.sourceKey])).rows[0]!;
   if (result.rows[0]) await appendStudioEvent(sql, execution.id, 'queued', `${input.trigger} execution queued; configuration revision ${row.revision} frozen`);

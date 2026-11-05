@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n-provider"
 import { canvasColors, canvasReducer, initialView, newCanvasShape, parseCanvas, wrapCanvasText, type CanvasDocument, type CanvasPoint, type CanvasShape, type CanvasView } from "./whiteboard-model"
 import { RadixSelect } from "@/components/ui/radix-select"
+import { ContextMenuItem, ContextMenuLabel, ContextMenuPopup, ContextMenuSeparator, isNativeContextTarget, useContextMenu } from "@/components/ui/context-menu"
 
 type Props = { storageKey: string }
 type Tool = "select" | "pan" | CanvasShape["kind"]
@@ -44,6 +45,8 @@ function LocalCanvas({ storageKey }: Props) {
   const svg = useRef<SVGSVGElement>(null)
   const textField = useRef<HTMLTextAreaElement>(null)
   const gesture = useRef<Gesture | null>(null)
+  const properties = useRef<HTMLDivElement>(null)
+  const contextMenu = useContextMenu<{ kind: "shape"; shape: CanvasShape } | { kind: "background" }>()
   const shapes = history.present
   const selected = shapes.find(shape => shape.id === selectedId)
   const displayed = preview ? (shapes.some(shape => shape.id === preview.id) ? shapes.map(shape => shape.id === preview.id ? preview : shape) : [...shapes, preview]) : shapes
@@ -66,7 +69,25 @@ function LocalCanvas({ storageKey }: Props) {
     if (!selected) return
     commit(shapes.map(shape => shape.id === selected.id ? { ...shape, ...patch } : shape))
   }
-  function removeSelected() { if (selected) { commit(shapes.filter(shape => shape.id !== selected.id)); setSelectedId("") } }
+  function removeShape(id: string) { commit(shapes.filter(shape => shape.id !== id)); if (selectedId === id) setSelectedId("") }
+  function removeSelected() { if (selected) removeShape(selected.id) }
+  function bringToFront(id: string) {
+    const shape = shapes.find(candidate => candidate.id === id)
+    if (shape) commit([...shapes.filter(candidate => candidate.id !== id), shape])
+  }
+  function editShape(id: string, text: boolean) {
+    setSelectedId(id)
+    requestAnimationFrame(() => {
+      properties.current?.scrollIntoView({ block: "nearest" })
+      if (text) textField.current?.focus()
+      else properties.current?.querySelector<HTMLElement>("input[type='number']")?.focus()
+    })
+  }
+  function menuTarget(target: EventTarget | null) {
+    const id = target instanceof Element ? target.closest("[data-shape-id]")?.getAttribute("data-shape-id") : null
+    const shape = shapes.find(candidate => candidate.id === id)
+    return shape ? { kind: "shape" as const, shape } : { kind: "background" as const }
+  }
   function add(kind: CanvasShape["kind"]) {
     if (shapes.length >= 2000) return
     const shape = newCanvasShape(kind, (500 - view.x) / view.zoom - 90, (300 - view.y) / view.zoom - 60, color, kind === "note" ? (en ? "New note" : "新便签") : "")
@@ -151,6 +172,15 @@ function LocalCanvas({ storageKey }: Props) {
   function keyDown(event: KeyboardEvent<HTMLElement>) {
     const target = event.target as HTMLElement
     if (target.closest("input, textarea, select, [contenteditable='true']")) return
+    if (target.closest("svg") && (event.key === "ContextMenu" || event.shiftKey && event.key === "F10")) {
+      if (isNativeContextTarget(event.target)) return
+      const trigger = target.closest<SVGElement>("[data-shape-id]") ?? svg.current
+      if (!trigger) return
+      event.preventDefault(); event.stopPropagation()
+      const bounds = trigger.getBoundingClientRect()
+      contextMenu.openAt({ x: bounds.left, y: bounds.bottom }, menuTarget(target), trigger)
+      return
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); dispatch({ type: event.shiftKey ? "redo" : "undo" }); return }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); dispatch({ type: "redo" }); return }
     if (target.closest("button")) return
@@ -202,7 +232,7 @@ function LocalCanvas({ storageKey }: Props) {
       {([{ label: en ? "Pan left" : "向左平移", x: 80, y: 0, symbol: "←" }, { label: en ? "Pan right" : "向右平移", x: -80, y: 0, symbol: "→" }, { label: en ? "Pan up" : "向上平移", x: 0, y: 80, symbol: "↑" }, { label: en ? "Pan down" : "向下平移", x: 0, y: -80, symbol: "↓" }]).map(direction => <Button key={direction.label} variant="ghost" aria-label={direction.label} onClick={() => setView(previous => ({ ...previous, x: previous.x + direction.x, y: previous.y + direction.y }))}>{direction.symbol}</Button>)}
     </div>
     <p id={`${id}-instructions`} className="text-xs text-muted-foreground">{en ? "Draw by dragging. Use Add buttons to create without a pointer. Tab to an object or choose it below; arrows move it (Shift: 10px), Enter edits text, Delete removes it. Ctrl/Cmd+Z undoes. Pan by dragging with Pan selected." : "拖动绘制；也可使用添加按钮通过键盘创建。Tab 聚焦对象或从下方选择，方向键移动（Shift：10px），Enter 编辑文字，Delete 删除。Ctrl/Cmd+Z 撤销。选择平移工具后拖动平移。"}</p>
-    <svg ref={svg} viewBox="0 0 1000 600" role="group" aria-label={en ? "Canvas drawing area" : "画布绘图区"} aria-describedby={`${id}-instructions`} tabIndex={0} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={event => pointerEnd(event)} onPointerCancel={event => pointerEnd(event, true)} className="max-h-[640px] min-h-64 w-full touch-none rounded-panel border border-border bg-muted/30 focus-visible:outline-2 focus-visible:outline-ring" style={{ cursor: tool === "pan" ? "grab" : tool === "select" ? "default" : "crosshair" }}>
+    <svg ref={svg} viewBox="0 0 1000 600" role="group" aria-label={en ? "Canvas drawing area" : "画布绘图区"} aria-describedby={`${id}-instructions`} tabIndex={0} onContextMenu={event => { if (!gesture.current) contextMenu.open(event, menuTarget(event.target), event.target instanceof SVGElement ? event.target.closest<SVGElement>("[data-shape-id]") ?? event.currentTarget : event.currentTarget) }} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={event => pointerEnd(event)} onPointerCancel={event => pointerEnd(event, true)} className="max-h-[640px] min-h-64 w-full touch-none rounded-panel border border-border bg-muted/30 focus-visible:outline-2 focus-visible:outline-ring" style={{ cursor: tool === "pan" ? "grab" : tool === "select" ? "default" : "crosshair" }}>
       <defs>{displayed.map(shape => <clipPath key={shape.id} id={`${id}-clip-${shape.id}`}><rect width={shape.width - 8 > 0 ? shape.width - 8 : 1} height={Math.max(1, shape.height - 8)} x={4} y={4} /></clipPath>)}</defs>
       <g transform={`translate(${view.x} ${view.y}) scale(${view.zoom})`}>
         {displayed.map(shape => <g key={shape.id} data-shape-id={shape.id} transform={`translate(${shape.x} ${shape.y})`} role="button" tabIndex={0} aria-label={`${names[shape.kind]}: ${shape.text || shape.id}`} aria-pressed={selectedId === shape.id} onFocus={() => setSelectedId(shape.id)} onDoubleClick={() => { setSelectedId(shape.id); textField.current?.focus() }} className="outline-none focus-visible:stroke-primary">
@@ -213,7 +243,7 @@ function LocalCanvas({ storageKey }: Props) {
       </g>
     </svg>
     {shapes.length === 0 && <p className="text-sm text-muted-foreground">{en ? "Empty canvas. Add a note or draw a shape to begin." : "画布为空。添加便签或绘制图形即可开始。"}</p>}
-    <div className="grid gap-3 rounded-panel border border-border p-3 md:grid-cols-2">
+    <div ref={properties} className="grid gap-3 rounded-panel border border-border p-3 md:grid-cols-2">
       <label className="space-y-1 text-sm"><span>{en ? "Selected object" : "选择对象"}</span><RadixSelect className={field} value={selected?.id ?? ""} onChange={event => setSelectedId(event.target.value)}><option value="">{en ? "No selection" : "未选择"}</option>{shapes.map((shape, index) => <option key={shape.id} value={shape.id}>{index + 1}. {names[shape.kind]} {shape.text.slice(0, 70)}</option>)}</RadixSelect></label>
       {selected && <>
         <label className="space-y-1 text-sm"><span>{en ? "Object text" : "对象文本"}</span><textarea ref={textField} className={`${field} min-h-20 py-2`} maxLength={10000} value={selected.text} onChange={event => updateSelected({ text: event.target.value })} /></label>
@@ -225,7 +255,7 @@ function LocalCanvas({ storageKey }: Props) {
           if (selected.kind === "draw" && (property === "width" || property === "height")) patch.points = selected.points.map(point => ({ x: property === "width" ? point.x * value / selected.width : point.x, y: property === "height" ? point.y * value / selected.height : point.y }))
           updateSelected(patch)
         }} /></label>)}</div>
-        <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-sm">{en ? "Object color" : "对象颜色"}<input type="color" value={selected.color} onChange={event => updateSelected({ color: event.target.value })} /></label><Button variant="outline" onClick={() => { commit([...shapes.filter(shape => shape.id !== selected.id), selected]) }}>{en ? "Bring to front" : "移到最前"}</Button><Button variant="destructive" onClick={removeSelected}>{en ? "Delete object" : "删除对象"}</Button></div>
+        <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-sm">{en ? "Object color" : "对象颜色"}<input type="color" value={selected.color} onChange={event => updateSelected({ color: event.target.value })} /></label><Button variant="outline" onClick={() => bringToFront(selected.id)}>{en ? "Bring to front" : "移到最前"}</Button><Button variant="destructive" onClick={removeSelected}>{en ? "Delete object" : "删除对象"}</Button></div>
       </>}
     </div>
     <div className="flex flex-wrap items-center gap-3">
@@ -235,5 +265,22 @@ function LocalCanvas({ storageKey }: Props) {
     </div>
     {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
     {imported && <div className="flex flex-wrap items-center gap-3 rounded-control border border-border p-3"><p className="text-sm">{en ? `Replace this canvas with ${imported.shapes.length} imported objects? The replacement can be undone.` : `用导入的 ${imported.shapes.length} 个对象替换当前画布？替换操作可撤销。`}</p><Button onClick={() => { commit(imported.shapes); setView(imported.view); setSelectedId(""); setImported(null) }}>{en ? "Replace canvas" : "替换画布"}</Button><Button variant="outline" onClick={() => setImported(null)}>{en ? "Cancel import" : "取消导入"}</Button></div>}
+    <ContextMenuPopup menu={contextMenu} aria-label={en ? "Local canvas actions" : "本地画布操作"}>
+      {contextMenu.target?.kind === "shape" ? <>
+        <ContextMenuLabel>{names[contextMenu.target.shape.kind]}</ContextMenuLabel>
+        <ContextMenuItem onSelect={() => { const target = contextMenu.target; if (target?.kind === "shape") editShape(target.shape.id, true) }}>{en ? "Edit text" : "编辑文本"}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => { const target = contextMenu.target; if (target?.kind === "shape") editShape(target.shape.id, false) }}>{en ? "Object properties" : "对象属性"}</ContextMenuItem>
+        <ContextMenuItem disabled={Boolean(preview)} onSelect={() => { const target = contextMenu.target; if (target?.kind === "shape") bringToFront(target.shape.id) }}>{en ? "Bring to front" : "移到最前"}</ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem className="text-destructive" disabled={Boolean(preview)} onSelect={() => { const target = contextMenu.target; if (target?.kind === "shape") removeShape(target.shape.id) }}>{en ? "Delete object" : "删除对象"}</ContextMenuItem>
+      </> : <>
+        <ContextMenuLabel>{en ? "Add at view center" : "在视图中心添加"}</ContextMenuLabel>
+        {(["note", "rectangle", "ellipse", "draw"] as const).map(kind => <ContextMenuItem key={kind} disabled={shapes.length >= 2000 || Boolean(preview)} onSelect={() => add(kind)}>{en ? "Add" : "添加"} {names[kind]}</ContextMenuItem>)}
+        <ContextMenuSeparator />
+        <ContextMenuItem disabled={!history.past.length || Boolean(preview)} onSelect={() => dispatch({ type: "undo" })}>{en ? "Undo" : "撤销"}</ContextMenuItem>
+        <ContextMenuItem disabled={!history.future.length || Boolean(preview)} onSelect={() => dispatch({ type: "redo" })}>{en ? "Redo" : "重做"}</ContextMenuItem>
+        <ContextMenuItem onSelect={() => setView(initialView)}>{en ? "Reset view" : "重置视图"}</ContextMenuItem>
+      </>}
+    </ContextMenuPopup>
   </section>
 }

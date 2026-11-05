@@ -1,6 +1,8 @@
 # 业务验收场景
 
-以下是 [v0.1 领域规范](README.md) 的 Given / When / Then 验收规格。第一阶段已有真实 PostgreSQL、HTTP、存储、Worker 和 SSE 验证，实际覆盖层次见[后端实现记录](../implementation/backend-delivery.md)。真实 Agent 场景仍留待第三阶段，不能以 UI 截图或模拟回调替代执行验收。
+> 适用性：本文件保留v0.1历史提案、完整Given/When/Then和稳定SC编号，不代表完整业务Runner或旧SQL核心规则已启用。当前Markdown任务状态、审核独立性与关系语义以[已采纳ADR](../architecture/adr/0003-markdown-core.md)及[入口第七节](README.md#implementation-plan)为准；Chat thread/generation不能替代历史Session/Run模型。以下阶段与通过表述属于原提案语境，不是最新工作树验收结论。
+
+以下是 [v0.1 领域规范](README.md) 的 Given / When / Then 验收规格。第一阶段已有真实 PostgreSQL、HTTP、存储、Worker 和 SSE 验证，当前验证入口和覆盖边界见[开发与验证说明](../guides/development.md)。真实 Agent 场景仍留待第三阶段，不能以 UI 截图或模拟回调替代执行验收。
 
 ## 核心链路
 

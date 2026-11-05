@@ -1,4 +1,4 @@
-import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAui, useAuiState, ThreadListPrimitive, type AssistantRuntime } from "@assistant-ui/react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -491,6 +491,11 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
   if (!entryObject.entity) handoffParams.delete("entity");
   if (automationsView) handoffParams.set("view", "automations"); else handoffParams.delete("view");
   const settingsReturnTo = `/agent/workspace?${handoffParams}`;
+  const customizeParams = new URLSearchParams();
+  if (displayScope) {
+    customizeParams.set("workspace", displayScope.workspaceId);
+    if (displayScope.projectId) customizeParams.set("project", displayScope.projectId);
+  }
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || event.isComposing || event.keyCode === 229) return;
@@ -558,7 +563,8 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
           <button type="button" className="pm-agent-icon" disabled={pending || state.loading || !displayScope || !displayContext || !!state.error} aria-label={t("新建当前作用域会话", "New session in current scope")} title={t("新建当前作用域会话 (Ctrl / ⌘ + Shift + O)", "New session in current scope (Ctrl / ⌘ + Shift + O)")} onClick={() => { if (displayScope) selectScope(displayScope, true); }}><PlusIcon /></button>
         </div>
         {projectFilter && <button type="button" className="pm-session-filter" onClick={() => setProjectFilter(undefined)}>{t("筛选：", "Filter: ")}{scopeContext(state.catalog, projectFilter)?.project?.name ?? scopeContext(state.catalog, projectFilter)?.workspace.name ?? projectFilter.projectId ?? t("工作区", "Workspace")}{t(" · 显示所有会话 ×", " · Show all sessions ×")}</button>}
-        <button type="button" className="pm-agent-automation-link" aria-current={automationsView ? "page" : undefined} disabled={!displayScope} title={!displayScope ? t("请先选择工作区", "Select a workspace first") : undefined} onClick={openAutomation}><ZapIcon /><span>{t("自动化", "Automations")}</span></button>
+        <Link className="pm-agent-navigation-link" data-testid="agent-customize-link" data-automation-leave-guarded="true" to={{ pathname: "/agent/settings/mcp-servers", search: customizeParams.toString() }} state={{ settingsReturnTo }} title={t("自定义 Agent：MCP 服务器与 Skills", "Customize Agent: MCP servers and Skills")} onClick={(event) => { if (!protectNavigation()) event.preventDefault(); }}><SettingsIcon aria-hidden="true" /><span>{t("自定义", "Customize")}</span><small>MCP / Skills</small></Link>
+        <button type="button" className="pm-agent-navigation-link" aria-current={automationsView ? "page" : undefined} disabled={!displayScope} title={!displayScope ? t("请先选择工作区", "Select a workspace first") : undefined} onClick={openAutomation}><ZapIcon /><span>{t("自动化", "Automations")}</span></button>
         {actionError && <p role="alert" className="pm-agent-sidebar-error">{actionError}</p>}
       </div>
       <SessionActions.Provider value={{
@@ -723,16 +729,16 @@ function SessionRow() {
   const title = useAuiState((s) => s.threadListItem.title) ?? t("新会话", "New session");
   const running = useAuiState((s) => s.threadListItem.isRunning);
   const thread = remoteId ? actions.thread(remoteId) : undefined;
-  const openMenu = (row: HTMLElement) => row.querySelector<HTMLButtonElement>(".pm-agent-session-menu-trigger")?.click();
   const isRunning = running || !!thread?.sidebar.running;
   const current = active && !actions.automationsView;
   const timestamp = thread && (actions.sortByCreated ? thread.createdAt : thread.updatedAt);
-  return <div className="pm-agent-session" data-active={current} onContextMenu={(event) => { if (!thread) return; event.preventDefault(); openMenu(event.currentTarget); }} onKeyDown={(event) => { if (thread && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) { event.preventDefault(); openMenu(event.currentTarget); } }}>
+  const renderRow = (ellipsis?: ReactNode) => <div className="pm-agent-session focus-visible:outline-ring focus-visible:outline-2" data-active={current} tabIndex={thread ? 0 : undefined}>
     <button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined} title={title}>
       <span className="pm-agent-session-meta"><span className="pm-agent-session-scope">{thread ? actions.scopeName(thread) : t("历史会话", "Past session")}</span><time dateTime={timestamp} title={timestamp}>{sessionTime(timestamp, t)}</time></span>
       <span className="pm-agent-session-main"><span className="pm-agent-session-title">{title}</span><span className="pm-agent-session-provider" title={thread ? actions.providerName(thread) : undefined}>{thread ? actions.providerName(thread) : t("正在读取", "Loading")}</span>{isRunning && <><Loader2Icon className="animate-spin" aria-hidden="true" /><span className="sr-only">{t("正在后台生成", "Generating in background")}</span></>}{thread?.sidebar.unread && <><span className="pm-session-unread" title={t("未读", "Unread")} aria-hidden="true" /><span className="sr-only">{t("未读", "Unread")}</span></>}</span>
       {thread?.sidebar.section === "snoozed" && <span className="sr-only">{t(`稍后提醒至 ${thread.sidebar.snoozedUntil}`, `Snoozed until ${thread.sidebar.snoozedUntil}`)}</span>}
     </button>
-    {thread && <SessionMenu thread={thread} title={title} path={actions.path(thread)} disabled={actions.disabled} running={isRunning} filtered={actions.filtered(thread)} onSidebar={(action, options) => actions.onSidebar(thread, action, options)} onRename={() => actions.onAction(id, title, "rename")} onRegenerate={() => actions.onRegenerate(thread)} onCustomSnooze={() => actions.onSnooze(thread)} onFilter={() => actions.onFilter(thread)} onSettings={() => actions.onSettings(thread)} onArchive={() => actions.onArchive(id, thread)} onDelete={() => actions.onAction(id, title, "delete")} onError={actions.onError} />}
+    {ellipsis}
   </div>;
+  return thread ? <SessionMenu thread={thread} title={title} path={actions.path(thread)} disabled={actions.disabled} running={isRunning} filtered={actions.filtered(thread)} onSidebar={(action, options) => actions.onSidebar(thread, action, options)} onRename={() => actions.onAction(id, title, "rename")} onRegenerate={() => actions.onRegenerate(thread)} onCustomSnooze={() => actions.onSnooze(thread)} onFilter={() => actions.onFilter(thread)} onSettings={() => actions.onSettings(thread)} onArchive={() => actions.onArchive(id, thread)} onDelete={() => actions.onAction(id, title, "delete")} onError={actions.onError}>{renderRow}</SessionMenu> : renderRow();
 }

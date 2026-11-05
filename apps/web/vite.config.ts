@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type ProxyOptions } from "vite"
+import { openHandsProvenancePlugin } from "../../vendor/openhands-extensions/scripts/web-build.mjs"
 
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url))
 
@@ -48,7 +49,7 @@ export default defineConfig(({ command, mode, isPreview }) => {
   return {
     envDir: workspaceRoot,
     define: { "import.meta.env.PM_LAB_ENABLED": JSON.stringify(labEnabled) },
-    plugins: [react(), tailwindcss(), {
+    plugins: [react(), tailwindcss(), openHandsProvenancePlugin(), {
       name: "workspace-lab-policy",
       generateBundle() {
         this.emitFile({ type: "asset", fileName: "ui-lab.json", source: JSON.stringify({ enabled: env.VITE_ENABLE_UI_LAB === "1" }) })
@@ -57,6 +58,10 @@ export default defineConfig(({ command, mode, isPreview }) => {
     resolve: {
       alias: {
         "@agent": fileURLToPath(new URL("./src/features/agent", import.meta.url)),
+        "@pm/openhands-extensions": fileURLToPath(new URL("../../vendor/openhands-extensions/src/web/index.tsx", import.meta.url)),
+        "@pm/openhands-source": fileURLToPath(new URL("../../vendor/openhands-extensions/src", import.meta.url)),
+        "@pm/cc-switch-source": fileURLToPath(new URL("../../vendor/cc-switch/src", import.meta.url)),
+        "@openhands/extensions/integrations": fileURLToPath(new URL("../../vendor/openhands-extensions/extensions/integrations/index.js", import.meta.url)),
         "@": fileURLToPath(new URL("./src", import.meta.url)),
         "@contracts": fileURLToPath(new URL("../../packages/contracts/src/client.ts", import.meta.url)),
         "@pm-schema/relations": fileURLToPath(new URL("../../packages/pm-schema/relations.ts", import.meta.url)),
@@ -68,7 +73,7 @@ export default defineConfig(({ command, mode, isPreview }) => {
         "@pm-core": fileURLToPath(new URL("../../packages/pm-core/index.ts", import.meta.url)),
         "@pm-views": fileURLToPath(new URL("../../packages/pm-views/index.tsx", import.meta.url)),
       },
-      dedupe: ["react", "react-dom", "react-router", "react-router-dom", "@assistant-ui/react"],
+      dedupe: ["react", "react-dom", "react-router", "react-router-dom", "@assistant-ui/react", "@tanstack/react-query", "i18next", "react-i18next"],
     },
     worker: { format: "es" },
     cacheDir: env.VITE_CACHE_DIR ?? "node_modules/.vite",

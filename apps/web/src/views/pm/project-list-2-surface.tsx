@@ -13,10 +13,11 @@ type ProjectBrowseCardProps = {
   onStar: () => void
   readModel: ProjectCollectionViewProps["readModel"]
   renderProjectAction?: ProjectCollectionViewProps["renderProjectAction"]
+  renderProjectContextMenu?: ProjectCollectionViewProps["renderProjectContextMenu"]
 }
 
 /** Browse uses the host's records and selection flow, without introducing a second data source. */
-export function ProjectBrowseCard({ project, locale, selected, onSelect, readModel, renderProjectAction }: ProjectBrowseCardProps) {
+export function ProjectBrowseCard({ project, locale, selected, onSelect, readModel, renderProjectAction, renderProjectContextMenu }: ProjectBrowseCardProps) {
   const en = locale === "en"
   const members: NonNullable<ProjectCollectionRecord["members"]> = project.members?.length ? project.members : project.teamSize !== null && project.owner ? [project.owner] : []
   const visibleMembers = members.slice(0, 3)
@@ -26,7 +27,7 @@ export function ProjectBrowseCard({ project, locale, selected, onSelect, readMod
     ? new Intl.DateTimeFormat(en ? "en-GB" : locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(project.dueDate + "T00:00:00Z"))
     : readModel.unavailableDateLabel ?? "—"
   const status = project.archived ? en ? "Archived" : "已归档" : project.status?.label ?? "—"
-  return <article className={styles.card} data-pm-project={project.id} data-selected={selected} aria-labelledby={`${project.id}-title`}>
+  const card = <article className={styles.card} data-pm-project={project.id} data-selected={selected} aria-labelledby={`${project.id}-title`}>
     <div className={styles.cardTop}>
       <div className={styles.identity}>
         <span className={styles.projectIcon}><PanelsTopLeft aria-hidden="true" /></span>
@@ -60,4 +61,5 @@ export function ProjectBrowseCard({ project, locale, selected, onSelect, readMod
       {project.health !== null && <Meter className={styles.meter} min={0} max={100} value={project.health} data-low={project.health < 40} aria-label={readModel.healthMetric === "completion" ? en ? `${project.title} task completion` : `${project.title} 任务完成比例` : en ? `${project.title} timeline health` : `${project.title} 时间线健康度`} />}
     </div>
   </article>
+  return renderProjectContextMenu ? renderProjectContextMenu(project, card) : card
 }

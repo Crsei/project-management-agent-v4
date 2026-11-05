@@ -1,7 +1,6 @@
-import { ArrowDownUp, ChevronDown, CirclePlus, Mail, MoreHorizontal, Search, Shield, ShieldCheck, UserRoundPlus, X } from "lucide-react"
+import { ArrowDownUp, ChevronDown, CirclePlus, Mail, Search, Shield, ShieldCheck, UserRoundPlus, X } from "lucide-react"
 import { DataTable, type DataTableColumn } from "@/components/blocks/data-table"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs"
@@ -11,6 +10,7 @@ import type { ControlledInvitation, ControlledMember, ControlledSuggestedContact
 import { InvitationStatus, PeopleIdentity, PeopleRoleLabel } from "./people-views"
 import { PmPage } from "./presentation-page"
 import { MemberDirectoryFilter, memberDirectoryFilterFields } from "./member-directory-filters"
+import { MemberDirectoryActionsMenu, MemberDirectoryContextMenu } from "./member-directory-actions"
 import styles from "./member-list-3.module.css"
 
 export function MemberList3View(props: MemberDirectoryViewProps) {
@@ -61,18 +61,9 @@ export function MemberList3View(props: MemberDirectoryViewProps) {
     {
       id: "access", header: text("访问", "Access"), minWidth: 176, align: "right",
       cell: (member) => {
-        const triggerId = `pm-member-actions-${member.membershipId}`
         return <div className={styles.accessCell}>
           <Button variant="outline" className={styles.manageButton} disabled={!canManageAccess(member)} onClick={(event) => { if (canManageAccess(member)) actions.manageAccess!(member, event.currentTarget) }}>{text("管理访问", "Manage Access")}</Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button id={triggerId} variant="ghost" size="icon" className={styles.menuButton} disabled={loading} aria-label={text(`${member.name} (${member.membershipId}) 的操作`, `Open actions for ${member.name} (${member.membershipId})`)} />}><MoreHorizontal aria-hidden="true" size={16} /></DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={loading || !capabilities.memberOpen(member)} onClick={() => actions.memberOpen(member, document.getElementById(triggerId))}>{text("成员明细", "Member details")}</DropdownMenuItem>
-              <DropdownMenuItem disabled={loading || !capabilities.editRole(member)} onClick={() => actions.editRole(member, document.getElementById(triggerId))}>{text("更改角色", "Change role")}</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={!canManageAccess(member)} onClick={() => { if (canManageAccess(member)) actions.manageAccess!(member, document.getElementById(triggerId)) }}>{text("管理访问", "Manage Access")}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <MemberDirectoryActionsMenu surface={props} member={member} className={styles.menuButton} />
         </div>
       },
     },
@@ -185,7 +176,7 @@ export function MemberList3View(props: MemberDirectoryViewProps) {
         </Select>
       </div>
       <TabsPanel className={styles.panel} value="members">
-        <DataTable rows={model.members} columns={columns} getRowId={(member) => member.membershipId} getRowLabel={(member) => `${member.name} (${member.email || member.membershipId})`} caption={text("团队成员、来源角色、安全状态与访问授权；未知安全信息保持未提供", "Team members, source roles, security and access; unknown security facts remain unavailable")} selectedIds={state.selectedIds} onSelectionChange={(selectedIds) => actions.setInteraction((previous) => ({ ...previous, selectedIds }))} isRowSelectable={() => !loading} activeRowId={state.selectedId} className={`${styles.table} ${styles.memberTable}`} data={membersData} />
+        <DataTable rows={model.members} columns={columns} getRowId={(member) => member.membershipId} getRowLabel={(member) => `${member.name} (${member.email || member.membershipId})`} renderRow={(member, row) => <MemberDirectoryContextMenu surface={props} member={member}>{row}</MemberDirectoryContextMenu>} caption={text("团队成员、来源角色、安全状态与访问授权；未知安全信息保持未提供", "Team members, source roles, security and access; unknown security facts remain unavailable")} selectedIds={state.selectedIds} onSelectionChange={(selectedIds) => actions.setInteraction((previous) => ({ ...previous, selectedIds }))} isRowSelectable={() => !loading} activeRowId={state.selectedId} className={`${styles.table} ${styles.memberTable}`} data={membersData} />
       </TabsPanel>
       <TabsPanel className={styles.panel} value="invitations">
         {model.invitationsNotice && <p role="status" className={styles.sourceUnavailable}>{model.invitationsNotice}</p>}

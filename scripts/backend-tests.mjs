@@ -23,6 +23,7 @@ const unitPatterns = [
   'packages/infrastructure/tests/*.test.ts',
   'packages/pm-core/tests/*.test.ts',
   'packages/pm-markdown/tests/*.test.ts',
+  'packages/pm-cli/tests/*.test.ts',
 ];
 const patterns = {
   backend: [...unitPatterns, 'tests/*.test.ts'],
@@ -255,6 +256,7 @@ async function main() {
     }
     console.error(`[backend-tests] finished ${completed}/${files.length} files; failed ${failed}${interrupted === undefined ? '' : '; interrupted'}`);
     console.error(`[backend-tests] case summaries ${summaries}/${completed}: tests ${totals.tests}, passed ${totals.passed}, failed ${totals.failed}, skipped ${totals.skipped}, cancelled ${totals.cancelled}, todo ${totals.todo}; missing summaries are incomplete, not passed`);
+    if (summaries !== completed || totals.failed || totals.skipped || totals.cancelled || totals.todo) result ||= 1;
     return interrupted ?? result;
   } finally {
     process.off('SIGINT', sigint);

@@ -1,4 +1,4 @@
-import { bigint, bigserial, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { bigint, bigserial, boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import type { ProjectAuditChange, ProjectAuditEntry } from '../../domain/src/project-audit.ts';
 export { artifactCopyOrigins } from './artifact-files-schema.ts';
@@ -9,6 +9,16 @@ export * from './webhook-schema.ts';
 export { localProjectSettings, localProjectOperations } from './local-projects-schema.ts';
 export { agentFileAreas, agentStorageSettings } from './agent-file-areas-schema.ts';
 export { documentSourceScopes, documentSources, documentSourceOperations } from './document-sources-schema.ts';
+
+export const instanceSetup = pgTable('instance_setup', {
+  singleton: boolean('singleton').primaryKey().default(true),
+  tokenHash: text('token_hash'),
+  preparedAt: timestamp('prepared_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+}, (t) => [
+  check('instance_setup_singleton_check', sql`${t.singleton}`),
+  check('instance_setup_check', sql`(${t.completedAt} IS NULL AND ${t.tokenHash} IS NOT NULL AND ${t.tokenHash} ~ '^[a-f0-9]{64}$') OR (${t.completedAt} IS NOT NULL AND ${t.tokenHash} IS NULL)`),
+]);
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey(), email: text('email').notNull().unique(), name: text('name').notNull(),

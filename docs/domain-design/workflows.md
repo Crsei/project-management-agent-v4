@@ -1,5 +1,7 @@
 # 状态机与业务流程
 
+> 适用性：本文件保留v0.1历史提案/稳定编号，不代表完整业务Runner或旧SQL核心规则已启用。当前Markdown任务状态、审核独立性与关系语义以[已采纳ADR](../architecture/adr/0003-markdown-core.md)及[入口第七节](README.md#implementation-plan)为准；Chat thread/generation不能替代历史Session/Run模型。
+
 本文件定义 [v0.1 提案](README.md) 的允许转换。未列出的转换默认拒绝；所有转换还需满足权限、版本与 [不变量](invariants.md)。归档对象拒绝普通业务修改，恢复归档是单独的管理命令。
 
 ## 1. 从讨论到完成
@@ -133,4 +135,4 @@ Project 归档要求 completed/cancelled；WorkItem 归档要求 done/cancelled�
 
 ## 节点驱动任务阶段（2026-11-01 实现增补）
 
-按已采纳的 [Markdown ADR](../implementation/markdown-integration-adr.zh.md)，执行工作流通过应用服务申请原生任务状态转换，而非执行回调直接决定业务完成（INV-15）。支持的开始开发、CI 通过后待审核边界、授权和原收据恢复见[实现说明](../implementation/workflow-task-state.zh.md)。不自动设置 done/canceled，不增加 Submission/Review 前置守卫；既有手动完成规则不变。
+按已采纳的 [Markdown ADR](../architecture/adr/0003-markdown-core.md)，执行工作流通过应用服务申请原生任务状态转换，而非执行回调直接决定业务完成（INV-15）。支持的开始开发、CI 通过后待审核边界、授权和原收据恢复见[实现说明](../guides/workflow-task-state.md)。不自动设置 done/canceled，不增加 Submission/Review 前置守卫；既有手动完成规则不变。

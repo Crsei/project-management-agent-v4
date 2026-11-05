@@ -10,7 +10,7 @@
 - `blob-storage-binding.ts`：`bindBlobStore` 每次读写核对 SQL active binding/epoch/locator 与不可覆盖 marker；实例首次接受的 storeId/epoch 被固定。普通 init 不创建或认领 binding/marker。readiness 用固定探针实际 PUT+GET，门禁+探针预算 2 秒；失败不意味着可切回其他 provider。
 - `blob-storage-inventory.ts`：事务内游标遍历本 schema 所有持久 JSON 列，包括 upload（过期/已消费均不筛掉）、不可变版本、收据、outbox、事件及其他历史；所有 objectKey 的 SHA/size/contentDigest 必须一致。缺少必需表权限、未知 scalar blob 引用或坏引用直接终止。
 
-S3 配置字段、权限、生产私有性/加密和未知写语义见[完整实施计划](../../docs/implementation/service-s3-blobstore-plan.zh.md)。存储可用不意味着桶私有性、备份恢复、供应商 SLA 或多 API 已验收；Markdown 仍只有一个 API 写者。
+S3配置字段、权限、生产私有性/加密和未知写语义见[公开集成指南](../../docs/guides/integrations.md#私有-s3-配置)。存储可用不意味着桶私有性、备份恢复、供应商 SLA 或多 API 已验收；Markdown 仍只有一个 API 写者。
 
 ## 显式初始化与升级
 
@@ -62,7 +62,7 @@ node scripts/blob-storage.ts restore-rebind --target-config /owned/new-target.js
 
 恢复只用新数据库、新 core 根/卷和新桶/独占前缀，不能复制旧 marker 假装原部署。SQL/core由父级备份入口负责同窗口归档和约束恢复；其专用本机 PG 安全范围保持不变。摘要通过后仍须隔离 API/Worker 的真实登录、原收据、下载/cover/Evidence、SSE 和新上传 HTTP 验收；本模块不伪造这一证据。
 
-核心允许缺少 `.pm/config.yaml` 而使用内置默认配置；checkpoint 保留缺省，不制造配置。已存在配置及 `.pm/state` 完整验证，缺失 state/符号链接/摘要变化拒绝。S3 源备份 CLI 已在新库、新核心副本和新 Local 身份恢复并经授权 HTTP 核验，见[统一交付](../../docs/implementation/service-completion-and-acceptance.zh.md#five-package-delivery)。
+核心允许缺少 `.pm/config.yaml` 而使用内置默认配置；checkpoint 保留缺省，不制造配置。已存在配置及 `.pm/state` 完整验证，缺失 state/符号链接/摘要变化拒绝。历史批次曾在新库/新核心副本/新Local身份运行恢复与授权HTTP核验；这不证明当前工作树或目标供应商已通过。
 
 ## 专项测试入口与证据边界
 
@@ -74,4 +74,4 @@ node --test packages/infrastructure/tests/blob-storage-config.test.ts packages/i
 PM_REQUIRE_S3_TESTS=true PM_S3_TEST_MINIO_BINARY=/approved/path/to/minio node --test tests/s3-blobs.integration.test.ts
 ```
 
-要求 S3 的批次缺少真实 fixture/PG 会失败，不能把普通未配置环境的 skip 计为 S3通过。协议夹具使用隔离管理员身份建桶/造篡改，不代表 API 最小权限、实际供应商私有性或生产加密通过；这些仍需独立受限身份和供应商管理员脱敏配置证据。owned MinIO启动还须以真实带认证HeadBucket的明确404确认对象层已初始化，再执行一次CreateBucket，不能把HTTP健康200当S3初始化完成。实现代理未运行全套 build/lint/tests/formatter、安装、业务服务或用户数据迁移；经owner授权的隔离SDK操作级诊断与实际结果见S3计划10.3，统一/浏览器验收仍由owner记录。
+要求 S3 的批次缺少真实 fixture/PG 会失败，不能把普通未配置环境的 skip 计为 S3通过。协议夹具使用隔离管理员身份建桶/造篡改，不代表 API 最小权限、实际供应商私有性或生产加密通过；这些仍需独立受限身份和供应商管理员脱敏配置证据。owned MinIO启动还须以真实带认证HeadBucket的明确404确认对象层已初始化，再执行一次CreateBucket，不能把HTTP健康200当S3初始化完成。每次变更的实际运行结果需单独报告，内部S3计划/机器诊断不作为公开检出依赖；供应商及完整恢复验收仍需真实证据。

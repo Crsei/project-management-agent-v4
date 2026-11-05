@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/components/ui/search-field.tsx",
+  "beforeSha256": "cf96842999f936d4b01e5cebd4b3e0ad478325327176c6ece182b3848f7a0fd9",
+  "afterSha256": "b025341984aaa2f930d5ea075ac117c42ca9553d1373bc4cc2ae14449d534992",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 97,
+  "before": "QC9jb21wb25lbnRzL3VpL2lucHV0IjsKaW1wb3J0IHsgSG92ZXJUaXAgfSBmcm9tICJAL2NvbXBvbmVudHMvdWkvaG92ZXItdGlwIjsKaW1wb3J0IHsgY24gfSBmcm9tICJA",
+  "after": "Li9pbnB1dCI7CmltcG9ydCB7IEhvdmVyVGlwIH0gZnJvbSAiLi9ob3Zlci10aXAiOwppbXBvcnQgeyBjbiB9IGZyb20gIi4uLy4u"
+}

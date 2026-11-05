@@ -122,5 +122,5 @@ export async function resolveAgentContext(context: AgentFileAreaContext, scope: 
   }
   const row = await context.sql.query<{ name: string }>('SELECT name FROM workspaces WHERE id=$1', [scope.workspaceId]);
   if (!row.rows[0]) throw new DomainError('not_found_or_forbidden', 'Workspace is unavailable', 404);
-  return { scope, workspaceName: row.rows[0].name, projectName: project?.entity.title ?? null, path: area.path! };
+  return { scope, actorId: context.actor.id, workspaceName: row.rows[0].name, projectName: project?.entity.title ?? null, path: area.path! };
 }

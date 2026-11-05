@@ -17,26 +17,32 @@ const uuid = z.uuid().toLowerCase();
 const project = z.string().regex(/^PRJ-\d+$/);
 const tool = z.string().regex(/^[a-zA-Z0-9_.:/-]{1,200}$/);
 const revision = { requestId: uuid, expectedRevision: z.number().int().nonnegative() };
+export const automationMcpDefinitionRefSchema = z.strictObject({ contextId: z.string().min(1).max(100), serverId: z.string().min(1).max(300) });
+export type AutomationMcpDefinitionRef = z.infer<typeof automationMcpDefinitionRefSchema>;
+export type AutomationMcpDefinition = AutomationMcpDefinitionRef & { name: string; configFingerprint: string; transport: 'streamable-http' };
+export type AutomationMcpDefinitionList = { contextId: string; definitions: AutomationMcpDefinition[] };
 export const automationIntegrationConfigSchema = z.strictObject({
   projectId: project, provider: automationIntegrationProviderSchema, label: z.string().trim().min(1).max(160),
-  endpoint: z.string().url().max(2048), readTools: z.array(tool).max(100), writeTools: z.array(tool).max(100),
+  mcpDefinition: automationMcpDefinitionRefSchema.optional(), readTools: z.array(tool).max(100), writeTools: z.array(tool).max(100),
   nativeApi: z.strictObject({ baseUrl: z.string().url().max(2048), repositories: z.array(z.string().trim().min(1).max(300)).min(1).max(100), allowWrites: z.boolean(), allowOwnerLoadSearch: z.boolean().optional() }).optional(),
 }).superRefine((value, ctx) => {
   const names = [...value.readTools, ...value.writeTools];
   if (new Set(names).size !== names.length) ctx.addIssue({ code: 'custom', path: ['readTools'], message: 'Specify unique, explicitly authorized tool names' });
+  if (names.length && !value.mcpDefinition) ctx.addIssue({ code: 'custom', path: ['mcpDefinition'], message: 'Select a managed MCP definition for explicitly authorized tools' });
+  if (!names.length && value.mcpDefinition) ctx.addIssue({ code: 'custom', path: ['mcpDefinition'], message: 'A managed MCP binding requires an explicit tool allowlist' });
   if (!names.length && (!['github', 'gitlab'].includes(value.provider) || !value.nativeApi)) ctx.addIssue({ code: 'custom', path: ['readTools'], message: 'Zero MCP tools is supported only for an explicitly configured GitHub/GitLab native API connection' });
 });
 export type AutomationIntegrationConfig = z.infer<typeof automationIntegrationConfigSchema>;
 export const automationIntegrationVerificationSchema = z.strictObject({ mcp: z.boolean(), nativeApi: z.boolean() });
 export type AutomationIntegrationVerification = z.infer<typeof automationIntegrationVerificationSchema>;
-export function automationIntegrationSupportsMcp(config: AutomationIntegrationConfig): boolean { return config.readTools.length + config.writeTools.length > 0; }
+export function automationIntegrationSupportsMcp(config: AutomationIntegrationConfig): boolean { return config.mcpDefinition !== undefined && config.readTools.length + config.writeTools.length > 0; }
 export function automationIntegrationSupportsNativeApi(config: AutomationIntegrationConfig): boolean { return (config.provider === 'github' || config.provider === 'gitlab') && config.nativeApi !== undefined; }
 export const automationIntegrationSaveSchema = z.strictObject({ ...revision, config: automationIntegrationConfigSchema,
-  /** Omit to keep current credentials. Empty object deliberately clears them. Never returned. */
-  privateHeaders: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), z.string().max(8192)).optional(),
+  /** Native API credentials only. MCP secrets belong exclusively to the managed definition. Omit to retain; {} clears. */
+  nativePrivateHeaders: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), z.string().max(8192)).optional(),
 });
 export const automationIntegrationMutationSchema = z.strictObject(revision);
-export type AutomationIntegrationConnection = AutomationIntegrationConfig & { id: string; revision: number; status: 'configured' | 'verified' | 'error' | 'revoked'; verification: AutomationIntegrationVerification; hasCredentials: boolean; lastCheckedAt: string | null; lastError: string | null; createdAt: string; updatedAt: string };
+export type AutomationIntegrationConnection = AutomationIntegrationConfig & { id: string; revision: number; status: 'configured' | 'verified' | 'error' | 'revoked'; verification: AutomationIntegrationVerification; hasCredentials: boolean; mcpConfigFingerprint: string | null; lastCheckedAt: string | null; lastError: string | null; createdAt: string; updatedAt: string };
 export type AutomationIntegrationList = { providers: typeof automationIntegrationProviders; connections: AutomationIntegrationConnection[]; privateStorageAvailable: boolean };
 export const automationEventVerificationSchema = z.enum(['key', 'hmac_sha256_hex', 'standard_webhooks', 'slack_v0']);
 export type AutomationEventVerification = z.infer<typeof automationEventVerificationSchema>;

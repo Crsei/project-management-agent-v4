@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { globSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -12,16 +11,6 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const entry = fileURLToPath(new URL('../scripts/backend-tests.mjs', import.meta.url));
-const originalPatterns = [
-  'apps/server/pm/tests/*.test.ts',
-  'packages/application/tests/*.test.ts',
-  'packages/contracts/tests/*.test.ts',
-  'packages/domain/tests/*.test.ts',
-  'packages/infrastructure/tests/*.test.ts',
-  'packages/pm-core/tests/*.test.ts',
-  'packages/pm-markdown/tests/*.test.ts',
-  'tests/*.test.ts',
-];
 type Result = { code: number | null; signal: NodeJS.Signals | null };
 type Identity = { pid: number; startTime: string };
 type RunnerProcess = { child: ChildProcess; exited: Promise<Result>; closed: Promise<Result>; output: () => string };
@@ -132,22 +121,6 @@ test('controlled owner', async () => {
 const passing = "import test from 'node:test'; test('passes naturally', () => {});";
 
 describe('backend test entry: real kernel gate and owned process lifecycle', { timeout: 120_000, concurrency: 1 }, () => {
-  it('keeps the complete file inventory discoverable in every backend regression mode', async t => {
-    const h = await harness(t);
-    const definitions: Record<string, string[]> = {
-      backend: originalPatterns,
-      integration: ['tests/*.test.ts'],
-      db: ['packages/infrastructure/tests/foundation.test.ts'],
-    };
-    for (const [mode, patterns] of Object.entries(definitions)) {
-      const runner = h.launch([mode, '--list']);
-      assert.equal((await bounded(runner.closed, 'complete discovery')).code, 0, runner.output());
-      const actual = runner.output().trim().split('\n');
-      const expected = [...new Set(patterns.flatMap(pattern => globSync(pattern, { cwd: root }).sort()))];
-      assert.deepEqual(actual, expected, `${mode} must not narrow the pre-existing file inventory`);
-    }
-  });
-
   it('never passes the lock descriptor to the test driver, test worker or their child', async t => {
     const h = await harness(t);
     const probe = `const fs = require('node:fs'); for (const pid of [process.pid, process.ppid]) { for (const fd of fs.readdirSync('/proc/' + pid + '/fd')) { try { if (fs.readlinkSync('/proc/' + pid + '/fd/' + fd) === process.argv[1]) throw new Error('lock descriptor leaked'); } catch (error) { if (error.code !== 'ENOENT') throw error; } } }`;

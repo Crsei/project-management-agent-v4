@@ -1412,6 +1412,15 @@
       "target": "apps/server/agent/src/mcp-apps/routes.ts"
     },
     {
+      "source": "apps/server/agent/src/app.ts",
+      "line": 20,
+      "specifier": "./extensions/index.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/server/agent/src/extensions/index.ts"
+    },
+    {
       "source": "apps/server/agent/src/automation-execution/provider-tools.test.ts",
       "line": 1,
       "specifier": "node:assert/strict",
@@ -1477,11 +1486,11 @@
     {
       "source": "apps/server/agent/src/automation-execution/provider-tools.ts",
       "line": 4,
-      "specifier": "../../../../../packages/contracts/src/automation-pm-catalog.ts",
+      "specifier": "../../../../../packages/contracts/src/automation-pm.ts",
       "kind": "import",
       "usage": "runtime",
       "disposition": "pm-host-boundary",
-      "target": "packages/contracts/src/automation-pm-catalog.ts"
+      "target": "packages/contracts/src/automation-pm.ts"
     },
     {
       "source": "apps/server/agent/src/automation-execution/provider-tools.ts",
@@ -2197,7 +2206,7 @@
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
       "line": 3,
-      "specifier": "node:fs",
+      "specifier": "node:child_process",
       "kind": "import",
       "usage": "runtime",
       "disposition": "node-builtin",
@@ -2206,7 +2215,7 @@
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
       "line": 4,
-      "specifier": "node:os",
+      "specifier": "node:fs",
       "kind": "import",
       "usage": "runtime",
       "disposition": "node-builtin",
@@ -2215,7 +2224,7 @@
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
       "line": 5,
-      "specifier": "node:path",
+      "specifier": "node:os",
       "kind": "import",
       "usage": "runtime",
       "disposition": "node-builtin",
@@ -2224,7 +2233,7 @@
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
       "line": 6,
-      "specifier": "node:sqlite",
+      "specifier": "node:path",
       "kind": "import",
       "usage": "runtime",
       "disposition": "node-builtin",
@@ -2233,7 +2242,7 @@
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
       "line": 7,
-      "specifier": "node:test",
+      "specifier": "node:sqlite",
       "kind": "import",
       "usage": "runtime",
       "disposition": "node-builtin",
@@ -2242,6 +2251,15 @@
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
       "line": 8,
+      "specifier": "node:test",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "node-builtin",
+      "target": null
+    },
+    {
+      "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
+      "line": 9,
       "specifier": "effect/Effect",
       "kind": "import",
       "usage": "runtime",
@@ -2250,7 +2268,7 @@
     },
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
-      "line": 9,
+      "line": 10,
       "specifier": "effect/Option",
       "kind": "import",
       "usage": "runtime",
@@ -2259,7 +2277,7 @@
     },
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
-      "line": 10,
+      "line": 11,
       "specifier": "./agent-backup.ts",
       "kind": "import",
       "usage": "runtime",
@@ -2268,7 +2286,7 @@
     },
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
-      "line": 11,
+      "line": 12,
       "specifier": "../providers/instances.ts",
       "kind": "import",
       "usage": "runtime",
@@ -2277,12 +2295,21 @@
     },
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
-      "line": 12,
+      "line": 13,
       "specifier": "../providers/t3code/credentials.ts",
       "kind": "import",
       "usage": "runtime",
       "disposition": "pm-host-boundary",
       "target": "apps/server/agent/src/providers/t3code/credentials.ts"
+    },
+    {
+      "source": "apps/server/agent/src/maintenance/agent-backup.test.ts",
+      "line": 14,
+      "specifier": "../../../../../packages/pm-core/private-path.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "packages/pm-core/private-path.ts"
     },
     {
       "source": "apps/server/agent/src/maintenance/agent-backup.ts",
@@ -2346,6 +2373,33 @@
       "usage": "runtime",
       "disposition": "pm-host-boundary",
       "target": "apps/server/agent/src/usage/hubs.ts"
+    },
+    {
+      "source": "apps/server/agent/src/maintenance/agent-backup.ts",
+      "line": 12,
+      "specifier": "../../../../../packages/pm-core/private-path.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "packages/pm-core/private-path.ts"
+    },
+    {
+      "source": "apps/server/agent/src/maintenance/agent-backup.ts",
+      "line": 13,
+      "specifier": "../../../../../packages/pm-core/platform.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "packages/pm-core/platform.ts"
+    },
+    {
+      "source": "apps/server/agent/src/maintenance/agent-backup.ts",
+      "line": 14,
+      "specifier": "../../../../../packages/pm-core/windows-reparse.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "packages/pm-core/windows-reparse.ts"
     },
     {
       "source": "apps/server/agent/src/mcp-apps/assets.ts",
@@ -7147,6 +7201,15 @@
     {
       "source": "apps/server/pm/src/app.ts",
       "line": 43,
+      "specifier": "./instance-setup-routes.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/server/pm/src/instance-setup-routes.ts"
+    },
+    {
+      "source": "apps/server/pm/src/app.ts",
+      "line": 44,
       "specifier": "../../../../packages/application/src/team-directory.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7155,7 +7218,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 44,
+      "line": 45,
       "specifier": "../../../../packages/application/src/team-workload.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7164,7 +7227,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 45,
+      "line": 46,
       "specifier": "./workspace-identity-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7173,7 +7236,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 46,
+      "line": 47,
       "specifier": "./account-security-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7182,7 +7245,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 47,
+      "line": 48,
       "specifier": "../../../../packages/application/src/task-comments.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7191,7 +7254,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 48,
+      "line": 49,
       "specifier": "../../../../packages/domain/src/task-comments.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7200,7 +7263,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 49,
+      "line": 50,
       "specifier": "../../../../packages/infrastructure/src/account-recovery-mail.ts",
       "kind": "import",
       "usage": "type-only",
@@ -7209,7 +7272,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 50,
+      "line": 51,
       "specifier": "../../../../packages/infrastructure/src/webhook-config.ts",
       "kind": "import",
       "usage": "type-only",
@@ -7218,7 +7281,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 51,
+      "line": 52,
       "specifier": "../../../../packages/application/src/service-facts.ts",
       "kind": "import",
       "usage": "type-only",
@@ -7227,7 +7290,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 52,
+      "line": 53,
       "specifier": "../../../../packages/pm-core/readonly.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7236,7 +7299,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 53,
+      "line": 54,
       "specifier": "./core-fact-importer.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7245,7 +7308,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 54,
+      "line": 55,
       "specifier": "./notification-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7254,7 +7317,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 55,
+      "line": 56,
       "specifier": "./account-recovery-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7263,7 +7326,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 56,
+      "line": 57,
       "specifier": "./webhook-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7272,7 +7335,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 57,
+      "line": 58,
       "specifier": "./artifact-files-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7281,7 +7344,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 58,
+      "line": 59,
       "specifier": "./agent-tool-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7290,7 +7353,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 59,
+      "line": 60,
       "specifier": "./agent-core-files-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7299,7 +7362,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 60,
+      "line": 61,
       "specifier": "./agent-reference-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7308,7 +7371,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 61,
+      "line": 62,
       "specifier": "./agent-capability-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7317,7 +7380,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 62,
+      "line": 63,
       "specifier": "./agent-issue-search-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7326,7 +7389,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 63,
+      "line": 64,
       "specifier": "./agent-preview-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7335,7 +7398,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 64,
+      "line": 65,
       "specifier": "./automation-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7344,7 +7407,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 65,
+      "line": 66,
       "specifier": "./automation-studio-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7353,7 +7416,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 66,
+      "line": 67,
       "specifier": "./automation-git-sync-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7362,7 +7425,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 67,
+      "line": 68,
       "specifier": "./automation-events-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7371,7 +7434,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 68,
+      "line": 69,
       "specifier": "./automation-pm-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7380,7 +7443,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 69,
+      "line": 70,
       "specifier": "./automation-pm-mutations.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7389,7 +7452,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 70,
+      "line": 71,
       "specifier": "../../../../packages/application/src/automation-studio.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7398,7 +7461,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 71,
+      "line": 72,
       "specifier": "../../../../packages/application/src/automation-studio-auth.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7407,7 +7470,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 72,
+      "line": 73,
       "specifier": "../../../../packages/infrastructure/src/automation-execution-client.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7416,7 +7479,16 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 73,
+      "line": 74,
+      "specifier": "../../../../packages/infrastructure/src/automation-integrations-definitions.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "packages/infrastructure/src/automation-integrations-definitions.ts"
+    },
+    {
+      "source": "apps/server/pm/src/app.ts",
+      "line": 75,
       "specifier": "../../../../packages/contracts/src/automation-studio.ts",
       "kind": "import",
       "usage": "type-only",
@@ -7425,7 +7497,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 74,
+      "line": 76,
       "specifier": "./agent-file-area-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7434,7 +7506,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 75,
+      "line": 77,
       "specifier": "./document-source-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7443,7 +7515,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 76,
+      "line": 78,
       "specifier": "./workflow-task-transition-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7452,7 +7524,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 77,
+      "line": 79,
       "specifier": "./agent-chat-tools.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7461,7 +7533,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 78,
+      "line": 80,
       "specifier": "../../../../packages/contracts/src/artifact-files.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7470,7 +7542,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 79,
+      "line": 81,
       "specifier": "../../../../packages/infrastructure/src/project-blobs.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7479,7 +7551,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 80,
+      "line": 82,
       "specifier": "../../../../packages/pm-core/project-locations.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7488,7 +7560,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 81,
+      "line": 83,
       "specifier": "../../../../packages/application/src/local-projects.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7497,7 +7569,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 82,
+      "line": 84,
       "specifier": "../../../../packages/infrastructure/src/local-project-storage-maintenance.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7597,52 +7669,7 @@
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
       "line": 26,
-      "specifier": "@agent-workspace/contracts/provider",
-      "kind": "import",
-      "usage": "type-only",
-      "disposition": "pm-host-package",
-      "target": null
-    },
-    {
-      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
-      "line": 27,
-      "specifier": "@agent-workspace/client-runtime/providers",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "pm-host-package",
-      "target": null
-    },
-    {
-      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
-      "line": 28,
-      "specifier": "@agent/lib/utils",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "external-package",
-      "target": null
-    },
-    {
-      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
-      "line": 29,
-      "specifier": "@agent/src/settings/browser-preferences",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "external-package",
-      "target": null
-    },
-    {
-      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
-      "line": 30,
-      "specifier": "@agent/src/i18n",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "external-package",
-      "target": null
-    },
-    {
-      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
-      "line": 31,
-      "specifier": "@agent/src/chat/cancel-generation",
+      "specifier": "@/components/ui/context-menu",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -7651,25 +7678,25 @@
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
       "line": 32,
-      "specifier": "@agent/src/chat/output-timeline",
+      "specifier": "@agent-workspace/contracts/provider",
       "kind": "import",
-      "usage": "runtime",
-      "disposition": "external-package",
+      "usage": "type-only",
+      "disposition": "pm-host-package",
       "target": null
     },
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
       "line": 33,
-      "specifier": "@agent/src/chat/remote-adapter",
+      "specifier": "@agent-workspace/client-runtime/providers",
       "kind": "import",
       "usage": "runtime",
-      "disposition": "external-package",
+      "disposition": "pm-host-package",
       "target": null
     },
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
       "line": 34,
-      "specifier": "@agent/src/chat/response-streaming",
+      "specifier": "@agent/lib/utils",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -7678,7 +7705,7 @@
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
       "line": 35,
-      "specifier": "@agent/src/usage/ComposerUsage",
+      "specifier": "@agent/src/settings/browser-preferences",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -7687,7 +7714,7 @@
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
       "line": 36,
-      "specifier": "@agent/src/usage/ComposerUsageModel",
+      "specifier": "@agent/src/i18n",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -7696,7 +7723,7 @@
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
       "line": 37,
-      "specifier": "@agent/src/chat/provider-skills-composer",
+      "specifier": "@agent/src/chat/cancel-generation",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -7705,6 +7732,60 @@
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
       "line": 38,
+      "specifier": "@agent/src/chat/output-timeline",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
+      "line": 39,
+      "specifier": "@agent/src/chat/remote-adapter",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
+      "line": 40,
+      "specifier": "@agent/src/chat/response-streaming",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
+      "line": 41,
+      "specifier": "@agent/src/usage/ComposerUsage",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
+      "line": 42,
+      "specifier": "@agent/src/usage/ComposerUsageModel",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
+      "line": 43,
+      "specifier": "@agent/src/chat/provider-skills-composer",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
+      "line": 44,
       "specifier": "@assistant-ui/react",
       "kind": "import",
       "usage": "runtime",
@@ -7713,7 +7794,7 @@
     },
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
-      "line": 51,
+      "line": 57,
       "specifier": "lucide-react",
       "kind": "import",
       "usage": "runtime",
@@ -7722,7 +7803,7 @@
     },
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
-      "line": 68,
+      "line": 74,
       "specifier": "react",
       "kind": "import",
       "usage": "runtime",
@@ -7731,7 +7812,7 @@
     },
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
-      "line": 69,
+      "line": 75,
       "specifier": "./composer-layout.module.css",
       "kind": "import",
       "usage": "runtime",
@@ -7908,6 +7989,24 @@
       "usage": "runtime",
       "disposition": "vendored-source",
       "target": "apps/web/src/features/agent/src/settings/mcp-clients-page.tsx"
+    },
+    {
+      "source": "apps/web/src/features/agent/src/app.tsx",
+      "line": 21,
+      "specifier": "./settings/extensions-page",
+      "kind": "dynamic-import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/web/src/features/agent/src/settings/extensions-page.tsx"
+    },
+    {
+      "source": "apps/web/src/features/agent/src/app.tsx",
+      "line": 22,
+      "specifier": "./settings/extensions-page",
+      "kind": "dynamic-import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/web/src/features/agent/src/settings/extensions-page.tsx"
     },
     {
       "source": "apps/web/src/features/agent/src/chat/mcp-app-document-bridge.ts",
@@ -8182,7 +8281,7 @@
     {
       "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
       "line": 4,
-      "specifier": "@assistant-ui/react",
+      "specifier": "react-router-dom",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8191,7 +8290,7 @@
     {
       "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
       "line": 5,
-      "specifier": "@agent/hooks/use-chat-settings",
+      "specifier": "@assistant-ui/react",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8200,6 +8299,15 @@
     {
       "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
       "line": 6,
+      "specifier": "@agent/hooks/use-chat-settings",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
+      "line": 7,
       "specifier": "@agent-workspace/contracts/provider",
       "kind": "import",
       "usage": "type-only",
@@ -8208,7 +8316,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 7,
+      "line": 8,
       "specifier": "@agent-workspace/contracts/chat",
       "kind": "import",
       "usage": "type-only",
@@ -8217,7 +8325,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 8,
+      "line": 9,
       "specifier": "@agent-workspace/client-runtime",
       "kind": "import",
       "usage": "runtime",
@@ -8226,7 +8334,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 9,
+      "line": 10,
       "specifier": "../pm/state",
       "kind": "import",
       "usage": "runtime",
@@ -8235,7 +8343,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 10,
+      "line": 11,
       "specifier": "../network",
       "kind": "import",
       "usage": "runtime",
@@ -8244,7 +8352,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 11,
+      "line": 12,
       "specifier": "../i18n",
       "kind": "import",
       "usage": "runtime",
@@ -8253,7 +8361,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 12,
+      "line": 13,
       "specifier": "./provider-skills.css",
       "kind": "import",
       "usage": "runtime",
@@ -8389,7 +8497,7 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 6,
-      "specifier": "@agent/components/ui/button",
+      "specifier": "@/components/dovspace-brand",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8398,7 +8506,7 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 7,
-      "specifier": "@agent/components/ui/input",
+      "specifier": "@agent/components/ui/button",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8407,7 +8515,7 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 8,
-      "specifier": "@agent/components/ui/dialog",
+      "specifier": "@agent/components/ui/input",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8416,7 +8524,7 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 9,
-      "specifier": "@agent/components/assistant-ui/elements/thread.aui",
+      "specifier": "@agent/components/ui/dialog",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8425,7 +8533,7 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 10,
-      "specifier": "@agent/hooks/use-chat-settings",
+      "specifier": "@agent/components/assistant-ui/elements/thread.aui",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8434,7 +8542,7 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 11,
-      "specifier": "@agent/hooks/use-mobile",
+      "specifier": "@agent/hooks/use-chat-settings",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8443,6 +8551,15 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 12,
+      "specifier": "@agent/hooks/use-mobile",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
+      "line": 13,
       "specifier": "../chat/continuity",
       "kind": "import",
       "usage": "runtime",
@@ -8451,7 +8568,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 13,
+      "line": 14,
       "specifier": "../usage/navigation",
       "kind": "import",
       "usage": "runtime",
@@ -8460,7 +8577,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 14,
+      "line": 15,
       "specifier": "../chat/remote-adapter",
       "kind": "import",
       "usage": "runtime",
@@ -8469,7 +8586,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 15,
+      "line": 16,
       "specifier": "../chat/pm-tool-calls",
       "kind": "import",
       "usage": "runtime",
@@ -8478,7 +8595,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 16,
+      "line": 17,
       "specifier": "./file-area-dialog",
       "kind": "import",
       "usage": "runtime",
@@ -8487,7 +8604,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 17,
+      "line": 18,
       "specifier": "./inspector",
       "kind": "import",
       "usage": "runtime",
@@ -8496,7 +8613,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 18,
+      "line": 19,
       "specifier": "./thread-details-panel",
       "kind": "import",
       "usage": "runtime",
@@ -8505,7 +8622,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 19,
+      "line": 20,
       "specifier": "./terminal-drawer",
       "kind": "import",
       "usage": "runtime",
@@ -8514,7 +8631,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 20,
+      "line": 21,
       "specifier": "./product-switcher",
       "kind": "import",
       "usage": "runtime",
@@ -8523,7 +8640,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 21,
+      "line": 22,
       "specifier": "./user-menu",
       "kind": "import",
       "usage": "runtime",
@@ -8532,7 +8649,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 22,
+      "line": 23,
       "specifier": "./sidebar-project-chooser",
       "kind": "import",
       "usage": "runtime",
@@ -8541,7 +8658,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 23,
+      "line": 24,
       "specifier": "./drafts",
       "kind": "import",
       "usage": "runtime",
@@ -8550,7 +8667,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 24,
+      "line": 25,
       "specifier": "./session-menu",
       "kind": "import",
       "usage": "runtime",
@@ -8559,7 +8676,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 25,
+      "line": 26,
       "specifier": "./pm-issue-workspace",
       "kind": "import",
       "usage": "runtime",
@@ -8568,7 +8685,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 26,
+      "line": 27,
       "specifier": "./pm-issue-picker-host",
       "kind": "import",
       "usage": "runtime",
@@ -8577,7 +8694,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 27,
+      "line": 28,
       "specifier": "./pm-composer-references",
       "kind": "import",
       "usage": "runtime",
@@ -8586,7 +8703,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 28,
+      "line": 29,
       "specifier": "./sidebar-visit",
       "kind": "import",
       "usage": "runtime",
@@ -8595,7 +8712,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 29,
+      "line": 30,
       "specifier": "../network",
       "kind": "import",
       "usage": "runtime",
@@ -8604,7 +8721,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 30,
+      "line": 31,
       "specifier": "../i18n",
       "kind": "import",
       "usage": "runtime",
@@ -8613,7 +8730,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 31,
+      "line": 32,
       "specifier": "../i18n-text.ts",
       "kind": "import",
       "usage": "runtime",
@@ -8622,7 +8739,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 32,
+      "line": 33,
       "specifier": "@agent-workspace/contracts/chat",
       "kind": "import",
       "usage": "type-only",
@@ -8631,7 +8748,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 33,
+      "line": 34,
       "specifier": "../settings/session-settings-dialog",
       "kind": "import",
       "usage": "runtime",
@@ -8640,7 +8757,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 34,
+      "line": 35,
       "specifier": "../settings/input-preferences",
       "kind": "import",
       "usage": "runtime",
@@ -8649,7 +8766,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 35,
+      "line": 36,
       "specifier": "../workspace/instruction-blocks-dialog",
       "kind": "import",
       "usage": "runtime",
@@ -8658,7 +8775,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 36,
+      "line": 37,
       "specifier": "../settings/browser-preferences",
       "kind": "import",
       "usage": "runtime",
@@ -8667,7 +8784,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 37,
+      "line": 38,
       "specifier": "./state",
       "kind": "import",
       "usage": "runtime",
@@ -8676,7 +8793,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 38,
+      "line": 39,
       "specifier": "@/views/pm/dashboards-views.module.css",
       "kind": "import",
       "usage": "runtime",
@@ -8685,7 +8802,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 39,
+      "line": 40,
       "specifier": "../../styles/pm-chat.css",
       "kind": "import",
       "usage": "runtime",
@@ -8694,7 +8811,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 41,
+      "line": 42,
       "specifier": "./automation/page",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -8956,11 +9073,11 @@
     {
       "source": "apps/web/src/features/agent/src/workspace/instruction-blocks-dialog.tsx",
       "line": 9,
-      "specifier": "./skills-panel",
+      "specifier": "./instruction-blocks-panel",
       "kind": "import",
       "usage": "runtime",
       "disposition": "pm-host-boundary",
-      "target": "apps/web/src/features/agent/src/workspace/skills-panel.tsx"
+      "target": "apps/web/src/features/agent/src/workspace/instruction-blocks-panel.tsx"
     },
     {
       "source": "apps/web/src/features/agent/src/workspace/instruction-blocks-dialog.tsx",

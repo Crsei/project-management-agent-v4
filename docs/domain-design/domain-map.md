@@ -1,5 +1,7 @@
 # 领域边界与协作
 
+> 适用性：本文件保留v0.1历史提案/稳定编号，不代表完整业务Runner或旧SQL核心规则已启用。当前Markdown任务状态、审核独立性与关系语义以[已采纳ADR](../architecture/adr/0003-markdown-core.md)及[入口第七节](README.md#implementation-plan)为准；Chat thread/generation不能替代历史Session/Run模型。
+
 本文件是 [v0.1 提案](README.md) 的限界上下文划分。上下文表示语义和写入责任，不代表独立服务。
 
 ## 1. 上下文职责

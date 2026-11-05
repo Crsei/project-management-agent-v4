@@ -3,8 +3,9 @@ import { Handle, Position } from "@xyflow/react"
 import { AlertTriangle, ArrowUpRight, CalendarDays, ChevronDown, Download, Filter, FolderKanban, ListTodo, Network, SlidersHorizontal } from "lucide-react"
 import type { Entity } from "@contracts"
 import { DataTable } from "@/components/blocks/data-table"
-import { FilterCard, type FilterCondition, type FilterField } from "@/components/blocks/filter-card"
-import { WorkflowCanvas } from "@/components/blocks/workflow-canvas"
+import { FilterCard } from "@/components/blocks/filter-card"
+import type { FilterCondition, FilterField } from "@/lib/filter-model"
+import { WorkflowCanvas, type CanvasContextMenuTarget } from "@/components/blocks/workflow-canvas"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { CanvasNodeProps } from "@/components/ui/canvas-node"
@@ -19,13 +20,14 @@ import { DashboardView } from "@/views/pm/dashboard"
 import { DashboardNavigation } from "@/views/pm/dashboard-navigation"
 import { PmSearch } from "@/views/pm/presentation-page"
 import d4 from "@/views/pm/dashboard-4.module.css"
-import { QueryNotice, string, strings } from "./pm-ui"
-import type { ServiceDashboardProps } from "./service-dashboard-contract"
-import { usePlanningDashboard } from "./pm-service"
+import { allowed, QueryNotice, string, strings, writable } from "./pm-ui"
+import type { DependencyEditorTarget, ServiceDashboardProps } from "./service-dashboard-contract"
+import { usePlanningDashboard, usePmCommand, usePmService } from "./pm-service"
 import { CriticalPathPanel, MilestoneReschedule, ProjectDependenciesPanel } from "./dashboard-planning"
 import { PortfolioHealth } from "./dashboard-portfolio"
 import { SprintPlanner } from "./dashboard-sprints"
 import styles from "./service-dashboard-4.module.css"
+import { ContextMenuItem, ContextMenuLabel, ContextMenuPopup, useContextMenu } from "@/components/ui/context-menu"
 
 type StateGroup = "planned" | "working" | "done" | "other"
 type DependencyFacts = { notDone: number; unknownState: number; unavailable: number; manual: number }
@@ -72,7 +74,7 @@ const conditionMatches = (condition: FilterCondition, values: readonly string[] 
 }
 
 /** Project dependencies and task prerequisites remain separate authoritative graphs. */
-export function ServiceDashboard4({ surface, projects, issues, members, openEntity, openActivity, dependencyEditor }: ServiceDashboardProps) {
+export function ServiceDashboard4({ surface, projects, issues, members, openEntity, openActivity, renderDependencyEditor }: ServiceDashboardProps) {
   const { locale } = useI18n()
   const en = locale === "en"
   const text = useCallback((zh: string, english: string): string => en ? english : zh, [en])
@@ -83,6 +85,11 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
   const [showRail, setShowRail] = useState(true)
   const [selection, setSelection] = useState<CanvasSelection>({ nodeIds: [], edgeIds: [] })
   const [layout, setLayout] = useState<LayoutSnapshot | null>(null)
+  const { workspace } = usePmService()
+  const command = usePmCommand()
+  const [dependencyOpen, setDependencyOpen] = useState(false)
+  const [dependencyTarget, setDependencyTarget] = useState<DependencyEditorTarget>()
+  const contextMenu = useContextMenu<{ kind: "node"; item: Entity } | { kind: "edge"; item: Entity; prerequisite: Entity }>()
   const projectById = useMemo(() => new Map((projects.data ?? []).filter(project => project.kind === "project").map(project => [project.id, project])), [projects.data])
   const available = projects.data !== undefined && issues.data !== undefined
   const items = useMemo(() => available ? (issues.data ?? []).filter(item => item.kind === "work_item" && item.projectId !== null && projectById.has(item.projectId)) : [], [available, issues.data, projectById])
@@ -213,6 +220,27 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
       <div className={d4.ports}>{definition?.ports.map(port => <Handle key={port.id} id={port.id} type={port.direction === "input" ? "target" : "source"} position={port.direction === "input" ? Position.Top : Position.Right} isConnectable={false} />)}</div>
     </div>
   }, [byId, facts, projectById, text, statusLabel])
+  function openCanvasMenu(target: CanvasContextMenuTarget) {
+    if (target.kind === "node" && target.id && scope.has(target.id)) {
+      const item = byId.get(target.id)
+      if (!item) return false
+      contextMenu.openAt({ x: target.x, y: target.y }, { kind: "node", item }, target.trigger)
+      return true
+    }
+    const edge = target.kind === "edge" ? edges.find(edge => edge.id === target.id) : undefined
+    const item = edge ? byId.get(edge.target) : undefined
+    const prerequisite = edge ? byId.get(edge.source) : undefined
+    if (!item || !prerequisite) return false
+    contextMenu.openAt({ x: target.x, y: target.y }, { kind: "edge", item, prerequisite }, target.trigger)
+    return true
+  }
+  function openDependencies(item: Entity, prerequisite?: Entity) {
+    setDependencyTarget({ itemId: item.id, ...(prerequisite ? { prerequisiteId: prerequisite.id } : {}) })
+    setShowRail(true)
+    setDependencyOpen(true)
+  }
+  const menuItem = contextMenu.target && scope.has(contextMenu.target.item.id) ? byId.get(contextMenu.target.item.id) : undefined
+  const menuEditable = !!menuItem && writable(menuItem) && allowed(workspace, "planning.edit", menuItem.projectId) && !command.pending && !command.unknownCommand
 
   function exportSnapshot(): void {
     if (graphMode === "projects" ? !planning.data : !available) return
@@ -242,7 +270,7 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
   const readNotices = <div className={styles.readNotices}><QueryNotice query={projects} /><QueryNotice query={issues} />{(projects.isFetching && projects.data || issues.isFetching && issues.data) && <p role="status">{text("正在刷新；保留上次授权快照。", "Refreshing; the previous authorized snapshot is retained.")}</p>}</div>
   let ringOffset = 0
 
-  return <DashboardView {...surface}
+  return <><DashboardView {...surface}
     variant="dashboard4"
     navigation={<DashboardNavigation query={query} onQueryChange={setQuery} onPeople={surface.actions.openPeople} onActivity={openActivity} breadcrumb={<><span>{text("项目", "Projects")}</span><span aria-hidden="true">/</span><strong>{text("项目交付", "Project Delivery")}</strong></>} />}
     readModel={{ ...surface.readModel, title: graphMode === "projects" ? text("项目依赖地图", "Project Dependency Map") : text("工作项依赖地图", "Work-item Dependency Map"), description: text("项目依赖、任务前置关系和关键路径分别依据正式记录；健康评估不从任务完成率推算。", "Project dependencies, task prerequisites and critical paths use their own recorded facts. Health is not inferred from task completion."),
@@ -270,10 +298,10 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
     </nav></div>}
     showRail={showRail}
     regions={{
-      timeline: graphMode === "projects" ? <section className={`${d4.canvasCard} min-h-96 p-4`} aria-label={text("授权项目依赖画布", "Authorized project dependency canvas")} data-pm-dashboard4="canvas-card"><ProjectDependenciesPanel projectId={activeProjectId} projectIds={projectRows?.map(project => project.id)} onSelectProject={selectProject} /></section> : <section className={d4.canvasCard} aria-label={text("授权工作项依赖画布", "Authorized work-item dependency canvas")} data-pm-dashboard4="canvas-card">
+      timeline: graphMode === "projects" ? <section className={`${d4.canvasCard} min-h-96 p-4`} aria-label={text("授权项目依赖画布", "Authorized project dependency canvas")} data-pm-dashboard4="canvas-card"><ProjectDependenciesPanel projectId={activeProjectId} projectIds={projectRows?.map(project => project.id)} onSelectProject={selectProject} onOpenProject={surface.actions.openProject} /></section> : <section className={d4.canvasCard} aria-label={text("授权工作项依赖画布", "Authorized work-item dependency canvas")} data-pm-dashboard4="canvas-card">
         <div className={`${d4.canvas} ${styles.canvas}`} data-pm-dashboard4="canvas">
           {readNotices}
-          {available && rows.length > 0 && layout?.source === document ? <WorkflowCanvas key={`${JSON.stringify(document.nodes.map(node => node.id))}:${JSON.stringify(edges.map(edge => edge.id))}`} document={layout.document} definitions={definitions} selection={currentSelection} onSelectionChange={setSelection} readOnly onOpenNode={id => { if (scope.has(id)) openEntity(id) }} renderNode={renderNode} showBackground showMiniMap={false} controlsVariant="minimal-vertical" defaultInteractionMode="pan" fitViewOptions={fitViewOptions} edgePath="smoothstep" showEdgeLabels={false} showEdgeArrows={false} /> : available && rows.length === 0 ? <p className={styles.canvasMessage} role="status">{items.length ? text("没有符合筛选条件的工作项。", "No work items match these filters.") : text("当前授权项目内没有工作项。", "No work items in the authorized projects.")}</p> : available ? <p className={styles.canvasMessage} role="status">{text("正在排列真实依赖节点…", "Arranging recorded dependency nodes…")}</p> : null}
+          {available && rows.length > 0 && layout?.source === document ? <WorkflowCanvas key={`${JSON.stringify(document.nodes.map(node => node.id))}:${JSON.stringify(edges.map(edge => edge.id))}`} document={layout.document} definitions={definitions} selection={currentSelection} onSelectionChange={setSelection} readOnly onOpenNode={id => { if (scope.has(id)) openEntity(id) }} onContextMenu={openCanvasMenu} renderNode={renderNode} showBackground showMiniMap={false} controlsVariant="minimal-vertical" defaultInteractionMode="pan" fitViewOptions={fitViewOptions} edgePath="smoothstep" showEdgeLabels={false} showEdgeArrows={false} /> : available && rows.length === 0 ? <p className={styles.canvasMessage} role="status">{items.length ? text("没有符合筛选条件的工作项。", "No work items match these filters.") : text("当前授权项目内没有工作项。", "No work items in the authorized projects.")}</p> : available ? <p className={styles.canvasMessage} role="status">{text("正在排列真实依赖节点…", "Arranging recorded dependency nodes…")}</p> : null}
           {layout?.source === document && layout.grid && <p className={styles.layoutNotice} role="status">{text("依赖无法进行分层布局；当前网格仅表示位置，不表示顺序。", "A layered layout is unavailable; grid positions do not represent ordering.")}</p>}
         </div>
         <div className={d4.legend}>{stateGroups.map(group => <span key={group} className={d4.bandLabel}><span className={d4.bandDot} style={{ background: stateColors[group] }} aria-hidden="true" />{groupLabel(group)}</span>)}<span className={d4.edgeLegend}>{text("已记录前置关系", "Recorded prerequisite")}</span></div>
@@ -315,10 +343,21 @@ export function ServiceDashboard4({ surface, projects, issues, members, openEnti
           </>}
           {selectedEdge && <p className={`${d4.caption} ${styles.scopeNote}`}>{text("选中前置关系", "Selected prerequisite")}: {itemTitle(byId.get(selectedEdge.source)!)} → {itemTitle(byId.get(selectedEdge.target)!)}</p>}
           {selected && <Button variant="ghost" className={d4.selectedProject} onClick={() => openEntity(selected.id)}>{text("查看选中工作项", "Open selected work item")}<ArrowUpRight size={14} aria-hidden="true" /></Button>}
-      <Dialog><DialogTrigger render={<Button variant="outline" />}><Network size={18} aria-hidden="true" />{text("管理真实依赖", "Manage dependencies")}</DialogTrigger><DialogContent className={styles.editorDialog}><DialogTitle>{text("工作项依赖编辑器", "Work-item dependency editor")}</DialogTitle><DialogDescription>{text("仅此编辑器提交现有受权限和版本保护的依赖命令。画布筛选不修改记录。", "Only this editor submits the existing permission- and version-guarded dependency commands. Canvas filters do not modify records.")}</DialogDescription><div className={styles.editor}>{dependencyEditor}</div></DialogContent></Dialog>
+      <Dialog open={dependencyOpen} onOpenChange={setDependencyOpen}><DialogTrigger onClick={() => setDependencyTarget(undefined)} render={<Button variant="outline" />}><Network size={18} aria-hidden="true" />{text("管理真实依赖", "Manage dependencies")}</DialogTrigger><DialogContent className={styles.editorDialog}><DialogTitle>{text("工作项依赖编辑器", "Work-item dependency editor")}</DialogTitle><DialogDescription>{text("仅此编辑器提交现有受权限和版本保护的依赖命令。画布筛选不修改记录。", "Only this editor submits the existing permission- and version-guarded dependency commands. Canvas filters do not modify records.")}</DialogDescription><div className={styles.editor}>{renderDependencyEditor(dependencyTarget)}</div></DialogContent></Dialog>
         </section>}
       </aside>,
       metrics: null, distribution: null, cards: null, currentProject: null, issues: null, activity: null,
     }}
   />
+    <ContextMenuPopup menu={contextMenu} aria-label={text("工作项依赖操作", "Work-item dependency actions")}>
+      {menuItem && <>
+        <ContextMenuLabel>{contextMenu.target?.kind === "edge" ? `${itemTitle(contextMenu.target.prerequisite)} → ${itemTitle(menuItem)}` : itemTitle(menuItem)}</ContextMenuLabel>
+        <ContextMenuItem onSelect={() => openEntity(menuItem.id)}>{text("打开工作项", "Open work item")}</ContextMenuItem>
+        {contextMenu.target?.kind === "node" ? <>
+          <ContextMenuItem onSelect={() => openDependencies(menuItem)}>{text("查看前置任务", "View prerequisites")}</ContextMenuItem>
+          <ContextMenuItem disabled={!menuEditable} title={!menuEditable ? text("当前对象、权限或命令状态不允许编辑；仍可查看前置任务。", "This item, permission, or command state is read-only; prerequisites remain viewable.") : undefined} onSelect={() => openDependencies(menuItem)}>{text("管理前置任务", "Manage prerequisites")}</ContextMenuItem>
+        </> : <ContextMenuItem onSelect={() => { const target = contextMenu.target; if (target?.kind === "edge") openDependencies(menuItem, target.prerequisite) }}>{text("在现有面板中定位依赖", "Locate dependency in existing panel")}</ContextMenuItem>}
+      </>}
+    </ContextMenuPopup>
+  </>
 }

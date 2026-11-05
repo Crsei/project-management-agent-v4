@@ -11,6 +11,7 @@ import { PeopleRoleLabel } from "./people-views"
 import { PmPage, PmSearch } from "./presentation-page"
 import type { ControlledMember, MemberDirectoryViewProps } from "./people-controlled-contracts"
 import { activeMemberConditionCount, MemberDirectoryFilter, memberDirectoryFilterFields } from "./member-directory-filters"
+import { MemberDirectoryActionsMenu, MemberDirectoryContextMenu } from "./member-directory-actions"
 import styles from "./member-list-1.module.css"
 
 const presences = ["available", "away", "offline"] as const
@@ -61,12 +62,12 @@ export function MemberList1View(props: MemberDirectoryViewProps) {
   }
 
   function cell(member: ControlledMember, columnId: string) {
-    if (columnId === "member") return <Button id={`pm-member-open-${member.membershipId}`} variant="ghost" className={styles.identityButton} disabled={!capabilities.memberOpen(member)} aria-label={text(`查看 ${member.name} (${member.email || member.membershipId})`, `View ${member.name} (${member.email || member.membershipId})`)} aria-current={state.selectedId === member.membershipId ? "true" : undefined} onClick={(event) => actions.memberOpen(member, event.currentTarget)}>
+    if (columnId === "member") return <div className="flex min-w-0 items-center gap-1"><Button id={`pm-member-open-${member.membershipId}`} variant="ghost" className={styles.identityButton} disabled={!capabilities.memberOpen(member)} aria-label={text(`查看 ${member.name} (${member.email || member.membershipId})`, `View ${member.name} (${member.email || member.membershipId})`)} aria-current={state.selectedId === member.membershipId ? "true" : undefined} onClick={(event) => actions.memberOpen(member, event.currentTarget)}>
       <span className={styles.identityCell} data-pm-member={member.membershipId}>
         <span className={styles.avatarWrap} data-pm-person-avatar><Avatar name={member.name} src={member.avatarDataUrl ?? undefined} size={32} />{member.presence && <span className={styles.presenceDot} data-presence={member.presence} aria-hidden="true" />}</span>
         <span className={styles.identityText}><span className={styles.memberName} title={member.name}>{member.name}</span><span className={styles.email} title={member.email}>{member.email || text("邮箱未提供", "Email unavailable")}</span></span>
       </span>
-    </Button>
+    </Button><MemberDirectoryActionsMenu surface={props} member={member} className="shrink-0" menuClassName={styles.menu} /></div>
     if (columnId === "availability") return availability(member)
     if (columnId === "role") return <Button variant="ghost" className={styles.roleCell} disabled={loading || (!member.isOwner && !model.roles.some((role) => role.value === member.role)) || !capabilities.editRole(member)} aria-label={text(`编辑 ${member.name} (${member.membershipId}) 的角色`, `Edit role for ${member.name} (${member.membershipId})`)} onClick={(event) => actions.editRole(member, event.currentTarget)}><PeopleRoleLabel member={member} roles={model.roles} /></Button>
     if (columnId === "teams") {
@@ -126,7 +127,7 @@ export function MemberList1View(props: MemberDirectoryViewProps) {
         <Table role="table" className={`${styles.directory} ${state.comfortable ? styles.comfortable : ""}`} style={columnLayout}>
           <TableCaption>{text("成员目录", "Member directory")}</TableCaption>
           <TableHeader role="rowgroup"><TableRow role="row">{visibleColumns.map((column) => <TableHead role="columnheader" key={column.id}>{column.label}</TableHead>)}</TableRow></TableHeader>
-          <TableBody role="rowgroup">{model.members.map((member) => <TableRow role="row" key={member.membershipId} data-row-id={member.membershipId} data-member-id={member.membershipId}>{visibleColumns.map((column) => <TableCell role="cell" key={column.id}>{cell(member, column.id)}</TableCell>)}</TableRow>)}</TableBody>
+          <TableBody role="rowgroup">{model.members.map((member) => <MemberDirectoryContextMenu key={member.membershipId} surface={props} member={member}><TableRow role="row" tabIndex={0} data-row-id={member.membershipId} data-member-id={member.membershipId} aria-label={`${member.name} (${member.email || member.membershipId})`}>{visibleColumns.map((column) => <TableCell role="cell" key={column.id}>{cell(member, column.id)}</TableCell>)}</TableRow></MemberDirectoryContextMenu>)}</TableBody>
         </Table>
       </TableContainer>
     </DataRegion>

@@ -8,6 +8,7 @@ import { authorizeAutomationProject, automationSnapshot } from './automation-rep
 import { getMembership } from './access.ts';
 import { requestHash } from './kernel.ts';
 import type { AutomationIntegrationReceipt } from '../../contracts/src/automation-integrations.ts';
+import { assertAutomationIntegrationsAvailable } from '../../infrastructure/src/automation-integrations.ts';
 export type AutomationIntegrationContext = { database: () => Pool; core: NotificationCorePort };
 export async function authorizeAutomationIntegration(sql: SqlExecutor, context: AutomationIntegrationContext, actor: Actor, workspaceId: string, projectId: string, write = false, active = write): Promise<void> {
   await authorizeAutomationProject(sql, actor, workspaceId, projectId, await automationSnapshot(context.core, workspaceId), write, active);
@@ -32,7 +33,7 @@ export async function readAutomationIntegrationReceipt(sql: SqlExecutor, context
 export async function mutateAutomationIntegration<T>(context: AutomationIntegrationContext, actor: Actor, workspaceId: string, input: { requestId: string; [key: string]: unknown }, projects: string[], operation: (sql: PoolClient) => Promise<T>): Promise<T> {
   const sql = await context.database().connect(); let result: unknown; let status = 200;
   try {
-    await sql.query('BEGIN'); await lockWorkspace(sql, workspaceId); await getMembership(sql, actor, workspaceId);
+    await sql.query('BEGIN'); await assertAutomationIntegrationsAvailable(sql); await lockWorkspace(sql, workspaceId); await getMembership(sql, actor, workspaceId);
     const prior = (await sql.query<ReceiptRow>('SELECT * FROM automation_integration_receipts WHERE workspace_id=$1 AND actor_id=$2 AND request_id=$3', [workspaceId, actor.id, input.requestId])).rows[0];
     if (prior) {
       for (const projectId of prior.project_ids) await authorizeAutomationIntegration(sql, context, actor, workspaceId, projectId);

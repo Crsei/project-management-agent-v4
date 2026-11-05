@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "destination": "vendor/openhands-extensions/supplemental-inputs.json",
+  "sha256": "9bcf6d052c337b028ff86bd80790f4f5a4f23914946a64bd7b1e112b2aed728c",
+  "mode": 420,
+  "encoding": "base64",
+  "content": "ewogICJ2ZXJzaW9uIjogMSwKICAiY29tbWl0IjogImI0YTNmNDVhMjhmNmI2YzM4N2E4ZGViM2RjN2MxOGI0MzkzYzU5YzEiLAogICJyZWFzb24iOiAiQWRkaXRpb25hbCBwaW5uZWQgR2l0IGRlcGVuZGVuY2llcyBhcmUgZW5yb2xsZWQgaGVyZSBiZWZvcmUgY29weS9hZGFwdGF0aW9uLCB3aXRob3V0IGNoYW5naW5nIGFueSBvZiB0aGUgaW5pdGlhbCAyNjAgb3JpZ2luYWwgcmVjb3Jkcy4gTm8gc3VwcGxlbWVudGFsIGlucHV0cyB3ZXJlIHJlcXVlc3RlZCBhdCBjcmVhdGlvbi4iLAogICJmaWxlcyI6IFtdCn0K"
+}

@@ -1,0 +1,49 @@
+name: Repository checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Fork PR code receives no write token, protected environment or Provider/signing secrets.
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: PM / Web / Agent / Rust / contracts / sources
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.9.0'
+          run_install: false
+      - name: Install native compiler and real Linux namespace prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config bubblewrap util-linux
+      - name: Install repository-pinned Rust without changing its version
+        shell: bash
+        run: |
+          RUST_VERSION=$(node --input-type=module -e 'import fs from "node:fs"; const text=fs.readFileSync("rust-toolchain.toml","utf8"); const match=/^channel\s*=\s*"([^"]+)"/m.exec(text); if(!match) throw new Error("Missing pinned Rust channel"); process.stdout.write(match[1]);')
+          rustup toolchain install "$RUST_VERSION" --profile minimal --no-self-update
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run complete isolated repository checks
+        # Creates its own loopback-random PG16/MinIO containers and synthetic
+        # credentials; never loads .env, reuses a service or counts skips as passes.
+        # Native installers/signing and real Provider/network Skill acceptance are separate.
+        run: node scripts/check-ci.mjs

@@ -49,12 +49,21 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
-          node-version: '24.21.0'
+          node-version-file: '.node-version'
           architecture: ${{ matrix.arch }}
       - uses: pnpm/action-setup@v4
+      - name: Install the repository-pinned Rust toolchain
+        shell: bash
+        run: |
+          toolchain="$(node --input-type=module -e 'import fs from "node:fs"; const pin = /^channel\s*=\s*"(\d+\.\d+\.\d+)"\s*$/m.exec(fs.readFileSync("rust-toolchain.toml", "utf8"))?.[1]; if (!pin) throw new Error("Missing exact Rust pin"); console.log(pin)')"
+          rustup toolchain install "$toolchain" --profile minimal --no-self-update
+      - name: Configure Windows C++ compiler and SDK
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          version: '11.9.0'
-          run_install: false
+          arch: x64
+      - name: Preflight pinned build tools without installation or service access
+        run: node scripts/doctor.mjs
       - name: Install locked native runner dependencies
         run: pnpm install --frozen-lockfile
       - name: Prepare integrity-pinned offline Node and complete PostgreSQL
@@ -127,12 +136,21 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
-          node-version: '24.21.0'
+          node-version-file: '.node-version'
           architecture: ${{ matrix.arch }}
       - uses: pnpm/action-setup@v4
+      - name: Install the repository-pinned Rust toolchain
+        shell: bash
+        run: |
+          toolchain="$(node --input-type=module -e 'import fs from "node:fs"; const pin = /^channel\s*=\s*"(\d+\.\d+\.\d+)"\s*$/m.exec(fs.readFileSync("rust-toolchain.toml", "utf8"))?.[1]; if (!pin) throw new Error("Missing exact Rust pin"); console.log(pin)')"
+          rustup toolchain install "$toolchain" --profile minimal --no-self-update
+      - name: Configure Windows C++ compiler and SDK
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          version: '11.9.0'
-          run_install: false
+          arch: x64
+      - name: Preflight pinned build tools without installation or service access
+        run: node scripts/doctor.mjs
       - name: Install locked native runner dependencies
         run: pnpm install --frozen-lockfile
       - name: Prepare integrity-pinned offline Node and complete PostgreSQL

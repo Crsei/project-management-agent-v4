@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source": "src/components/shell/AppPageHeader.tsx",
+  "beforeSha256": "a6cbf15d770e181f501a468edbeb9f7e884d4059fea1e72ac43aaacbd43f9749",
+  "afterSha256": "a43edfd4c44ea57721c7f75be509bddc8e3811e292ed588f3004dc91209a6ea5",
+  "format": "exact-byte-splice-base64-no-fuzz",
+  "start": 120,
+  "before": "QC9saWIvcGxhdGZvcm0iOwppbXBvcnQgeyBjbiB9IGZyb20gIkA=",
+  "after": "Li4vLi4vbGliL3BsYXRmb3JtIjsKaW1wb3J0IHsgY24gfSBmcm9tICIuLi8uLg=="
+}

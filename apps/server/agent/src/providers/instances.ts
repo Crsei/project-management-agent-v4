@@ -5,20 +5,15 @@ import { chmodSync, closeSync, linkSync, lstatSync, mkdirSync, openSync, readFil
 import os from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import * as Effect from "effect/Effect";
-import * as NodePath from "@effect/platform-node/NodePath";
-import * as HostProcess from "@t3tools/shared/HostProcess";
-import { CodexSettings, ModelCapabilities } from "@t3tools/contracts";
+import { ModelCapabilities } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import type { Path as EffectPath } from "effect/Path";
-import { resolveCodexHomeLayout } from "../../../../../vendor/t3code/apps/server/src/provider/Drivers/CodexHomeLayout.ts";
-import { resolveClaudeHomePath } from "../../../../../vendor/t3code/apps/server/src/provider/Drivers/ClaudeHome.ts";
+import { resolveProviderNativeHome } from "./t3code/native-paths.ts";
 import { dataDirectory, projectDirectory } from "../paths.ts";
 import type { ProviderConfig, ProviderDriver, ProviderInstanceInput, ProviderInstanceUpdate, ProviderCustomModel, ProviderInstallation, ProviderModel, ProviderTestResult, ProviderModelPreferences } from "@agent-workspace/contracts/provider";
 import type { ProviderDriverContext } from "./driver-adapter.ts";
 import { getNativeProviderAdapter, nativeProviderAdapters } from "./driver-registry.ts";
 import { expandNativePath } from "./drivers/codex-config.ts";
-import { migrateCodexManagedState } from "./drivers/codex-persistence.ts";
+import { migrateCodexManagedState } from "./t3code/families/codex-persistence.ts";
 import { readPreparedAcpRegistryConfigMigration } from "./t3code/families/acp-registry-migration.ts";
 import { beginProviderMaintenance } from "./auth.ts";
 
@@ -107,22 +102,15 @@ function nativeEnvironment(env: Record<string, string>): NodeJS.ProcessEnv {
   for (const key of Object.keys(result)) if (RESERVED_ENV.test(key)) delete result[key];
   return result;
 }
+/** The native runtime's user Home authority, distinct from Codex/Claude configuration homes. */
+export function providerUserHome(instance: Pick<StoredProviderInstance, "env">, cwd = projectDirectory()): string {
+  const env = nativeEnvironment(instance.env);
+  return path.resolve(cwd, env.HOME || env.USERPROFILE || os.homedir());
+}
 function nativeHome(instanceId: string, driver: ProviderDriver, config: ProviderConfig, environment: Record<string, string>, cwd = projectDirectory()): string {
   const env = nativeEnvironment(environment);
   const home = env.HOME || env.USERPROFILE || os.homedir();
-  const resolve = <A>(effect: Effect.Effect<A, never, EffectPath>) => Effect.runSync(effect.pipe(
-    Effect.provideService(HostProcess.HomeDirectory, home),
-    Effect.provideService(HostProcess.Environment, env),
-    Effect.provideService(HostProcess.WorkingDirectory, cwd),
-    Effect.provide(NodePath.layer),
-  ));
-  if (driver === "codex") {
-    if (config.setupMode === "managed") return stateDirectory(instanceId);
-    const layout = resolve(resolveCodexHomeLayout(Schema.decodeUnknownSync(CodexSettings)(config)));
-    return layout.effectiveHomePath ?? layout.sharedHomePath;
-  }
-  if (driver === "claude") return resolve(resolveClaudeHomePath({ homePath: String(config.homePath ?? "") }, env));
-  return path.resolve(cwd, home);
+  return resolveProviderNativeHome(driver, config, env, cwd, home, stateDirectory(instanceId));
 }
 function environmentBinding(instance: StoredProviderInstance): string {
   const env = nativeEnvironment(instance.env);

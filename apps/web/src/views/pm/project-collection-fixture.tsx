@@ -17,7 +17,7 @@ import { ProjectSummaryIssues, type ProjectSummaryIssue } from "./project-list-4
 import styles from "./project-list-1.module.css"
 import { ChevronsUpDown, Filter, MoreHorizontal, Plus, SlidersHorizontal } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { type FilterCondition } from "@/components/blocks/filter-card"
+import type { FilterCondition } from "@/lib/filter-model"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"

@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowUpRight, FolderInput, Pencil, Trash2 } from 'lucide-react';
 import type { FileRecord } from '@pm-schema';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { DocumentSource, DocumentSourceAssociationScope } from '../../../../../../packages/contracts/src/document-sources';
 import type { DocumentSort, DocumentSourceFilter, DocumentTypeFilter } from './document-collection-model';
-import { buildDocumentRows, filterDocumentRows, sortDocumentRows } from './document-collection-model';
+import { buildDocumentRows, filterDocumentRows, sortDocumentRows, type DocumentRow } from './document-collection-model';
 import { useDocumentSourceFiles } from './DocumentSources';
 import type { ExternalManagementIntent, ExternalTarget } from './external-document-state';
 
@@ -31,6 +32,11 @@ export function DocumentCollection({ files, projects, workspaceId, sources, scop
     return page && page.sourceRevision === source.revision ? [{ source, entries: page.entries }] : [];
   }), projectNames, en), [files, reads, sources, projectNames, en]);
   const visible = useMemo(() => sortDocumentRows(filterDocumentRows(rows, filters), filters.sort), [rows, filters]);
+  const [menuRow, setMenuRow] = useState<DocumentRow | null>(null);
+  const openRow = (row: DocumentRow) => row.source === 'native' ? onOpenNative(row.file) : onOpenExternal({ kind: 'external', sourceId: row.sourceId, revision: row.revision, path: row.entry.path });
+  const manageRow = (row: DocumentRow, action: 'rename' | 'move' | 'delete') => {
+    if (row.source === 'external' && row.canWrite) onManageExternal({ action, target: { kind: 'external', sourceId: row.sourceId, revision: row.revision, path: row.entry.path } });
+  };
   const rowActions = [
     { action: 'rename' as const, label: en ? 'Rename' : '重命名', Icon: Pencil },
     { action: 'move' as const, label: en ? 'Move' : '移动', Icon: FolderInput },
@@ -55,15 +61,19 @@ export function DocumentCollection({ files, projects, workspaceId, sources, scop
             const updated = row.updatedAt === null ? (en ? 'Update time unavailable' : '更新时间不可用') : new Date(row.updatedAt).toLocaleString(en ? 'en-US' : 'zh-CN');
             const secondary = row.source === 'native' ? row.file.id : `${row.sourceName} · ${row.entry.path.includes('/') ? row.entry.path.slice(0, row.entry.path.lastIndexOf('/')) : '.'}`;
             const title = row.source === 'external' ? `${row.sourceName} · ${row.sourceId} · ${row.entry.path} · ${updated}` : updated;
-            return <tr key={row.key} className={row.source === 'native' ? '' : undefined}>
-              <td><button type="button" className="table-title" title={title} aria-label={`${row.title} · ${row.typeLabel} · ${row.projectLabel}`} onClick={() => row.source === 'native' ? onOpenNative(row.file) : onOpenExternal({ kind: 'external', sourceId: row.sourceId, revision: row.revision, path: row.entry.path })}><strong>{row.title}</strong>{secondary && <span className="mono">{secondary}</span>}</button></td>
+            const captured = menuRow?.key === row.key ? menuRow : row;
+            return <ContextMenu key={row.key} onOpenChange={open => { if (open) setMenuRow(row); }}><ContextMenuTrigger asChild><tr tabIndex={0} className={row.source === 'native' ? '' : undefined} aria-label={`${row.title} · ${row.typeLabel}`}>
+              <td><button type="button" className="table-title" title={title} aria-label={`${row.title} · ${row.typeLabel} · ${row.projectLabel}`} onClick={() => openRow(row)}><strong>{row.title}</strong>{secondary && <span className="mono">{secondary}</span>}</button></td>
               <td><span className="muted">{row.typeLabel}</span></td>
               <td><span className="muted" title={row.projectLabel}>{row.projectLabel}</span></td>
               {showActions && <td><div className="document-source-row-actions">
-                <button type="button" className="icon-button" title={en ? 'Open' : '打开'} aria-label={`${en ? 'Open' : '打开'} ${row.title}`} onClick={() => row.source === 'native' ? onOpenNative(row.file) : onOpenExternal({ kind: 'external', sourceId: row.sourceId, revision: row.revision, path: row.entry.path })}><ArrowUpRight size={14} aria-hidden="true" /></button>
-                {row.source === 'external' && row.canWrite && rowActions.map(({ action, label, Icon }) => <button type="button" className="icon-button" key={action} title={`${label} ${row.title}`} aria-label={`${label} ${row.title}`} onClick={() => onManageExternal({ action, target: { kind: 'external', sourceId: row.sourceId, revision: row.revision, path: row.entry.path } })}><Icon size={14} aria-hidden="true" /></button>)}
+                <button type="button" className="icon-button" title={en ? 'Open' : '打开'} aria-label={`${en ? 'Open' : '打开'} ${row.title}`} onClick={() => openRow(row)}><ArrowUpRight size={14} aria-hidden="true" /></button>
+                {row.source === 'external' && row.canWrite && rowActions.map(({ action, label, Icon }) => <button type="button" className="icon-button" key={action} title={`${label} ${row.title}`} aria-label={`${label} ${row.title}`} onClick={() => manageRow(row, action)}><Icon size={14} aria-hidden="true" /></button>)}
               </div></td>}
-            </tr>;
+            </tr></ContextMenuTrigger><ContextMenuContent aria-label={captured.title}>
+              <ContextMenuItem onSelect={() => openRow(captured)}><ArrowUpRight size={14} />{en ? 'Open' : '打开'}</ContextMenuItem>
+              {captured.source === 'external' && <><ContextMenuSeparator />{rowActions.map(({ action, label, Icon }) => <ContextMenuItem key={action} disabled={!captured.canWrite} title={!captured.canWrite ? en ? 'This source is read only' : '此来源为只读' : undefined} onSelect={() => manageRow(captured, action)}><Icon size={14} />{label}</ContextMenuItem>)}</>}
+            </ContextMenuContent></ContextMenu>;
           })}</tbody>
         </table>
       </div>

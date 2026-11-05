@@ -8,7 +8,7 @@ import type { ProviderSkillsSnapshot } from "@agent-workspace/contracts/provider
 import type { PmProviderHostService } from "./t3code/contract.ts";
 import type { PmProviderApplication } from "./t3code/application.ts";
 import { bindPmProviderApplicationAccess } from "./t3code/application-access.ts";
-import { makePmProviderManagement } from "./t3code/management.ts";
+import { invalidateProviderSkillsSnapshots, makePmProviderManagement } from "./t3code/management.ts";
 import { getStoredInstance, updateProviderInstance } from "./instances.ts";
 import { providerRoutes } from "./routes.ts";
 
@@ -21,6 +21,8 @@ test("skills route uses PM scope and instance revision, retaining native states 
   const originalFetch = globalThis.fetch;
   process.env.AGENT_WORKSPACE_DATA_DIR = root;
   let scans = 0;
+  let cacheInvalidations = 0;
+  let duringScan: (() => void) | undefined;
   let fail = false;
   let deny = false;
   globalThis.fetch = async (_input, init) => {
@@ -33,8 +35,10 @@ test("skills route uses PM scope and instance revision, retaining native states 
       assertCurrent: Effect.suspend(() => getStoredInstance(context.instanceId)?.revision === context.revision
         ? Effect.void : Effect.fail(Object.assign(new Error("configuration changed"), { status: 409, code: "session_mismatch" }))),
       instance: {
+        invalidateCaches: Effect.sync(() => { cacheInvalidations++; }),
         snapshotForCwd: (cwd: string) => Effect.suspend(() => {
           scans++;
+          duringScan?.();
           return fail ? Effect.fail(new Error("native scan failed")) : Effect.succeed({
             status: "ready", skills: [{ name: path.basename(cwd), path: "native:virtual", enabled: false, userInvocable: false }],
             slashCommands: [{ name: "native", input: { hint: "args" } }], slashCommandsPending: false,
@@ -62,6 +66,22 @@ test("skills route uses PM scope and instance revision, retaining native states 
     const b: ProviderSkillsSnapshot = await second.json();
     assert.equal(b.skills[0]?.name, "two");
     assert.equal(scans, 2);
+    const revisionBeforeMutation = getStoredInstance("codex")!.revision;
+    const changed = invalidateProviderSkillsSnapshots(["codex"], "install_skill_unified");
+    const refreshedOne: ProviderSkillsSnapshot = await (await call("one")).json();
+    const refreshedTwo: ProviderSkillsSnapshot = await (await call("two")).json();
+    assert.equal(scans, 4, "both scoped/cwd snapshots must be invalidated");
+    assert.deepEqual(refreshedOne.nativeConfiguration, changed);
+    assert.deepEqual(refreshedTwo.nativeConfiguration, changed);
+    assert.equal(changed.reloadRequired, true);
+    assert.equal(changed.liveExecutionsPreserved, true);
+    assert.equal(getStoredInstance("codex")!.revision, revisionBeforeMutation, "a skill mutation is not an account/config reset");
+    assert.ok(cacheInvalidations >= 2, "each changed scope refresh must invalidate source discovery caches");
+    duringScan = () => { invalidateProviderSkillsSnapshots(["codex"], "toggle_skill_app"); };
+    const superseded = await call("one", true);
+    assert.equal(superseded.status, 409, "a scan crossing a configuration mutation cannot publish an old inventory");
+    duringScan = undefined;
+    await call("one");
     fail = true;
     const failed = await call("one", true);
     const failure: ProviderSkillsSnapshot = await failed.json();
@@ -73,7 +93,7 @@ test("skills route uses PM scope and instance revision, retaining native states 
     const revised = await call("one");
     const newSnapshot: ProviderSkillsSnapshot = await revised.json();
     assert.notEqual(newSnapshot.revision, a.revision);
-    assert.equal(scans, 4);
+    assert.equal(scans, 8);
     deny = true;
     assert.equal((await call("one")).status, 403);
     const invalid = await providerRoutes.request("/providers/codex/skills/refresh", {

@@ -49,7 +49,7 @@
 
 ## 本仓库的业务规则优先级
 
-适配时先读 [v3 范围约定](../../V3-AGENT-CHAT-TASKS.zh.md) 与 [Markdown 核心已采纳 ADR](../../docs/implementation/markdown-integration-adr.zh.md)，再按当前服务合同、能力和配置解释对象状态。
+适配时先读 [Agent 使用与边界](../../docs/guides/agent-chat.md) 与 [Markdown 核心已采纳 ADR](../../docs/architecture/adr/0003-markdown-core.md)，再按当前服务合同、能力和配置解释对象状态。
 
 [历史不变量](../../docs/domain-design/invariants.md) 和 [历史场景](../../docs/domain-design/scenarios.md) 提供追踪编号，不是所有旧规则仍生效的证明：
 

@@ -167,7 +167,17 @@ it('LP-A08: stopped real SQL/core/project/blob backup restores into entirely new
     finally {
       try { await restoredPool?.end(); }
       finally {
-        try { if (createdDatabase) await admin.query(`DROP DATABASE ${restoreDatabase}`); }
+        try {
+          if (createdDatabase) {
+            const cleanup = await admin.connect();
+            try {
+              // DROP DATABASE waits for a cluster-wide checkpoint, not an API query.
+              // Keep cleanup bounded without changing the application's 15s limit.
+              await cleanup.query("SET statement_timeout = '60s'");
+              await cleanup.query(`DROP DATABASE ${restoreDatabase}`);
+            } finally { cleanup.release(); }
+          }
+        }
         finally { await admin.end(); await f.close(); }
       }
     }

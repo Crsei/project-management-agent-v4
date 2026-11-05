@@ -10,6 +10,7 @@ import { attachTerminalUpgrade } from "./inspector/terminal.ts";
 import { startRuntime, stopRuntime } from "./runtime.ts";
 import { assertNetworkBinding } from "./access.ts";
 import { webDistDirectory } from "./paths.ts";
+import { stopExtensionHost } from "./extensions/index.ts";
 
 // Unknown API routes must never fall through to the SPA, including in API-only mode.
 app.all("/api", (c) => c.json({ error: "API route not found." }, 404));
@@ -61,7 +62,7 @@ function shutdown(): void {
   shuttingDown = true;
   const deadline = setTimeout(() => process.exit(1), 15_000);
   deadline.unref();
-  void Promise.all([stopRuntime(), appPreviews.close()]).then(
+  void Promise.all([stopRuntime(), appPreviews.close(), stopExtensionHost()]).then(
     () => {
       server.close(() => process.exit(0));
       if ("closeAllConnections" in server) server.closeAllConnections();

@@ -1,5 +1,7 @@
 # 实体、聚合与关系
 
+> 适用性：本文件保留v0.1历史提案/稳定编号，不代表完整业务Runner或旧SQL核心规则已启用。当前Markdown任务状态、审核独立性与关系语义以[已采纳ADR](../architecture/adr/0003-markdown-core.md)及[入口第七节](README.md#implementation-plan)为准；Chat thread/generation不能替代历史Session/Run模型。
+
 本文件是 [v0.1 提案](README.md)。字段表示业务信息要求，不是数据库 DDL。所有身份均用不透明 ID；跨上下文只保存引用及必要快照。
 
 ## 1. 通用约束

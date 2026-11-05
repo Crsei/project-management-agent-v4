@@ -21,6 +21,8 @@ import type { WebhookOverview, WebhookDeliveryPage, WebhookDeliveryDetail } from
 import { AccountRecoveryClient } from './account-recovery-client.ts';
 import { createLocalProjectClient } from './local-project-client.ts';
 import { createAgentContextClient } from './agent-file-area-client.ts';
+import type { InstanceSetupStatus, SetupRequest, SetupResponse } from './instance-setup.ts';
+export type { InstanceSetupStatus, SetupRequest, SetupResponse } from './instance-setup.ts';
 export type { DashboardRecord } from '../../domain/src/dashboard.ts';
 export type { PersonalDashboard, SelfProfile, PrivateNote, PrivateNoteData, TaskWatch, TaskWatchData, ProjectMeeting, ProjectMeetingData, MeetingParticipant } from '../../domain/src/dashboard-personal.ts';
 export type { TimeDashboard, TimeTimer, TimeWorklog, TimeTotals, TimePeriodTotal, TimeTaskReference, PresencePreference, PresenceStatus, PresenceMember, PresenceSelf, TimerData, WorklogData, PresencePreferenceData, PresenceHeartbeatData } from '../../domain/src/dashboard-time.ts';
@@ -267,6 +269,8 @@ export class ProjectManagementClient {
   getReadiness(options?: RequestOptions) { return this.#json<Readiness>('GET', '/health/ready', options, undefined, undefined, [503]); }
   getCapabilities(options?: RequestOptions) { return this.#json<Capabilities>('GET', '/api/v1/capabilities', options); }
   getOpenApi(options?: RequestOptions) { return this.#json<Record<string, unknown>>('GET', '/openapi.json', options); }
+  setupStatus(options?: RequestOptions) { return this.#json<InstanceSetupStatus>('GET', '/api/v1/setup/status', options); }
+  setup(input: SetupRequest, options?: RequestOptions) { return this.#json<SetupResponse>('POST', '/api/v1/setup', options, input); }
   login(credentials: { email: string; password: string }, options?: RequestOptions) { return this.#json<{ actor: Actor; expiresAt: string }>('POST', '/api/v1/auth/login', options, credentials); }
   logout(options?: RequestOptions) { return this.#json<{ loggedOut: true }>('POST', '/api/v1/auth/logout', options); }
   getMe(options?: RequestOptions) { return this.#json<{ actor: Actor }>('GET', '/api/v1/auth/me', options); }
