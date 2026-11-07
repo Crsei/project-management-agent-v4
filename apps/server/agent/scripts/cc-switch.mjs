@@ -99,7 +99,8 @@ export async function buildSidecar(outputRoot) {
   if (!binary.length) throw new Error("Cargo produced an empty sidecar executable.");
   const destination = path.resolve(outputRoot, "cc-switch", target.target);
   if (await lstat(destination).catch((error) => { if (error.code === "ENOENT") return null; throw error; })) throw new Error("cc-switch native staging destination already exists; refusing replacement.");
-  const assets = [{ target: target.executable, bytes: binary, sha256: sha256(binary), mode: 0o755 }, ...notices.assets];
+  // Windows has no POSIX execute bits; use the same canonical mode as file().
+  const assets = [{ target: target.executable, bytes: binary, sha256: sha256(binary), mode: process.platform === "win32" ? 0o644 : 0o755 }, ...notices.assets];
   for (const relative of ["LICENSE", "LICENSING.md", "SYNC.md", "source-manifest.json", "fork-policy.json", "output-inventory.json", "resource-closure.json", "upstream-tree.json"]) {
     const bytes = (await file(repository, `vendor/cc-switch/${relative}`)).bytes;
     assets.push({ target: `licenses/provenance/vendor/cc-switch/${relative}`, bytes, sha256: sha256(bytes), mode: 0o644 });

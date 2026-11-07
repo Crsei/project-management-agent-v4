@@ -63,8 +63,8 @@
     },
     {
       "path": "apps/server/agent/scripts/cc-switch.mjs",
-      "sha256": "4670764b3bc70eccb4c6141a5816734168beb415a229b20e590c994d1c3971ad",
-      "bytes": 12080
+      "sha256": "5880bb5081226ba3f9d04ab3675e7ae8e699ba5c67df1fade486e4f6a928c048",
+      "bytes": 12198
     },
     {
       "path": "apps/desktop/package.json",
@@ -200,14 +200,14 @@
     },
     {
       "destination": "apps/server/agent/scripts/cc-switch.mjs",
-      "sha256": "4670764b3bc70eccb4c6141a5816734168beb415a229b20e590c994d1c3971ad",
-      "bytes": 12080,
+      "sha256": "5880bb5081226ba3f9d04ab3675e7ae8e699ba5c67df1fade486e4f6a928c048",
+      "bytes": 12198,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
+      "reason": "Windows native sidecar files have no POSIX execute bits; record canonical 0644 on Windows while retaining SHA256, byte count, mode and target verification. Unix executable mode remains 0755.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/scripts/cc-switch.mjs.json",
-        "sha256": "1d2eee150da6cd217a5e8670de21d298589ea408dca1461a7c1ba51b6de73334"
+        "sha256": "3a33913629cee86d243a3e58ca2feb2f4ed7067dce1088ccd97e1045174c3ae7"
       }
     },
     {
@@ -15210,7 +15210,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/scripts/cc-switch.mjs.json",
-      "sha256": "1d2eee150da6cd217a5e8670de21d298589ea408dca1461a7c1ba51b6de73334"
+      "sha256": "3a33913629cee86d243a3e58ca2feb2f4ed7067dce1088ccd97e1045174c3ae7"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/scripts/package.mjs.json",
