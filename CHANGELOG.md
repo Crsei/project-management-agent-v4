@@ -20,9 +20,10 @@
 - 已授权 MCP 客户端合并到 MCP 设置的“外部访问”分区，移除独立导航与旧页面路由；保留连接地址、PM 身份授权列表和撤销能力。部署未就绪明确提示，不隐藏历史授权管理；分区切换沿用草稿／操作保护，扩展内嵌抽屉不会遮挡离页确认。
 - 已启用 Provider 的默认分组保留独立配置库与已启动的管理进程；原位刷新保留订阅和待重新加载状态，同目录别名停用后由仍启用的实例核验完整目录归属。跨 Home 物理根重叠、已登记符号链接改指明确拒绝；不兼容的原生根及 Claude Home 路径分别管理。
 - 修复扩展配置目标切换后选择器消失；Skills 清除分配按 Agent 串行等待真实写入与核对，Config／Catalog 共用详情抽屉，MCP 目录按全部支持的传输方式筛选。
-- Agent Chat Composer 移除原生目录工具栏、原生 Skills 管理链接和用户指令块入口；输入 `$` / `/` 的原生 Skill 与命令建议、引用 chip 保留，目录仍随输入、作用域与实例变化自动读取。
+- Agent Chat Composer 移除原生目录工具栏、原生 Skills 管理链接和用户指令块入口；输入 `@` 文件、`$` 原生 Skill / `/` 命令共用一组可键盘导航的建议列表与引用 chip。文件建议按当前 Session 执行目录核验搜索，选中后插入可移除的 Markdown 文件链接；目录仍随输入、作用域与实例变化自动读取。
 - Agent Chat durable 输出时间线改用紧凑 `Trace` 行：命令、推理、工具、计划、待办、子 Agent、搜索和错误不再逐项套大卡片；终端输出保留 xterm 流式、换行和滚动，复制按钮移到右上角；Diff 使用带行号的增删行样式。执行中或失败项默认展开，成功项默认折叠。
 - Agent Chat 右侧面板采用 t3code surface 交互：Files / Git 单标签、多个 Browser 标签，以及可切换停靠位置的单一 Terminal 视图；顶部支持标签菜单、排序、最大化及窄屏抽屉。终端范围、目录、连接和终止状态明确展示；未实现 PR / Device surface 不显示。
+- Agent Chat 右侧 Files surface 按 t3code 文件展示页重做：文件树与预览分栏、可切换文件树、文件类型图标、全项目文件搜索、目录展开／折叠、面包屑、语法高亮只读源码、Markdown 渲染切换和自动换行。搜索仍按当前 Session 执行目录核验、跳过忽略目录与符号链接；二进制文件继续明确拒绝，不新增写入能力。
 - Agent Chat 的 Browser surface 改为 t3code 单行浏览器工具栏（后退/前进/刷新、地址栏、元素选择/截图/浮层/菜单）和“最近使用”入口；地址栏 Enter 打开 URL，非 URL 文本在新标签页搜索。修复 iframe 沙箱缺少 `allow-same-origin` 导致跨域 SPA 的模块脚本和样式被 CORS 拦截而白屏的问题；同源地址明确阻止预览并引导新标签页。最近记录仅保存在浏览器 localStorage，可删除或清空；跨域页面不提供元素选择、截图和浮层。
 - 桌面版新增受控 Electron `<webview>` Browser runtime：工作区 preload 仅暴露预览 IPC，主进程管理独立 preview partition、导航/标题/favicon、截图、元素选择与只读 PiP 帧流；元素选择和截图作为图片附件加入 Composer，Browser 标签标题跟随页面标题。工作区窗口启用受 `will-attach-webview` 校验的 `webviewTag`，连接窗口、guest 的 Node 能力和工作区 session 隔离保持不变；原生预览仅本地工作区启用，远程工作区继续 iframe fallback。
 - 桌面 Browser 元素选择在主框架导航时立即取消，子框架导航不误取消；关闭其他 Browser 标签不会关闭当前标签的 PiP。

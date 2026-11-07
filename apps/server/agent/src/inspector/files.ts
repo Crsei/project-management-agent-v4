@@ -5,6 +5,8 @@ import type {
   InspectorErrorBody,
   InspectorFileEntry,
   InspectorFileResponse,
+  InspectorSearchEntry,
+  InspectorSearchResponse,
   InspectorTreeResponse,
 } from "@agent-workspace/contracts/inspector";
 import {
@@ -21,6 +23,14 @@ export const DIRECTORY_ENTRY_LIMIT = 2000;
 export const FILE_READ_LIMIT = 256 * 1024;
 /** Bytes inspected when deciding whether a file is binary. */
 const BINARY_SNIFF_BYTES = 8 * 1024;
+/** Maximum query length accepted by the project-wide search. */
+export const SEARCH_QUERY_LIMIT = 256;
+/** Maximum number of matches returned by the project-wide search. */
+export const SEARCH_RESULT_LIMIT = 100;
+/** Maximum number of filesystem entries visited before the search stops. */
+export const SEARCH_SCAN_LIMIT = 20_000;
+/** Maximum number of matches collected before ranking the best results. */
+const SEARCH_MATCH_LIMIT = 500;
 
 type InspectorErrorStatus = 400 | 403 | 404 | 415 | 500;
 
@@ -174,6 +184,75 @@ async function readFile(relative: string, root: string): Promise<InspectorFileRe
   };
 }
 
+function searchRank(entry: InspectorSearchEntry, needle: string): number {
+  const name = entry.name.toLowerCase();
+  if (name === needle) return 0;
+  if (name.startsWith(needle)) return 1;
+  if (name.includes(needle)) return 2;
+  return 3;
+}
+
+/**
+ * Walk the project once and return files whose relative path contains the
+ * query. Ignored directories are skipped, symlinks are never followed, and
+ * both visited entries and matches are bounded so a large repository cannot
+ * block the inspector.
+ */
+async function searchFiles(query: string, root: string): Promise<InspectorSearchResponse> {
+  const trimmed = query.trim();
+  const needle = trimmed.toLowerCase();
+  if (!needle) return { query: "", entries: [], truncated: false };
+
+  const matches: InspectorSearchEntry[] = [];
+  const directories: string[] = [""];
+  let visited = 0;
+  let truncated = false;
+
+  while (directories.length > 0) {
+    const relative = directories.pop()!;
+    let dirents;
+    try {
+      dirents = await readdir(path.join(root, relative), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    dirents.sort((left, right) => left.name.localeCompare(right.name));
+
+    for (const dirent of dirents) {
+      visited += 1;
+      if (visited > SEARCH_SCAN_LIMIT) {
+        truncated = true;
+        break;
+      }
+      if (IGNORED_DIRECTORIES[dirent.name]) continue;
+      const childRelative = relative ? `${relative}/${dirent.name}` : dirent.name;
+      if (dirent.isDirectory()) {
+        directories.push(childRelative);
+        continue;
+      }
+      // Symbolic links are excluded from search: their targets are not
+      // guaranteed to stay inside the project root.
+      if (!dirent.isFile()) continue;
+      if (!childRelative.toLowerCase().includes(needle)) continue;
+      matches.push({ name: dirent.name, path: childRelative });
+      if (matches.length >= SEARCH_MATCH_LIMIT) {
+        truncated = true;
+        break;
+      }
+    }
+    if (truncated) break;
+  }
+
+  matches.sort(
+    (left, right) =>
+      searchRank(left, needle) - searchRank(right, needle) ||
+      left.path.length - right.path.length ||
+      left.path.localeCompare(right.path),
+  );
+  const entries = matches.slice(0, SEARCH_RESULT_LIMIT);
+  return { query: trimmed, entries, truncated: truncated || matches.length > entries.length };
+}
+
 function respondFailure(c: Context, error: unknown): Response {
   if (error instanceof DurableError)
     return c.json({ error: error.message, code: error.code }, error.status);
@@ -199,6 +278,24 @@ export const filesRoutes = new Hono()
       const root = await resolveInspectorRoot(new URL(c.req.url), c.req.raw.headers);
       const file = await readFile(c.req.query("path") ?? "", root);
       return c.json(file);
+    } catch (error) {
+      return respondFailure(c, error);
+    }
+  })
+  .get("/search", async (c) => {
+    const query = (c.req.query("q") ?? "").trim();
+    if (!query) {
+      return c.json({ error: "搜索内容不能为空。", code: "invalid_query" }, 400);
+    }
+    if (query.length > SEARCH_QUERY_LIMIT) {
+      return c.json(
+        { error: `搜索内容不能超过 ${SEARCH_QUERY_LIMIT} 个字符。`, code: "invalid_query" },
+        400,
+      );
+    }
+    try {
+      const root = await resolveInspectorRoot(new URL(c.req.url), c.req.raw.headers);
+      return c.json(await searchFiles(query, root));
     } catch (error) {
       return respondFailure(c, error);
     }

@@ -6,7 +6,6 @@ import { toString } from 'mdast-util-to-string';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
 
-import { loadInventory, sha256 } from '../vendor/cc-switch/scripts/provenance.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const excluded = new Set(['node_modules', '.git', '.ref', '.next', 'dist', '.local', '.runtime', '.omp', 'target', 'coverage']);
@@ -66,19 +65,10 @@ function documentLinks(text) {
 }
 
 const errors = [];
-let upstreamSourceReferences = 0;
-let upstreamAnchorsUnchecked = 0;
-const ccSwitch = await loadInventory(root);
-const sourceSnapshots = new Map(ccSwitch.manifest.files.filter(entry => entry.path.endsWith('.md')).map(entry => [`vendor/cc-switch/${entry.path}`, entry]));
-const upstreamTree = JSON.parse(await readFile(path.join(root, 'vendor/cc-switch/upstream-tree.json'), 'utf8'));
-if (upstreamTree.upstreamCommit !== ccSwitch.manifest.commit) throw new Error('Wrong pinned upstream document tree.');
-const upstreamPaths = new Set(upstreamTree.paths);
 const files = await markdownFiles(root);
 for (const file of files) {
   const text = await readFile(file, 'utf8');
   const label = repositoryPath(file);
-  const snapshot = sourceSnapshots.get(label);
-  const immutableSnapshot = snapshot && sha256(Buffer.from(text)) === snapshot.sha256;
   if ((text.match(/^```/gm)?.length ?? 0) % 2) errors.push(`${label}: unbalanced fence`);
   for (const href of documentLinks(text)) {
     if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith('//')) continue;
@@ -106,12 +96,7 @@ for (const file of files) {
       await stat(target);
     } catch (error) {
       if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
-      const repositoryTarget = repositoryPath(target);
-      const upstreamPath = repositoryTarget.startsWith('vendor/cc-switch/') ? repositoryTarget.slice('vendor/cc-switch/'.length) : null;
-      if (immutableSnapshot && upstreamPath && (upstreamPaths.has(upstreamPath) || upstreamTree.paths.some(entry => entry.startsWith(upstreamPath.replace(/\/$/, '') + '/')))) {
-        upstreamSourceReferences++;
-        if (anchor) upstreamAnchorsUnchecked++;
-      } else errors.push(`${label}: missing ${href}${immutableSnapshot ? ' (also not a tracked path in the pinned upstream source tree)' : ''}`);
+      errors.push(`${label}: missing ${href}`);
       continue;
     }
     if (anchor) {
@@ -152,5 +137,4 @@ if (errors.length) {
 } else {
   console.log(`Checked ${files.length} public Markdown files, local links/anchors and domain INV/SC definitions/references.`);
   console.log('Internal plans and historical evidence are not required and cannot be linked from public documents.');
-  console.log(`${upstreamSourceReferences} links in hash-verified immutable cc-switch source snapshots point to tracked upstream files outside the selected local snapshot; ${upstreamAnchorsUnchecked} upstream-only anchors remain unchecked. These are source references, not local product resource closure.`);
 }

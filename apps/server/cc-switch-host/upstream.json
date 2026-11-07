@@ -1,0 +1,12 @@
+{
+  "upstream": "https://github.com/farion1231/cc-switch",
+  "version": "4.0.25",
+  "commit": "7afceec14b977ecc2f4373e8ffb40e7223b435ac",
+  "license": "MIT",
+  "translatedAt": "2026-11-07",
+  "language": "typescript",
+  "runtime": "node>=24 <25",
+  "updatePolicy": "agent-reviewed-only",
+  "sourceLedger": "UPSTREAM-SOURCES.md",
+  "provenance": "PROVENANCE.md"
+}

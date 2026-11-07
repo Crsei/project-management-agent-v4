@@ -11,6 +11,7 @@ import type {
   GitDiffResponse,
   GitStatusResponse,
   InspectorFileResponse,
+  InspectorSearchResponse,
   InspectorTreeResponse,
 } from "@agent-workspace/contracts/inspector";
 import type { AgentWorkspace } from "@agent-workspace/contracts/chat";
@@ -174,6 +175,26 @@ test("lists a nested directory with relative paths", async () => {
   assert.deepEqual(body.entries, [
     { name: "index.ts", path: "src/index.ts", kind: "file", size: 24 },
   ]);
+});
+
+test("searches files across the project without entering ignored directories or symlinks", async () => {
+  const index = await getJson<InspectorSearchResponse>("/api/inspector/search?q=INDEX");
+  assert.equal(index.status, 200);
+  assert.equal(index.body.query, "INDEX");
+  assert.deepEqual(index.body.entries.map((entry) => entry.path), ["src/index.ts"]);
+  assert.equal(index.body.truncated, false);
+
+  const readme = await getJson<InspectorSearchResponse>("/api/inspector/search?q=readme");
+  assert.deepEqual(readme.body.entries.map((entry) => entry.path), ["docs/readme.md"]);
+
+  const ignored = await getJson<InspectorSearchResponse>("/api/inspector/search?q=pkg");
+  assert.deepEqual(ignored.body.entries, []);
+  const escaped = await getJson<InspectorSearchResponse>("/api/inspector/search?q=escape");
+  assert.deepEqual(escaped.body.entries, []);
+
+  const empty = await getJson<{ error: string; code: string }>("/api/inspector/search?q=");
+  assert.equal(empty.status, 400);
+  assert.equal(empty.body.code, "invalid_query");
 });
 
 test("rejects paths that do not exist or are not directories", async () => {

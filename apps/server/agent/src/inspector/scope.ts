@@ -4,7 +4,7 @@ import { executionSelectionSchema } from "@agent-workspace/contracts/chat";
 import { DurableError } from "../durable/errors.ts";
 import { getThread, validThreadId } from "../durable/threads.ts";
 
-const INSPECTOR_QUERY_KEYS: Record<string, true> = { threadId: true, path: true, staged: true };
+const INSPECTOR_QUERY_KEYS: Record<string, true> = { threadId: true, path: true, staged: true, q: true };
 
 /** A Session's server-resolved execution directory is the only inspector root. */
 export async function resolveInspectorRoot(url: URL, headers: Headers): Promise<string> {

@@ -3,10 +3,9 @@ import { createHash } from 'node:crypto';
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sha256 } from '../vendor/cc-switch/scripts/provenance.mjs';
 import { verifyHostBuildInputs } from '../vendor/t3code/scripts/host-inputs.mjs';
 import { assertNoRetiredImportEdges, assertRetiredTargetsAbsent, validateAdaptationManifest } from '../vendor/t3code/scripts/mcp-skills-adaptations.mjs';
-import { verifyOutputs as verifyCcSwitch, sha256 } from '../vendor/cc-switch/scripts/provenance.mjs';
-import { resourceClosure } from '../vendor/cc-switch/scripts/closure.mjs';
 import { verifyOutputs as verifyOpenHands, offlineOriginals } from '../vendor/openhands-extensions/scripts/provenance.mjs';
 
 const root = await realpath(fileURLToPath(new URL('../', import.meta.url)));
@@ -82,10 +81,6 @@ async function verifyT3Code() {
 
 if (process.argv.length !== 2) throw new Error('Usage: node scripts/check-sources.mjs');
 await verifyT3Code();
-const ccSwitch = await verifyCcSwitch(root);
-const closure = await resourceClosure(root, ccSwitch.policy, ccSwitch.inventory.files);
-if (sha256(closure) !== ccSwitch.inventory.closureSha256) throw new Error('CC Switch source/resource closure drift');
-console.log(`[sources] CC Switch: ${ccSwitch.inventory.files.length} pinned outputs and source/resource closure`);
 const openHands = await verifyOpenHands(root);
 await offlineOriginals(openHands, root);
 execFileSync(process.execPath, ['vendor/t3code/scripts/imports.mjs', '--check'], { cwd: root, stdio: 'inherit' });

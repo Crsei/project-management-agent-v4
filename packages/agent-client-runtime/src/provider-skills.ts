@@ -3,7 +3,11 @@ import type { ServerProviderSkill, ServerProviderSlashCommand } from "@t3tools/c
 import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
 import { insertRankedSearchResult, normalizeSearchQuery, scoreQueryMatch } from "@t3tools/shared/searchRanking";
 export { formatProviderSkillDisplayName, matchInlineSkills } from "@t3tools/shared/inlineSkills";
-export { detectComposerTrigger, replaceTextRange } from "@t3tools/shared/composerTrigger";
+export {
+  detectComposerTrigger,
+  replaceTextRange,
+  serializeComposerFileLink,
+} from "@t3tools/shared/composerTrigger";
 export { collectComposerInlineTokens } from "@t3tools/shared/composerInlineTokens";
 export type ProviderSkillSourceKind = "app" | "repo" | "project" | "personal" | "system" | "other";
 

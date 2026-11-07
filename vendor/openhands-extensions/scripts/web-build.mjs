@@ -1,7 +1,6 @@
 import { lstat, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { encode, file, inside, prefix, relative, repository, safePath, sha256, verifyOutputs } from "./provenance.mjs";
-import { verifyOutputs as verifyCcSwitchOutputs } from "../../cc-switch/scripts/provenance.mjs";
 
 const marker = "openhands-provenance.json";
 const legalFiles = ["LICENSE", "extensions/LICENSE", "extensions/source-package.json", "LICENSING.md", "SYNC.md", "source-manifest.json", "supplemental-inputs.json", "dependency-notices.json", "fork-policy.json", "output-inventory.json", "resource-closure.json"];
@@ -12,14 +11,13 @@ function requiredModules(loaded) {
 
 /** Production-only Vite/Rollup hook; development never requires a final capture. */
 export function openHandsProvenancePlugin() {
-  let loaded, ccSwitch, outputs, modules, dependencyNotices;
+  let loaded, outputs, modules, dependencyNotices;
   return {
     name: "reviewed-openhands-runtime-closure",
     apply: "build",
     enforce: "post",
     async buildStart() {
       loaded = await verifyOutputs();
-      ccSwitch = await verifyCcSwitchOutputs();
     },
     async generateBundle(_options, bundle) {
       const ids = [...this.getModuleIds()], sourceFiles = new Set(), packageRoots = new Map();
@@ -94,8 +92,6 @@ export function openHandsProvenancePlugin() {
       if (!options.dir) throw new Error("OpenHands Web provenance requires a directory output.");
       const current = await verifyOutputs();
       if (sha256(current.inventoryBytes) !== sha256(loaded.inventoryBytes)) throw new Error("OpenHands source generation changed during Web build.");
-      const currentCcSwitch = await verifyCcSwitchOutputs();
-      if (sha256(currentCcSwitch.inventoryBytes) !== sha256(ccSwitch.inventoryBytes)) throw new Error("CC Switch source generation changed during Web build.");
       const directory = path.resolve(options.dir), files = [];
       // writeBundle runs after Vite's transforms; hash the actual emitted bytes,
       // including inlined assets in chunks and legal assets added by this hook.
@@ -103,7 +99,7 @@ export function openHandsProvenancePlugin() {
         relative(name); const input = await file(directory, name);
         files.push({ path: name, sha256: sha256(input.bytes), bytes: input.bytes.length });
       }
-      await writeFile(await safePath(directory, marker), encode({ version: 1, upstreamCommit: loaded.policy.upstreamCommit, outputInventorySha256: sha256(loaded.inventoryBytes), ccSwitchOutputInventorySha256: sha256(ccSwitch.inventoryBytes), sourceManifestSha256: sha256(loaded.manifestBytes), modules, dependencyNotices, files }));
+      await writeFile(await safePath(directory, marker), encode({ version: 1, upstreamCommit: loaded.policy.upstreamCommit, outputInventorySha256: sha256(loaded.inventoryBytes), sourceManifestSha256: sha256(loaded.manifestBytes), modules, dependencyNotices, files }));
     },
   };
 }
@@ -112,8 +108,6 @@ export function openHandsProvenancePlugin() {
 export async function verifyWebDistribution(directory, root = repository) {
   const loaded = await verifyOutputs(root), bytes = (await file(directory, marker)).bytes, inventory = JSON.parse(bytes);
   if (inventory.version !== 1 || inventory.upstreamCommit !== loaded.policy.upstreamCommit || inventory.outputInventorySha256 !== sha256(loaded.inventoryBytes) || inventory.sourceManifestSha256 !== sha256(loaded.manifestBytes) || !Array.isArray(inventory.modules) || !Array.isArray(inventory.files)) throw new Error("Web artifact was not built from the current reviewed OpenHands generation.");
-  const ccSwitch = await verifyCcSwitchOutputs(root);
-  if (inventory.ccSwitchOutputInventorySha256 !== sha256(ccSwitch.inventoryBytes)) throw new Error("Web artifact CC Switch source generation changed.");
   const knownModules = new Set(loaded.inventory.files.map((entry) => entry.destination));
   for (const name of requiredModules(loaded)) if (!inventory.modules.includes(name)) throw new Error(`Missing real OpenHands runtime module: ${name}`);
   for (const name of inventory.modules) if (!knownModules.has(name)) throw new Error(`Unreviewed packaged source module: ${name}`);

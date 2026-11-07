@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -11,7 +11,6 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const dockerHost = ['--host', 'unix:///var/run/docker.sock'];
 // Public PostgreSQL manifest and source-built MinIO fixture; never developer volumes.
 const postgresImage = 'postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab';
-const networkSkillTest = 'services::skill::tests::mcode_copy_updates_and_disables_without_losing_external_changes';
 let commandRunner;
 let interrupted;
 
@@ -25,9 +24,9 @@ const sigint = () => stop('SIGINT'), sigterm = () => stop('SIGTERM');
 async function main(recorder) {
   const requested = process.argv.slice(2);
   const stage = requested.length === 0 ? 'all' : requested.length === 2 && requested[0] === '--stage' ? requested[1] : '';
-  if (!['all', 'static', 'build', 'backend', 'agent', 'rust', 'rust-network'].includes(stage)) throw new Error('Usage: node scripts/check-ci.mjs [--stage all|static|build|backend|agent|rust|rust-network]');
+  if (!['all', 'static', 'build', 'backend', 'agent', 'host'].includes(stage)) throw new Error('Usage: node scripts/check-ci.mjs [--stage all|static|build|backend|agent|host]');
   recorder.record('run', 'Repository checks', 'scope', { stage });
-  const selected = name => stage === name || stage === 'all' && name !== 'rust-network';
+  const selected = name => stage === name || stage === 'all';
   if (process.platform !== 'linux') throw new Error('CI isolation requires Linux procfs, util-linux flock, Bubblewrap and local Docker');
   const birth = processBirth(process.pid);
   if (!birth) throw new Error('Cannot establish CI owner process birth identity');
@@ -42,7 +41,6 @@ async function main(recorder) {
     PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
     HOME: path.join(temporary, 'home'), TMPDIR: path.join(temporary, 'tmp'),
     XDG_CONFIG_HOME: path.join(temporary, 'config'), XDG_DATA_HOME: path.join(temporary, 'data'), XDG_CACHE_HOME: path.join(temporary, 'cache'),
-    CARGO_HOME: path.join(temporary, 'cargo'), RUSTUP_HOME: process.env.RUSTUP_HOME ?? path.join(homedir(), '.rustup'),
     CI: 'true', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', TZ: 'UTC',
     NODE_OPTIONS: '--max-old-space-size=4096', CHOKIDAR_USEPOLLING: 'true',
     GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0',
@@ -184,17 +182,10 @@ process.exit(result.status ?? 1);
       await pnpm('Marketing production build', ['build:marketing']);
       await node('Post-build source provenance', ['scripts/check-sources.mjs']);
     });
-    if (selected('rust')) await measure('rust', async () => {
-      console.error(`[ci] Offline Rust scope excludes external GitHub Skill smoke: ${networkSkillTest}; use --stage rust-network for that separate acceptance`);
-      await run('Rust host locked offline-scope tests (all other ignored tests enabled)', 'cargo', [
-        'test', '--locked', '--all-targets', '--manifest-path', 'apps/server/cc-switch-host/Cargo.toml',
-        '--', '--include-ignored', '--skip', networkSkillTest,
-      ], env);
-    });
-    if (selected('rust-network')) await measure('rust-network', async () => {
-      await run('Explicit external GitHub Skill acceptance', 'cargo', [
-        'test', '--locked', '--lib', '--manifest-path', 'apps/server/cc-switch-host/Cargo.toml', networkSkillTest, '--', '--ignored', '--exact',
-      ], env);
+    if (selected('host')) await measure('host', async () => {
+      await pnpm('TypeScript host build', ['--filter', '@agent-workspace/cc-switch-host', 'build']);
+      await node('TypeScript host protocol tests', ['--test', 'apps/server/cc-switch-host/tests/host-protocol.test.ts']);
+      await node('Agent extension integration tests against TypeScript host', ['--test', 'apps/server/agent/src/extensions/service.integration.test.ts']);
     });
     if (selected('backend') || selected('agent')) await measure('regression build prerequisites', async () => {
       for (const generated of ['packages/agent-contracts/dist/pm-tools.d.ts', 'packages/agent-client-runtime/dist/index.d.ts', 'dist/apps/server/pm/src/main.js', 'apps/server/agent/dist/index.mjs']) {
@@ -208,14 +199,14 @@ process.exit(result.status ?? 1);
     });
     if (selected('agent')) await measure('agent', async () => {
       const buildRoot = path.join(root, 'apps/server/agent/dist');
-      const { verifySidecar } = await import('../apps/server/agent/scripts/cc-switch.mjs');
-      const native = await verifySidecar(buildRoot);
-      env.CC_SWITCH_HOST_BINARY = path.join(buildRoot, 'cc-switch', native.target, native.executable);
+      const { verifyHost } = await import('../apps/server/agent/scripts/cc-switch.mjs');
+      await verifyHost(buildRoot);
+      env.CC_SWITCH_HOST_ENTRY = path.join(buildRoot, 'cc-switch', 'host', 'main.mjs');
       await node('Agent, client runtime, gateway, Web models, doctor and provenance regressions', [
         'scripts/backend-tests.mjs', 'files', '--',
         'apps/server/gateway.test.ts', 'packages/agent-client-runtime/src/**/*.test.ts',
         'apps/server/agent/src/**/*.test.ts', 'apps/web/src/**/*.test.ts', 'scripts/*.test.mjs',
-        'vendor/cc-switch/scripts/provenance.test.mjs', 'vendor/openhands-extensions/scripts/provenance.test.mjs',
+        'vendor/openhands-extensions/scripts/provenance.test.mjs',
       ], { supervised: true });
     });
   } catch (error) { failure = error; }

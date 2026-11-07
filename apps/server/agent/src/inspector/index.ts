@@ -5,8 +5,8 @@ import { terminalRoutes } from "./terminal.ts";
 
 /**
  * Read-only inspector API. Mounted under `/api`, so the public paths are
- * `/api/inspector/files`, `/api/inspector/file`, `/api/inspector/git` and
- * `/api/inspector/git/diff`.
+ * `/api/inspector/files`, `/api/inspector/file`, `/api/inspector/search`,
+ * `/api/inspector/git` and `/api/inspector/git/diff`.
  */
 export const inspectorRoutes = new Hono()
   .route("/inspector", filesRoutes)

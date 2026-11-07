@@ -60,7 +60,7 @@ import { join } from 'node:path';
 const role=${JSON.stringify(role)};
 const digest=value=>value?createHash('sha256').update(value).digest('hex'):null;
 const env=process.env;
-const snapshot={ keys:Object.keys(env),cwd:process.cwd(),dataRoot:env.LOCAL_DATA_ROOT,coreRoot:env.CORE_WORKSPACE_ROOT,blobRoot:env.BLOB_ROOT,chatRoot:env.PM_CHAT_SPACE_ROOT,projectRoot:env.AGENT_WORKSPACE_PROJECT_ROOT,agentDataRoot:env.AGENT_WORKSPACE_DATA_DIR,ccSwitchBinary:env.CC_SWITCH_HOST_BINARY,defaultParent:env.LOCAL_PROJECT_DEFAULT_PARENT,allowedRoots:env.LOCAL_PROJECT_ALLOWED_ROOTS?JSON.parse(env.LOCAL_PROJECT_ALLOWED_ROOTS):null,serviceSecret:digest(env.PM_AUTOMATION_SERVICE_SECRET),agentToken:digest(env.AGENT_WORKSPACE_ACCESS_TOKEN),managed:env.PM_DESKTOP_MANAGED };
+const snapshot={ keys:Object.keys(env),cwd:process.cwd(),dataRoot:env.LOCAL_DATA_ROOT,coreRoot:env.CORE_WORKSPACE_ROOT,blobRoot:env.BLOB_ROOT,chatRoot:env.PM_CHAT_SPACE_ROOT,projectRoot:env.AGENT_WORKSPACE_PROJECT_ROOT,agentDataRoot:env.AGENT_WORKSPACE_DATA_DIR,ccSwitchEntry:env.CC_SWITCH_HOST_ENTRY,defaultParent:env.LOCAL_PROJECT_DEFAULT_PARENT,allowedRoots:env.LOCAL_PROJECT_ALLOWED_ROOTS?JSON.parse(env.LOCAL_PROJECT_ALLOWED_ROOTS):null,serviceSecret:digest(env.PM_AUTOMATION_SERVICE_SECRET),agentToken:digest(env.AGENT_WORKSPACE_ACCESS_TOKEN),managed:env.PM_DESKTOP_MANAGED };
 await writeFile(join(process.cwd(),role+'-environment.json'),JSON.stringify(snapshot));
 await appendFile(join(process.cwd(),'events'),role+'-started\\n');
 if (role===${JSON.stringify(behavior.failRole || "")}) process.exit(7);
@@ -100,7 +100,7 @@ process.on('SIGTERM',async()=>{
     "apps/server/pm/src/main.ts": service("pm"),
     "apps/server/worker/src/main.ts": service("worker"),
     "apps/server/agent/dist/index.mjs": service("agent"),
-    [`apps/server/agent/dist/cc-switch/${process.platform}-${process.arch}/${process.platform === "win32" ? "cc-switch-host.exe" : "cc-switch-host"}`]: "test-only presence fixture; this suite does not start the sidecar",
+    "apps/server/agent/dist/cc-switch/host/main.mjs": "test-only presence fixture; this suite does not start the sidecar",
     "apps/server/gateway.ts": service("gateway"),
     "apps/web/dist/index.html": "<!doctype html><div id=\"root\">fixture</div>",
   };
@@ -243,8 +243,8 @@ test("managed startup isolates roles, authenticates readiness, and retains origi
   assert.equal(agent.keys.includes("DATABASE_URL"), false);
   assert.equal(agent.keys.includes("BLOB_ROOT"), false);
   assert.equal(agent.agentDataRoot, join(f.dataDir, "agent-data"));
-  assert.equal(agent.ccSwitchBinary, join(f.root, "apps/server/agent/dist/cc-switch", `${process.platform}-${process.arch}`, process.platform === "win32" ? "cc-switch-host.exe" : "cc-switch-host"));
-  for (const env of [worker, pm, gateway]) assert.equal(env.ccSwitchBinary, undefined);
+  assert.equal(agent.ccSwitchEntry, join(f.root, "apps/server/agent/dist/cc-switch/host/main.mjs"));
+  for (const env of [worker, pm, gateway]) assert.equal(env.ccSwitchEntry, undefined);
   assert.equal(agent.projectRoot, f.projectRoot);
   assert.equal(agent.chatRoot, join(f.dataDir, "chat-spaces"));
   assert.equal(gateway.keys.includes("DATABASE_URL"), false);

@@ -4,8 +4,7 @@ import { createRequire, isBuiltin } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyHostBuildInputs } from "../../../../vendor/t3code/scripts/host-inputs.mjs";
-import { verifySidecar } from "./cc-switch.mjs";
-import { verifyOutputs as verifyCcSwitchOutputs, sha256 as ccSwitchSha256 } from "../../../../vendor/cc-switch/scripts/provenance.mjs";
+import { verifyHost } from "./cc-switch.mjs";
 import { verifyOutputs as verifyOpenHandsOutputs } from "../../../../vendor/openhands-extensions/scripts/provenance.mjs";
 import { verifyWebDistribution } from "../../../../vendor/openhands-extensions/scripts/web-build.mjs";
 
@@ -36,14 +35,11 @@ if (buildInputs.version !== 1) throw new Error("Unsupported build input inventor
 if (JSON.stringify(buildInputs.hostBuildInputs) !== JSON.stringify(hostBuildInputs)) {
   throw new Error("Host build tool provenance changed after build; rebuild from the reviewed toolchain.");
 }
-const ccSwitchSource = await verifyCcSwitchOutputs(repository);
-const ccSwitchNative = await verifySidecar(buildRoot);
-if (ccSwitchNative.outputInventorySha256 !== ccSwitchSha256(ccSwitchSource.inventoryBytes)
-  || buildInputs.ccSwitchNative?.outputInventorySha256 !== ccSwitchNative.outputInventorySha256
-  || buildInputs.ccSwitchNative?.target !== ccSwitchNative.target
-  || buildInputs.ccSwitchNative?.cargoLockSha256 !== ccSwitchNative.cargoLockSha256
-  || buildInputs.ccSwitchNative?.manifestSha256 !== ccSwitchNative.manifestSha256) {
-  throw new Error("cc-switch source/native build identity changed; rebuild the matching native target before packaging.");
+const ccSwitchHost = await verifyHost(buildRoot);
+if (buildInputs.ccSwitchHost?.manifestSha256 !== ccSwitchHost.manifestSha256
+  || buildInputs.ccSwitchHost?.sourceCommit !== ccSwitchHost.sourceCommit
+  || buildInputs.ccSwitchHost?.upstreamVersion !== ccSwitchHost.upstreamVersion) {
+  throw new Error("cc-switch TypeScript host build identity changed; rebuild the host before packaging.");
 }
 const openHandsSource = await verifyOpenHandsOutputs(repository);
 const openHandsWeb = options.has("--web-dist") ? await verifyWebDistribution(options.get("--web-dist"), repository) : null;
@@ -204,14 +200,12 @@ await inventoryTree(path.join(vendorRoot, "scripts"), "licenses/provenance/vendo
 await inventoryTree(path.join(vendorRoot, "third-party/patches"), "licenses/provenance/vendor/t3code/third-party/patches");
 await inventoryTree(path.join(vendorRoot, "third-party-licenses"), "licenses/provenance/vendor/t3code/third-party-licenses");
 const ccSwitchVendor = path.join(repository, "vendor/cc-switch");
-for (const relative of ["LICENSE", "LICENSING.md", "SYNC.md", "source-manifest.json", "fork-policy.json", "output-inventory.json", "resource-closure.json", "upstream-tree.json"]) {
+for (const relative of ["LICENSE", "LICENSING.md", "SYNC.md"]) {
   const source = path.join(ccSwitchVendor, relative), bytes = await readFile(source);
   const target = `licenses/provenance/vendor/cc-switch/${relative}`;
   transfers.push({ target, source, sha256: sha(bytes), mode: 0o644 });
   fileRecords.push({ path: target, sha256: sha(bytes), bytes: bytes.length, mode: 0o644 });
 }
-await inventoryTree(path.join(ccSwitchVendor, "integration-patches"), "licenses/provenance/vendor/cc-switch/integration-patches");
-await inventoryTree(path.join(ccSwitchVendor, "scripts"), "licenses/provenance/vendor/cc-switch/scripts");
 const openHandsVendor = path.join(repository, "vendor/openhands-extensions");
 for (const relative of ["LICENSE", "extensions/LICENSE", "extensions/source-package.json", "LICENSING.md", "SYNC.md", "source-manifest.json", "supplemental-inputs.json", "fork-policy.json", "output-inventory.json", "resource-closure.json"]) {
   const source = path.join(openHandsVendor, relative), bytes = await readFile(source);
@@ -257,9 +251,9 @@ await writeFile(path.join(outputRoot, "package.json"), JSON.stringify({ name: "p
 await writeFile(path.join(outputRoot, "artifact-manifest.json"), JSON.stringify({
   version: 1, upstreamCommit: "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c", platform: process.platform, arch: process.arch,
   entrypoint: "apps/server/agent/dist/index.mjs", effectSingleton: effectRoot ? packages.get(effectRoot).destination : null,
-  ccSwitchNative: { target: ccSwitchNative.target, triple: ccSwitchNative.triple, upstreamCommit: ccSwitchNative.upstreamCommit, outputInventorySha256: ccSwitchNative.outputInventorySha256, manifest: `apps/server/agent/dist/cc-switch/${ccSwitchNative.target}/native-manifest.json` },
+  ccSwitchHost: { implementation: "typescript", sourceCommit: ccSwitchHost.sourceCommit, upstreamVersion: ccSwitchHost.upstreamVersion, manifest: "apps/server/agent/dist/cc-switch/host/manifest.json", manifestSha256: ccSwitchHost.manifestSha256 },
   openHands: { upstreamCommit: openHandsSource.policy.upstreamCommit, outputInventorySha256: sha(openHandsSource.inventoryBytes), webManifestSha256: openHandsWeb?.sha256 ?? null },
   packages: ordered.map((record) => ({ name: record.metadata.name, version: record.metadata.version, license: record.metadata.license ?? null, path: record.destination, dependencies: Object.fromEntries([...record.dependencies].map(([name, root]) => [name, packages.get(root).destination])) })),
   bundled, files: fileRecords.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0), links,
 }, null, 2) + "\n", { flag: "wx" });
-console.log(JSON.stringify({ output: outputRoot, packages: ordered.length, files: fileRecords.length, links: links.length, nativeTarget: `${process.platform}-${process.arch}` }));
+console.log(JSON.stringify({ output: outputRoot, packages: ordered.length, files: fileRecords.length, links: links.length, host: "typescript" }));

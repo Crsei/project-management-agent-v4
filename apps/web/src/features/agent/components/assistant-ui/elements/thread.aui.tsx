@@ -40,7 +40,7 @@ import { useHistoryLoadOutcome } from "@agent/src/chat/remote-adapter";
 import { setResponseStreamingMode, useResponseStreamingMode } from "@agent/src/chat/response-streaming";
 import { ComposerUsage } from "@agent/src/usage/ComposerUsage";
 import { consumeUsageLimitsCommand } from "@agent/src/usage/ComposerUsageModel";
-import { useProviderSkillsComposer } from "@agent/src/chat/provider-skills-composer";
+import { useComposerSuggestions } from "@agent/src/chat/composer-suggestions";
 import {
   ActionBarMorePrimitive,
   ActionBarPrimitive,
@@ -287,7 +287,7 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
   const { preferences } = useChatBrowserPreferences();
   const aui = useAui();
   const [limitsRequest, setLimitsRequest] = useState(0);
-  const nativeSkills = useProviderSkillsComposer(props.providerInstanceId, !!props.disabled || props.historyBlocked);
+  const suggestions = useComposerSuggestions(props.providerInstanceId, !!props.disabled || props.historyBlocked);
   const unavailableReason = useAuiState((s) => {
     if (s.composer.isEmpty || s.composer.canSend || s.thread.isRunning) return undefined;
     if (s.thread.isDisabled) return "restoring" as const;
@@ -306,10 +306,10 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
             ? t("消息暂时无法发送，请检查附件或语音状态。", "Messages cannot be sent right now; check attachment or voice status.")
             : undefined;
   const handleUsageCommand = () => consumeUsageLimitsCommand(aui.composer, () => setLimitsRequest((request) => request + 1));
-  const handleSendCommand = () => handleUsageCommand() || !nativeSkills.beforeSend();
+  const handleSendCommand = () => handleUsageCommand() || !suggestions.beforeSend();
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col" onSubmit={(event) => {
-      if (handleSendCommand() || props.historyBlocked || nativeSkills.blocked) event.preventDefault();
+      if (handleSendCommand() || props.historyBlocked || suggestions.blocked) event.preventDefault();
     }}>
       <ComposerPrimitive.AttachmentDropzone asChild>
         <div
@@ -319,29 +319,29 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
           <ComposerQuotePreview />
           <ComposerAttachments />
           {props.composerLeading}
-          {nativeSkills.surface}
+          {suggestions.surface}
           <ComposerPrimitive.Input
-            ref={nativeSkills.inputRef}
+            ref={suggestions.inputRef}
             role="combobox"
-            {...nativeSkills.inputAria}
-            onChange={(event) => nativeSkills.onInput(event.currentTarget)}
-            onSelect={(event) => nativeSkills.onInput(event.currentTarget)}
-            onCompositionStart={nativeSkills.onCompositionStart}
-            onCompositionEnd={(event) => nativeSkills.onCompositionEnd(event.currentTarget)}
-            placeholder={t("输入消息…", "Type a message…")}
+            {...suggestions.inputAria}
+            onChange={(event) => suggestions.onInput(event.currentTarget)}
+            onSelect={(event) => suggestions.onInput(event.currentTarget)}
+            onCompositionStart={suggestions.onCompositionStart}
+            onCompositionEnd={(event) => suggestions.onCompositionEnd(event.currentTarget)}
+            placeholder={t("输入消息… 使用 @ 引用文件、$ 引用 Skill、/ 调用命令", "Type a message… use @ for files, $ for skills, / for commands")}
             className="aui-composer-input placeholder:text-muted-foreground/60 max-h-[240px] min-h-[68px] w-full resize-none bg-transparent px-2.5 py-2 text-sm leading-5 outline-none"
             rows={1}
             autoFocus
             aria-label={t("消息输入", "Message input")}
             submitMode={preferences.sendShortcut}
             onKeyDown={(event) => {
-              if (nativeSkills.onKeyDown(event)) return;
+              if (suggestions.onKeyDown(event)) return;
               // assistant-ui's steer shortcut sends directly instead of submitting the form.
-              if (event.key === "Enter" && event.shiftKey && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && (handleSendCommand() || props.historyBlocked || nativeSkills.blocked)) event.preventDefault();
+              if (event.key === "Enter" && event.shiftKey && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229 && (handleSendCommand() || props.historyBlocked || suggestions.blocked)) event.preventDefault();
             }}
             cancelOnEscape={false}
           />
-          <ComposerAction {...props} historyBlocked={props.historyBlocked || nativeSkills.blocked} onUsageCommand={handleSendCommand} />
+          <ComposerAction {...props} historyBlocked={props.historyBlocked || suggestions.blocked} onUsageCommand={handleSendCommand} />
           {unavailable && <p role="status" className="px-2 text-xs text-muted-foreground">{unavailable}</p>}
           <ComposerUsage providerInstanceId={props.providerInstanceId} limitsRequest={limitsRequest} onCloseLimits={() => setLimitsRequest(0)} />
         </div>

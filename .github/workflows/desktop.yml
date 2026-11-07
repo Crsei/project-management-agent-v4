@@ -63,12 +63,7 @@ jobs:
           path: ${{ steps.pnpm-cache.outputs.path }}
           # Signed and unsigned caches stay separate. Never cache node_modules,
           # built applications, user homes, keychains or signing materials.
-          key: desktop-${{ inputs.distribution }}-pnpm-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
-      - name: Install the repository-pinned Rust toolchain
-        shell: bash
-        run: |
-          toolchain="$(node --input-type=module -e 'import fs from "node:fs"; const pin = /^channel\s*=\s*"(\d+\.\d+\.\d+)"\s*$/m.exec(fs.readFileSync("rust-toolchain.toml", "utf8"))?.[1]; if (!pin) throw new Error("Missing exact Rust pin"); console.log(pin)')"
-          rustup toolchain install "$toolchain" --profile minimal --no-self-update
+          key: desktop-${{ inputs.distribution }}-pnpm-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
       - name: Configure Windows C++ compiler and SDK
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
@@ -84,7 +79,7 @@ jobs:
           # Only source archives: runtime:prepare still checks pinned SHA256,
           # cross-checks Node's official checksum, extracts and inventories anew.
           path: apps/desktop/.cache/runtime-downloads
-          key: desktop-${{ inputs.distribution }}-runtime-archives-v1-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'apps/desktop/scripts/runtime-manifest.mjs', 'apps/desktop/scripts/prepare-runtime.mjs') }}
+          key: desktop-${{ inputs.distribution }}-runtime-archives-v1-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'apps/desktop/scripts/runtime-manifest.mjs', 'apps/desktop/scripts/prepare-runtime.mjs') }}
       - name: Prepare integrity-pinned offline Node and complete PostgreSQL
         run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
       - name: Execute bundled runtime tools without ambient PATH
@@ -164,12 +159,7 @@ jobs:
           path: ${{ steps.pnpm-cache.outputs.path }}
           # Signed and unsigned caches stay separate. Never cache node_modules,
           # built applications, user homes, keychains or signing materials.
-          key: desktop-${{ inputs.distribution }}-pnpm-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
-      - name: Install the repository-pinned Rust toolchain
-        shell: bash
-        run: |
-          toolchain="$(node --input-type=module -e 'import fs from "node:fs"; const pin = /^channel\s*=\s*"(\d+\.\d+\.\d+)"\s*$/m.exec(fs.readFileSync("rust-toolchain.toml", "utf8"))?.[1]; if (!pin) throw new Error("Missing exact Rust pin"); console.log(pin)')"
-          rustup toolchain install "$toolchain" --profile minimal --no-self-update
+          key: desktop-${{ inputs.distribution }}-pnpm-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
       - name: Configure Windows C++ compiler and SDK
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
@@ -185,7 +175,7 @@ jobs:
           # Only source archives: runtime:prepare still checks pinned SHA256,
           # cross-checks Node's official checksum, extracts and inventories anew.
           path: apps/desktop/.cache/runtime-downloads
-          key: desktop-${{ inputs.distribution }}-runtime-archives-v1-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'apps/desktop/scripts/runtime-manifest.mjs', 'apps/desktop/scripts/prepare-runtime.mjs') }}
+          key: desktop-${{ inputs.distribution }}-runtime-archives-v1-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'apps/desktop/scripts/runtime-manifest.mjs', 'apps/desktop/scripts/prepare-runtime.mjs') }}
       - name: Prepare integrity-pinned offline Node and complete PostgreSQL
         run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
       - name: Execute bundled runtime tools without ambient PATH

@@ -1,0 +1,22 @@
+.composer-suggestions { position: relative; min-width: 0; font-size: 12px; }
+.composer-suggestions > p { margin: 6px 0; overflow-wrap: anywhere; }
+.composer-reference-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; }
+.composer-reference-chips button { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--muted); color: var(--foreground); overflow-wrap: anywhere; }
+.composer-reference-chips button[data-invalid=true] { border-color: var(--destructive); color: var(--destructive); }
+.composer-reference-chips button svg { width: 12px; height: 12px; flex: none; }
+.composer-reference-chips button [aria-label] { color: var(--text-muted); }
+.composer-command-menu { position: absolute; bottom: 100%; left: 0; z-index: 30; width: min(560px, 100%); max-height: min(340px, 42dvh); overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-popover-value); background: var(--card); color: var(--foreground); box-shadow: var(--shadow-floating); padding: 5px; }
+.composer-command-list { display: flex; flex-direction: column; }
+.composer-command-item { display: flex; width: 100%; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--control-radius); color: inherit; text-align: left; }
+.composer-command-item[aria-selected=true] { background: var(--accent); color: var(--accent-foreground); }
+.composer-command-icon { width: 16px; height: 16px; flex: none; color: var(--text-muted); }
+.composer-command-item[aria-selected=true] .composer-command-icon { color: inherit; }
+.composer-command-label { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.composer-command-prefix { color: var(--text-muted); }
+.composer-command-item[aria-selected=true] .composer-command-prefix { color: inherit; }
+.composer-command-description { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+.composer-command-item[aria-selected=true] .composer-command-description { color: inherit; }
+.composer-command-badge { display: inline-flex; flex: none; align-items: center; gap: 3px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: 11px; }
+.composer-command-badge svg { width: 12px; height: 12px; }
+.composer-command-status { margin: 8px 10px; color: var(--text-muted); overflow-wrap: anywhere; }
+.composer-command-note { margin: 4px 10px 8px; color: var(--text-muted); font-size: 11px; }

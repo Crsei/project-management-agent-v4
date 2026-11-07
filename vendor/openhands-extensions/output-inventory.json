@@ -3,26 +3,26 @@
   "upstreamCommit": "b4a3f45a28f6b6c387a8deb3dc7c18b4393c59c1",
   "sourceManifestSha256": "38e687390e239aa6b41628928ef0f35149d618e15504e79aa7a52eb8cb0e9bed",
   "supplementalSha256": "9bcf6d052c337b028ff86bd80790f4f5a4f23914946a64bd7b1e112b2aed728c",
-  "policySha256": "6ff65d8a230febf52e85ba1c477e3f4fd53c67e41d4734b4fc9fc87fb12cfce3",
+  "policySha256": "bd1f52028d21573699af13bf34fc2fc9546ed2785fe34c8d40c51badbe8f5652",
   "closureSha256": "b812d5037b432b7cb3ff2c01cb3fa85b4cb61d2f2c215b97f6f383bab4aaaa32",
   "modePolicy": "Canonical 0644/0755 executable class, regular nonlinked files; original modes fixed. Exact pre/postimage and exclusive nonoverwriting replay.",
   "hostBuildInputs": [
     {
       "path": "package.json",
-      "sha256": "c93494e3863a29bac77397c4191c973737101d7d1b2a36ef785ffaf2a202e8bb",
-      "bytes": 6159,
+      "sha256": "b417709b897117cfa11fa645e203ace0ba15de445b553c241e65f9991c3cfeab",
+      "bytes": 6240,
       "mode": 420
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "83bfe3315a9229415fb743c7dfe127142ed879123d24aff68fc1e597c8754b72",
-      "bytes": 750178,
+      "sha256": "b3c3c78466cfb61c37d0942bf15b53a78626a3ef13e6ac1b90b0d5905c6d6ef0",
+      "bytes": 751303,
       "mode": 420
     },
     {
       "path": "pnpm-workspace.yaml",
-      "sha256": "ad401876323b9f64813a2fe160053c6f55515a004085701c7c8b44d891401086",
-      "bytes": 1504,
+      "sha256": "c58526cf9c38eed67f91d05c757590c33354106f01f56ed1f4fc9717a4028f4f",
+      "bytes": 1535,
       "mode": 420
     },
     {
@@ -51,26 +51,14 @@
     },
     {
       "path": "apps/server/agent/scripts/package.mjs",
-      "sha256": "f447109cd0d91fb121ac903d1905904d3302ff0a08e5e6edb2b20431598ae2ae",
-      "bytes": 17873,
+      "sha256": "1e4f6a9cb986d060c5fca31f6ecd19cd243049f8523ebcfb9bf07c5638a13076",
+      "bytes": 17038,
       "mode": 420
     },
     {
       "path": "apps/desktop/scripts/stage-workspace.mjs",
-      "sha256": "c745a214c9a705dfd012c6d45df459dd39cdceea8d8ddad134cc999705289357",
-      "bytes": 12039,
-      "mode": 420
-    },
-    {
-      "path": "vendor/cc-switch/scripts/provenance.mjs",
-      "sha256": "6f9c4b6bdb9ea5fe670299c725c5d1cc9625cde5ddb256ddfbd319a51cc4f8b2",
-      "bytes": 26645,
-      "mode": 420
-    },
-    {
-      "path": "vendor/cc-switch/scripts/closure.mjs",
-      "sha256": "dea052c1f8a3fd3def105b3543921ed0636bb859df0790eb95b5ab4e4de5d973",
-      "bytes": 23349,
+      "sha256": "e21cda7a3c88a3ccbc5ec35bb4b007f25d328b0d942070eb6303c08867d99c6c",
+      "bytes": 12172,
       "mode": 420
     }
   ],
@@ -1145,8 +1133,8 @@
     },
     {
       "destination": "vendor/openhands-extensions/fork-policy.json",
-      "sha256": "6ff65d8a230febf52e85ba1c477e3f4fd53c67e41d4734b4fc9fc87fb12cfce3",
-      "bytes": 5119,
+      "sha256": "bd1f52028d21573699af13bf34fc2fc9546ed2785fe34c8d40c51badbe8f5652",
+      "bytes": 5148,
       "mode": 420,
       "provenance": "local-fork-integration",
       "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
@@ -1290,8 +1278,8 @@
     },
     {
       "destination": "vendor/openhands-extensions/scripts/web-build.mjs",
-      "sha256": "ce072ed76201fa940c20978ed06d48384941c05b26cf9f9836938f6c98bd3333",
-      "bytes": 11555,
+      "sha256": "0d1349027428e4a7858c61fefee56bde322db9c7f22f706136e49ee1879b1a3a",
+      "bytes": 10908,
       "mode": 420,
       "provenance": "local-fork-integration",
       "reason": "Normalize Vite module IDs and native root separators before tracing OpenHands runtime dependencies on Windows; preserve complete real dependency notice collection and fail-closed license verification. No source pins or runtime modules changed.",

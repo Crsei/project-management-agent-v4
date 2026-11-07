@@ -1,8 +1,0 @@
-{
-  "version": 1,
-  "destination": "apps/server/agent/src/extensions/index.ts",
-  "sha256": "624e2c5a01980e370c5ac2ff0f71289dae2a3734d43c3a174371f6a6d326a8bb",
-  "mode": 420,
-  "encoding": "base64",
-  "content": "ZXhwb3J0IHsgZXh0ZW5zaW9uUm91dGVzLCBleHRlbnNpb25EZWZpbml0aW9uUm91dGVzIH0gZnJvbSAiLi9yb3V0ZXMudHMiOwpleHBvcnQgeyBFeHRlbnNpb25Ib3N0LCBnZXRFeHRlbnNpb25Ib3N0LCBzdG9wRXh0ZW5zaW9uSG9zdCB9IGZyb20gIi4vc2VydmljZS50cyI7CmV4cG9ydCB7IEV4dGVuc2lvbkVycm9yIH0gZnJvbSAiLi9ycGMudHMiOwpleHBvcnQgeyBleHRlbnNpb25EYXRhRGlyZWN0b3J5LCBwcm9qZWN0RXh0ZW5zaW9uQ29udGV4dElkIH0gZnJvbSAiLi9zdG9yYWdlLnRzIjsK"
-}

@@ -32,21 +32,46 @@ const mcpErrors: Record<string, { status: ExtensionErrorStatus; message: string 
   mcp_target_unbound: { status: 403, message: "The requested native application has no explicitly confirmed target in this context." },
 };
 
-async function binaryPath(): Promise<string> {
-  const configured = process.env.CC_SWITCH_HOST_BINARY?.trim();
-  if (configured) {
-    if (!path.isAbsolute(configured)) throw new ExtensionError(503, "sidecar_binary_invalid", "CC_SWITCH_HOST_BINARY must be an absolute, host-configured executable path.");
-    await access(configured).catch(() => { throw publicError("sidecar_binary_missing"); });
-    return configured;
+type HostCommand = { command: string; args: string[] };
+
+/** Resolve the reviewed host implementation. The TypeScript entry is the default; the Rust
+ * executable remains available only while an operator explicitly selects it during rollback. */
+async function hostCommand(): Promise<HostCommand> {
+  const configuredEntry = process.env.CC_SWITCH_HOST_ENTRY?.trim();
+  if (configuredEntry) {
+    if (!path.isAbsolute(configuredEntry)) throw new ExtensionError(503, "sidecar_entry_invalid", "CC_SWITCH_HOST_ENTRY must be an absolute, host-configured script path.");
+    await access(configuredEntry).catch(() => { throw publicError("sidecar_binary_missing"); });
+    return { command: process.execPath, args: [configuredEntry] };
   }
-  const executable = process.platform === "win32" ? "cc-switch-host.exe" : "cc-switch-host";
+  const implementation = process.env.CC_SWITCH_HOST_IMPLEMENTATION?.trim() || "ts";
+  if (implementation === "rust") {
+    const configured = process.env.CC_SWITCH_HOST_BINARY?.trim();
+    if (configured) {
+      if (!path.isAbsolute(configured)) throw new ExtensionError(503, "sidecar_binary_invalid", "CC_SWITCH_HOST_BINARY must be an absolute, host-configured executable path.");
+      await access(configured).catch(() => { throw publicError("sidecar_binary_missing"); });
+      return { command: configured, args: [] };
+    }
+    const executable = process.platform === "win32" ? "cc-switch-host.exe" : "cc-switch-host";
+    const packageDirectory = fileURLToPath(new URL(import.meta.url.endsWith(".ts") ? "../../" : "./", import.meta.url));
+    const packaged = path.join(packageDirectory, "cc-switch", `${process.platform}-${process.arch}`, executable);
+    try { await access(packaged); return { command: packaged, args: [] }; } catch { /* source checkout */ }
+    if (!import.meta.url.endsWith(".ts")) throw publicError("sidecar_binary_missing");
+    const source = path.join(workspaceRoot, "apps/server/cc-switch-host/target/release", executable);
+    await access(source).catch(() => { throw publicError("sidecar_binary_missing"); });
+    return { command: source, args: [] };
+  }
+  if (implementation !== "ts") throw new ExtensionError(503, "sidecar_implementation_invalid", "CC_SWITCH_HOST_IMPLEMENTATION must be 'ts' or 'rust'.");
   const packageDirectory = fileURLToPath(new URL(import.meta.url.endsWith(".ts") ? "../../" : "./", import.meta.url));
-  const packaged = path.join(packageDirectory, "cc-switch", `${process.platform}-${process.arch}`, executable);
-  try { await access(packaged); return packaged; } catch { /* A source checkout has a separately built release sidecar. */ }
-  if (!import.meta.url.endsWith(".ts")) throw publicError("sidecar_binary_missing");
-  const source = path.join(workspaceRoot, "apps/server/cc-switch-host/target/release", executable);
-  await access(source).catch(() => { throw publicError("sidecar_binary_missing"); });
-  return source;
+  const packaged = path.join(packageDirectory, "cc-switch", "host", "main.mjs");
+  try { await access(packaged); return { command: process.execPath, args: [packaged] }; } catch { /* source checkout */ }
+  if (import.meta.url.endsWith(".ts")) {
+    const source = path.join(workspaceRoot, "apps/server/cc-switch-host/dist/main.mjs");
+    try { await access(source); return { command: process.execPath, args: [source] }; } catch { /* use strip-only source below */ }
+    const sourceTs = path.join(workspaceRoot, "apps/server/cc-switch-host/src/main.ts");
+    await access(sourceTs).catch(() => { throw publicError("sidecar_binary_missing"); });
+    return { command: process.execPath, args: [sourceTs] };
+  }
+  throw publicError("sidecar_binary_missing");
 }
 
 /** Owns precisely one child and its descendants; no writes are automatically retried. */
@@ -141,7 +166,7 @@ export class ExtensionSidecar {
     try {
     await this.termination;
     if (this.stopping) throw publicError("sidecar_stopping");
-      const executable = await binaryPath();
+      const executable = await hostCommand();
       const config = await this.initialize();
       if (this.stopping) { config.secretKey = ""; throw publicError("sidecar_stopping"); }
       const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: config.homeDir, USERPROFILE: config.homeDir, LANG: process.env.LANG ?? "C.UTF-8", ...(process.env.SYSTEMROOT ? { SYSTEMROOT: process.env.SYSTEMROOT } : {}), ...(process.env.TMPDIR ? { TMPDIR: process.env.TMPDIR } : {}) };
@@ -149,7 +174,7 @@ export class ExtensionSidecar {
       for (const key of ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"]) {
         if (process.env[key] !== undefined) env[key] = process.env[key];
       }
-      const child = spawn(executable, [], { cwd: config.dataDir, env, stdio: "pipe", windowsHide: true, detached: process.platform !== "win32" });
+      const child = spawn(executable.command, executable.args, { cwd: config.dataDir, env, stdio: "pipe", windowsHide: true, detached: process.platform !== "win32" });
       this.child = child;
       this.buffer = "";
       child.stdin.on("error", () => { if (this.child === child) this.fail("sidecar_stdin_closed"); });

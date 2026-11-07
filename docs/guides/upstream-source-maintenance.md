@@ -1,3 +1,5 @@
+> 2026-11-07：cc-switch headless Rust host 已翻译为 TypeScript，`cc-switch` upstream-sync profile 已退役。后续 cc-switch 更新只按 [`apps/server/cc-switch-host/PROVENANCE.md`](../../apps/server/cc-switch-host/PROVENANCE.md) 的 agent 核查流程补充 TypeScript；本指南余下的 cc-switch profile 内容仅保留为历史来源说明。`vendor/cc-switch` 只保留 Web UI、许可和共享 verifier helper。
+
 # t3code / cc-switch 选定源码维护
 
 本指南说明仓库维护工具与 `.agents/skills/upstream-source-update`，不是 PM 业务任务执行器。现有目录、产品权限、审批、业务完成规则及运行数据不变；不会创建任务、自动合并、部署、重启或启动付费 Agent。Skill 是否被发现取决于调用它的 Agent/Provider，不表示 Chat 自动加载。

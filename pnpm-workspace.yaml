@@ -2,6 +2,7 @@ packages:
   - apps/desktop
   - apps/server/agent
   - apps/server/pm
+  - apps/server/cc-switch-host
   - apps/web
   - apps/marketing
   - packages/*

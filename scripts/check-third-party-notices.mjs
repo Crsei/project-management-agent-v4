@@ -108,8 +108,7 @@ async function main(mode) {
     }
   });
   await check("cc-switch original notice", async () => {
-    const manifestPath = "vendor/cc-switch/source-manifest.json", manifest = await json(manifestPath);
-    await originalNotice("vendor/cc-switch/LICENSE", exactRecord(manifest.files, "path", "LICENSE", manifestPath));
+    await contains("vendor/cc-switch/LICENSE", ["MIT License", "Copyright (c) 2025 Jason Young", "THE SOFTWARE IS PROVIDED \"AS IS\""]);
   });
   await check("OpenHands original notices", async () => {
     const manifestPath = "vendor/openhands-extensions/source-manifest.json", manifest = await json(manifestPath);

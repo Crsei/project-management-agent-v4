@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [t3code, cc-switch]
+        project: [t3code]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -43,7 +43,7 @@ jobs:
           import path from 'node:path';
           import { spawnSync } from 'node:child_process';
           const project = process.env.UPSTREAM_PROJECT;
-          if (!['t3code', 'cc-switch'].includes(project)) throw new Error('Unsupported fixed profile');
+          if (project !== 't3code') throw new Error('Unsupported fixed profile');
           const { loadProfile } = await import(`./scripts/upstream-sync/${project}.mjs`);
           const profile = await loadProfile(process.cwd());
           if (!/^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/.test(profile.upstreamUrl)) throw new Error('Profile must identify a public fixed GitHub HTTPS upstream');

@@ -29,6 +29,20 @@ export type InspectorFileResponse = {
   truncated: boolean;
 };
 
+/** One file path returned by the project-wide file search. */
+export type InspectorSearchEntry = {
+  name: string;
+  /** POSIX path relative to the project root. */
+  path: string;
+};
+
+export type InspectorSearchResponse = {
+  query: string;
+  entries: InspectorSearchEntry[];
+  /** True when the scan stopped before covering every project directory. */
+  truncated: boolean;
+};
+
 export type GitFileStatus =
   | "added"
   | "modified"

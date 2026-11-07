@@ -83,7 +83,7 @@ PM 后端编译到根 `dist`，Agent 服务编译到 `apps/server/agent/dist`；
 
 ## 工具链与隔离聚合入口
 
-工具链固定为 Node 24.21.0、pnpm 11.9.0、Rust 1.95.0（根 `rust-toolchain.toml`）。安装依赖前运行 `node scripts/doctor.mjs`，它仅检查本机前提，不安装工具、不读取 `.env` 或连接业务服务。
+工具链固定为 Node 24.21.0、pnpm 11.9.0。MCP/Skills 管理宿主已从 Rust sidecar 切换为 `apps/server/cc-switch-host` 的 TypeScript 实现，不再需要 Rust/Cargo。安装依赖前运行 `node scripts/doctor.mjs`，它仅检查本机前提，不安装工具、不读取 `.env` 或连接业务服务。
 
 - Linux：C/C++ 编译器、链接器、make、pkg-config（通常为 build-essential 与 pkg-config）。
 - macOS：Xcode Command Line Tools（clang/clang++/ld/make）及 pkg-config。

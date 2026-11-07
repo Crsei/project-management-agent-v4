@@ -1,3 +1,11 @@
+## 2026-11-07 host cutover
+
+The compiled/run Rust host has been translated to TypeScript at
+`apps/server/cc-switch-host`. The `src-tauri` Rust source and Cargo build are no
+longer shipped or built. This retained snapshot exists for the React Web UI,
+MIT attribution and source/reconstruction history. The TypeScript translation's
+own provenance and update instructions are in that package's `PROVENANCE.md`.
+
 # cc-switch fork licensing and distribution
 
 ## Upstream grant retained verbatim

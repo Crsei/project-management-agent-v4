@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   checks:
-    name: PM / Web / Agent / Rust / contracts / sources
+    name: PM / Web / Agent / TypeScript host / contracts / sources
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     env:
@@ -43,16 +43,11 @@ jobs:
           path: ${{ steps.pnpm-cache.outputs.path }}
           # No prefix fallback, node_modules, build outputs, homes or credentials.
           # The hosted image also scopes any approved native install side effects.
-          key: checks-pnpm-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
+          key: checks-pnpm-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
       - name: Install native compiler and real Linux namespace prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install --yes build-essential pkg-config bubblewrap util-linux
-      - name: Install repository-pinned Rust without changing its version
-        shell: bash
-        run: |
-          RUST_VERSION=$(node --input-type=module -e 'import fs from "node:fs"; const text=fs.readFileSync("rust-toolchain.toml","utf8"); const match=/^channel\s*=\s*"([^"]+)"/m.exec(text); if(!match) throw new Error("Missing pinned Rust channel"); process.stdout.write(match[1]);')
-          rustup toolchain install "$RUST_VERSION" --profile minimal --no-self-update
       - name: Install locked workspace dependencies
         run: pnpm install --frozen-lockfile
       - name: Check upstream maintenance protocols without publication credentials

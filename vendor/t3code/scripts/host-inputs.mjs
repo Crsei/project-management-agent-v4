@@ -5,7 +5,6 @@ import path from "node:path";
 const required = [
   ".node-version",
   "package.json",
-  "rust-toolchain.toml",
   "scripts/doctor.mjs",
   "apps/server/agent/scripts/build.mjs",
   "apps/server/agent/scripts/package.mjs",

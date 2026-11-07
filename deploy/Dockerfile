@@ -1,17 +1,9 @@
 ARG NODE_IMAGE=node:24.21.0-bookworm-slim
 ARG CADDY_IMAGE=caddy:2-alpine
-ARG RUST_IMAGE=rust:1.95.0-bookworm
-
-FROM ${RUST_IMAGE} AS rust-toolchain
-
 FROM ${NODE_IMAGE} AS build
 WORKDIR /app
-# Native-only headless Rust build tools stay in this build stage. Final Agent,
-# backend and Web images never contain Cargo, Rust sources or a desktop GUI.
-ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo
-ENV PATH=/usr/local/cargo/bin:${PATH}
-COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
-COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
+# Native Node dependencies are built in this stage. Final Agent, backend and Web
+# images contain no Cargo, Rust sources, TypeScript host source or desktop GUI.
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config cmake ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN corepack enable

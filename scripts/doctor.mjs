@@ -5,8 +5,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 
-// Only version/help queries run here. In particular, do not invoke Cargo metadata,
-// rustup install, package installation, application configuration or live services.
+// Only version/help queries run here. In particular, do not invoke package
+// installation, application configuration or live services.
 export async function inspectBuildPrerequisites({
   root = repositoryRoot,
   platform = process.platform,
@@ -17,11 +17,8 @@ export async function inspectBuildPrerequisites({
   const nodePin = (await readFile(path.join(root, ".node-version"), "utf8")).trim();
   const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
   const pnpmPin = /^pnpm@(\d+\.\d+\.\d+)(?:\+sha\d+\..+)?$/.exec(manifest.packageManager)?.[1];
-  const rustPin = /^channel\s*=\s*"(\d+\.\d+\.\d+)"\s*$/m.exec(
-    await readFile(path.join(root, "rust-toolchain.toml"), "utf8"),
-  )?.[1];
-  if (!/^\d+\.\d+\.\d+$/.test(nodePin) || !pnpmPin || !rustPin) {
-    throw new Error("Build tool pins must specify exact Node, pnpm and Rust versions.");
+  if (!/^\d+\.\d+\.\d+$/.test(nodePin) || !pnpmPin) {
+    throw new Error("Build tool pins must specify exact Node and pnpm versions.");
   }
 
   const checks = [{ name: "Node.js", ok: nodeVersion === nodePin, detail: `required ${nodePin}; found ${nodeVersion}` }];
@@ -33,8 +30,6 @@ export async function inspectBuildPrerequisites({
     COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
     COREPACK_ENABLE_AUTO_PIN: "0",
     npm_config_manage_package_manager_versions: "false",
-    RUSTUP_AUTO_INSTALL: "0",
-    RUSTUP_NO_UPDATE_CHECK: "1",
   };
   const query = (command, args, shell = false) => {
     const result = run(command, args, {
@@ -58,17 +53,6 @@ export async function inspectBuildPrerequisites({
     checks.push({ name, ok: result.ok && found === expected, detail: `required ${expected}; ${found ? `found ${found}` : "not available (no tool was installed)"}` });
   };
   version("pnpm", platform === "win32" ? "pnpm.cmd" : "pnpm", ["--version"], pnpmPin, /^(\d+\.\d+\.\d+)$/m, platform === "win32");
-
-  // `rustup which` resolves the tools selected from Cargo's actual working
-  // directory without installing a missing toolchain. Only then query the shims.
-  const rustc = query("rustup", ["which", "rustc"]);
-  const cargo = query("rustup", ["which", "cargo"]);
-  if (rustc.ok && cargo.ok) {
-    version("Rust", "rustc", ["--version"], rustPin, /^rustc (\d+\.\d+\.\d+)(?:\s|$)/m);
-    version("Cargo", "cargo", ["--version"], rustPin, /^cargo (\d+\.\d+\.\d+)(?:\s|$)/m);
-  } else {
-    checks.push({ name: "Rust/Cargo", ok: false, detail: `install Rust ${rustPin} with rustup before building; the selected toolchain is unavailable (no download attempted)` });
-  }
 
   const tool = (name, command, args) => {
     const result = query(command, args);

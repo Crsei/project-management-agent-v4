@@ -1,3 +1,15 @@
+## 2026-11-07 host cutover
+
+The headless Rust host was translated to TypeScript at
+`apps/server/cc-switch-host`. The `src-tauri` Rust source, Cargo files and the
+native build are no longer part of this repository or its build. This folder now
+retains the React Web UI (`src/web` and its imports), the retained MIT notice and
+the shared provenance helper scripts used by the OpenHands presentation. The
+Rust reconstruction ledgers, Cargo sources and integration recipes were removed
+with the translation. Runtime provenance, the pinned commit and the agent-driven
+update policy live in `apps/server/cc-switch-host/PROVENANCE.md` and
+`UPSTREAM-SOURCES.md`.
+
 # cc-switch source-fork synchronization
 
 ## Authority and scope

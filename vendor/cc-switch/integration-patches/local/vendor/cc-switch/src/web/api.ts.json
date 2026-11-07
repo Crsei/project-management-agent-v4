@@ -1,8 +1,0 @@
-{
-  "version": 1,
-  "destination": "vendor/cc-switch/src/web/api.ts",
-  "sha256": "b3e911fb191519eb6436ab2865381bccd3cc5a08381ae87eecb905ce114e816b",
-  "mode": 420,
-  "encoding": "base64",
-  "content": "Ly8gRGVsaWJlcmF0ZWx5IGV4Y2x1ZGUgZGVza3RvcCBwcm92aWRlci9hY2NvdW50cy9wcm94eSBBUElzIGZyb20gdGhlIFdlYiBjbG9zdXJlLgpleHBvcnQgeyBzZXR0aW5nc0FwaSB9IGZyb20gIi4uL2xpYi9hcGkvc2V0dGluZ3MiOwpleHBvcnQgeyBza2lsbHNBcGkgfSBmcm9tICIuLi9saWIvYXBpL3NraWxscyI7CmV4cG9ydCB0eXBlIHsgQXBwSWQgfSBmcm9tICIuLi9saWIvYXBpL3R5cGVzIjsK"
-}

@@ -27,7 +27,7 @@
 | t3code 选定源码 | 原生 Agent Provider 驱动、协议、模型/配置能力、部分客户端与服务端实现 | 不接管 PM 业务工作流、账号授权或完整 t3code orchestrator | [Provider 宿主合同](../architecture/provider-host-contract.md)、[来源同步说明](../../vendor/t3code/SYNC.md) |
 | 本地 Provider 适配 | 实例/租约、scope、执行与取消、事件映射、凭据边界、续接附属记录、PM 工具桥 | 不能复制一套上游协议以规避集成，也不能把 Provider 完成当任务完成 | [适配入口](../../apps/server/agent/src/providers/t3code/application.ts)、[宿主运行时](../../apps/server/agent/src/providers/t3code/host-runtime.ts) |
 | cc-switch 选定源码 | 多 Agent 的 MCP/Skills 配置、导入、安装、原生文件投影等管理能力 | 不等于 Provider 执行、原生 Skills 发现、`/mcp` OAuth 或 MCP Apps | [配置宿主说明](../../apps/server/agent/src/extensions/README.md) |
-| 本地 cc-switch host | headless Rust 装配、JSON-lines 协议、上下文、私有数据及宿主安全集成；TS 层负责认证与路径授权 | 配置保存不等于全部原生文件同步成功，也不等于运行会话已重载 | [Rust 装配](../../apps/server/cc-switch-host/src/lib.rs)、[Web bridge 入口](../../vendor/cc-switch/src/web/index.tsx) |
+| 本地 cc-switch host | headless Rust 装配、JSON-lines 协议、上下文、私有数据及宿主安全集成；TS 层负责认证与路径授权 | 配置保存不等于全部原生文件同步成功，也不等于运行会话已重载 | [TypeScript host 来源与更新说明](../../apps/server/cc-switch-host/PROVENANCE.md)、[Web bridge 入口](../../vendor/cc-switch/src/web/index.tsx) |
 
 当前固定来源：
 
@@ -80,7 +80,7 @@ vendir、Copybara、subtree、subrepo、Quilt 和 Renovate 本轮均不安装。
 
 ## 4. 现状缺口与首个前置条件
 
-现有 [t3code capture](../../vendor/t3code/scripts/capture.py)、[cc-switch capture](../../vendor/cc-switch/scripts/capture.mjs) 是**同 commit 的记录工具**；现有 sync 是**同 pin 的精确重建工具**，不是跨版本升级器。直接修改 pin 后刷新 hash 不会完成上游移植。
+现有 [t3code capture](../../vendor/t3code/scripts/capture.py) 是**同 commit 的记录工具**；cc-switch Rust host 已翻译为 TypeScript，后续更新只按 [PROVENANCE](../../apps/server/cc-switch-host/PROVENANCE.md) 的 agent 核查流程进行，不再使用 cc-switch capture/sync。直接修改 pin 后刷新 hash 不会完成上游移植。
 
 此前本会话只读检查观察到：
 
@@ -136,8 +136,8 @@ vendir、Copybara、subtree、subrepo、Quilt 和 Renovate 本轮均不安装。
 - 已有 `host_context`、`settings`、`secret_codec`、`mcp_management` 及 TS `extensions` 是优先接点；不复制 MCP/Skills 算法到 HTTP 层。
 - Web 继续由 `CcSwitchManagement` 的 `invoke/upload/subscribe/context` 接入宿主。复用其 bridge，而不是让上游页面直接认识 PM Cookie、业务 API 或任意路径。
 - 必须保留无法仅靠外层包装保证的行为：headless 原生路径授权、DAO 凭据加密、每 Agent override/assignment、写入前校验、未知/部分成功和配置同步语义。
-- 例如 [config.rs](../../vendor/cc-switch/src-tauri/src/config.rs) 的 headless Home/dataDir/Claude 配置路径及私有文件写入，[MCP DAO](../../vendor/cc-switch/src-tauri/src/database/dao/mcp.rs) 的 `secret_codec`，不是“无关定制”。没有等价安全接口前不得还原。
-- [fork-policy](../../vendor/cc-switch/fork-policy.json) 中的 Codex 配置提取是明确派生关系，应随原 `codex_config.rs` 更新分析；不能只查上游同名输出。
+- 例如 [来源映射](../../apps/server/cc-switch-host/UPSTREAM-SOURCES.md) 的 headless Home/dataDir/Claude 配置路径及私有文件写入，[来源映射](../../apps/server/cc-switch-host/UPSTREAM-SOURCES.md) 的 `secret_codec`，不是“无关定制”。没有等价安全接口前不得还原。
+- 原先的 cc-switch Rust 派生关系已记录在 [UPSTREAM-SOURCES](../../apps/server/cc-switch-host/UPSTREAM-SOURCES.md)；`vendor/cc-switch` 现在只保留 Web UI 与许可声明，Rust `src-tauri` 已删除。
 - 验证管理能力时使用隔离原生目录、私有数据库和密钥，不读取或改写操作者的真实 CLI Home。
 
 ### 5.4 补丁准入与退出
@@ -293,7 +293,7 @@ Actions 的发布权限、仓库实际 origin/base、App 和分支保护策略�
 
 OpenHands 不升级、不重构、不批量 recapture，其他 vendor 不纳入此次更新范围。
 
-但其 [fork-policy](../../vendor/openhands-extensions/fork-policy.json) 绑定 cc-switch 的 `provenance.mjs`、`closure.mjs` 及多个共享构建输入；OpenHands UI 也实际消费 cc-switch 内部接口。因此：
+但其 [fork-policy](../../vendor/openhands-extensions/fork-policy.json) 仍绑定 cc-switch Web UI；CC 的 Rust provenance/closure 脚本已移除。因此：
 
 - 优先新增独立更新 authoring 工具，复用原 verifier，避免无必要修改共享验证器。
 - 所有外部消费者做只读兼容检查，检查不是获得修改授权。
@@ -379,7 +379,7 @@ Skill 另设行为案例：缺基线、dirty tree、源码提示注入、语义�
 | --- | --- |
 | `scripts/upstream-sync.mjs` 及必要的小型 helper/test | 薄入口、两 profile、候选/验证/交接；不复制现有 hash/路径安全实现 |
 | `vendor/t3code/scripts/`、现有 manifest/ledger、`SYNC.md` | 新 generation authoring、模块策略、补丁理由、精确重放联动 |
-| `vendor/cc-switch/scripts/`、`fork-policy.json`、现有 manifest/inventory、`SYNC.md` | 同上；避免无必要修改被其他 fork 指纹绑定的共享 verifier |
+| `vendor/cc-switch/src/`、`SYNC.md`、许可文件 | cc-switch 仅保留 Web UI 与许可；Rust 源码/清单已删除，TypeScript 来源见 `apps/server/cc-switch-host/PROVENANCE.md` |
 | 现有 t3code 宿主适配及 cc-switch host/bridge | 仅经逐项证明可减少上游侵入的窄改动，不改变目录/公开功能 |
 | `.agents/skills/upstream-source-update/` | Skill、行为案例与必要参考说明；入口 README 明确区别于只读 PM 分析 Skills |
 | `.github/workflows/` | 经批准后的受信检测/发布流程；保留现有只读 PR CI，不运行带写 token 的候选代码 |

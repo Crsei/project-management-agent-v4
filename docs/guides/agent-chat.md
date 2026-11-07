@@ -8,7 +8,7 @@ Provider 在 `/agent/settings/providers` 配置，原生 Home 留空时沿用服
 
 文件夹支持重命名显示名称、关闭和重新打开；关闭只隐藏列表，不删除代码或 Sessions，也不改变已绑定目录身份。会话行支持右键或省略号菜单：Pin、Settle、Snooze、重命名、隔离生成标题、未读、文件夹筛选、Auto-settle、复制、选择文件夹、Archive 与 Delete。各文件夹内按“置顶 / 活跃 / 稍后提醒 / 已归置”组织，每行显示目录、时间、标题及 Provider；侧栏导航不改绑当前会话。归置不是归档，更不代表 PM 工作完成。状态由服务端持久化并用独立 revision 防止覆盖；自动归置为默认 3 天无活动，不在运行成功时立即执行。归档可从 `/agent/settings/history` 恢复，运行中不能归档；删除沿用现有停止生成后再明确确认的流程，且不可恢复。标题重生成仅对具备隔离无工具调用能力的 Codex / Claude 开放，不修改原消息或原生会话游标。
 
-主页保留自动化独立导航行、设置／用量／快捷键工具栏，以及顶栏面包屑和面板开关。右侧 Files / Git 复用单标签，Browser 可以新增多个标签；Terminal 是同一组服务端终端的单一视图，可在右侧和底部停靠，不另建第二套进程。标签支持关闭、排序、最大化和窄屏抽屉；隐藏终端只断开视图，显式“终止”才停止进程。底部高度可调整，`Ctrl / ⌘ + J` 切换显示。
+主页保留自动化独立导航行、设置／用量／快捷键工具栏，以及顶栏面包屑和面板开关。右侧 Files / Git 复用单标签，Browser 可以新增多个标签；Terminal 是同一组服务端终端的单一视图，可在右侧和底部停靠，不另建第二套进程。Files surface 采用 t3code 的文件展示布局：可切换的项目文件树、文件类型图标、全项目文件搜索、目录展开／折叠、面包屑与语法高亮只读源码，Markdown 可切换渲染、源码可自动换行；二进制文件继续明确拒绝，不新增写入能力。右侧面板标签支持关闭、排序、最大化和窄屏抽屉；底部终端抽屉与右侧终端只显示终端内容，并以一条横线与上方内容分隔，不显示范围、实例、状态或操作按钮。隐藏或切换停靠只断开视图，不重启服务端 PTY。底部高度可调整，`Ctrl / ⌘ + J` 切换显示。
 
 Browser surface 使用单行浏览器工具栏：后退／前进／刷新、地址栏、元素选择／截图／浮层／菜单；地址栏按 Enter 打开 URL，非 URL 文本在新标签页搜索。跨域页面以 iframe 打开；同源地址不在沙箱中预览，改为引导至新标签页。最近使用记录只存在本机浏览器 localStorage（最多 12 条），可删除或清空；跨域 iframe 明确禁用元素选择、截图和浮层。v4 公共入口是 `3224`，v3 的 `3223` 不共享登录或数据。内嵌页保留展开、关闭和返回 PM 上下文。
 
@@ -39,7 +39,7 @@ PM 中“Agent 助手”是文字与向下箭头合并的圆角下拉按钮：�
 | Workspace Terminal | 显式选择的 Agent 文件夹／子目录；跨 Session 保留，隐藏与停靠切换只重附着 |
 | Session Terminal | 当前 Session 的实际目录／Worktree；切换 Session 时切走原 Session 终端 |
 
-文件夹菜单可以从该目录打开终端；终端内 `cd` 不改变 Agent 主目录。服务端在本次进程生命周期内拥有 PTY，校验目录身份和 Session 执行身份，保留有界输出用于重附着。创建请求有稳定 ID：响应未知先按原请求核对，不自动重复创建；未知输入不重放。显式终止以实际退出为准。**不支持跨 Agent 服务重启存活**：旧终端不可用，不恢复进程、不重放命令，用户须明确创建新终端。
+文件夹菜单可以从该目录打开终端；终端内 `cd` 不改变 Agent 主目录。服务端在本次进程生命周期内拥有 PTY，校验目录身份和 Session 执行身份，保留有界输出用于重附着。创建请求有稳定 ID，未知输入不重放；当前终端视图不提供范围、实例、终止或重新附加控件。**不支持跨 Agent 服务重启存活**：旧终端不可用，不恢复进程、不重放命令，用户须明确创建新终端。
 
 Inspector 请求携带当前 Session，不接受浏览器任意 cwd 或旧 `rootId`。Terminal 使用服务进程的本机 shell 权限，不是文件沙箱；它与 Provider 共用原生环境过滤规则，保留正常 CLI 环境，但不继承服务端 PM 凭据、Agent 私有控制变量或加载器注入变量。`Ctrl / ⌘ + Alt + B` 切换右侧面板；网页预览继续保留 iframe sandbox。
 
@@ -103,7 +103,7 @@ MCP、Skills 与交互 Apps 的源码能力须与实例部署、实际账号及�
 - **保留的边界：** 仅已有 Provider 的正常管理使用上述直接流程；宿主登记的外部 CLI 仍使用其明确登记/绑定流程，不开放浏览器任意路径。旧的明确配置链接仍访问原数据；项目私有配置仍受 PM 身份与范围检查，不导出到原生 Home。MCP 自身的 API Key / OAuth 和项目工具审批不因配置页面简化而取消。事件流断开时暂停新写入，重连只重读状态，不重放操作；结果不明确时先刷新核对，配置变更不会自动重启活跃原生会话。
 - **外部连接：** MCP 设置的“外部访问”（`/agent/settings/mcp-servers?section=external`）提供连接地址与已授权客户端撤销。部署未配置或元数据读取失败时明确显示外部访问尚未就绪，下方仍保留 PM 登录及已有授权的查看／撤销；不把读取失败当作没有授权。外部 HTTP MCP 客户端经 `/connect-agent` 完成 PM 登录主体同意、授权码与 S256 交换，再访问 `/mcp`。默认只读，明确选择 PM 工作区／项目上限及纯对话线程；目录型 Session 不接受外部委托，线程中的 PM 引用和工具历史也须在授权上限内。full 不绕过既有审批；外部 token 不可登录普通 PM／Agent API，也不能枚举同项目的全部历史。
 - **原生工具：** 工具注册在本机读取真实 schema，不为启动普通代码会话访问 PM。`pm_list_workspaces` 只发现当前授权的业务 ID／名称，不选择目录或 Session 所有者；其他 PM 工具每次明确携带 `target: { workspaceId, projectId }`，可在同一 Session 内访问多个已授权目标。PM 不可用时工具明确失败，普通代码环境仍可用。当前成员能力、审批、revision、幂等与原结果核对不变；Chat 成功不会完成 WorkItem。OpenCode 的单 transport、Pi 的 generation-owned 扩展、OMP 的单 `pm_tools` Host Tools 桥仍有各自限制。
-- **Skills：** 全页和 PM 内嵌 Chat 共用 Composer 的 `$` 搜索、原生 `/` commands 与引用 chip；目录在输入、执行环境或实例变化时自动读取，Composer 不提供目录工具栏或 session 重启按钮。目录绑定 Provider 实例／revision 和同一服务端核验的 Session cwd；失败、pending、空目录在建议菜单分别展示，禁用及不可由用户调用的条目不能选。原生安装／修改仍在各 Provider 支持的位置进行；既有 WorkspaceSkill 指令块不再从 Composer 进入，且不是通用 Skill 协议。
+- **Skills 与文件引用：** 全页和 PM 内嵌 Chat 共用 Composer 的 `@` 文件、`$` 原生 Skill 与 `/` commands 建议列表及引用 chip；目录在输入、执行环境或实例变化时自动读取，Composer 不提供目录工具栏或 session 重启按钮。`@` 只搜索同一服务端核验的 Session 执行目录，跳过忽略目录与符号链接，不回落 PM 文档、来源目录或父仓库；选中后插入可移除的相对 Markdown 链接，发送内容不额外注入正文。Skill 目录绑定 Provider 实例／revision 和同一 cwd；失败、pending、空目录在建议菜单分别展示，禁用及不可由用户调用的条目不能选。原生安装／修改仍在各 Provider 支持的位置进行；既有 WorkspaceSkill 指令块不再从 Composer 进入，且不是通用 Skill 协议。
 - **Provider 差异：** Codex 使用 `skills/list` 与原生 mention；Claude 保留 frontmatter／最后一个 Skill 展开；OpenCode 1.x 文本／命令与 2.x 结构化 IDs 不混同，目录只借用当前已授权且匹配的 live session，不为刷新启动插件／MCP；Grok／Pi 使用 leading mention，Cursor／FX／Antigravity 按各自发现和分派语义。Muse 只公布原生 commands，ACP Registry 只调用当前会话实际公布的 commands（虚拟 skill URI 不当作文件）；OMP 目录可见不等于可调用，Skill 调用禁用，命令仅开放既有 `session` 白名单。逐家真实账号／Skill 行为尚未全部验收。
 - **MCP Apps：** 当前原生交互能力由 Codex adapter 提供；其他 Provider 保留真实工具结果，不假造 App 支持。类型化 producing item 绑定原 Server／thread／session；成功工具结果结束后可保留 live session，停止、配置／范围变化、显式重启、撤权或服务关闭使相应能力失效。历史可读不代表仍可交互，打开 App 不隐式启动新模型轮次。frame 使用 `sandbox="allow-scripts allow-forms"`，不含 `allow-same-origin`；工具确认不能替代服务端授权。App 模型上下文按产生项替换／清除，仅在匹配的有效范围／session 内送入后续轮次。
 

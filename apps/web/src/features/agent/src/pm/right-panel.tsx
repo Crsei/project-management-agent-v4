@@ -303,7 +303,7 @@ export function PmRightPanel({
 }) {
   const t = useAgentText();
   const [state, dispatch] = useReducer(pmRightPanelReducer, EMPTY_RIGHT_PANEL_STATE);
-  const [width, setWidth] = useState(440);
+  const [width, setWidth] = useState(540);
   const [availableWidth, setAvailableWidth] = useState(() => typeof window === "undefined" ? 0 : window.innerWidth);
   const [menuOpen, setMenuOpen] = useState(false);
   const [scroll, setScroll] = useState({ hasOverflow: false, canLeft: false, canRight: false });

@@ -10595,8 +10595,8 @@
     {
       "destination": "vendor/t3code/scripts/host-inputs.mjs",
       "asset": "vendor/t3code/scripts/host-inputs.mjs",
-      "sha256": "190da31e62f736954db02cb3eafcfe5cdc99dcef38bf0677853d73b5445c8505",
-      "bytes": 1675,
+      "sha256": "bbcfc55dd9b9b1f963279a05a181b2db64f8bc329f9769352d8eb5f01390958d",
+      "bytes": 1650,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -11638,15 +11638,15 @@
     "hostBuildInputs": [
       {
         "path": "apps/server/agent/scripts/build.mjs",
-        "sha256": "34b49ad1df5e9457e17e22232b940a02f71ddc60619b02bbd3f33003aa7b3ef5"
+        "sha256": "7deaa9e84384c2b3453a07516b9ee6047c2305e87ebd0d233607aa11fa13938d"
       },
       {
         "path": "apps/server/agent/scripts/package.mjs",
-        "sha256": "f447109cd0d91fb121ac903d1905904d3302ff0a08e5e6edb2b20431598ae2ae"
+        "sha256": "1e4f6a9cb986d060c5fca31f6ecd19cd243049f8523ebcfb9bf07c5638a13076"
       },
       {
         "path": "vendor/t3code/scripts/host-inputs.mjs",
-        "sha256": "190da31e62f736954db02cb3eafcfe5cdc99dcef38bf0677853d73b5445c8505"
+        "sha256": "bbcfc55dd9b9b1f963279a05a181b2db64f8bc329f9769352d8eb5f01390958d"
       },
       {
         "path": "apps/server/agent/scripts/verify-artifact.mjs",
@@ -11658,15 +11658,11 @@
       },
       {
         "path": "package.json",
-        "sha256": "c93494e3863a29bac77397c4191c973737101d7d1b2a36ef785ffaf2a202e8bb"
-      },
-      {
-        "path": "rust-toolchain.toml",
-        "sha256": "34cc522222afbb069af98709583a18c307753b86bbc9fec61565c1061b21c976"
+        "sha256": "b417709b897117cfa11fa645e203ace0ba15de445b553c241e65f9991c3cfeab"
       },
       {
         "path": "scripts/doctor.mjs",
-        "sha256": "1852742ece2ce81b1d9faf70d153241a8563dbd18a976c6238fce326c8f185f5"
+        "sha256": "43e14b07642a04c0cee881686b271a466b4f8a72165a27c614c12b86a61e0d2b"
       }
     ],
     "acceptance": "Parent-only: relocated included tools/verify-artifact.mjs; no T18 execution.",
