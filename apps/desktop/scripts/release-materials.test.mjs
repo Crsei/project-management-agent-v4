@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -137,6 +137,39 @@ test("source ancestor replacement during an opened-file copy rejects and removes
     syncBuiltinESMExports();
   }
 });
+
+for (const gitBacked of [false, true]) {
+  test(`${gitBacked ? "Git" : "gitless"} source accepts stable file-dependency hardlinks but still rejects changed content`, async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    const sourcePath = "vendor/t3code/third-party/mdast-util-math/index.d.ts";
+    const approvedBytes = "export interface ApprovedPublicFileDependency {}\n";
+    await snapshot(input, { [sourcePath]: approvedBytes });
+    if (gitBacked) {
+      await fixtureGit(input, ["init"]);
+      await fixtureGit(input, ["add", "--", "README.md", "apps", "vendor", "pnpm-lock.yaml"]);
+      await fixtureGit(input, ["commit", "-m", "Synthetic public file dependency"]);
+    }
+    const before = await captureSource(join(root, "before-install"), input);
+    const installedAlias = join(input, "node_modules/file-dependency/index.d.ts");
+    await mkdir(dirname(installedAlias), { recursive: true });
+    await link(join(input, sourcePath), installedAlias);
+    assert.equal((await lstat(join(input, sourcePath))).nlink, 2);
+    await requireUnchangedSource(before, input);
+    const afterRoot = join(root, "after-install");
+    const after = await captureSource(afterRoot, input);
+    assert.deepEqual(after.files, before.files);
+    assert.equal(after.sha256, before.sha256);
+    if (gitBacked) assert.equal(after.dirty, false);
+    const copy = await lstat(join(afterRoot, sourcePath));
+    const original = await lstat(join(input, sourcePath));
+    assert.equal(copy.nlink, 1);
+    assert.notEqual(`${copy.dev}:${copy.ino}`, `${original.dev}:${original.ino}`);
+    await writeFile(installedAlias, "changed through the dependency's hardlinked inode\n");
+    await assert.rejects(requireUnchangedSource(before, input), /Source changed/);
+    assert.equal(await readFile(join(afterRoot, sourcePath), "utf8"), approvedBytes);
+  });
+}
 
 test("source dirty identity compares actual bytes with HEAD even under assume-unchanged", async (t) => {
   const root = await temporary(t);

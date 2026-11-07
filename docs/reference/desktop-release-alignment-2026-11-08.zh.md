@@ -56,7 +56,7 @@
 
 本项目 origin 当前为公开仓库；本轮 main push 会公开源码，Actions 上传的仍是 **unsigned 验证 artifact**，不能以构建/上传代替四个 OPEN 项的审阅或正式发布批准。构建环境继续只有只读 checkout token，不获得用于 push/dispatch 的操作者凭据。对应源码生成仅选择公开根中的 tracked 文件及逐条登记的已审阅新增文件，排除 `.env*`、`.local`、`.git`/config/hooks、凭据/证书、Home、内部历史文档和生成目录/缓存；不会归档所有 untracked 文件。清单不包含运行数据或数据库备份。
 
-源码路径保护不只检查叶文件或 `realpath` 是否还在仓库内：Git 与无 Git 入口都先核验真实根，沿用现有 `GuardedDirectory` / `checkedFileOpen` 逐级拒绝 source 祖先的 symlink/junction/reparse，保留每级身份至复制结束。只从已核验打开的同一文件描述符读取，复制前后再次核对目录身份和文件 stamp；发现替换或漂移就拒绝并移除该次未完成副本。这样不能把 tracked 公共目录改指向仓库内部 `.local` 后将其同名私有字节归档。Linux 使用已有描述符相对遍历；macOS/Windows 仍按现有平台实现做路径、reparse 和打开句柄的前后身份检查，不将其夸大为对恶意同用户进程的原生文件系统沙箱。
+源码路径保护不只检查叶文件或 `realpath` 是否还在仓库内：Git 与无 Git 入口都先核验真实根，沿用现有 `GuardedDirectory` 逐级拒绝 source 祖先的 symlink/junction/reparse，保留每级身份至复制结束。本发布边界仅以只读方式打开普通源文件，复用既有 Windows reparse 检查，并在平台支持时使用 `O_NOFOLLOW`；不沿用 PM 私有可写存储的“单硬链接”不变量，因为冻结安装可为合法 `file:` 源依赖建立 `nlink > 1` 的硬链接。多硬链接不会跳过检查：开前/开后与读后核对同一目录、叶路径、打开描述符身份及完整文件 stamp（包含 link count），构建后仍按已捕获的批准 SHA256/模式核对内容。只从已核验的同一描述符读取，不改写源 inode，也不把源硬链接带入副本；任何操作中的身份、stamp 或内容漂移都拒绝并移除该次未完成副本。这样既不能通过祖先改指仓库内部 `.local` 归档其私有字节，也不会仅因 pnpm 在稳定冻结安装后合法增加 link count 而误拒绝未改动源文件。Linux 使用已有描述符相对遍历；macOS/Windows 仍按现有平台实现做路径、reparse 和打开句柄的前后身份检查，不将其夸大为对恶意同用户进程的原生文件系统沙箱。共享 PM 存储 helper 的单链接安全语义保持不变。
 
 派生 legal 目录在 tar 之前再次按其**自身**根执行现有资源检查：即使原链接合法留在安装 resources 内，复制后越界、悬空或循环也拒绝归档，不因原闭包合法而原样接受。交付 verifier 还要求实际最终 ASAR 的 SHA256 与构建报告 `checks.application.sha256` 相同；仅保持应用名称/版本不够证明是同一成品。
 

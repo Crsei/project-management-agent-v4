@@ -1,13 +1,14 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, constants, createReadStream, createWriteStream, fstatSync, lstatSync, readFileSync } from "node:fs";
+import { closeSync, constants, createReadStream, createWriteStream, fstatSync, lstatSync, openSync, readFileSync } from "node:fs";
 import { chmod, copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { create as createTar } from "tar";
 import { desktopRoot, hashFile } from "./runtime-manifest.mjs";
-import { checkedFileOpen, fileStamp, GuardedDirectory, sameFileIdentity } from "../../../packages/pm-core/platform.ts";
+import { fileStamp, GuardedDirectory, sameFileIdentity } from "../../../packages/pm-core/platform.ts";
+import { assertNoWindowsReparsePath } from "../../../packages/pm-core/windows-reparse.ts";
 import { inspectDeployment } from "./stage-workspace.mjs";
 
 const execute = promisify(execFile);
@@ -89,15 +90,20 @@ async function withSourceFile(root, path, consume) {
     }
     const filename = directory.path(components.at(-1));
     const before = lstatSync(filename, { bigint: true });
+    if (!before.isFile() || before.isSymbolicLink()) throw new Error("Source must be a regular file without a symlink or junction.");
+    assertNoWindowsReparsePath(filename, before);
     assertDirectories();
-    fd = checkedFileOpen(filename, constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NONBLOCK));
+    // Source is read-only: pnpm file: dependencies may legitimately share this
+    // inode. Private PM storage's single-link writable-file policy does not apply.
+    fd = openSync(filename, constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK));
     const opened = fstatSync(fd, { bigint: true });
-    if (!sameFileIdentity(before, opened) || fileStamp(before) !== fileStamp(opened))
+    if (!opened.isFile() || !sameFileIdentity(before, opened) || fileStamp(before) !== fileStamp(opened))
       throw new Error("Source file identity changed before reading.");
     assertDirectories();
     const result = await consume(fd, opened);
     assertDirectories();
     const current = lstatSync(filename, { bigint: true });
+    assertNoWindowsReparsePath(filename, current);
     if (!current.isFile() || current.isSymbolicLink() || !sameFileIdentity(opened, current)
       || fileStamp(opened) !== fileStamp(current) || fileStamp(opened) !== fileStamp(fstatSync(fd, { bigint: true })))
       throw new Error("Source file identity or contents changed while reading.");
