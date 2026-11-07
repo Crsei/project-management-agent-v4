@@ -40,7 +40,7 @@ pnpm --filter @agent-workspace/desktop package
 
 `package` 明确生成 unsigned 测试包；macOS ad-hoc 不等于 Developer ID 签名或公证。正式构建用 `package:signed`，需显式提供证书及 macOS 公证材料，缺失时失败而不降级。默认输出 `apps/desktop/releases/<version>/<platform>-<arch>/<unsigned|signed>/`，`desktop-package.json` 记录产物 SHA256 与资源位置。没有自动更新源，也不自动发布 GitHub Release。
 
-[原生 CI](../../.github/workflows/desktop.yml) 仅手动触发，分别运行 Windows x64、macOS x64/arm64，执行真实 PG 回归和打包资源的初始化、登录、停止与重连冒烟；signed 模式使用受保护的 `desktop-signing` 环境。工作流配置和历史通过不代表最新工作树、原生GUI或真实Provider执行已验收。
+[原生 CI](../../.github/workflows/desktop.yml) 仅手动触发，默认分别运行 Windows x64、macOS x64/arm64；勾选 `windows_only` 可只构建 Windows x64，不启动 macOS Job。执行真实 PG 回归和打包资源的初始化、登录、停止与重连冒烟；signed 模式使用受保护的 `desktop-signing` 环境。工作流配置和历史通过不代表最新工作树、原生GUI或真实Provider执行已验收。
 
 CI 在桌面类型检查前依次构建 `@agent-workspace/contracts` 与 `@agent-workspace/client-runtime`，生成包导出的类型声明；全新检出不能依赖开发机已有的 `dist` 缓存。[`.gitattributes`](../../.gitattributes) 固定文本检出的 LF 行尾，避免 Windows `core.autocrlf` 改变受固定哈希保护的构建输入；不放宽或重写完整性校验。完整 Web 类型检查超出托管 macOS 默认堆上限，工作流显式设置 `NODE_OPTIONS=--max-old-space-size=4096`，保留全部类型检查。
 
