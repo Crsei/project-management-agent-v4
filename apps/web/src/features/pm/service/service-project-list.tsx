@@ -19,7 +19,7 @@ import { useI18n } from "@/lib/i18n-provider"
 import { usePmNoticeCenter } from "./pm-notice-center"
 import { allowed, CommandNotice, issueRecord, projectRecord, queryData, ServiceGuard, string, today, useText, writable, type QueryState } from "./pm-ui"
 import { ProjectCoverImage } from "./project-extras"
-import { ProjectAgentAction } from "../agent/project-entry"
+import { AgentAssistantMenu } from "../agent/agent-assistant-menu"
 import { ProjectContextMenu, ProjectMenuButton, useProjectMenuActions } from "./project-menu"
 
 type TableSettings = NonNullable<ProjectCollectionViewProps["table"]>
@@ -294,7 +294,7 @@ function ServiceProjectList() {
     capabilities={{ create: canCreate, edit: canEdit, star: canStar, openFullDetails: true, filters: { archive: true, updated: true, status: true, starred: !!extras.data && !extras.error, teamSize: !!directory.data && !directory.error } }}
     actions={{ setInteraction: updateInteraction, create: createProject, edit: editProject, star, openFullDetails: openProject }}
     headerActions={<><Button variant={interaction.quickView === "archived" ? "secondary" : "outline"} size="sm" onClick={() => { const next = new URLSearchParams(searchParams); if (archiveFromUrl === "archived") next.delete("archive"); else next.set("archive", "archived"); setSearchParams(next) }}><Archive className="size-3.5" aria-hidden="true" />{t("已归档项目", "Archived projects")}</Button>{allowed(workspace, "access.manage") && <Button variant="outline" size="sm" onClick={() => navigate(`${root}/members?tab=teams`)}>{t("团队管理", "Team management")}</Button>}</>}
-    renderProjectAction={project => <span className="inline-flex items-center gap-1"><ProjectAgentAction projectId={project.id} projectTitle={project.title} /><ProjectMenuButton projectId={project.id} /></span>}
+    renderProjectAction={project => <span className="inline-flex items-center gap-1"><AgentAssistantMenu projectId={project.id} /><ProjectMenuButton projectId={project.id} /></span>}
     renderProjectContextMenu={(project, target) => <ProjectContextMenu projectId={project.id}>{target}</ProjectContextMenu>}
     toolbarActions={rows ? <ProjectRowsToolbar table={variant === "table"} interaction={interaction} setInteraction={setInteraction} controls={controls} setControls={setControls} sortKeys={sortKeys} statusOptions={statusOptions} conditions={conditions} setConditions={setFilterConditions} clearFilters={clearFilters} canCreate={canCreate} onCreate={createProject} /> : undefined}
     summarySort={variant === "compact" ? <div className="flex items-center gap-1"><ProjectSortSelect controls={controls} sortKeys={sortKeys} onChange={sortKey => setControls(previous => ({ ...previous, sortKey, sortDir: sortKey === "name" || sortKey === "owner" ? "asc" : "desc" }))} /><SortDirection controls={controls} onToggle={() => setControls(previous => ({ ...previous, sortDir: previous.sortDir === "asc" ? "desc" : "asc" }))} /></div> : undefined}

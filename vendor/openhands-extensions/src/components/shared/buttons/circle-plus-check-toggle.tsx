@@ -1,6 +1,6 @@
 import React from "react";
 import { Check as CheckmarkIcon, Plus as PlusIcon, X as RemoveIcon } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@pm/cc-switch-source/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@pm/cc-switch-ui";
 import { useOpenHandsTranslation } from "@pm/openhands-source/web/i18n";
 import { cn } from "@pm/openhands-source/utils/utils";
 

@@ -16,6 +16,29 @@ const policyPath = prefix + "fork-policy.json", closurePath = prefix + "resource
 const digestBlob = (bytes) => createHash("sha1").update(`blob ${bytes.length}\0`).update(bytes).digest("hex");
 const bytes = (value) => Buffer.isBuffer(value) ? value : Buffer.from(value);
 const require = createRequire(import.meta.url);
+const externalPaths = ["apps/server/agent/src/providers/t3code/management.ts", "packages/agent-contracts/src/provider.ts"];
+const externalOwnerPath = "vendor/t3code/mcp-skills-adaptations.json";
+const externalReferences = externalPaths.map((path) => ({ path, owner: externalOwnerPath }));
+
+async function externalOwner(root) {
+  const commit = "3".repeat(40), supplementalCommit = "4".repeat(40), source = bytes("export const source = 1;\n"), sourcePath = "packages/contracts/src/server.ts";
+  const manifestPath = "vendor/t3code/source-manifest.json", inventoryPath = "vendor/t3code/sync-inventory.json";
+  const sourceInventoryPath = "vendor/t3code/mcp-skills-source.json", licensePath = "vendor/t3code/LICENSE", license = bytes("MIT external owner fixture\n");
+  const manifest = encode({ upstream: { commit, distribution_license: { spdx: "MIT", path: "LICENSE" } }, files: [[sourcePath, source], ["LICENSE", license]].map(([source_path, content]) => ({ source_path, sha256: sha256(content), bytes: content.length, git_blob_sha1: digestBlob(content), git_mode: "100644" })) });
+  const supplemental = encode({ version: 1, upstream: { commit: supplementalCommit, existingVendorCommit: commit, license: { spdx: "MIT", path: "LICENSE", sha256: sha256(license) } }, files: [{ path: "LICENSE", sha256: sha256(license), bytes: license.length, blob: digestBlob(license), mode: "100644", type: "blob" }] });
+  const owner = { version: 1, baselineCommit: commit, sourceInventory: sourceInventoryPath, baselineInventory: inventoryPath, sources: [commit, supplementalCommit].map((commit) => ({ commit, role: "Reviewed external source fixture", license: { spdx: "MIT", path: "LICENSE", distributedPath: licensePath, sha256: sha256(license) } })), outputs: [] };
+  async function update(destination, value) {
+    const content = bytes(value), index = owner.outputs.findIndex((entry) => entry.destination === destination);
+    const entry = { destination, provenance: "adapted-upstream", reason: "Reviewed external host output", license: "MIT; existing repository terms", sha256: sha256(content), bytes: content.length, mode: 0o644, inputs: [{ commit, path: sourcePath, sha256: sha256(source), bytes: source.length, gitBlobSha1: digestBlob(source), gitMode: "100644" }], recipe: { kind: "exact-line-splices", primaryInput: 0, splices: [{ start: 0, before: [source.toString()], after: [content.toString()] }] } };
+    if (index < 0) owner.outputs.push(entry); else owner.outputs[index] = entry;
+    await put(root, destination, content);
+    const records = [[externalOwnerPath, encode(owner)], [manifestPath, manifest], [sourceInventoryPath, supplemental], [licensePath, license]];
+    for (const [name, content] of records) await put(root, name, content);
+    await put(root, inventoryPath, encode({ version: 1, upstreamCommit: commit, sourceManifestSha256: sha256(manifest), files: records.map(([destination, content]) => ({ destination, sha256: sha256(content), bytes: content.length, mode: 0o644 })) }));
+  }
+  for (const name of externalPaths) await update(name, "export const host = 1;\n");
+  return { update };
+}
 async function put(root, name, content, mode = 0o644) {
   await mkdir(path.dirname(path.join(root, name)), { recursive: true });
   await writeFile(path.join(root, name), content, { mode });
@@ -25,7 +48,7 @@ async function parsed(root, name) { return JSON.parse(await readFile(path.join(r
 
 // These are real exact-byte generations on disposable files. Immutable object
 // callbacks model Git's blob/tree interface; no candidate script is executed.
-async function fixture(t, { derived = false, patched = false, security = false } = {}) {
+async function fixture(t, { derived = false, patched = false, security = false, external = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "cc-profile-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const initial = new Map([
@@ -48,6 +71,8 @@ async function fixture(t, { derived = false, patched = false, security = false }
   const manifest = { schemaVersion: 1, upstream: "https://github.com/farion1231/cc-switch", commit: oldCommit, version: "1.0.0", license: "MIT", selection: ["LICENSE", "package.json", "src", "src-tauri/src"], files: originalFiles };
   const manifestBytes = encode(manifest);
   const policy = { version: 1, upstreamCommit: oldCommit, sourceManifestSha256: sha256(manifestBytes), productionRoots: [prefix + "src/index.ts"], hostBuildInputs: ["host/build.json"], ownedTrees: ["vendor/cc-switch"], generatedTrees: [], derivedOutputs: derived ? [{ destination: prefix + "src-tauri/src/codex_mcp_config.rs", source: "src-tauri/src/codex_config.rs", reason: "Reviewed headless Codex helper extraction" }] : [], sourceReferenceDocuments: [], dynamicResources: [] };
+  if (external) policy.externalHostOutputs = externalReferences;
+  const owner = external ? await externalOwner(root) : null;
   await put(root, manifestPath, manifestBytes);
   await put(root, policyPath, encode(policy));
   await put(root, "host/build.json", "{}\n");
@@ -85,6 +110,7 @@ async function fixture(t, { derived = false, patched = false, security = false }
   const tree = encode({ version: 1, upstreamCommit: oldCommit, paths: [...initial.keys()].sort() });
   const closure = await resourceClosure(root, policy, files, [...initial.keys()].sort());
   const inventory = { version: 1, upstreamCommit: oldCommit, sourceManifestSha256: sha256(manifestBytes), policySha256: sha256(encode(policy)), closureSha256: sha256(closure), upstreamTreeSha256: sha256(tree), hostBuildInputs: [{ path: "host/build.json", sha256: sha256(bytes("{}\n")), bytes: 3 }], modePolicy: "Canonical 0644/0755", files: files.sort((a, b) => a.destination.localeCompare(b.destination)), patches: patches.sort((a, b) => a.path.localeCompare(b.path)), summary: {} };
+  if (external) inventory.externalHostOutputs = externalReferences;
   await put(root, closurePath, closure);
   await put(root, treePath, tree);
   await put(root, inventoryPath, encode(inventory));
@@ -94,7 +120,7 @@ async function fixture(t, { derived = false, patched = false, security = false }
     if (content === null) target.delete(name); else target.set(name, bytes(content));
     plan.changes.push({ sourcePath: name, sourceCommit: oldCommit, outputPath: prefix + name, status, kind: "pristine" });
   }
-  return { ...context, initial, target, modes, change, manifestBytes, inventory, context };
+  return { ...context, initial, target, modes, change, manifestBytes, inventory, context, owner };
 }
 
 async function openHandsConsumer(root, name) {
@@ -293,4 +319,50 @@ test("derived review cannot authorize unrelated local output edits", async (t) =
   f.plan.reviewedDerivedOutputs = [prefix + "src/host-only.ts"];
   await assert.rejects(recordGeneration(f.context), /not enrolled in CC fork policy/);
   assert.equal((await parsed(f.root, manifestPath)).commit, oldCommit);
+});
+
+test("an independently reviewed T3 host generation does not stale or enroll CC replay ownership", async (t) => {
+  const f = await fixture(t, { external: true });
+  const before = await readFile(path.join(f.root, inventoryPath));
+  const oldProfile = await loadProfile(f.root);
+  await f.owner.update(externalPaths[0], "export const host = 2;\n");
+  const profile = await loadProfile(f.root);
+  assert.notEqual(profile.hostInputs.find((entry) => entry.path === externalPaths[0]).sha256, oldProfile.hostInputs.find((entry) => entry.path === externalPaths[0]).sha256);
+  assert.deepEqual((await verifyGeneration(f.context)).blockers, []);
+  assert.deepEqual(await readFile(path.join(f.root, inventoryPath)), before);
+  assert.equal(profile.outputs.some((entry) => externalPaths.includes(entry.path)), false);
+  for (const name of [externalOwnerPath, "vendor/t3code/source-manifest.json", "vendor/t3code/sync-inventory.json", "vendor/t3code/mcp-skills-source.json", "vendor/t3code/LICENSE"]) {
+    assert.ok(profile.metadataPaths.includes(name));
+    assert.ok(profile.protectedPaths.includes(name));
+  }
+  f.change("src/index.ts", "export const upstream = 2;\n");
+  await put(f.root, prefix + "src/index.ts", f.target.get("src/index.ts"));
+  const result = await recordGeneration(f.context);
+  assert.deepEqual(result.blockers, []);
+  assert.equal(result.changedPaths.some((name) => externalPaths.includes(name) || name === externalOwnerPath), false);
+  const inventory = await parsed(f.root, inventoryPath), closure = await parsed(f.root, closurePath);
+  assert.deepEqual(inventory.externalHostOutputs, externalReferences);
+  assert.equal(inventory.files.some((entry) => externalPaths.includes(entry.destination)), false);
+  assert.equal(inventory.hostBuildInputs.some((entry) => externalPaths.includes(entry.path)), false);
+  assert.equal(closure.inputs.some((entry) => externalPaths.includes(entry.path)), false);
+  assert.equal(closure.hostIntegrationOutputs.some((name) => externalPaths.includes(name)), false);
+  assert.deepEqual((await verifyGeneration(f.context)).blockers, []);
+});
+
+test("CC authoring cannot approve external host edits or a generation that changes during recording", async (t) => {
+  const f = await fixture(t, { external: true });
+  const before = await readFile(path.join(f.root, inventoryPath));
+  f.plan.approvedOutputHashes = { [externalPaths[0]]: sha256(await readFile(path.join(f.root, externalPaths[0]))) };
+  await assert.rejects(recordGeneration(f.context), /CC cannot approve an external owner generation/);
+  f.plan.approvedOutputHashes = {};
+  let updated = false;
+  const result = await recordGeneration({ ...f.context, readBlob: async (commit, name) => {
+    if (!updated) { updated = true; await f.owner.update(externalPaths[0], "export const host = 3;\n"); }
+    return f.readBlob(commit, name);
+  } });
+  assert.ok(result.blockers.some((entry) => entry.code === "BLOCKED_EXTERNAL_OWNER_DRIFT"));
+  assert.deepEqual(await readFile(path.join(f.root, inventoryPath)), before);
+  await put(f.root, externalPaths[0], "export const unreviewed = true;\n");
+  await assert.rejects(recordGeneration(f.context), /differs from owner generation/);
+  await assert.rejects(verifyGeneration(f.context), /differs from owner generation/);
 });

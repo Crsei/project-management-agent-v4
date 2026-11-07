@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { bindPmProviderExecutionService, forkNativeSession } from "./native.ts";
 import { getStoredInstance } from "./instances.ts";
 import { closeStore } from "../durable/store.ts";
+import { agentWorkspaceEnvironment } from "../durable/execution.testkit.ts";
 
 test("fork delegates once to the assembled V2 service with trusted target identity and preserves source guards", async () => {
   const directory = await mkdtemp(join(tmpdir(), "native-v2-fork-"));
@@ -16,7 +17,7 @@ test("fork delegates once to the assembled V2 service with trusted target identi
     const instance = getStoredInstance("codex")!;
     const source = { providerInstanceId: instance.instanceId, driver: "codex" as const, sessionId: "source", turnId: "native-turn",
       modelId: "explicit", cwd: directory, instanceRevision: instance.revision };
-    const execution = { threadId: "branch", generationId: "fork-generation", messageId: "fork-message", scope: { workspaceId: "workspace", projectId: null } };
+    const execution = { threadId: "branch", generationId: "fork-generation", messageId: "fork-message", environment: agentWorkspaceEnvironment(directory, true) };
     let calls = 0;
     release = bindPmProviderExecutionService({
       run: async () => assert.fail("Metadata fork must not run a prompt"),

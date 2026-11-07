@@ -30,6 +30,8 @@ test("native bindings preserve upstream app IDs, explicit homes, sharing, confir
     await mkdir(two, { recursive: true });
     const first = createProviderInstance({ instanceId: "codex-one", driver: "codex", config: { homePath: path.join(one, ".codex") }, environment: environment(one) });
     createProviderInstance({ instanceId: "codex-two", driver: "codex", config: { homePath: path.join(two, ".codex") }, environment: environment(two) });
+    createProviderInstance({ instanceId: "codex-disabled", driver: "codex", enabled: false, config: { homePath: path.join(one, "disabled-codex") }, environment: environment(one) });
+    assert.equal(listExtensionProviderTargets().some(target => target.providerInstanceId === "codex-disabled"), false);
     const a = resolveExtensionProviderBinding({ providerInstanceIds: ["codex-one"], confirmed: true });
     const b = resolveExtensionProviderBinding({ providerInstanceIds: ["codex-two"], confirmed: true });
     assert.equal(a.homeDir, one);

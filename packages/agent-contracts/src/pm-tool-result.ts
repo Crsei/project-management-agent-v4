@@ -34,5 +34,9 @@ export const agentChatToolResultSchema = z.union([
   z.strictObject({ kind: z.literal("relation"), items: z.array(agentChatToolRelationSchema), ...resultFields }),
   // Lifecycle writes may leave no current entity (permanent deletion); the receipt still proves the original outcome.
   z.strictObject({ kind: z.literal("lifecycle"), items: z.array(agentChatToolEntitySchema), ...resultFields }),
+  z.strictObject({ kind: z.literal("workspaces"), items: z.array(z.strictObject({
+    id: z.uuid(), name: z.string(), workspaceAllowed: z.boolean().optional(),
+    projects: z.array(z.strictObject({ id: identifier, name: z.string() })),
+  })), ...resultFields }),
 ]);
 export type AgentChatToolResult = z.infer<typeof agentChatToolResultSchema>;

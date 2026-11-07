@@ -7,7 +7,6 @@ export function ThreadDetailsPanel({
   open,
   onClose,
   workspaceName,
-  projectName,
   threadTitle,
   path,
   statusLabel,
@@ -18,7 +17,6 @@ export function ThreadDetailsPanel({
   open: boolean;
   onClose: () => void;
   workspaceName?: string;
-  projectName?: string;
   threadTitle?: string;
   path?: string | null;
   statusLabel: string;
@@ -38,14 +36,13 @@ export function ThreadDetailsPanel({
     <div className={styles.body}>
       <dl className={styles.facts}>
         <div><dt>{t("工作区", "Workspace")}</dt><dd>{workspaceName || "—"}</dd></div>
-        <div><dt>{t("项目", "Project")}</dt><dd>{projectName || "—"}</dd></div>
         <div><dt>{t("会话", "Session")}</dt><dd>{threadTitle || "—"}</dd></div>
-        <div><dt>{t("文件区域", "File area")}</dt><dd><code>{path || "—"}</code></dd></div>
+        <div><dt>{t("实际执行目录", "Actual execution folder")}</dt><dd><code>{path || t("仅对话 · 无代码目录", "Chat only · no code folder")}</code></dd></div>
         <div><dt>{t("状态", "Status")}</dt><dd>{statusLabel}</dd></div>
       </dl>
       <div className={styles.actions} role="group" aria-label={t("会话操作", "Session actions")}>
         <button type="button" className={styles.action} disabled={!onConfigureFiles} onClick={onConfigureFiles}>
-          <FolderOpenIcon aria-hidden="true" /><span className={styles.actionLabel}>{t("配置文件区域", "Configure file area")}</span>{!onConfigureFiles && <span className={styles.unavailable}>{t("不可用", "Unavailable")}</span>}
+          <FolderOpenIcon aria-hidden="true" /><span className={styles.actionLabel}>{t("选择执行环境", "Select execution environment")}</span>{!onConfigureFiles && <span className={styles.unavailable}>{t("不可用", "Unavailable")}</span>}
         </button>
         <button type="button" className={styles.action} disabled={sessionSettingsDisabled} onClick={onSessionSettings}>
           <SlidersHorizontalIcon aria-hidden="true" /><span className={styles.actionLabel}>{t("当前会话参数", "Session settings")}</span>{sessionSettingsDisabled && <span className={styles.unavailable}>{t("不可用", "Unavailable")}</span>}

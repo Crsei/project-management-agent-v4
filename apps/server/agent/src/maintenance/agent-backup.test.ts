@@ -184,6 +184,32 @@ test("migrated private credentials and attachment bytes survive only their decla
   }
 });
 
+test("independent workspace records and private chat files are backed up without copying external code", async () => {
+  for (const secrets of ["include", "exclude"] as const) {
+    const f = fixture();
+    try {
+      const external = path.join(f.root, "external-code");
+      mkdirSync(external, { mode: 0o700 });
+      writeFileSync(path.join(external, "source.ts"), "external code is not backup-owned", { mode: 0o600 });
+      const scratch = path.join(f.source, "chat-scratch", "thread-a");
+      mkdirSync(scratch, { recursive: true, mode: 0o700 });
+      writeFileSync(path.join(scratch, "notes.txt"), "private conversation notes", { mode: 0o600 });
+      const db = new DatabaseSync(path.join(f.source, "workspace.sqlite"));
+      const workspace = { id: "folder-a", path: external, revision: 1 };
+      try {
+        db.prepare("INSERT INTO records VALUES (?,?,?)").run("agent:workspaces:v1", "folder-a", JSON.stringify(workspace));
+      } finally { db.close(); }
+      const manifest = await create(f, secrets);
+      restoreAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      verifyAgentBackup({ bundle: f.bundle, target: f.target, stopped: true });
+      assert.equal(readFileSync(path.join(f.target, "chat-scratch/thread-a/notes.txt"), "utf8"), "private conversation notes");
+      assert.deepEqual(JSON.parse(String(restoredRecords(f.target).find(row => row.namespace === "agent:workspaces:v1")!.value)), workspace);
+      assert.equal(manifest.files.some(member => member.path.includes("source.ts")), false);
+      assert.equal(readFileSync(path.join(external, "source.ts"), "utf8"), "external code is not backup-owned");
+    } finally { f.close(); }
+  }
+});
+
 test("credential-excluded manifests cannot smuggle a migrated private store into restore", async () => {
   const f = fixture();
   try {

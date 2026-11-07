@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { parseDocument } from 'yaml';
 import { parseMarkdown } from '../pm-markdown/index.ts';
 import { defaultConfiguration,parseConfiguration,type FileRecord,type ProtocolConfiguration } from '../pm-schema/index.ts';
@@ -5,7 +6,7 @@ import { validateRelations } from '../pm-schema/relations.ts';
 import { FileRepository,revisionOf } from './repository.ts';
 export type ReadonlyCoreSnapshot={files:FileRecord[];fingerprint:string;configuration?:ProtocolConfiguration};
 import { DurableState } from './state.ts';
-import { ProjectLocations } from './project-locations.ts';
+import { ProjectLocations, type ProjectLocation } from './project-locations.ts';
 /** Pure file reads. Never initializes Workspace, state, cache, directories, or watchers. */
 export function readCurrentCore(root:string):ReadonlyCoreSnapshot {
  const repository=new FileRepository(root);
@@ -31,3 +32,19 @@ export function readCurrentCore(root:string):ReadonlyCoreSnapshot {
 }
 export type NotificationCorePort={read(workspaceId:string):Promise<ReadonlyCoreSnapshot>};
 export function readonlyCorePort(rootFor:(workspaceId:string)=>string):NotificationCorePort {return {read:async workspaceId=>readCurrentCore(rootFor(workspaceId))};}
+/** Only the authoritative reads needed by code-root resolution; a Workspace also satisfies this port. */
+export type ExecutionCoreWorkspace = {
+ readonly root:string;
+ items(query:{entity:'project';archived:'include'}):FileRecord[];
+ projectLocations():ProjectLocation[];
+};
+/** No Workspace, projection, watcher, recovery or write initialization is created for Worker callers. */
+export function readExecutionWorkspace(root:string):ExecutionCoreWorkspace {
+ root=path.resolve(root);
+ const snapshot=readCurrentCore(root),locations=new ProjectLocations(root);
+ return {
+  root,
+  items:()=>snapshot.files.filter(file=>file.entity.entity==='project'),
+  projectLocations:()=>locations.list(),
+ };
+}

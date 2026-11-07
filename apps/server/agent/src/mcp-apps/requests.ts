@@ -68,6 +68,6 @@ export async function mcpAppContext(threadId: string, itemId: string, headers: H
   return withMcpAppSession(app, headers, signal, async session => {
     await session.check();
     // Commit is synchronous immediately after current authorization; replace/clear, never append.
-    return { revision: replaceMcpAppContext(app, session.scope, session.cwd, input, session.originatingMcpGrant) };
+    return { revision: replaceMcpAppContext(app, session.executionEnvironment, session.cwd, input, session.originatingMcpGrant) };
   });
 }

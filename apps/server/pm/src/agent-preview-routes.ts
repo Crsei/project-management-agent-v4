@@ -9,21 +9,17 @@ import {
   type AgentChatToolName, type AgentChatToolScope,
 } from '../../../../packages/application/src/agent-chat-tools.ts';
 import { pmChangeSetSchema, type PmChangeField, type PmChangeKind, type PmChangeSet } from '../../../../packages/agent-contracts/src/pm-changes.ts';
+import { pmToolTargetSchema } from '../../../../packages/agent-contracts/src/pm-tools.ts';
 import { validateTransition, workflowFor, type FileRecord, type ProtocolConfiguration } from '../../../../packages/pm-schema/index.ts';
 import { relationFields } from '../../../../packages/pm-schema/relations.ts';
 import { inspectFrontmatter } from '../../../../packages/pm-markdown/index.ts';
 import { WorkspaceError, type Workspace } from '../../../../packages/pm-core/index.ts';
 import { CoreScope, type CoreWorkspacePool } from './core-routes.ts';
 
-const projectIdPattern = /^[A-Z][A-Z0-9]*-\d+$/;
-const previewScopeSchema = z.strictObject({
-  kind: z.enum(['projects', 'workspace']),
-  projectIds: z.array(z.string().regex(projectIdPattern)).max(1000),
-});
 const previewRequestSchema = z.strictObject({
   name: z.string().min(1).max(100),
   arguments: z.unknown(),
-  scope: previewScopeSchema,
+  target: pmToolTargetSchema,
 }).refine(value => value.arguments !== undefined, 'Arguments are required');
 type PreviewRequest = z.infer<typeof previewRequestSchema>;
 
@@ -217,17 +213,15 @@ function preview(name: AgentChatToolName, args: unknown, workspace: Workspace, s
   }
 }
 
-function resolveScope(member: Membership, workspaceId: string, workspace: Workspace, input: PreviewRequest['scope']): AgentChatToolScope {
-  if (input.kind === 'workspace' && member.projectIds !== null) throw new DomainError('not_found_or_forbidden', 'Workspace scope requires workspace-wide native permission', 404);
-  if (input.kind === 'workspace' && input.projectIds.length) throw new DomainError('agent_scope_invalid', 'Workspace scope does not accept a project list', 400);
+function resolveScope(member: Membership, workspaceId: string, workspace: Workspace, target: PreviewRequest['target']): AgentChatToolScope {
+  if (target.projectId === null && member.projectIds !== null) throw new DomainError('not_found_or_forbidden', 'Workspace scope requires workspace-wide native permission', 404);
   const coreScope = new CoreScope(member, workspaceId);
   const authorized = workspace.items({ entity: 'project', archived: 'exclude' })
     .filter(record => coreScope.allows(record) && !record.stale && !record.error).map(record => record.id);
-  const selected = input.kind === 'workspace' ? authorized : [...new Set(input.projectIds)];
-  if (input.kind === 'workspace' && authorized.length > 1000) throw new DomainError('agent_scope_too_large', 'Choose a smaller explicit project scope', 400);
-  if (input.kind === 'projects' && !selected.length) throw new DomainError('agent_scope_required', 'Select at least one authorized project', 400);
-  if (selected.some(id => !authorized.includes(id))) throw new DomainError('not_found_or_forbidden', 'One or more selected projects are unavailable', 404);
-  return { kind: input.kind, projectIds: selected };
+  const selected = target.projectId === null ? authorized : [target.projectId];
+  if (target.projectId === null && authorized.length > 1000) throw new DomainError('agent_scope_too_large', 'Choose an explicit project target', 400);
+  if (selected.some(id => !authorized.includes(id))) throw new DomainError('not_found_or_forbidden', 'The selected project is unavailable', 404);
+  return { kind: target.projectId === null ? 'workspace' : 'projects', projectIds: selected };
 }
 
 /**
@@ -243,6 +237,7 @@ export function registerAgentPreviewRoutes(app: FastifyInstance, options: {
     reply.header('Cache-Control', 'no-store');
     const { workspaceId } = z.object({ workspaceId: z.uuid().toLowerCase() }).parse(request.params);
     const input = previewRequestSchema.parse(request.body);
+    if (input.target.workspaceId !== workspaceId) throw new DomainError('agent_tool_target_mismatch', 'The tool target must match the URL workspace', 400);
     const actor = await options.actor(request);
     const member = await getMembership(options.database(), actor, workspaceId);
     if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403);
@@ -250,7 +245,7 @@ export function registerAgentPreviewRoutes(app: FastifyInstance, options: {
     if (!tool) throw new DomainError('agent_tool_not_available', 'This tool is not registered', 403);
     if (!options.coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);
     const workspace = await options.coreWorkspaces.get(workspaceId);
-    const scope = resolveScope(member, workspaceId, workspace, input.scope);
+    const scope = resolveScope(member, workspaceId, workspace, input.target);
     parseAgentChatToolInput(tool.name, input.arguments);
     if (!tool.write) throw new DomainError('preview_not_supported', 'This read-only tool has no change to preview', 400);
     return preview(tool.name, input.arguments, workspace, scope);

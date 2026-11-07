@@ -10,13 +10,9 @@ import { USAGE_PATH } from "./usage/navigation";
 const GeneralPage = lazy(() => import("./settings/general-page"));
 const ProvidersPage = lazy(() => import("./settings/providers-page"));
 const AppearancePage = lazy(() => import("./settings/appearance-page"));
-const FileAreasPage = lazy(() => import("./settings/file-areas-page"));
 const HistoryPage = lazy(() => import("./settings/history-page"));
-const DiagnosticsPage = lazy(() => import("./settings/diagnostics-page"));
-const StoragePage = lazy(() => import("./settings/storage-page"));
 const UsagePage = lazy(() => import("./usage/UsagePage"));
 const UsageSettings = lazy(() => import("./usage/UsageSettings"));
-const McpClientsPage = lazy(() => import("./settings/mcp-clients-page"));
 const ExtensionsPage = lazy(() => import("./settings/extensions-page"));
 const NativeSkillsPage = lazy(() => import("./settings/extensions-page").then(module => ({ default: module.NativeSkillsPage })));
 
@@ -83,16 +79,12 @@ export function App() {
       <Route index element={<SettingsIndex />} />
       <Route path="general" element={<GeneralPage />} />
       <Route path="providers" element={<ProvidersPage />} />
-      <Route path="mcp-clients" element={<McpClientsPage />} />
       <Route path="mcp-servers" element={<ExtensionsPage />} />
       <Route path="skills" element={<NativeSkillsPage />} />
       <Route path="usage" element={<UsagePage />} />
       <Route path="usage/config" element={<UsageSettings />} />
       <Route path="appearance" element={<AppearancePage />} />
-      <Route path="file-areas" element={<FileAreasPage />} />
       <Route path="history" element={<HistoryPage />} />
-      <Route path="diagnostics" element={<DiagnosticsPage />} />
-      <Route path="storage" element={<StoragePage />} />
       <Route path="*" element={<SettingsNotFound />} />
     </Route>
     <Route path="*" element={<main className="p-8">

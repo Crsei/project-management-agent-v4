@@ -133,7 +133,7 @@ export function ComposerTraitsPicker({
         aria-busy={busy}
         title={error ? t(`参数未保存：${error}`, `Parameters not saved: ${error}`) : description}
         data-composer-traits-trigger="true"
-        className={cn("flex h-7 min-w-0 max-w-40 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50", (error || unavailable.length > 0) && "text-destructive")}
+        className={cn("flex h-7 min-w-0 max-w-40 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground disabled:opacity-50", (error || unavailable.length > 0) && "text-destructive")}
       />}>
         {primary && REASONING_SELECT_DESCRIPTOR_IDS.has(primary.id) ? <BrainIcon aria-hidden="true" className="size-3.5 shrink-0" /> : <SlidersHorizontalIcon aria-hidden="true" className="size-3.5 shrink-0" />}
         <span className="min-w-0 truncate" data-composer-effort-label={primary && REASONING_SELECT_DESCRIPTOR_IDS.has(primary.id) ? true : undefined}>{triggerLabel}</span>
@@ -215,7 +215,7 @@ export function ComposerTraitsPicker({
         aria-label={t(`交互模式：${modeLabel}`, `Interaction mode: ${modeLabel}`)}
         aria-busy={busy}
         title={t(`交互模式：${modeLabel}`, `Interaction mode: ${modeLabel}`)}
-        className="flex h-7 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+        className="flex h-7 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground disabled:opacity-50"
       />}>
         <SlidersHorizontalIcon aria-hidden="true" className="size-3.5 shrink-0" />
         <span>{modeLabel}</span>

@@ -6,11 +6,11 @@ import type {
   ProviderSettingsFormControl,
 } from "@t3tools/contracts";
 import type { ProviderIcon, ProviderEnvironmentField } from "@t3tools/provider-core/client";
-import type { AgentScope } from "./chat.ts";
+import type { ExecutionSelection } from "./execution.ts";
 import type { ServerProviderSkill, ServerProviderSlashCommand } from "@t3tools/contracts";
 
 /** Provider-native discovery is distinct from saved WorkspaceSkill instructions. */
-export type ProviderSkillsRefreshInput = { scope: AgentScope; fresh?: boolean };
+export type ProviderSkillsRefreshInput = { threadId?: string; executionSelection?: ExecutionSelection; fresh?: boolean };
 export type ProviderNativeConfigurationChange = {
   changedAt: string;
   reason: string;

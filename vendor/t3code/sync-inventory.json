@@ -10,8 +10,8 @@
     "upstreamSelected": 861,
     "upstreamPristine": 697,
     "upstreamPatched": 164,
-    "existingAdditionalAssets": 346,
-    "outputFilesExcludingSelf": 1213
+    "existingAdditionalAssets": 347,
+    "outputFilesExcludingSelf": 1214
   },
   "files": [
     {
@@ -26,8 +26,8 @@
     {
       "destination": "vendor/t3code/SYNC.md",
       "asset": "vendor/t3code/SYNC.md",
-      "sha256": "e30bc7c6dc86866915700aa954e246ce33ebd3faa9032befbb52a3bf2e128800",
-      "bytes": 19628,
+      "sha256": "9de1f5eda20f953bc5eaaeb954a91ff15bda3bcb82b937c2e2f29a5959d0eb98",
+      "bytes": 24254,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3831,8 +3831,8 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "fe59f5c25328bed2ba39741dccfcc368b353990b19d366c82501a935bb5320ea",
-      "bytes": 4788710
+      "sha256": "0a90a0329aa86558f95994f274d6c10fdd160441974145e823aec366e62b13ce",
+      "bytes": 4811857
     },
     {
       "destination": "vendor/t3code/mcp-skills-source.json",
@@ -10580,14 +10580,14 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "a231b14647719e5b43a8f773fb2de004073f92d225b1d818ac187469a1f84b11",
-      "bytes": 4109
+      "sha256": "5b110e6f887cb88d6020ec76ce16aee349acd889eec58dcf3f616467c35bbae3",
+      "bytes": 8189
     },
     {
       "destination": "vendor/t3code/scripts/capture.py",
       "asset": "vendor/t3code/scripts/capture.py",
-      "sha256": "ab58c4c341a2003c509f763ef1681ff7b8ccedb300f8a940dc8dd270837e65fd",
-      "bytes": 9991,
+      "sha256": "49dadcc6e804d3434505a3411125e16c0c4ebc6551a8a5b6d4fb7a95da02c78e",
+      "bytes": 10919,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10604,8 +10604,8 @@
     {
       "destination": "vendor/t3code/scripts/imports.mjs",
       "asset": "vendor/t3code/scripts/imports.mjs",
-      "sha256": "bf64aa39a8806319c9beed361a3ca054f17c15061227aac35b8950059ad309d7",
-      "bytes": 8289,
+      "sha256": "63fd2a7b63673af521d48d1313374ee1bcee96e34bbd1aa1e042412dbc652209",
+      "bytes": 12611,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10616,8 +10616,8 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "b595113bd6284ba1899e176ca40cfaa5c59e0c4b36f1c1550ab6cedc1f1681f9",
-      "bytes": 5563
+      "sha256": "ac76d6db8e19063ee975be18374cc47065add0fce279e50778f8cb7e6106874a",
+      "bytes": 10198
     },
     {
       "destination": "vendor/t3code/scripts/mcp-skills-source.mjs",
@@ -10631,17 +10631,26 @@
     {
       "destination": "vendor/t3code/scripts/sync.mjs",
       "asset": "vendor/t3code/scripts/sync.mjs",
-      "sha256": "ede34d762ca6f92db3a073189a7340eda78263c62eab94c58e61e64f010e0eda",
-      "bytes": 9236,
+      "sha256": "6ffa9d686c7c1ab527c3c6db11d82001299d1d0b00e539f00a5d0f4bc08c683e",
+      "bytes": 9416,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
     },
     {
+      "destination": "vendor/t3code/scripts/verify-mcp-skills-authoring.mjs",
+      "asset": "vendor/t3code/scripts/verify-mcp-skills-authoring.mjs",
+      "mode": 420,
+      "provenance": "local-addition",
+      "rationaleLedger": "vendor/t3code/integration-patches.json",
+      "sha256": "0df37c6527c4e9290004520f5e3f82b1ca95d389d64734b7bd658cb48c99578c",
+      "bytes": 11667
+    },
+    {
       "destination": "vendor/t3code/scripts/verify-sync.mjs",
       "asset": "vendor/t3code/scripts/verify-sync.mjs",
-      "sha256": "700ba8cea3384c6ccfa4e584dbed2bf6d6c7bd52e71a9aae0c351a07c1c54dc0",
-      "bytes": 11578,
+      "sha256": "d79baea4079cdd85d45d7bcfe58416cf0050e03b9d1db97637bdb762d289c831",
+      "bytes": 12543,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10667,8 +10676,8 @@
     {
       "destination": "vendor/t3code/sync-imports.json",
       "asset": "vendor/t3code/sync-imports.json",
-      "sha256": "b9291a2d6e00c2d9cf99d0825d7be9980468c41d1dfe1c829d3cd638498b2bf3",
-      "bytes": 2298264,
+      "sha256": "fce842b5f7130a1341ac0f1e3cffc5702df58e1778be1a531dda12d426a0a925",
+      "bytes": 2298167,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -11649,7 +11658,7 @@
       },
       {
         "path": "package.json",
-        "sha256": "c66e82c9fc00ecf8a1b16a878e44e9f2e8caa79c5b1fb4416adde8dac7f73a20"
+        "sha256": "c93494e3863a29bac77397c4191c973737101d7d1b2a36ef785ffaf2a202e8bb"
       },
       {
         "path": "rust-toolchain.toml",

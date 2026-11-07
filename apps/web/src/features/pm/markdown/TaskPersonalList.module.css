@@ -1,5 +1,5 @@
 .list {
-  --personal-columns: 18px 30px minmax(220px, 1fr) 160px 126px 108px 104px 40px;
+  --personal-columns: 18px 30px minmax(220px, 1fr) 160px 126px 108px 104px 76px;
   container: personal-task-list / inline-size;
   width: 100%;
   min-width: 0;
@@ -287,7 +287,7 @@
 @container personal-task-list (max-width: 920px) {
   .columns,
   .row {
-    grid-template-columns: 30px minmax(0, 1fr) 40px;
+    grid-template-columns: 30px minmax(0, 1fr) 76px;
   }
 
   .columns {

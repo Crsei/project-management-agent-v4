@@ -4,6 +4,7 @@ import { lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyHostBuildInputs } from '../vendor/t3code/scripts/host-inputs.mjs';
+import { assertNoRetiredImportEdges, assertRetiredTargetsAbsent, validateAdaptationManifest } from '../vendor/t3code/scripts/mcp-skills-adaptations.mjs';
 import { verifyOutputs as verifyCcSwitch, sha256 } from '../vendor/cc-switch/scripts/provenance.mjs';
 import { resourceClosure } from '../vendor/cc-switch/scripts/closure.mjs';
 import { verifyOutputs as verifyOpenHands, offlineOriginals } from '../vendor/openhands-extensions/scripts/provenance.mjs';
@@ -54,10 +55,22 @@ async function verifyT3Code() {
   }
   const adaptations = JSON.parse((await input('vendor/t3code/mcp-skills-adaptations.json')).bytes);
   if (adaptations.version !== 1 || adaptations.baselineCommit !== inventory.upstreamCommit || !Array.isArray(adaptations.outputs)) throw new Error('T3 Code supplemental source identity mismatch');
+  const retirements = validateAdaptationManifest(adaptations);
+  await assertRetiredTargetsAbsent(root, retirements);
+  assertNoRetiredImportEdges(JSON.parse((await input('vendor/t3code/sync-imports.json')).bytes), retirements);
+  const retired = new Set(retirements.map(entry => entry.destination));
+  if (inventory.files.some(entry => retired.has(entry.destination))) throw new Error('Retired T3 Code output still has a baseline reconstruction owner');
   const adapted = new Set();
   for (const entry of adaptations.outputs) {
     if (adapted.has(entry.destination)) throw new Error('Duplicate T3 Code supplemental output');
     adapted.add(entry.destination);
+    if (Object.hasOwn(entry, 'retirement')) {
+      if (entry.recipe.kind === 'local-bytes') {
+        const decoded = Buffer.from(entry.recipe.base64, 'base64');
+        if (sha256(decoded) !== entry.sha256 || decoded.length !== entry.bytes) throw new Error(`T3 Code retired local recipe drift: ${entry.destination}`);
+      }
+      continue;
+    }
     const bytes = await verifyEntry(entry);
     if (entry.recipe?.kind === 'local-bytes') {
       const decoded = Buffer.from(entry.recipe.base64, 'base64');

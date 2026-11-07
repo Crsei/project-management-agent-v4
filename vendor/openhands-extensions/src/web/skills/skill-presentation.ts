@@ -1,7 +1,5 @@
 import type { SkillInfo } from "@pm/openhands-source/types/settings";
-import type { InstalledSkill, DiscoverableSkill } from "@pm/cc-switch-source/lib/api/skills";
-import type { AppId } from "@pm/cc-switch-source/lib/api/types";
-import { APP_DISPLAY_NAME } from "@pm/cc-switch-source/components/shell/AppGlyph";
+import { APP_DISPLAY_NAME, type InstalledSkill, type DiscoverableSkill, type AppId } from "@pm/cc-switch-ui";
 import { isTargetAvailable } from "@pm/openhands-source/web/bridge";
 
 export interface ManagedSkillInfo extends SkillInfo {

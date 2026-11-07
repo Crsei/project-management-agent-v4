@@ -52,6 +52,19 @@ jobs:
           node-version-file: '.node-version'
           architecture: ${{ matrix.arch }}
       - uses: pnpm/action-setup@v4
+      - name: Locate pnpm content store and hosted toolchain image
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+      - name: Restore exact dependency content store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.path }}
+          # Signed and unsigned caches stay separate. Never cache node_modules,
+          # built applications, user homes, keychains or signing materials.
+          key: desktop-${{ inputs.distribution }}-pnpm-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
       - name: Install the repository-pinned Rust toolchain
         shell: bash
         run: |
@@ -66,6 +79,13 @@ jobs:
         run: node scripts/doctor.mjs
       - name: Install locked native runner dependencies
         run: pnpm install --frozen-lockfile
+      - name: Restore integrity-pinned runtime download archives
+        uses: actions/cache@v4
+        with:
+          # Only source archives: runtime:prepare still checks pinned SHA256,
+          # cross-checks Node's official checksum, extracts and inventories anew.
+          path: apps/desktop/.cache/runtime-downloads
+          key: desktop-${{ inputs.distribution }}-runtime-archives-v1-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'apps/desktop/scripts/runtime-manifest.mjs', 'apps/desktop/scripts/prepare-runtime.mjs') }}
       - name: Prepare integrity-pinned offline Node and complete PostgreSQL
         run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
       - name: Execute bundled runtime tools without ambient PATH
@@ -139,6 +159,19 @@ jobs:
           node-version-file: '.node-version'
           architecture: ${{ matrix.arch }}
       - uses: pnpm/action-setup@v4
+      - name: Locate pnpm content store and hosted toolchain image
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+      - name: Restore exact dependency content store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.path }}
+          # Signed and unsigned caches stay separate. Never cache node_modules,
+          # built applications, user homes, keychains or signing materials.
+          key: desktop-${{ inputs.distribution }}-pnpm-v1-${{ matrix.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
       - name: Install the repository-pinned Rust toolchain
         shell: bash
         run: |
@@ -153,6 +186,13 @@ jobs:
         run: node scripts/doctor.mjs
       - name: Install locked native runner dependencies
         run: pnpm install --frozen-lockfile
+      - name: Restore integrity-pinned runtime download archives
+        uses: actions/cache@v4
+        with:
+          # Only source archives: runtime:prepare still checks pinned SHA256,
+          # cross-checks Node's official checksum, extracts and inventories anew.
+          path: apps/desktop/.cache/runtime-downloads
+          key: desktop-${{ inputs.distribution }}-runtime-archives-v1-${{ matrix.os }}-${{ runner.arch }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'apps/desktop/scripts/runtime-manifest.mjs', 'apps/desktop/scripts/prepare-runtime.mjs') }}
       - name: Prepare integrity-pinned offline Node and complete PostgreSQL
         run: pnpm --filter @agent-workspace/desktop runtime:prepare --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
       - name: Execute bundled runtime tools without ambient PATH

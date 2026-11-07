@@ -8,11 +8,12 @@ import path from 'node:path';
 
 export interface Identity { path: string; id: string; entity?: string }
 export interface Idempotency { key: string; hash: string; id: string; revision?: string; copy?: ProjectCopyMapping & { sourceRevision: string; records: { id: string; revision: string }[] } }
-export type DuplicateTransaction = { kind: 'duplicate'; id: string; path: string; raw: string; records: { id: string; path: string; raw: string }[]; idempotency: Idempotency & { copy: NonNullable<Idempotency['copy']> }; projectDirectory?: { workspaceId: string; hash: string; check: ProjectDirectoryCheck } };
+export type DuplicateTransaction = { kind: 'duplicate'; id: string; path: string; raw: string; records: { id: string; path: string; raw: string }[]; idempotency: Idempotency & { copy: NonNullable<Idempotency['copy']> }; projectDirectory?: { workspaceId: string; hash: string; check: ProjectDirectoryCheck }; mutationIds?: string[] };
 export type Transaction =
-  | { kind: 'create'; id: string; path: string; raw: string; idempotency?: Idempotency; projectDirectory?: { workspaceId: string; hash: string; check: ProjectDirectoryCheck } }
+  | { kind: 'create'; id: string; path: string; raw: string; idempotency?: Idempotency; projectDirectory?: { workspaceId: string; hash: string; check: ProjectDirectoryCheck }; mutationId?: string }
   | DuplicateTransaction
-  | { kind: 'delete'; id: string; path: string; raw: string };
+  | { kind: 'write'; id: string; path: string; raw: string; beforeRevision: string; mutationId: string; idempotency?: never }
+  | { kind: 'delete'; id: string; path: string; raw: string; mutationId?: string };
 interface ProjectionBlob { revision: string; bytes: number; parts: number }
 export interface MigrationProjection {
   version: 1;
@@ -29,6 +30,7 @@ interface State {
   observed: Identity[];
   tombstones: string[];
   idempotency: Idempotency[];
+  committedMutationIds?: string[];
   transaction?: Transaction;
   migrationProjection?: MigrationProjection;
 }
@@ -37,6 +39,7 @@ const projectionBlobDirectory = '.pm/state/projection-blobs';
 const projectionChunkLength = 256 * 1024;
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const id = (value: unknown): value is string => typeof value === 'string' && /^[A-Z][A-Z0-9]*-\d+$/.test(value);
+const mutationIdentity = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const safePath = (value: unknown): value is string => typeof value === 'string' && !value.startsWith('.pm/') && !value.startsWith('/') && !value.includes('\\') && !value.includes('\0') && value.split('/').every(part => !!part && part !== '..' && part !== '.') && /\.md$/i.test(value);
 const keyRecord = (value: unknown): value is Idempotency => object(value) && typeof value.key === 'string' && !!value.key && typeof value.hash === 'string' && /^[a-f0-9]{64}$/.test(value.hash) && id(value.id)
   && (value.revision === undefined || typeof value.revision === 'string' && /^[a-f0-9]{64}$/.test(value.revision))
@@ -104,9 +107,13 @@ export class DurableState {
         && (item.entity === undefined || entityKinds.includes(item.entity as typeof entityKinds[number])))
       || !Array.isArray(value.idempotency) || !value.idempotency.every(keyRecord)) throw new Error('Malformed durable protocol state');
     const transaction = value.transaction;
-    if (transaction !== undefined && (!object(transaction) || !['create', 'delete', 'duplicate'].includes(String(transaction.kind)) || !id(transaction.id)
+    if (transaction !== undefined && (!object(transaction) || !['create', 'delete', 'duplicate', 'write'].includes(String(transaction.kind)) || !id(transaction.id)
       || !safePath(transaction.path) || typeof transaction.raw !== 'string'
       || (transaction.idempotency !== undefined && !keyRecord(transaction.idempotency)))) throw new Error('Malformed durable transaction');
+    if (object(transaction) && transaction.kind === 'write' && (typeof transaction.beforeRevision !== 'string' || !/^[a-f0-9]{64}$/.test(transaction.beforeRevision) || !mutationIdentity(transaction.mutationId))) throw new Error('Malformed durable write proof');
+    if (object(transaction) && transaction.mutationId !== undefined && !mutationIdentity(transaction.mutationId)) throw new Error('Malformed durable mutation proof');
+    if (object(transaction) && transaction.mutationIds !== undefined && (transaction.kind !== 'duplicate' || !Array.isArray(transaction.mutationIds) || !transaction.mutationIds.every(mutationIdentity))) throw new Error('Malformed durable batch proof');
+    if (value.committedMutationIds !== undefined && (!Array.isArray(value.committedMutationIds) || !value.committedMutationIds.every(mutationIdentity))) throw new Error('Malformed committed mutation proof');
     if (object(transaction) && transaction.projectDirectory !== undefined) {
       const directory = transaction.projectDirectory;
       const rootIdentity = (item: unknown): boolean => object(item) && typeof item.device === 'string' && /^\d+$/.test(item.device) && typeof item.inode === 'string' && /^\d+$/.test(item.inode);
@@ -277,12 +284,44 @@ export class DurableState {
     this.store({ ...this.value, reservedIds: [...new Set([...this.value.reservedIds, transaction.id, ...(transaction.kind === 'duplicate' ? transaction.records.map(record => record.id) : [])])], transaction });
   }
 
+  attachMutationProofs(mutationIds: readonly string[]): void {
+    if (!mutationIds.length) return;
+    const transaction = this.value.transaction;
+    if (transaction?.kind !== 'duplicate') throw new Error('Only the pending project copy may attach batch proofs');
+    const next = [...new Set([...(transaction.mutationIds ?? []), ...mutationIds])];
+    if (JSON.stringify(next) !== JSON.stringify(transaction.mutationIds)) this.store({ ...this.value, transaction: { ...transaction, mutationIds: next } });
+  }
+
   finish(): void {
     const transaction = this.value.transaction;
     if (!transaction) return;
     const { transaction: _transaction, ...next } = this.value;
     if (transaction.kind === 'delete') next.tombstones = [...new Set([...next.tombstones, transaction.id])];
     else if (transaction.idempotency) next.idempotency = [...next.idempotency, { ...transaction.idempotency, revision: revisionOf(transaction.raw) }];
+    const proofs='mutationIds' in transaction?transaction.mutationIds??[]:'mutationId' in transaction&&transaction.mutationId?[transaction.mutationId]:[];
+    if (proofs.length) next.committedMutationIds = [...new Set([...(next.committedMutationIds ?? []), ...proofs])];
+    this.store(next);
+  }
+
+  mutationProofs(): ReadonlySet<string> {
+    return new Set(this.value.committedMutationIds ?? []);
+  }
+
+  hasUnpublishedMutations(): boolean {
+    return !!this.value.committedMutationIds?.length;
+  }
+
+  retireMutationProofs(completed: ReadonlySet<string>): void {
+    const proofs = this.value.committedMutationIds;
+    if (!proofs?.some(id => completed.has(id))) return;
+    this.store({ ...this.value, committedMutationIds: proofs.filter(id => !completed.has(id)) });
+  }
+
+  cancelUnwrittenMutation(knownCasRejection = false): void {
+    const transaction = this.value.transaction;
+    if (transaction?.kind !== 'write') return;
+    if (!knownCasRejection && revisionOf(this.repository.read(transaction.path)) !== transaction.beforeRevision) return;
+    const { transaction: _transaction, ...next } = this.value;
     this.store(next);
   }
 
@@ -305,6 +344,12 @@ export class DurableState {
     let current: string | undefined;
     try { current = this.repository.read(transaction.path); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    if (transaction.kind === 'write') {
+      if (current === transaction.raw) this.finish();
+      else if (current !== undefined && revisionOf(current) === transaction.beforeRevision) this.cancelUnwrittenMutation();
+      else throw new RepositoryConflict(`Write proof conflicts with external content: ${transaction.path}`);
+      return;
+    }
     if (current !== undefined && current !== transaction.raw) throw new RepositoryConflict(`Transaction recovery conflicts with external content: ${transaction.path}`);
     if (transaction.kind === 'create' && current === undefined) {
       const directory = transaction.path.slice(0, transaction.path.lastIndexOf('/'));

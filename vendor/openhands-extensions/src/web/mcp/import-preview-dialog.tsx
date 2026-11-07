@@ -1,10 +1,9 @@
 import React from "react";
 import type { ExtensionMcpImportResolution } from "@agent-workspace/contracts/extensions";
-import { usePreviewMcpImport, useApplyMcpImport } from "@pm/cc-switch-source/hooks/useMcp";
-import { V7Dialog } from "@pm/cc-switch-source/components/mcp/formBits";
-import { DialogTitle, DialogDescription } from "@pm/cc-switch-source/components/ui/dialog";
-import { APP_DISPLAY_NAME } from "@pm/cc-switch-source/components/shell/AppGlyph";
-import { useUnsavedChangesTracker } from "@pm/cc-switch-source/lib/unsavedChanges";
+import {
+  usePreviewMcpImport, useApplyMcpImport, V7Dialog, DialogTitle, DialogDescription,
+  APP_DISPLAY_NAME, useUnsavedChangesTracker,
+} from "@pm/cc-switch-ui";
 import { useOpenHandsTranslation } from "@pm/openhands-source/web/i18n";
 import { mcpReasonText } from "./management";
 
@@ -32,7 +31,7 @@ export function McpImportPreviewDialog({ onClose, onInteractionBlockedChange }: 
     if (!busy && !applyLock.current && (!dirty || window.confirm(t("MCP_PM$DISCARD")))) onClose();
   };
   const submit = () => {
-    if (busy || applyLock.current || !preview.data || apply.data) return;
+    if (busy || applyLock.current || !preview.data || apply.data || apply.error) return;
     applyLock.current = true;
     apply.mutate({ previewId: preview.data.previewId, selections: preview.data.entries.map(entry => ({
       entryId: entry.entryId, resolution: choices[entry.entryId] ?? "skip",
@@ -60,6 +59,6 @@ export function McpImportPreviewDialog({ onClose, onInteractionBlockedChange }: 
       {preview.data?.entries.length === 0 && <p>{t("MCP_PM$NO_IMPORT")}</p>}
       {apply.data && <div role="status" className="oh-mcp-import-result"><strong>{t("MCP_PM$IMPORT_RESULT", { applied: apply.data.applied, skipped: apply.data.skipped })}</strong><p>{t("MCP_PM$IMPORT_NO_WRITE")}</p>{apply.data.warnings.map((warning, index) => <p className="oh-mcp-warning" key={`${warning.app}:${index}`}>{APP_DISPLAY_NAME[warning.app]}: {mcpReasonText(warning.message, t)}</p>)}</div>}
     </div>
-    <div className="oh-mcp-actions"><button type="button" disabled={busy} onClick={close}>{t("MCP_PM$CLOSE")}</button>{!apply.data && <button type="button" className="oh-mcp-primary" disabled={busy || !preview.data || !dirty} onClick={submit}>{t("MCP_PM$APPLY_IMPORT")}</button>}</div>
+    <div className="oh-mcp-actions"><button type="button" disabled={busy} onClick={close}>{t("MCP_PM$CLOSE")}</button>{!apply.data && <button type="button" className="oh-mcp-primary" disabled={busy || !preview.data || !dirty || !!apply.error} onClick={submit}>{t("MCP_PM$APPLY_IMPORT")}</button>}</div>
   </V7Dialog>;
 }

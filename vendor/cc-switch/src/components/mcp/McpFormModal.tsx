@@ -692,7 +692,6 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
         aria-describedby={undefined}
       >
         <SheetBody className="flex flex-col gap-5 px-6 pb-6 pt-5">
-          {definitionOnly && <p className="m-0 rounded-panel border border-border bg-subtle px-3 py-2 text-caption text-fg-2">{t("MCP_PM$SHARED_EDIT_BOUNDARY")}</p>}
           {transportRestricted && <Notice title={t("mcpPage.drawer.contextTransportTitle")}><p id="mcp-context-transport-hint">{transportConstraint}</p></Notice>}
           {(unsupportedTransport || unsupportedBatch) && <FieldError>{t("mcpPage.drawer.contextTransportUnavailable")}</FieldError>}
           {!isEdit && (
@@ -900,17 +899,6 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                     {t("mcpPage.drawer.name")}
                     <RequiredMark srText={t("mcpPage.drawer.required")} />
                   </label>
-                  <HelpTip
-                    title={
-                      isEdit
-                        ? t("mcpPage.drawer.nameHelpEditTitle")
-                        : t("mcpPage.drawer.nameHelpTitle")
-                    }
-                  >
-                    {isEdit
-                      ? t("mcpPage.drawer.nameHelpEdit")
-                      : t("mcpPage.drawer.nameHelp")}
-                  </HelpTip>
                 </div>
                 <input
                   id="mcp-name"
@@ -1322,7 +1310,6 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                 open={metaOpen}
                 controls="mcp-meta"
                 onToggle={() => setMetaOpen((value) => !value)}
-                hint={t("mcpPage.drawer.metaHint")}
               >
                 {t("mcpPage.drawer.meta")}
               </DisclosureButton>
@@ -1333,9 +1320,6 @@ const McpFormModal: React.FC<McpFormModalProps> = ({
                       <label htmlFor="mcp-meta-name" className={LABEL_CLASS}>
                         {t("mcpPage.drawer.displayName")}
                       </label>
-                      <HelpTip title={t("mcpPage.drawer.displayNameHelpTitle")}>
-                        {t("mcpPage.drawer.displayNameHelp")}
-                      </HelpTip>
                     </div>
                     <input
                       id="mcp-meta-name"

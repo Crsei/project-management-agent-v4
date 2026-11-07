@@ -5,11 +5,7 @@ import { useOpenHandsTranslation } from "@pm/openhands-source/web/i18n";
 import { getInstallableMcpConnectionOptions, type McpMarketplaceConnectionOption } from "@pm/openhands-source/utils/mcp-marketplace-utils";
 import { toMcpServerName } from "@pm/openhands-source/utils/mcp-server-name";
 import type { MCPServerConfig } from "@pm/openhands-source/types/mcp-server";
-import { useSaveMcpDefinition } from "@pm/cc-switch-source/hooks/useMcp";
-import { uniqueId } from "@pm/cc-switch-source/components/mcp/mcpDraft";
-import { V7Dialog } from "@pm/cc-switch-source/components/mcp/formBits";
-import { DialogTitle, DialogDescription } from "@pm/cc-switch-source/components/ui/dialog";
-import { useUnsavedChangesTracker } from "@pm/cc-switch-source/lib/unsavedChanges";
+import { useSaveMcpDefinition, uniqueId, V7Dialog, DialogTitle, DialogDescription, useUnsavedChangesTracker } from "@pm/cc-switch-ui";
 import { webPlatform } from "@pm/openhands-source/web/bridge";
 
 /** Source helper text keeps safe documentation links, never javascript/data URLs. */
@@ -130,7 +126,6 @@ export function InstallServerModal({ entry, existingServers, onClose, onSuccess,
       {template?.kind === "stdio" ? <label>{t("MCP$COMMAND_LABEL")}<input readOnly value={`${template.command} ${template.args.join(" ")}`} /></label> : template && <label>{t("SETTINGS$MCP_URL")}<input type="url" value={values.url ?? template.url} readOnly={!template.urlEditable} disabled={save.isPending || !!reason} onChange={event => setValue("url", event.target.value)} />{errors.url && <small className="oh-mcp-error">{errors.url}</small>}</label>}
       {fields.map(renderField)}
       {needsCredential && renderField({ key: "api_key", label: t(`MCP_PM$CREDENTIAL_${entry.id}`, { defaultValue: option.auth.credentialLabel ?? t("SETTINGS$MCP_API_KEY") }), type: "password", required: !credentialOptional, placeholder: option.auth.credentialPlaceholder, helperText: option.auth.credentialHelp })}
-      <p className="oh-mcp-muted">{t("MCP_PM$INSTALL_BOUNDARY")}</p>
       {globalError && <p role="alert" className="oh-mcp-error">{globalError}</p>}
       <div className="oh-mcp-actions"><button type="button" disabled={save.isPending} onClick={close}>{t("BUTTON$CANCEL")}</button><button type="submit" className="oh-mcp-primary" disabled={save.isPending || !!reason}>{save.isPending ? t("SETTINGS$SAVING") : t("MCP$INSTALL_BUTTON")}</button></div>
     </form>

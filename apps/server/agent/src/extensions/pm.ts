@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { extensionProjectScopeSchema, type ExtensionProjectScope } from "@agent-workspace/contracts/extensions";
 import { automationServiceHeaders } from "../../../../../packages/infrastructure/src/automation-execution-client.ts";
-import { resolveAgentScope } from "../durable/agent-scope.ts";
+import { authorizePmTarget } from "../durable/pm-context.ts";
 import { ExtensionError } from "./rpc.ts";
 
 export async function extensionPmCallback(action: "authorize" | "references" | "invalidate", input: Record<string, unknown>): Promise<unknown> {
@@ -30,8 +30,8 @@ export async function authorizeExtensionProject(scope: ExtensionProjectScope, wr
   if (!result.authorized) throw new ExtensionError(403, "project_access_required", "Project configuration access is required.");
 }
 export async function resolveExtensionBrowserScope(input: { workspaceId: string; projectId: string }, headers: Headers, write = false): Promise<ExtensionProjectScope> {
-  const resolved = await resolveAgentScope({ workspaceId: input.workspaceId, projectId: input.projectId }, headers);
-  const scope = extensionProjectScopeSchema.parse({ actorId: resolved.actorId, workspaceId: resolved.scope.workspaceId, projectId: resolved.scope.projectId });
+  const resolved = await authorizePmTarget(input, headers);
+  const scope = extensionProjectScopeSchema.parse({ actorId: resolved.actorId, ...resolved.target });
   await authorizeExtensionProject(scope, write);
   return scope;
 }

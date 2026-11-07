@@ -11,27 +11,23 @@ import { recordNativeUsage } from "./ledger.ts";
 import { startPmProviderApplication, stopPmProviderApplication } from "../providers/t3code/application.ts";
 import { makePmProviderFamily } from "../providers/t3code/registration.ts";
 import { codexDriver, makeCodexDriverLayer } from "../providers/t3code/families/codex.ts";
+import { chatOnlyExecutionSelection } from "@agent-workspace/contracts/chat";
 
-test("usage API enforces access and read-only PM scope, persists snapshots and validates revision", async () => {
+test("usage API enforces Agent access without PM connectivity, persists snapshots and validates revision", async () => {
   const directory = await mkdtemp(join(tmpdir(), "usage-api-"));
   const oldDir = process.env.AGENT_WORKSPACE_DATA_DIR, oldPm = process.env.PM_API_URL, oldFetch = globalThis.fetch;
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
-  process.env.PM_API_URL = "http://127.0.0.1:4194";
-  const workspaceId = "0196c319-8b1d-7000-8000-000000000001";
-  let allowed = true; const calls: string[] = [];
+  process.env.PM_API_URL = "http://127.0.0.1:1";
+  const calls: string[] = [];
   globalThis.fetch = async (input, init) => {
     const url = String(input); calls.push(`${init?.method ?? "GET"} ${url}`);
-    if (url.endsWith("/api/v1/agent-contexts")) {
-      const area = { path: null, status: "unconfigured", revision: 1, source: null, canManage: false };
-      return Response.json({ workspaces: allowed ? [{ id: workspaceId, name: "Fixture", fileArea: area, projects: [] }] : [] });
-    }
     if (url.includes("github")) return Response.json({ "fixture-model": { input_cost_per_token: 0.000001, output_cost_per_token: 0.000002 } });
     throw new Error("Unexpected network request");
   };
   const json = (method: string, body: unknown) => ({ method, headers: { host: "localhost", "content-type": "application/json" }, body: JSON.stringify(body) });
   try {
     await writeFile(join(directory, "provider-instances.json"), JSON.stringify({ version: 1, instances: [] }));
-    ensureThread("usage-thread", undefined, { workspaceId, projectId: null });
+    ensureThread("usage-thread", undefined, chatOnlyExecutionSelection());
     recordNativeUsage({ generationId: "gen", threadId: "usage-thread", instanceId: "instance", provider: "codex", model: "fixture-model", update: { turn: { totals: { uncachedInputTokens: 7, cachedInputTokens: 0, cacheCreationTokens: 0, outputTokens: 4, reasoningTokens: 1 } }, context: { usedTokens: 11, updatedAt: new Date().toISOString() } } });
     const instance = createProviderInstance({ instanceId: "fixture", driver: "codex", label: "Fixture", enabled: false,
       config: { homePath: join(directory, "native-home"), binaryPath: join(directory, "must-not-start") },
@@ -51,10 +47,8 @@ test("usage API enforces access and read-only PM scope, persists snapshots and v
     assert.equal(thread.status, 200);
     const body = await thread.json() as { totals: { outputTokens: number }; context: { usedTokens: number } };
     assert.equal(body.totals.outputTokens, 4); assert.equal(body.context.usedTokens, 11);
-    assert.ok(calls.includes("GET http://127.0.0.1:4194/api/v1/agent-contexts"));
-    assert.ok(!calls.some((call) => call.includes("/resolve")));
-    allowed = false;
-    assert.equal((await app.request("http://localhost/api/usage/threads/usage-thread", { headers: { host: "localhost" } })).status, 403);
+    assert.equal(calls.some((call) => call.includes("/api/v1/")), false);
+    assert.equal((await app.request("http://localhost/api/usage/threads/missing-thread", { headers: { host: "localhost" } })).status, 404);
     const updated = await app.request("http://localhost/api/usage/settings", json("PATCH", { revision: 0, usageModelAliases: { alias: "fixture-model" } }));
     assert.equal(updated.status, 200);
     const conflict = await app.request("http://localhost/api/usage/settings", json("PATCH", { revision: 0, usageModelAliases: { other: "model" } }));

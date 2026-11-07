@@ -11,10 +11,37 @@ router, authentication system, settings database or cloud backend.
 The independent [CC Switch maintenance ledger](../cc-switch/SYNC.md) remains the
 authority for its original inputs and adaptations. OpenHands outputs must never
 be enrolled as new CC Switch-owned files. Both tools share the existing exact
-binary splice/path-safety primitives and TypeScript AST/resource scanner; scoped
-aliases and fingerprinted independent-fork boundaries avoid a loose second
-copier or recursively claiming each other's outputs. The t3code Provider ledger
-and unrelated `vendor/openhands-automations` remain independent and unchanged.
+binary splice/path-safety primitives and TypeScript AST/resource scanner.
+OpenHands imports CC capabilities only through `@pm/cc-switch-ui`, mapped to the
+existing `vendor/cc-switch/src/web/index.tsx` public entry. The closure fingerprints
+that independently owned entry; CC's own production closure follows its explicit
+exports into the real implementations. Internal paths, relative bypasses and
+public-alias substitutions are rejected, including type-only imports.
+
+This replaces implementation-file fingerprint coupling, not functional reuse:
+MCP/Skills controllers, management providers, authorized transport and portal
+behavior still belong to CC and the PM host. Do not copy them or replace their
+behavior with presentation-local substitutes. Both source generations and actual
+runtime/legal assets remain production build requirements. The t3code Provider
+ledger and unrelated `vendor/openhands-automations` remain independent and unchanged.
+
+## Rebuilt MCP / Skills presentation
+
+The operator-supplied `mcp-skill-page` rebuild supplies the Installed / Explore /
+Config layout, horizontal MCP rows, Skill catalog, assignment matrices and
+per-Agent drawers. These are local adaptations of the selected presentation,
+not a new upstream pin or a runtime dependency on that sibling checkout.
+Its demonstration localStorage, seeded assignments, simulated connectivity,
+sync and OAuth flows are not copied. The host's existing scoped CC Switch
+controllers own saves, serial bulk mutations, native imports and explicit probes.
+Project theme tokens, responsive containers and existing accessible dialogs
+remain authoritative for the integrated surface.
+
+The setup-only entry shares this presentation frame without mounting a CC
+management platform when no supported Provider exists. MCP exposes its public
+catalog; Skills reports unread native data, and both link to Provider settings.
+Saved Provider instances enter real management directly through the host's
+registered-Provider resolver; internal context metadata is not a user consent step.
 
 ## Immutable input identities
 

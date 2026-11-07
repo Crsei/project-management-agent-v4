@@ -128,8 +128,8 @@ export function SettingsPanel({
                       const selected =
                         group.instanceId === providerInstanceId && option.id === model;
                       const className = cn(
-                        "rounded-full px-2.5 py-1 text-xs font-medium transition-[background-color,color,scale] duration-150",
-                        onModelChange && "active:scale-[0.97]",
+                        "rounded-full px-2.5 py-1 text-xs font-medium transition-colors duration-[var(--motion-button)]",
+                        onModelChange && "active:bg-surface-pressed",
                         selected
                           ? "bg-background text-foreground/90 dark:bg-foreground/10"
                           : onModelChange

@@ -83,13 +83,91 @@ After all feature owners release their outputs, reviewed metadata authoring is:
 
 ```sh
 SOURCE=/tmp/pm-t3code-t13-30eb-local
-python3 vendor/t3code/scripts/capture-mcp-skills.py --source "$SOURCE"
+# Repeat --accept-output for EACH changed active output after reviewing its bytes.
+# Omit approval flags for unchanged outputs; hashes here are not auto-approvals.
+python3 vendor/t3code/scripts/capture-mcp-skills.py --source "$SOURCE" \
+  --accept-output REVIEWED_OUTPUT_PATH=REVIEWED_CURRENT_SHA256
 python3 vendor/t3code/scripts/capture.py --source "$SOURCE" --review-actions
 node vendor/t3code/scripts/imports.mjs --write
 python3 vendor/t3code/scripts/capture.py --source "$SOURCE"
 ```
 
 `--review-actions` authorizes only copy-verbatim/copy-then-patch disposition changes; original source fields remain unchanged. `--allow-local vendor/t3code/<path>` explicitly enrolls a reviewed new local metadata/implementation asset. Never use it for an upstream adaptation: add that module's exact source mapping to the supplemental manifest instead. Recapture after any integration/build-tool edits; it is authoring, not verification. Parent runs `imports.mjs --check`, `verify-sync.mjs --source "$SOURCE"`, independent packaging and relocated artifact acceptance.
+
+### Explicit retirement and granular authoring
+
+The supplemental author refuses blanket recapture: every changed non-retired
+output needs its own `--accept-output PATH=CURRENT_SHA256`. Unknown, duplicate,
+stale/unnecessary or wrong-hash approvals fail; executable-class changes need
+separate review. With unchanged active outputs, the original `--source`-only
+invocation is byte- and timestamp-preserving. All prior source commits, MIT
+identities and each original SHA-256/blob/byte-count/mode are validated against
+Git objects, and every old recipe is replayed before any authoring. Original
+identity fields are never refreshed from a different source.
+The prior ledger must also match its exact hash/byte-count binding in the existing
+baseline inventory; hand-deleting rows or pre-editing retirement/recipe metadata
+cannot evade explicit authoring. Only the supplemental ledger is published, after
+all validations succeed. Then the separately reviewed baseline capture binds that
+new ledger before any repeat authoring; no flag bypasses this ordering.
+
+An intentionally removed host component must stay absent, not be restored to
+satisfy a ledger. Request each reviewed retirement with both exact preimage and
+explicit rationale:
+
+```sh
+python3 vendor/t3code/scripts/capture-mcp-skills.py --source "$SOURCE" \
+  --retire-output HOST_OUTPUT_PATH=RECORDED_OLD_OUTPUT_SHA256 \
+  --retirement-reason 'HOST_OUTPUT_PATH=Specific reviewed removal rationale' \
+  --accept-output CHANGED_SURVIVING_OUTPUT=REVIEWED_CURRENT_SHA256
+```
+
+The existing `outputs[]` record remains authoritative and retains its complete
+old source mapping, original reason/license, exact recipe, output hash, byte count
+and mode. Only `retirement: { "sha256": "...", "reason": "..." }` is added; its
+hash must equal that retained output preimage. There is no deletion-only second
+ledger, hand-deleted row, source-pin change or fuzzy replay. Requests fail for an
+existing target (including unsafe ancestors/symlinks), wrong hash, missing reason,
+unknown/duplicate/already-retired target, conflicting acceptance, incomplete old
+identity/recipe or surviving static consumers. The existing TypeScript import
+authority scans host/vendor/script sources, including non-ledger consumers, and
+resolves relative imports, actual tsconfig aliases and package exports against
+virtual retired paths. Computed native resources remain explicitly separate
+review obligations; static provenance does not prove arbitrary runtime strings.
+Rejection happens before ledger publication, including rejection of unapproved
+drift elsewhere in the same invocation.
+
+Retired records are structurally checked by imports/source gates and their full
+old recipes/inputs are still verified by offline Git replay. They are excluded
+from active import ownership and reconstruction, and both authoring and replay
+refuse a reappearing target. Replay also refuses a stale import-inventory edge
+to/from a retired output before destination writes. `--pristine` remains original
+source-only reconstruction, not a host retirement/migration operation. The
+immutable original source manifest and supplemental snapshot inventory do not
+change. After authoring, regenerate imports and recapture the existing baseline
+inventory with the sequence above; do not use stale tool fingerprints.
+
+Parent-only isolated author/replay fixtures (not run by the implementation
+worker):
+
+```sh
+node vendor/t3code/scripts/verify-mcp-skills-authoring.mjs --source "$SOURCE"
+node vendor/t3code/scripts/verify-sync.mjs --source "$SOURCE"
+node vendor/t3code/scripts/imports.mjs --check
+```
+
+The new fixture script must be explicitly enrolled, after parent tool review,
+with `capture.py --allow-local vendor/t3code/scripts/verify-mcp-skills-authoring.mjs`
+on the first baseline capture. Its enrollment is not a claim that it was run.
+
+The first uses disposable host roots and read-only Git objects to cover malformed
+old identities/recipes/retirement records, existing targets, exact preimages,
+duplicate/unknown requests, missing rationale, relative/alias live consumers,
+granular drift approval, no writes on rejection, unchanged determinism and
+source-derived/local retirement replay. The maintained `scripts/upstream-sync`
+candidate authoring protocol is unchanged: this same-pin retirement operation
+does not claim modern candidate retirement support or waive its dirty/identity
+checks.
+
 
 Distribution includes the existing MIT `LICENSE`, both source/adaptation manifests, baseline ledgers/recipes/import inventory and complete `vendor/t3code/scripts/` under artifact provenance. Package metadata must include these files without `.ref`, source `.git`, absolute checkout paths as dependencies, or a second executable t3code tree. Host build-tool fingerprints—including package-script changes—are refreshed by the final baseline capture. No build, tests, lint, formatter or reconstruction acceptance is implied by capture.
 

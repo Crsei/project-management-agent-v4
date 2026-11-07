@@ -66,7 +66,7 @@ function readJson(filename: string): JsonObject {
 }
 function safeRelative(value: unknown): string {
   if (typeof value !== "string" || !safeRelativePath(value)
-    || !(value === USAGE_SOURCES || value === CURSOR_USAGE_CACHE || /^(?:workspace\.sqlite|provider-instances\.json|providers\.json|(?:provider-homes|provider-private|provider-attachments|cc-switch)\/.+)$/.test(value)))
+    || !(value === USAGE_SOURCES || value === CURSOR_USAGE_CACHE || /^(?:workspace\.sqlite|provider-instances\.json|providers\.json|(?:provider-homes|provider-private|provider-attachments|chat-scratch|cc-switch)\/.+)$/.test(value)))
     throw new Error("Unsafe backup member path.");
   return value;
 }
@@ -454,7 +454,7 @@ export async function createAgentBackup(options: { source: string; bundle: strin
   regular(path.join(source, DATABASE));
   // Check root classification before reading any credentials/home contents.
   for (const name of readdirSync(source)) {
-    if (!derivedUsageCache(name) && ![DATABASE, `${DATABASE}-wal`, `${DATABASE}-shm`, CONFIG, CREDENTIALS, USAGE_SOURCES, CURSOR_USAGE_CACHE, EXTENSIONS, "provider-homes", "provider-private", "provider-attachments", "provider-cache", "workspace.lock", "agent-restore.json"].includes(name))
+    if (!derivedUsageCache(name) && ![DATABASE, `${DATABASE}-wal`, `${DATABASE}-shm`, CONFIG, CREDENTIALS, USAGE_SOURCES, CURSOR_USAGE_CACHE, EXTENSIONS, "provider-homes", "provider-private", "provider-attachments", "chat-scratch", "provider-cache", "workspace.lock", "agent-restore.json"].includes(name))
       throw new Error("Unclassified Agent data file found; backup refuses to silently omit persistent data.");
   }
   const release = acquireOfflineLock(source);
@@ -489,11 +489,11 @@ export async function createAgentBackup(options: { source: string; bundle: strin
       if (existsSync(path.join(source, CREDENTIALS))) copyRestricted(path.join(source, CREDENTIALS), path.join(staging!, CREDENTIALS));
       if (existsSync(path.join(source, CURSOR_USAGE_CACHE))) copyRestricted(path.join(source, CURSOR_USAGE_CACHE), path.join(staging!, CURSOR_USAGE_CACHE));
     }
-    // Attachments are durable private conversation data, not credentials. Native
-    // probe caches are rebuildable; the private store (including identity) is not.
+    // Attachments and chat scratch are durable private conversation data, not
+    // credentials. External workspace directories remain references only.
     const links: BundleLink[] = [];
     for (const name of options.secrets === "include"
-      ? ["provider-homes", "provider-private", "provider-attachments", EXTENSIONS] : ["provider-attachments"]) {
+      ? ["provider-homes", "provider-private", "provider-attachments", "chat-scratch", EXTENSIONS] : ["provider-attachments", "chat-scratch"]) {
       const root = path.join(source, name);
       if (!existsSync(root)) continue;
       await copyOwnedTree(source, staging!, name, links);

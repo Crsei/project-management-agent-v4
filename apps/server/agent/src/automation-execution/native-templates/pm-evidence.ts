@@ -35,9 +35,9 @@ export function pmNativeTestsComplete(item: NativeOutputItem, tests: PmAutomatio
 }
 
 /** Exact persisted PM references only. Titles, cwd names, and current mutable thread bindings are not joins. */
-export function pmGenerationTaskAssociations(generation: ChatGeneration, projectId: string): Array<{ id: string; revision: string | null }> {
+export function pmGenerationTaskAssociations(generation: ChatGeneration, target: { workspaceId: string; projectId: string }): Array<{ id: string; revision: string | null }> {
   const refs = new Map<string, string | null>();
-  for (const ref of generation.pmReferences ?? []) if (ref.kind === 'issue' && ref.projectId === projectId && /^TASK-\d+$/.test(ref.id) && (ref.availability === 'available' || ref.availability === 'stale')) refs.set(ref.id, ref.revision);
+  for (const ref of generation.pmReferences ?? []) if (ref.kind === 'issue' && ref.workspaceId === target.workspaceId && ref.projectId === target.projectId && /^TASK-\d+$/.test(ref.id) && (ref.availability === 'available' || ref.availability === 'stale')) refs.set(ref.id, ref.revision);
   return [...refs].map(([id, revision]) => ({ id, revision }));
 }
 
@@ -45,14 +45,15 @@ export function collectPmAgentEvidence(request: StudioExecutionRequest): PmAutom
   const evidence: PmAutomationAgentEvidence = { sources: [], sessions: [], executions: [], pullRequests: [], coverage: [] };
   const gaps = new Set<string>();
   let bytes = 0, observedSessions = 0, observedExecutions = 0;
-  const source = (kind: PmAutomationSourceRef['kind'], id: string, revision: string, label: string, at: string | null, threadId: string): PmAutomationSourceRef => ({ refId: `agent:${kind}:${hash([id, revision]).slice(0, 32)}`, kind, id, revision, actorId: request.actorId, workspaceId: request.workspaceId, projectId: request.projectId, label: label.slice(0, 1000), url: `/agent/workspace?workspace=${encodeURIComponent(request.workspaceId)}&project=${encodeURIComponent(request.projectId)}&threadId=${encodeURIComponent(threadId)}`, updatedAt: at });
+  const source = (kind: PmAutomationSourceRef['kind'], id: string, revision: string, label: string, at: string | null, threadId: string): PmAutomationSourceRef => ({ refId: `agent:${kind}:${hash([request.workspaceId, request.projectId, id, revision]).slice(0, 32)}`, kind, id, revision, actorId: request.actorId, workspaceId: request.workspaceId, projectId: request.projectId, label: label.slice(0, 1000), url: `/agent/workspace?threadId=${encodeURIComponent(threadId)}`, updatedAt: at });
   const clip = (text: string, limit: number) => { if (text.length <= limit) return text; gaps.add('Bounded Agent text was truncated; full original remains in Agent Chat.'); return text.slice(0, limit); };
   for (const thread of listThreads()) {
-    if (thread.scope?.workspaceId !== request.workspaceId || thread.scope.projectId !== request.projectId || thread.custom?.automationExecutionId) continue;
+    if (thread.custom?.automationExecutionId) continue;
     const all = listChatGenerations(thread.remoteId).filter(generation => !generation.idleCompaction && !isAutomationOriginGeneration(generation));
     if (all.length > 200) gaps.add('A session has more than 200 generations; only its most recent accepted generations are collected.');
-    const generations = all.slice(0, 200).filter(generation => generation.executionSnapshot?.actorId === request.actorId && generation.executionSnapshot.scope.workspaceId === request.workspaceId && generation.executionSnapshot.scope.projectId === request.projectId);
-    if (all.some(generation => !generation.executionSnapshot?.actorId)) gaps.add('Legacy Agent generations lack PM-resolved actor identity and were excluded, not assigned to the current actor.');
+    const generations = all.slice(0, 200).filter(generation => generation.pmOperations?.some(operation =>
+      operation.actorId === request.actorId && operation.target.workspaceId === request.workspaceId && operation.target.projectId === request.projectId));
+    if (all.some(generation => !generation.pmOperations?.length)) gaps.add('Some Agent generations lack explicit authorized PM operation actor identity and were excluded, not assigned to the current actor.');
     if (!generations.length) continue;
     observedSessions++;
     if (evidence.sessions.length >= 100 || bytes >= 1800000) { gaps.add('Agent collection reached 100 sessions or 1.8 MiB; later records were not exposed.'); continue; }
@@ -66,7 +67,7 @@ export function collectPmAgentEvidence(request: StudioExecutionRequest): PmAutom
     let messageBytes = 0;
     for (const generation of ordered) {
       if (bytes >= 1800000 || evidence.sources.length + refs.length >= 9000) { gaps.add('Agent evidence byte/source limit reached; remaining generations were excluded.'); break; }
-      for (const association of pmGenerationTaskAssociations(generation, request.projectId)) taskIds.add(association.id);
+      for (const association of pmGenerationTaskAssociations(generation, request)) taskIds.add(association.id);
       const input = generation.request.messages.at(-1);
       if (input && input.role === 'user' && messageBytes < 100000) {
         const ref = source('message', input.id, hash(input.parts), 'User message accepted by Agent', generation.createdAt, thread.remoteId);
@@ -80,7 +81,7 @@ export function collectPmAgentEvidence(request: StudioExecutionRequest): PmAutom
       }
       observedExecutions++;
       if (evidence.executions.length >= 200 || bytes >= 1800000) { gaps.add('Agent execution collection reached 200 executions or 1.8 MiB.'); continue; }
-      const associations = pmGenerationTaskAssociations(generation, request.projectId);
+      const associations = pmGenerationTaskAssociations(generation, request);
       const association = associations.length === 1 ? associations[0] : undefined;
       if (!association) gaps.add('Some generations have no unique immutable task association; their taskId is null and no task match was inferred.');
       const output = getNativeOutput(generation.id);

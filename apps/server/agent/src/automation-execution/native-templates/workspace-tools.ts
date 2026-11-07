@@ -12,7 +12,7 @@ import { emitNativeOutput } from '../../durable/native-output.ts';
 import { listRecords, readRecord, writeRecord } from '../../durable/store.ts';
 import { dataDirectory } from '../../paths.ts';
 import { resolveAutomationExecutionScope } from '../context.ts';
-import { assertNativeTemplateChatSnapshot, nativeTemplateRepositoryBinding, validateNativeRepositoryPath, type NativeRepositoryBinding } from './repository.ts';
+import { assertNativeTemplateChatSnapshot, resolveSessionNativeTemplateSnapshot, nativeTemplateRepositoryBinding, validateNativeRepositoryPath, type NativeRepositoryBinding } from './repository.ts';
 import { nativeHash } from './state.ts';
 import { assertAutomationProviderToolRequirement } from '../provider-tools.ts';
 
@@ -166,8 +166,9 @@ export async function openNativeTemplateScratchTools(generation: ChatGeneration,
     const current = getChatGeneration(generation.id);
     if (!current || current.status !== 'running' || current.threadId !== generation.threadId || current.request.idempotencyKey !== generation.request.idempotencyKey) throw new Error('Native scratch generation is no longer live.');
     await authorizeExecution('tool');
-    const authorized = await resolveAutomationExecutionScope(binding.request, controller.signal);
-    await assertNativeTemplateChatSnapshot(current, authorized);
+    const authorized = await resolveAutomationExecutionScope(binding.request, controller.signal, generation.threadId);
+    const actual = await resolveSessionNativeTemplateSnapshot(generation.threadId, authorized, 'execute');
+    await assertNativeTemplateChatSnapshot(current, actual);
     if (closed || controller.signal.aborted) throw new Error('Native scratch grant was revoked during authorization.');
   };
   await authorize();

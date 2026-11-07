@@ -64,6 +64,23 @@ export function collectTasks(files: FileRecord[], scope: TaskScope, today: strin
   return result;
 }
 
+/** Apply personal attention after all authorized scope and saved-view filtering. */
+export function filterTaskCollectionAttention(collection: TaskCollection, pendingIds: ReadonlySet<string>): TaskCollection {
+  const pending = (files: FileRecord[]) => files.filter(file => pendingIds.has(file.id));
+  return {
+    files: pending(collection.files),
+    open: pending(collection.open),
+    completed: pending(collection.completed),
+    canceled: pending(collection.canceled),
+    groups: collection.groups.map(group => ({ ...group, files: pending(group.files) })),
+  };
+}
+
+/** A pending-only board must include completed items without changing the normal display preference. */
+export function taskBoardFiles(collection: TaskCollection, showCompleted: boolean, pendingOnly: boolean): FileRecord[] {
+  return showCompleted || pendingOnly ? collection.files : [...collection.open, ...collection.canceled];
+}
+
 /** Only local paths within the workspace or project root may be used after create/back. */
 export function safeWorkspaceReturn(value: string | null | undefined, root: string, fallback = `${root}/issues`): string {
   if (!value || /[\\\u0000-\u001f]/.test(value)) return fallback;

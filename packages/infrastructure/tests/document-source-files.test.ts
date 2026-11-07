@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -198,5 +198,56 @@ test('moves preserve external UTF-8 BOM and line endings without adding native m
     const original = directory.content('source.md', 1);
     directory.move(original.path, original.revision, 1, directory, 'nested/renamed.MD', 1);
     assert.deepEqual(readFileSync(path.join(root, 'nested', 'renamed.MD')), raw);
+  } finally { directory.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('prepared external history retains private immutable before bytes but never substitutes for completion proof', () => {
+  const dataRoot = mkdtempSync(path.join(temporaryRoot, 'pm-document-history-proof-'));
+  const workspaceId = randomUUID(), actorId = randomUUID(), operationId = randomUUID(), hash = 'a'.repeat(64);
+  const capture = {
+    workspaceId, actorId, operationId, action: 'delete' as const,
+    source: { sourceId: randomUUID(), path: 'nested/note.md', projectId: null, sourceRevision: 2, rootIdentity: '1'.repeat(64), locationKey: '2'.repeat(64) },
+    before: { content: '\uFEFF# Exact original\r\nBefore deletion.\r\n', revision: '3'.repeat(64) }, observedAt: new Date().toISOString(),
+  };
+  try {
+    const journal = new DocumentSourceOperationJournal(dataRoot, workspaceId, actorId);
+    try {
+      journal.prepareHistory(operationId, hash, capture);
+      assert.deepEqual(journal.readHistory(operationId, hash), capture);
+      assert.equal(journal.read(operationId, hash), undefined, 'Preparation alone cannot prove an applied mutation');
+      assert.throws(() => journal.prepareHistory(operationId, hash, { ...capture, before: { ...capture.before, content: 'forged replacement' } }));
+      assert.deepEqual(journal.readHistory(operationId, hash), capture);
+    } finally { journal.close(); }
+    const reopened = new DocumentSourceOperationJournal(dataRoot, workspaceId, actorId);
+    try {
+      assert.deepEqual(reopened.readHistory(operationId, hash), capture);
+      assert.throws(() => reopened.readHistory(operationId, 'b'.repeat(64)), code('document_source_operation_id_conflict'));
+      const location = path.join(dataRoot, 'document-source-operations', workspaceId, actorId, `${operationId}.history.json`);
+      assert.equal(lstatSync(location).mode & 0o077, 0);
+      const receipt = { operationId, action: 'delete' as const, path: capture.source.path, status: 'succeeded' as const };
+      reopened.record(operationId, hash, receipt);
+      assert.deepEqual(reopened.read(operationId, hash), receipt);
+      assert.deepEqual(reopened.readHistory(operationId, hash), capture, 'Completion does not replace original before bytes');
+    } finally { reopened.close(); }
+  } finally { rmSync(dataRoot, { recursive: true, force: true }); }
+});
+
+test('retained history path guards allow deleted paths but reject live links, hardlinks, private components and unreadable files', () => {
+  const root = mkdtempSync(path.join(temporaryRoot, 'pm-document-history-path-'));
+  mkdirSync(path.join(root, 'nested')); writeFileSync(path.join(root, 'nested', 'original.md'), '# Retained snapshot\n');
+  symlinkSync('nested', path.join(root, 'linked'));
+  const directory = new DocumentSourceDirectory(root);
+  try {
+    directory.assertHistoryPath('nested/original.md');
+    directory.assertHistoryPath('missing/parent/deleted.md');
+    rmSync(path.join(root, 'nested', 'original.md'));
+    directory.assertHistoryPath('nested/original.md');
+    writeFileSync(path.join(root, 'nested', 'original.md'), '# New current file\n');
+    assert.throws(() => directory.assertHistoryPath('linked/original.md'));
+    assert.throws(() => directory.assertHistoryPath('.pm/retained.md'), code('document_source_path_forbidden'));
+    linkSync(path.join(root, 'nested', 'original.md'), path.join(root, 'hard.md'));
+    assert.throws(() => directory.assertHistoryPath('hard.md'), code('document_source_path_forbidden'));
+    rmSync(path.join(root, 'hard.md')); chmodSync(path.join(root, 'nested', 'original.md'), 0o000);
+    assert.throws(() => directory.assertHistoryPath('nested/original.md'), code('document_source_path_forbidden'));
   } finally { directory.close(); rmSync(root, { recursive: true, force: true }); }
 });

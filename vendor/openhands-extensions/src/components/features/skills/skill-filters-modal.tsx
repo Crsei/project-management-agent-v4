@@ -1,6 +1,6 @@
 import { useOpenHandsTranslation } from "@pm/openhands-source/web/i18n";
 import { BrandButton } from "@pm/openhands-source/components/features/settings/brand-button";
-import { Dialog, DialogContent, DialogTitle } from "@pm/cc-switch-source/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@pm/cc-switch-ui";
 import { SkillFacetRail } from "./skill-facet-rail";
 import type { SkillFacetGroup, SkillFacetGroupId } from "./skill-filter";
 

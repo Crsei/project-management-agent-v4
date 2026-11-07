@@ -26,6 +26,7 @@ export type PmReferenceKind = "issue" | "project" | "document";
 
 export type PmReference = {
   kind: PmReferenceKind;
+  workspaceId: string;
   id: string;
   projectId: string | null;
   title: string;

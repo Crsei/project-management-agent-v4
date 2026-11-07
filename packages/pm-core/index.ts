@@ -13,7 +13,7 @@ import { Projection, type ItemQuery } from './projection.ts';
 import { DurableState, requestHash, type Identity } from './state.ts';
 import { MigrationManager, type MigrationRequest, type MigrationTransition } from './migrations.ts';
 import { SprintHistory, type SprintHistorySnapshot } from './sprint-history.ts';
-import { ServiceFactObservations } from './service-facts.ts';
+import { ServiceFactObservations, type CoreFactSummary } from './service-facts.ts';
 import { ProjectLocations, type ProjectDirectory, type ProjectDirectoryCheck, type ProjectLocation, type ProjectMount } from './project-locations.ts';
 import { projectCopyRecords, type ProjectCopyInput, type ProjectCopyResult } from './project-copy.ts';
 
@@ -25,7 +25,7 @@ export type WorkspaceEvent = { type: 'change' | 'error'; reason: string; errors?
 export type WorkspaceMutationGuard = (before: FileRecord | undefined, after: Entity, batch?: readonly FileRecord[]) => void | Promise<void>;
 export type WorkspaceCreationPrepared = (record: FileRecord) => void;
 export type WorkspaceMutationCapture = {
-  prepare(before: FileRecord | undefined, after: FileRecord | undefined): Promise<void>;
+  prepare(before: FileRecord | undefined, after: FileRecord | undefined): Promise<string | void>;
   committed(before: FileRecord | undefined, after: FileRecord | undefined): string | void;
 };
 export type CoreCreationFact = { request?: { key: string; hash: string; id: string; revision?: string }; pending: boolean; deleted: boolean; current?: FileRecord; unavailable: boolean };
@@ -80,6 +80,18 @@ export class Workspace {
     this.root = this.repository.root;
     this.locations = new ProjectLocations(this.root);
     this.events.setMaxListeners(0);
+  }
+
+  static mutationProofs(root: string): ReadonlySet<string> {
+    return new DurableState(new FileRepository(root), true).mutationProofs();
+  }
+
+  retireMutationProofs(completed: ReadonlySet<string>): void {
+    this.state.retireMutationProofs(completed);
+  }
+
+  acceptCommittedFact(factId: string, before: CoreFactSummary | null, after: CoreFactSummary | null): void {
+    this.factHistory.acceptCommitted(factId, before, after);
   }
 
   /** Read durable creation identity and current source without initializing, recovering, or publishing anything. */
@@ -402,7 +414,7 @@ export class Workspace {
     }
     files.sort((a, b) => a.id.localeCompare(b.id));
     this.history.observe(files, this.config, reason, !errors.some(issue => issue.severity === 'error'));
-    this.factHistory.observe(files, reason, !errors.some(issue => issue.severity === 'error'));
+    this.factHistory.observe(files, reason, !errors.some(issue => issue.severity === 'error') && !this.state.hasUnpublishedMutations(), this.config);
     const historyError = this.history.failure();
     if (historyError) errors.push(diagnostic('SPRINT_HISTORY_UNAVAILABLE', historyError, '.pm/state/sprint-history'));
     errors.sort((a, b) => a.path.localeCompare(b.path) || a.code.localeCompare(b.code));
@@ -464,7 +476,12 @@ export class Workspace {
 
   private publishSavedMutation(before: FileRecord | undefined, after: FileRecord | undefined, capture: WorkspaceMutationCapture | undefined): void {
     try {
-      if (capture) this.factHistory.accept(before, after, capture.committed(before, after));
+      if (capture) {
+        const factId = capture.committed(before, after);
+        // committed() has durably published the fact journal before this proof retires.
+        this.factHistory.accept(before, after, factId, this.config);
+        if (factId) this.state.retireMutationProofs(new Set([factId]));
+      }
       this.scan('command');
     } catch (error) {
       throw new WorkspaceError(422, 'The file was saved but durable fact publication requires recovery', after ?? before,
@@ -489,9 +506,14 @@ export class Workspace {
     const candidate: FileRecord = { id: entity.id, path: current.path, raw, revision: revisionOf(raw), entity };
     const before = 'entity' in current ? current : undefined;
     const capture = this.mutationCapture.getStore();
-    await capture?.prepare(before, candidate);
-    try { this.repository.write(current.path, raw, current.revision); }
+    const mutationId = await capture?.prepare(before, candidate);
+    try {
+      if (mutationId) this.state.begin({ kind: 'write', id: entity.id, path: current.path, raw, beforeRevision: current.revision, mutationId });
+      this.repository.write(current.path, raw, current.revision);
+      if (mutationId) this.state.finish();
+    }
     catch (error) {
+      if (mutationId) this.state.cancelUnwrittenMutation(error instanceof RepositoryConflict);
       this.scan('conflict');
       throw new WorkspaceError(error instanceof RepositoryConflict ? 409 : 422, messageOf(error), this.projection.get(entity.id), [diagnostic(error instanceof RepositoryConflict ? 'REVISION_CONFLICT' : 'FILE_UNWRITABLE', messageOf(error), current.path, entity.id)]);
     }
@@ -562,10 +584,10 @@ export class Workspace {
       await guard?.(undefined, candidate.entity);
       prepared?.(candidate);
       const capture = this.mutationCapture.getStore();
-      await capture?.prepare(undefined, candidate);
+      const mutationId = await capture?.prepare(undefined, candidate);
       try {
         this.repository.mkdir(directory);
-        this.state.begin({ kind: 'create', id, path, raw, ...(idempotencyKey ? { idempotency: { key: idempotencyKey, hash, id } } : {}) });
+        this.state.begin({ kind: 'create', id, path, raw, ...(mutationId ? { mutationId } : {}), ...(idempotencyKey ? { idempotency: { key: idempotencyKey, hash, id } } : {}) });
         this.repository.write(path, raw);
         this.state.finish();
       } catch (error) { throw new WorkspaceError(error instanceof RepositoryConflict ? 409 : 422, messageOf(error), undefined, [diagnostic('TRANSACTION_FAILED', messageOf(error), path, id)]); }
@@ -636,8 +658,10 @@ export class Workspace {
         taskIdMap: { ...pending.idempotency.copy.taskIdMap }, copiedTaskCount: pending.idempotency.copy.copiedTaskCount };
       prepared?.(records);
       const capture = this.mutationCapture.getStore();
-      for (const record of records) await capture?.prepare(undefined, record);
+      const mutationIds: string[] = [];
+      for (const record of records) { const id = await capture?.prepare(undefined, record); if (id) mutationIds.push(id); }
       try {
+        this.state.attachMutationProofs(mutationIds);
         if (directory) {
           this.locations.reserve(pending.id, key, hash, directory, pending.projectDirectory?.check);
           this.locations.prepare(pending.id);
@@ -647,7 +671,11 @@ export class Workspace {
         if (directory) { this.locations.contentWritten(pending.id); this.locations.finish(pending.id); }
         this.state.finish();
         await this.refreshProjectWatches();
-        for (const record of records) if (capture) this.factHistory.accept(undefined, record, capture.committed(undefined, record));
+        for (const record of records) if (capture) {
+          const factId = capture.committed(undefined, record);
+          this.factHistory.accept(undefined, record, factId, this.config);
+          if (factId) this.state.retireMutationProofs(new Set([factId]));
+        }
         this.scan('project-copy');
       } catch (error) {
         throw new WorkspaceError(409, 'The original project copy requires explicit recovery', undefined,
@@ -739,10 +767,10 @@ export class Workspace {
       await guard?.(undefined, candidate.entity);
       prepared?.(candidate);
       const capture = this.mutationCapture.getStore();
-      await capture?.prepare(undefined, candidate);
+      const mutationId = await capture?.prepare(undefined, candidate);
       try {
         // The shared journal reserves ID + original key before the selected directory is touched.
-        if (!pending && !previous) this.state.begin({ kind: 'create', id, path: relative, raw, idempotency: { key, hash, id }, ...(directoryCheck ? { projectDirectory: { workspaceId: directory.workspaceId, hash: locationHash, check: directoryCheck } } : {}) });
+        if (!pending && !previous) this.state.begin({ kind: 'create', id, path: relative, raw, ...(mutationId ? { mutationId } : {}), idempotency: { key, hash, id }, ...(directoryCheck ? { projectDirectory: { workspaceId: directory.workspaceId, hash: locationHash, check: directoryCheck } } : {}) });
         this.locations.reserve(id, key, locationHash, directory, directoryCheck);
         this.locations.prepare(id);
         let current: string | undefined;
@@ -842,9 +870,9 @@ export class Workspace {
       }
       if (diagnostics.length) throw new WorkspaceError(422, 'Permanent deletion is blocked by inbound references or unreadable sources', current, diagnostics);
       const capture = this.mutationCapture.getStore();
-      await capture?.prepare(current, undefined);
+      const mutationId = await capture?.prepare(current, undefined);
       try {
-        this.state.begin({ kind: 'delete', id, path: current.path, raw: current.raw });
+        this.state.begin({ kind: 'delete', id, path: current.path, raw: current.raw, ...(mutationId ? { mutationId } : {}) });
         this.repository.remove(current.path, current.revision);
         this.state.finish();
       } catch (error) { throw new WorkspaceError(error instanceof RepositoryConflict ? 409 : 422, messageOf(error), current, [diagnostic('TRANSACTION_FAILED', messageOf(error), current.path, id)]); }

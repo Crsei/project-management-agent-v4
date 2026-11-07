@@ -1,6 +1,9 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { studioExecutionResultSchema, studioRuntimeCapabilitiesSchema, type StudioExecutionPort, type StudioExecutionRequest, type StudioExecutionScope } from '../../contracts/src/automation-studio.ts';
+import type { StudioWorkspaceExecutionPort } from '../../contracts/src/automation-studio.ts';
+import { executionEnvironmentSchema, executionSelectionSchema } from '../../agent-contracts/src/execution.ts';
+import { DomainError } from '../../domain/src/core.ts';
 
 const prefix = 'pm-automation-v1.';
 const identitySchema = z.strictObject({ actorId: z.uuid(), workspaceId: z.uuid(), projectId: z.string().regex(/^PRJ-\d+$/), executionId: z.uuid(), requestId: z.uuid(), definitionId: z.uuid(), definitionRevision: z.number().int().positive(), audience: z.enum(['native-pm', 'automation-integrations']), generationId: z.uuid().nullable(), expiresAt: z.number().int(), issuedAt: z.number().int() });
@@ -73,3 +76,33 @@ export function createAutomationExecutionClient(options: { baseUrl?: string; sec
   };
 }
 export const createConfiguredAutomationExecutionPort = createAutomationExecutionClient;
+
+/** Uses the existing dedicated service secret, never a browser cookie or general PM session. */
+export function createAgentWorkspaceExecutionClient(options: { baseUrl?: string; secret?: string; fetch?: typeof fetch } = {}): StudioWorkspaceExecutionPort {
+  return {
+    async resolve(selection) {
+      const parsed = executionSelectionSchema.parse(selection);
+      if (parsed.agentWorkspaceId === null) throw new DomainError('agent_workspace_selection_required', 'Select an explicit Agent folder; service preflight does not allocate chat scratch', 412);
+      const endpoint = new URL('/internal/agent-workspaces/resolve', origin(options.baseUrl ?? process.env.PM_AUTOMATION_AGENT_URL));
+      const body = JSON.stringify({ executionSelection: parsed });
+      const response = await (options.fetch ?? fetch)(endpoint, { method: 'POST', headers: automationServiceHeaders('POST', endpoint.pathname, body, options.secret), body, redirect: 'error', signal: AbortSignal.timeout(30_000) });
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw new DomainError('agent_workspace_unavailable', `The authenticated Agent folder preflight rejected the selected directory (HTTP ${response.status})`, response.status >= 400 && response.status < 500 ? response.status : 503);
+      }
+      const reader = response.body?.getReader();
+      if (!reader) throw new DomainError('agent_workspace_unavailable', 'Agent folder preflight returned no response body', 503);
+      const chunks: Uint8Array[] = []; let size = 0;
+      for (;;) {
+        const part = await reader.read(); if (part.done) break;
+        size += part.value.length;
+        if (size > 64 * 1024) { await reader.cancel(); throw new DomainError('agent_workspace_unavailable', 'Agent folder preflight exceeded its transport limit', 503); }
+        chunks.push(part.value);
+      }
+      const resolved = z.strictObject({ path: z.string().min(1), environment: executionEnvironmentSchema }).parse(JSON.parse(Buffer.concat(chunks, size).toString('utf8')));
+      if (resolved.environment.agentWorkspaceId !== parsed.agentWorkspaceId || resolved.environment.agentWorkspaceRevision !== parsed.agentWorkspaceRevision || resolved.environment.executionPath !== resolved.path || resolved.environment.sourcePath !== resolved.path || resolved.environment.worktree !== null)
+        throw new DomainError('agent_workspace_unavailable', 'Agent folder preflight returned a different execution identity', 503);
+      return resolved;
+    },
+  };
+}

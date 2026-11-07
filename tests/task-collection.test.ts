@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parseMarkdown } from '../packages/pm-markdown/index.ts';
 import { defaultConfiguration, parseConfiguration, type FileRecord } from '../packages/pm-schema/index.ts';
 import { applyView, groupChange } from '../packages/pm-schema/query.ts';
-import { calendarDay, collectTasks, personalDate, safeWorkspaceReturn, taskScope } from '../apps/web/src/features/pm/markdown/task-collection-model.ts';
+import { calendarDay, collectTasks, filterTaskCollectionAttention, personalDate, safeWorkspaceReturn, taskBoardFiles, taskScope } from '../apps/web/src/features/pm/markdown/task-collection-model.ts';
 import { decodeCreationDrafts, newCreationDraft, resumableCreationDraft } from '../apps/web/src/features/pm/markdown/creation-model.ts';
 
 function task(id: string, due: string | null, status = 'todo', extra = ''): FileRecord {
@@ -84,6 +84,18 @@ test('important intersects visible files with this actor watches; priority never
   assert.deepEqual(result.groups.map(group => [group.id, group.files.map(file => file.id)]), [['todo', ['TASK-1']], ['done', ['TASK-3']], ['canceled', ['TASK-4']]]);
   assert.deepEqual(collectTasks(visible, 'important', null, new Set(['TASK-2']), defaultConfiguration).files.map(file => file.id), ['TASK-2']);
   assert.equal(collectTasks(visible, 'important', null, null, defaultConfiguration).files.length, 0);
+});
+
+test('pending attention intersects scoped tasks and keeps completed on board without changing the preference', () => {
+  const files = [assignedTask('TASK-1', null), assignedTask('TASK-2', null, 'done'), assignedTask('TASK-3', null, 'done', 'other')];
+  const original = collectTasks(files, 'mine', '2026-10-21', null, defaultConfiguration, 'actor-self');
+  const pending = filterTaskCollectionAttention(original, new Set(['TASK-2', 'TASK-3', 'TASK-99']));
+  assert.deepEqual(pending.files.map(file => file.id), ['TASK-2']);
+  assert.deepEqual(pending.groups.find(group => group.id === 'completed')?.files.map(file => file.id), ['TASK-2']);
+  assert.deepEqual(taskBoardFiles(pending, false, true).map(file => file.id), ['TASK-2']);
+  assert.deepEqual(taskBoardFiles(original, false, false).map(file => file.id), ['TASK-1']);
+  assert.deepEqual(taskBoardFiles(original, true, false).map(file => file.id), ['TASK-1', 'TASK-2']);
+  assert.deepEqual(original.files.map(file => file.id), ['TASK-1', 'TASK-2']);
 });
 
 test('shared search/project/filter set remains identical across layouts and scope projection never mutates a view', () => {

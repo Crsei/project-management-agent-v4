@@ -20,12 +20,19 @@ Provider sessions, t3code, PM policy, MCP OAuth and MCP Apps remain host-owned.
 The newer default Marketplace/Skills presentation is an independent real
 [OpenHands source fork](../openhands-extensions/SYNC.md). Its immutable
 Git/generated-locale/npm inputs and exact adaptations have their own ledger.
-`fork-policy.json.sourceAliases` resolves both scoped source seams, while
-`independentForkRoots` fingerprints an imported OpenHands boundary without
-recursively treating that tree as CC Switch-owned or enrolling it as local code.
-Capture/replay both forks after source owners settle; do not put OpenHands files
-in this fork's `--allow-local` list. Web packaging verifies the OpenHands build
-generation/assets/notices in addition to the existing native CC Switch proof.
+OpenHands consumes this fork through the existing `@pm/cc-switch-ui` public Web
+entry, not internal source paths. CC's production closure follows that entry's
+explicit exports and owns their implementations; OpenHands fingerprints the
+public boundary without recursively claiming those outputs. Keep the independent
+fork guard and never enroll OpenHands files in this fork's `--allow-local` list.
+Web packaging still verifies both source generations, assets and notices.
+This is a public consumption boundary, not independent OpenHands runtime operation.
+
+Registered application Providers now enter MCP/Skills configuration directly by
+instance ID. The host resolves/reuses internal native ownership metadata; users
+do not create or authorize a separate management context. Exact native roots,
+revision checks, shared-root effects, existing libraries and active execution
+protection remain authoritative. Explicit external-target enrollment is separate.
 
 ## Reviewed output ledgers
 
@@ -56,6 +63,57 @@ entry and a real native build, never a guessed success.
 Ordinary Rust literals use Rust escape/continuation and multiline rules rather
 than JSON decoding. Lexical and unsupported-resource diagnostics include source,
 line and column; lexer regressions include the real production Skills DAO query.
+
+## Externally owned PM integration outputs
+
+`fork-policy.json.externalHostOutputs` can identify only these eleven reviewed
+host outputs. Their sole replay authority is
+`vendor/t3code/mcp-skills-adaptations.json`; the list is also enforced in the
+provenance helper, not chosen by a capture caller:
+
+- `apps/server/agent/src/providers/t3code/management.ts`
+- `packages/agent-contracts/src/provider.ts`
+- `apps/server/agent/src/app.ts`
+- `apps/server/agent/src/maintenance/agent-backup.test.ts`
+- `apps/server/agent/src/maintenance/agent-backup.ts`
+- `apps/server/agent/src/providers/skills.test.ts`
+- `apps/server/pm/src/app.ts`
+- `apps/web/src/features/agent/src/app.tsx`
+- `apps/web/src/features/agent/src/chat/provider-skills-composer.tsx`
+- `apps/web/src/features/agent/src/settings/settings-layout.tsx`
+- `packages/agent-contracts/package.json`
+
+The two existing Provider outputs remain upstream-derived. The Composer output
+retains its five exact supplemental-source inputs; the other eight additions
+are zero-input `local-integration` records with canonical `local-bytes` recipes.
+Verification authenticates owner/source manifests and the distributed MIT license
+against their registrations in the T3 inventory, including bytes, hashes and
+modes. Every derived input must match its registered original production or
+supplemental manifest. The current pins remain
+`30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c` and
+`d53873b6a4799e87afd63c8d288ef0089f5a3748`; modern owner validation follows
+coherent registered generations rather than adding a fixed-pin gate. Legacy T3
+replay pin guards are unchanged. Exact line-splice inversion and forward replay
+authenticate the primary original and current output.
+Local recipes must decode canonically to the exact current bytes/hash/size/mode.
+Retired, duplicate, malformed, unregistered or conflicting replay owners fail.
+
+CC keeps neither a second whole-file asset nor a frozen consumer hash. Owner
+generations may advance independently with complete registered evidence; this
+does not authorize a CC candidate to rewrite owner metadata, enroll other paths
+or change pins. Existing Provider binding/Skills behavior and Agent/Web type
+checks remain compatibility gates.
+
+The initial reviewed transfer requires one
+`--transfer-host-output PATH=OLD_ASSET_RECIPE_SHA256` per retired output, alongside
+the exact approvals for changed policy/tool files. Capture authenticates each
+unchanged old asset recipe, its unique prior enrollment, canonical bytes/mode and
+current owner before retiring the duplicate recipes; output hashes cannot stand
+in for old recipe hashes. Subsequent captures do not reenroll these paths, and
+`--allow-local` cannot reclaim them. A clean CC-only replay manufactures neither
+external files nor owner evidence. If any external output or owner evidence is
+present, complete valid evidence is required before replay writes begin.
+
 
 ## Capture: an authoring operation, not a check
 
@@ -95,6 +153,17 @@ node vendor/cc-switch/scripts/capture.mjs \
   --review --reason 'Specific reviewed change and compatibility evidence' \
   --accept-change vendor/cc-switch/src/example.ts=EXACT_CURRENT_SHA256
 ```
+
+Already-deleted, obsolete **host-owned local code** can be retired with
+`--retire-local PATH=OLD_OUTPUT_SHA256`. Review all consumers first; the exact
+previous inventory output hash and intact asset recipe are required. This never
+deletes source files, cannot retire upstream/derived code, vendor/tooling outputs,
+production roots, host build inputs or externally owned outputs, and conflicts
+with enrollment/update approvals. Resource-closure verification still rejects
+remaining imports reachable from its production roots; host consumers also need
+their typecheck/build. Capture checks absence again before publication and removes
+only the obsolete generated recipe and inventory enrollment; it does not restore
+dead components or silently accept missing files.
 
 Source commit, selected file set, original bytes/blob/modes, existing patch hashes,
 output modes, local resource closure and concurrent edits are checked before
@@ -220,9 +289,10 @@ Both modes remain private because Agent histories/attachments are private.
 Restore requires a separate empty target and matching old/new build/data versions,
 never overwrites the source, relocates owned binding/providerBinding/external
 snapshots, and **blanks native binding fingerprints**. Those fingerprints attest
-live Provider revisions and physical roots, not portable path strings. A user must
-explicitly rebind current targets before any native write; restore never resyncs
-or grants a target implicitly. External paths are not followed. Windows symlink
+live Provider revisions and physical roots, not portable path strings. Opening a
+registered Provider's management page revalidates its current registered roots
+before use; external targets still require explicit re-enrollment. Resolution
+and restore never resync native files. External paths are not followed. Windows symlink
 restore requires permission to create the original link kind. Stop the owning
 Agent and its child sidecars first; `--stopped` is an operator attestation and the
 existing Agent lock/owner checks remain enforced. Roll back only by stopping the

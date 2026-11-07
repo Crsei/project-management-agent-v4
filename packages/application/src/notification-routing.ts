@@ -6,7 +6,7 @@ import { lockWorkspace } from '../../infrastructure/src/database.ts';
 import type { SqlExecutor } from './ports.ts';
 import type { NotificationFactInput } from './service-facts.ts';
 
-type Job={workspace_id:string;fact_id:string;lease_epoch:string;candidate_after:string;actor_id:string|null;task_id:string;original_project_id:string;comment_id:string|null;watch_candidates:NotificationFactInput['watchCandidates'];new_mention_ids:string[]};
+type Job={workspace_id:string;fact_id:string;lease_epoch:string;candidate_after:string;actor_id:string|null;task_id:string;original_project_id:string;comment_id:string|null;watch_candidates:NotificationFactInput['watchCandidates'];new_mention_ids:string[];completion:boolean;assignee_id:string|null;requester_id:string|null;trusted_origin:'manual'|'agent'|'automation'};
 export function notificationTaskVisible(snapshot:ReadonlyCoreSnapshot,taskId:string,projectId:string):boolean {
  const task=snapshot.files.find(file=>file.id===taskId),project=snapshot.files.find(file=>file.id===projectId);
  return !!task && task.entity.entity==='work_item'&&task.entity.project===projectId&&!!project&&project.entity.entity==='project';
@@ -27,14 +27,14 @@ export async function routeNotificationBatch(pool:Pool,core:NotificationCorePort
    await claim.query('BEGIN');await lockWorkspace(claim,candidate.workspace_id);
    const result=await claim.query<Job>(`WITH claimed AS (UPDATE notification_route_jobs SET state='running',lease_owner=$3,lease_until=clock_timestamp()+($4::integer*interval '1 millisecond'),lease_epoch=lease_epoch+1
     WHERE workspace_id=$1 AND fact_id=$2 AND ((state='pending' AND next_attempt_at<=clock_timestamp()) OR (state='running' AND lease_until<clock_timestamp())) RETURNING *)
-    SELECT c.workspace_id,c.fact_id,c.lease_epoch::text,c.candidate_after,i.actor_id,i.task_id,i.original_project_id,i.comment_id,i.watch_candidates,i.new_mention_ids FROM claimed c JOIN notification_fact_inputs i USING(workspace_id,fact_id)`,[candidate.workspace_id,candidate.fact_id,owner,leaseMs]);
+    SELECT c.workspace_id,c.fact_id,c.lease_epoch::text,c.candidate_after,i.actor_id,i.task_id,i.original_project_id,i.comment_id,i.watch_candidates,i.new_mention_ids,i.completion,i.assignee_id,i.requester_id,i.trusted_origin FROM claimed c JOIN notification_fact_inputs i USING(workspace_id,fact_id)`,[candidate.workspace_id,candidate.fact_id,owner,leaseMs]);
    job=result.rows[0];await claim.query('COMMIT');
   }catch(error){await claim.query('ROLLBACK');throw error;}finally{claim.release();}
   if(!job) continue;
   jobs++;
   try {
    const snapshot=await core.read(job.workspace_id);
-   const ids=[...new Set([...job.watch_candidates.map(value=>value.ownerId),...job.new_mention_ids])].filter(id=>id>job!.candidate_after).sort();
+   const ids=[...new Set([...job.watch_candidates.map(value=>value.ownerId),...job.new_mention_ids,...(job.completion&&job.assignee_id?[job.assignee_id]:[]),...(job.completion&&job.requester_id?[job.requester_id]:[])])].filter(id=>id>job!.candidate_after).sort();
    const page=ids.slice(0,limit);
    const sql=await pool.connect();
    try {
@@ -50,7 +50,7 @@ export async function routeNotificationBatch(pool:Pool,core:NotificationCorePort
     }
     let completed=0,skipped=0,inserted=0;
     for(const id of page) {
-     if(!valid||id===job.actor_id) {skipped++;continue;}
+     if(!valid||id===job.actor_id&&job.trusted_origin==='manual') {skipped++;continue;}
      const member=await sql.query(`SELECT 1 FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.workspace_id=$1 AND m.user_id=$2 AND m.revoked_at IS NULL AND u.disabled_at IS NULL
       AND 'domain.read'=ANY(m.capabilities) AND (m.project_ids IS NULL OR $3=ANY(m.project_ids))`,[job.workspace_id,id,job.original_project_id]);
      if(!member.rows.length) {skipped++;continue;}
@@ -61,6 +61,10 @@ export async function routeNotificationBatch(pool:Pool,core:NotificationCorePort
       if(activeWatch.rows.length) {reasons.push('watch');break;}
      }
      if(job.new_mention_ids.includes(id)) reasons.push('mention');
+     const currentTask=current.files.find(file=>file.id===job!.task_id);
+     if(job.completion&&job.assignee_id===id&&currentTask?.entity.assignee===id)reasons.push('assignee');
+     if(job.completion&&job.requester_id===id&&job.trusted_origin!=='manual')reasons.push('requester');
+     if(reasons.length&&job.completion)reasons.push('completion');
      if(!reasons.length) {skipped++;continue;}
      const prior=await sql.query('SELECT 1 FROM notification_recipients WHERE workspace_id=$1 AND fact_id=$2 AND recipient_id=$3',[job.workspace_id,job.fact_id,id]);
      if(!prior.rows.length) {

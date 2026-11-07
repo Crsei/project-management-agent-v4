@@ -7,7 +7,7 @@ import type { McpAppMetadata, McpAppSnapshot, McpAppToolResult, McpAppToolsResul
 import type { GenerationOutputStatus } from "@agent-workspace/contracts/output";
 import { WorkspaceClientError, makeMcpAppHost, McpAppHostRefusal, mcpAppStyleVariables, mcpResourceBytes, clampMcpAppHeight, MCP_APP_DEFAULT_HEIGHT, MCP_APP_MAX_HEIGHT, mcpAppAllowAttribute, type McpAppDisplayMode, type McpAppHost } from "@agent-workspace/client-runtime";
 import { useTheme } from "@agent/hooks/use-theme";
-import { canSendThread, threadScope, scopeKey, usePmChatState } from "../pm/state";
+import { canSendThread, threadExecutionSelection, usePmChatState } from "../pm/state";
 import { workspaceClient } from "../network";
 import { useAgentText } from "../i18n";
 import { bindMcpAppDocument, makeMcpAppDocumentBridge } from "./mcp-app-document-bridge";
@@ -30,7 +30,7 @@ export function McpAppFrame({ app, generationStatus }: { app: McpAppMetadata; ge
   const localId = useAuiState(s => s.threads.mainThreadId);
   const remoteId = useAuiState(s => s.threads.threadItems.find(item => item.id === s.threads.mainThreadId)?.remoteId);
   const threadRunning = useAuiState(s => s.thread.isRunning);
-  const currentScope = threadScope(localId, remoteId);
+  const executionSelection = threadExecutionSelection(localId, remoteId);
   const selectedProvider = state.providers.find(provider => provider.instanceId === app.producing.providerInstanceId);
   const { theme } = useTheme();
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -49,14 +49,14 @@ export function McpAppFrame({ app, generationStatus }: { app: McpAppMetadata; ge
   const loads = useRef(0);
   const lastPageInputAt = useRef(Number.NEGATIVE_INFINITY);
   const target = `/api/mcp-apps/${encodeURIComponent(app.producing.threadId)}/${encodeURIComponent(app.producing.itemId)}`;
-  const targetKey = JSON.stringify([app.producing, currentScope && scopeKey(currentScope)]);
+  const targetKey = JSON.stringify([app.producing, executionSelection]);
   const capturedDocument = useMemo<{ binding?: ReturnType<typeof bindMcpAppDocument>; error?: string }>(() => {
     if (!snapshot) return {};
     try { return { binding: bindMcpAppDocument(snapshot.html, window.location.origin) }; }
     catch (cause) { return { error: cause instanceof Error ? cause.message : String(cause) }; }
   }, [snapshot, generation, targetKey]);
   const documentBinding = capturedDocument.binding;
-  const bound = !!currentScope && remoteId === app.producing.threadId && !state.error && !state.providerError && !!selectedProvider?.nativeSessionReady && (selectedProvider.revision === undefined || selectedProvider.revision === app.producing.instanceRevision) && state.threads.get(remoteId)?.settings.providerInstanceId === app.producing.providerInstanceId;
+  const bound = remoteId === app.producing.threadId && !state.providerError && !!selectedProvider?.nativeSessionReady && (selectedProvider.revision === undefined || selectedProvider.revision === app.producing.instanceRevision) && state.threads.get(remoteId)?.settings.providerInstanceId === app.producing.providerInstanceId;
   // Tool completion precedes retained-session handoff. Only the producing
   // generation's terminal output confirms that handoff, not thread.isRunning.
   const ready = generationStatus === "completed";

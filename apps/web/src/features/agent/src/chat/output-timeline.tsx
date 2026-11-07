@@ -2,7 +2,13 @@ import { memo, useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { MultiFileDiff } from "@pierre/diffs/react";
+import {
+  Bell, Brain, Circle, CircleAlert, CircleCheck, CircleDot, CircleX,
+  Copy, FileCode, GitBranch, Globe, ListTodo, MessageSquare, RefreshCw,
+  Route, Search, ShieldQuestion, Terminal as TerminalIcon, Wrench,
+} from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
+import { Button } from "@agent/components/ui/button";
 import { Markdown } from "./markdown";
 import type { GenerationOutputStatus, NativeInteractionResponse, NativeOutputItem } from "@agent-workspace/contracts/output";
 import { WorkspaceClientError } from "@agent-workspace/client-runtime";
@@ -13,6 +19,7 @@ import { PmToolCard } from "./pm-tool-card";
 import { usePmToolCalls } from "./pm-tool-calls";
 import { useAgentText, type AgentText } from "../i18n";
 import { McpAppFrame } from "./mcp-app-frame";
+import { CodeBlock, Trace, TraceLine, TraceRow, TraceStatusBadge } from "./execution-trace";
 import "./output-timeline.css";
 
 const labels = (t: AgentText): Record<NativeOutputItem["type"], string> => ({
@@ -78,9 +85,19 @@ function CommandOutput({ generationId, item }: { generationId: string; item: Nat
       await navigator.clipboard.writeText(terminalOutputPlainText(output.current.text));
       setCopyError(undefined);
       setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
     } catch (cause) { setCopyError(cause instanceof Error ? cause.message : String(cause)); }
   };
-  return <div className="native-command-output"><div ref={node} aria-label={t("命令终端输出", "Command terminal output")} />{(truncated || item.outputTruncated) && <p>{t("输出已截断，仅显示保留的尾部。", "Output truncated; only the retained tail is shown.")}</p>}{error && <p role="alert">{t("输出连接中断：", "Output connection interrupted: ")}{error}</p>}<button type="button" disabled={!ready} onClick={() => void copy()}>{t("复制输出", "Copy output")}</button>{copied && <span role="status">{t("已复制", "Copied")}</span>}{copyError && <span role="alert">{t("复制失败：", "Copy failed: ")}{copyError}</span>}</div>;
+  return <div className="native-command-output">
+    <Button className="native-command-copy" size="icon-xs" variant="ghost" aria-label={t("复制输出", "Copy output")} disabled={!ready} onClick={() => void copy()}>
+      {copied ? <CircleCheck aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    </Button>
+    <div ref={node} aria-label={t("命令终端输出", "Command terminal output")} />
+    {(truncated || item.outputTruncated) && <p>{t("输出已截断，仅显示保留的尾部。", "Output truncated; only the retained tail is shown.")}</p>}
+    {error && <p role="alert">{t("输出连接中断：", "Output connection interrupted: ")}{error}</p>}
+    {copied && <span role="status" className="sr-only">{t("已复制", "Copied")}</span>}
+    {copyError && <span role="alert">{t("复制失败：", "Copy failed: ")}{copyError}</span>}
+  </div>;
 }
 function Interaction({ generationId, item }: { generationId: string; item: NativeOutputItem }) {
   const t = useAgentText();
@@ -133,42 +150,100 @@ function Interaction({ generationId, item }: { generationId: string; item: Nativ
 function FileChanges({ item }: { item: NativeOutputItem }) {
   const t = useAgentText();
   const changes: NonNullable<NativeOutputItem["changes"]> = item.changes?.length ? item.changes : [{ path: item.fileName || item.title || t("文件", "File"), operation: "", diff: item.diff }];
-  return <div data-native-context-menu>{changes.map((change, index) => <div key={`${change.path}:${index}`}><strong>{change.oldPath ? `${change.oldPath} → ` : ""}{change.path}</strong> {change.operation} {change.diff ? <Diff text={change.diff} /> : index === 0 && item.oldText !== undefined && item.newText !== undefined ? <MultiFileDiff oldFile={{ name: change.oldPath || change.path, contents: item.oldText }} newFile={{ name: change.path, contents: item.newText }} disableWorkerPool options={{ themeType: "system", diffStyle: "unified", overflow: "scroll" }} /> : index === 0 && (item.oldText !== undefined || item.newText !== undefined) ? <div className="native-before-after">{item.oldText !== undefined && <div><b>{t("原内容", "Original")}</b><pre>{item.oldText}</pre></div>}{item.newText !== undefined && <div><b>{t("新内容", "New")}</b><pre>{item.newText}</pre></div>}</div> : <p>{t("未提供差异内容。", "No diff content provided.")}</p>}</div>)}</div>;
+  return <div data-native-context-menu className="native-changes">
+    {changes.map((change, index) => <div key={`${change.path}:${index}`} className="native-change">
+      <div className="native-change-path"><strong>{change.oldPath ? `${change.oldPath} → ` : ""}{change.path}</strong>{change.operation && <span>{change.operation}</span>}</div>
+      {change.diff ? <Diff text={change.diff} /> : index === 0 && item.oldText !== undefined && item.newText !== undefined ? <MultiFileDiff oldFile={{ name: change.oldPath || change.path, contents: item.oldText }} newFile={{ name: change.path, contents: item.newText }} disableWorkerPool options={{ themeType: "system", diffStyle: "unified", overflow: "scroll" }} /> : index === 0 && (item.oldText !== undefined || item.newText !== undefined) ? <div className="native-before-after">{item.oldText !== undefined && <div><b>{t("原内容", "Original")}</b><CodeBlock code={item.oldText} lineNumbers /></div>}{item.newText !== undefined && <div><b>{t("新内容", "New")}</b><CodeBlock code={item.newText} lineNumbers /></div>}</div> : <p>{t("未提供差异内容。", "No diff content provided.")}</p>}
+    </div>)}
+  </div>;
 }
 function Diff({ text }: { text: string }) {
-  return <pre className="native-diff">{text.split("\n").map((line, index) => <span key={index} className={line.startsWith("+") && !line.startsWith("+++") ? "addition" : line.startsWith("-") && !line.startsWith("---") ? "deletion" : ""}>{line}{"\n"}</span>)}</pre>;
+  const rows = text.split("\n")
+    .filter(line => !line.startsWith("--- ") && !line.startsWith("+++ "))
+    .map(line => ({ text: line, kind: line.startsWith("+") ? "added" as const : line.startsWith("-") ? "removed" as const : "context" as const }));
+  return <CodeBlock rows={rows} lineNumbers />;
 }
 // assistant-ui replaces the live message with authoritative history at finish.
 // Keep explicit expansion through that remount, without persisting output or unbounded keys.
 const expandedRows = new Set<string>();
+function commandText(item: NativeOutputItem) {
+  const input = item.input;
+  if (typeof input === "string") return input;
+  if (input && typeof input === "object" && "command" in input && typeof input.command === "string") return input.command;
+  return undefined;
+}
+function traceStatusFor(status: NativeOutputItem["status"]): "running" | "error" | "pending" | undefined {
+  if (status === "failed" || status === "interrupted") return "error";
+  if (status === "running") return "running";
+  if (status === "pending" || status === "waiting") return "pending";
+  return undefined;
+}
+function outputIcon(type: NativeOutputItem["type"]) {
+  switch (type) {
+    case "assistant_message": return <MessageSquare aria-hidden="true" />;
+    case "reasoning": return <Brain aria-hidden="true" />;
+    case "command_execution": return <TerminalIcon aria-hidden="true" />;
+    case "file_change": return <FileCode aria-hidden="true" />;
+    case "file_search": return <Search aria-hidden="true" />;
+    case "web_search": return <Globe aria-hidden="true" />;
+    case "dynamic_tool": return <Wrench aria-hidden="true" />;
+    case "todo_list": return <ListTodo aria-hidden="true" />;
+    case "proposed_plan": return <Route aria-hidden="true" />;
+    case "subagent": return <GitBranch aria-hidden="true" />;
+    case "approval_request":
+    case "user_input_request": return <ShieldQuestion aria-hidden="true" />;
+    case "notification": return <Bell aria-hidden="true" />;
+    case "error": return <CircleAlert aria-hidden="true" />;
+    case "compaction": return <RefreshCw aria-hidden="true" />;
+  }
+}
 const OutputRow = memo(function OutputRow({ item, generationId, generationStatus }: { item: NativeOutputItem; generationId: string; generationStatus: GenerationOutputStatus }) {
   const t = useAgentText();
   const expansionKey = JSON.stringify([generationId, item.id]);
-  const [open, setOpen] = useState(() => expandedRows.has(expansionKey));
-  const toggle = () => {
-    if (open) expandedRows.delete(expansionKey);
-    else {
+  const [open, setOpen] = useState(() => expandedRows.has(expansionKey) || item.status === "failed" || item.status === "interrupted" || item.status === "running" || item.status === "waiting" || item.status === "pending");
+  const change = (next: boolean) => {
+    if (next) {
       expandedRows.add(expansionKey);
       if (expandedRows.size > 256) expandedRows.delete(expandedRows.values().next().value!);
+    } else {
+      expandedRows.delete(expansionKey);
     }
-    setOpen(!open);
+    setOpen(next);
   };
   if (item.type === "assistant_message") return <div className="native-answer"><Markdown content={item.text ?? ""} locale="zh-CN" streaming={item.streaming === true} />{item.error && <p role="alert" className="native-error">{item.error}</p>}</div>;
-  const collapsible = item.type === "reasoning" || item.type === "command_execution" || item.type === "dynamic_tool" || item.type === "file_change";
-  const title = item.title || item.request?.title || item.toolName || labels(t)[item.type];
+  const title = (item.type === "command_execution" ? commandText(item) : undefined) || item.title || item.request?.title || item.toolName || labels(t)[item.type];
+  const status = traceStatusFor(item.status);
+  const tone = item.status === "completed" ? "success" : item.status === "failed" || item.status === "interrupted" ? "error" : item.status === "running" ? "running" : item.status === "waiting" ? "warning" : item.status === "pending" ? "pending" : "neutral";
+  const meta = <>
+    <Duration item={item} />
+    {item.exitCode !== undefined && <span> · exit {item.exitCode}</span>}
+    {item.type === "file_change" && (item.additions !== undefined || item.deletions !== undefined) && <span> · +{item.additions ?? 0} −{item.deletions ?? 0}</span>}
+  </>;
   const body = <>
     {item.type === "reasoning" && <div className="native-prose"><Markdown content={item.text ?? ""} locale="zh-CN" streaming={item.streaming === true} /></div>}
-    {item.type === "command_execution" && <>{item.input !== undefined && <pre>{printable(item.input)}</pre>}{item.exitCode !== undefined && <p>{t("退出码：", "Exit code: ")}{item.exitCode}</p>}{open && <CommandOutput generationId={generationId} item={item} />}</>}
-    {item.type === "file_change" && <>{(item.additions !== undefined || item.deletions !== undefined) && <p>{item.additions !== undefined && t(`新增 ${item.additions}`, `+${item.additions} added`)}{item.additions !== undefined && item.deletions !== undefined && " · "}{item.deletions !== undefined && t(`删除 ${item.deletions}`, `-${item.deletions} deleted`)}</p>}<FileChanges item={item} /></>}
-    {(item.type === "file_search" || item.type === "web_search") && <>{item.text && <p>{item.text}</p>}{item.input !== undefined && <pre>{printable(item.input)}</pre>}{item.output && <pre>{item.output}</pre>}<ul>{item.results?.map((result, index) => { const url = safeUrl(result.url); return <li key={index}>{url ? <a href={url} target="_blank" rel="noopener noreferrer">{result.title || url}</a> : <strong>{result.title || result.path || result.url || t("结果", "Result")}</strong>}{result.path && <span> {result.path}{result.line !== undefined ? `:${result.line}` : ""}</span>}{result.text && <p>{result.text}</p>}</li>; })}</ul></>}
-    {item.type === "dynamic_tool" && <>{item.input !== undefined && <><b>{t("输入", "Input")}</b><pre>{printable(item.input)}</pre></>}{item.output !== undefined && <><b>{t("输出", "Output")}</b><pre>{item.output}</pre></>}{item.text && <p>{item.text}</p>}</>}
-    {(item.type === "todo_list" || item.type === "proposed_plan") && <>{item.text && <Markdown content={item.text} locale="zh-CN" />}{item.steps && <ol>{item.steps.map((step) => <li key={step.id}>{step.status === "completed" ? "✓" : step.status === "running" ? "◷" : step.status === "cancelled" ? "×" : "○"} {step.text} <small>{step.status}</small></li>)}</ol>}</>}
-    {item.type === "subagent" && <>{item.model && <p>{t("模型：", "Model: ")}{item.model}</p>}{item.childSessionId && <p>{t("子会话：", "Child session: ")}{item.childSessionId}</p>}{item.text && <p>{item.text}</p>}{item.output && <pre>{item.output}</pre>}</>}
+    {item.type === "command_execution" && open && <CommandOutput generationId={generationId} item={item} />}
+    {item.type === "file_change" && <FileChanges item={item} />}
+    {(item.type === "file_search" || item.type === "web_search") && <>{item.text && <p>{item.text}</p>}{item.input !== undefined && <CodeBlock code={printable(item.input)} wrap />}{item.output && <CodeBlock code={item.output} wrap />}<ul>{item.results?.map((result, index) => { const url = safeUrl(result.url); return <li key={index}>{url ? <a href={url} target="_blank" rel="noopener noreferrer">{result.title || url}</a> : <strong>{result.title || result.path || result.url || t("结果", "Result")}</strong>}{result.path && <span> {result.path}{result.line !== undefined ? `:${result.line}` : ""}</span>}{result.text && <p>{result.text}</p>}</li>; })}</ul></>}
+    {item.type === "dynamic_tool" && <>{item.input !== undefined && <><b>{t("输入", "Input")}</b><CodeBlock code={printable(item.input)} wrap /></>}{item.output !== undefined && <><b>{t("输出", "Output")}</b><CodeBlock code={item.output} wrap /></>}{item.text && <p>{item.text}</p>}</>}
+    {(item.type === "todo_list" || item.type === "proposed_plan") && <>{item.text && <Markdown content={item.text} locale="zh-CN" />}{item.steps && <Trace nested>{item.steps.map(step => <TraceLine key={step.id} icon={step.status === "completed" ? <CircleCheck aria-hidden="true" /> : step.status === "running" ? <CircleDot aria-hidden="true" /> : step.status === "cancelled" ? <CircleX aria-hidden="true" /> : <Circle aria-hidden="true" />} title={step.text} status={step.status === "completed" ? undefined : step.status === "running" ? "running" : "pending"} />)}</Trace>}</>}
+    {item.type === "subagent" && <>{item.model || item.childSessionId ? <Trace nested>{item.model && <TraceLine icon={<Wrench aria-hidden="true" />} title={t("模型", "Model")} description={item.model} />}{item.childSessionId && <TraceLine icon={<GitBranch aria-hidden="true" />} title={t("子会话", "Child session")} description={item.childSessionId} />}</Trace> : null}{item.text && <p>{item.text}</p>}{item.output && <CodeBlock code={item.output} wrap />}</>}
     {(item.type === "approval_request" || item.type === "user_input_request") && <Interaction key={item.request?.id ?? item.id} generationId={generationId} item={item} />}
-    {(item.type === "notification" || item.type === "error" || item.type === "compaction") && <>{item.text && <p>{item.text}</p>}{item.output && <pre>{item.output}</pre>}{item.input !== undefined && <pre>{printable(item.input)}</pre>}</>}
+    {(item.type === "notification" || item.type === "error" || item.type === "compaction") && <>{item.text && <p>{item.text}</p>}{item.output && <CodeBlock code={item.output} wrap />}{item.input !== undefined && <CodeBlock code={printable(item.input)} wrap />}</>}
     {item.error && <p role="alert" className="native-error">{item.error}</p>}
   </>;
-  return <section className={`native-output-card native-${item.type}`}><header>{collapsible ? <button type="button" aria-expanded={open} onClick={toggle}><span aria-hidden>{open ? "▾" : "▸"}</span> {title}</button> : <strong>{title}</strong>}<span className="native-status">{statuses(t)[item.status]} <Duration item={item} /></span></header>{item.mcpApp && <McpAppFrame key={JSON.stringify(item.mcpApp.producing)} app={item.mcpApp} generationStatus={generationStatus} />}{(!collapsible || open) && <div className="native-card-body">{body}</div>}</section>;
+  return <TraceRow
+    className={`native-${item.type}`}
+    icon={outputIcon(item.type)}
+    title={title}
+    description={meta}
+    status={status}
+    trailing={<TraceStatusBadge status={status} tone={tone}>{statuses(t)[item.status]}</TraceStatusBadge>}
+    open={open}
+    onOpenChange={change}
+  >
+    {item.mcpApp && <McpAppFrame key={JSON.stringify(item.mcpApp.producing)} app={item.mcpApp} generationStatus={generationStatus} />}
+    <div className="native-card-body">{body}</div>
+  </TraceRow>;
 });
 export function OutputTimeline({ generationId }: { generationId: string }) {
   const t = useAgentText();

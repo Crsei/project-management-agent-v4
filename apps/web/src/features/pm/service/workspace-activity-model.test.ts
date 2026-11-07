@@ -143,6 +143,16 @@ test('audit pagination reads every page/project and rejects cycles, scope mismat
   await assert.rejects(readActivityAudits(['PRJ-001'], async () => ({ projectId: 'PRJ-001', entries: [], nextCursor: 'empty-loop' }), new AbortController().signal), /invalid_response/);
 });
 
+test('bounded audit reads stop at the newest N entries of each project', async () => {
+  const calls: string[] = [];
+  const entries = await readActivityAudits(['PRJ-001', 'PRJ-002'], async (projectId, cursor) => {
+    calls.push(`${projectId}:${cursor ?? 'first'}`);
+    return { projectId, entries: [audit({ id: '10', projectId })], nextCursor: 'older' };
+  }, new AbortController().signal, 1);
+  assert.deepEqual(calls, ['PRJ-001:first', 'PRJ-002:first']);
+  assert.deepEqual(entries.map(entry => [entry.projectId, entry.id]), [['PRJ-001', '10'], ['PRJ-002', '10']]);
+});
+
 test('comment target lookup paginates, strips body/author, stops after resolution, and honors moved-history limitations', async () => {
   const files = [file('TASK-001', 'work_item', 'PRJ-001'), file('TASK-002', 'work_item', 'PRJ-001')];
   const calls: string[] = [];

@@ -1,0 +1,167 @@
+/* Shared MCP / Skills presentation chrome. Scoped to the OpenHands surface. */
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-stack {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-stack .oh-agent-avatar + .oh-agent-avatar {
+  margin-inline-start: -6px;
+}
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px var(--oh-color-base-secondary);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar-xs { width: 16px; height: 16px; font-size: 8px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar-sm { width: 20px; height: 20px; font-size: 9px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar-md { width: 28px; height: 28px; font-size: 10px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar-lg { width: 36px; height: 36px; font-size: 12px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-avatar-overflow { background: var(--oh-surface-raised); color: var(--oh-muted); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-stack-empty { color: var(--oh-muted); font-size: 11px; }
+
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-status-pill {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+  max-width: 100%;
+  border: 1px solid var(--oh-border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: var(--oh-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+}
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-status-pill[data-tone="success"] { border-color: color-mix(in srgb, var(--success) 30%, transparent); background: color-mix(in srgb, var(--success) 10%, transparent); color: var(--success-text); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-status-pill[data-tone="warning"] { border-color: color-mix(in srgb, var(--warning) 35%, transparent); background: color-mix(in srgb, var(--warning) 10%, transparent); color: var(--warning-text); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-status-pill[data-tone="error"] { border-color: color-mix(in srgb, var(--danger) 35%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger-text); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-status-pill[data-tone="accent"] { border-color: color-mix(in srgb, var(--oh-accent) 35%, transparent); background: color-mix(in srgb, var(--oh-accent) 10%, transparent); color: var(--oh-accent); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-status-pill[data-tone="info"] { border-color: color-mix(in srgb, var(--info) 35%, transparent); background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--info); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-status-pill-dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 999px; background: currentColor; }
+
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter { position: relative; flex-shrink: 0; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--oh-border);
+  border-radius: 8px;
+  background: var(--oh-color-base-secondary);
+  color: var(--oh-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+}
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-trigger:hover { background: var(--oh-color-tertiary); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-trigger[data-filtered="true"] { border-color: color-mix(in srgb, var(--oh-contrast) 60%, transparent); background: color-mix(in srgb, var(--oh-contrast) 8%, transparent); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-chevron { width: 16px; height: 16px; color: var(--oh-muted); transition: transform 150ms; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-chevron-open { transform: rotate(180deg); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-menu {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  min-width: 100%;
+  width: max-content;
+  max-height: 15rem;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--oh-border);
+  border-radius: 8px;
+  background: var(--oh-color-base);
+  box-shadow: var(--shadow-floating);
+}
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--oh-foreground);
+  font-size: 12px;
+  text-align: start;
+  cursor: pointer;
+}
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-option:hover { background: var(--oh-color-tertiary); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-option[aria-checked="true"] { background: var(--oh-color-tertiary); font-weight: 600; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-enum-filter-option svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* Shared Agent x target assignment matrix. */
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-scroll { overflow-x: auto; border: 1px solid var(--oh-border); border-radius: 12px; background: var(--oh-color-base-secondary); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-table { width: 100%; min-width: 660px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 12px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-table thead tr { background: var(--oh-surface-raised); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-table th,
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-table td { border-bottom: 1px solid var(--oh-border); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-table tr:last-child td { border-bottom: 0; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-table .oh-agent-matrix-row-header { width: 44%; padding: 10px 12px; text-align: start; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-row-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-row-heading > span:first-of-type { color: var(--oh-muted); font-size: 12px; font-weight: 500; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-row-copy { min-width: 0; flex: 1; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-row-copy > button { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 0; padding: 0; background: transparent; color: var(--oh-contrast); font-size: 13px; font-weight: 500; text-align: start; cursor: pointer; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-row-copy > button:hover { text-decoration: underline; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-row-copy > p { margin: 1px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--oh-text-dim); font-size: 11px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-issue { width: 14px; height: 14px; flex-shrink: 0; color: var(--warning-text); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-agent { padding: 8px 4px; text-align: center; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-agent > div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-agent > div > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--oh-muted); font-size: 10px; line-height: 1.2; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-agent small { color: var(--oh-text-dim); font-size: 10px; line-height: 1; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-manage { width: 40px; padding: 4px; text-align: center; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-manage button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--oh-muted); cursor: pointer; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-manage button:hover { background: var(--oh-color-tertiary); color: var(--oh-contrast); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-manage svg { width: 16px; height: 16px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-table tbody tr[data-selected] { background: color-mix(in srgb, var(--oh-surface-raised) 60%, transparent); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-table tbody tr:hover { background: color-mix(in srgb, var(--oh-surface-raised) 35%, transparent); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-unsupported { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: color-mix(in srgb, var(--oh-muted) 50%, transparent); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-agent-matrix-empty { padding: 40px 16px; text-align: center; color: var(--oh-muted); }
+
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-assignment-checkbox {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 1px solid var(--oh-border);
+  border-radius: 4px;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  transition: background-color 150ms, border-color 150ms;
+}
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-assignment-checkbox:hover:not(:disabled) { border-color: color-mix(in srgb, var(--oh-contrast) 50%, transparent); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-assignment-checkbox-checked { border-color: transparent; background: var(--oh-accent); color: var(--oh-accent-foreground); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-assignment-checkbox-mixed { border-color: transparent; background: var(--oh-surface-raised); color: var(--oh-muted); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-assignment-checkbox:disabled { opacity: .5; cursor: not-allowed; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-assignment-checkbox svg { width: 12px; height: 12px; stroke-width: 3; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-assignment-sync-dot { position: absolute; top: -3px; right: -3px; width: 6px; height: 6px; border-radius: 999px; box-shadow: 0 0 0 1px var(--oh-color-base-secondary); background: var(--warning); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-assignment-checkbox[data-sync-state="error"] .oh-assignment-sync-dot { background: var(--danger); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-assignment-checkbox[data-sync-state="unavailable"] .oh-assignment-sync-dot { background: var(--warning); }
+
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px; border: 1px solid var(--oh-border); border-radius: 8px; background: var(--oh-surface-raised); font-size: 12px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk > strong { color: var(--oh-contrast); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk > span { color: var(--oh-text-dim); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk-agents { display: flex; flex-wrap: wrap; gap: 4px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk-agents button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid var(--oh-border); border-radius: 6px; background: var(--oh-color-base-secondary); color: var(--oh-muted); font-size: 11px; cursor: pointer; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk-agents button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--oh-contrast) 30%, transparent); color: var(--oh-contrast); }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk-agents button:disabled { opacity: .4; cursor: not-allowed; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk-actions { display: flex; align-items: center; gap: 12px; margin-inline-start: auto; font-size: 11px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk-actions button { border: 0; padding: 0; background: transparent; color: var(--oh-muted); cursor: pointer; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-bulk-actions button:hover { color: var(--oh-contrast); text-decoration: underline; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+:is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) .oh-matrix-summary { color: var(--oh-text-dim); font-size: 11px; }

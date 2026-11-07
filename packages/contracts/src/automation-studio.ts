@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema, pmAutomationTemplateIds, pmAutomationTemplateVersion } from './automation-pm.ts';
 import { pmAutomationTemplateCapabilities, pmAutomationTemplateRequiresProvider } from './automation-pm.ts';
+import { executionSelectionSchema, type ExecutionEnvironment, type ExecutionSelection } from '../../agent-contracts/src/execution.ts';
 
 const uuid = z.uuid().toLowerCase();
 const timestamp = z.iso.datetime();
@@ -19,6 +20,7 @@ export const studioPluginSchema = z.strictObject({ id: z.string().min(1).max(300
 const actionCommon = {
   repositories: z.array(studioRepositorySchema).max(20), plugins: z.array(studioPluginSchema).max(30),
   timeoutSeconds: z.number().int().min(1).max(86400),
+  executionSelection: executionSelectionSchema.optional(),
 };
 /** Native model-option selections only; Provider credentials are resolved privately by the Agent. */
 const studioOptionId = z.string().min(1).max(200).refine(value => !/^(?:api.?key|access.?token|refresh.?token|auth(?:orization)?|cookie|password|secret|credentials?|headers?)$/i.test(value), 'Credential fields are not model options');
@@ -72,6 +74,7 @@ export const studioConfigSchema = z.strictObject({
   name: z.string().trim().min(1).max(160), description: z.string().max(4000), projectId: z.string().regex(/^PRJ-\d+$/),
   tags: z.array(z.string().trim().min(1).max(100)).max(30), templateId: z.string().max(300).nullable(),
   templateInputs: z.record(z.string(), z.unknown()).optional(), templateVersion: z.string().max(200).nullable().optional(),
+  quickAccess: z.boolean().optional().describe('Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no execution authority.'),
   action: studioActionSchema, trigger: studioTriggerSchema,
   dailyLimit: z.number().int().min(1).max(100), cooldownMinutes: z.number().int().min(0).max(10080),
 }).superRefine((config, context) => {
@@ -86,6 +89,20 @@ export const studioConfigSchema = z.strictObject({
   if (!inputs.success || !args.success || JSON.stringify(inputs.data) !== JSON.stringify(args.data)) context.addIssue({ code: 'custom', path: ['templateInputs'], message: 'Freeze the same validated arguments in templateInputs and action.arguments' });
 });
 export type StudioConfig = z.infer<typeof studioConfigSchema>;
+/** Repository-materializing templates and scripts cannot execute in chat-only scratch. */
+export function studioActionRequiresAgentWorkspace(action: StudioConfig['action']): boolean {
+  return action.kind === 'script' || action.kind === 'template' && studioNativeTemplateRequiresWorkspace(action.templateId);
+}
+/**
+ * UI confirmation policy only: registered PM handlers persist analysis/candidates, never apply them.
+ * Their model phase has no tools; the PR host can only read its frozen scope. Runtime support,
+ * current authorization, revision and dispatch budgets remain server-owned checks.
+ */
+export function studioCanRunWithoutConfirmation(config: StudioConfig): boolean {
+  if (config.action.kind !== 'template' || !isPmAutomationTemplateId(config.action.templateId)) return false;
+  return studioConfigSchema.safeParse(config).success;
+}
+export type StudioDefinitionFilters = { projectId?: string; quickAccess?: boolean };
 /** Feature identity advertised by the selected Provider's actual native tool adapter, not by its model name. */
 export function studioRequiredProviderToolFeature(config: StudioConfig): string | null {
   const action = config.action;
@@ -94,8 +111,13 @@ export function studioRequiredProviderToolFeature(config: StudioConfig): string 
   if (action.kind === 'template' && studioNativeTemplateRequiresWorkspace(action.templateId)) return `provider:${action.providerInstanceId ?? ''}:templateWorkspace`;
   return null;
 }
+/** Historical selections are forensic data only, never valid input to an execution. */
+const historicalExecutionFields = {
+  historicalExecutionSelection: z.unknown().optional(),
+  executionUnavailableReason: z.literal('agent_workspace_selection_required').optional(),
+};
 export const studioDefinitionSchema = z.strictObject({
-  id: uuid, revision: z.number().int().positive(), config: studioConfigSchema, status: z.enum(['draft', 'enabled', 'paused']),
+  id: uuid, revision: z.number().int().positive(), config: studioConfigSchema, status: z.enum(['draft', 'enabled', 'paused']), ...historicalExecutionFields,
   createdAt: timestamp, updatedAt: timestamp, lastRunAt: timestamp.nullable(), nextDueAt: timestamp.nullable(),
 });
 export type StudioDefinition = z.infer<typeof studioDefinitionSchema>;
@@ -103,7 +125,7 @@ export const studioExecutionStatusSchema = z.enum(['queued', 'running', 'complet
 export const studioExecutionEventSchema = z.strictObject({ sequence: z.number().int().positive(), at: timestamp, kind: z.enum(['queued', 'dispatch', 'status', 'log', 'cancel', 'error']), message: z.string(), stream: z.enum(['stdout', 'stderr', 'system']).nullable() });
 export type StudioExecutionEvent = z.infer<typeof studioExecutionEventSchema>;
 export const studioExecutionSchema = z.strictObject({
-  id: uuid, definitionId: uuid, definitionRevision: z.number().int().positive(), configSnapshot: studioConfigSchema,
+  id: uuid, definitionId: uuid, definitionRevision: z.number().int().positive(), configSnapshot: studioConfigSchema, ...historicalExecutionFields,
   trigger: z.enum(['manual', 'scheduled', 'event', 'test']), requestId: uuid, status: studioExecutionStatusSchema,
   createdAt: timestamp, startedAt: timestamp.nullable(), finishedAt: timestamp.nullable(), threadId: z.string().nullable(),
   externalExecutionId: z.string().nullable(), error: z.string().nullable(), summary: z.string(),
@@ -150,4 +172,9 @@ export interface StudioExecutionPort {
   dispatch(request: StudioExecutionRequest): Promise<StudioExecutionResult>;
   query(request: StudioExecutionRequest): Promise<StudioExecutionResult>;
   cancel(request: StudioExecutionRequest): Promise<StudioExecutionResult>;
+}
+
+/** Dedicated PM-to-Agent authenticated preflight; no PM directory or scratch fallback. */
+export interface StudioWorkspaceExecutionPort {
+  resolve(selection: ExecutionSelection): Promise<{ path: string; environment: ExecutionEnvironment }>;
 }

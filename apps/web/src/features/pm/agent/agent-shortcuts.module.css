@@ -1,0 +1,100 @@
+.entry {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.trigger {
+  gap: 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.menu {
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(520px, var(--radix-dropdown-menu-content-available-height));
+  overflow-y: auto;
+}
+
+.label {
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 4px 10px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+
+.hint p {
+  margin: 0 0 6px;
+}
+
+.item {
+  align-items: flex-start;
+  padding-block: 8px;
+  white-space: normal;
+}
+
+.item > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.item > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.item strong, .item small {
+  display: block;
+}
+
+.item small {
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}
+
+.feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 320px;
+  padding-top: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.feedback code {
+  font-size: 10px;
+}
+
+.feedback a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+@media (pointer: coarse) {
+  .trigger {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

@@ -13,7 +13,7 @@ import { isolationAvailability, safeScriptPath, validateScriptAction } from './s
 
 const secret = 'fixture-only-automation-service-secret-32-bytes';
 function request(): StudioExecutionRequest {
-  return { executionId: '11111111-1111-4111-8111-111111111111', requestId: '22222222-2222-4222-8222-222222222222', actorId: '33333333-3333-4333-8333-333333333333', workspaceId: '44444444-4444-4444-8444-444444444444', projectId: 'PRJ-001', definitionId: '55555555-5555-4555-8555-555555555555', definitionRevision: 1, config: { name: 'Fixture', description: '', projectId: 'PRJ-001', tags: [], templateId: null, action: { kind: 'script', repositories: [], plugins: [], timeoutSeconds: 10, entrypoint: 'main.py', setup: '', content: 'print("fixture")', bundleRef: null, files: [] }, trigger: { kind: 'manual' }, dailyLimit: 1, cooldownMinutes: 0 }, trigger: 'test', payload: null, issuedAt: '2026-10-31T00:00:00.000Z' };
+  return { executionId: '11111111-1111-4111-8111-111111111111', requestId: '22222222-2222-4222-8222-222222222222', actorId: '33333333-3333-4333-8333-333333333333', workspaceId: '44444444-4444-4444-8444-444444444444', projectId: 'PRJ-001', definitionId: '55555555-5555-4555-8555-555555555555', definitionRevision: 1, config: { name: 'Fixture', description: '', projectId: 'PRJ-001', tags: [], templateId: null, action: { kind: 'script', executionSelection: { version: 2, agentWorkspaceId: 'fixture-folder', agentWorkspaceRevision: 1 }, repositories: [], plugins: [], timeoutSeconds: 10, entrypoint: 'main.py', setup: '', content: 'print("fixture")', bundleRef: null, files: [] }, trigger: { kind: 'manual' }, dailyLimit: 1, cooldownMinutes: 0 }, trigger: 'test', payload: null, issuedAt: '2026-10-31T00:00:00.000Z' };
 }
 let directory: string;
 const originalData = process.env.AGENT_WORKSPACE_DATA_DIR;
@@ -90,43 +90,93 @@ for (const held of ['prepare', 'create', 'authorization']) {
     const script = `
       import assert from 'node:assert/strict';
       import { mock } from 'node:test';
-      import { setImmediate } from 'node:timers/promises';
       const root = ${JSON.stringify(new URL('./', import.meta.url).href)};
       const held = ${JSON.stringify(held)}, request = ${JSON.stringify(request())};
-      const entered = Promise.withResolvers(), release = Promise.withResolvers();
+      const entered = Promise.withResolvers(), release = Promise.withResolvers(), terminal = Promise.withResolvers();
+      // Originals delegate real work; runtime imports must wait until module mocks are installed.
       const actual = await import(new URL('script-runtime.ts', root).href);
-      let starts = 0, inspections = 0, authorizations = 0;
+      const store = await import(new URL('../durable/store.ts', root).href);
+      let starts = 0, inspections = 0, authorizations = 0, preparations = 0, creations = 0, dispositions = 0;
       mock.module(new URL('script-runtime.ts', root).href, { namedExports: {
         ...actual,
         prepareIsolatedScript: async () => {
+          preparations++;
           if (held === 'prepare') { entered.resolve(); await release.promise; }
           return { executable: '/fixture-only', image: 'fixture', directory: process.env.AGENT_WORKSPACE_DATA_DIR, container: 'fixture', fingerprint: 'fixture' };
         },
-        createIsolatedScript: async () => { if (held === 'create') { entered.resolve(); await release.promise; } },
+        createIsolatedScript: async () => { creations++; if (held === 'create') { entered.resolve(); await release.promise; } },
         startIsolatedScript: async () => { starts++; },
         stopIsolatedScript: async () => {},
         observeIsolatedScript: async () => { inspections++; return { state: held === 'create' ? 'missing' : 'created', exitCode: null, startedAt: null, finishedAt: null, logs: [], error: null }; },
       } });
-      globalThis.fetch = async () => {
+      mock.module(new URL('../durable/store.ts', root).href, { namedExports: {
+        ...store,
+        writeRecord: (namespace, id, record) => {
+          store.writeRecord(namespace, id, record);
+          if (namespace === 'pm-automation:executions' && id === request.executionId && ['finished', 'unknown'].includes(record.phase)) {
+            dispositions++;
+            terminal.resolve();
+          }
+        },
+      } });
+      // This subprocess installs module mocks before loading the runtime dependency graph.
+      const { openAgentWorkspace } = await import(new URL('../agent-workspaces.ts', root).href);
+      const workspace = openAgentWorkspace({ path: process.env.AGENT_WORKSPACE_DATA_DIR });
+      request.config.action.executionSelection = { version: 2, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+      globalThis.fetch = async (input, init) => {
+        assert.equal(new URL(String(input)).pathname, '/api/v1/agent-contexts/authorize');
+        assert.equal(init?.method, 'POST');
+        assert.deepEqual(JSON.parse(String(init?.body)), { workspaceId: request.workspaceId, projectId: request.projectId });
+        assert.match(new Headers(init?.headers).get('authorization') ?? '', /^Bearer pm-automation-v1\\./);
         if (++authorizations === 2 && held === 'authorization') { entered.resolve(); await release.promise; }
-        return Response.json({ scope: { workspaceId: request.workspaceId, projectId: request.projectId }, workspaceName: 'Fixture', projectName: 'Fixture', path: process.env.AGENT_WORKSPACE_DATA_DIR });
+        return Response.json({ actorId: request.actorId, scope: { workspaceId: request.workspaceId, projectId: request.projectId }, workspaceName: 'Fixture', projectName: 'Fixture' });
       };
       const runtime = await import(new URL('service.ts', root).href);
-      const { closeStore } = await import(new URL('../durable/store.ts', root).href);
+      const { closeStore, listRecords } = await import(new URL('../durable/store.ts', root).href);
       try {
-        await runtime.dispatchAutomationExecution(request);
+        assert.equal((await runtime.dispatchAutomationExecution(request)).status, 'running');
+        const admission = listRecords('pm-automation:executions')[0];
         await entered.promise;
         assert.equal((await runtime.queryAutomationExecution(request)).status, 'running');
+        assert.equal((await runtime.dispatchAutomationExecution(request)).status, 'running');
+        const concurrent = await Promise.all([
+          runtime.queryAutomationExecution(request),
+          runtime.cancelAutomationExecution(request),
+          runtime.cancelAutomationExecution(request),
+        ]);
+        assert.ok(concurrent.every(observation => observation.status === 'running'));
         assert.equal(inspections, 0, 'An owned in-flight admission is not a missing external outcome');
-        await runtime.cancelAutomationExecution(request);
+        const pending = listRecords('pm-automation:executions');
+        assert.equal(pending.length, 1);
+        assert.deepEqual(pending[0].request, admission.request);
+        assert.equal(pending[0].fingerprint, admission.fingerprint);
+        assert.equal(pending[0].acceptedAt, admission.acceptedAt);
+        assert.equal(pending[0].deadline, admission.deadline);
+        assert.equal(pending[0].phase, held === 'prepare' ? 'accepted' : held === 'create' ? 'submitting' : 'container-created');
+        assert.equal(pending[0].cancelRequested, true);
         release.resolve();
-        await setImmediate();
-        assert.equal((await runtime.queryAutomationExecution(request)).status, 'cancelled');
+        // Releasing PM authorization still leaves real directory identity I/O.
+        // Join its actual durable disposition, not one event-loop turn or shutdown.
+        await terminal.promise;
+        const disposition = await runtime.queryAutomationExecution(request);
+        assert.equal(disposition.status, 'cancelled');
         assert.equal(starts, 0, 'Cancellation before start must survive the asynchronous authorization boundary');
+        assert.equal(preparations, 1);
+        assert.equal(creations, held === 'prepare' ? 0 : 1);
+        assert.equal(authorizations, held === 'authorization' ? 2 : 1);
+        assert.equal(disposition.logs.filter(log => log.id === 'admission').length, 1);
+        assert.equal(disposition.logs.filter(log => log.id === 'cancel-request').length, 1);
+        assert.equal(disposition.logs.filter(log => log.id.startsWith('status:')).length, 1);
+        assert.deepEqual(await runtime.queryAutomationExecution(request), disposition);
+        assert.deepEqual(await runtime.cancelAutomationExecution(request), disposition);
+        assert.deepEqual(await runtime.dispatchAutomationExecution(request), disposition);
+        assert.equal(dispositions, 1);
+        assert.equal(listRecords('pm-automation:executions').length, 1);
+        assert.deepEqual(listRecords('chat:threads'), []);
       } finally { release.resolve(); await runtime.stopAutomationExecutionRuntime(); closeStore(); }
     `;
     execFileSync(process.execPath, ['--experimental-test-module-mocks', '--input-type=module', '--eval', script], {
-      env: { PATH: process.env.PATH, HOME: directory, TMPDIR: tmpdir(), AGENT_WORKSPACE_DATA_DIR: directory, PM_AUTOMATION_SERVICE_SECRET: secret, PM_API_URL: 'http://127.0.0.1:4394' },
+      env: { PATH: process.env.PATH, HOME: directory, TMPDIR: tmpdir(), AGENT_WORKSPACE_DATA_DIR: directory, AGENT_WORKSPACE_ALLOWED_ROOTS: JSON.stringify([directory]), PM_AUTOMATION_SERVICE_SECRET: secret, PM_API_URL: 'http://127.0.0.1:4394' },
       timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'],
     });
   });

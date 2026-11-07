@@ -7,6 +7,7 @@ import Fastify from 'fastify';
 import type { Pool } from 'pg';
 import { DomainError } from '../../../../packages/domain/src/core.ts';
 import { Workspace } from '../../../../packages/pm-core/index.ts';
+import { createMcpServiceBearer } from '../../../../packages/infrastructure/src/mcp-service-auth.ts';
 import type { CoreWorkspacePool } from '../src/core-routes.ts';
 import { registerAgentCoreFilesRoutes } from '../src/agent-core-files-routes.ts';
 
@@ -42,4 +43,29 @@ test('registered shared and independent core files preserve invalid raw content 
     assert.ok(!mountedFiles.files.some(file => file.content === 'not managed'));
     allowed = [shared.id]; assert.equal((await read(mounted.id)).statusCode, 404);
   } finally { await app.close(); await workspace.close(); await rm(base, { recursive: true, force: true }); }
+});
+
+test('revoked delegated core-file reads fail before traversing any registered repository', async t => {
+  const oldSecret = process.env.PM_AUTOMATION_SERVICE_SECRET, oldUrl = process.env.PM_MCP_AGENT_URL;
+  process.env.PM_AUTOMATION_SERVICE_SECRET = 'test-only-core-files-secret'.repeat(4);
+  process.env.PM_MCP_AGENT_URL = 'http://127.0.0.1:4123';
+  const workspaceId = '0196c319-8b1d-7000-8000-000000000001';
+  const actor = { id: '0196c319-8b1d-7000-8000-000000000010', email: 'fixture@example.invalid', name: 'Fixture' };
+  const bearer = createMcpServiceBearer({ grantId: '0196c319-8b1d-7000-8000-000000000020', actorId: actor.id, scope: { workspaceId, projectId: 'PRJ-001' }, access: 'read-only', threadIds: [], version: 1 });
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ error: 'revoked' }, { status: 401 }));
+  let traversals = 0;
+  const app = Fastify();
+  app.setErrorHandler((error, _request, reply) => reply.code(error instanceof DomainError ? error.status : 500).send({ error: error instanceof DomainError ? error.code : 'unexpected' }));
+  registerAgentCoreFilesRoutes(app, { database: () => ({ query: async () => { throw new Error('Revoked grant must fail before PM data reads'); } }) as unknown as Pool,
+    actor: async () => actor, coreWorkspaces: { get: async () => { traversals++; throw new Error('Must not traverse'); } } as unknown as CoreWorkspacePool });
+  try {
+    const response = await app.inject({ method: 'GET', url: `/api/v1/workspaces/${workspaceId}/agent-tools/core-files?projectId=PRJ-001`, headers: { authorization: `Bearer ${bearer}` } });
+    assert.equal(response.statusCode, 403);
+    assert.equal(response.json().error, 'mcp_grant_revoked');
+    assert.equal(traversals, 0);
+  } finally {
+    await app.close();
+    if (oldSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = oldSecret;
+    if (oldUrl === undefined) delete process.env.PM_MCP_AGENT_URL; else process.env.PM_MCP_AGENT_URL = oldUrl;
+  }
 });

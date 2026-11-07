@@ -57,8 +57,21 @@ try {
   assert.ok(adaptations.sources.some((entry) => entry.commit === "d53873b6a4799e87afd63c8d288ef0089f5a3748"));
   assert.ok(adaptations.sources.some((entry) => entry.commit === inventory.upstreamCommit));
   for (const entry of adaptations.outputs) {
-    assert.equal(sha(await readFile(path.join(destination, entry.destination))), entry.sha256);
+    if (Object.hasOwn(entry, "retirement")) await assert.rejects(lstat(path.join(destination, entry.destination)), { code: "ENOENT" });
+    else assert.equal(sha(await readFile(path.join(destination, entry.destination))), entry.sha256);
     if (!entry.destination.startsWith("vendor/t3code/")) await assert.rejects(lstat(path.join(pristine, entry.destination)), { code: "ENOENT" });
+  }
+  const retiredOutput = adaptations.outputs.find((entry) => Object.hasOwn(entry, "retirement"));
+  if (retiredOutput) {
+    const retiredConflict = path.join(temporary, "retired-output-conflict");
+    await cp(destination, retiredConflict, { recursive: true });
+    await rm(path.join(retiredConflict, "vendor/t3code/LICENSE"));
+    const target = path.join(retiredConflict, retiredOutput.destination);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, "A retired host target must never be recreated or accepted.\n");
+    const beforeRetiredConflict = await snapshot(retiredConflict);
+    assert.match(sync(retiredConflict, [], 1).stderr, /Retired target exists/);
+    assert.deepEqual(await snapshot(retiredConflict), beforeRetiredConflict);
   }
 
   const copyHostInputs = async root => {
@@ -129,7 +142,7 @@ try {
   const conflicted = await snapshot(conflict);
   assert.match(sync(conflict, [], 1).stderr, /Destination conflict/);
   assert.deepEqual(await snapshot(conflict), conflicted); // missing LICENSE must not be partially restored
-  const adaptedHost = adaptations.outputs.find((entry) => entry.provenance === "adapted-upstream" && !entry.destination.startsWith("vendor/t3code/"));
+  const adaptedHost = adaptations.outputs.find((entry) => !Object.hasOwn(entry, "retirement") && entry.provenance === "adapted-upstream" && !entry.destination.startsWith("vendor/t3code/"));
   assert.ok(adaptedHost);
   const hostConflict = path.join(temporary, "host-output-conflict");
   await cp(destination, hostConflict, { recursive: true });

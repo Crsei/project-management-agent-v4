@@ -16,6 +16,7 @@ import { closeStore, readRecord, writeRecord } from "../../durable/store.ts";
 import { initializeNativeOutput, emitNativeNotification, endNativeOutput, getNativeOutput } from "../../durable/native-output.ts";
 import type { ProviderDriverContext } from "../driver-adapter.ts";
 import { makePmProviderRuntimeHost, pmRuntimeBinding } from "./runtime-host.ts";
+import { agentWorkspaceEnvironment } from "../../durable/execution.testkit.ts";
 
 let directory: string;
 const previousDirectory = process.env.AGENT_WORKSPACE_DATA_DIR;
@@ -79,7 +80,7 @@ test("scope shutdown drains native child notifications without reopening a compl
   emitNativeNotification("settled", "owner", { id: "native-child:child", type: "notification", status: "completed", input: { providerThreadId: thread.id } });
   const context: ProviderDriverContext = { instanceId, driver: "codex", revision: 4, config: {}, cwd: "/workspace",
     homeDirectory: "/native-home", stateDirectory: "/state", env: {}, execution: { threadId: "owner", generationId: "settled",
-      messageId: "message", scope: { workspaceId: "workspace", projectId: null } } };
+      messageId: "message", environment: agentWorkspaceEnvironment("/workspace", true) } };
   let cleared = false;
   await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
     const requests = yield* makePmProviderContinuationRequests(context, makePmProviderRuntimeHost());
@@ -224,7 +225,7 @@ function seedOwnedGeneration(executionId: string, status: "running" | "completed
   initializeNativeOutput(executionId, ownerThreadId, "running");
   if (status === "completed") endNativeOutput(executionId, status);
   return pmRuntimeBinding({ ...retainedContext, execution: { threadId: ownerThreadId, generationId: executionId,
-    messageId: `message-${executionId}`, scope: { workspaceId: "workspace", projectId: null } } }, ownerThreadId, executionId);
+    messageId: `message-${executionId}`, environment: agentWorkspaceEnvironment("/workspace", true) } }, ownerThreadId, executionId);
 }
 
 function drainBufferedOffers(requests: { readonly offer: (request: ProviderContinuationRequest) => Effect.Effect<void> }) {

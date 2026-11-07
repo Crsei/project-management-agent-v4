@@ -3,6 +3,7 @@ import { deleteRecord, listRecords, readRecord, transaction, writeRecord } from 
 import { getThread } from '../durable/threads.ts';
 import type { McpInvocationIdentity, McpServiceIdentity } from '../../../../../packages/infrastructure/src/mcp-service-auth.ts';
 import { trustedMcpOrigin } from '../../../../../packages/infrastructure/src/mcp-service-auth.ts';
+import type { PmToolCallRecord, PmToolTarget } from '@agent-workspace/contracts/pm-tools';
 
 // McpOAuth PendingCode + EnvironmentAuth MCP sessions adapted to existing Agent SQLite records.
 export const MCP_GRANTS = 'mcp:grants', MCP_CODES = 'mcp:codes', MCP_TOKENS = 'mcp:tokens', MCP_CONSENTS = 'mcp:consents';
@@ -39,14 +40,48 @@ export function putGrant(grant: Grant): void {
   if (grants.length >= 4096 || grants.filter(item => item.actorId === grant.actorId && !item.revokedAt).length >= 100) throw new McpAuthError('temporarily_unavailable', 'Revoke an existing client before approving another.', 503);
   writeRecord(MCP_GRANTS, grant.grantId, grant);
 }
+/** Explicit Session consent never expands a grant's PM or directory ceiling. */
+export function assertMcpThreadEligible(identity: Pick<McpInvocationIdentity, 'scope' | 'actorId'>, threadId: string): void {
+  const thread = getThread(threadId);
+  if (!thread || thread.deleted || thread.executionSelection?.agentWorkspaceId !== null || thread.executionSelection.agentWorkspaceRevision !== null)
+    throw new McpAuthError('insufficient_scope', 'Only a chat-only Session may be delegated.', 403);
+  const assertTarget = (target: PmToolTarget) => {
+    if (target.workspaceId !== identity.scope.workspaceId || identity.scope.projectId !== null && target.projectId !== identity.scope.projectId)
+      throw new McpAuthError('insufficient_scope', 'Session PM history exceeds the explicit delegation ceiling.', 403);
+  };
+  for (const generation of listRecords<{ threadId: string; pmOperations?: { actorId: string; target: PmToolTarget }[]; pmReferences?: PmToolTarget[] }>('chat:generations')) {
+    if (generation.threadId !== threadId) continue;
+    for (const operation of generation.pmOperations ?? []) {
+      if (operation.actorId !== identity.actorId) throw new McpAuthError('insufficient_scope', 'Session PM history belongs to another actor.', 403);
+      assertTarget(operation.target);
+    }
+    for (const reference of generation.pmReferences ?? []) assertTarget(reference);
+  }
+  for (const { record } of listRecords<{ record: PmToolCallRecord }>('pm-tool-calls')) {
+    if (record.threadId !== threadId) continue;
+    if (record.actorId && record.actorId !== identity.actorId) throw new McpAuthError('insufficient_scope', 'Session PM history belongs to another actor.', 403);
+    if (record.name === 'pm_list_workspaces') {
+      if (record.result?.kind === 'workspaces') for (const workspace of record.result.items) {
+        if (workspace.id !== identity.scope.workspaceId) throw new McpAuthError('insufficient_scope', 'Workspace discovery history exceeds the delegation ceiling.', 403);
+        for (const project of workspace.projects) assertTarget({ workspaceId: workspace.id, projectId: project.id });
+      }
+    } else if (record.target) assertTarget(record.target);
+    else throw new McpAuthError('insufficient_scope', 'Historical PM operation target cannot be verified.', 403);
+  }
+}
+
 export function assertStoredThread(identity: McpInvocationIdentity, threadId: string): void {
   const grant = currentGrant(identity), thread = getThread(threadId);
-  if (!grant.threadIds.includes(threadId) || !thread || thread.deleted || !thread.scope || thread.scope.workspaceId !== grant.scope.workspaceId || thread.scope.projectId !== grant.scope.projectId) throw new McpAuthError('insufficient_scope', 'Thread is not explicitly granted in this scope.', 403);
+  if (!grant.threadIds.includes(threadId) || !thread || thread.deleted)
+    throw new McpAuthError('insufficient_scope', 'Thread is not explicitly granted as a chat-only Session.', 403);
+  assertMcpThreadEligible(grant, threadId);
 }
 export function grantMcpThread(identity: McpInvocationIdentity, threadId: string): void {
   transaction(() => {
     const grant = currentGrant(identity), thread = getThread(threadId);
-    if (grant.access !== 'full' || !thread || thread.deleted || !thread.scope || thread.scope.workspaceId !== grant.scope.workspaceId || thread.scope.projectId !== grant.scope.projectId) throw new McpAuthError('insufficient_scope', 'Cannot grant this thread.', 403);
+    if (grant.access !== 'full' || !thread || thread.deleted)
+      throw new McpAuthError('insufficient_scope', 'Cannot grant an unavailable Session.', 403);
+    assertMcpThreadEligible(grant, threadId);
     if (grant.threadIds.includes(threadId)) return;
     if (grant.threadIds.length >= 1000) throw new McpAuthError('invalid_request', 'Thread grant limit reached.');
     writeRecord(MCP_GRANTS, grant.grantId, { ...grant, threadIds: [...grant.threadIds, threadId] });

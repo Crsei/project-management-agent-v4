@@ -21,8 +21,8 @@ async function initialize(f: LocalProjectFixture, name: string, folder: string) 
 }
 
 // A real PostgreSQL URL is required by the fixture; these acceptance cases never skip.
-describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { concurrency: 1 }, () => {
-  it('lists true empty groups, resolves the original mount, and persists independent two-level mappings without moving PM data', { timeout: localProjectCaseTimeout }, async t => {
+describe('PM document/storage preferences without Agent execution authority', { concurrency: 1 }, () => {
+  it('preserves PM groups and old preferences without treating either as execution roots', { timeout: localProjectCaseTimeout }, async t => {
     const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const empty = await createWorkspace(f.pool, f.owner.id, 'A real empty workspace');
     const project = await initialize(f, 'A real empty project', 'native-project');
@@ -32,26 +32,27 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     assert.equal(initial.workspaces.find(workspace => workspace.id === empty.id)?.projects.length, 0);
     const group = initial.workspaces.find(workspace => workspace.id === f.workspaceId)!;
     assert.deepEqual(group.projects.map(entry => entry.id).sort(), [project.record.id, second.record.id].sort());
-    assert.deepEqual(group.fileArea, { path: join(f.root, '.pmv4', 'workspaces', f.workspaceId, 'workspace'), status: 'available', revision: 0, source: 'default', canManage: true, reason: 'initializes_on_first_use' });
+    assert.deepEqual(group.fileArea, { path: null, status: 'unconfigured', revision: 0, source: 'default', canManage: true, reason: 'directory_not_configured' });
     await assert.rejects(lstat(join(f.root, '.pmv4')), { code: 'ENOENT' });
     assert.equal((await f.pool.query('SELECT count(*)::integer AS n FROM agent_file_areas')).rows[0].n, 0);
     assert.deepEqual(group.projects.find(entry => entry.id === project.record.id)?.fileArea, {
       path: project.location.path, status: 'available', revision: 0, source: 'project_location', canManage: true,
     });
     const nativeScope = { workspaceId: f.workspaceId, projectId: project.record.id };
-    const nativeArea = await client.agentContexts.resolve(nativeScope);
+    const nativeArea = await client.agentContexts.authorize(nativeScope);
     assert.deepEqual(nativeArea.scope, nativeScope);
-    assert.equal(nativeArea.path, project.location.path);
+    assert.equal('path' in nativeArea, false);
+    assert.equal('environment' in nativeArea, false);
     assert.equal(nativeArea.actorId, f.owner.id);
-    const defaultArea = await client.agentContexts.resolve({ workspaceId: f.workspaceId, projectId: null });
-    assert.equal(defaultArea.path, group.fileArea.path);
-    assert.ok((await lstat(defaultArea.path)).isDirectory());
+    const workspaceAuthority = await client.agentContexts.authorize({ workspaceId: f.workspaceId, projectId: null });
+    assert.equal(workspaceAuthority.scope.projectId, null);
+    await assert.rejects(lstat(join(f.root, '.pmv4')), { code: 'ENOENT' });
     const coreFile = join(project.location.path!, '.pm/core/projects', `${project.record.id}.md`);
     const before = await readFile(coreFile);
     const existing = join(f.parents[1], 'workspace-area'); await mkdir(existing);
     await writeFile(join(existing, 'user-file.txt'), 'Do not modify');
-    const workspaceArea = await client.agentContexts.saveWorkspace(f.workspaceId, { directory: { mode: 'existing', path: existing }, expectedRevision: 1 });
-    assert.deepEqual(workspaceArea.fileArea, { path: existing, status: 'available', source: 'explicit', revision: 2, canManage: true });
+    const workspaceArea = await client.agentContexts.saveWorkspace(f.workspaceId, { directory: { mode: 'existing', path: existing }, expectedRevision: 0 });
+    assert.deepEqual(workspaceArea.fileArea, { path: existing, status: 'available', source: 'explicit', revision: 1, canManage: true });
     const projectArea = await client.agentContexts.saveProject(f.workspaceId, project.record.id, {
       directory: { mode: 'new', parentPath: f.parents[1], folderName: 'project-agent-area' }, expectedRevision: 0,
     });
@@ -71,10 +72,10 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     const restoredGroup = restored.workspaces.find(workspace => workspace.id === f.workspaceId)!;
     assert.deepEqual(restoredGroup.fileArea, workspaceArea.fileArea);
     assert.deepEqual(restoredGroup.projects.find(entry => entry.id === project.record.id)?.fileArea, projectArea.fileArea);
-    assert.equal((await client.agentContexts.resolve({ workspaceId: f.workspaceId, projectId: null })).path, existing);
-    assert.equal((await client.agentContexts.resolve(nativeScope)).path, projectArea.fileArea.path);
+    assert.deepEqual(await client.agentContexts.authorize(nativeScope), nativeArea);
+    assert.deepEqual(await client.agentContexts.authorize({ workspaceId: f.workspaceId, projectId: null }), workspaceAuthority);
     assert.equal(restoredGroup.projects.find(entry => entry.id === second.record.id)?.fileArea.source, 'project_location');
-    assert.deepEqual(await readFile(coreFile), before, 'Configuring an execution location never changes project authority');
+    assert.deepEqual(await readFile(coreFile), before, 'Configuring PM storage never changes project authority');
   });
 
   it('serializes revision CAS and rejects stale writes before creating a directory', { timeout: localProjectCaseTimeout }, async t => {
@@ -100,7 +101,7 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     assert.equal((await f.pool.query('SELECT revision FROM agent_file_areas WHERE workspace_id=$1', [f.workspaceId])).rows[0].revision, 2);
   });
 
-  it('filters memberships and projects, redacts paths, rejects hidden resolve, and preserves original management and Origin checks', { timeout: localProjectCaseTimeout }, async t => {
+  it('filters memberships/projects, redacts paths and preserves PM authority, management and Origin checks', { timeout: localProjectCaseTimeout }, async t => {
     const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const a = await initialize(f, 'Allowed project', 'allowed');
     const b = await initialize(f, 'Hidden project', 'hidden');
@@ -116,15 +117,15 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     assert.equal(JSON.stringify(readerCatalog.body).includes(f.parents[0]), false);
     assert.equal((await f.request<AgentCatalog>('/api/v1/agent-contexts', { cookie: outsider.cookie })).body.workspaces.length, 0);
     const scope: AgentScope = { workspaceId: f.workspaceId, projectId: a.record.id };
-    const hiddenPath = await f.request<Failure>('/api/v1/agent-contexts/resolve', { method: 'POST', cookie: reader.cookie, body: scope });
-    assert.equal(hiddenPath.status, 403); assert.equal(hiddenPath.body.error.code, 'agent_file_area_path_not_visible');
-    assert.equal(JSON.stringify(hiddenPath.body).includes(f.parents[0]), false);
-    const deniedProject = await f.request('/api/v1/agent-contexts/resolve', { method: 'POST', cookie: reader.cookie, body: { ...scope, projectId: b.record.id } });
+    const authority = await f.request<{ actorId: string }>('/api/v1/agent-contexts/authorize', { method: 'POST', cookie: reader.cookie, body: scope });
+    assert.equal(authority.status, 200); assert.equal(authority.body.actorId, reader.user.id);
+    assert.equal(JSON.stringify(authority.body).includes(f.parents[0]), false);
+    const deniedProject = await f.request('/api/v1/agent-contexts/authorize', { method: 'POST', cookie: reader.cookie, body: { ...scope, projectId: b.record.id } });
     assert.equal(deniedProject.status, 404);
     const visibleManager = await f.request<AgentCatalog>('/api/v1/agent-contexts', { cookie: manager.cookie });
     assert.equal(visibleManager.body.workspaces[0]?.projects[0]?.fileArea.canManage, false);
     assert.ok(visibleManager.body.workspaces[0]?.projects[0]?.fileArea.path);
-    assert.equal((await f.request('/api/v1/agent-contexts/resolve', { method: 'POST', cookie: manager.cookie, body: scope })).status, 200);
+    assert.equal((await f.request('/api/v1/agent-contexts/authorize', { method: 'POST', cookie: manager.cookie, body: scope })).status, 200, 'PM read authority does not allocate scratch or require directory management');
     const endpoint = `/api/v1/workspaces/${f.workspaceId}/projects/${a.record.id}/agent-file-area`;
     const input = { directory: { mode: 'existing', path: f.parents[0] }, expectedRevision: 0 };
     for (const cookie of [reader.cookie, manager.cookie, outsider.cookie]) assert.ok((await f.request(endpoint, { method: 'PUT', cookie, body: input })).status >= 400);
@@ -133,7 +134,7 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     assert.equal((await f.request(endpoint, { method: 'PUT', headers: { 'sec-fetch-site': 'cross-site' }, body: input })).status, 403);
     await f.pool.query('UPDATE memberships SET revoked_at=clock_timestamp(),version=version+1 WHERE workspace_id=$1 AND user_id=$2', [f.workspaceId, reader.user.id]);
     assert.equal((await f.request<AgentCatalog>('/api/v1/agent-contexts', { cookie: reader.cookie })).body.workspaces.length, 0);
-    assert.equal((await f.request('/api/v1/agent-contexts/resolve', { method: 'POST', cookie: reader.cookie, body: scope })).status, 404);
+    assert.equal((await f.request('/api/v1/agent-contexts/authorize', { method: 'POST', cookie: reader.cookie, body: scope })).status, 404);
     assert.equal((await f.pool.query('SELECT count(*)::integer AS n FROM agent_file_areas')).rows[0].n, 0);
   });
 
@@ -147,10 +148,10 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     assert.equal(missing.body.workspaces[0]?.fileArea.status, 'unavailable');
     assert.equal(missing.body.workspaces[0]?.fileArea.path, root);
     const missingResolve = await f.request<Failure>('/api/v1/agent-contexts/resolve', { method: 'POST', body: scope });
-    assert.equal(missingResolve.status, 409); assert.equal(missingResolve.body.error.code, 'agent_file_area_unavailable');
+    assert.equal(missingResolve.status, 404, 'The retired PM directory resolver cannot allocate a replacement or scratch directory');
     await assert.rejects(lstat(root), { code: 'ENOENT' });
     await f.restartApi();
-    assert.equal((await f.request('/api/v1/agent-contexts/resolve', { method: 'POST', body: scope })).status, 409);
+    assert.equal((await f.request('/api/v1/agent-contexts/authorize', { method: 'POST', body: scope })).status, 200);
     await assert.rejects(lstat(root), { code: 'ENOENT' });
     await mkdir(root);
     const replaced = await f.request<AgentCatalog>('/api/v1/agent-contexts');
@@ -167,49 +168,35 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     await writeFile(join(project.location.path!, '.pm/project.json'), '{}');
     const invalid = await f.request<AgentCatalog>('/api/v1/agent-contexts');
     assert.equal(invalid.body.workspaces[0]?.projects.find(entry => entry.id === project.record.id)?.fileArea.status, 'unavailable');
-    const nativeResolve = await f.request<Failure>('/api/v1/agent-contexts/resolve', { method: 'POST', body: projectScope });
-    assert.equal(nativeResolve.status, 409); assert.equal(nativeResolve.body.error.code, 'agent_file_area_unavailable');
-    const absent = await f.request('/api/v1/agent-contexts/resolve', { method: 'POST', body: { ...projectScope, projectId: 'PRJ-999999' } });
+    const nativeResolve = await f.request('/api/v1/agent-contexts/authorize', { method: 'POST', body: projectScope });
+    assert.equal(nativeResolve.status, 404, 'An unavailable authoritative PM project cannot be revived by a storage preference');
+    const absent = await f.request('/api/v1/agent-contexts/authorize', { method: 'POST', body: { ...projectScope, projectId: 'PRJ-999999' } });
     assert.equal(absent.status, 404, 'Saved preference or guessed ID cannot manufacture a core project');
   });
 
-  it('isolates default workspace/project scopes and preserves assignments across revisioned settings and restart', { timeout: localProjectCaseTimeout }, async t => {
+  it('preserves revisioned PM save settings across restart without allocating per-project execution directories', { timeout: localProjectCaseTimeout }, async t => {
     const f = await createLocalProjectFixture({ localProjectsEnabled: false, signal: t.signal }); t.after(() => f.close());
     const project = await f.command('CreateProject', { name: 'No native mount', goal: '', ownerId: f.owner.id, completionCriteria: [] });
-    const second = await f.command('CreateProject', { name: 'Future assignment', goal: '', ownerId: f.owner.id, completionCriteria: [] });
     await f.restartApi(true);
     let client = new ProjectManagementClient({ baseUrl: f.origin, auth: { type: 'cookie', credentials: 'include', cookie: () => f.ownerCookie } });
     const endpoint = `/api/v1/workspaces/${f.workspaceId}/agent-storage-settings`;
-    const settings = await client.agentContexts.storageSettings(f.workspaceId);
-    assert.deepEqual(settings, { defaultRoot: join(f.root, '.pmv4'), effectiveRoot: join(f.root, '.pmv4'), revision: 0, canManage: true });
-    const catalog = await client.agentContexts.catalog();
-    assert.equal(catalog.workspaces[0]?.projects.find(p => p.id === project.id)?.fileArea.source, 'default');
+    assert.deepEqual(await client.agentContexts.storageSettings(f.workspaceId), { defaultRoot: join(f.root, '.pmv4'), effectiveRoot: join(f.root, '.pmv4'), revision: 0, canManage: true });
+    assert.equal((await client.agentContexts.catalog()).workspaces[0]?.projects.find(p => p.id === project.id)?.fileArea.status, 'unconfigured');
     await assert.rejects(lstat(join(f.root, '.pmv4')), { code: 'ENOENT' });
-    assert.equal((await f.pool.query('SELECT count(*)::integer AS n FROM agent_storage_settings')).rows[0].n, 0);
-    const workspace = await client.agentContexts.resolve({ workspaceId: f.workspaceId, projectId: null });
-    const assigned = await client.agentContexts.resolve({ workspaceId: f.workspaceId, projectId: project.id });
-    assert.equal(workspace.path, join(f.root, '.pmv4', 'workspaces', f.workspaceId, 'workspace'));
-    assert.equal(assigned.path, join(f.root, '.pmv4', 'workspaces', f.workspaceId, 'projects', project.id));
-    await writeFile(join(assigned.path, 'keep.txt'), 'preserve existing files');
-    const saved = await client.agentContexts.saveStorageSettings(f.workspaceId, { directory: { mode: 'new', parentPath: f.parents[0], folderName: 'new-chat-default' }, expectedRevision: 0 });
-    assert.equal(saved.revision, 1);
-    assert.equal(saved.effectiveRoot, join(f.parents[0], 'new-chat-default'));
+    const directory = join(f.parents[0], 'pm-save-location'); await mkdir(directory);
+    await writeFile(join(directory, 'keep.txt'), 'preserve existing files');
+    const saved = await client.agentContexts.saveStorageSettings(f.workspaceId, { directory: { mode: 'existing', path: directory }, expectedRevision: 0 });
+    assert.equal(saved.revision, 1); assert.equal(saved.effectiveRoot, directory);
     const stale = await f.request<Failure>(endpoint, { method: 'PUT', body: { directory: { mode: 'new', parentPath: f.parents[0], folderName: 'stale-root' }, expectedRevision: 0 } });
-    assert.equal(stale.status, 409);
-    assert.equal(stale.body.error.code, 'agent_storage_settings_revision_conflict');
+    assert.equal(stale.status, 409); assert.equal(stale.body.error.code, 'agent_storage_settings_revision_conflict');
     await assert.rejects(lstat(join(f.parents[0], 'stale-root')), { code: 'ENOENT' });
-    const future = await client.agentContexts.resolve({ workspaceId: f.workspaceId, projectId: second.id });
-    assert.equal(future.path, join(saved.effectiveRoot!, 'workspaces', f.workspaceId, 'projects', second.id));
     await f.restartApi();
     client = new ProjectManagementClient({ baseUrl: f.origin, auth: { type: 'cookie', credentials: 'include', cookie: () => f.ownerCookie } });
-    assert.equal((await client.agentContexts.resolve({ workspaceId: f.workspaceId, projectId: project.id })).path, assigned.path);
-    assert.equal(await readFile(join(assigned.path, 'keep.txt'), 'utf8'), 'preserve existing files');
-    const persisted = await client.agentContexts.catalog();
-    assert.equal(persisted.workspaces[0]?.projects.find(p => p.id === project.id)?.fileArea.source, 'default');
-    assert.equal(persisted.workspaces[0]?.projects.find(p => p.id === project.id)?.fileArea.revision, 1);
-    await rename(assigned.path, assigned.path + '-original');
-    assert.equal((await f.request('/api/v1/agent-contexts/resolve', { method: 'POST', body: { workspaceId: f.workspaceId, projectId: project.id } })).status, 409);
-    await assert.rejects(lstat(assigned.path), { code: 'ENOENT' });
+    assert.deepEqual(await client.agentContexts.storageSettings(f.workspaceId), saved);
+    assert.equal(await readFile(join(directory, 'keep.txt'), 'utf8'), 'preserve existing files');
+    const authority = await client.agentContexts.authorize({ workspaceId: f.workspaceId, projectId: project.id });
+    assert.equal(authority.scope.projectId, project.id); assert.equal('path' in authority, false);
+    await assert.rejects(lstat(join(directory, 'workspaces')), { code: 'ENOENT' });
   });
 
   it('guards settings permissions, CAS races, trusted roots and traversal without filesystem side effects', { timeout: localProjectCaseTimeout }, async t => {
@@ -222,7 +209,7 @@ describe('v3 Agent file areas: real PM authorization, disk and SQL mappings', { 
     assert.deepEqual(hidden.body, { defaultRoot: null, effectiveRoot: null, revision: 0, canManage: false });
     const input = { directory: { mode: 'existing', path: f.parents[0] }, expectedRevision: 0 };
     for (const cookie of [reader.cookie, manager.cookie]) assert.equal((await f.request(endpoint, { method: 'PUT', cookie, body: input })).status, 403);
-    assert.equal((await f.request('/api/v1/agent-contexts/resolve', { method: 'POST', cookie: manager.cookie, body: { workspaceId: f.workspaceId, projectId: null } })).status, 409);
+    assert.equal((await f.request('/api/v1/agent-contexts/authorize', { method: 'POST', cookie: manager.cookie, body: { workspaceId: f.workspaceId, projectId: null } })).status, 200);
     await assert.rejects(lstat(join(f.root, '.pmv4')), { code: 'ENOENT' });
     const link = join(f.parents[0], 'linked-default'); await symlink(f.parents[1], link, 'dir');
     for (const directory of [

@@ -27,7 +27,7 @@ import { executeCoreCommand, isCoreCommand, isCoreEntityKind, listCoreEntities, 
 import { readExternalReceipt, recordExternalReceipt, requestHash } from '../../../../packages/application/src/core-bridge.ts';
 import { CoreCommandJournal } from './core-journal.ts';
 import { WorkspaceError } from '../../../../packages/pm-core/index.ts';
-import type { CoreAccess, SqlExecutor } from '../../../../packages/application/src/ports.ts';
+import type { CoreAccess, SqlExecutor, TrustedMutationSource } from '../../../../packages/application/src/ports.ts';
 import { requireDashboardReadSelf, type DashboardReadContext } from '../../../../packages/application/src/dashboard-read.ts';
 import { readPersonalDashboard } from '../../../../packages/application/src/dashboard-personal.ts';
 import { readTimeDashboard } from '../../../../packages/application/src/dashboard-time.ts';
@@ -70,12 +70,16 @@ import { registerPmAutomationRoutes } from './automation-pm-routes.ts';
 import { createPmAutomationMutationPort } from './automation-pm-mutations.ts';
 import { createAutomationStudioService } from '../../../../packages/application/src/automation-studio.ts';
 import { authorizeAutomationStudioService } from '../../../../packages/application/src/automation-studio-auth.ts';
-import { createConfiguredAutomationExecutionPort, verifyAutomationServiceBearer } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
+import { createAgentWorkspaceExecutionClient, createConfiguredAutomationExecutionPort, verifyAutomationServiceBearer } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
 import { createAutomationDefinitionClient } from '../../../../packages/infrastructure/src/automation-integrations-definitions.ts';
-import type { StudioExecutionPort } from '../../../../packages/contracts/src/automation-studio.ts';
+import type { StudioExecutionPort, StudioWorkspaceExecutionPort } from '../../../../packages/contracts/src/automation-studio.ts';
 import { registerAgentFileAreaRoutes } from './agent-file-area-routes.ts';
 import { registerDocumentSourceRoutes } from './document-source-routes.ts';
 import { registerWorkflowTaskTransitionRoutes } from './workflow-task-transition-routes.ts';
+import { registerChangeHistoryRoutes } from './change-history-routes.ts';
+import { recordExternalDocumentHistory } from '../../../../packages/application/src/change-history.ts';
+import { readCoreSnapshot } from '../../../../packages/pm-core/change-snapshots.ts';
+import { currentPmAutomationOrigin } from '../../../../packages/application/src/automation-pm-signals.ts';
 import { createAgentChatTools } from './agent-chat-tools.ts';
 import { artifactVisibilitySchema, type ArtifactVisibility } from '../../../../packages/contracts/src/artifact-files.ts';
 import { createProjectBlobStore, initializeProjectBlobStorage, checkProjectBlobStorage } from '../../../../packages/infrastructure/src/project-blobs.ts';
@@ -112,7 +116,7 @@ function browserOriginAllowed(origin: string, configured: string): boolean {
   } catch { return false; }
 }
 
-export function buildApp(options: { logger?: boolean; databaseUrl?: string; blobStore?: BlobStorageProvider; blobStorageLocator?: BlobStorageLocator | null; coreWorkspaceRoot?: string; chatSpaceRoot?: string; localProjects?: Omit<LocalProjectConfiguration, 'coreRoot'> & { coreRoot?: string }; publicOrigin?: string; cookieSecure?: boolean; invitationMail?: InvitationMailConfig; accountRecoveryMail?: AccountRecoveryMailConfig; webhooks?: WebhookConfig; automationRuntime?: StudioExecutionPort; signal?: AbortSignal } = {}) {
+export function buildApp(options: { logger?: boolean; databaseUrl?: string; blobStore?: BlobStorageProvider; blobStorageLocator?: BlobStorageLocator | null; coreWorkspaceRoot?: string; chatSpaceRoot?: string; localProjects?: Omit<LocalProjectConfiguration, 'coreRoot'> & { coreRoot?: string }; publicOrigin?: string; cookieSecure?: boolean; invitationMail?: InvitationMailConfig; accountRecoveryMail?: AccountRecoveryMailConfig; webhooks?: WebhookConfig; automationRuntime?: StudioExecutionPort; agentWorkspaceExecution?: StudioWorkspaceExecutionPort; signal?: AbortSignal } = {}) {
   if ((options.blobStore === undefined) !== (options.blobStorageLocator === undefined)) throw new Error('Blob provider and locator must be supplied together');
   // Bound receiving a request, not durable work after its body has arrived.
   // A socket idle timer otherwise cuts off valid slow commits as unknown.
@@ -146,7 +150,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   });
   const automationRuntime = options.automationRuntime ?? createConfiguredAutomationExecutionPort();
   const automationDefinitions = createAutomationDefinitionClient();
-  const automationStudio = createAutomationStudioService({ database, core: notificationCore, runtime: automationRuntime, definitionResolver: automationDefinitions });
+  const automationStudio = createAutomationStudioService({ database, core: notificationCore, runtime: automationRuntime, definitionResolver: automationDefinitions, workspaceExecution: options.agentWorkspaceExecution ?? createAgentWorkspaceExecutionClient() });
   const controller = new AbortController();
   const abort = () => controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', abort, { once: true });
@@ -403,7 +407,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   registerAutomationGitSyncRoutes(app, { database, actor, core: notificationCore, studio: automationStudio });
   registerAutomationEventsRoutes(app, { database, actor, core: notificationCore, definitionResolver: automationDefinitions, ...(options.publicOrigin ? { publicOrigin: options.publicOrigin } : {}) });
   const chatTools = coreWorkspaces ? createAgentChatTools({
-    database, coreWorkspaces, executeCommand: executeNativeCommand, readCommandReceipt: readNativeCommandReceipt,
+    database, coreWorkspaces, executeCommand: (principal, workspaceId, command, checkAuthorization) => executeNativeCommand(principal, workspaceId, command, checkAuthorization, { kind: currentPmAutomationOrigin() ? 'automation' : 'agent', requesterId: principal.id }), readCommandReceipt: readNativeCommandReceipt,
     readComments: (principal, workspaceId, taskId, input) => applicationRead(principal, workspaceId, ctx => readTaskComments(ctx, taskId, input)),
     localProjects: { enabled: localProjects.enabled, defaultParent: localProjects.defaultParent },
   }) : undefined;
@@ -453,7 +457,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     const query = taskCommentHistoryOptionsSchema.parse(request.query);
     return dashboardRead(request, scope.workspaceId, ctx => readTaskCommentHistory(ctx, scope.taskId, scope.commentId, { projectId: query.projectId, limit: query.limit, ...(query.after === undefined ? {} : { after: query.after }) }));
   });
-  async function executeCoreRequest(principal: Actor, scope: { workspaceId: string }, parsed: Command, recoveringLocalProject = false, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<CommandReceipt> {
+  async function executeCoreRequest(principal: Actor, scope: { workspaceId: string }, parsed: Command, recoveringLocalProject = false, checkAuthorization?: (sql: SqlExecutor) => Promise<void>, trustedSource?: TrustedMutationSource): Promise<CommandReceipt> {
     if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);
       const coreScope = await authorizeCoreScope(database(), principal, scope.workspaceId, 'domain.read');
       const workspace = await coreWorkspaces.get(scope.workspaceId);
@@ -491,7 +495,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
               const record = workspace.get(result.id);
               if (!coreScope.allows(record)) throw new DomainError('not_found_or_forbidden', 'Entity is not accessible', 404);
             }
-            await recordExternalReceipt(database(), principal, scope.workspaceId, parsed as Command, saved.receipt, saved.scopeProjectIds, saved.audit ?? [], saved.facts ?? []);
+            await recordExternalReceipt(database(), principal, scope.workspaceId, parsed as Command, saved.receipt, saved.scopeProjectIds, saved.audit ?? [], saved.facts ?? [], key => readCoreSnapshot(workspace.root, key));
             return saved.receipt;
           }
           if (!recoveringLocalProject || !localCreation && parsed.commandType !== 'DuplicateProject') return { commandId: parsed.commandId, status: 'rejected', httpStatus: 409, error: { code: 'command_outcome_unknown', message: 'The previous core write outcome is unknown; query the original request before explicitly recovering supported operations' } } satisfies CommandReceipt;
@@ -501,9 +505,9 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
         if (parsed.projectId && coreScope.allowsProject(parsed.projectId)) affectedProjects.add(parsed.projectId);
         const audit: ProjectAuditWrite[] = [];
         const facts: CapturedServiceFact[] = [];
-        const result = await executeCoreCommand({ workspace, scope: coreScope, principal, command: parsed as Command, pool: database(), localProjects, recoveringLocalProject, bindLocalProject, ...(checkAuthorization ? { checkAuthorization } : {}), affectProject: projectId => { affectedProjects.add(projectId); }, captureAudit: entries => { audit.push(...entries); }, captureFacts: entries => { facts.push(...entries); } }, parsed.commandId);
+        const result = await executeCoreCommand({ workspace, scope: coreScope, principal, command: parsed as Command, pool: database(), localProjects, recoveringLocalProject, bindLocalProject, ...(trustedSource ? { trustedSource } : {}), ...(checkAuthorization ? { checkAuthorization } : {}), affectProject: projectId => { affectedProjects.add(projectId); }, captureAudit: entries => { audit.push(...entries); }, captureFacts: entries => { facts.push(...entries); } }, parsed.commandId);
         journal.complete(parsed.commandId, hash, result, principal.id, [...affectedProjects], audit, facts);
-        await recordExternalReceipt(database(), principal, scope.workspaceId, parsed as Command, result, [...affectedProjects], audit, facts);
+        await recordExternalReceipt(database(), principal, scope.workspaceId, parsed as Command, result, [...affectedProjects], audit, facts, key => readCoreSnapshot(workspace.root, key));
         return result;
       });
       if (localCreation && !(receipt.status === 'rejected' && receipt.error?.code === 'command_outcome_unknown')) {
@@ -531,12 +535,12 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
       ...(parsed.expectedVersions === undefined ? {} : { expectedVersions: parsed.expectedVersions }),
     };
   }
-  async function executeNativeCommand(principal: Actor, workspaceId: string, input: unknown, checkAuthorization?: (sql: SqlExecutor) => Promise<void>): Promise<CommandReceipt> {
+  async function executeNativeCommand(principal: Actor, workspaceId: string, input: unknown, checkAuthorization?: (sql: SqlExecutor) => Promise<void>, trustedSource?: TrustedMutationSource): Promise<CommandReceipt> {
     const parsed = parseNativeCommand(input);
     if (/^(CreateSession|CloseSession|CreateRun|RetryRun|StartRun|RequestApproval|GrantApproval|DenyApproval|RecordRun|ReconcileRun)/.test(parsed.commandType)) throw new DomainError('capability_not_enabled', 'Agent execution belongs to phase three', 409);
-    if (coreWorkspaces && isCoreCommand(parsed.commandType)) return executeCoreRequest(principal, { workspaceId }, parsed, false, checkAuthorization);
+    if (coreWorkspaces && isCoreCommand(parsed.commandType)) return executeCoreRequest(principal, { workspaceId }, parsed, false, checkAuthorization, trustedSource);
     const coreAccess = coreWorkspaces ? await coreAccessFor(principal, workspaceId, database(), Object.hasOwn(projectMetadataWrites, parsed.commandType)) : undefined;
-    return runCommand(database(), principal, workspaceId, parsed, registry, coreAccess, notificationCore, checkAuthorization);
+    return runCommand(database(), principal, workspaceId, parsed, registry, coreAccess, notificationCore, checkAuthorization, trustedSource);
   }
   async function readNativeCommandReceipt(principal: Actor, workspaceId: string, input: Command): Promise<CommandReceipt | null> {
     const parsed = parseNativeCommand(input), hash = requestHash(parsed as unknown as Record<string, unknown>);
@@ -551,7 +555,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     for (const projectId of saved.scopeProjectIds ?? []) if (!scope.allowsProject(projectId)) throw new DomainError('not_found_or_forbidden', 'Command receipt is not accessible', 404);
     const result = saved.receipt.result;
     if (result && typeof result === 'object' && 'id' in result && typeof result.id === 'string' && !scope.allows(workspace.get(result.id))) throw new DomainError('not_found_or_forbidden', 'Command receipt is not accessible', 404);
-    await recordExternalReceipt(database(), principal, workspaceId, parsed, saved.receipt, saved.scopeProjectIds, saved.audit ?? [], saved.facts ?? []);
+    await recordExternalReceipt(database(), principal, workspaceId, parsed, saved.receipt, saved.scopeProjectIds, saved.audit ?? [], saved.facts ?? [], key => readCoreSnapshot(workspace.root, key));
     return saved.receipt;
   }
   app.post('/api/v1/workspaces/:workspaceId/commands', async (request, reply) => {
@@ -616,10 +620,12 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
     if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'Configure DATABASE_URL and migrate the database', 503);
     return coreWorkspaces.get(workspaceId);
   } });
-  registerDocumentSourceRoutes(app, { database, actor, config: { ...localProjects, chatSpaceRoot: options.chatSpaceRoot ?? path.join(homedir(), '.pmv4') }, workspace: async workspaceId => {
+  const documentSourceOptions = { database, actor, history: recordExternalDocumentHistory, config: { ...localProjects, chatSpaceRoot: options.chatSpaceRoot ?? path.join(homedir(), '.pmv4') }, workspace: async (workspaceId: string) => {
     if (!coreWorkspaces) throw new DomainError('backend_not_initialized', 'Configure DATABASE_URL and migrate the database', 503);
     return coreWorkspaces.get(workspaceId);
-  } });
+  } };
+  registerDocumentSourceRoutes(app, documentSourceOptions);
+  registerChangeHistoryRoutes(app, { database, actor, core: notificationCore, sources: documentSourceOptions });
   // The Markdown core is authoritative for its objects; PM-only modules keep their own storage.
   if (coreWorkspaces) registerCoreRoutes(app, { database, actor, pool: coreWorkspaces, localProjects, bindLocalProject,
     checkLocalProject: mount => checkProjectBlobStorage(storagePool ?? database(), mount),

@@ -8,12 +8,14 @@
     "vendor/cc-switch/src/web/index.tsx"
   ],
   "sourceAliases": {
-    "@pm/cc-switch-source/": "vendor/cc-switch/src/",
-    "@pm/openhands-source/": "vendor/openhands-extensions/src/",
-    "@pm/openhands-extensions": "vendor/openhands-extensions/src/web/index.tsx"
+    "@pm/cc-switch-source/": "vendor/cc-switch/src/"
   },
-  "independentForkRoots": ["vendor/openhands-extensions"],
-  "rustFeatures": ["headless"],
+  "independentForkRoots": [
+    "vendor/openhands-extensions"
+  ],
+  "rustFeatures": [
+    "headless"
+  ],
   "hostBuildInputs": [
     ".node-version",
     "rust-toolchain.toml",
@@ -35,6 +37,16 @@
     "deploy/Dockerfile",
     ".dockerignore"
   ],
+  "externalHostOutputs": [
+    {
+      "path": "apps/server/agent/src/providers/t3code/management.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "packages/agent-contracts/src/provider.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    }
+  ],
   "ownedTrees": [
     "vendor/cc-switch",
     "apps/server/cc-switch-host",
@@ -52,7 +64,9 @@
       "reason": "Extract the upstream Codex config path/read/validate/file-IO helpers into a GUI-free production module; preserve source-derived algorithms, while the original desktop module reexports them."
     }
   ],
-  "sourceReferenceDocuments": ["vendor/cc-switch/docs/user-manual"],
+  "sourceReferenceDocuments": [
+    "vendor/cc-switch/docs/user-manual"
+  ],
   "sourceReferencePolicy": "Copied upstream manuals are immutable source-reference snapshots, not published host documentation. Relative links to files outside the selected snapshot are recorded with pinned upstream URLs, not treated as local product links. Host-authored SYNC.md and LICENSING.md remain normal local documents.",
   "dynamicResources": [],
   "dependencyPolicy": "Reachable Rust modules, include/include_str/include_bytes resources, Cargo path dependencies/build scripts, TS/JS imports/exports/dynamic imports, URL resources and CSS references are inventoried. Unresolved local resources and unreviewed computed resources fail closure. Cargo metadata and the native build separately close platform-specific crate dependencies and embedded resources. Snapshot-only files are never claimed as production inputs."

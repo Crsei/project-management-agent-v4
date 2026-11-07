@@ -22,6 +22,12 @@
   padding-right: 28px;
 }
 
+/* 弹窗内共享控件保持静态边框：聚焦不显示品牌色边框/光圈。 */
+.dialog :is(button, input, textarea, [data-slot="select-trigger"]):focus-visible { outline: none; box-shadow: none; }
+.dialog .group\/button:focus-visible { border-color: transparent; }
+.dialog .group\/button.border-border:focus-visible { border-color: var(--border); }
+.dialog [data-slot="input"]:focus-visible { border-color: var(--border); }
+
 .search {
   position: relative;
   display: flex;
@@ -52,10 +58,10 @@
 }
 
 .search .searchInput:focus-visible {
-  border-color: var(--ring);
+  border-color: var(--border);
   background: var(--surface);
   outline: none;
-  box-shadow: 0 0 0 2px var(--selection);
+  box-shadow: none;
 }
 
 .search .searchInput::-webkit-search-cancel-button {
@@ -80,11 +86,6 @@
 .searchClear:hover {
   background: var(--surface-hover);
   color: var(--foreground);
-}
-
-.searchClear:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
 }
 
 .searchClear > svg {
@@ -199,13 +200,7 @@
 }
 
 .row[aria-checked="true"] {
-  border-color: var(--ring);
   background: var(--selection);
-}
-
-.row:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
 }
 
 .checkbox {

@@ -10,7 +10,7 @@ import { readNativeProviderStatus, resolveCatalogModel, resolveProviderModelOpti
 import { getStoredInstance, providerContext, type StoredProviderInstance } from "./instances.ts";
 import { getNativeProviderAdapter } from "./driver-registry.ts";
 import { forkNativeSession } from "./native.ts";
-import { projectDirectory } from "../paths.ts";
+import path from "node:path";
 import { ingestUsageLimits } from "../usage/limits.ts";
 import { beginProviderExecution, isProviderAccountBusy } from "./auth.ts";
 
@@ -79,7 +79,7 @@ export async function resolveProviderRuntime(options: ResolveProviderRuntimeOpti
 }
 
 export async function runNativeRuntime(runtime: ProviderRuntime, options: {
-  prompt: string; signal?: AbortSignal; onText?: (delta: string) => void; cwd?: string;
+  prompt: string; signal?: AbortSignal; onText?: (delta: string) => void; cwd: string;
   /** Original latest user text for native invocation parsing, separate from PM context. */
   userMessageText?: string;
   session?: CliSessionOptions; onSession?: (ref: NativeSessionRef) => void;
@@ -113,9 +113,12 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
     throw new ProviderRuntimeError(400, "invalid_session", "Choose resume or fork, not both.");
   let resume = options.session?.resume;
   const source = resume ?? options.session?.fork?.source;
-  const cwd = options.cwd ?? source?.cwd ?? projectDirectory();
-  if (source && (source.providerInstanceId !== instance.instanceId || source.driver !== instance.driver
-    || (options.cwd ? source.cwd !== cwd : source.cwd && source.cwd !== cwd)))
+  const cwd = options.cwd;
+  if (!cwd || !path.isAbsolute(cwd) || cwd.includes("\0"))
+    throw new ProviderRuntimeError(412, "execution_environment_required", "Native execution requires an explicit server-resolved directory.");
+  if (options.execution?.environment.agentWorkspaceId && options.execution.environment.executionPath !== cwd)
+    throw new ProviderRuntimeError(409, "execution_environment_changed", "Native execution directory differs from its server-issued Session binding.");
+  if (source && (source.providerInstanceId !== instance.instanceId || source.driver !== instance.driver || source.cwd !== cwd))
     throw new ProviderRuntimeError(409, "session_mismatch", "Native session belongs to another instance/driver/workspace; use an explicit portable handoff.");
   if (source && source.instanceRevision !== instance.revision)
     throw new ProviderRuntimeError(409, "session_mismatch", "Native session has no matching provider configuration/account revision; use an explicit portable handoff.");

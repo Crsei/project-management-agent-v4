@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { mcpEqual, mcpMac } from '../../../../../packages/infrastructure/src/mcp-service-auth.ts';
 import { deleteRecord, readRecord, transaction } from '../durable/store.ts';
-import { getThread, listThreads } from '../durable/threads.ts';
-import { boundedRecord, currentGrant, digest, grantIdentity, MCP_CODES, MCP_CONSENTS, MCP_GRANTS, MCP_TOKENS, McpAuthError, opaque, putGrant, type Grant } from './grants.ts';
+import { listThreads } from '../durable/threads.ts';
+import { assertMcpThreadEligible, boundedRecord, currentGrant, digest, grantIdentity, MCP_CODES, MCP_CONSENTS, MCP_GRANTS, MCP_TOKENS, McpAuthError, opaque, putGrant, type Grant } from './grants.ts';
 import { mcpPublicOrigin, pmBrowser, pmRequest, type McpCatalog } from './identity.ts';
 
 // Derived from pinned apps/server/src/auth/McpOAuth.ts: redirect matching, stateless
@@ -75,7 +75,8 @@ export async function approval(request: Request, input: unknown) {
   const catalog = await pmRequest('/api/v1/agent-contexts', browser.headers) as McpCatalog;
   const csrfToken = opaque();
   transaction(() => boundedRecord<Consent>(MCP_CONSENTS, { key: digest(csrfToken), expiresAt: Date.now() + 600_000, actorId: browser.actorId, sessionHash: browser.sessionHash, authorizationHash: authorizationHash(authorization) }));
-  const threads = listThreads().filter(thread => thread.scope && catalog.workspaces.some(workspace => workspace.id === thread.scope!.workspaceId && (thread.scope!.projectId === null ? workspace.workspaceAllowed === true : workspace.projects.some(project => project.id === thread.scope!.projectId)))).slice(0, 1000).map(thread => ({ id: thread.remoteId, title: thread.title ?? '', scope: thread.scope! }));
+  const threads = listThreads().filter(thread => !thread.deleted && thread.executionSelection?.agentWorkspaceId === null &&
+    thread.executionSelection.agentWorkspaceRevision === null).slice(0, 1000).map(thread => ({ id: thread.remoteId, title: thread.title ?? '' }));
   const allowedAccess = authorization.scope === undefined || authorization.scope.split(' ').includes('orchestration:operate') ? ['read-only', 'full'] : ['read-only'];
   return { clientName: client(authorization.client_id).n, redirectHost: new URL(authorization.redirect_uri).host, csrfToken, authorization, defaultAccess: 'read-only', allowedAccess, catalog: { workspaces: catalog.workspaces.map(workspace => ({ id: workspace.id, name: workspace.name, workspaceAllowed: workspace.workspaceAllowed === true, projects: workspace.projects.map(project => ({ id: project.id, name: project.name })) })) }, threads };
 }
@@ -103,7 +104,7 @@ export async function decide(request: Request, input: unknown): Promise<{ redire
   transaction(() => {
     validConsent();
     const threadIds = [...new Set(decision.threadIds)];
-    for (const id of threadIds) { const thread = getThread(id); if (!thread || thread.deleted || !thread.scope || thread.scope.workspaceId !== decision.scope.workspaceId || thread.scope.projectId !== decision.scope.projectId) throw new McpAuthError('access_denied', 'Thread does not belong to the explicitly selected scope.', 403); }
+    for (const id of threadIds) assertMcpThreadEligible({ scope: decision.scope, actorId: browser.actorId }, id);
     const grant: Grant = { grantId: randomUUID(), actorId: browser.actorId, scope: decision.scope, access: decision.access, threadIds, version: 1, clientHash: digest(authorization.client_id), clientName: client(authorization.client_id).n, audience: `${mcpPublicOrigin()}/mcp`, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + 24 * 3600_000).toISOString(), revokedAt: null };
     putGrant(grant);
     boundedRecord<PendingCode>(MCP_CODES, { key: digest(code), expiresAt: now + 60_000, clientHash: grant.clientHash, redirectUri: authorization.redirect_uri, challenge: authorization.code_challenge, resource: grant.audience, grantId: grant.grantId });

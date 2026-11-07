@@ -101,12 +101,13 @@ export function decodeAutomationTar(archiveBase64: string): AutomationBundleFile
   return files;
 }
 export function exportAutomationDefinition(definition: StudioDefinition, format: 'source' | 'bundle'): AutomationTransferExport {
+  if (definition.historicalExecutionSelection !== undefined) throw new DomainError('agent_workspace_selection_required', 'Reselect an Agent folder before exporting an executable definition; the original directory selection remains available as historical evidence', 409);
   const config = studioConfigSchema.parse(definition.config); validateScriptFiles(config);
   let document: unknown;
   if (format === 'bundle') document = { version: 1, kind: 'pm-automation-bundle', spec: config };
   else {
     const action = config.action;
-    if (action.kind !== 'prompt' || config.tags.length || config.description || config.templateId || config.templateInputs !== undefined || config.templateVersion !== undefined || config.dailyLimit !== 10 || config.cooldownMinutes !== 0 || Object.keys(action.options).length || action.repositories.length > 1 || action.plugins.some(plugin => plugin.version !== null) || !['cron', 'event'].includes(config.trigger.kind)) invalid('Source JSON cannot represent this definition losslessly. Use the complete PM bundle (native templates, scripts, tags, metadata, budgets, multiple repositories, options, once/manual require it)');
+    if (action.kind !== 'prompt' || action.executionSelection !== undefined || config.quickAccess !== undefined || config.tags.length || config.description || config.templateId || config.templateInputs !== undefined || config.templateVersion !== undefined || config.dailyLimit !== 10 || config.cooldownMinutes !== 0 || Object.keys(action.options).length || action.repositories.length > 1 || action.plugins.some(plugin => plugin.version !== null) || !['cron', 'event'].includes(config.trigger.kind)) invalid('Source JSON cannot represent this definition losslessly. Use the complete PM bundle (Agent folder selection, quickAccess, native templates, scripts, tags, metadata, budgets, multiple repositories, options, once/manual require it)');
     const trigger = config.trigger;
     if (trigger.kind === 'event' && Object.keys(trigger.filter).length) invalid('PM event filters have no lossless source JSON representation');
     document = { version: 1, kind: 'automation', spec: { name: config.name, prompt: action.prompt, enabled: definition.status === 'enabled', model: action.model, timeout: action.timeoutSeconds, plugins: action.plugins.map(plugin => plugin.id), ...(action.repositories[0] ? { repository: action.repositories[0].id, ...(action.repositories[0].ref !== null ? { branch: action.repositories[0].ref } : {}) } : {}), trigger: trigger.kind === 'cron' ? { type: 'cron', schedule: trigger.expression, timezone: trigger.timezone } : trigger.kind === 'event' ? { type: 'event', source: trigger.source, on: trigger.key } : invalid('Unsupported source trigger') } };

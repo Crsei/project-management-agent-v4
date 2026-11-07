@@ -42,7 +42,7 @@ function fixture(template = 'builtin-deliver') {
     },
     authorize, repository: async () => repo, provider: async () => {}, delivery, readDelivery: dp.read, now: () => clock };
   const service = new TaskWorkflowService(p);
-  const input: WorkflowStart = { ...scope, id, taskRevision: 'r1', definitionId: template, definitionVersion: 1, baseBranch: 'main', repository: 'owner/repo', providerInstanceId: 'codex', model: 'selected', consent: { execute: true, worktreeWrite: template !== 'builtin-analysis', commit: true, push: true, draftPr: true, taskStatus: true } };
+  const input: WorkflowStart = { ...scope, id, taskRevision: 'r1', definitionId: template, definitionVersion: 1, baseBranch: 'main', repository: 'owner/repo', providerInstanceId: 'codex', model: 'selected', executionSelection: { version: 2, agentWorkspaceId: 'agent-folder', agentWorkspaceRevision: 1 }, consent: { execute: true, worktreeWrite: template !== 'builtin-analysis', commit: true, push: true, draftPr: true, taskStatus: true } };
   const stepUntil = async (predicate: (r: WorkflowRun) => boolean) => { for (let i = 0; i < 25; i++) { const r = await service.tick(id); if (predicate(r)) return r; } throw new Error('condition not reached'); };
   return { service, p, dp, input, calls, runs, definitions, deliveries, stepUntil, set: { deny: () => { allow = false; }, revision: () => { taskRevision = 'external-edit'; }, status: (v: string) => { taskStatus = v; taskRevision = 'external-state'; }, repo: () => { repo = 'owner/other'; }, generation: (v: string) => { generation = v; }, test: (v: number) => { testExit = v; }, ci: (v: typeof ci) => { ci = v; }, ciHead: () => { ciHead = 'other'; }, advance: (ms: number) => { clock += ms; } } };
 }
@@ -87,7 +87,7 @@ test('missing consent, repository mismatch, changed requirements, existing manua
   for (const key of ['worktreeWrite', 'commit', 'push', 'draftPr'] as const) { const f = fixture(); f.input.consent[key] = false; await assert.rejects(f.service.start(f.input), /授权/); assert.deepEqual(f.calls, []); }
   const a = fixture(); a.set.repo(); await assert.rejects(a.service.start(a.input), /仓库/);
   const b = fixture(); b.set.revision(); await assert.rejects(b.service.start(b.input), /版本/);
-  const c = fixture(); await c.p.delivery.prepare({ ...scope, id, taskRevision: 'r1', baseBranch: 'main' }); await assert.rejects(c.service.start(c.input), /已有/);
+  const c = fixture(); await c.p.delivery.prepare({ ...scope, id, taskRevision: 'r1', baseBranch: 'main', executionSelection: c.input.executionSelection! }); await assert.rejects(c.service.start(c.input), /已有/);
   const d = fixture(); const first = await d.service.start(d.input); assert.deepEqual(await d.service.start(d.input), first);
   await assert.rejects(d.service.start({ ...d.input, baseBranch: 'other' }), /改变参数/);
   await assert.rejects(d.service.start({ ...d.input, id: 'different' }), /已有/);
@@ -148,7 +148,7 @@ test('templates remain editable without Git readiness and catalogue identifies m
   const f = fixture(); f.p.repository = async () => { throw new Error('no origin'); };
   const catalog = await f.service.catalog(scope);
   assert.equal(catalog.repository, null); assert.equal(catalog.definitions.length, 3); assert.equal(catalog.hasManualDelivery, false);
-  await f.p.delivery.prepare({ ...scope, id, taskRevision: 'r1', baseBranch: 'main' });
+  await f.p.delivery.prepare({ ...scope, id, taskRevision: 'r1', baseBranch: 'main', executionSelection: f.input.executionSelection! });
   assert.equal((await f.service.catalog(scope)).hasManualDelivery, true);
 });
 
@@ -266,4 +266,42 @@ test('required CI never silently succeeds when a check is missing until timeout'
   f.set.advance(16 * 60_000);
   assert.equal((await f.service.tick(id)).status, 'failed'); assert.ok(!f.calls.includes('state-review'));
   assert.equal(workflowTemplates[2]!.versions[1]!.graph.nodes.find(n => n.kind === 'ci')!.config.requiredChecks, undefined);
+});
+test('explicit replacement Session preserves immutable workflow input/nodes and delivery evidence without replay', async () => {
+  const f = fixture(); await f.service.start(f.input);
+  const completed = await f.stepUntil(run => run.status === 'completed');
+  const before = structuredClone(completed), calls = [...f.calls], delivery = f.deliveries.get(id)!;
+  const selection = { ...f.input.executionSelection!, agentWorkspaceRevision: 2 };
+  const replaced = await f.service.replaceSession(id, completed.version, selection);
+  assert.deepEqual(replaced.input, before.input);
+  assert.deepEqual(replaced.nodes, before.nodes);
+  assert.equal(replaced.status, before.status);
+  assert.deepEqual(replaced.executionSelection, selection);
+  assert.deepEqual(f.deliveries.get(id)!.previousThreadIds, [delivery.threadId]);
+  assert.deepEqual(f.deliveries.get(id)!.git, delivery.git);
+  assert.deepEqual(f.deliveries.get(id)!.test, delivery.test);
+  assert.deepEqual(f.calls, calls);
+  await assert.rejects(f.service.replaceSession(id, completed.version, selection), /已更新/);
+});
+test('historical workflow receipts stay readable while background execution pauses before any node side effect', async () => {
+  const f = fixture(); await f.service.start(f.input);
+  const run = f.runs.get(id)!;
+  run.input = { ...run.input, executionSelection: { version: 1 } } as unknown as WorkflowRun['input'];
+  let receivedSelection: unknown = 'not-called';
+  const authorize = f.p.authorize;
+  f.p.authorize = async (target, write) => { receivedSelection = target.executionSelection; return authorize(target, write); };
+  assert.deepEqual(await f.service.read(id), run);
+  assert.equal(receivedSelection, undefined, 'Historical reads authorize the PM task, never resolve old directory data');
+  const paused = await f.service.tick(id);
+  assert.equal(paused.status, 'paused'); assert.match(paused.message!, /历史工作流/);
+  assert.deepEqual(f.calls, []);
+  await assert.rejects(f.service.control(id, 'resume', paused.version), /历史工作流/);
+  assert.equal((await f.service.read(id)).input.executionSelection?.version, 1);
+});
+test('workflow catalogue without an explicit Agent folder never probes the server cwd or a PM-derived repository', async () => {
+  const f = fixture(); let probes = 0;
+  f.p.repository = async () => { probes++; return 'server/process-cwd'; };
+  const catalog = await f.service.catalog(scope);
+  assert.equal(probes, 0); assert.equal(catalog.repository, null); assert.equal(catalog.defaultBase, null);
+  assert.equal(catalog.definitions.length, 3);
 });

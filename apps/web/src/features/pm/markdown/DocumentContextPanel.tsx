@@ -1,10 +1,10 @@
-import { FileText, History, Link2, ListTree, X } from 'lucide-react';
+import { FileText, Link2, ListTree, X } from 'lucide-react';
 import { statusCategory, workflowFor, type FileRecord } from '@pm-schema';
 import { StatusIcon } from '@pm-views';
 import { headingSlug } from '@pm-markdown';
 import type { WorkspaceController } from './controller';
 import { scanDocumentOutline } from './document-structure';
-import { EntityAgentPanelAction } from '../agent/agent-entry';
+import { AgentAssistantMenu } from '../agent/agent-assistant-menu';
 
 type Props = {
   controller: WorkspaceController;
@@ -38,14 +38,10 @@ export function DocumentContextPanel({ controller: c, en, onClose, onOutline, on
         <summary><FileText size={14} /><span>{en ? 'Referenced by' : '引用这份文档'}</span><small>{backlinks.length}</small></summary>
         {backlinks.length > 0 ? <ul className="document-context-links">{backlinks.map(file => <li key={file.id}><FileText size={14} aria-hidden="true" /><button type="button" onClick={() => onOpenEntity(file)}><strong>{file.entity.title}</strong><small><code>{file.id}</code> · {file.entity.entity}{file.entity.archived ? en ? ' · Archived' : ' · 已归档' : ''}</small></button></li>)}</ul> : <p>{en ? 'No saved document or planning object references this document.' : '没有已保存文档或规划对象引用此文档。'}</p>}
       </details>
-      <details className="document-context-section">
-        <summary><History size={14} /><span>{en ? 'Version history' : '版本历史'}</span></summary>
-        <p>{en ? 'Body version storage is not connected yet. Saved status and revision-conflict recovery remain available; history is not inferred from local drafts.' : '正文版本存储尚未接入。当前仅提供保存状态与版本冲突核对，不使用本地草稿补造历史版本。'}</p>
-      </details>
       <section className="document-context-section document-context-agent" aria-label={en ? 'Agent assistant' : 'Agent 助手'}>
         <div className="document-context-agent-heading"><strong>{en ? 'Agent assistant' : 'Agent 助手'}</strong></div>
-        <p>{en ? 'Ask about this document, edit it, or create tasks from its context.' : '基于当前文档提问、编辑或创建任务。'}</p>
-        <EntityAgentPanelAction entityId={doc.id} projectId={doc.project} title={doc.title} hasDraft={!!c.draft} />
+        <p>{en ? 'Run a configured project automation or go to Agent Chat.' : '运行已配置的项目自动化，或前往 Agent Chat。'}</p>
+        <AgentAssistantMenu projectId={doc.project} disabledReason={!c.canWrite || c.configurationInvalid || c.accessError || c.query.error || c.writesBlocked ? (en ? 'PM writes are currently locked; resolve access, configuration or the original pending request first.' : 'PM 当前为只读或写入已锁定；请先核对权限、配置或原待处理请求。') : undefined} />
       </section>
     </div>
   </div>;

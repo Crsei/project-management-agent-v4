@@ -13,6 +13,36 @@ import { disposeChannels, mountWebPlatform, type DirectoryListing, type Director
 import "./management.css";
 
 export type { ManagementContext, ManagementEvent, DirectoryListing } from "./bridge";
+
+// Public reuse surface: implementations and singleton state remain CC Switch-owned.
+export { default as McpFormModal } from "../components/mcp/McpFormModal";
+export { default as UnifiedMcpPanel } from "../components/mcp/UnifiedMcpPanel";
+export { V7Dialog } from "../components/mcp/formBits";
+export { uniqueId } from "../components/mcp/mcpDraft";
+export { APP_DISPLAY_NAME } from "../components/shell/AppGlyph";
+export { default as UnifiedSkillsPanel } from "../components/skills/UnifiedSkillsPanel";
+export type { SkillsInstalledPresentation } from "../components/skills/UnifiedSkillsPanel";
+export type { SkillsDiscoveryPresentation, DiscoverRow } from "../components/skills/SkillsPage";
+export { Button } from "../components/ui/button";
+export { Dialog, DialogContent, DialogTitle, DialogDescription } from "../components/ui/dialog";
+export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetBody } from "../components/ui/sheet";
+export { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
+export { MCP_APP_IDS, type McpAppId } from "../config/appConfig";
+export {
+  useMcpManagement, useSaveMcpDefinition, useSetMcpAgentConfiguration,
+  usePreviewMcpImport, useApplyMcpImport, useDeleteMcpServer, useResyncMcpToApps,
+} from "../hooks/useMcp";
+export { useMcpConnectivity, type McpConnectivity } from "../hooks/useMcpConnectivity";
+export { default as i18n } from "../i18n";
+export type { InstalledSkill, DiscoverableSkill } from "../lib/api/skills";
+export type { AppId } from "../lib/api/types";
+export { copyText } from "../lib/clipboard";
+export { toast } from "../lib/toast";
+export { hasUnsavedChanges, useUnsavedChangesTracker } from "../lib/unsavedChanges";
+export type { McpServer, McpServersMap } from "../types";
+export { webPlatform, getPortalContainer, isTargetAvailable } from "./bridge";
+export { useSettingsQuery } from "./settings";
+
 export const MANAGED_APPS = MCP_APP_IDS.map(id => ({ id, label: APP_DISPLAY_NAME[id] }));
 export interface CcSwitchManagementProps {
   context: ManagementContext;
@@ -71,14 +101,14 @@ export function CcSwitchManagement(props: CcSwitchManagementProps) {
   useEffect(() => props.subscribe(({ event, data }) => {
     if (event === "reconnected") {
       void client.invalidateQueries();
-      setNotice("事件连接已恢复；正在重新读取权威状态，原表单草稿未丢弃，不会自动重放写入。");
+      setNotice("事件连接已恢复；正在重新读取权威状态。");
     } else if (event === "changed") {
       void client.invalidateQueries();
       const synchronized = data && typeof data === "object" && "filesSynchronized" in data ? data.filesSynchronized : undefined;
       const importedWithoutWrites = data && typeof data === "object" && "command" in data && data.command === "apply_mcp_import" && "nativeFilesWritten" in data && data.nativeFilesWritten === false;
-      setNotice(props.context.kind === "project" ? "项目私有 MCP 定义已保存；未写入原生 Home，PM 执行授权仍单独核验。" : importedWithoutWrites ? "审阅导入已保存；本次未改写原生文件。请核对逐应用同步状态，需要时再显式同步；运行会话保持不变。" : synchronized === false ? "配置已保存，但原生文件同步存在失败；请查看逐应用结果并核对后再重载。活跃执行保持不变。" : `配置已保存；文件同步：${synchronized === true ? "宿主未报告失败，请核对逐应用结果" : "尚无同步结果"}。运行会话未重载；请刷新原生目录，并按需显式重启原生会话或新建对话。`);
+      setNotice(props.context.kind === "project" ? "已保存；未写入原生 Home。" : importedWithoutWrites ? "已保存；未改写原生文件。" : synchronized === false ? "已保存；部分原生文件同步失败。" : "配置已保存。");
     } else if ((event === "operation" || event === "warning") && data && typeof data === "object") {
-      const message = "message" in data && typeof data.message === "string" ? data.message : "state" in data && data.state === "partial" ? "配置操作部分成功；至少一个原生目标同步失败。请检查逐应用结果，不要将保存视为全部同步或会话重载。" : "error" in data && data.error && typeof data.error === "object" && "message" in data.error && typeof data.error.message === "string" ? data.error.message : undefined;
+      const message = "message" in data && typeof data.message === "string" ? data.message : "state" in data && data.state === "partial" ? "部分原生目标同步失败。" : "error" in data && data.error && typeof data.error === "object" && "message" in data.error && typeof data.error.message === "string" ? data.error.message : undefined;
       if (message) setWarnings(previous => previous.includes(message) ? previous : [...previous, message]);
     }
   }), [props.subscribe, client]);

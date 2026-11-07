@@ -1,5 +1,7 @@
 import { DomainError, type Actor } from '../../domain/src/core.ts';
 import { introspectMcpGrant, verifyMcpServiceBearer, type McpInvocationIdentity, type McpServiceIdentity } from '../../infrastructure/src/mcp-service-auth.ts';
+import { pmToolTargetSchema } from '../../agent-contracts/src/pm-tools.ts';
+import { pmReferenceResolveRequestSchema } from '../../agent-contracts/src/pm-references.ts';
 import { AGENT_CHAT_TOOL_REGISTRY } from './agent-chat-tools.ts';
 import { assertProjectScope, getMembership } from './access.ts';
 import type { SqlExecutor } from './ports.ts';
@@ -15,21 +17,25 @@ export function mcpRequestIdentity(request: Pick<Request, 'headers'>): McpServic
 export function assertMcpEndpoint(identity: McpInvocationIdentity, request: Request): void {
   const url = new URL(request.url, 'http://pm.invalid'), scope = identity.scope;
   const base = `/api/v1/workspaces/${scope.workspaceId}/agent-tools`;
-  const body = request.body as { workspaceId?: unknown; projectId?: unknown; scope?: { kind?: unknown; projectIds?: unknown }; name?: unknown; threadId?: unknown; operationId?: unknown; generationId?: unknown; messageId?: unknown } | null;
+  const body = request.body as { workspaceId?: unknown; projectId?: unknown; target?: unknown; name?: unknown; threadId?: unknown; operationId?: unknown; generationId?: unknown; messageId?: unknown } | null;
   let allowed = false;
   if (request.method === 'GET' && !url.search && url.pathname === '/api/v1/agent-contexts') allowed = true;
+  else if (request.method === 'GET' && !url.search && url.pathname === '/api/v1/agent-tools') allowed = true;
+  else if (request.method === 'POST' && !url.search && url.pathname === '/api/v1/agent-contexts/authorize') allowed = body?.workspaceId === scope.workspaceId && body.projectId === scope.projectId;
   else if (request.method === 'POST' && !url.search && url.pathname === '/api/v1/agent-contexts/resolve') allowed = identity.access === 'full' && body?.workspaceId === scope.workspaceId && body.projectId === scope.projectId;
   else if (request.method === 'GET' && !url.search && url.pathname === base) allowed = true;
   else if (request.method === 'GET' && url.pathname === `${base}/core-files`) allowed = url.searchParams.getAll('projectId').length === 1 && [...url.searchParams.keys()].every(key => key === 'projectId') && !!url.searchParams.get('projectId') && (scope.projectId === null || url.searchParams.get('projectId') === scope.projectId);
-  else if (request.method === 'POST' && !url.search && url.pathname === `/api/v1/workspaces/${scope.workspaceId}/agent-references/resolve`) allowed = true; // Route intersects effective CoreScope with this grant.
+  else if (request.method === 'POST' && !url.search && url.pathname === `/api/v1/workspaces/${scope.workspaceId}/agent-references/resolve`) {
+    const references = pmReferenceResolveRequestSchema.safeParse(request.body);
+    allowed = references.success && references.data.references.every(reference => reference.workspaceId === scope.workspaceId && (scope.projectId === null || reference.projectId === null || reference.projectId === scope.projectId));
+  }
   else if (request.method === 'POST' && !url.search && (url.pathname === `${base}/call` || url.pathname === `${base}/result`)) {
-    const tool = AGENT_CHAT_TOOL_REGISTRY.find(item => item.name === body?.name), selected = body?.scope;
-    const selectedAllowed = scope.projectId === null
-      ? selected?.kind === 'workspace' && Array.isArray(selected.projectIds) && selected.projectIds.length === 0 || selected?.kind === 'projects' && Array.isArray(selected.projectIds) && selected.projectIds.length > 0
-      : selected?.kind === 'projects' && Array.isArray(selected.projectIds) && selected.projectIds.length === 1 && selected.projectIds[0] === scope.projectId;
+    const tool = AGENT_CHAT_TOOL_REGISTRY.find(item => item.name === body?.name), selected = pmToolTargetSchema.safeParse(body?.target);
+    const selectedAllowed = selected.success && selected.data.workspaceId === scope.workspaceId
+      && (scope.projectId === null || selected.data.projectId === scope.projectId);
     allowed = !!tool && (!tool.write || identity.access === 'full') && selectedAllowed && typeof body?.threadId === 'string' && identity.threadIds.includes(body.threadId) && typeof body.operationId === 'string' && typeof body.generationId === 'string' && typeof body.messageId === 'string';
   }
-  if (!allowed) throw new DomainError('mcp_scope_forbidden', 'MCP delegation cannot authorize this endpoint, action, thread or scope', 403);
+  if (!allowed) throw new DomainError('mcp_scope_forbidden', 'MCP delegation cannot authorize this endpoint, action, thread or target', 403);
 }
 /** No nested transaction: callers may pass their mutation-lock SqlExecutor for final authorization. */
 export async function authorizeMcpService(sql: SqlExecutor, identity: McpServiceIdentity, request: Request): Promise<Actor> {

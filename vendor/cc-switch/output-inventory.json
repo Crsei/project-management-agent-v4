@@ -2,8 +2,8 @@
   "version": 1,
   "upstreamCommit": "7afceec14b977ecc2f4373e8ffb40e7223b435ac",
   "sourceManifestSha256": "1624a696b1354d5ce3a18fb2a7c274984403d9fd54a87845c449734551f2a593",
-  "policySha256": "8814165bdc638130ea63112b4f394cc342b1f55ddb0f6d771c971832a1702cea",
-  "closureSha256": "6f7ae81d1879165bf6ca7d09167999e535f9175eaa3026410e56e9c4d73c8e50",
+  "policySha256": "bf6c5c532d0f3078e5ec447584139513ef077b17d2f99ea3e606f38e28ea5c48",
+  "closureSha256": "62bac1796c28677fefdaa124d048cdcb0759c23d48a6cbdc53e2b5caef3d298e",
   "upstreamTreeSha256": "edf3067a499f3fcf06fcc5b687c7383a984cbf363001f4469142009d221d6aed",
   "hostBuildInputs": [
     {
@@ -28,8 +28,8 @@
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "bc6100a34484c641f479c35ae84336c52939ba9950193e24a51d7c188cc94240",
-      "bytes": 746899
+      "sha256": "83bfe3315a9229415fb743c7dfe127142ed879123d24aff68fc1e597c8754b72",
+      "bytes": 750178
     },
     {
       "path": "pnpm-workspace.yaml",
@@ -43,8 +43,8 @@
     },
     {
       "path": "apps/web/vite.config.ts",
-      "sha256": "2fbeb5522d6b4a5bd1eac0ee808b10a36c1d26383cfce6eb7d7c9a68321aaaf4",
-      "bytes": 4790
+      "sha256": "cac7c7df109e1c23b40c5d85291c174556bae87bf9a72f6a87b71f9162692c65",
+      "bytes": 5233
     },
     {
       "path": "apps/server/agent/package.json",
@@ -102,6 +102,16 @@
       "bytes": 1346
     }
   ],
+  "externalHostOutputs": [
+    {
+      "path": "apps/server/agent/src/providers/t3code/management.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "packages/agent-contracts/src/provider.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    }
+  ],
   "modePolicy": "Canonical 0644/0755 by executable class; special bits, links and nonregular files refused. Existing content must match exactly; no force or fuzzy replay.",
   "files": [
     {
@@ -110,7 +120,7 @@
       "bytes": 12039,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/desktop/scripts/stage-workspace.mjs.json",
         "sha256": "2f92d7022c2d4616205264e802964a385bf6f9ab2550e8ea42ce4e3ee6f810db"
@@ -122,7 +132,7 @@
       "bytes": 27325,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/desktop/src/local-server.mjs.json",
         "sha256": "c074107a58bdecf757deaa6747c5661287c51340fa894728d0ade85556429fb4"
@@ -134,7 +144,7 @@
       "bytes": 21128,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/desktop/src/local-server.test.mjs.json",
         "sha256": "8a45f814b452d9e3258db55abef30730d161e3595f8767e0128f557f10692d3b"
@@ -146,7 +156,7 @@
       "bytes": 5764,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/scripts/build.mjs.json",
         "sha256": "d1ca26b26b07523ae36da78b4fb63c5ff9c06845a1d420be8aaaeb3838fdc920"
@@ -158,7 +168,7 @@
       "bytes": 12080,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/scripts/cc-switch.mjs.json",
         "sha256": "1d2eee150da6cd217a5e8670de21d298589ea408dca1461a7c1ba51b6de73334"
@@ -170,7 +180,7 @@
       "bytes": 17873,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/scripts/package.mjs.json",
         "sha256": "1e7421dfbdbe9589a2a83384298c66ee311886c2538426b2eb9066a66fcb416a"
@@ -182,7 +192,7 @@
       "bytes": 2070,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/app.ts.json",
         "sha256": "c27bad497e33513c02c52ccf7af7d7411799c2f9240ef88458e3b25b98f10b9e"
@@ -190,14 +200,14 @@
     },
     {
       "destination": "apps/server/agent/src/extensions/README.md",
-      "sha256": "1a427879a9622c7ddf579aa61cf1c6881bb74100c26a64362ac28e5ff9470f40",
-      "bytes": 18909,
+      "sha256": "67590381decb7e9e38fc5d70c07eaeb2fb0543e09d3dedcf46973ac0eb9d9674",
+      "bytes": 20749,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/README.md.json",
-        "sha256": "123e477a2ee37d7996509c5e4952f045d4c09e08b220e36669a69f3d255e8eb0"
+        "sha256": "3589b3395c4261ba01ee9979ab737aa38496c40b64e7afdb6ad5ac98e3485efe"
       }
     },
     {
@@ -206,7 +216,7 @@
       "bytes": 7119,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/commands.ts.json",
         "sha256": "6973adec896643e9078e04e3be433d03d85a9c60c8b6be57552ff15584b838ae"
@@ -214,26 +224,26 @@
     },
     {
       "destination": "apps/server/agent/src/extensions/external-targets.test.ts",
-      "sha256": "ec68c2b4b429a3ae6bd971866ade04b7947335268be56199b5c915cde7438b48",
-      "bytes": 7065,
+      "sha256": "e3dc05eb023d35ebf58ed7f6bd8d914c825c83abd397728cc3636acc53ad5b2a",
+      "bytes": 7280,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed HTTP-only project controls and visible deletion references; exact private Claude MCP file authority, real CLI mode isolation, private backup relocation and regression fixtures.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/external-targets.test.ts.json",
-        "sha256": "96a622b2178243325cc0b397f1c07e9911bb45f1c63d21bb27a04228f782abd8"
+        "sha256": "74770ee989a538a9d9a1c29584e593b8b3f5f870e21dd160cb05528d4bd35283"
       }
     },
     {
       "destination": "apps/server/agent/src/extensions/external-targets.ts",
-      "sha256": "31b30e23c81d4cb97bcaa2143bd304957a9172c89e78f1f9d6c3c208d4b8258d",
-      "bytes": 9821,
+      "sha256": "f4c8d6904b206fac020e6b9a20c772746192fba19d6b5439a0544ea6fa7817f6",
+      "bytes": 11576,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed HTTP-only project controls and visible deletion references; exact private Claude MCP file authority, real CLI mode isolation, private backup relocation and regression fixtures.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/external-targets.ts.json",
-        "sha256": "f8e0fd5964eb0fe4e273bdff3a6c61ade4491a48e87a4a3237a2a2607d86dc16"
+        "sha256": "91361eae8e43bf0ea19f0390ec1ea503a40f76f664224ff7051c424bea97c31c"
       }
     },
     {
@@ -242,7 +252,7 @@
       "bytes": 282,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/index.ts.json",
         "sha256": "e0e63299b200ca68b4d5a5148c87ba8111a07a4958f523def7786923f8691257"
@@ -254,7 +264,7 @@
       "bytes": 2160,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/maintenance.ts.json",
         "sha256": "6469888d7921dfd9a73766d45f993935022298752e79418d3e1ba2db68305871"
@@ -266,7 +276,7 @@
       "bytes": 4535,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "OpenHands source-backed presentation and CC Switch native assignments, import previews, source-normalized transport comparisons, strict PM boundaries and packaging closure.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/mcp-wire.ts.json",
         "sha256": "30db5062ad9565b782e4e86e493ba2792d49cda36b614b05200dff77334dd40b"
@@ -274,62 +284,62 @@
     },
     {
       "destination": "apps/server/agent/src/extensions/pm.ts",
-      "sha256": "c52c3d8e30c9d55f3b30a9076c7c699c7bab70fa902db2f2f1f326dd67b69115",
-      "bytes": 3528,
+      "sha256": "dbe55bad855b376feab1086c9f55b67fc74214afce670b756ac3d564206d5c8d",
+      "bytes": 3532,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Apply optimized Agent Chat execution trace and headerless compact CodeBlock; settle current host outputs",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/pm.ts.json",
-        "sha256": "274a30a82dce773e07207558ead55afbc538dbcf65815dbe5952a9680549bcec"
+        "sha256": "e4e41ee1a65252689a487685dbfb508ec8769a9b5f93fa7b0d99609ad641f366"
       }
     },
     {
       "destination": "apps/server/agent/src/extensions/provider-bindings.test.ts",
-      "sha256": "8bb30568c1776bcc06e14f1f217320ce27afaf33dc16d08b99f014be9c598070",
-      "bytes": 12396,
+      "sha256": "bcae84834a7f9a3409254b1d23235a7e9da0d8a0f530b107d51df75e9c29360d",
+      "bytes": 12698,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed HTTP-only project controls and visible deletion references; exact private Claude MCP file authority, real CLI mode isolation, private backup relocation and regression fixtures.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/provider-bindings.test.ts.json",
-        "sha256": "e931687f0691822fe6cdf5582c56c42ab76e2473fcee1a651bdbc2e8a17ce0dc"
+        "sha256": "46170e9b883acfcf302b530729d1debc406d65656431daa4e8cbb1eccadb3a4f"
       }
     },
     {
       "destination": "apps/server/agent/src/extensions/provider-bindings.ts",
-      "sha256": "bc722630305a7138a0d4a2fb7ca61d7e93f2e18987bb1cec366206edbc543bf0",
-      "bytes": 14708,
+      "sha256": "35c26936202db1f36b6ffa1554ed24fbaf051587be3a04168f9c96853d623a64",
+      "bytes": 15222,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/provider-bindings.ts.json",
-        "sha256": "d9c1357eeca57acf7b998859ee4326a1d54bbaf3d5fc62e6d39e74cf65fd9214"
+        "sha256": "611bd3c78d1a8a2107417283f1243bbe9c46a5987bebd13b23bd3b01c5485744"
       }
     },
     {
       "destination": "apps/server/agent/src/extensions/routes.test.ts",
-      "sha256": "14aee3f458a528ac05a795a5235485c42764f2dfca3377dc81e97eb497eb3430",
-      "bytes": 5610,
+      "sha256": "c48ed249398a92e41853a37ef2c686e73aca59f8918c566f89296988a97261ea",
+      "bytes": 6919,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/routes.test.ts.json",
-        "sha256": "9d227f9ef30e32945ee649dbb2e5b2cfede99d8145506c455d8ec73509456833"
+        "sha256": "c699a529a61856ca9cd6f1d998d7379c0392f00ac1d9f4360d91a484025fb5f0"
       }
     },
     {
       "destination": "apps/server/agent/src/extensions/routes.ts",
-      "sha256": "6f55da60a3788f7c60ddb385daf43a06c1bdedd830ba1837ce5e01576ab72a6d",
-      "bytes": 8893,
+      "sha256": "8c730805e17faacb9a92dcd48e5456bdcaa6a37871d4340ee5f931e2f40b124f",
+      "bytes": 9344,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/routes.ts.json",
-        "sha256": "e1d35acef49c3cc603a6ed60a3463781c3fea9f4fdd8ce48b7f5a4bc7b34c906"
+        "sha256": "01389b05740554db0a1af43d33b8806b0b412104f251e073ea3cb5282eba8906"
       }
     },
     {
@@ -338,7 +348,7 @@
       "bytes": 13750,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/rpc.ts.json",
         "sha256": "5be544c1044ef244c7d957617d16d66c69a3ead1007bc5dac61fcf2ca23c6bc9"
@@ -350,7 +360,7 @@
       "bytes": 14160,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/secrets.test.ts.json",
         "sha256": "3744eb594f630286ad163523668b170b5c27b0f4488ba1f7a6ed33773b9f90b5"
@@ -362,34 +372,46 @@
       "bytes": 11322,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/secrets.ts.json",
         "sha256": "ca6b28410dce6d6d7662de6eebcfdd82b75a483cfd68efc091f70017793d739e"
       }
     },
     {
-      "destination": "apps/server/agent/src/extensions/service.integration.test.ts",
-      "sha256": "a3278a6485fdf541591d9b965e62e45731c4342fa7a6419baab71ec4d1e308c1",
-      "bytes": 26884,
+      "destination": "apps/server/agent/src/extensions/service-unified.test.ts",
+      "sha256": "62164cfd4b549513a3a4bd4f343f550f9829df25fcddc973376b2a976ec848bb",
+      "bytes": 8268,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
+      "asset": {
+        "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/service-unified.test.ts.json",
+        "sha256": "ce29261a7a55f6371ba549ba8107e62c17a7d7464075077e2c97110f4c8a1ed9"
+      }
+    },
+    {
+      "destination": "apps/server/agent/src/extensions/service.integration.test.ts",
+      "sha256": "2f72da45b3f64a86848fc5b8d9f14af67bc2b6726f80e4bdf241a786625f3ab1",
+      "bytes": 37971,
+      "mode": 420,
+      "provenance": "host-owned-integration",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/service.integration.test.ts.json",
-        "sha256": "1dd370e5ab38d216c7dcd19fadf2b641b232107329f53d7db928f5ab9966bb94"
+        "sha256": "134864bf5e1befe0532eac93e796cd1f4c38647851aa47fc61709d3636559262"
       }
     },
     {
       "destination": "apps/server/agent/src/extensions/service.ts",
-      "sha256": "a4920281f33db17393279821744136f9c074f16de5e6f1ff21338b923084d47e",
-      "bytes": 47458,
+      "sha256": "65906e05faf4b12af0f22d7a80e6ca94edc26b2c6d96e2d33df1e44531736792",
+      "bytes": 59563,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/service.ts.json",
-        "sha256": "b560fa2359d726b5d64eda6deba41b8da75862373f49fdab6da258b54ac73149"
+        "sha256": "54eb5bdd5244eba23ef09ba375b62630385dd59e9fbd92d4fc1d2cf7607da173"
       }
     },
     {
@@ -398,7 +420,7 @@
       "bytes": 5312,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/storage.test.ts.json",
         "sha256": "801159b7f29fa74a303b78525621858c2ad6db823ad3d3e178f201a6b58a81a8"
@@ -410,7 +432,7 @@
       "bytes": 8245,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/storage.ts.json",
         "sha256": "591f88f25d266d8c1017b9573bdc544f2c2a58e8c9c9612ce4d8c190d593752c"
@@ -422,7 +444,7 @@
       "bytes": 39257,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed HTTP-only project controls and visible deletion references; exact private Claude MCP file authority, real CLI mode isolation, private backup relocation and regression fixtures.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/maintenance/agent-backup.test.ts.json",
         "sha256": "189fe8c6c09ec3fe6fc7b6b8c97bcdc7de6aab802a684fe6431310083f741207"
@@ -434,7 +456,7 @@
       "bytes": 43105,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed HTTP-only project controls and visible deletion references; exact private Claude MCP file authority, real CLI mode isolation, private backup relocation and regression fixtures.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/maintenance/agent-backup.ts.json",
         "sha256": "18e5b3fe52f1cd6c1f80b9b6af6c54498280568255ddc4ddd164cb8a2330cbc1"
@@ -446,7 +468,7 @@
       "bytes": 37671,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/providers/instances.ts.json",
         "sha256": "b6258d3c2036133e9ab88eda821fd7d2a3595affa4cd48fbb7c7b15c184acff7"
@@ -454,38 +476,26 @@
     },
     {
       "destination": "apps/server/agent/src/providers/skills.test.ts",
-      "sha256": "5430c201bcb343f5c47dbaa500c9cfbd2caa5f0b692e232707a73e342d98a6db",
-      "bytes": 6090,
+      "sha256": "d94b74d726241badd2d9c47082d75271d4349b90d42def55b53f68ac25714b8f",
+      "bytes": 6356,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/providers/skills.test.ts.json",
-        "sha256": "e9fa2901170a49ad59c36362612442a26230e5c99164549cd8020e10a96799d8"
-      }
-    },
-    {
-      "destination": "apps/server/agent/src/providers/t3code/management.ts",
-      "sha256": "4b86483dbc3b4313229d95b731b266c27b335549861f7503a3b90e03b442fc08",
-      "bytes": 39856,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/providers/t3code/management.ts.json",
-        "sha256": "6b19b892000688e767b03f08da210c3c102a2e2a29c26b9a32c9da08b2f756f9"
+        "sha256": "2c9e7c0468266fba779e7ffb17ec438a8c79064ccec440bf64d12f95f6f9154e"
       }
     },
     {
       "destination": "apps/server/agent/src/server.ts",
-      "sha256": "106ee2937b31220b1a5af86f6c0a7cafe5b4c59e86d1151cb39b03578b22e923",
-      "bytes": 3044,
+      "sha256": "1b4ca7da0e842cb24e630c2db466dd49e7c61f6d6dc6c55b7fa82c99de5739ca",
+      "bytes": 3076,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Apply optimized Agent Chat execution trace and headerless compact CodeBlock; settle current host outputs",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/server.ts.json",
-        "sha256": "6caebc37ff089e00007ba21a731d4dd21b19bbdbd99189fda042b2e8d1f1d9e7"
+        "sha256": "972f5522838fe3103e37c0bda34733d080dd813f895ee84dead4d6e5ebd22004"
       }
     },
     {
@@ -494,7 +504,7 @@
       "bytes": 77838,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/Cargo.lock.json",
         "sha256": "5f6c3043e420ce00dfde9a1e39e81d5ba5261775ba1f5402588a368ff6098ffe"
@@ -506,7 +516,7 @@
       "bytes": 1710,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/Cargo.toml.json",
         "sha256": "bdabaaa24237ba82aa5f494c6874c618930935c2c98c6adfb839b2f1260a2c1d"
@@ -518,7 +528,7 @@
       "bytes": 6115,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/database.rs.json",
         "sha256": "260d9171d4dc9fcb148146cc3a452a40ffe721db240296ed8af87db523b0b8a4"
@@ -530,7 +540,7 @@
       "bytes": 7260,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "OpenHands source-backed presentation and CC Switch native assignments, import previews, source-normalized transport comparisons, strict PM boundaries and packaging closure.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/database/mcp_assignments.rs.json",
         "sha256": "39ac0c51b00640202ab6d95e65eba304860b5727fd4270db07100fa1eaaa6125"
@@ -542,7 +552,7 @@
       "bytes": 12067,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/host_context.rs.json",
         "sha256": "5316aab41096a87085a593bf8302e4d0bdf3f54bf53f27e9fa2625d14e59d8ce"
@@ -554,7 +564,7 @@
       "bytes": 2326,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/lib.rs.json",
         "sha256": "79ed74dc0047f18c21ff8a73639df5569b124878f5b160e07357dad2fcc856ee"
@@ -566,7 +576,7 @@
       "bytes": 5128,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/main.rs.json",
         "sha256": "a8f261fa264f20d01b028feb1b4052de18958f7a1b0f97d9da4aa8863b9922ed"
@@ -578,7 +588,7 @@
       "bytes": 17934,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "OpenHands source-backed presentation and CC Switch native assignments, import previews, source-normalized transport comparisons, strict PM boundaries and packaging closure.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/mcp_management.rs.json",
         "sha256": "9cf9c98882542692e36365758db76753be4cf4498e30a1a5e9ac2ca77bfce396"
@@ -590,7 +600,7 @@
       "bytes": 12766,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/protocol.rs.json",
         "sha256": "e6406c82ee830f8429ff6bc86a417b2a002cc4b857eaf40a6b7be5f60bd760bc"
@@ -602,7 +612,7 @@
       "bytes": 97,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/proxy.rs.json",
         "sha256": "4e21ed41de41b9fb0f90a3df317024e48d80831f39ba76449f80d636318181e5"
@@ -614,7 +624,7 @@
       "bytes": 4551,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/secret_codec.rs.json",
         "sha256": "28d683bfeba5d263f300b61f5076a759e07d50eecd5f3eca853014ac91f49ac9"
@@ -626,7 +636,7 @@
       "bytes": 307,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/services.rs.json",
         "sha256": "93dc6b583541ed892d9d1ccc32427c30792a922426ee1d6a7b5236784d6a0893"
@@ -638,7 +648,7 @@
       "bytes": 4511,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/settings.rs.json",
         "sha256": "3533c18c0f1594357b2eebbf2b11de0ad233edac1cf0917d67ac0a5233544b22"
@@ -650,7 +660,7 @@
       "bytes": 926,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/src/store.rs.json",
         "sha256": "89384cc931d4e9d7a1f49b96ec8086a97aa9ba2c0b18614a3a7161bdb31aefd6"
@@ -662,7 +672,7 @@
       "bytes": 35795,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/tests/host_protocol.rs.json",
         "sha256": "f1c9de1bd40c6e0ee213a05379c3de54c911129a6244638f034ec623847a5a84"
@@ -670,14 +680,14 @@
     },
     {
       "destination": "apps/server/pm/src/app.ts",
-      "sha256": "81f4c607e4012c1c742199ddfeecd0e6f5a1f0fb5e058a7ed73a9dfdfc170891",
-      "bytes": 51666,
+      "sha256": "e72a60ec453c3461fcae2cd2169630e3b9231c19b3ce1135f160db36967c3da3",
+      "bytes": 53123,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/pm/src/app.ts.json",
-        "sha256": "011c6d20388f82303948b5eab139fb0c036388945244e9d210bd748ec89b4c58"
+        "sha256": "e20846c72b2e16607bc1d3d04cac4b9133ff91aa6ae103417c460cfd25014b0b"
       }
     },
     {
@@ -686,7 +696,7 @@
       "bytes": 13289,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/pm/src/automation-events-routes.ts.json",
         "sha256": "339051d155482bbb09dbe5527141f19e71a215bbc61dedf2e7327c23429b1c2f"
@@ -694,26 +704,26 @@
     },
     {
       "destination": "apps/web/src/features/agent/src/app.tsx",
-      "sha256": "04e2bbfe69784c367825d9369e277fdf3fde8c42856543697a9b89c5d574760a",
-      "bytes": 5594,
+      "sha256": "e2fff322ac6bf498631246b177bb1be8db0773e5fe7c295bc4fe58c0a9b59ace",
+      "bytes": 5488,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Hide Agent Chat local service settings pages and routes; include settled preview page registration",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/app.tsx.json",
-        "sha256": "ad13e04aea79a70dc62d0ac04e90f1c6057e846bc344080edf904b6eca85a707"
+        "sha256": "7d87d8aad9ff1e1ffcfe883f6ede4605b5a9fba68535ca807cc7320ab6031270"
       }
     },
     {
       "destination": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "sha256": "4f1e60d35c15b4ac3d0a0908df921a7708c8b02c75bbd3a40244b0657270a97c",
-      "bytes": 20216,
+      "sha256": "0183464821f74db07e02f18a1419d3ffe34549b1f0d810487a34fb209e0ba558",
+      "bytes": 15704,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Apply optimized Agent Chat execution trace and headerless compact CodeBlock; settle current host outputs",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/chat/provider-skills-composer.tsx.json",
-        "sha256": "870b72ecc4f8038409c33544a84c5230f9c8fb1513f9e6a8b5d02ce5f37618c9"
+        "sha256": "50ac0a9c41c0107cd785e3e03f38cbb689b3ad66c2deeba278f4a69633f4375d"
       }
     },
     {
@@ -722,7 +732,7 @@
       "bytes": 30968,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-integrations.tsx.json",
         "sha256": "7a56ce3e12b3349297dd0cb341eacd8175af5f3489577286382f3eb310d28f52"
@@ -734,7 +744,7 @@
       "bytes": 4949,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-setup-dependencies.ts.json",
         "sha256": "bfa1d1dd3f8d2c48c0e12762d62206c9e6f910cad7cbc498e3a85ee01abddc3b"
@@ -742,26 +752,26 @@
     },
     {
       "destination": "apps/web/src/features/agent/src/pm/automation/studio-setup.test.ts",
-      "sha256": "1f36d91a79bcacdc2ab7b362cd8e39908f0405b2e87553d92f6651a3a59ca940",
-      "bytes": 13021,
+      "sha256": "b3480629d9e3967e9aa3cbe4664af4d02031d03eac48fede535f1f3d067c784a",
+      "bytes": 18392,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-setup.test.ts.json",
-        "sha256": "9ef16060742b57e55e73049c46df5fe43145b1bf870da3f458189bbb6e1b10f9"
+        "sha256": "5423022cbcfdea7ce1bc04a99e10c3bd179baabee404dc4d6caeb5809a3542de"
       }
     },
     {
       "destination": "apps/web/src/features/agent/src/pm/automation/studio-setup.ts",
-      "sha256": "3e50b214d5abd90b45bfa372d781abb2e17bf47b76a1140a73284cd81a22838f",
-      "bytes": 17200,
+      "sha256": "01989383461b9825607072d30c2699d6686f5209a63da42a3ce6a4ca1225e906",
+      "bytes": 18014,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-setup.ts.json",
-        "sha256": "1fda8f6dc10ec492ef7afcf82b9f5c6a3406bd2547152b18b7156a3119c996a4"
+        "sha256": "df58286e81cdc30937cbf873ec580852eb80cbeec3b0e669813053ba03a0028b"
       }
     },
     {
@@ -770,7 +780,7 @@
       "bytes": 3914,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed HTTP-only project controls and visible deletion references; exact private Claude MCP file authority, real CLI mode isolation, private backup relocation and regression fixtures.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/extensions-api.ts.json",
         "sha256": "8d55edcf446ae1328ac371aca89c8e0194db664c9cea5cecbf7cd3e475f5b10d"
@@ -778,74 +788,38 @@
     },
     {
       "destination": "apps/web/src/features/agent/src/settings/extensions-page.tsx",
-      "sha256": "8ffb35ea2f91d57eb38f537fc0bf7e2f8aa8f5f643eedbc649855194a26d1f6b",
-      "bytes": 23720,
+      "sha256": "91eba35c796ec6c1c6b60ef1f4e39c443e3f27e4ae283f8459e6aa9b7d7a4d2f",
+      "bytes": 15991,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/extensions-page.tsx.json",
-        "sha256": "b3a9c89b0b7c0615fe0d39e3b406ae114e0dfaea355b6054b02afc7de034929c"
+        "sha256": "1f6c667d3e869e2aa83c00331c991d448ae48e51c64abaeb070b7105584a6ed1"
       }
     },
     {
       "destination": "apps/web/src/features/agent/src/settings/settings-layout.tsx",
-      "sha256": "9baabf7d4d19e24e77fe7319d6899aef70e49726147cf5fefd92f1804f348de7",
-      "bytes": 14311,
+      "sha256": "7dc4d39c30b2919275f9d58633dbdaabe81e93bad8d1f234c86ff65ec47e7c07",
+      "bytes": 14247,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Apply optimized Agent Chat execution trace and headerless compact CodeBlock; settle current host outputs",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/settings-layout.tsx.json",
-        "sha256": "01977ac2a45467318f530c1db951d09e78835892b7ecf115bae4d9284b5ee261"
-      }
-    },
-    {
-      "destination": "apps/web/src/features/agent/src/workspace/agents-panel.tsx",
-      "sha256": "b4899d862133fa8d6a0d80fbbccef0001e9b86ba71f95920598e88baa00d1c55",
-      "bytes": 13936,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/workspace/agents-panel.tsx.json",
-        "sha256": "cefb757d49bee54de7e40aa734b8c172c96b7557ccf4ff483babf29261118640"
-      }
-    },
-    {
-      "destination": "apps/web/src/features/agent/src/workspace/instruction-blocks-dialog.tsx",
-      "sha256": "8f48b710032beb7f360e8d8d881e92a1ea86de04c544957c67a8ae558677e808",
-      "bytes": 2729,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/workspace/instruction-blocks-dialog.tsx.json",
-        "sha256": "7f43854e4cb6c5116b933cc7f3b6f5044141041569eeaba926c2166769b3627e"
-      }
-    },
-    {
-      "destination": "apps/web/src/features/agent/src/workspace/instruction-blocks-panel.tsx",
-      "sha256": "9964aee5dba143618b15ba18c49f5874a2bbab8b02719d5fd5fbc3d153119766",
-      "bytes": 5834,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/workspace/instruction-blocks-panel.tsx.json",
-        "sha256": "5f09231dee9c5db3751d41943a0df138c21e965f0d4f52a4573cbc45d3540bc1"
+        "sha256": "3e280a0b15b012e15b67ca7c48d61f0fa6d01566e46f95bd70416a38bc38c43e"
       }
     },
     {
       "destination": "apps/web/vite.config.ts",
-      "sha256": "2fbeb5522d6b4a5bd1eac0ee808b10a36c1d26383cfce6eb7d7c9a68321aaaf4",
-      "bytes": 4790,
+      "sha256": "cac7c7df109e1c23b40c5d85291c174556bae87bf9a72f6a87b71f9162692c65",
+      "bytes": 5233,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/vite.config.ts.json",
-        "sha256": "842329e961274053d69cfe66f60e6a4231fc6db15dcbcb1c58c64c716550db41"
+        "sha256": "f831117e8daf6564562a1a45a1d6e626ce750de10b749b928187e5274d90f188"
       }
     },
     {
@@ -854,7 +828,7 @@
       "bytes": 3522,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/package.json.json",
         "sha256": "57491283822bf35680fb5d20613faadf77b07ed6f8a12126561d7c1f7d066914"
@@ -866,22 +840,10 @@
       "bytes": 4401,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/src/extensions.ts.json",
         "sha256": "a672b29f35d7aebca666f4ff578fcea5d695b606ef93fef6a7211709a7d354ff"
-      }
-    },
-    {
-      "destination": "packages/agent-contracts/src/provider.ts",
-      "sha256": "d217a907db41e0fa61cf976525e915b65a1c8e53767662800ce3a2afa1cd9a40",
-      "bytes": 9917,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/src/provider.ts.json",
-        "sha256": "1281b81e9ae3906418d991eb36d90410c0759254df018f6e243a586a9a31006e"
       }
     },
     {
@@ -890,7 +852,7 @@
       "bytes": 2998,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-integrations-definitions.ts.json",
         "sha256": "1eadb3a69dcc75e3453653b83d729e6a8c45517d4688ad03b546e57b84b0384a"
@@ -902,7 +864,7 @@
       "bytes": 24054,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-integrations-runtime.ts.json",
         "sha256": "dde8099636264c253d7139a8ba21857e7fa806eeb8d7d35f7539ce7e70f7381e"
@@ -914,7 +876,7 @@
       "bytes": 4846,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-integrations-store.ts.json",
         "sha256": "749ee378dcaccb71559c9bb4ccedb370a78985ebe208b10dcde802205a409773"
@@ -926,7 +888,7 @@
       "bytes": 17329,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-integrations.ts.json",
         "sha256": "3c53ad99fc353ed09ccd9868b2bf19b946c606e8ec4f3f85caa8e9daba62d594"
@@ -934,26 +896,26 @@
     },
     {
       "destination": "packages/application/src/automation-studio-store.ts",
-      "sha256": "189101d66bf8595b464eecbf663ed364ace409ab378f11a718a7b3f38c391dba",
-      "bytes": 8731,
+      "sha256": "b7504576012b462287e5520005dbcb72ba08663a4d026d66745d2260894c4ca7",
+      "bytes": 10146,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-studio-store.ts.json",
-        "sha256": "e9720ddba7f785c0687aa3be324bf456052d211f8b098d2d4cec93271b4febd2"
+        "sha256": "9f3a034a2d7762f6a48dba51cce4b6be4798aa825e45d09ee4b897792ef18e78"
       }
     },
     {
       "destination": "packages/application/src/automation-studio.ts",
-      "sha256": "d35a40e75b759c941f68a91277421f1c600f862fcbbec04d582a0e787ee3b96e",
-      "bytes": 24851,
+      "sha256": "5632944266d92dc2135f82ba362e988dae882fb48792959ff2c45ae30af67864",
+      "bytes": 27701,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-studio.ts.json",
-        "sha256": "f656360d6bb0eb8ce85ae70c3238d8374af5c179be1d3c92f9987989aa4f25d8"
+        "sha256": "c5345e4dcee1af3572417546cca79b2dce60d0bba1aaf82365c737c08c53cc71"
       }
     },
     {
@@ -962,7 +924,7 @@
       "bytes": 5497,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/tests/automation-integrations-definitions.test.ts.json",
         "sha256": "933bc45f762e939728bcecb8032fddf69ca96d363ce624114743cafe39739d56"
@@ -974,7 +936,7 @@
       "bytes": 2539,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/tests/automation-studio-integrations.test.ts.json",
         "sha256": "3430cc11b495b2e1548a1cdf36431917bdfae095ee167c52f98a40054fd181e5"
@@ -986,7 +948,7 @@
       "bytes": 4049,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/automation-integrations-client.ts.json",
         "sha256": "cf83fc207db198c92d93387528ebcd015ee0645ea94898d713496efb2ac52d5f"
@@ -998,7 +960,7 @@
       "bytes": 8033,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/automation-integrations.ts.json",
         "sha256": "40bbb762ac745e4f0e7c46542deeab53a88abeda5c2a2c0f062dda5e526ec688"
@@ -1010,7 +972,7 @@
       "bytes": 12350,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/automation-studio-helpers-openapi.ts.json",
         "sha256": "84b17ecc285ff51a94de82330d12dcc795f24ecd32188e548607bca27a7e1df2"
@@ -1018,26 +980,26 @@
     },
     {
       "destination": "packages/contracts/src/client.ts",
-      "sha256": "f6d1f83fdce46542aba918cf3928416ae0af0078ff1b9dfd09cdde5e5af69d29",
-      "bytes": 42910,
+      "sha256": "1147226f7415ecf59585ac2d2cddd8b35e3a9d55e2b76bc810551efd21e282e1",
+      "bytes": 43417,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/client.ts.json",
-        "sha256": "a2dbe9012ba3d5bb0dfa2fa4de8fe9a17ceac24bb469a8b32c9e8f15847fd8af"
+        "sha256": "3564bced01e77338e9990d58961f0355a077be3cad360dceb92474f636fbf791"
       }
     },
     {
       "destination": "packages/contracts/src/openapi.ts",
-      "sha256": "8b430ed764b39a3d113f6f2ec8771a0686d667b77527bede56ba3bd8df8b4b90",
-      "bytes": 63813,
+      "sha256": "e6c6516195de88e92a1972a48c12077cfec2bed006eaeb8998fdeb31b1ffa8a1",
+      "bytes": 63908,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/openapi.ts.json",
-        "sha256": "39ea3bdea566161341cee0d88abc4721d646f74a6d49d1dc52336823a35c631c"
+        "sha256": "05bcb4a236aa136678cda93a2ceb9f1a4113b39a1b3cc2ae644febb01f0993c7"
       }
     },
     {
@@ -1046,7 +1008,7 @@
       "bytes": 3483,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/migrations/0047_automation_managed_mcp.sql.json",
         "sha256": "6176224b416820f1726e6bc2c596ec7893b8e1b1581dcab90b6360042113f891"
@@ -1058,7 +1020,7 @@
       "bytes": 4883,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/src/automation-integrations-definitions.ts.json",
         "sha256": "b8b1ebb8cf4db688e2b19a61d409e1fb5c298dfb6dafc46ec52855bf4113ff1d"
@@ -1070,7 +1032,7 @@
       "bytes": 18092,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/src/automation-integrations-migration.ts.json",
         "sha256": "fffcad5de5461fc618761993d94a9c42e138528e157ef5f043bc9cd1ef2287ec"
@@ -1082,7 +1044,7 @@
       "bytes": 16536,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/src/automation-integrations-native.ts.json",
         "sha256": "4fe7058bf5cbdfa58c1f51e3790e91887334a6a5d7ca786b1c7688f8867c4941"
@@ -1094,7 +1056,7 @@
       "bytes": 11771,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/src/automation-integrations.ts.json",
         "sha256": "46f61c521e3e3f808bd907e66d83cbc1b2845defb25edb4ace3eadaeea0d935a"
@@ -1102,14 +1064,14 @@
     },
     {
       "destination": "packages/infrastructure/src/schema.ts",
-      "sha256": "8726fc2c60094f67b1dd1b7d714ede8fe7f7b8b226c8225eebd4703b8ea9091a",
-      "bytes": 13371,
+      "sha256": "714c10ea9c773c9091402d21fcc9c36fb25defb0fa98a3488fa3f2aaf564d612",
+      "bytes": 13548,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/src/schema.ts.json",
-        "sha256": "3a14f9a124de2bc4f45319e63e4318d8b84c28742380e0ae8db926e2057de23a"
+        "sha256": "6161a66b36a9564b32d3a087da1ac13875bf60a11aab65cce780e253f8da7eac"
       }
     },
     {
@@ -1118,7 +1080,7 @@
       "bytes": 4476,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/scripts/agent-backup.ts.json",
         "sha256": "2ec5f7549e73389a7a3ce3c12d3e320655d91deb06de80f828b0261dc09c6100"
@@ -1130,7 +1092,7 @@
       "bytes": 7406,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/scripts/check-docs.mjs.json",
         "sha256": "deb296e3813a45a1bd2a579da6ec3171663c06dd495778ee3b6404c509a74b13"
@@ -1142,7 +1104,7 @@
       "bytes": 7113,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/scripts/migrate-automation-integrations.ts.json",
         "sha256": "582fa6ef4affa0469d419d04841bbd41278ffcb2cdf3c8aa500278eccb1aa4e9"
@@ -1154,7 +1116,7 @@
       "bytes": 22432,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/tests/automation-events.integration.test.ts.json",
         "sha256": "d1a82b5f3a05ae37219116a69f49ff728ed7e82144018790a61eb7fd72a6a023"
@@ -1166,7 +1128,7 @@
       "bytes": 13326,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/tests/automation-events.test.ts.json",
         "sha256": "550bb7faf3ea0cfa4d790f34d1912cf7409773ab2c9fdfa396a46e984e08a2ce"
@@ -1178,7 +1140,7 @@
       "bytes": 20795,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/tests/automation-integrations-migration.integration.test.ts.json",
         "sha256": "682b509d98a551c9bcda3b1e9c32dd762ebb69667c185803588bcb4ba69ca2a2"
@@ -1186,14 +1148,14 @@
     },
     {
       "destination": "tests/automation-studio.integration.test.ts",
-      "sha256": "b98583f9b87ca4ba22a8b0ec25d150e83005aceb5724226390e4ea70c4f4adf2",
-      "bytes": 22870,
+      "sha256": "95d756175a2da747d7729338b46a52e13244af3e40fbbcdac9e416e52aab44e8",
+      "bytes": 53996,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/tests/automation-studio.integration.test.ts.json",
-        "sha256": "c3bcf1e66b3bc10fc9a23f95624b174faa72dec7311894240d202a3ec324a455"
+        "sha256": "169db715092a4cd667b19fadd95448632e7afba1ef3f50a709d985c8f5e3219c"
       }
     },
     {
@@ -1212,7 +1174,7 @@
       "bytes": 4514,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/LICENSING.md.json",
         "sha256": "6e9fe91e28ea6d7fcbcd1bbbde868d9346f65f5321521885fdc87f27de933a4c"
@@ -1220,14 +1182,14 @@
     },
     {
       "destination": "vendor/cc-switch/SYNC.md",
-      "sha256": "30253597b8ed7491c834ece450b16138708a6ac94153f0f4d439eeda68cd5960",
-      "bytes": 14718,
+      "sha256": "68caad0ebed96cf1a809e162dee338cc235342e99ad96314e241c5dd92a19fd0",
+      "bytes": 17328,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/SYNC.md.json",
-        "sha256": "5a19fc078f0da8dd24d883ffdc45f96f5fc540c081ae82c6fb92030d82e38d28"
+        "sha256": "171e6136c478bd367c528615ede40d9f40cd4a90abd3e0f5f23e6795113b0493"
       }
     },
     {
@@ -1342,14 +1304,14 @@
     },
     {
       "destination": "vendor/cc-switch/fork-policy.json",
-      "sha256": "8814165bdc638130ea63112b4f394cc342b1f55ddb0f6d771c971832a1702cea",
-      "bytes": 2841,
+      "sha256": "bf6c5c532d0f3078e5ec447584139513ef077b17d2f99ea3e606f38e28ea5c48",
+      "bytes": 3022,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed public release toolchain and legal closure, pure automation contracts, shared native layout authority, isolated CI guard and portable documentation",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/fork-policy.json.json",
-        "sha256": "c2e46c68cbaacf6690babc9dd33734f4ccbdc21cf567da42146e82d1db8674d5"
+        "sha256": "060dc5af934c86086bb1b67c94de55242bd704839ec82fbdc5c1cc6e4cbc56ba"
       }
     },
     {
@@ -1398,14 +1360,14 @@
     },
     {
       "destination": "vendor/cc-switch/scripts/capture.mjs",
-      "sha256": "52e21555cfc267e7cdd1223a2c61e0d66121a4b027784a3a66578ecbaa5d445b",
-      "bytes": 10332,
+      "sha256": "4c5dff0405df91eaf0ccc9cea091c102a09770d185cde72ddd07ba629e87d16b",
+      "bytes": 12501,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/capture.mjs.json",
-        "sha256": "40e9420648dde045a6f1012feaf2e3bd309b7d54aae8af3557d534d7116f7e75"
+        "sha256": "4a164a2a5d67b4130aa1954a2bdd6fb94e0cdce7677843ee4e937e60e8950375"
       }
     },
     {
@@ -1414,7 +1376,7 @@
       "bytes": 23349,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/closure.mjs.json",
         "sha256": "a9e0e0c48a2134ea5b608f750fca9e625443f824eab5b9e1578db5303a0e5377"
@@ -1422,38 +1384,50 @@
     },
     {
       "destination": "vendor/cc-switch/scripts/provenance.mjs",
-      "sha256": "c2538923649b1dd027eec80f31c3cb7ea5ca8ba5bbb558d2a336ee60637a2514",
-      "bytes": 9970,
+      "sha256": "d86c6a9b7de0ab288fe2744aa60ca34d6f808162cd9b6f7e038d4904780f58c0",
+      "bytes": 19796,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/provenance.mjs.json",
-        "sha256": "0eddfd2b1af51fb67fcfc1c3cacf5b1d3c2691fcefc9b654c8c8134a0c5d54c7"
+        "sha256": "e525f6f717c9f6914e990a153e41d9657c41dadf393bd1238f509f7aab1d4262"
       }
     },
     {
       "destination": "vendor/cc-switch/scripts/provenance.test.mjs",
-      "sha256": "c081a6e0b3250eea9b665fed3d8ad928c779fde98d4288e7a26c8fb46ac27475",
-      "bytes": 10734,
+      "sha256": "faf2c014574da22e56f2fb75a01e3892686384f27b8e064cc11ce127cc3de7ff",
+      "bytes": 25626,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/provenance.test.mjs.json",
-        "sha256": "6cedbf1685e4fa204691872f6ef8a894ffb8e9f934e96218c565ff1d2665cc69"
+        "sha256": "84cf0987a640f296e38860e12f8038ae38a143b6f0ea931278af5b6167f6a396"
+      }
+    },
+    {
+      "destination": "vendor/cc-switch/scripts/retire-local.mjs",
+      "sha256": "6458f7e52db2ba47808de4f40857701ac89b47d29330ef6748562208acdab2eb",
+      "bytes": 1683,
+      "mode": 420,
+      "provenance": "local-fork-integration",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
+      "asset": {
+        "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/retire-local.mjs.json",
+        "sha256": "ed05e3a2a5982818605a195a2cfbf4efc860e62ed57ab34b0541909de8b93f28"
       }
     },
     {
       "destination": "vendor/cc-switch/scripts/sync.mjs",
-      "sha256": "0e1e36ef86d0b686ea45cb53a6ecd86dcd3e7cfca2d87520e18855b8cfb54778",
-      "bytes": 4861,
+      "sha256": "7f5aafa08c3b1f6c2e0684634392bd7afc48712490f5a18cee1a5fd7fc87c0be",
+      "bytes": 5538,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/sync.mjs.json",
-        "sha256": "9f9c4aa0947c79b0f73990b7df1b1f954365182f765ef30cd75414d84520ba8f"
+        "sha256": "5b21fd3ca71a0f027304f18863b52aa0758abd91db071e953b8aeed0f547610f"
       }
     },
     {
@@ -1462,7 +1436,7 @@
       "bytes": 345592,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/source-manifest.json.json",
         "sha256": "7534498f0db434082aacda58eef4a2b61ff1d02c1da6b9697ee9db008ff6ac44"
@@ -2888,7 +2862,7 @@
       "bytes": 1742,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "OpenHands source-backed presentation and CC Switch native assignments, import previews, source-normalized transport comparisons, strict PM boundaries and packaging closure.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src-tauri/src/mcp/overrides.rs.json",
         "sha256": "92cb0055419316fc29f3a42cc9959722c036c483206137136d3a153073005124"
@@ -2914,7 +2888,7 @@
       "bytes": 16229,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "OpenHands source-backed presentation and CC Switch native assignments, import previews, source-normalized transport comparisons, strict PM boundaries and packaging closure.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src-tauri/src/mcp/snapshot.rs.json",
         "sha256": "7aa6f6df292d929d85fac6016a11f631376161c14c29adb3b482dbe8bc5cdec4"
@@ -6122,16 +6096,16 @@
     },
     {
       "destination": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
-      "sha256": "d7184d15d03e828e3eebdfb28d9cec61901c56982eb46b52bd5eccb141fdc430",
-      "bytes": 57480,
+      "sha256": "21566923bca7f8c27e7ecd225e14eeb3d66f7d392f476861e0f08a6193b8a0f0",
+      "bytes": 56668,
       "mode": 420,
       "provenance": "patched-upstream",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Reviewed removal of redundant MCP form helper copy",
       "source": "src/components/mcp/McpFormModal.tsx",
       "upstreamSha256": "e2e7ace7f99cb6d65145c32b5e09fb7856fcf5b078d24c05059cca1703cea3b8",
       "patch": {
         "path": "vendor/cc-switch/integration-patches/src/components/mcp/McpFormModal.tsx.json",
-        "sha256": "290a79b2ff657f76ece0edbcc017ee2b33af1ee943e90d43adb26d7c89a36e3b"
+        "sha256": "bc326b2119479b672d8d71bc4fa0e85524af4ac54ffe3ef81397e814d887ebb7"
       }
     },
     {
@@ -8060,16 +8034,16 @@
     },
     {
       "destination": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
-      "sha256": "11e2dfcf32a957646402ccb52e23a2f60e0036040f4e2524ece1c04d754069b5",
-      "bytes": 79444,
+      "sha256": "526a42237974131a697d1eaec04e088064d4df99cc85ebc652f8817fc7b9f36b",
+      "bytes": 81390,
       "mode": 420,
       "provenance": "patched-upstream",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Reviewed MCP/Skills presentation seam, catalog tabs, header actions and shortened save notices",
       "source": "src/components/skills/UnifiedSkillsPanel.tsx",
       "upstreamSha256": "066396c0d939d26bb2e09e537cbc8c8918a5d6cce317a0327bb755dafc18f089",
       "patch": {
         "path": "vendor/cc-switch/integration-patches/src/components/skills/UnifiedSkillsPanel.tsx.json",
-        "sha256": "0135058d2e394651b8560196a7db7c402d4f640c7ae4399a5d14289e696d8747"
+        "sha256": "10b5cd509bebae1b7bd8ca7e3de5e2124384c9207e21a501ab72b0749315750d"
       }
     },
     {
@@ -12150,7 +12124,7 @@
       "bytes": 228,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src/web/api.ts.json",
         "sha256": "d686dbf265eeafb7259329c4fd2417082ecc5793ba35bf4417cfb08ab04f2f07"
@@ -12162,7 +12136,7 @@
       "bytes": 6227,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src/web/bridge.ts.json",
         "sha256": "48beefcd11af341a848d3c1fdcbf3b573cd5623cebb6bdf50d4b001bf88c492d"
@@ -12174,7 +12148,7 @@
       "bytes": 2185,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src/web/build-css.mjs.json",
         "sha256": "0063ea5a4f364422b5d6aa6430f24efb7e60a7c0dfcba36dab085f837462b260"
@@ -12182,14 +12156,14 @@
     },
     {
       "destination": "vendor/cc-switch/src/web/index.tsx",
-      "sha256": "fedf8e451132aa0b7814432ae7d7e392aba99daaa164e5427163ddfd5ab8ee3c",
-      "bytes": 10762,
+      "sha256": "34387646a2d799303083d16b16ff6a1c439b72f3f2a614ba024d3e148b43de2e",
+      "bytes": 12036,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src/web/index.tsx.json",
-        "sha256": "8580d557030412b4580fa9f567d93b2a1d77ae504a0df7f594a5f4fb11b53231"
+        "sha256": "6f242ef11ab25a7e07b54066be1028c4807cd8f040cfb82f9556c2cb125de6b2"
       }
     },
     {
@@ -12198,7 +12172,7 @@
       "bytes": 155753,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Add the Chat sidebar Customize entry and align MCP/Skills navigation labels; preserve existing authorization and return navigation.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src/web/management.css.json",
         "sha256": "b53e44fcdc40a3646509b5b647ea43efdf7edaa06e63f0b0de7445323acf60e1"
@@ -12210,7 +12184,7 @@
       "bytes": 1766,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
+      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src/web/settings.ts.json",
         "sha256": "fa73d684c8124feb2f2bcc10510aa665380cba63d4c21e40492969e27d13d4a9"
@@ -15304,7 +15278,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/README.md.json",
-      "sha256": "123e477a2ee37d7996509c5e4952f045d4c09e08b220e36669a69f3d255e8eb0"
+      "sha256": "3589b3395c4261ba01ee9979ab737aa38496c40b64e7afdb6ad5ac98e3485efe"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/commands.ts.json",
@@ -15312,11 +15286,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/external-targets.test.ts.json",
-      "sha256": "96a622b2178243325cc0b397f1c07e9911bb45f1c63d21bb27a04228f782abd8"
+      "sha256": "74770ee989a538a9d9a1c29584e593b8b3f5f870e21dd160cb05528d4bd35283"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/external-targets.ts.json",
-      "sha256": "f8e0fd5964eb0fe4e273bdff3a6c61ade4491a48e87a4a3237a2a2607d86dc16"
+      "sha256": "91361eae8e43bf0ea19f0390ec1ea503a40f76f664224ff7051c424bea97c31c"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/index.ts.json",
@@ -15332,23 +15306,23 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/pm.ts.json",
-      "sha256": "274a30a82dce773e07207558ead55afbc538dbcf65815dbe5952a9680549bcec"
+      "sha256": "e4e41ee1a65252689a487685dbfb508ec8769a9b5f93fa7b0d99609ad641f366"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/provider-bindings.test.ts.json",
-      "sha256": "e931687f0691822fe6cdf5582c56c42ab76e2473fcee1a651bdbc2e8a17ce0dc"
+      "sha256": "46170e9b883acfcf302b530729d1debc406d65656431daa4e8cbb1eccadb3a4f"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/provider-bindings.ts.json",
-      "sha256": "d9c1357eeca57acf7b998859ee4326a1d54bbaf3d5fc62e6d39e74cf65fd9214"
+      "sha256": "611bd3c78d1a8a2107417283f1243bbe9c46a5987bebd13b23bd3b01c5485744"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/routes.test.ts.json",
-      "sha256": "9d227f9ef30e32945ee649dbb2e5b2cfede99d8145506c455d8ec73509456833"
+      "sha256": "c699a529a61856ca9cd6f1d998d7379c0392f00ac1d9f4360d91a484025fb5f0"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/routes.ts.json",
-      "sha256": "e1d35acef49c3cc603a6ed60a3463781c3fea9f4fdd8ce48b7f5a4bc7b34c906"
+      "sha256": "01389b05740554db0a1af43d33b8806b0b412104f251e073ea3cb5282eba8906"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/rpc.ts.json",
@@ -15363,12 +15337,16 @@
       "sha256": "ca6b28410dce6d6d7662de6eebcfdd82b75a483cfd68efc091f70017793d739e"
     },
     {
+      "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/service-unified.test.ts.json",
+      "sha256": "ce29261a7a55f6371ba549ba8107e62c17a7d7464075077e2c97110f4c8a1ed9"
+    },
+    {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/service.integration.test.ts.json",
-      "sha256": "1dd370e5ab38d216c7dcd19fadf2b641b232107329f53d7db928f5ab9966bb94"
+      "sha256": "134864bf5e1befe0532eac93e796cd1f4c38647851aa47fc61709d3636559262"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/service.ts.json",
-      "sha256": "b560fa2359d726b5d64eda6deba41b8da75862373f49fdab6da258b54ac73149"
+      "sha256": "54eb5bdd5244eba23ef09ba375b62630385dd59e9fbd92d4fc1d2cf7607da173"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/storage.test.ts.json",
@@ -15392,15 +15370,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/providers/skills.test.ts.json",
-      "sha256": "e9fa2901170a49ad59c36362612442a26230e5c99164549cd8020e10a96799d8"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/providers/t3code/management.ts.json",
-      "sha256": "6b19b892000688e767b03f08da210c3c102a2e2a29c26b9a32c9da08b2f756f9"
+      "sha256": "2c9e7c0468266fba779e7ffb17ec438a8c79064ccec440bf64d12f95f6f9154e"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/server.ts.json",
-      "sha256": "6caebc37ff089e00007ba21a731d4dd21b19bbdbd99189fda042b2e8d1f1d9e7"
+      "sha256": "972f5522838fe3103e37c0bda34733d080dd813f895ee84dead4d6e5ebd22004"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/cc-switch-host/Cargo.lock.json",
@@ -15464,7 +15438,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/pm/src/app.ts.json",
-      "sha256": "011c6d20388f82303948b5eab139fb0c036388945244e9d210bd748ec89b4c58"
+      "sha256": "e20846c72b2e16607bc1d3d04cac4b9133ff91aa6ae103417c460cfd25014b0b"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/pm/src/automation-events-routes.ts.json",
@@ -15472,11 +15446,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/app.tsx.json",
-      "sha256": "ad13e04aea79a70dc62d0ac04e90f1c6057e846bc344080edf904b6eca85a707"
+      "sha256": "7d87d8aad9ff1e1ffcfe883f6ede4605b5a9fba68535ca807cc7320ab6031270"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/chat/provider-skills-composer.tsx.json",
-      "sha256": "870b72ecc4f8038409c33544a84c5230f9c8fb1513f9e6a8b5d02ce5f37618c9"
+      "sha256": "50ac0a9c41c0107cd785e3e03f38cbb689b3ad66c2deeba278f4a69633f4375d"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-integrations.tsx.json",
@@ -15488,11 +15462,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-setup.test.ts.json",
-      "sha256": "9ef16060742b57e55e73049c46df5fe43145b1bf870da3f458189bbb6e1b10f9"
+      "sha256": "5423022cbcfdea7ce1bc04a99e10c3bd179baabee404dc4d6caeb5809a3542de"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-setup.ts.json",
-      "sha256": "1fda8f6dc10ec492ef7afcf82b9f5c6a3406bd2547152b18b7156a3119c996a4"
+      "sha256": "df58286e81cdc30937cbf873ec580852eb80cbeec3b0e669813053ba03a0028b"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/extensions-api.ts.json",
@@ -15500,27 +15474,15 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/extensions-page.tsx.json",
-      "sha256": "b3a9c89b0b7c0615fe0d39e3b406ae114e0dfaea355b6054b02afc7de034929c"
+      "sha256": "1f6c667d3e869e2aa83c00331c991d448ae48e51c64abaeb070b7105584a6ed1"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/settings-layout.tsx.json",
-      "sha256": "01977ac2a45467318f530c1db951d09e78835892b7ecf115bae4d9284b5ee261"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/workspace/agents-panel.tsx.json",
-      "sha256": "cefb757d49bee54de7e40aa734b8c172c96b7557ccf4ff483babf29261118640"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/workspace/instruction-blocks-dialog.tsx.json",
-      "sha256": "7f43854e4cb6c5116b933cc7f3b6f5044141041569eeaba926c2166769b3627e"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/workspace/instruction-blocks-panel.tsx.json",
-      "sha256": "5f09231dee9c5db3751d41943a0df138c21e965f0d4f52a4573cbc45d3540bc1"
+      "sha256": "3e280a0b15b012e15b67ca7c48d61f0fa6d01566e46f95bd70416a38bc38c43e"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/vite.config.ts.json",
-      "sha256": "842329e961274053d69cfe66f60e6a4231fc6db15dcbcb1c58c64c716550db41"
+      "sha256": "f831117e8daf6564562a1a45a1d6e626ce750de10b749b928187e5274d90f188"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/package.json.json",
@@ -15529,10 +15491,6 @@
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/src/extensions.ts.json",
       "sha256": "a672b29f35d7aebca666f4ff578fcea5d695b606ef93fef6a7211709a7d354ff"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/src/provider.ts.json",
-      "sha256": "1281b81e9ae3906418d991eb36d90410c0759254df018f6e243a586a9a31006e"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-integrations-definitions.ts.json",
@@ -15552,11 +15510,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-studio-store.ts.json",
-      "sha256": "e9720ddba7f785c0687aa3be324bf456052d211f8b098d2d4cec93271b4febd2"
+      "sha256": "9f3a034a2d7762f6a48dba51cce4b6be4798aa825e45d09ee4b897792ef18e78"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-studio.ts.json",
-      "sha256": "f656360d6bb0eb8ce85ae70c3238d8374af5c179be1d3c92f9987989aa4f25d8"
+      "sha256": "c5345e4dcee1af3572417546cca79b2dce60d0bba1aaf82365c737c08c53cc71"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/application/tests/automation-integrations-definitions.test.ts.json",
@@ -15580,11 +15538,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/client.ts.json",
-      "sha256": "a2dbe9012ba3d5bb0dfa2fa4de8fe9a17ceac24bb469a8b32c9e8f15847fd8af"
+      "sha256": "3564bced01e77338e9990d58961f0355a077be3cad360dceb92474f636fbf791"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/openapi.ts.json",
-      "sha256": "39ea3bdea566161341cee0d88abc4721d646f74a6d49d1dc52336823a35c631c"
+      "sha256": "05bcb4a236aa136678cda93a2ceb9f1a4113b39a1b3cc2ae644febb01f0993c7"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/migrations/0047_automation_managed_mcp.sql.json",
@@ -15608,7 +15566,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/src/schema.ts.json",
-      "sha256": "3a14f9a124de2bc4f45319e63e4318d8b84c28742380e0ae8db926e2057de23a"
+      "sha256": "6161a66b36a9564b32d3a087da1ac13875bf60a11aab65cce780e253f8da7eac"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/scripts/agent-backup.ts.json",
@@ -15636,7 +15594,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/tests/automation-studio.integration.test.ts.json",
-      "sha256": "c3bcf1e66b3bc10fc9a23f95624b174faa72dec7311894240d202a3ec324a455"
+      "sha256": "169db715092a4cd667b19fadd95448632e7afba1ef3f50a709d985c8f5e3219c"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/LICENSING.md.json",
@@ -15644,15 +15602,15 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/SYNC.md.json",
-      "sha256": "5a19fc078f0da8dd24d883ffdc45f96f5fc540c081ae82c6fb92030d82e38d28"
+      "sha256": "171e6136c478bd367c528615ede40d9f40cd4a90abd3e0f5f23e6795113b0493"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/fork-policy.json.json",
-      "sha256": "c2e46c68cbaacf6690babc9dd33734f4ccbdc21cf567da42146e82d1db8674d5"
+      "sha256": "060dc5af934c86086bb1b67c94de55242bd704839ec82fbdc5c1cc6e4cbc56ba"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/capture.mjs.json",
-      "sha256": "40e9420648dde045a6f1012feaf2e3bd309b7d54aae8af3557d534d7116f7e75"
+      "sha256": "4a164a2a5d67b4130aa1954a2bdd6fb94e0cdce7677843ee4e937e60e8950375"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/closure.mjs.json",
@@ -15660,15 +15618,19 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/provenance.mjs.json",
-      "sha256": "0eddfd2b1af51fb67fcfc1c3cacf5b1d3c2691fcefc9b654c8c8134a0c5d54c7"
+      "sha256": "e525f6f717c9f6914e990a153e41d9657c41dadf393bd1238f509f7aab1d4262"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/provenance.test.mjs.json",
-      "sha256": "6cedbf1685e4fa204691872f6ef8a894ffb8e9f934e96218c565ff1d2665cc69"
+      "sha256": "84cf0987a640f296e38860e12f8038ae38a143b6f0ea931278af5b6167f6a396"
+    },
+    {
+      "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/retire-local.mjs.json",
+      "sha256": "ed05e3a2a5982818605a195a2cfbf4efc860e62ed57ab34b0541909de8b93f28"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/sync.mjs.json",
-      "sha256": "9f9c4aa0947c79b0f73990b7df1b1f954365182f765ef30cd75414d84520ba8f"
+      "sha256": "5b21fd3ca71a0f027304f18863b52aa0758abd91db071e953b8aeed0f547610f"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/source-manifest.json.json",
@@ -15696,7 +15658,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src/web/index.tsx.json",
-      "sha256": "8580d557030412b4580fa9f567d93b2a1d77ae504a0df7f594a5f4fb11b53231"
+      "sha256": "6f242ef11ab25a7e07b54066be1028c4807cd8f040cfb82f9556c2cb125de6b2"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/src/web/management.css.json",
@@ -15836,7 +15798,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/src/components/mcp/McpFormModal.tsx.json",
-      "sha256": "290a79b2ff657f76ece0edbcc017ee2b33af1ee943e90d43adb26d7c89a36e3b"
+      "sha256": "bc326b2119479b672d8d71bc4fa0e85524af4ac54ffe3ef81397e814d887ebb7"
     },
     {
       "path": "vendor/cc-switch/integration-patches/src/components/mcp/UnifiedMcpPanel.tsx.json",
@@ -15884,7 +15846,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/src/components/skills/UnifiedSkillsPanel.tsx.json",
-      "sha256": "0135058d2e394651b8560196a7db7c402d4f640c7ae4399a5d14289e696d8747"
+      "sha256": "10b5cd509bebae1b7bd8ca7e3de5e2124384c9207e21a501ab72b0749315750d"
     },
     {
       "path": "vendor/cc-switch/integration-patches/src/components/skills/repoFailures.ts.json",
@@ -16036,6 +15998,6 @@
     "pristine": 1272,
     "adapted": 81,
     "extracted": 1,
-    "local": 108
+    "local": 105
   }
 }

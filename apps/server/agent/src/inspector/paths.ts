@@ -4,6 +4,7 @@ import path from "node:path";
 /** Directories that never appear in the inspector tree. */
 export const IGNORED_DIRECTORIES: Record<string, true> = {
   ".git": true,
+  ".pm": true,
   node_modules: true,
   dist: true,
   ".vite-cache": true,
@@ -60,8 +61,4 @@ export async function resolveInsideRoot(
   }
 
   return { absolute, relative: display };
-}
-
-export function toPosix(absolutePath: string, root: string): string {
-  return path.relative(root, absolutePath).split(path.sep).join("/");
 }

@@ -1,5 +1,5 @@
 import { AppPreviewPanel } from './AppPreviewPanel';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { WorkspaceClientError } from '@agent-workspace/client-runtime';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -13,6 +13,8 @@ import './task-workflows.css';
 import { DeliveryOverview } from './DeliveryOverview';
 import { providerReadinessHint, deliveryTaskStatusLabel, workflowNodeMessage } from './workflow-presentation';
 import { RadixSelect } from "@/components/ui/radix-select"
+import { executionSelectionSchema, type ExecutionSelection } from '@agent-workspace/contracts/chat';
+import { ExecutionSelectionField } from '@agent/src/pm/execution-workspace';
 
 type Catalog = { definitions: WorkflowDefinition[]; runs: WorkflowRun[]; repository: string | null; defaultBase?: string | null; hasManualDelivery: boolean };
 type Props = DeliveryScope & { revision: string; taskStatus: string; disabled: boolean };
@@ -29,11 +31,18 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
   const [runNodeId, setRunNodeId] = useState('');
   const [consent, setConsent] = useState({ execute: false, worktreeWrite: false, commit: false, push: false, draftPr: false, taskStatus: false });
   const [uncertain, setUncertain] = useState<WorkflowStart | null>(null);
+  const [executionSelection, setExecutionSelection] = useState<ExecutionSelection>();
+  const [availableSelection, setAvailableSelection] = useState<string | null>(null);
   const startId = useRef(crypto.randomUUID()), alive = useRef(true);
   const catalogRequest = useRef<AbortController | null>(null), providerRequest = useRef<AbortController | null>(null);
   const panel = usePmAgentPanel();
   const scope = { workspaceId, projectId, taskId };
-  const catalogUrl = `/api/task-workflows?${new URLSearchParams(scope)}`;
+  const parsedExecution = executionSelectionSchema.safeParse(executionSelection ?? run?.executionSelection ?? delivery?.executionSelection ?? run?.input.executionSelection);
+  const selectedExecution = parsedExecution.success ? parsedExecution.data : undefined;
+  const selectionKey = JSON.stringify(selectedExecution ?? null);
+  const reportExecutionAvailability = useCallback((available: boolean) => setAvailableSelection(available ? selectionKey : null), [selectionKey]);
+  const executionReady = !!selectedExecution?.agentWorkspaceId && availableSelection === selectionKey;
+  const catalogUrl = `/api/task-workflows?${new URLSearchParams({ ...scope, ...(selectedExecution ? { executionSelection: JSON.stringify(selectedExecution) } : {}) })}`;
   const definition = catalog?.definitions.find(d => d.id === selected);
   const published = definition?.versions.at(-1);
   const graph = published?.graph;
@@ -53,7 +62,7 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
     catch { if (alive.current && !request.signal.aborted) setProviderError('Provider 读取超时或失败；不影响编辑画布。请刷新 Provider。'); }
     finally { if (alive.current && !request.signal.aborted) setProvidersLoading(false); }
   };
-  useEffect(() => { if (expanded) { void load(); void loadProviders(); } }, [expanded]);
+  useEffect(() => { if (expanded) { void load(); void loadProviders(); } }, [expanded, selectionKey]);
   useEffect(() => {
     if (!run || !expanded) return;
     let stopped = false, timer: ReturnType<typeof setTimeout>;
@@ -90,8 +99,13 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
     finally { if (alive.current) setBusy(false); }
   };
   const start = async (frozen?: WorkflowStart) => {
-    if (busy || (!frozen && (!published || !definition || !catalog))) return;
-    const input: WorkflowStart = frozen ?? { ...scope, id: startId.current, taskRevision: revision, definitionId: definition!.id, definitionVersion: published!.version, baseBranch: base.trim(), repository: catalog!.repository!, providerInstanceId: provider, model, consent: { ...consent, execute: true } };
+    if (busy) return;
+    let input = frozen;
+    if (!input) {
+      if (disabled || !executionReady || !selectedExecution?.agentWorkspaceId || !published || !definition || !catalog) return;
+      input = { ...scope, id: startId.current, taskRevision: revision, definitionId: definition.id, definitionVersion: published.version, baseBranch: base.trim(), repository: catalog.repository!, providerInstanceId: provider, model, executionSelection: selectedExecution, consent: { ...consent, execute: true } };
+    }
+    if (!input) return;
     setBusy(true); setError(''); setUncertain(input);
     try {
       const value = await workspaceClient.json<WorkflowRun>('/api/task-workflows/runs', { method: 'POST', body: JSON.stringify(input) });
@@ -103,11 +117,11 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
       } }
     finally { if (alive.current) setBusy(false); }
   };
-  const control = async (action: 'pause' | 'resume' | 'approve' | 'confirm-transition') => {
-    if (!run || busy) return;
+  const control = async (action: 'pause' | 'resume' | 'approve' | 'confirm-transition' | 'new-session') => {
+    if (!run || busy || action === 'new-session' && !executionReady) return;
     setBusy(true); setError('');
     try {
-      const value = await workspaceClient.json<WorkflowRun>(`/api/task-workflows/runs/${run.id}/control`, { method: 'POST', body: JSON.stringify({ action, version: run.version, confirm: true }) });
+      const value = await workspaceClient.json<WorkflowRun>(`/api/task-workflows/runs/${run.id}/control`, { method: 'POST', body: JSON.stringify({ action, version: run.version, confirm: true, ...(action === 'new-session' ? { executionSelection: selectedExecution } : {}) }) });
       if (alive.current) setRun(value);
     } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : '操作未确认，请刷新。'); }
     finally { if (alive.current) setBusy(false); }
@@ -132,13 +146,16 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
     <p className="delivery-boundary">独立目录执行 · 授权后发布 · 不自动合并、部署或完成任务</p>
     {error && <p role="alert">{error}</p>}{disabled && <p role="alert">请先保存任务，并确认项目编辑权限。</p>}
     <div className="workflow-toolbar"><button type="button" disabled={loading || busy} onClick={() => void load()}>{loading ? '正在读取工作流…' : '刷新工作流 / 核对启动'}</button></div>
-    {!catalog && !loading && <p>尚未加载。项目需绑定可访问的 GitHub 仓库；失败时不会回退示例数据。</p>}
+    <p>PM 业务目标：<code>{workspaceId} / {projectId} / {taskId}</code>；执行文件夹独立选择，不改变任务或会话归属。</p>
+    <ExecutionSelectionField value={selectedExecution} allowChatOnly={false} disabled={busy || !!uncertain || disabled} onChange={setExecutionSelection} onAvailabilityChange={reportExecutionAvailability} />
+    {!executionReady && <p role="status">请明确选择可用的 Agent Workspace 文件夹。缺失、被替换或旧版目录配置不能执行；关闭或重命名 Workspace 不改变已有执行绑定，不会回退 PM 存储或自动绑定替代会话。</p>}
+    {!catalog && !loading && <p>尚未加载。请在独立 Agent Workspace 中选择具有可访问 GitHub origin 的仓库目录；失败时不会回退示例数据。</p>}
     {catalog && <>
       <label>交付方式 · 工作流模板<RadixSelect disabled={busy || !!uncertain} value={selected} onChange={e => setSelected(e.target.value)}>{catalog.definitions.map(d => <option key={d.id} value={d.id}>{d.draft.name} · {d.versions.length ? `v${d.versions.at(-1)!.version}` : '未发布'}</option>)}</RadixSelect></label>
       <div className="workflow-toolbar"><button type="button" onClick={() => edit(false)} disabled={!definition || disabled || busy}>打开节点画布</button><button type="button" onClick={() => edit(true)} disabled={!definition || disabled || busy}>复制为项目工作流</button></div>
       {!run && catalog.hasManualDelivery && <p>此任务已有手动代码交付，请继续使用下方原入口。新工作流请在新任务启动；仍可编辑项目模板。</p>}
       {!run && !catalog.hasManualDelivery && <>
-        <small>仓库：{catalog.repository ?? '未就绪：请先绑定具有 GitHub origin 的项目 Git 仓库'}。模板发布不等于授权执行。</small>
+        <small>仓库：{catalog.repository ?? '未就绪：请选择具有 GitHub origin 的 Agent Workspace 文件夹'}。模板发布不等于授权执行。</small>
         <label>远端基准分支<input placeholder="填写实际分支，例如 main" value={base} disabled={!!uncertain || busy} onChange={e => setBase(e.target.value)} /></label>
         <label>运行 Provider<RadixSelect value={provider} disabled={!!uncertain || busy} onChange={e => { setProvider(e.target.value); setModel(''); }}><option value="">选择已有 Provider</option>{providers.map(p => <option key={p.instanceId} value={p.instanceId} disabled={!p.enabled || !p.nativeSessionReady || !p.configured || (!!needWrite && p.driver !== 'codex')}>{p.label}{!p.nativeSessionReady ? ' · 未就绪' : ''}</option>)}</RadixSelect></label>
         <label>运行模型<RadixSelect value={model} disabled={!providerValue || !!uncertain || busy} onChange={e => setModel(e.target.value)}><option value="">选择模型</option>{providerValue?.models.map(m => <option key={m.id} value={m.id} disabled={!!m.disabledReason}>{m.label}</option>)}</RadixSelect></label>
@@ -146,7 +163,7 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
         {!providersLoading && providers.filter(p => !p.nativeSessionReady).map(p => <small key={p.instanceId}>{p.label} 未就绪：{providerReadinessHint(p.message)}</small>)}
         <div className="delivery-preflight" aria-label="启动前检查"><span data-ready={!!published}>流程{published ? '已发布' : '待发布'}</span><span data-ready={!!catalog.repository}>仓库{catalog.repository ? '已绑定' : '未就绪'}</span><span data-ready={!!providerValue?.nativeSessionReady}>Agent{providerValue?.nativeSessionReady ? '已就绪' : '待选择或修复'}</span><span data-ready={!disabled}>{disabled ? '请先保存任务' : '任务已保存'}</span></div>
         {providerError && <a href="/agent/settings/providers">前往 Agent 设置排查</a>}
-        <button type="button" className="workflow-primary" disabled={disabled || busy || !!uncertain || !published || !catalog.repository || !base.trim() || !providerValue?.nativeSessionReady || !model} onClick={() => { setConsent({ execute: false, worktreeWrite: false, commit: false, push: false, draftPr: false, taskStatus: false }); setConfirmStart(true); }}>启动交付</button>
+        <button type="button" className="workflow-primary" disabled={disabled || busy || !!uncertain || !published || !executionReady || !catalog.repository || !base.trim() || !providerValue?.nativeSessionReady || !model} onClick={() => { setConsent({ execute: false, worktreeWrite: false, commit: false, push: false, draftPr: false, taskStatus: false }); setConfirmStart(true); }}>启动交付</button>
         {uncertain && <button type="button" disabled={busy || loading} onClick={async () => { const found = await read<Catalog>(catalogUrl).catch(() => null); if (!found) { setError('核对失败，不重发。'); return; } if (found.runs.length) { setRun(found.runs[0]!); setUncertain(null); } else void start(uncertain); }}>核对后重发原启动请求（相同 ID / 参数）</button>}
       </>}
     </>}
@@ -155,7 +172,8 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
       <div className="workflow-toolbar"><button type="button" onClick={() => openRun()}>查看运行画布</button>{!['completed', 'failed', 'paused'].includes(run.status) && <button type="button" disabled={busy || disabled} onClick={() => void control('pause')}>暂停后续步骤</button>}{run.status === 'paused' && <button type="button" disabled={busy || disabled || (workflowTaskRevision(run) !== revision && run.transitions?.[run.current]?.state !== 'requested')} onClick={() => void control('resume')}>核对并恢复原运行</button>}{run.graph.nodes.find(n => n.id === run.current)?.kind === 'approval' && run.nodes[run.current]?.state === 'waiting' && <button type="button" disabled={busy || disabled} onClick={() => void control('approve')}>确认继续（不是业务审核）</button>}</div>
       {Object.entries(run.transitions ?? {}).map(([id, change]) => <p key={id}>任务状态联动 · {run.graph.nodes.find(n => n.id === id)?.label}：{change.message ?? change.state}</p>)}
       {run.transitions?.[run.current]?.state === 'awaiting' && run.transitions[run.current]?.mode === 'confirm' && <button type="button" className="workflow-primary" disabled={busy || disabled || workflowTaskRevision(run) !== revision} onClick={() => void control('confirm-transition')}>确认任务{run.transitions[run.current]?.phase === 'start' ? '进入进行中' : '进入待审核'}（非验收通过）</button>}
-      {delivery?.generationId && <button type="button" onClick={() => { panel.openPanel({ workspaceId, projectId, taskId, title: delivery.title }); panel.setThreadId(delivery.threadId); }}>查看 Agent 开发过程</button>}
+      {delivery?.threadId && <button type="button" onClick={() => { panel.openPanel({ workspaceId, projectId, taskId, title: delivery.title }); panel.setThreadId(delivery.threadId); }}>查看 Agent 会话</button>}
+      {delivery && <button type="button" disabled={busy || disabled || !executionReady || !['paused', 'completed', 'failed'].includes(run.status)} onClick={() => { if (selectedExecution && window.confirm('为此工作流的原交付 worktree 新建空闲 Chat 会话？固定输入和旧节点证据不变，不重放流程或运行模型；恢复仍需另行确认。')) void control('new-session'); }}>新建替代 Chat 会话（不执行）</button>}
       {delivery?.pr && <a href={delivery.pr.url} target="_blank" rel="noreferrer">查看交付成果 · Draft PR #{delivery.pr.number}</a>}
       {delivery?.pr && <button type="button" disabled={busy || disabled} onClick={() => void refreshFeedback()}>核对 CI / 评审结果</button>}
       {delivery?.feedback && <p>GitHub：{delivery.feedback.checks.map(c => `${c.name}: ${c.conclusion ?? c.status}`).join('；') || '未发现 CI，不代表通过'} · {delivery.feedback.reviews.length ? `${delivery.feedback.reviews.length} 条评审` : '暂无人工评审'}<br />证据快照：{delivery.feedback.observedAt}（不是持续更新的审批结论）</p>}
@@ -173,7 +191,7 @@ export function TaskWorkflowPanel({ workspaceId, projectId, taskId, revision, ta
       <p>必需 CI：{graph?.nodes.find(n => n.kind === 'ci')?.config.requiredChecks?.join('、') ?? (need('ci') ? '旧模板未配置，建议在画布中指定' : '本流程不发布 PR')}</p>
       {graph?.nodes.filter(n => n.config.taskTransition).map(n => <p key={n.id}>{n.label}：{n.config.taskTransition?.phase === 'start' ? '派发前：待办 → 进行中' : 'CI 通过后：进行中 → 待审核'} · {n.config.taskTransition?.mode === 'auto' ? '自动申请' : '人工确认后申请'}</p>)}
       {(['execute', ...(needWrite ? ['worktreeWrite'] : []), ...(need('commit') ? ['commit'] : []), ...(need('push') ? ['push'] : []), ...(need('pr') ? ['draftPr'] : []), ...(needStatus ? ['taskStatus'] : [])] as (keyof typeof consent)[]).map(key => <label className="workflow-consent" key={key}><input type="checkbox" checked={consent[key]} disabled={busy || !!uncertain} onChange={e => setConsent({ ...consent, [key]: e.target.checked })} />{{ execute: '允许执行当前图、创建独立目录并运行上述验证命令', worktreeWrite: '允许 Codex 仅在此任务 worktree 内开发与测试', commit: '允许系统自动提交当前任务的已验证代码', push: `允许自动推送到 ${catalog?.repository} 的独立任务分支`, draftPr: '允许在上述仓库自动创建 Draft PR', taskStatus: '允许按上述节点配置申请任务状态流转，不自动完成或取消任务' }[key]}</label>)}
-      {error && <p role="alert">{error}</p>}<button type="button" className="workflow-primary" disabled={!consentReady || busy || !!uncertain || disabled} onClick={() => void start()}>{busy ? '正在提交原启动请求…' : '确认并开始'}</button>
+      {error && <p role="alert">{error}</p>}<button type="button" className="workflow-primary" disabled={!consentReady || !executionReady || busy || !!uncertain || disabled} onClick={() => void start()}>{busy ? '正在提交原启动请求…' : '确认并开始'}</button>
     </div></DialogContent></Dialog>
   </div>}</details>;
 }

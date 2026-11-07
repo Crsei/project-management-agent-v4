@@ -14,7 +14,7 @@ import type {
   GitStatusResponse,
 } from "@agent-workspace/contracts/inspector";
 import { errorMessage } from "./api";
-import { useInspectorUrl } from "./scope";
+import { InspectorExecution, useInspectorUrl } from "./scope";
 import { workspaceClient } from "@agent/src/network";
 import { DiffView } from "./diff-view";
 import { useAgentText, type AgentText } from "../../i18n";
@@ -62,6 +62,10 @@ function stagingLabel(t: AgentText, file: GitChangedFile): string {
 }
 
 export function GitPanel({ active = true }: { active?: boolean }) {
+  return <InspectorExecution><GitRootPanel active={active} /></InspectorExecution>;
+}
+
+function GitRootPanel({ active }: { active: boolean }) {
   const t = useAgentText();
   const inspectUrl = useInspectorUrl();
   const [status, setStatus] = useState<GitStatusResponse | null>(null);

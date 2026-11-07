@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronsUpDown, LoaderCircle, LogOut, Monitor, Moon, Sun } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@agent/components/ui/avatar";
 import { useTheme } from "@agent/hooks/use-theme";
-import { pmJson, usePmChatState } from "./state";
+import { pmJson, refreshIdentity, usePmChatState } from "./state";
 import { useAgentText } from "../i18n";
 import styles from "@/features/pm/service/pm-user-menu.module.css";
 
@@ -26,6 +27,7 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
 
+  useEffect(() => { if (open) void refreshIdentity(); }, [open]);
   useEffect(() => {
     if (!open || !workspaceId || profile?.workspaceId === workspaceId) return;
     let cancelled = false;
@@ -35,9 +37,8 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
     return () => { cancelled = true; };
   }, [open, workspaceId, profile?.workspaceId]);
 
-  if (!actor) return null;
 
-  const displayName = profile?.name ?? actor.name;
+  const displayName = profile?.name ?? actor?.name ?? t("本机 Agent", "Local Agent");
   const avatarDataUrl = profile?.avatarDataUrl ?? undefined;
   const avatarInitials = displayName.trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0]).join("").toLocaleUpperCase() || "?";
 
@@ -74,7 +75,7 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
             </Avatar>
             <div className={styles.identityText}>
               <span className={styles.displayName}>{displayName}</span>
-              <span className={styles.email} title={actor.email}>{actor.email}</span>
+              {actor && <span className={styles.email} title={actor.email}>{actor.email}</span>}
             </div>
           </div>
           <div className={styles.separator} />
@@ -93,10 +94,10 @@ export function UserMenu({ workspaceId, canLeave }: UserMenuProps) {
             </button>)}
           </div>
           <div className={styles.separator} />
-          <button type="button" className={styles.item} disabled={signingOut} onClick={() => { if (canLeave()) void signOut(); }}>
+          {actor ? <button type="button" className={styles.item} disabled={signingOut} onClick={() => { if (canLeave()) void signOut(); }}>
             {signingOut ? <LoaderCircle className={styles.spinner} aria-hidden="true" /> : <LogOut aria-hidden="true" />}
-            {signingOut ? t("正在退出…", "Signing out…") : t("退出登录", "Sign out")}
-          </button>
+            {signingOut ? t("正在退出…", "Signing out…") : t("退出 PM 登录", "Sign out of PM")}
+          </button> : <Link className={styles.item} to="/pm" onClick={event => { if (!canLeave()) event.preventDefault(); }}>{t("前往 PM 登录", "Sign in to PM")}</Link>}
           {logoutError && <p role="alert" className={styles.error}>{logoutError}</p>}
     </PopoverContent>
   </Popover>;

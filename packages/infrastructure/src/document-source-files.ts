@@ -4,6 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { documentSourceMutationReceiptSchema, type DocumentSourceContent, type DocumentSourceEntry, type DocumentSourceIssue, type DocumentSourceMutationReceipt } from '../../contracts/src/document-sources.ts';
 import { parseDocumentSourceReceipt } from './document-sources.ts';
+import { externalDocumentHistoryPreparedSchema, type ExternalDocumentHistoryPrepared } from './document-source-history.ts';
 import { DomainError } from '../../domain/src/core.ts';
 import { maxRepositoryFileBytes } from '../../pm-core/repository.ts';
 import { assertCanonicalAbsolute, checkedFileOpen, fileStamp, GuardedDirectory, safePathComponent, safeRelativePath, sameFileIdentity, samePath } from '../../pm-core/platform.ts';
@@ -15,6 +16,7 @@ type Link = GuardedDirectory;
 const fileFlags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 const privateComponents: Record<string, true> = { '.pm': true, '.git': true, '.ssh': true, '.aws': true, '.config': true, '.codex': true, '.claude': true, '.agent-workspace': true, 'provider-homes': true };
 const operationProofSchema = z.strictObject({ requestHash: z.string().regex(/^[a-f0-9]{64}$/), receipt: z.preprocess(parseDocumentSourceReceipt, documentSourceMutationReceiptSchema) });
+const operationHistorySchema = z.strictObject({ requestHash: z.string().regex(/^[a-f0-9]{64}$/), capture: externalDocumentHistoryPreparedSchema });
 const sameIdentity = sameFileIdentity;
 const stamp = fileStamp;
 const forbiddenPathCodes = ['ELOOP', 'ENOTDIR', 'EACCES', 'EPERM'];
@@ -207,6 +209,40 @@ export class DocumentSourceDirectory {
     }
   }
 
+  /** Authorize retained bytes without treating an absent file as a filesystem read. */
+  assertHistoryPath(relative: string): void {
+    assertDocumentRelativePath(relative);
+    const nested: Link[] = [];
+    const current = (): void => { this.assertCurrent(); for (const link of nested) assertLink(link); };
+    let leaf: number | undefined;
+    try {
+      current();
+      let parent = this.handle;
+      const parts = relative.split('/');
+      for (let index = 0; index < parts.length; index++) {
+        const location = parent.path(parts[index]!);
+        let stat: BigIntStats;
+        try { stat = lstatSync(location, { bigint: true }); }
+        catch (error) { if (!missing(error)) throw error; current(); return; }
+        if (index < parts.length - 1) {
+          directory(stat);
+          const link = pinDirectory(location); nested.push(link);
+          if (!sameIdentity(link.stat, stat)) changed();
+          parent = link;
+        } else {
+          ordinaryFile(stat);
+          leaf = checkedFileOpen(location, fileFlags);
+          const opened = fstatSync(leaf, { bigint: true }); ordinaryFile(opened);
+          if (stamp(opened) !== stamp(stat) || stamp(lstatSync(location, { bigint: true })) !== stamp(stat)) changed();
+        }
+      }
+      current();
+    } finally {
+      if (leaf !== undefined) closeSync(leaf);
+      for (const link of nested.reverse()) link.close();
+    }
+  }
+
   private parent<T>(relative: string, create: boolean, action: (location: string, parent: Link, current: () => void) => T): T {
     assertDocumentRelativePath(relative);
     const nested: Link[] = [];
@@ -352,10 +388,10 @@ export class DocumentSourceOperationJournal {
     this.root.assertCurrent();
     for (const link of this.links) assertLink(link);
   }
-  read(operationId: string, requestHash: string): DocumentSourceMutationReceipt | undefined {
+  private readEvidence(operationId: string, suffix: string): unknown | undefined {
     if (!/^[a-f0-9-]{36}$/.test(operationId)) forbidden();
     this.assertCurrent();
-    const location = this.handle.path(`${operationId}.json`);
+    const location = this.handle.path(`${operationId}${suffix}.json`);
     let fd: number;
     try { fd = checkedFileOpen(location, fileFlags); }
     catch (error) { if (missing(error)) return undefined; throw error; }
@@ -371,23 +407,42 @@ export class DocumentSourceOperationJournal {
         offset += count;
       }
       if (stamp(fstatSync(fd, { bigint: true })) !== stamp(stat) || stamp(lstatSync(location, { bigint: true })) !== stamp(stat)) changed();
-      const proof = operationProofSchema.parse(JSON.parse(bytes.toString('utf8')));
-      if (proof.requestHash !== requestHash) throw new DomainError('document_source_operation_id_conflict', 'The original operation identity conflicts with its durable evidence', 409);
-      const receipt = proof.receipt;
-      if (receipt.operationId !== operationId || receipt.status !== 'succeeded') changed();
-      this.assertCurrent(); return receipt;
+      const proof: unknown = JSON.parse(bytes.toString('utf8'));
+      this.assertCurrent(); return proof;
     } finally { closeSync(fd); }
   }
+  read(operationId: string, requestHash: string): DocumentSourceMutationReceipt | undefined {
+    const evidence = this.readEvidence(operationId, '');
+    if (evidence === undefined) return undefined;
+    const proof = operationProofSchema.parse(evidence);
+    if (proof.requestHash !== requestHash) throw new DomainError('document_source_operation_id_conflict', 'The original operation identity conflicts with its durable evidence', 409);
+    if (proof.receipt.operationId !== operationId || proof.receipt.status !== 'succeeded') changed();
+    return proof.receipt;
+  }
+  readHistory(operationId: string, requestHash: string): ExternalDocumentHistoryPrepared | undefined {
+    const evidence = this.readEvidence(operationId, '.history');
+    if (evidence === undefined) return undefined;
+    const proof = operationHistorySchema.parse(evidence);
+    if (proof.requestHash !== requestHash || proof.capture.operationId !== operationId) throw new DomainError('document_source_operation_id_conflict', 'The original history identity conflicts with its durable evidence', 409);
+    return proof.capture;
+  }
+  /** Prepared bytes are not a change: publication also requires original success proof. */
+  prepareHistory(operationId: string, requestHash: string, capture: ExternalDocumentHistoryPrepared): void {
+    this.recordEvidence(operationId, '.history', { requestHash, capture: externalDocumentHistoryPreparedSchema.parse(capture) });
+  }
   record(operationId: string, requestHash: string, receipt: DocumentSourceMutationReceipt): void {
+    this.recordEvidence(operationId, '', { requestHash, receipt });
+  }
+  private recordEvidence(operationId: string, suffix: string, evidence: unknown): void {
     if (!/^[a-f0-9-]{36}$/.test(operationId)) forbidden();
     this.assertCurrent();
     const temporary = this.handle.path(`.${randomUUID()}.tmp`);
-    const location = this.handle.path(`${operationId}.json`);
+    const location = this.handle.path(`${operationId}${suffix}.json`);
     let fd: number | undefined;
     try {
       fd = checkedFileOpen(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
       makePrivatePath(temporary);
-      const bytes = Buffer.from(JSON.stringify({ requestHash, receipt }));
+      const bytes = Buffer.from(JSON.stringify(evidence));
       let offset = 0;
       while (offset < bytes.length) offset += writeSync(fd, bytes, offset, bytes.length - offset);
       fsyncSync(fd); closeSync(fd); fd = undefined; this.assertCurrent();

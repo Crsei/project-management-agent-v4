@@ -6,10 +6,22 @@ export type NotificationInboxFilters = {
   conditions?: readonly FilterCondition[] | undefined
 }
 
+function notificationTitle(item: NotificationInboxItem) {
+  const type = item.event.eventType
+  if (type === 'TaskCommentChanged') return '任务评论有更新 / Task comment updated'
+  if (item.event.completion === true) return '任务已完成 / Task completed'
+  if (type.startsWith('WorkItem:')) {
+    const labels: Record<string, string> = { created: '创建 / created', metadata_changed: '属性 / properties', content_changed: '正文 / content', lifecycle_changed: '状态 / lifecycle' }
+    const changes = type.slice('WorkItem:'.length).split('+').map(kind => labels[kind] ?? kind).filter(Boolean)
+    return `任务变更 / Task changed${changes.length ? ` · ${changes.join('、')}` : ''}`
+  }
+  return `活动更新 / Activity update · ${type}`
+}
+
 export function notificationItem(item: NotificationInboxItem) {
   return {
-    id: item.event.eventId, title: `${item.event.eventType} · ${item.reasons.join(" + ")}`,
-    entityName: `${item.origin === "legacy_activity" ? "历史活动 / Legacy" : "定向通知 / Routed"} · ${item.event.entityKind} ${item.event.entityId}`, entityId: item.target?.taskId ?? item.event.entityId,
+    id: item.event.eventId, title: notificationTitle(item),
+    entityName: `${item.origin === "legacy_activity" ? "历史活动 / Legacy" : "定向通知 / Routed"} · ${item.event.entityKind} ${item.event.entityId} · ${item.reasons.map(reason => ({ watch: "关注 / watching", mention: "提及 / mention", assignee: "负责人 / assignee", requester: "发起人 / requester", completion: "完成 / completion", legacy_activity_state: "历史状态 / legacy state" })[reason] ?? reason).join(" + ")}${item.event.changedFields?.length ? ` · ${item.event.changedFields.join(", ")}` : ""} · ${item.event.origin ?? "来源未知 / source unknown"}`, entityId: item.target?.taskId ?? item.event.entityId,
     readAt: item.state.readAt, archivedAt: item.state.archivedAt, createdAt: item.event.occurredAt ?? item.event.observedAt ?? item.event.recordedAt, version: String(item.state.version),
   }
 }

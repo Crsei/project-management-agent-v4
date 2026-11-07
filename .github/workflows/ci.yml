@@ -31,6 +31,19 @@ jobs:
         with:
           version: '11.9.0'
           run_install: false
+      - name: Locate pnpm content store and hosted toolchain image
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+      - name: Restore exact dependency content store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.path }}
+          # No prefix fallback, node_modules, build outputs, homes or credentials.
+          # The hosted image also scopes any approved native install side effects.
+          key: checks-pnpm-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'rust-toolchain.toml', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
       - name: Install native compiler and real Linux namespace prerequisites
         run: |
           sudo apt-get update
@@ -56,3 +69,12 @@ jobs:
         # credentials; never loads .env, reuses a service or counts skips as passes.
         # Native installers/signing and real Provider/network Skill acceptance are separate.
         run: node scripts/check-ci.mjs
+      - name: Preserve isolated check timings even after failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repository-check-timings-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/ci-runs/*.jsonl
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

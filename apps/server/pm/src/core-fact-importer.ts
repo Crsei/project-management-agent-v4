@@ -1,27 +1,38 @@
 import type { Pool } from 'pg';
-import { readServiceFactObservations, type CoreFactObservation } from '../../../../packages/pm-core/service-facts.ts';
+import { readServiceFactObservations, type CoreFactObservation, type CoreFactSummary } from '../../../../packages/pm-core/service-facts.ts';
 import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
 import { appendProjectAudit } from '../../../../packages/application/src/project-audit.ts';
 import { DomainError } from '../../../../packages/domain/src/core.ts';
-import { insertServiceFact,freezeTaskWatchCandidates,type CapturedServiceFact,type NotificationFactInput } from '../../../../packages/application/src/service-facts.ts';
+import { insertServiceFact,freezeTaskWatchCandidates,type CapturedServiceFact } from '../../../../packages/application/src/service-facts.ts';
 import { CoreCommandJournal } from './core-journal.ts';
 import type { CoreWorkspacePool } from './core-routes.ts';
 import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
 import { recoverPreparedCoreCreations } from './core-facts.ts';
 import { insertPmAutomationObservationSignals } from '../../../../packages/application/src/automation-pm-signals.ts';
+import { changedSnapshotFields, insertChangeHistory, type HistorySnapshotReader } from '../../../../packages/application/src/change-history.ts';
+import { randomUUID } from 'node:crypto';
+import { readCoreSnapshot } from '../../../../packages/pm-core/change-snapshots.ts';
+import type { ChangeSnapshot } from '../../../../packages/contracts/src/change-history.ts';
 
-async function observationCapture(sql:SqlExecutor,workspaceId:string,observation:CoreFactObservation):Promise<CapturedServiceFact> {
- const target=observation.after??observation.before!;
- const sourceKey=String(observation.sequence);
- const previous=await sql.query<{actor_id:string|null;task_id:string|null;original_project_id:string|null;comment_id:string|null;comment_version:number|null;watch_candidates:NotificationFactInput['watchCandidates'];new_mention_ids:string[]}>(`SELECT i.* FROM notification_fact_inputs i JOIN service_fact_events f USING(workspace_id,fact_id)
- WHERE f.workspace_id=$1 AND f.source_kind='core_observation' AND f.source_key=$2`,[workspaceId,sourceKey]);
- const existing=previous.rows[0];
- const safe=!!observation.after && !!target.projectId && (!observation.before||observation.before.projectId===target.projectId);
- return {fact:{factId:observation.factId,schemaVersion:1,sourceKind:'core_observation',sourceKey,projectId:target.projectId,entityKind:target.kind,entityId:target.id,
- beforeRevision:observation.before?.revision??null,afterRevision:observation.after?.revision??null,changeKinds:observation.changeKinds,
- occurredAt:null,observedAt:observation.observedAt,safetyClass:safe?'project_fact':'restricted_internal'},
- input:target.kind==='work_item'&&safe&&observation.changeKinds.length>0?existing?{actorId:existing.actor_id,taskId:existing.task_id,originalProjectId:existing.original_project_id,commentId:existing.comment_id,commentVersion:existing.comment_version,watchCandidates:existing.watch_candidates,newMentionIds:existing.new_mention_ids}:
- {actorId:null,taskId:target.id,originalProjectId:target.projectId,commentId:null,commentVersion:null,watchCandidates:target.projectId?await freezeTaskWatchCandidates(sql,workspaceId,target.id,target.projectId):[],newMentionIds:[]}:null};
+function observationSnapshot(summary:CoreFactSummary|null,readSnapshot:HistorySnapshotReader):ChangeSnapshot|null {
+ if(!summary?.snapshotKey)return null;
+ const snapshot=readSnapshot(summary.snapshotKey),metadata=snapshot.metadata;
+ if(!metadata)throw new DomainError('history_snapshot_scope_mismatch',undefined,409);
+ const project=metadata.entity==='project'?metadata.id:metadata.project??null;
+ if(snapshot.revision!==summary.revision||metadata.id!==summary.id||metadata.entity!==summary.kind||project!==summary.projectId)throw new DomainError('history_snapshot_scope_mismatch',undefined,409);
+ return snapshot;
+}
+async function observationCapture(sql:SqlExecutor,workspaceId:string,observation:CoreFactObservation,readSnapshot:HistorySnapshotReader):Promise<CapturedServiceFact> {
+ const target=observation.after??observation.before!,before=observationSnapshot(observation.before,readSnapshot),after=observationSnapshot(observation.after,readSnapshot);
+ const safe=!!observation.after&&!!target.projectId&&(!observation.before||observation.before.projectId===target.projectId);
+ const changedFields=observation.before&&!before?[]:changedSnapshotFields(before,after);
+ const assignee=after?.metadata?.assignee;
+ return {fact:{factId:observation.factId,schemaVersion:1,sourceKind:'core_observation',sourceKey:String(observation.sequence),projectId:target.projectId,entityKind:target.kind,entityId:target.id,
+ beforeRevision:observation.before?.revision??null,afterRevision:observation.after?.revision??null,changeKinds:observation.changeKinds,occurredAt:null,observedAt:observation.observedAt,safetyClass:safe?'project_fact':'restricted_internal'},
+ input:target.kind==='work_item'&&safe&&observation.changeKinds.length>0?{actorId:null,taskId:target.id,originalProjectId:target.projectId,commentId:null,commentVersion:null,watchCandidates:target.projectId?await freezeTaskWatchCandidates(sql,workspaceId,target.id,target.projectId):[],newMentionIds:[],
+ completion:!!observation.before&&observation.before.statusCategory!==undefined&&observation.before.statusCategory!=='completed'&&observation.after?.statusCategory==='completed',
+ assigneeId:typeof assignee==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(assignee)?assignee:null,changedFields}:null,
+ ...((before||after)?{history:{target:{kind:'core' as const,entityId:target.id},entityKind:target.kind,projectId:target.projectId,beforeKey:observation.before?.snapshotKey??null,afterKey:observation.after?.snapshotKey??null,completeness:observation.before&&!before?'missing_before' as const:'observed_endpoints' as const,origin:'observation' as const,actorId:null,changedFields}}:{})};
 }
 /** API-only recovery; independent of GET requests and independent of the notification Worker. */
 export class CoreFactImporter {
@@ -57,10 +68,10 @@ export class CoreFactImporter {
    const offset=Number(checkpoint.rows[0]!.journal_offset),end=Math.min(entries.length,offset+limit);
    if(offset>entries.length) throw new DomainError('fact_checkpoint_ahead','SQL and core journal require a consistent restore checkpoint',409);
    for(const entry of entries.slice(offset,end)) {
-    if(entry.kind==='fact_completed') {await insertServiceFact(client,workspaceId,entry.captured);count++;}
+    if(entry.kind==='fact_completed') {await insertServiceFact(client,workspaceId,entry.captured,key=>readCoreSnapshot(root,key));count++;}
     if(entry.kind==='completed'||entry.kind==='http_completed') {
      await appendProjectAudit(client,workspaceId,{id:entry.actorId,email:'',name:''},entry.audit??[]);
-     for(const fact of entry.facts??[]) await insertServiceFact(client,workspaceId,fact);
+     for(const fact of entry.facts??[]) await insertServiceFact(client,workspaceId,fact,key=>readCoreSnapshot(root,key));
      if(entry.kind==='completed') {
       const commandType=entries.find(value=>value.kind==='pending'&&value.commandId===entry.commandId&&value.actorId===entry.actorId);
       if(commandType?.kind==='pending') {
@@ -80,19 +91,36 @@ export class CoreFactImporter {
    await client.query('COMMIT');
   } catch(error) {await client.query('ROLLBACK');throw error;} finally {client.release();}
   // Open the sole API Workspace only after confirmed facts have recovered. Ordinary scans remain observation-only.
-  await this.workspaces.get(workspaceId);
-  const observations=readServiceFactObservations(root);
-  const journalLength=journal.entries().length;
+  const workspace=await this.workspaces.get(workspaceId);
   const sql=await this.database.connect();
   try {
    await sql.query('BEGIN');await lockWorkspace(sql,workspaceId);
+   const completed=journal.entries().flatMap(entry=>entry.kind==='fact_completed'?[entry]:[]);
+   for(const entry of completed)if(entry.boundary)workspace.acceptCommittedFact(entry.captured.fact.factId,entry.boundary.before,entry.boundary.after);
+   workspace.retireMutationProofs(new Set(completed.map(entry=>entry.captured.fact.factId)));
+   await workspace.rescan('fact-recovery');
+   const observations=readServiceFactObservations(root),journalLength=journal.entries().length;
    const checkpoint=await sql.query<{observation_sequence:string}>('SELECT observation_sequence::text FROM service_fact_import_checkpoints WHERE workspace_id=$1',[workspaceId]);
    if(Number(checkpoint.rows[0]!.observation_sequence)>observations.sequence) throw new DomainError('fact_checkpoint_ahead','SQL and core observation ledger require a consistent restore checkpoint',409);
    const pending=observations.observations.filter(value=>value.sequence>Number(checkpoint.rows[0]!.observation_sequence)).slice(0,limit);
    for(const observation of pending) {
-    await insertServiceFact(sql,workspaceId,await observationCapture(sql,workspaceId,observation));
+    const prior=await sql.query<{fact_id:string;before_revision:string|null;after_revision:string|null}>(`SELECT fact_id,before_revision,after_revision FROM service_fact_events WHERE workspace_id=$1 AND source_kind='core_observation' AND source_key=$2`,[workspaceId,String(observation.sequence)]);
+    if(prior.rows[0]) {
+     if(prior.rows[0].fact_id!==observation.factId||prior.rows[0].before_revision!==(observation.before?.revision??null)||prior.rows[0].after_revision!==(observation.after?.revision??null))throw new DomainError('fact_idempotency_conflict',undefined,409);
+    } else {
+     const snapshots=new Map<string,ChangeSnapshot>();
+     const readSnapshot:HistorySnapshotReader=key=>{let value=snapshots.get(key);if(!value){value=readCoreSnapshot(root,key);snapshots.set(key,value);}return value;};
+     await insertServiceFact(sql,workspaceId,await observationCapture(sql,workspaceId,observation,readSnapshot),readSnapshot);
+    }
     await insertPmAutomationObservationSignals(sql,workspaceId,observation);
     count++;
+   }
+   const known=await sql.query<{stream_key:string}>('SELECT stream_key FROM change_history_streams WHERE workspace_id=$1',[workspaceId]);
+   const knownKeys=new Set(known.rows.map(row=>row.stream_key));
+   const successfulTargets=new Set(journal.entries().flatMap(entry=>entry.kind==='fact_completed'&&entry.captured.history?[entry.captured.fact.entityId]:(entry.kind==='completed'||entry.kind==='http_completed')?(entry.facts??[]).filter(fact=>fact.history).map(fact=>fact.fact.entityId):[]));
+   const pendingIds=new Set(observations.observations.filter(value=>value.sequence>Number(checkpoint.rows[0]!.observation_sequence)).map(value=>(value.after??value.before)!.id));
+   for(const baseline of observations.baseline.filter(value=>value.snapshotKey&&!pendingIds.has(value.id)&&!successfulTargets.has(value.id)&&!knownKeys.has(`core:${value.id}`)).slice(0,limit)) {
+    await insertChangeHistory(sql,workspaceId,{changeId:randomUUID(),sourceKey:`baseline:${baseline.id}:${baseline.revision}`,target:{kind:'core',entityId:baseline.id},entityKind:baseline.kind,projectId:baseline.projectId,before:null,after:observationSnapshot(baseline,key=>readCoreSnapshot(root,key)),completeness:'baseline',origin:'observation',actorId:null,changedFields:[],changeKinds:[],observedAt:observations.lastObservedAt??new Date().toISOString(),occurredAt:null});
    }
    await sql.query(`UPDATE service_fact_import_checkpoints SET observation_sequence=$2::bigint,observed_at=$3,imported_count=imported_count+$7,status=CASE WHEN $4::text IS NOT NULL THEN 'error' WHEN journal_offset<$5::bigint OR $2::bigint<$6::bigint THEN 'pending' ELSE 'current' END,last_error_code=$4 WHERE workspace_id=$1`,
     [workspaceId,pending.at(-1)?.sequence??checkpoint.rows[0]!.observation_sequence,observations.lastObservedAt,observations.gap,journalLength,observations.sequence,pending.length]);

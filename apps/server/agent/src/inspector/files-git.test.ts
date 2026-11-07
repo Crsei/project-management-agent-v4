@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { Hono } from "hono";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
@@ -12,40 +13,55 @@ import type {
   InspectorFileResponse,
   InspectorTreeResponse,
 } from "@agent-workspace/contracts/inspector";
-import type { AgentScope } from "@agent-workspace/contracts/chat";
+import type { AgentWorkspace } from "@agent-workspace/contracts/chat";
 
 const projectDir = await mkdtemp(path.join(tmpdir(), "inspector-project-"));
 const dataDir = await mkdtemp(path.join(tmpdir(), "inspector-data-"));
 const repoDir = await mkdtemp(path.join(tmpdir(), "inspector-repo-"));
 const outsideDir = await mkdtemp(path.join(tmpdir(), "inspector-outside-"));
-
-process.env.AGENT_WORKSPACE_PROJECT_ROOT = projectDir;
+const original = {
+  data: process.env.AGENT_WORKSPACE_DATA_DIR, roots: process.env.AGENT_WORKSPACE_ALLOWED_ROOTS,
+  pm: process.env.PM_API_URL, access: process.env.AGENT_WORKSPACE_ACCESS_TOKEN,
+  ceiling: process.env.GIT_CEILING_DIRECTORIES,
+};
 process.env.AGENT_WORKSPACE_DATA_DIR = dataDir;
-// Keep temp fixtures from discovering the repository that contains the OS temp dir.
+process.env.AGENT_WORKSPACE_ALLOWED_ROOTS = JSON.stringify([tmpdir()]);
+delete process.env.AGENT_WORKSPACE_ACCESS_TOKEN;
 process.env.GIT_CEILING_DIRECTORIES = tmpdir();
 
-const workspaceId = "inspector-workspace";
-const scopeRoots = new Map<string, string>();
-let currentProjectId = "files";
-scopeRoots.set(currentProjectId, projectDir);
-let pmServer: Server;
-let pmStatus = 200;
-const pmRequests: { scope: AgentScope; cookie?: string; authorization?: string }[] = [];
-const originalPmUrl = process.env.PM_API_URL;
-
-// The app and its route modules snapshot environment-dependent state at load
-// time, so the project/data roots must be set before a static import would run.
-const { app } = await import("../app.ts");
-const { ensureThread } = await import("../durable/threads.ts");
+// These imports must follow fixture environment setup: the durable store and
+// execution modules snapshot data-directory configuration during module loading.
+const { inspectorRoutes } = await import("./index.ts");
+const { accessGuard } = await import("../access.ts");
+const { ensureThread, freezeThreadExecution } = await import("../durable/threads.ts");
 const { closeStore } = await import("../durable/store.ts");
+const { openAgentWorkspace, resolveAgentWorkspaceExecution, updateAgentWorkspace } = await import("../agent-workspaces.ts");
+const app = new Hono().use("/api/*", accessGuard).route("/api", inspectorRoutes);
+const fixtures = new Map<string, { workspace: AgentWorkspace; threadId: string }>();
+let currentDirectory = projectDir;
+let pmServer: Server;
+let pmRequests = 0;
+
+function directoryFixture(directory: string) {
+  let fixture = fixtures.get(directory);
+  if (!fixture) {
+    const workspace = openAgentWorkspace({ path: directory });
+    const threadId = `fixture:${workspace.id}`;
+    const selection = { version: 2 as const, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+    ensureThread(threadId, undefined, selection);
+    fixture = { workspace, threadId };
+    fixtures.set(directory, fixture);
+  }
+  return fixture;
+}
 
 async function getJson<T>(
   url: string,
-  projectId: string | null = currentProjectId,
+  directory = currentDirectory,
 ): Promise<{ status: number; body: T }> {
   const scoped = new URL(url, "http://localhost");
-  scoped.searchParams.set("workspaceId", workspaceId);
-  if (projectId !== null) scoped.searchParams.set("projectId", projectId);
+  if (!scoped.searchParams.has("threadId"))
+    scoped.searchParams.set("threadId", directoryFixture(directory).threadId);
   const response = await app.request(scoped.toString(), { headers: { host: "localhost" } });
   return { status: response.status, body: (await response.json()) as T };
 }
@@ -62,24 +78,16 @@ function runGit(cwd: string, args: string[]): Promise<string> {
   return promise;
 }
 
-async function setFileArea(directory: string): Promise<void> {
-  currentProjectId = directory;
-  scopeRoots.set(currentProjectId, directory);
+async function selectDirectory(directory: string): Promise<void> {
+  currentDirectory = directory;
+  directoryFixture(directory);
 }
 
 before(async () => {
-  pmServer = createServer(async (request, response) => {
-    assert.equal(request.url, "/api/v1/agent-contexts/resolve");
-    assert.equal(request.method, "POST");
-    let body = "";
-    for await (const chunk of request) body += chunk;
-    const scope = JSON.parse(body) as AgentScope;
-    pmRequests.push({ scope, cookie: request.headers.cookie, authorization: request.headers.authorization });
-    const root = scope.workspaceId === workspaceId ? scopeRoots.get(scope.projectId ?? "workspace") : undefined;
-    response.writeHead(pmStatus !== 200 ? pmStatus : root ? 200 : 404, { "content-type": "application/json" });
-    response.end(JSON.stringify(root
-      ? { scope, path: root, workspaceName: "Inspector", projectName: scope.projectId }
-      : { error: "not_found_or_forbidden" }));
+  pmServer = createServer((_request, response) => {
+    pmRequests++;
+    response.writeHead(503, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "PM is deliberately offline" }));
   });
   const listening = Promise.withResolvers<void>();
   pmServer.listen(0, "127.0.0.1", listening.resolve);
@@ -116,12 +124,18 @@ before(async () => {
 });
 
 after(async () => {
+  assert.equal(pmRequests, 0, "ordinary inspection never calls PM");
   closeStore();
   const closing = Promise.withResolvers<void>();
   pmServer.close((error) => error ? closing.reject(error) : closing.resolve());
   await closing.promise;
-  if (originalPmUrl === undefined) delete process.env.PM_API_URL;
-  else process.env.PM_API_URL = originalPmUrl;
+  for (const [key, value] of [
+    ["AGENT_WORKSPACE_DATA_DIR", original.data], ["AGENT_WORKSPACE_ALLOWED_ROOTS", original.roots],
+    ["PM_API_URL", original.pm], ["AGENT_WORKSPACE_ACCESS_TOKEN", original.access],
+    ["GIT_CEILING_DIRECTORIES", original.ceiling],
+  ] as const) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
   await Promise.all(
     [projectDir, dataDir, repoDir, outsideDir].map((directory) =>
       rm(directory, { recursive: true, force: true }),
@@ -219,7 +233,7 @@ test("rejects binary files, directories, missing paths and traversal", async () 
 });
 
 test("reports git status with staged and unstaged flags", async () => {
-  await setFileArea(repoDir);
+  await selectDirectory(repoDir);
   const { status, body } = await getJson<GitStatusResponse>("/api/inspector/git");
   assert.equal(status, 200);
   assert.equal(body.repo, true);
@@ -263,7 +277,7 @@ test("reports git status with staged and unstaged flags", async () => {
 });
 
 test("returns staged and worktree diffs", async () => {
-  await setFileArea(repoDir);
+  await selectDirectory(repoDir);
 
   const staged = await getJson<GitDiffResponse>("/api/inspector/git/diff?path=staged.txt&staged=1");
   assert.equal(staged.status, 200);
@@ -284,7 +298,7 @@ test("returns staged and worktree diffs", async () => {
 });
 
 test("diffs untracked files against /dev/null", async () => {
-  await setFileArea(repoDir);
+  await selectDirectory(repoDir);
   const { status, body } = await getJson<GitDiffResponse>("/api/inspector/git/diff?path=notes.md");
   assert.equal(status, 200);
   assert.equal(body.untracked, true);
@@ -294,7 +308,7 @@ test("diffs untracked files against /dev/null", async () => {
 });
 
 test("diffs staged renames and worktree deletions", async () => {
-  await setFileArea(repoDir);
+  await selectDirectory(repoDir);
   const renamed = await getJson<GitDiffResponse>(
     "/api/inspector/git/diff?path=renamed.txt&staged=true",
   );
@@ -307,7 +321,7 @@ test("diffs staged renames and worktree deletions", async () => {
   assert.match(deleted.body.patch, /-gone/);
 });
 
-test("normalizes paths when the project is a repository subdirectory", async () => {
+test("does not borrow a parent repository when a selected root is a repository subdirectory", async () => {
   const outer = await mkdtemp(path.join(tmpdir(), "inspector-outer-"));
   const inner = path.join(outer, "app");
   try {
@@ -318,27 +332,21 @@ test("normalizes paths when the project is a repository subdirectory", async () 
     await writeFile(path.join(inner, "inside.txt"), "inside\n");
     await writeFile(path.join(outer, "outside.txt"), "outside\n");
 
-    await setFileArea(inner);
+    await selectDirectory(inner);
     const status = await getJson<GitStatusResponse>("/api/inspector/git");
     assert.equal(status.status, 200);
-    assert.equal(status.body.repo, true);
-    assert.deepEqual(
-      status.body.files.map((file) => file.path),
-      ["inside.txt"],
-    );
-
+    assert.equal(status.body.repo, false);
+    assert.deepEqual(status.body.files, []);
     const diff = await getJson<GitDiffResponse>("/api/inspector/git/diff?path=inside.txt");
-    assert.equal(diff.status, 200);
-    assert.match(diff.body.patch, /b\/inside\.txt/);
-    assert.doesNotMatch(diff.body.patch, /outside\.txt/);
+    assert.equal(diff.status, 409);
   } finally {
-    await setFileArea(repoDir);
+    await selectDirectory(repoDir);
     await rm(outer, { recursive: true, force: true });
   }
 });
 
 test("reports non-repositories", async () => {
-  await setFileArea(projectDir);
+  await selectDirectory(projectDir);
   const status = await getJson<GitStatusResponse>("/api/inspector/git");
   assert.equal(status.status, 200);
   assert.equal(status.body.repo, false);
@@ -348,154 +356,126 @@ test("reports non-repositories", async () => {
   assert.equal(diff.status, 409);
   assert.equal(diff.body.code, "not_a_repo");
 
-  await setFileArea(repoDir);
+  await selectDirectory(repoDir);
 });
 
-test("requires explicit scope on every endpoint before resolving PM", async () => {
-  const count = pmRequests.length;
+test("requires one explicit Session and rejects all client filesystem or PM binding parameters", async () => {
+  const threadId = directoryFixture(projectDir).threadId;
   for (const endpoint of ["files", "file", "git", "git/diff"]) {
     for (const query of [
-      "",
-      "?projectId=files",
-      "?workspaceId=",
-      `?workspaceId=${workspaceId}&projectId=`,
-      `?workspaceId=${workspaceId}&workspaceId=forged`,
-      `?workspaceId=${workspaceId}&root=${encodeURIComponent(outsideDir)}`,
-      `?workspaceId=${workspaceId}&cwd=${encodeURIComponent(outsideDir)}`,
+      "", "?threadId=", `?threadId=${threadId}&threadId=forged`,
+      ...["workspaceId", "projectId", "rootId", "agentWorkspaceId", "cwd", "root"].map(
+        key => `?threadId=${threadId}&${key}=${encodeURIComponent(outsideDir)}`,
+      ),
     ]) {
       const response = await app.request(`/api/inspector/${endpoint}${query}`, { headers: { host: "localhost" } });
       assert.equal(response.status, 400, `${endpoint}${query}`);
     }
   }
-  assert.equal(pmRequests.length, count);
+  assert.equal(pmRequests, 0);
 });
 
-test("validates persisted scope and denies unknown, legacy and forged thread bindings", async () => {
-  const scope = { workspaceId, projectId: "files" };
-  ensureThread("inspector-scoped", undefined, scope);
-  ensureThread("inspector-legacy");
-  const valid = await getJson<InspectorTreeResponse>("/api/inspector/files?threadId=inspector-scoped", "files");
-  assert.equal(valid.status, 200);
+test("denies unknown and chat-only Sessions without allocating an inspectable scratch root", async () => {
+  ensureThread("inspector-chat-only", undefined, { version: 2, agentWorkspaceId: null, agentWorkspaceRevision: null });
   for (const endpoint of ["files", "file", "git", "git/diff"]) {
-    const count = pmRequests.length;
-    for (const [threadId, projectId, expected] of [
-      ["missing", "files", 404],
-      ["inspector-legacy", "files", 412],
-      ["inspector-scoped", "forged", 409],
-      ["", "files", 400],
-    ] as const) {
-      const response = await getJson(`/api/inspector/${endpoint}?threadId=${threadId}`, projectId);
-      assert.equal(response.status, expected);
-    }
-    assert.equal(pmRequests.length, count);
+    assert.equal((await getJson(`/api/inspector/${endpoint}?threadId=missing`)).status, 404);
+    assert.equal((await getJson(`/api/inspector/${endpoint}?threadId=inspector-chat-only`)).status, 412);
   }
 });
 
-test("resolves simultaneous workspace and project requests independently with request-local auth", async () => {
-  scopeRoots.set("workspace", projectDir);
-  scopeRoots.set("repo", repoDir);
-  const [workspace, project, repo, nonRepo] = await Promise.all([
-    getJson<InspectorTreeResponse>("/api/inspector/files", null),
-    getJson<InspectorTreeResponse>("/api/inspector/files", "repo"),
-    getJson<GitStatusResponse>("/api/inspector/git", "repo"),
-    getJson<GitStatusResponse>("/api/inspector/git", null),
+test("resolves simultaneous directory Sessions independently while PM is offline", async () => {
+  const [first, second, repo, nonRepo] = await Promise.all([
+    getJson<InspectorTreeResponse>("/api/inspector/files", projectDir),
+    getJson<InspectorTreeResponse>("/api/inspector/files", repoDir),
+    getJson<GitStatusResponse>("/api/inspector/git", repoDir),
+    getJson<GitStatusResponse>("/api/inspector/git", projectDir),
   ]);
-  assert.equal(workspace.body.root, projectDir);
-  assert.equal(project.body.root, repoDir);
-  assert.ok(!workspace.body.entries.some((entry) => entry.name === "tracked.txt"));
-  assert.ok(!project.body.entries.some((entry) => entry.name === "a.txt"));
+  assert.equal(first.body.root, projectDir);
+  assert.equal(second.body.root, repoDir);
+  assert.ok(!first.body.entries.some(entry => entry.name === "tracked.txt"));
+  assert.ok(!second.body.entries.some(entry => entry.name === "a.txt"));
   assert.equal(repo.body.repo, true);
   assert.equal(nonRepo.body.repo, false);
   const [own, other] = await Promise.all([
-    getJson<InspectorFileResponse>("/api/inspector/file?path=a.txt", null),
-    getJson("/api/inspector/file?path=a.txt", "repo"),
+    getJson<InspectorFileResponse>("/api/inspector/file?path=a.txt", projectDir),
+    getJson("/api/inspector/file?path=a.txt", repoDir),
   ]);
   assert.equal(own.body.content, "alpha\n");
   assert.equal(other.status, 404);
-  for (const suffix of ["first", "second"]) {
-    const response = await app.request(`/api/inspector/files?workspaceId=${workspaceId}`, {
-      headers: { host: "localhost", cookie: `pm_v4_session=${suffix}`, authorization: `Bearer ${suffix}` },
-    });
-    assert.equal(response.status, 200);
-    assert.equal(pmRequests.at(-1)?.cookie, `pm_v4_session=${suffix}`);
-    assert.equal(pmRequests.at(-1)?.authorization, `Bearer ${suffix}`);
-  }
-  await getJson("/api/inspector/files", null);
-  assert.equal(pmRequests.at(-1)?.cookie, undefined);
-  assert.equal(pmRequests.at(-1)?.authorization, undefined);
+  assert.equal(pmRequests, 0);
 });
 
-test("keeps same-origin and access guards ahead of scope resolution", async () => {
-  const count = pmRequests.length;
-  const url = `/api/inspector/files?workspaceId=${workspaceId}&projectId=files`;
-  const crossOrigin = await app.request(url, { headers: { host: "localhost", origin: "https://evil.invalid" } });
-  assert.equal(crossOrigin.status, 403);
+test("keeps same-origin, Agent access and MCP exclusion ahead of directory resolution", async () => {
+  const url = `/api/inspector/files?threadId=${directoryFixture(projectDir).threadId}`;
+  assert.equal((await app.request(url, { headers: { host: "localhost", origin: "https://evil.invalid" } })).status, 403);
+  assert.equal((await app.request(url, { headers: { host: "localhost", authorization: "Bearer pm-mcp-access-v1.forged" } })).status, 401);
   const previousToken = process.env.AGENT_WORKSPACE_ACCESS_TOKEN;
-  process.env.AGENT_WORKSPACE_ACCESS_TOKEN = "inspector-test-access-token";
+  process.env.AGENT_WORKSPACE_ACCESS_TOKEN = "inspector-test-access-token-at-least-32-chars";
   try {
-    const unauthenticated = await app.request(url, { headers: { host: "localhost" } });
-    assert.equal(unauthenticated.status, 401);
+    assert.equal((await app.request(url, { headers: { host: "localhost" } })).status, 401);
+    assert.equal((await app.request(url, { headers: { host: "localhost", authorization: `Bearer ${process.env.AGENT_WORKSPACE_ACCESS_TOKEN}` } })).status, 200);
   } finally {
     if (previousToken === undefined) delete process.env.AGENT_WORKSPACE_ACCESS_TOKEN;
     else process.env.AGENT_WORKSPACE_ACCESS_TOKEN = previousToken;
   }
-  assert.equal(pmRequests.length, count);
 });
 
-test("returns PM auth, forged scope and availability failures without a global fallback", async () => {
-  const forged = await getJson("/api/inspector/files", "forged");
-  assert.equal(forged.status, 404);
-  for (const status of [401, 403, 503]) {
-    pmStatus = status;
-    try {
-      for (const endpoint of ["files", "file", "git", "git/diff"]) {
-        const response = await getJson(`/api/inspector/${endpoint}`, "files");
-        assert.equal(response.status, status);
-      }
-    } finally {
-      pmStatus = 200;
-    }
-  }
-  const pmUrl = process.env.PM_API_URL;
-  process.env.PM_API_URL = "invalid-url";
+test("rejects a frozen Session path rebind instead of inspecting the new path", async () => {
+  const workspace = directoryFixture(projectDir).workspace;
+  const selection = { version: 2 as const, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+  ensureThread("inspector-rebound", undefined, selection);
+  const { environment } = resolveAgentWorkspaceExecution(selection);
+  freezeThreadExecution("inspector-rebound", { ...environment, executionPath: repoDir, frozen: true });
+  for (const endpoint of ["files", "git"])
+    assert.equal((await getJson(`/api/inspector/${endpoint}?threadId=inspector-rebound`)).status, 409);
+});
+
+test("future revisions reject and metadata rename does not rebind an existing Session", async () => {
+  const fixture = directoryFixture(projectDir);
+  const selection = { version: 2 as const, agentWorkspaceId: fixture.workspace.id, agentWorkspaceRevision: fixture.workspace.revision + 100 };
+  ensureThread("inspector-future-revision", undefined, selection);
+  assert.ok((await getJson("/api/inspector/files?threadId=inspector-future-revision")).status >= 400);
+  updateAgentWorkspace(fixture.workspace.id, { expectedRevision: fixture.workspace.revision, name: "Renamed directory" });
+  const unchanged = await getJson<InspectorTreeResponse>("/api/inspector/files", projectDir);
+  assert.equal(unchanged.status, 200);
+  assert.equal(unchanged.body.root, projectDir);
+});
+
+test("rejects same-path directory replacement and missing roots without fallback", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "inspector-replacement-"));
+  const moved = `${directory}-original`;
   try {
-    assert.equal((await getJson("/api/inspector/files", "files")).status, 503);
+    const fixture = directoryFixture(directory);
+    await rename(directory, moved);
+    for (const endpoint of ["files", "git"])
+      assert.ok((await getJson(`/api/inspector/${endpoint}?threadId=${fixture.threadId}`)).status >= 400);
+    await mkdir(directory);
+    await writeFile(path.join(directory, "replacement-secret"), "must not appear");
+    for (const endpoint of ["files", "git"])
+      assert.ok((await getJson(`/api/inspector/${endpoint}?threadId=${fixture.threadId}`)).status >= 400);
   } finally {
-    process.env.PM_API_URL = pmUrl;
+    await rm(directory, { recursive: true, force: true });
+    await rm(moved, { recursive: true, force: true });
   }
 });
 
-test("uses the current PM directory on each request without changing the thread binding", async () => {
-  ensureThread("inspector-rebound", undefined, { workspaceId, projectId: "rebound" });
-  scopeRoots.set("rebound", projectDir);
-  try {
-    const before = await getJson<InspectorTreeResponse>("/api/inspector/files?threadId=inspector-rebound", "rebound");
-    assert.equal(before.body.root, projectDir);
-    scopeRoots.set("rebound", repoDir);
-    const after = await getJson<InspectorTreeResponse>("/api/inspector/files?threadId=inspector-rebound", "rebound");
-    assert.equal(after.body.root, repoDir);
-    const git = await getJson<GitStatusResponse>("/api/inspector/git?threadId=inspector-rebound", "rebound");
-    assert.equal(git.body.repo, true);
-    scopeRoots.set("rebound", path.join(outsideDir, "missing-area"));
-    for (const endpoint of ["files", "file", "git", "git/diff"]) {
-      const unavailable = await getJson(`/api/inspector/${endpoint}?threadId=inspector-rebound`, "rebound");
-      assert.equal(unavailable.status, 412);
-    }
-  } finally {
-    scopeRoots.delete("rebound");
-  }
+test("keeps duplicate relative filenames isolated by server-resolved Session directories", async () => {
+  await writeFile(path.join(projectDir, "duplicate.txt"), "first-directory");
+  await writeFile(path.join(repoDir, "duplicate.txt"), "second-directory");
+  const first = await getJson<InspectorFileResponse>("/api/inspector/file?path=duplicate.txt", projectDir);
+  const second = await getJson<InspectorFileResponse>("/api/inspector/file?path=duplicate.txt", repoDir);
+  assert.equal(first.body.content, "first-directory");
+  assert.equal(second.body.content, "second-directory");
 });
 
-test("denies symlinks outside the selected scope, including missing descendants", async () => {
+test("denies symlinks outside the selected directory, including missing descendants", async () => {
   for (const endpoint of ["files", "file", "git/diff"]) {
-    for (const target of ["escape", "escape/deleted.txt"]) {
-      const result = await getJson(`/api/inspector/${endpoint}?path=${target}`, "files");
-      assert.equal(result.status, 400);
-    }
+    for (const target of ["escape", "escape/deleted.txt"])
+      assert.equal((await getJson(`/api/inspector/${endpoint}?path=${target}`, projectDir)).status, 400);
   }
 });
 
-test("treats Git pathspec magic as a literal path within the selected subtree", async () => {
+test("rejects an enclosing repository and treats pathspec magic literally in an independently selected repository", async () => {
   const outer = await mkdtemp(path.join(tmpdir(), "inspector-pathspec-"));
   const inner = path.join(outer, "app");
   try {
@@ -508,17 +488,27 @@ test("treats Git pathspec magic as a literal path within the selected subtree", 
     await runGit(outer, ["add", "."]);
     await runGit(outer, ["commit", "-qm", "init"]);
     await writeFile(path.join(outer, "outside.txt"), "private after\n");
-    scopeRoots.set("nested", inner);
-    const status = await getJson<GitStatusResponse>("/api/inspector/git", "nested");
-    assert.equal(status.body.root, inner);
-    assert.deepEqual(status.body.files, []);
-    const diff = await getJson<GitDiffResponse>(`/api/inspector/git/diff?path=${encodeURIComponent(":(top)outside.txt")}`, "nested");
+    const status = await getJson<GitStatusResponse>("/api/inspector/git", inner);
+    assert.equal(status.body.repo, false);
+    const rejected = await getJson<{ code: string }>("/api/inspector/git/diff", inner);
+    assert.equal(rejected.status, 409);
+    assert.equal(rejected.body.code, "not_a_repo");
+    await runGit(inner, ["init", "-q"]);
+    await runGit(inner, ["config", "user.email", "test@example.com"]);
+    await runGit(inner, ["config", "user.name", "Test"]);
+    await runGit(inner, ["add", "."]);
+    await runGit(inner, ["commit", "-qm", "independent root"]);
+    await writeFile(path.join(inner, "inside.txt"), "inside after\n");
+    const independent = await getJson<GitStatusResponse>("/api/inspector/git", inner);
+    assert.equal(independent.body.root, inner);
+    assert.equal(independent.body.files[0]?.path, "inside.txt");
+    const diff = await getJson<GitDiffResponse>(`/api/inspector/git/diff?path=${encodeURIComponent(":(top)inside.txt")}`, inner);
     assert.equal(diff.status, 200);
     assert.equal(diff.body.patch, "");
-    const full = await getJson<GitDiffResponse>("/api/inspector/git/diff", "nested");
-    assert.equal(full.body.patch, "");
+    const full = await getJson<GitDiffResponse>("/api/inspector/git/diff", inner);
+    assert.match(full.body.patch, /inside after/);
+    assert.doesNotMatch(full.body.patch, /private after/);
   } finally {
-    scopeRoots.delete("nested");
     await rm(outer, { recursive: true, force: true });
   }
 });

@@ -63,13 +63,14 @@ export function PmReferenceTray({
         {references.map((reference) => {
           const availability: Availability = reference.availability ?? "unverified";
           const availabilityText = AVAILABILITY_LABEL[availability];
-          const text = `@${reference.id} · ${reference.title}`;
+          const text = `@${reference.id} · ${reference.title} · ${reference.workspaceId}${reference.projectId ? ` / ${reference.projectId}` : ""}`;
           return (
-            <li key={`${reference.kind}:${reference.projectId ?? ""}:${reference.id}`} className={styles.chip}>
+            <li key={`${reference.workspaceId}:${reference.kind}:${reference.projectId ?? ""}:${reference.id}`} className={styles.chip}>
               <span className={styles.chipLabel} title={`${text} · ${KIND_LABEL[reference.kind]} · ${availabilityText}`}>
                 <span className={styles.chipId}>@{reference.id}</span>
                 {" · "}
                 <span className={styles.chipTitle}>{reference.title}</span>
+                <small className="text-muted-foreground">{reference.workspaceId}{reference.projectId ? ` / ${reference.projectId}` : ""}</small>
               </span>
               {availability !== "available" ? (
                 <span className={styles.chipState} data-state={availability} title={t(`PM 核验状态：${availabilityText}`, `PM verification: ${availabilityText}`)}>

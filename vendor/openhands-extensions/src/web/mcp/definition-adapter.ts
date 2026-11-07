@@ -1,6 +1,5 @@
 import type { ExtensionMcpDefinition, ExtensionMcpManagement } from "@agent-workspace/contracts/extensions";
-import type { McpServer, McpServersMap } from "@pm/cc-switch-source/types";
-import { MCP_APP_IDS, type McpAppId } from "@pm/cc-switch-source/config/appConfig";
+import { MCP_APP_IDS, type McpAppId, type McpServer, type McpServersMap } from "@pm/cc-switch-ui";
 import type { MCPServerConfig } from "@pm/openhands-source/types/mcp-server";
 
 /** Presentation projection only. Rust remains the validator/projector for all writes. */

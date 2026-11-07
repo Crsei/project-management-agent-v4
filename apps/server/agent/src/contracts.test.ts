@@ -59,26 +59,6 @@ const postJson = (input: string, body: unknown) =>
     body: JSON.stringify(body),
   });
 
-const validStep = (id: string) => ({
-  id,
-  name: `步骤 ${id}`,
-  model: "gpt-5.4",
-  providerInstanceId: "codex",
-  system: "",
-  instruction: "总结输入。",
-});
-
-const validRun = () => ({
-  runId: "run-contract",
-  threadId: "thread-contract",
-  name: "契约测试",
-  kind: "workflow",
-  input: "请总结这段文本。",
-  context: "",
-  temperature: 0.7,
-  steps: [validStep("step-1")],
-});
-
 const assertJsonError = async (response: Response, status: number) => {
   assert.equal(response.status, status);
   const payload = (await response.json()) as { error?: unknown; code?: unknown };
@@ -130,47 +110,4 @@ test("POST /api/chat rejects malformed and incomplete bodies", async () => {
   const missingMessages = await postJson("/api/chat", { system: "测试" });
   const payload = await assertJsonError(missingMessages, 400);
   assert.equal(payload.code, "invalid_request");
-});
-
-test("POST /api/chat refuses legacy unscoped execution without defaulting to the repository", async () => {
-  const response = await postJson("/api/chat", {
-    id: "thread-contract",
-    messages: [{ id: "m-1", role: "user", parts: [{ type: "text", text: "你好" }] }],
-  });
-
-  const payload = await assertJsonError(response, 412);
-  assert.equal(payload.code, "scope_required");
-});
-
-test("POST /api/workspace/runs validates request boundaries", async () => {
-  const missing = await postJson("/api/workspace/runs", {});
-  await assertJsonError(missing, 400);
-
-  const tooManySteps = await postJson("/api/workspace/runs", {
-    ...validRun(),
-    steps: Array.from({ length: 9 }, (_, index) => validStep(`step-${index + 1}`)),
-  });
-  await assertJsonError(tooManySteps, 400);
-
-  const duplicateIds = await postJson("/api/workspace/runs", {
-    ...validRun(),
-    steps: [validStep("step-1"), validStep("step-1")],
-  });
-  await assertJsonError(duplicateIds, 400);
-
-  const longInput = await postJson("/api/workspace/runs", {
-    ...validRun(),
-    input: "x".repeat(8001),
-  });
-  await assertJsonError(longInput, 400);
-});
-
-test("POST /api/workspace/runs rejects bodies over 2 MiB with 413", async () => {
-  const oversized = await postJson("/api/workspace/runs", {
-    ...validRun(),
-    context: "x".repeat(2 * 1024 * 1024),
-  });
-  assert.equal(oversized.status, 413);
-  const payload = (await oversized.json()) as { error?: unknown };
-  assert.equal(typeof payload.error, "string");
 });

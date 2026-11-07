@@ -61,7 +61,7 @@ allowed.set("packages/automation-resources/catalog.ts", [
 const normalize = value => value.split(path.sep).join("/");
 const moduleKey = value => value.replace(/\.(?:[cm]?[jt]sx?)$/, "");
 const exactAllowed = new Map([...allowed].map(([importer, targets]) => [importer, new Set(targets.map(moduleKey))]));
-const sourceRoots = ["apps/server/agent/src", "apps/web/src/features/agent", "packages/contracts/src", "packages/agent-contracts/src", "packages/agent-client-runtime/src", "packages/automation-resources"];
+const sourceRoots = ["apps/server/agent/src", "apps/web/src/features/agent", "packages/ui/src", "packages/contracts/src", "packages/agent-contracts/src", "packages/agent-client-runtime/src", "packages/automation-resources"];
 
 /** AST inspection shared by the CLI and its negative regression fixtures. */
 export function inspectImportBoundaries(filename, text) {

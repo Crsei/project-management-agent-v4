@@ -13,11 +13,11 @@ import { DurableChatTransport } from "./chat/transport";
 import { PmChatSurface } from "./pm/chat-surface";
 import { canSendThread, usePmChatState } from "./pm/state";
 
-const ACTIVE_THREAD_KEY = "pm-v3:agent-active-thread";
+const ACTIVE_THREAD_KEY = "pm-v4:agent-active-thread:execution-v2";
 function readActiveThread(entry?: URLSearchParams): string | undefined {
   const params = entry ?? new URLSearchParams(window.location.search);
   if (params.get("thread")) return params.get("thread")!;
-  // A PM context entry starts in that explicit scope, never an unrelated old thread.
+  // An explicit PM hand-off starts a fresh chat; it never selects or rebinds a code folder.
   if (params.has("workspace")) return undefined;
   try { return localStorage.getItem(ACTIVE_THREAD_KEY) ?? undefined; }
   catch { return undefined; }

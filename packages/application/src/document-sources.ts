@@ -14,8 +14,9 @@ import { assertProjectScope, getMembership, type Membership } from './access.ts'
 import { agentAllowedDirectory, type AgentDirectoryConfiguration } from './agent-storage.ts';
 import { requireLocalManagement } from './local-projects.ts';
 import type { SqlExecutor } from './ports.ts';
+import { externalDocumentHistoryAddress, externalDocumentHistorySnapshot, type ExternalDocumentHistoryAddress, type ExternalDocumentHistoryPrepared, type ExternalDocumentHistorySink } from './external-document-history.ts';
 
-export type DocumentSourceContext = { sql: SqlExecutor; actor: Actor; config: AgentDirectoryConfiguration; workspace: (workspaceId: string) => Promise<Workspace> };
+export type DocumentSourceContext = { sql: SqlExecutor; actor: Actor; config: AgentDirectoryConfiguration; workspace: (workspaceId: string) => Promise<Workspace>; history?: ExternalDocumentHistorySink };
 const contains = pathContains;
 const overlaps = (a: string, b: string): boolean => contains(a, b) || contains(b, a);
 function pathVisible(member: Membership): boolean { return member.projectIds === null && member.capabilities.includes('access.manage'); }
@@ -186,7 +187,7 @@ export async function listDocumentSourceDirectories(context: DocumentSourceConte
   finally { directory.close(); }
 }
 
-async function readSource<T>(context: DocumentSourceContext, reference: DocumentSourceReference, operation: (directory: DocumentSourceDirectory, saved: DocumentSourceRow, canRead: (relative: string) => boolean, member: Membership) => T, expectedRevision?: number): Promise<T> {
+async function readSource<T>(context: DocumentSourceContext, reference: DocumentSourceReference, operation: (directory: DocumentSourceDirectory, saved: DocumentSourceRow, canRead: (relative: string) => boolean, member: Membership) => T, expectedRevision?: number, observed?: (result: T, saved: DocumentSourceRow) => Promise<void>): Promise<T> {
   reference = documentSourceReferenceSchema.parse(reference);
   const { member, saved } = await authorizedSource(context, reference);
   if (expectedRevision !== undefined && saved.revision !== expectedRevision) throw new DomainError('document_source_cursor_invalid', 'The source changed; reload from the first page', 409);
@@ -197,7 +198,14 @@ async function readSource<T>(context: DocumentSourceContext, reference: Document
     const current = await authorizedSource(context, reference);
     if (current.member.version !== member.version) throw new DomainError('not_found_or_forbidden', 'Authorization changed during the read', 404);
     if (current.saved.revision !== saved.revision) throw new DomainError('document_source_cursor_invalid', 'The source changed; reload from the first page', 409);
-    directory.assertCurrent(); return result;
+    directory.assertCurrent();
+    if (observed) {
+      await observed(result, saved);
+      const latest = await authorizedSource(context, reference);
+      if (latest.member.version !== member.version || latest.saved.revision !== saved.revision) throw new DomainError('not_found_or_forbidden', 'Authorization or source binding changed during the read', 404);
+      directory.assertCurrent();
+    }
+    return result;
   } catch (error) { return documentSourceFileError(error); }
   finally { directory?.close(); }
 }
@@ -227,7 +235,79 @@ export async function readDocumentSourceContent(context: DocumentSourceContext, 
     if (!canRead(relative)) throw new DomainError('not_found_or_forbidden', 'The requested document is unavailable', 404);
     try { return directory.content(relative, saved.revision, member.capabilities.includes('planning.edit')); }
     catch (error) { return documentSourceFileError(error, true); }
+  }, undefined, async (content, saved) => {
+    await context.history?.(context.sql, {
+      workspaceId: reference.workspaceId, actorId: null, operationId: null, action: 'observe',
+      source: externalDocumentHistoryAddress(saved, relative), before: null, after: externalDocumentHistorySnapshot(content), observedAt: new Date().toISOString(),
+    }, expected => resolveAuthorizedExternalDocumentHistoryAddress(context, reference.workspaceId, expected, reference.sourceId));
   });
+}
+
+/** History may outlive a file, never its current source authorization or root binding. */
+export async function authorizeExternalDocumentHistory(context: DocumentSourceContext, reference: DocumentSourceReference & { path: string }, expectedAddress?: ExternalDocumentHistoryAddress): Promise<ExternalDocumentHistoryAddress> {
+  return readSource(context, { workspaceId: reference.workspaceId, sourceId: reference.sourceId }, (directory, saved, canRead) => {
+    assertDocumentRelativePath(reference.path);
+    if (!canRead(reference.path)) throw new DomainError('not_found_or_forbidden', 'The requested document history is unavailable', 404);
+    directory.assertHistoryPath(reference.path);
+    const address = externalDocumentHistoryAddress(saved, reference.path);
+    if (expectedAddress && (address.sourceId !== expectedAddress.sourceId || address.path !== expectedAddress.path
+      || address.projectId !== expectedAddress.projectId || address.sourceRevision !== expectedAddress.sourceRevision
+      || address.rootIdentity !== expectedAddress.rootIdentity || address.locationKey !== expectedAddress.locationKey))
+      throw new DomainError('not_found_or_forbidden', 'The historical source binding is no longer available', 404);
+    return address;
+  });
+}
+
+/** An explicitly shared current association may authorize the same retained file. */
+export async function resolveAuthorizedExternalDocumentHistoryAddress(context: DocumentSourceContext, workspaceId: string, expected: ExternalDocumentHistoryAddress, preferredSourceId?: string): Promise<ExternalDocumentHistoryAddress> {
+  const member = await getMembership(context.sql, context.actor, workspaceId);
+  if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403);
+  const original = await readDocumentSource(context.sql, { workspaceId, sourceId: expected.sourceId }, true);
+  if (!original || !original.path) throw new DomainError('not_found_or_forbidden', 'The historical source binding is unavailable', 404);
+  assertDocumentRelativePath(expected.path);
+  const originalAddress = externalDocumentHistoryAddress(original, expected.path);
+  if (originalAddress.rootIdentity !== expected.rootIdentity || originalAddress.locationKey !== expected.locationKey
+    || originalAddress.sourceRevision !== expected.sourceRevision || originalAddress.projectId !== expected.projectId)
+    throw new DomainError('not_found_or_forbidden', 'The historical source binding is unavailable', 404);
+  const directory = openRoot(context, original.path, { device: original.directory_device!, inode: original.directory_inode! });
+  try {
+    directory.assertHistoryPath(expected.path);
+    const location = path.join(original.path, expected.path), sources = await readDocumentSources(context.sql, workspaceId);
+    sources.sort((left, right) => Number(right.source_id === preferredSourceId) - Number(left.source_id === preferredSourceId)
+      || Number(right.source_id === expected.sourceId) - Number(left.source_id === expected.sourceId));
+    for (const source of sources) {
+      if (!source.path || !contains(source.path, location)) continue;
+      const relative = path.relative(source.path, location).split(path.sep).join('/');
+      try {
+        const address = await authorizeExternalDocumentHistory(context, { workspaceId, sourceId: source.source_id, path: relative });
+        if (address.locationKey !== expected.locationKey) continue;
+        directory.assertCurrent();
+        return address;
+      } catch (error) {
+        if (!(error instanceof DomainError) || ![403, 404, 409].includes(error.status)) throw error;
+      }
+    }
+    throw new DomainError('not_found_or_forbidden', 'No current authorized source exposes this historical document', 404);
+  } catch (error) { return documentSourceFileError(error); }
+  finally { directory.close(); }
+}
+
+async function publishDocumentSourceHistory(context: DocumentSourceContext, reference: DocumentSourceReference, row: DocumentSourceOperationRow, receipt: DocumentSourceMutationReceipt, existingJournal?: DocumentSourceOperationJournal): Promise<void> {
+  if (!context.history || receipt.status !== 'succeeded') return;
+  const journal = existingJournal ?? new DocumentSourceOperationJournal(context.config.dataRoot, reference.workspaceId, context.actor.id);
+  try {
+    const capture = journal.readHistory(row.operation_id, row.request_hash);
+    // Old receipts did not retain before bytes. Never substitute today's file.
+    if (!capture) return;
+    if (capture.workspaceId !== reference.workspaceId || capture.actorId !== context.actor.id || capture.operationId !== row.operation_id
+      || capture.action !== row.request.action || capture.source.sourceId !== reference.sourceId || capture.source.path !== row.request.path
+      || capture.source.sourceRevision !== row.request.sourceRevision || capture.before?.revision !== row.request.expectedRevision
+      || capture.action === 'move' && (capture.target?.sourceId !== row.request.targetSourceId || capture.target?.path !== row.request.targetPath || capture.target?.sourceRevision !== row.request.targetSourceRevision)
+      || capture.action !== 'delete' && !receipt.content)
+      throw new DomainError('document_source_operation_unavailable', 'The original history evidence does not match its completed operation', 409);
+    await context.history(context.sql, { ...capture, after: receipt.content ? externalDocumentHistorySnapshot(receipt.content) : null },
+      expected => resolveAuthorizedExternalDocumentHistoryAddress(context, reference.workspaceId, expected, reference.sourceId));
+  } finally { if (!existingJournal) journal.close(); }
 }
 
 function operationReceipt(row: DocumentSourceOperationRow, status: DocumentSourceMutationReceipt['status'], message?: string): DocumentSourceMutationReceipt {
@@ -255,15 +335,23 @@ async function authorizedReceipt(context: DocumentSourceContext, reference: Docu
   if (!receipt.content) return receipt;
   if (root) {
     try {
-      const checked = allowedRoot(context, root);
-      if ((await readablePaths(context, destination, member, checked))(relative)) return receipt;
+      const sourceId = row.request.action === 'move' ? row.request.targetSourceId ?? row.request.targetScope! : reference.sourceId;
+      const current = await authorizedSource(context, { workspaceId: reference.workspaceId, sourceId });
+      if (current.saved.revision === receipt.content.sourceRevision && samePath(current.saved.path!, root)) {
+        await authorizeExternalDocumentHistory(context, { workspaceId: reference.workspaceId, sourceId, path: relative });
+        return receipt;
+      }
     } catch { /* Historical completion metadata remains queryable without bytes. */ }
   }
   const metadata = { ...receipt, message: 'The original operation completed; its historical content is no longer readable under current directory boundaries' };
   delete metadata.content; return metadata;
 }
 async function reconcileDocumentSourceOperation(context: DocumentSourceContext, reference: DocumentSourceReference, row: DocumentSourceOperationRow): Promise<DocumentSourceMutationReceipt> {
-  if (row.receipt) return authorizedReceipt(context, reference, row, row.receipt);
+  if (row.receipt) {
+    try { await publishDocumentSourceHistory(context, reference, row, row.receipt); }
+    catch { return authorizedReceipt(context, reference, row, operationReceipt(row, 'unknown', 'The original completion is recorded but its history persistence requires reconciliation; do not repeat this write')); }
+    return authorizedReceipt(context, reference, row, row.receipt);
+  }
   if (row.status === 'prepared') {
     const receipt = operationReceipt(row, 'not_applied', 'The original attempt stopped before filesystem dispatch; an explicit new request is safe');
     await finishDocumentSourceOperation(context.sql, reference, context.actor.id, receipt); return authorizedReceipt(context, reference, row, receipt);
@@ -273,6 +361,7 @@ async function reconcileDocumentSourceOperation(context: DocumentSourceContext, 
     journal = new DocumentSourceOperationJournal(context.config.dataRoot, reference.workspaceId, context.actor.id);
     const proof = journal.read(row.operation_id, row.request_hash);
     if (proof) {
+      await publishDocumentSourceHistory(context, reference, row, proof, journal);
       await finishDocumentSourceOperation(context.sql, reference, context.actor.id, proof).catch(() => undefined);
       return authorizedReceipt(context, reference, row, proof);
     }
@@ -340,14 +429,29 @@ export async function mutateDocumentSource(context: DocumentSourceContext, refer
     if (input.action === 'move') target = await writableSource(context, { workspaceId: reference.workspaceId, sourceId: input.targetSourceId }, input.targetSourceRevision, input.targetPath);
     await assertNoPhysicalPending(context, reference, input.operationId, [source.directory.root, ...(target ? [target.directory.root] : [])]);
     if ('content' in input && Buffer.byteLength(input.content, 'utf8') > maxRepositoryFileBytes) throw new DomainError('document_source_file_too_large', 'Markdown content exceeds the 4 MiB limit', 413, { maxBytes: maxRepositoryFileBytes });
+    let before: DocumentSourceContent | null = null;
     if (input.action === 'create') source.directory.assertVacant(input.path);
-    else source.directory.assertWritable(input.path, input.expectedRevision, source.saved.revision);
+    else before = source.directory.assertWritable(input.path, input.expectedRevision, source.saved.revision);
     if (input.action === 'move') {
       if (path.join(source.directory.root, input.path) === path.join(target!.directory.root, input.targetPath)) throw new DomainError('document_source_same_path', 'Source and destination are the same Markdown file', 409);
       target!.directory.assertVacant(input.targetPath); request.targetRoot = target!.directory.root;
     }
     request.sourceRoot = source.directory.root;
     journal = new DocumentSourceOperationJournal(context.config.dataRoot, reference.workspaceId, context.actor.id);
+    const capture: ExternalDocumentHistoryPrepared = {
+      workspaceId: reference.workspaceId, actorId: context.actor.id, operationId: input.operationId, action: input.action,
+      source: externalDocumentHistoryAddress(source.saved, input.path),
+      ...(input.action === 'move' ? { target: externalDocumentHistoryAddress(target!.saved, input.targetPath) } : {}),
+      before: before ? externalDocumentHistorySnapshot(before) : null, observedAt: new Date().toISOString(),
+    };
+    journal.prepareHistory(input.operationId, hash, capture);
+    await authorizeExternalDocumentHistory(context, { ...reference, path: input.path }, capture.source);
+    const latest = await authorizedSource(context, reference); requireWrite(latest.member);
+    if (latest.member.version !== member.version) throw new DomainError('not_found_or_forbidden', 'Authorization changed before the write', 404);
+    if (capture.target) {
+      await authorizeExternalDocumentHistory(context, { workspaceId: reference.workspaceId, sourceId: capture.target.sourceId, path: capture.target.path }, capture.target);
+      requireWrite((await authorizedSource(context, { workspaceId: reference.workspaceId, sourceId: capture.target.sourceId })).member);
+    }
     source.directory.assertCurrent(); target?.directory.assertCurrent();
     await dispatchDocumentSourceOperation(context.sql, reference, context.actor.id, input.operationId, request); dispatched = true;
     let content: DocumentSourceContent | undefined;
@@ -356,7 +460,10 @@ export async function mutateDocumentSource(context: DocumentSourceContext, refer
     else if (input.action === 'delete') source.directory.remove(input.path, input.expectedRevision, source.saved.revision);
     else content = source.directory.move(input.path, input.expectedRevision, source.saved.revision, target!.directory, input.targetPath, target!.saved.revision);
     const receipt = { ...operationReceipt(attempt.row, 'succeeded'), ...(content ? { content } : {}) };
-    journal.record(input.operationId, hash, receipt); await finishDocumentSourceOperation(context.sql, reference, context.actor.id, receipt); return receipt;
+    journal.record(input.operationId, hash, receipt);
+    await publishDocumentSourceHistory(context, reference, attempt.row, receipt, journal);
+    await finishDocumentSourceOperation(context.sql, reference, context.actor.id, receipt);
+    return authorizedReceipt(context, reference, { ...attempt.row, request }, receipt);
   } catch (error) {
     if (dispatched) {
       const receipt = operationReceipt(attempt.row, 'unknown', 'The original filesystem outcome is uncertain; query this operation ID and do not repeat the write');

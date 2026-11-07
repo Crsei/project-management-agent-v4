@@ -5,7 +5,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import type { Server } from "node:http";
 import path from "node:path";
 import { app } from "./app.ts";
-import { attachTerminalUpgrade } from "./inspector/terminal.ts";
+import { attachTerminalUpgrade, stopTerminals } from "./inspector/terminal.ts";
 import { startRuntime, stopRuntime } from "./runtime.ts";
 import { assertNetworkBinding } from "./access.ts";
 import { webDistDirectory } from "./paths.ts";
@@ -48,7 +48,7 @@ function shutdown(): void {
   shuttingDown = true;
   const deadline = setTimeout(() => process.exit(1), 15_000);
   deadline.unref();
-  void Promise.all([stopRuntime(), appPreviews.close(), stopExtensionHost()]).then(
+  void Promise.all([stopRuntime(), appPreviews.close(), stopExtensionHost(), stopTerminals()]).then(
     () => {
       server.close(() => process.exit(0));
       if ("closeAllConnections" in server) server.closeAllConnections();

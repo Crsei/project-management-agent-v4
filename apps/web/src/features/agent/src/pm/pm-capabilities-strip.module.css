@@ -27,11 +27,6 @@
   color: var(--foreground);
 }
 
-.summary:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
 .icon {
   width: 12px;
   height: 12px;
@@ -108,11 +103,6 @@
 
 .retry:hover {
   background: var(--selection);
-}
-
-.retry:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
 }
 
 .list {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { CalendarDays, ChevronDown, ChevronRight, CircleCheck, ClockAlert, Folder, Plus, Sun } from 'lucide-react';
 import { statusCategory, workflowFor, type FileRecord } from '@pm-schema';
 import { addDays } from '../components/service-collection-shared';
@@ -7,6 +7,7 @@ import { usePmService } from '../service/pm-service';
 import { allowed } from '../service/pm-ui';
 import { taskStateLabel } from './task-status-label';
 import type { WorkspaceController } from './controller';
+import type { TaskCollection } from './task-collection-model';
 import { TaskCompletionControl, TaskDateEditor, TaskDueControl, TaskMoreActions, TaskPriorityControl, TaskStatusControl, useTaskRowActions } from './TaskPersonalFields';
 import { CollectionContextMenu } from './CollectionContextMenu';
 import styles from './TaskPersonalList.module.css';
@@ -16,14 +17,18 @@ interface PersonalListProps {
   en: boolean;
   actorId: string | null;
   today: string | null;
+  collection: TaskCollection;
+  pendingOnly: boolean;
+  renderAttention: (file: FileRecord) => ReactNode;
 }
 
-function PersonalTaskRow({ file, controller: c, en, today, onOpenDate }: {
+function PersonalTaskRow({ file, controller: c, en, today, onOpenDate, renderAttention }: {
   file: FileRecord;
   controller: WorkspaceController;
   en: boolean;
   today: string | null;
   onOpenDate: (id: string, anchor: HTMLElement) => void;
+  renderAttention: (file: FileRecord) => ReactNode;
 }) {
   const project = c.projects.find(candidate => candidate.id === file.entity.project);
   const projectLabel = project?.entity.title || (file.entity.project ? en ? 'Project unavailable' : '项目不可用' : en ? 'No project' : '未关联项目');
@@ -42,12 +47,12 @@ function PersonalTaskRow({ file, controller: c, en, today, onOpenDate }: {
       <div className={styles.cell}><TaskPriorityControl file={file} controller={c} en={en} today={today} /></div>
       <div className={styles.cell}><TaskDueControl file={file} controller={c} en={en} today={today} onOpen={onOpenDate} /></div>
     </div>
-    <div className={styles.actions}><TaskMoreActions file={file} en={en} actions={actions} /></div>
+    <div className={styles.actions}>{renderAttention(file)}<TaskMoreActions file={file} en={en} actions={actions} /></div>
   </li>} />;
 }
 
 /** Ownership, date groups and sort order belong to the authorized collection model. */
-export function TaskPersonalList({ controller: c, en, actorId, today }: PersonalListProps) {
+export function TaskPersonalList({ controller: c, en, actorId, today, collection, pendingOnly, renderAttention }: PersonalListProps) {
   const listId = useId();
   const { workspace } = usePmService();
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set(['completed']));
@@ -59,8 +64,9 @@ export function TaskPersonalList({ controller: c, en, actorId, today }: Personal
   useEffect(() => {
     if (dateSelection && !dateFile) setDateSelection(null);
   }, [dateSelection, dateFile]);
-  const collection = c.taskCollection;
-  if (!collection) return null;
+  useEffect(() => {
+    if (pendingOnly) setCollapsed(previous => { const next = new Set(previous); next.delete('completed'); return next; });
+  }, [pendingOnly]);
   const workflow = workflowFor('work_item', c.configuration);
   const createDisabled = !actorId || !c.canWrite || c.configurationInvalid || c.writesBlocked || !!c.busy;
   const completedStates = workflow?.states.filter(state => state.category === 'completed') ?? [];
@@ -114,7 +120,7 @@ export function TaskPersonalList({ controller: c, en, actorId, today }: Personal
           {addControl()}
         </div>
         <div id={contentId} hidden={isCollapsed}>
-          {group.files.length ? <ul className={styles.rows}>{group.files.map(file => <PersonalTaskRow key={file.id} file={file} controller={c} en={en} today={today} onOpenDate={openDate} />)}</ul> : <p className={styles.emptyGroup}>{en ? 'No tasks in this group.' : '此分组暂无任务。'}</p>}
+          {group.files.length ? <ul className={styles.rows}>{group.files.map(file => <PersonalTaskRow key={file.id} file={file} controller={c} en={en} today={today} onOpenDate={openDate} renderAttention={renderAttention} />)}</ul> : <p className={styles.emptyGroup}>{en ? 'No tasks in this group.' : '此分组暂无任务。'}</p>}
           {addControl(true)}
         </div>
       </section>;

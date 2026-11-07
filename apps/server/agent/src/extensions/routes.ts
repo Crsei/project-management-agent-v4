@@ -24,16 +24,21 @@ extensionRoutes.onError((error, c) => {
   if (error instanceof z.ZodError || error instanceof SyntaxError) return c.json({ error: "The configuration request does not match the supported command contract.", code: "invalid_request" }, 400);
   const status = error && typeof error === "object" && "status" in error ? error.status : undefined;
   // Provider binding errors have safe host-authored codes; do not forward raw paths or diagnostics.
-  if (status === 409 || status === 403 || status === 404) return c.json({ error: "The selected Provider binding changed or is unavailable. Review and explicitly bind its current targets.", code: "provider_binding_changed" }, status);
+  if (status === 409 || status === 403 || status === 404) return c.json({ error: "The selected Provider is unavailable or its native authority changed. Reopen the Provider's management page or reconcile its existing owner.", code: "provider_binding_changed" }, status);
   return c.json({ error: "The configuration service is unavailable. No operation completion was inferred; read its authoritative state before retrying.", code: "extension_unavailable" }, 503);
 });
 extensionRoutes.get("/extensions/targets", c => c.json(getExtensionHost().targets()));
+extensionRoutes.post("/extensions/providers/:providerInstanceId/context", bodyLimit({ maxSize: 32 * 1024 }), async c => {
+  z.strictObject({}).parse(await c.req.json());
+  return c.json(await getExtensionHost().resolveProviderContext(c.req.param("providerInstanceId")));
+});
 extensionRoutes.get("/extensions/contexts", async c => {
   const query = z.strictObject({ workspaceId: z.uuid().optional(), projectId: z.string().regex(/^PRJ-\d+$/).optional() }).parse(c.req.query());
   if (Boolean(query.workspaceId) !== Boolean(query.projectId)) throw new ExtensionError(400, "project_scope_required", "Select both a workspace and project for a private project context.");
   return c.json(await getExtensionHost().list(c.req.raw.headers, query.workspaceId && query.projectId ? { workspaceId: query.workspaceId, projectId: query.projectId } : undefined));
 });
 extensionRoutes.post("/extensions/contexts", async c => c.json(await getExtensionHost().bind(extensionBindSchema.parse(await c.req.json())), 201));
+extensionRoutes.post("/extensions/contexts/resolve-enabled", async c => c.json(await getExtensionHost().resolveEnabledProviderContexts()));
 extensionRoutes.delete("/extensions/contexts/:contextId", async c => {
   const body = z.strictObject({ confirmed: z.literal(true) }).parse(await c.req.json());
   if (body.confirmed) await getExtensionHost().unbind(c.req.param("contextId"));

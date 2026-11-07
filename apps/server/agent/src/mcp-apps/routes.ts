@@ -6,8 +6,8 @@ import { DurableError } from "../durable/errors.ts";
 import { mcpAppCall, mcpAppContext, mcpAppResource, mcpAppSnapshot, mcpAppTools } from "./requests.ts";
 import { getThread } from "../durable/threads.ts";
 import { resolveChatExecutionScope } from "../task-delivery/binding.ts";
-import { resolvePmContextBinding } from "../durable/pm-context.ts";
 import { closeMcpAppSession } from "./live.ts";
+import { McpAuthError } from "../mcp/grants.ts";
 
 async function readBody(request: Request, limit: number): Promise<unknown> {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
@@ -38,7 +38,8 @@ async function readBody(request: Request, limit: number): Promise<unknown> {
 /** Mounted by the Agent host at /api; normal browser authentication remains mandatory. */
 export const mcpAppRoutes = new Hono();
 mcpAppRoutes.onError((error, c) => {
-  if (error instanceof DurableError) return c.json({ error: error.message, code: error.code }, error.status as ContentfulStatusCode);
+  if (error instanceof DurableError || error instanceof McpAuthError)
+    return c.json({ error: error.message, code: error.code }, error.status as ContentfulStatusCode);
   if (error instanceof z.ZodError) return c.json({ error: "Invalid MCP App request.", code: "invalid_body" }, 400);
   return c.json({ error: "MCP App request failed.", code: "mcp_app_request_failed" }, 500);
 });
@@ -52,12 +53,11 @@ mcpAppRoutes.use("/mcp-apps/:threadId/:itemId/*", async (c, next) => {
   const thread = getThread(threadId);
   if (!thread) throw new DurableError(404, "thread_not_found", "The producing thread was not found.");
   try {
-    // Shared Chat scope authority runs even when the App capability has stopped.
+    // Independent directory authority runs even when the App capability has stopped.
     // Current browser credentials are never replaced by the producing turn's headers.
     // A frame remount cancels its read, not the native session's authority. Finish
-    // the bounded check so cancellation cannot masquerade as a scope failure.
+    // the bounded check so cancellation cannot masquerade as an authority failure.
     await resolveChatExecutionScope(thread, c.req.raw.headers, "inspect");
-    if (thread.pmContext) await resolvePmContextBinding(thread.pmContext, thread.scope, c.req.raw.headers);
   } catch (error) {
     await closeMcpAppSession(threadId);
     throw error;

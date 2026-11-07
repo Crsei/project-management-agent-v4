@@ -7,6 +7,9 @@ import { DeliveryError } from '../../../../../packages/application/src/task-code
 import { DurableError } from '../durable/errors.ts';
 import { workflowService } from './service.ts';
 import { assertWorkflowRunner, scheduleWorkflow } from './runner.ts';
+import { executionSelectionSchema } from '@agent-workspace/contracts/chat';
+import { createDeliverySession } from '../task-delivery/index.ts';
+import { deliveryStore } from '../task-delivery/binding.ts';
 export const taskWorkflowRoutes = new Hono();
 taskWorkflowRoutes.use('/task-workflows/*', bodyLimit({ maxSize: 96 * 1024 }));
 taskWorkflowRoutes.use('/task-workflows', bodyLimit({ maxSize: 96 * 1024 }));
@@ -16,7 +19,12 @@ taskWorkflowRoutes.onError((error, c) => {
   if (error instanceof z.ZodError || error instanceof SyntaxError) return c.json({ error: '工作流请求或图格式无效。' }, 400);
   return c.json({ error: '工作流暂不可用，请核对登录、项目 Git 仓库与 Provider 就绪状态。' }, 503);
 });
-taskWorkflowRoutes.get('/task-workflows', async c => c.json(await workflowService(c.req.raw.headers).catalog(deliveryScopeSchema.parse(c.req.query()))));
+taskWorkflowRoutes.get('/task-workflows', async c => {
+  const { executionSelection: encoded, ...query } = c.req.query();
+  const scope = deliveryScopeSchema.parse(query);
+  const executionSelection = encoded === undefined ? undefined : executionSelectionSchema.parse(JSON.parse(encoded));
+  return c.json(await workflowService(c.req.raw.headers).catalog({ ...scope, ...(executionSelection ? { executionSelection } : {}) }));
+});
 taskWorkflowRoutes.post('/task-workflows/definitions', async c => c.json(await workflowService(c.req.raw.headers).saveDefinition(workflowSaveSchema.parse(await c.req.json()))));
 taskWorkflowRoutes.post('/task-workflows/runs', async c => {
   assertWorkflowRunner();
@@ -28,7 +36,15 @@ taskWorkflowRoutes.get('/task-workflows/runs/:id', async c => c.json(await workf
 taskWorkflowRoutes.post('/task-workflows/runs/:id/control', async c => {
   assertWorkflowRunner();
   const input = workflowControlSchema.parse(await c.req.json());
-  const value = await workflowService(c.req.raw.headers).control(z.uuid().parse(c.req.param('id')), input.action, input.version);
+  const id = z.uuid().parse(c.req.param('id'));
+  if (input.action === 'new-session') {
+    const value = await workflowService(c.req.raw.headers).replaceSession(id, input.version, input.executionSelection);
+    const delivery = deliveryStore.read(id);
+    if (!delivery) throw new DurableError(409, 'delivery_missing', 'Original delivery receipt is missing.');
+    await createDeliverySession(delivery, c.req.raw.headers);
+    return c.json(value);
+  }
+  const value = await workflowService(c.req.raw.headers).control(id, input.action, input.version);
   if (input.action !== 'pause') scheduleWorkflow(value.id, c.req.raw.headers);
   return c.json(value);
 });

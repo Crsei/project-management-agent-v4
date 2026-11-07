@@ -9,6 +9,7 @@ import { pmExecutionError } from "./continuation.ts";
 import type { PmProviderBoundaryError } from "./contract.ts";
 import { mcpAppFromToolItem } from "@t3tools/shared/toolOutput";
 import { mcpAppMetadataSchema, mcpAppToolResultSchema, type McpAppProducingIdentity } from "@agent-workspace/contracts/mcp-apps";
+import { autoApproveApprovals } from "../../approval-mode.ts";
 
 type RequestItem = Extract<OrchestrationV2TurnItem, { type: "user_input_request" | "approval_request" }>;
 const active: Readonly<Partial<Record<string, true>>> = { idle: true, pending: true, running: true, waiting: true };
@@ -69,15 +70,18 @@ export function makePmEventAdapter(input: {
     const live = !closedRequests.has(id) && source.status === "pending" && source.responseCapability.type === "live"
       && input.isLiveRequest?.(source) === true;
     const respondable = informational && live && input.canRespond && item.questions.length > 0;
+    const autoApproved = !informational && autoApproveApprovals();
     const request: NativeInteractionRequest = {
-      id, itemId: item.id, kind: informational ? "user_input" : "approval", title: item.title ?? (informational ? "Provider question" : "Native permission denied"),
+      id, itemId: item.id, kind: informational ? "user_input" : "approval",
+      title: item.title ?? (informational ? "Provider question" : autoApproved ? "Native permission auto-approved" : "Native permission denied"),
       respondable,
       ...(informational ? { questions: item.questions.map((question) => ({
         id: question.id, title: question.header, prompt: question.question,
         options: question.options.map((option) => ({ id: option.value ?? option.label, label: option.label, description: option.description })),
         multiple: question.multiSelect, allowText: question.allowCustomAnswer,
       })) } : { detail: item.reason ?? item.prompt }),
-      ...(!respondable ? { unavailableReason: !informational ? "Native permissions are denied. PM business approvals remain separate."
+      ...(!respondable ? { unavailableReason: !informational
+        ? autoApproved ? "Auto-approved by configuration; no action required." : "Native permissions are denied. PM business approvals remain separate."
         : source.responseCapability.type === "not_resumable" ? source.responseCapability.reason
         : !live ? "The provider closed this interaction." : "This interaction has no live response channel." } : {}),
     };

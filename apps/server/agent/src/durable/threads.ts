@@ -1,21 +1,19 @@
 import type { NativeSessionRef, CliSessionOptions } from "@agent-workspace/contracts/provider";
-import type { AgentScope, PmContext, RemoteSettings as ThreadSettings } from "@agent-workspace/contracts/chat";
+import { chatOnlyExecutionSelection, type ExecutionSelection, type ExecutionEnvironment, type RemoteSettings as ThreadSettings } from "@agent-workspace/contracts/chat";
 import { deleteRecord, listRecords, readRecord, transaction, writeRecord } from "./store.ts";
-import { sameAgentScope } from "./agent-scope.ts";
-import { normalizedPmContext, samePmContext } from "./pm-context.ts";
 import { newThreadSettingsSnapshot } from "../settings/chat-defaults.ts";
-import { UNSELECTED_THREAD_SETTINGS } from "@agent-workspace/contracts/settings";
+import { sameExecutionIdentity } from "./agent-execution.ts";
 
 export const CHAT_FORMAT = "ai-sdk/v6";
 const THREADS = "chat:threads";
 const HISTORY = "chat:history";
-const IMPORTS = "chat:imports";
 
 export type ThreadMetadata = {
   remoteId: string;
-  scope?: AgentScope;
-  /** Bound PM issue; IDs only, validated through PM before it is stored. */
-  pmContext?: PmContext;
+  executionSelection?: ExecutionSelection;
+  executionEnvironment?: ExecutionEnvironment;
+  /** Private actual cwd freeze, including chat-only scratch that must never appear as a code root. */
+  executionPath?: string;
   title?: string;
   status: "regular" | "archived";
   custom?: Record<string, unknown>;
@@ -28,10 +26,11 @@ export type ThreadMetadata = {
   nativeSession?: NativeSessionRef;
   nativeMessageId?: string;
   nativeSystemPrompt?: string;
-  nativeScope?: AgentScope;
-  pendingForkScope?: AgentScope;
+  nativeEnvironment?: ExecutionEnvironment;
+  pendingForkEnvironment?: ExecutionEnvironment;
   pendingFork?: NonNullable<CliSessionOptions["fork"]>;
   deleted?: boolean;
+  sessionCutover?: unknown;
 };
 export type StoredMessage = {
   id: string;
@@ -66,25 +65,22 @@ const historyKey = (id: string, format: string) => JSON.stringify([id, format]);
 export function ensureThread(
   threadId: string,
   title?: string,
-  scope?: AgentScope,
-  pmContext?: PmContext,
+  executionSelection?: ExecutionSelection,
+  executionEnvironment?: ExecutionEnvironment,
 ): void {
   if (!validThreadId(threadId)) throw new Error("无效的会话 ID。");
   const existing = readRecord<ThreadMetadata>(THREADS, threadId);
   if (existing) {
-    if (scope && !sameAgentScope(existing.scope, scope))
-      throw new ThreadConflictError("已有会话不能更改工作区或项目归属。", "scope_conflict");
-    if (pmContext && !samePmContext(existing.pmContext, pmContext))
-      throw new ThreadConflictError("已有会话不能静默更改绑定的 PM 议题。", "pm_context_conflict");
+    if (executionSelection && JSON.stringify(existing.executionSelection) !== JSON.stringify(executionSelection))
+      throw new ThreadConflictError("Existing Session execution selection cannot be rebound implicitly.", "execution_selection_conflict");
     return;
   }
-  const binding = normalizedPmContext(pmContext);
   const now = new Date().toISOString();
   const snapshot = newThreadSettingsSnapshot();
   writeRecord<ThreadMetadata>(THREADS, threadId, {
     remoteId: threadId,
-    ...(scope ? { scope: { ...scope } } : {}),
-    ...(binding ? { pmContext: binding } : {}),
+    executionSelection: executionSelection ?? chatOnlyExecutionSelection(),
+    ...(executionEnvironment ? { executionEnvironment } : {}),
     title,
     status: "regular",
     createdAt: now,
@@ -95,11 +91,11 @@ export function ensureThread(
 }
 export function getThread(threadId: string): ThreadMetadata | null {
   const thread = readRecord<ThreadMetadata>(THREADS, threadId);
-  return thread?.deleted ? null : thread;
+  return thread?.deleted || thread?.sessionCutover ? null : thread;
 }
 export function listThreads(): ThreadMetadata[] {
   return listRecords<ThreadMetadata>(THREADS)
-    .filter((thread) => !thread.deleted)
+    .filter((thread) => !thread.deleted && !thread.sessionCutover)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 export function updateThread(
@@ -110,8 +106,8 @@ export function updateThread(
     custom?: Record<string, unknown>;
     settings?: ThreadSettings;
     revision?: number;
-    /** `null` clears the binding; the caller validates a new binding through PM first. */
-    pmContext?: PmContext | null;
+    executionSelection?: ExecutionSelection;
+    executionEnvironment?: ExecutionEnvironment;
   },
 ): ThreadMetadata {
   return transaction(() => {
@@ -120,22 +116,31 @@ export function updateThread(
     if (!current) throw new ThreadConflictError("该会话已删除，不能重新写入。", "thread_deleted");
     if (patch.revision !== undefined && current.revision !== patch.revision)
       throw new ThreadConflictError("会话设置已在另一页面更改，请重新载入后再保存。");
-    const { revision: _revision, pmContext, ...values } = patch;
+    if (patch.executionSelection && current.executionEnvironment?.frozen)
+      throw new ThreadConflictError("Execution environment is frozen; create a new Session to change roots.", "execution_frozen");
+    if (patch.executionEnvironment && current.executionEnvironment?.frozen &&
+        (!patch.executionEnvironment.frozen || !sameExecutionIdentity(current.executionEnvironment, patch.executionEnvironment)))
+      throw new ThreadConflictError("Frozen Session directory cannot be rebound.", "execution_frozen");
+    const { revision: _revision, ...values } = patch;
     const next = {
       ...current,
       ...values,
       chatOwned: true,
-      revision: current.revision + (patch.settings ? 1 : 0),
+      revision: current.revision + (patch.settings || patch.executionSelection ? 1 : 0),
       updatedAt: new Date().toISOString(),
     };
-    if (pmContext !== undefined) {
-      const binding = normalizedPmContext(pmContext);
-      if (binding) next.pmContext = binding;
-      else delete next.pmContext;
-    }
     writeRecord(THREADS, threadId, next);
     return next;
   });
+}
+/** Called within generation admission's transaction, so selection and first execution freeze atomically. */
+export function freezeThreadExecution(threadId: string, environment: ExecutionEnvironment, actualPath = environment.executionPath ?? undefined): void {
+  const thread = getThread(threadId);
+  if (!thread?.executionSelection) throw new ThreadConflictError("Old Session model cannot execute; create a new Session.", "session_cutover_required");
+  if (thread.executionEnvironment?.frozen &&
+      (!sameExecutionIdentity(thread.executionEnvironment, environment) || thread.executionPath !== actualPath))
+    throw new ThreadConflictError("Frozen Session directory cannot be rebound.", "execution_frozen");
+  writeRecord(THREADS, threadId, { ...thread, ...(actualPath ? { executionPath: actualPath } : {}), executionEnvironment: { ...environment, frozen: true } });
 }
 export function deleteThread(threadId: string): void {
   transaction(() => {
@@ -276,7 +281,7 @@ export function setThreadNativeSession(
   ref: NativeSessionRef | undefined,
   messageId?: string,
   systemPrompt?: string,
-  scope?: AgentScope,
+  environment?: ExecutionEnvironment,
 ): void {
   ensureThread(id);
   const thread = getThread(id);
@@ -286,8 +291,8 @@ export function setThreadNativeSession(
       nativeSession: ref,
       nativeMessageId: messageId,
       nativeSystemPrompt: systemPrompt,
-      nativeScope: ref && scope ? { ...scope } : undefined,
-      pendingForkScope: undefined,
+      nativeEnvironment: ref && environment ? { ...environment } : undefined,
+      pendingForkEnvironment: undefined,
       pendingFork: undefined,
     });
 }
@@ -301,8 +306,8 @@ export function setThreadPendingFork(
     writeRecord(THREADS, id, {
       ...thread,
       pendingFork: fork,
-      pendingForkScope: thread.scope,
-      nativeScope: undefined,
+      pendingForkEnvironment: thread.executionEnvironment,
+      nativeEnvironment: undefined,
       nativeSession: undefined,
       nativeMessageId: undefined,
     });
@@ -315,7 +320,10 @@ export function forkThreadHistory(
   transaction(() => {
     ensureThread(sourceThreadId);
     const source = getThread(sourceThreadId);
-    ensureThread(targetThreadId, `${source?.title ?? "会话"} · 分支`, source?.scope);
+    if (!source?.executionSelection) throw new ThreadConflictError("Old Session cannot be forked into a usable Session.", "session_cutover_required");
+    const environment = source.executionEnvironment ? { ...source.executionEnvironment,
+      executionPath: source.executionEnvironment.sourcePath, worktree: null, frozen: false } : undefined;
+    ensureThread(targetThreadId, `${source.title ?? "会话"} · 分支`, source.executionSelection, environment);
     const target = getThread(targetThreadId);
     if (!source || !target || getThreadHistory(targetThreadId).messages.length > 0) return;
     writeRecord(THREADS, targetThreadId, {
@@ -362,80 +370,6 @@ export function forkThreadHistory(
   });
 }
 
-export type ThreadImport = {
-  remoteId: string;
-  title?: string;
-  status?: "regular" | "archived";
-  custom?: Record<string, unknown>;
-  histories?: { format: string; messages: StoredMessage[] }[];
-  settings?: ThreadSettings;
-};
-export function importThreads(
-  migrationId: string,
-  threads: ThreadImport[],
-): { imported: number; skipped: number } {
-  return transaction(() => {
-    const previous = readRecord<{ imported: number; skipped: number }>(IMPORTS, migrationId);
-    if (previous) return previous;
-    let imported = 0;
-    let skipped = 0;
-    for (const input of threads) {
-      const existing = readRecord<ThreadMetadata>(THREADS, input.remoteId);
-      // Resource import may create metadata first. Fill only that unclaimed
-      // shell; never merge into a claimed, deleted, or nonempty chat.
-      if (
-        existing &&
-        (existing.deleted ||
-          existing.chatOwned ||
-          getThreadHistory(input.remoteId).messages.length > 0)
-      ) {
-        skipped++;
-        continue;
-      }
-      ensureThread(input.remoteId, input.title);
-      // Imported history has no relationship to today's default revision.
-      if (!existing) {
-        const created = getThread(input.remoteId)!;
-        writeRecord(THREADS, input.remoteId, {
-          ...created,
-          settings: input.settings ?? { ...UNSELECTED_THREAD_SETTINGS },
-          defaultsRevision: undefined,
-        });
-      }
-      updateThread(input.remoteId, {
-        title: input.title ?? existing?.title,
-        status: input.status ?? "regular",
-        custom: input.custom,
-        ...(input.settings ? { settings: input.settings } : {}),
-      });
-      for (const history of input.histories ?? []) {
-        let headId: string | null = null;
-        const messages: StoredMessage[] = [];
-        const ids = new Set<string>();
-        for (const message of history.messages) {
-          if (ids.has(message.id)) continue;
-          ids.add(message.id);
-          messages.push({
-            ...message,
-            parent_id: message.parent_id && ids.has(message.parent_id) ? message.parent_id : null,
-          });
-          headId = message.id;
-        }
-        writeRecord<ThreadHistory>(HISTORY, historyKey(input.remoteId, history.format), {
-          threadId: input.remoteId,
-          format: history.format,
-          headId,
-          messages,
-          authoritativeIds: messages.map((message) => message.id),
-        });
-      }
-      imported++;
-    }
-    const result = { imported, skipped };
-    writeRecord(IMPORTS, migrationId, result);
-    return result;
-  });
-}
 
 export function getThreadStableOutputs(threadId: string): { busy: boolean; texts: string[] } {
   type Content = {

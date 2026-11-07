@@ -25,7 +25,7 @@ export function StudioSetupAction({ action, template, values, capabilities, issu
   const requiresProvider = action.kind === "prompt" || (action.kind === "template" && studioNativeTemplateRequiresProvider(action.templateId));
   function selectKind(kind: StudioConfig["action"]["kind"]) {
     if (kind === action.kind) return;
-    const common = { repositories: action.repositories, plugins: action.plugins, timeoutSeconds: action.timeoutSeconds };
+    const common = { repositories: action.repositories, plugins: action.plugins, timeoutSeconds: action.timeoutSeconds, ...(action.executionSelection ? { executionSelection: action.executionSelection } : {}) };
     if (kind === "script") onKindChange({ kind, ...common, content: "", files: [], entrypoint: "python3 main.py", setup: "", bundleRef: null });
     else {
       const model = action.kind === "script" ? { providerInstanceId: "", model: "", options: {} } : { providerInstanceId: action.providerInstanceId ?? "", model: action.model ?? "", options: action.options };

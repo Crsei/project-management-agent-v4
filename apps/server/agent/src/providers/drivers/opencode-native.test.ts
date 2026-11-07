@@ -12,6 +12,7 @@ import { createOpenCodeTestHarness, waitForOpenCodeFixtureGate } from "./opencod
 import { runNativeRuntime, type ProviderRuntime } from "../runtime.ts";
 import { ensureThread, getThreadPendingFork } from "../../durable/threads.ts";
 import { forkChatSnapshot } from "../../durable/forks.ts";
+import { agentWorkspaceEnvironment, agentWorkspaceSelection } from "../../durable/execution.testkit.ts";
 
 const model = "native-api/model/one";
 
@@ -95,7 +96,7 @@ for (const generation of ["v1", "v2"] as const) {
       await assert.rejects(runNativeRuntime(runtime, { prompt: "ACCUMULATE 100", cwd: f.context.cwd,
         session: { resume: first.nativeSession }, signal: t.signal }), { code: "session_mismatch" });
       assert.equal(f.wire.prompts.length, 2);
-      ensureThread("native-opencode-fork", undefined, { workspaceId: "fixture-workspace", projectId: null });
+      ensureThread("native-opencode-fork", undefined, agentWorkspaceSelection, agentWorkspaceEnvironment(f.context.cwd, true));
       const branch = forkChatSnapshot({ threadId: "native-opencode-fork", generationId: "native-source-generation",
         messageId: "native-source-answer", context: first.text, nativeSession: first.nativeSession });
       const fork = getThreadPendingFork(branch.threadId);
@@ -349,7 +350,7 @@ for (const generation of ["v1", "v2"] as const) {
       };
       const base = { ...f.context, pmToolBridge: { command: process.execPath, args: ["/controlled/pm-transport.mjs", "http://127.0.0.1:12345"] } };
       const context = { ...base, authorizeExecution, execution: { threadId: "opencode-pm-thread", generationId: "opencode-generation-1", messageId: "user-1",
-        scope: { workspaceId: "fixture-workspace", projectId: null } } };
+        environment: agentWorkspaceEnvironment(f.context.cwd, true) } };
       const first = await f.run(context, { model, prompt: "ADD 19 23" }); assert.equal(first.text, "計算=42");
       assert.equal(f.wire.connectedMcpServers, 0, "A terminal generation must release its native transport");
       const second = await f.run({ ...context, execution: { ...context.execution, generationId: "opencode-generation-2", messageId: "user-2" } },
@@ -376,7 +377,7 @@ for (const generation of ["v1", "v2"] as const) {
     } finally { await f.close(); }
   });
 
-  test(`original OpenCode ${generation} cannot omit a refused PM transport or grant it without Chat scope`, { timeout: 20_000 }, async () => {
+  test(`original OpenCode ${generation} cannot omit a refused PM transport or grant it without Chat execution identity`, { timeout: 20_000 }, async () => {
     const f = await createOpenCodeTestHarness(generation, { rejectMcp: true });
     try {
       const context = { ...f.context, pmToolBridge: { command: process.execPath, args: ["/controlled/pm-transport.mjs"] } };
@@ -386,7 +387,7 @@ for (const generation of ["v1", "v2"] as const) {
       };
       await assert.rejects(f.run(context, { model, prompt: "ADD 1 2" }), { code: "scope_required" });
       await assert.rejects(f.run({ ...context, authorizeExecution, execution: { threadId: "transport-refused", generationId: "transport-refused-generation", messageId: "user-1",
-        scope: { workspaceId: "fixture-workspace", projectId: null } } }, { model, prompt: "ADD 1 2" }));
+        environment: agentWorkspaceEnvironment(f.context.cwd, true) } }, { model, prompt: "ADD 1 2" }));
       assert.ok(f.wire.requests.some(request => request.path.includes("/mcp")), "Native transport refusal must be reached after explicit host admission");
       assert.equal(f.wire.prompts.length, 0); assert.equal(f.wire.connectedMcpServers, 0); f.wire.assertClean();
     } finally { await f.close(); }

@@ -14,7 +14,7 @@ import { projectAuditChanges } from '../../../../packages/domain/src/project-aud
 import type { ProjectAuditWrite } from '../../../../packages/application/src/project-audit.ts';
 import { assertCoreTaskMutation, requireTaskAssignee } from '../../../../packages/application/src/core-task-creation.ts';
 import { planningCommands } from '../../../../packages/application/src/planning.ts';
-import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
+import type { SqlExecutor, TrustedMutationSource } from '../../../../packages/application/src/ports.ts';
 import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
 import { captureCoreFacts, recoverPreparedCoreCreations } from './core-facts.ts';
 import { CoreCommandJournal } from './core-journal.ts';
@@ -96,6 +96,7 @@ export type CoreCommandContext = {
   checkAuthorization?(sql: SqlExecutor): Promise<void>;
   localProjects?: LocalProjectConfiguration;
   recoveringLocalProject?: boolean;
+  trustedSource?: TrustedMutationSource;
   bindLocalProject?(sql: SqlExecutor, mount: ProjectMount): Promise<void>;
   affectProject?(projectId: string): void;
   captureAudit?(entries: readonly ProjectAuditWrite[]): void;
@@ -800,7 +801,8 @@ export async function executeCoreCommand(context: CoreCommandContext, idempotenc
       const facts: CapturedServiceFact[] = [];
       result = await context.workspace.captureMutations(captureCoreFacts({ sql, workspaceId: scope.workspaceId, root: context.workspace.root,
         sourceKind: 'command', operationId: context.command.commandId, requestHash: requestHash(context.command as unknown as Record<string, unknown>),
-        actorId: context.principal.id, facts, configuration: context.workspace.configuration().config, reusePrepared: context.command.commandType === 'DuplicateProject' }), () => dispatch(guarded, idempotencyKey));
+        actorId: context.principal.id, facts, configuration: context.workspace.configuration().config, reusePrepared: context.command.commandType === 'DuplicateProject' || context.recoveringLocalProject === true,
+        ...(context.trustedSource ? { trustedSource: context.trustedSource } : {}) }), () => dispatch(guarded, idempotencyKey));
       if (context.recoveringLocalProject) for (const entry of recoverPreparedCoreCreations(context.workspace.root, new CoreCommandJournal(context.workspace.root))) {
         if (entry.kind === 'fact_completed' && entry.commandId === context.command.commandId && entry.actorId === context.principal.id && !facts.some(fact => fact.fact.factId === entry.captured.fact.factId)) facts.push(entry.captured);
       }

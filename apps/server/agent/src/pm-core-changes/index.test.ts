@@ -74,3 +74,37 @@ test("core observations persist net changes across restart and refuse to infer d
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("workspace observation is explicit, authorized, and never retains request credentials in background scans", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pm-core-target-"));
+  const oldDir = process.env.AGENT_WORKSPACE_DATA_DIR, oldPm = process.env.PM_API_URL, oldFetch = globalThis.fetch, oldInterval = globalThis.setInterval;
+  process.env.AGENT_WORKSPACE_DATA_DIR = directory; process.env.PM_API_URL = "http://127.0.0.1:4194";
+  const target = { workspaceId: "0196c319-8b1d-7000-8000-000000000002", projectId: null };
+  let workspaceAllowed = false, enumerations = 0;
+  globalThis.setInterval = (() => { throw new Error("PM credentials must not escape their observation request"); }) as typeof setInterval;
+  globalThis.fetch = async (input, init) => {
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("cookie"), "request-only");
+    assert.equal(headers.get("x-untrusted"), null);
+    const url = new URL(String(input));
+    if (url.pathname === "/api/v1/agent-contexts") return Response.json({ workspaces: [{ id: target.workspaceId, workspaceAllowed, projects: [{ id: "PRJ-001" }] }] });
+    assert.equal(url.searchParams.get("projectId"), "PRJ-001");
+    enumerations++;
+    return Response.json({ files: [], complete: true });
+  };
+  try {
+    await assert.rejects(observePmCoreChanges(target, { cookie: "request-only" }), { status: 403 });
+    assert.equal(enumerations, 0);
+    workspaceAllowed = true;
+    assert.deepEqual(await observePmCoreChanges(target, { cookie: "request-only", "x-untrusted": "not-PM-auth" }), { status: "active" });
+    assert.equal(enumerations, 1);
+    await stopPmCoreChanges();
+    assert.equal(enumerations, 1, "stopping does not schedule a credential-bearing rescan");
+  } finally {
+    globalThis.fetch = oldFetch; globalThis.setInterval = oldInterval;
+    await stopPmCoreChanges(); closeStore();
+    if (oldDir === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = oldDir;
+    if (oldPm === undefined) delete process.env.PM_API_URL; else process.env.PM_API_URL = oldPm;
+    await rm(directory, { recursive: true, force: true });
+  }
+});

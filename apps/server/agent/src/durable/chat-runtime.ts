@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { workspaceRoot } from "../paths.ts";
 import { interruptPmToolCalls, openPmToolBridge } from "../pm-tools.ts";
-import { observePmCoreChanges, stopPmCoreChanges } from "../pm-core-changes/index.ts";
 import { injectQuoteContext } from "@assistant-ui/ai-sdk";
 import {
   createUIMessageStream,
@@ -14,6 +13,7 @@ import {
 } from "ai";
 import type { CliSessionOptions, NativeSessionRef, ProviderOptionSelection } from "@agent-workspace/contracts/provider";
 import type { RemoteSettings as ThreadSettings } from "@agent-workspace/contracts/chat";
+import type { PmToolTarget } from "@agent-workspace/contracts/pm-tools";
 import type { PmReferenceInput, PmReferenceResolution } from "@agent-workspace/contracts/pm-references";
 import type { NativeOutputItem, ResponseStreamingMode } from "@agent-workspace/contracts/output";
 import type { NativeUsageUpdate, ThreadUsageSnapshot } from "@agent-workspace/contracts/usage";
@@ -38,8 +38,8 @@ import { listRuns, withThreadExecution } from "./engine.ts";
 import { consumeTransfers, getThreadFork, TRANSFERS } from "./transfers.ts";
 import type { ChatRecoveryCandidate } from "../automation/service.ts";
 import { openAutomationGenerationConnectors, type AutomationGenerationConnectors } from "../automation-execution/connectors.ts";
-import { resolveNativeTemplateChatSnapshot, assertNativeTemplateChatSnapshot } from "../automation-execution/native-templates/repository.ts";
-import { automationRequestForNativeGeneration, isPmAnalysisGeneration } from "../automation-execution/context.ts";
+import { assertNativeTemplateChatSnapshot } from "../automation-execution/native-templates/repository.ts";
+import { automationRequestForNativeGeneration, getNativeGenerationPmTargetCeiling, isPmAnalysisGeneration } from "../automation-execution/context.ts";
 import { queuePmAgentTerminal, startPmAgentSignals, stopPmAgentSignals } from "../automation-execution/pm-signals.ts";
 import { resolvePmAnalysisChatSnapshot } from "../automation-execution/native-templates/pm-analysis-chat.ts";
 import { boundedContext } from "./context.ts";
@@ -57,10 +57,10 @@ import {
 import { makeAssistantStreamingFilter } from "./assistant-streaming.ts";
 import { DurableError } from "./errors.ts";
 import {
-  agentContextIdentity,
-  sameAgentScope,
+  agentExecutionIdentity,
+  sameExecutionIdentity,
   type AgentExecutionSnapshot,
-} from "./agent-scope.ts";
+} from "./agent-execution.ts";
 import {
   CHAT_FORMAT,
   ensureThread,
@@ -72,14 +72,13 @@ import {
   setThreadNativeSession,
   ThreadConflictError,
   updateThread,
+  freezeThreadExecution,
   type StoredMessage,
 } from "./threads.ts";
 import {
   assertResolvedReferences,
   pmContextPromptLine,
-  resolvePmContextBinding,
-  resolvePmReferences,
-  samePmContext,
+  resolvePmReferenceOperations,
 } from "./pm-context.ts";
 
 const GENERATIONS = "chat:generations";
@@ -131,6 +130,8 @@ export type ChatGeneration = {
   nativeContextReported?: boolean;
   /** Resolved IDs, titles, revisions and short reasons captured at acceptance time. */
   pmReferences?: PmReferenceResolution[];
+  /** Immutable authorized PM operation evidence; never a Session owner or directory grant. */
+  pmOperations?: { actorId: string; target: PmToolTarget }[];
 };
 type JournalEvent = { generationId: string; seq: number; chunk: UIMessageChunk };
 type ChatRuntimeState = {
@@ -169,6 +170,16 @@ export function getActiveChat(threadId: string): ChatGeneration | undefined {
 function saveGeneration(generation: ChatGeneration): void {
   writeRecord(GENERATIONS, generation.id, generation);
   for (const notify of subscribers.get(generation.id) ?? []) notify();
+}
+export function recordGenerationPmOperation(generationId: string, operation: { actorId: string; target: PmToolTarget }): void {
+  transaction(() => {
+    const generation = getChatGeneration(generationId);
+    if (!generation || !isChatActive(generation)) throw new DurableError(409, "stale_execution", "PM operation no longer belongs to an active generation.");
+    const operations = generation.pmOperations ?? [];
+    if (operations.some(item => item.actorId === operation.actorId && item.target.workspaceId === operation.target.workspaceId &&
+        item.target.projectId === operation.target.projectId)) return;
+    saveGeneration({ ...generation, pmOperations: [...operations, { actorId: operation.actorId, target: { ...operation.target } }] });
+  });
 }
 function appendChunk(id: string, chunk: UIMessageChunk): void {
   transaction(() => {
@@ -325,8 +336,8 @@ function findSubmittedChat(identity: string, fingerprint: string): ChatGeneratio
 function requireRunnableThread(threadId: string, expectedRevision?: number) {
   const thread = getThread(threadId);
   if (!thread) throw new ThreadConflictError("该会话已删除。", "thread_deleted");
-  if (!thread.scope)
-    throw new DurableError(412, "scope_required", "历史会话没有工作区归属；请先选择工作区或项目并新建会话。");
+  if (!thread.executionSelection)
+    throw new DurableError(412, "session_cutover_required", "Old Sessions cannot execute; create a new Session.");
   if (thread.status === "archived")
     throw new ThreadConflictError("请先恢复已归档会话，再发送或继续回复。", "thread_archived");
   if (!thread.settings.providerInstanceId.trim() || !thread.settings.model.trim())
@@ -347,7 +358,7 @@ function validatedModelOptions(instanceId: string, modelId: string, selections?:
 function idleCompactionCandidate(threadId: string, mode: "onReturn" | "beforeCacheExpires") {
   const thread = getThread(threadId);
   const latest = listChatGenerations(threadId)[0];
-  if (!thread || thread.status !== "regular" || !thread.scope || !latest || latest.status !== "completed" ||
+  if (!thread || thread.status !== "regular" || !thread.executionSelection || !latest || latest.status !== "completed" ||
       getActiveChat(threadId) || thread.pendingFork || !thread.nativeSession ||
       thread.nativeMessageId !== latest.messageId || latest.nativeSession?.sessionId !== thread.nativeSession.sessionId ||
       thread.settings.providerInstanceId !== latest.providerInstanceId || thread.settings.model !== latest.modelId ||
@@ -416,7 +427,7 @@ export async function submitChat(
   const identity = chatRequestIdentity(request);
   const fingerprint = chatRequestFingerprint(request);
   const existing = findSubmittedChat(identity, fingerprint);
-  if (existing) return existing;
+  if (existing) { await resolveChatExecutionScope(requireRunnableThread(existing.threadId), requestHeaders); return existing; }
   if (!idle) {
     const active = getActiveChat(request.id);
     if (active?.idleCompaction) {
@@ -439,20 +450,10 @@ export async function submitChat(
   }
   ensureThread(request.id);
   const thread = requireRunnableThread(request.id, request.config?.threadSettingsRevision);
-  // The bound issue is re-checked, and pinned references are resolved against the
-  // authoritative core before acceptance; anything inaccessible rejects the turn.
-  if (thread.pmContext) await resolvePmContextBinding(thread.pmContext, thread.scope, requestHeaders);
-  const boundTaskId = thread.pmContext?.taskId ?? (/^TASK-\d+$/.test(thread.pmContext?.entityId ?? "") ? thread.pmContext?.entityId : undefined);
-  const referenceInputs = [...request.pmReferences ?? []];
-  if (boundTaskId && referenceInputs.length < 50 && !referenceInputs.some(reference => reference.kind === "issue" && reference.id === boundTaskId))
-    referenceInputs.push({ kind: "issue", id: boundTaskId, projectId: thread.scope!.projectId ?? null, revision: null });
-  let pmReferences = referenceInputs.length
-    ? await resolvePmReferences(thread.scope!.workspaceId, referenceInputs, requestHeaders)
+  const referenceEvidence = request.pmReferences?.length
+    ? await resolvePmReferenceOperations(request.pmReferences, requestHeaders)
     : undefined;
-  if (boundTaskId && !referenceInputs.some(reference => reference.kind === "issue" && reference.id === boundTaskId)) {
-    const bound = await resolvePmReferences(thread.scope!.workspaceId, [{ kind: "issue", id: boundTaskId, projectId: thread.scope!.projectId ?? null, revision: null }], requestHeaders);
-    pmReferences = [...pmReferences ?? [], ...bound];
-  }
+  const pmReferences = referenceEvidence?.references;
   if (pmReferences) assertResolvedReferences(pmReferences);
   if (
     (request.config?.providerInstanceId !== undefined &&
@@ -469,8 +470,10 @@ export async function submitChat(
       modelName: thread.settings.model,
     }));
   const modelOptions = validatedModelOptions(resolved.providerInstanceId, thread.settings.model, thread.settings.modelOptions);
-  const analysisSnapshot = await resolvePmAnalysisChatSnapshot(request.id, request.idempotencyKey, thread.scope);
-  const executionSnapshot = analysisSnapshot ?? await resolveNativeTemplateChatSnapshot(request.id, request.idempotencyKey, await resolveChatExecutionScope(thread, requestHeaders));
+  const analysisSnapshot = await resolvePmAnalysisChatSnapshot(request.id, request.idempotencyKey);
+  const executionSnapshot = analysisSnapshot ?? await resolveChatExecutionScope(thread, requestHeaders);
+  if (!thread.executionSelection) throw new DurableError(412, "session_cutover_required", "旧会话不能执行；请新建 Session。");
+  if (!executionSnapshot.environment) throw new DurableError(412, "execution_environment_required", "Every executable Session requires a versioned actual environment.");
   if (!idle && request.trigger !== "regenerate-message") {
     const candidate = idleCompactionCandidate(request.id, "onReturn");
     const last = request.messages.at(-1);
@@ -491,15 +494,15 @@ export async function submitChat(
     if (duplicate) return duplicate;
     // Provider/PM resolution yields; archiving, deletion, settings or binding edits may have won meanwhile.
     requireRunnableThread(request.id, thread.revision);
-    if (!samePmContext(getThread(request.id)?.pmContext, thread.pmContext))
-      throw new ThreadConflictError("会话绑定的 PM 议题已更改，请重新发送。", "pm_context_conflict");
+    if (JSON.stringify(getThread(request.id)?.executionSelection) !== JSON.stringify(thread.executionSelection))
+      throw new ThreadConflictError("Execution selection changed during admission.", "execution_selection_conflict");
     if (idle) {
       const candidate = idleCompactionCandidate(request.id, idle.mode);
       const now = Date.now();
       if (state.stopping || !candidate || candidate.latest.id !== idle.expectedId ||
           !resolved.capabilities.nativeResume ||
           candidate.thread.nativeSession?.cwd !== executionSnapshot.path ||
-          !sameAgentScope(candidate.thread.nativeScope, executionSnapshot.scope) ||
+          !sameExecutionIdentity(candidate.thread.nativeEnvironment, executionSnapshot.environment) ||
           JSON.stringify(candidate.thread.settings) !== JSON.stringify(candidate.latest.threadSettingsSnapshot) ||
           (idle.mode === "onReturn" ? now < candidate.expires : now < candidate.expires - 120_000 || now >= candidate.expires))
         throw new ThreadConflictError("会话状态已变化，跳过自动压缩。", "stale_compaction");
@@ -516,6 +519,7 @@ export async function submitChat(
     const cancelled =
       readRecord("chat:cancellations", JSON.stringify([request.id, last.id])) !== null;
     const transfer = cancelled ? "" : consumeTransfers(request.id, id);
+    executionSnapshot.environment = { ...executionSnapshot.environment!, frozen: true };
     const next: ChatGeneration = {
       id,
       threadId: request.id,
@@ -542,8 +546,10 @@ export async function submitChat(
       threadSettingsSnapshot: { ...thread.settings },
       executionSnapshot,
       ...(pmReferences ? { pmReferences } : {}),
+      ...(referenceEvidence?.operations.length ? { pmOperations: referenceEvidence.operations } : {}),
     };
     saveGeneration(next);
+    freezeThreadExecution(request.id, executionSnapshot.environment!, executionSnapshot.path);
     initializeNativeOutput(id, request.id);
     writeRecord(REQUESTS, identity, { id, fingerprint });
     updateThread(request.id, {});
@@ -571,8 +577,8 @@ function nativePlan(
   const snapshot = generation.executionSnapshot;
   const system = [
     generation.request.system,
-    snapshot && agentContextIdentity(snapshot),
-    pmContextPromptLine(thread.pmContext, generation.pmReferences),
+    snapshot && agentExecutionIdentity(snapshot),
+    pmContextPromptLine(generation.pmReferences),
     snapshot && `本次执行工作目录：${JSON.stringify(snapshot.path)}。目录位置不是隔离沙箱或额外授权。`,
   ].filter(Boolean).join("\n\n");
   const compatibleDirectory = (ref: NativeSessionRef | undefined) =>
@@ -580,7 +586,7 @@ function nativePlan(
   if (
     fork &&
     !generation.continuationOf &&
-    sameAgentScope(thread.pendingForkScope, snapshot?.scope) &&
+    sameExecutionIdentity(thread.pendingForkEnvironment, snapshot?.environment) &&
     compatibleDirectory(fork.source) &&
     forkOrigin && forkOrigin.request.system === generation.request.system &&
     fork.source.providerInstanceId === runtime.providerInstanceId &&
@@ -610,7 +616,7 @@ function nativePlan(
   if (
     ref?.providerInstanceId === runtime.providerInstanceId &&
     ref.instanceRevision === runtime.instanceRevision &&
-    sameAgentScope(thread.nativeScope, snapshot?.scope) &&
+    sameExecutionIdentity(thread.nativeEnvironment, snapshot?.environment) &&
     compatibleDirectory(ref) &&
     runtime.capabilities.nativeResume &&
     index >= 0 &&
@@ -634,7 +640,7 @@ function nativePlan(
     generation.nativeSession?.providerInstanceId === runtime.providerInstanceId &&
     generation.nativeSession.instanceRevision === runtime.instanceRevision &&
     compatibleDirectory(generation.nativeSession) &&
-    sameAgentScope(previous?.executionSnapshot?.scope, snapshot?.scope) &&
+    sameExecutionIdentity(previous?.executionSnapshot?.environment, snapshot?.environment) &&
     previous?.executionSnapshot?.path === snapshot?.path &&
     runtime.capabilities.nativeResume &&
     generation.request.system === previous?.request.system &&
@@ -679,8 +685,8 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
       await closeMcpAppSession(generation.threadId, { preserveContext: true });
       if (controller.signal.aborted) return;
       const snapshot = generation.executionSnapshot;
-      if (!snapshot)
-        throw new DurableError(412, "scope_required", "本次执行没有可信目录快照，请选择上下文后新建请求。");
+      if (!snapshot?.environment)
+        throw new DurableError(412, "execution_environment_required", "This execution has no versioned authorized environment; create a new Session.");
       const assertLiveAuthorization = () => {
         const current = getChatGeneration(generation.id);
         if (state.stopping || controller.signal.aborted || controllers.get(generation.id) !== controller ||
@@ -688,18 +694,19 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
             current.messageId !== generation.messageId || getActiveChat(generation.threadId)?.id !== generation.id ||
             current.providerInstanceId !== generation.providerInstanceId ||
             current.providerInstanceRevision !== generation.providerInstanceRevision ||
-            !sameAgentScope(current.executionSnapshot?.scope, snapshot.scope) || current.executionSnapshot?.path !== snapshot.path)
+            !sameExecutionIdentity(current.executionSnapshot?.environment, snapshot.environment) || current.executionSnapshot?.path !== snapshot.path)
           throw new DurableError(409, "stale_execution", "本次原生回调不再属于当前聊天执行。");
         const instance = getStoredInstance(generation.providerInstanceId);
         if (!instance?.enabled || instance.revision !== generation.providerInstanceRevision ||
             runtime.providerInstanceId !== generation.providerInstanceId || runtime.instanceRevision !== generation.providerInstanceRevision)
           throw new ProviderRuntimeError(409, "session_mismatch", "Agent configuration changed during execution authorization.");
         const thread = requireRunnableThread(generation.threadId, threadSnapshot?.revision);
-        if (!threadSnapshot || !sameAgentScope(thread.scope, snapshot.scope) ||
+        if (!threadSnapshot || !sameExecutionIdentity(thread.executionEnvironment, snapshot.environment) ||
             JSON.stringify(thread.settings) !== JSON.stringify(generation.threadSettingsSnapshot))
           throw new ThreadConflictError("会话作用域或模型设置已更改，拒绝过期原生回调。", "stale_settings");
-        if (!samePmContext(thread.pmContext, threadSnapshot.pmContext))
-          throw new ThreadConflictError("会话绑定的 PM 议题已更改，拒绝过期原生回调。", "pm_context_conflict");
+        if (!thread.executionSelection || !thread.executionEnvironment?.frozen || thread.executionPath !== snapshot.path ||
+            !sameExecutionIdentity(thread.executionEnvironment, snapshot.environment))
+          throw new DurableError(409, "execution_environment_changed", "The accepted Session execution environment is no longer authoritative.");
       };
       const assertExternalGrant = async () => {
         if (!requestHeaders?.get("authorization")?.startsWith("Bearer pm-mcp-service-v1.")) return;
@@ -710,25 +717,19 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         assertLiveAuthorization();
       };
       // The initiating PM credentials live only in this closure, not the provider binding or Chat records.
-      const authorizeExecution = async (action: "compaction" | "tool") => {
+      const authorizeExecution = async (action: "launch" | "compaction" | "tool") => {
         assertLiveAuthorization();
         await assertExternalGrant();
         if (action === "tool" && generation.idleCompaction)
           throw new DurableError(412, "scope_required", "无工具的会话压缩不能获得 PM 工具权限。");
         try {
-          const analysis = await resolvePmAnalysisChatSnapshot(generation.threadId, generation.request.idempotencyKey, snapshot.scope, controller.signal);
+          const analysis = await resolvePmAnalysisChatSnapshot(generation.threadId, generation.request.idempotencyKey, controller.signal);
           const resolved = analysis ?? await resolveChatExecutionScope(requireRunnableThread(generation.threadId), requestHeaders, "execute", controller.signal);
           assertLiveAuthorization();
-          if (!sameAgentScope(resolved.scope, snapshot.scope))
-            throw new DurableError(409, "scope_conflict", "本次执行的文件区域归属已更改，拒绝过期原生回调。");
-          if (analysis) {
-            if (resolved.path !== snapshot.path) throw new DurableError(409, "scope_conflict", "PM analysis scratch identity changed.");
-          } else await assertNativeTemplateChatSnapshot(generation, resolved);
+          if (resolved.path !== snapshot.path || !sameExecutionIdentity(resolved.environment, snapshot.environment))
+            throw new DurableError(409, "execution_environment_changed", "Current execution directory differs from the accepted versioned environment.");
+          if (!analysis) await assertNativeTemplateChatSnapshot(generation, resolved);
           assertLiveAuthorization();
-          if (threadSnapshot?.pmContext) {
-            await resolvePmContextBinding(threadSnapshot.pmContext, snapshot.scope, requestHeaders, controller.signal);
-            assertLiveAuthorization();
-          }
           await assertExternalGrant();
         } catch (error) {
           // Cancellation or a revision cutover wins even when it aborts the in-flight PM request.
@@ -756,9 +757,8 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
                 current.nativeSession?.sessionId !== producing.nativeSessionId ||
                 (active && active.id !== generation.id) ||
                 listRuns(generation.threadId).some(run => run.status === "queued" || run.status === "running") ||
-                !sameAgentScope(thread.scope, snapshot.scope) ||
+                !sameExecutionIdentity(thread.executionEnvironment, snapshot.environment) ||
                 JSON.stringify(thread.settings) !== JSON.stringify(generation.threadSettingsSnapshot) ||
-                !samePmContext(thread.pmContext, threadSnapshot?.pmContext) ||
                 (current.status === "completed" && (
                   thread.nativeSession?.sessionId !== producing.nativeSessionId ||
                   thread.nativeMessageId !== generation.messageId ||
@@ -777,32 +777,20 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
           }
           const resolved = await resolveChatExecutionScope(thread, headers, "inspect");
           assertCurrent();
-          if (!sameAgentScope(resolved.scope, snapshot.scope) || resolved.path !== snapshot.path ||
-              (snapshot.actorId && resolved.actorId !== snapshot.actorId))
-            throw new DurableError(403, "mcp_app_scope_changed", "当前身份或文件区域与产生此 App 时不一致。");
-          if (thread.pmContext) {
-            await resolvePmContextBinding(thread.pmContext, snapshot.scope, headers);
-            assertCurrent();
-          }
+          if (resolved.path !== snapshot.path || !sameExecutionIdentity(resolved.environment, snapshot.environment))
+            throw new DurableError(403, "mcp_app_execution_changed", "Current directory differs from the App's producing execution.");
         };
       const bridge = generation.idleCompaction || templateChild ? undefined : await openPmToolBridge({
-        scope: snapshot.scope, threadId: generation.threadId, messageId: generation.messageId,
+        threadId: generation.threadId, messageId: generation.messageId,
         generationId: generation.id, headers: requestHeaders, authorizeExecution,
+        targetCeiling: getNativeGenerationPmTargetCeiling(generation),
+        onAuthorizedOperation: operation => recordGenerationPmOperation(generation.id, operation),
       });
-      const observe = async (phase: string) => {
-        try {
-          const result = await observePmCoreChanges(snapshot.scope, requestHeaders ?? new Headers());
-          if (result.status === "failed" || result.status === "incomplete") emitNativeOutput(generation.id, { type: "item.upsert", item: { id: `pm-core-observation:${phase}`, type: "notification", status: "failed", title: "PM core observation unavailable", text: result.error ?? "Observation failed or was incomplete." } });
-        } catch {
-          emitNativeOutput(generation.id, { type: "item.upsert", item: { id: `pm-core-observation:${phase}`, type: "notification", status: "failed", title: "PM core observation unavailable", text: "Could not observe PM core files." } });
-        }
-      };
       let automationConnectors: AutomationGenerationConnectors | undefined;
       try {
-      await observe("before");
       saveGeneration({ ...getChatGeneration(generation.id)!, status: "running" });
       setNativeOutputStatus(generation.id, "running");
-      await assertExternalGrant();
+      await authorizeExecution("launch");
       automationConnectors = await openAutomationGenerationConnectors(generation, requestHeaders, authorizeExecution);
       let failed: unknown;
       let source: ReadableStream<UIMessageChunk>;
@@ -892,6 +880,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
               }, delay);
             };
             try {
+              await authorizeExecution("launch");
               recordUsageLaunch({
                 generationId: generation.id, instanceId: runtime.providerInstanceId,
                 instanceRevision: runtime.instanceRevision, provider: runtime.driver,
@@ -900,13 +889,13 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
                   plan.session?.fork?.boundary?.turnId].filter((id): id is string => Boolean(id)),
               });
               const result = await runNativeRuntime(runtime, {
-                prompt: generation.idleCompaction ? "/compact" : !bridge ? plan.prompt : `${plan.prompt}\n\nPM tools are available through the generation-scoped CLI. List: ${[process.execPath, path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url, "tools", "list"].map((part) => `'${part.replaceAll("'", "'\\''")}'`).join(" ")}. For calls or reconciliation use the same command replacing list with call or result and supply JSON on stdin: {"operationId":"UUID","name":"pm_...","arguments":{...}}. Keep the same operationId and arguments to reconcile an unknown outcome; never redispatch an unknown write with a new ID. Tool results are authoritative; shell exit status or model text alone is not proof of a write.`,
+                prompt: generation.idleCompaction ? "/compact" : !bridge ? plan.prompt : `${plan.prompt}\n\nOptional PM tools are available through the generation-scoped CLI. List authorized PM workspaces first; no Session PM target is implied. List: ${[process.execPath, path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url, "tools", "list"].map((part) => `'${part.replaceAll("'", "'\\''")}'`).join(" ")}. For calls or reconciliation use the same command replacing list with call or result and supply JSON on stdin: {"operationId":"UUID","name":"pm_...","target":{"workspaceId":"...","projectId":null},"arguments":{...}}. Except pm_list_workspaces, each call requires its explicit target. Keep the same operationId, target and arguments to reconcile an unknown outcome; never redispatch an unknown write with a new ID. Tool results are authoritative; shell exit status or model text alone is not proof of a write.`,
                 userMessageText: generation.idleCompaction ? undefined : generation.request.messages.findLast(message => message.role === "user")
                   ?.parts.filter(part => part.type === "text").map(part => part.text).join("\n"),
                 pmToolBridge: bridge ? { command: process.execPath, args: [path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url] } : undefined,
                 mcpServers: automationConnectors?.mcpServers,
                 execution: { threadId: generation.threadId, generationId: generation.id,
-                  messageId: generation.messageId, scope: snapshot.scope },
+                  messageId: generation.messageId, environment: snapshot.environment },
                 authorizeExecution,
                 authorizeMcpApp,
                 originatingMcpGrant: requestHeaders?.get("authorization")?.startsWith("Bearer pm-mcp-service-v1.")
@@ -1023,7 +1012,6 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
       }
       if (failed) throw failed;
       } finally {
-        await observe("after");
         try { await automationConnectors?.close(); }
         finally { await bridge?.close(); }
       }
@@ -1109,7 +1097,7 @@ function settleChat(id: string, status: ChatGeneration["status"], error?: unknow
         current.nativeSession,
         current.messageId,
         current.request.system,
-        current.executionSnapshot?.scope,
+        current.executionSnapshot?.environment,
       );
     if (status !== "completed" && current.status !== "queued")
       setThreadNativeSession(current.threadId, undefined);
@@ -1169,7 +1157,7 @@ export async function continueChat(
 ): Promise<ChatGeneration> {
   const previous = getChatGeneration(id);
   if (!previous) throw new ThreadConflictError("找不到该回复。", "not_found");
-  if (previous.continuationId) return getChatGeneration(previous.continuationId)!;
+  if (previous.continuationId) { await resolveChatExecutionScope(requireRunnableThread(previous.threadId), requestHeaders); return getChatGeneration(previous.continuationId)!; }
   if (!["interrupted", "failed", "cancelled"].includes(previous.status))
     throw new ThreadConflictError("只有中断、失败或取消的回复可继续。");
   const thread = requireRunnableThread(previous.threadId);
@@ -1186,11 +1174,16 @@ export async function continueChat(
   const modelOptions = validatedModelOptions(runtime.providerInstanceId, thread.settings.model,
     unchangedSettings ? previous.modelOptions ?? thread.settings.modelOptions : thread.settings.modelOptions);
   const executionSnapshot = await resolveChatExecutionScope(thread, requestHeaders);
+  if (!thread.executionSelection || !executionSnapshot.environment) throw new DurableError(412, "execution_environment_required", "Continuation requires a versioned, currently authorized Session environment.");
   if (!confirmSideEffects)
     throw new ThreadConflictError(
       "CLI 的外部副作用可能已发生。请核对后确认恢复。",
       "side_effect_confirmation_required",
     );
+  const referenceEvidence = previous.request.pmReferences?.length
+    ? await resolvePmReferenceOperations(previous.request.pmReferences, requestHeaders)
+    : undefined;
+  if (referenceEvidence) assertResolvedReferences(referenceEvidence.references);
   const recovery: UIMessage = {
     id: crypto.randomUUID(),
     role: "user",
@@ -1222,6 +1215,7 @@ export async function continueChat(
     tools: previous.request.tools,
     config: previous.request.config,
     trigger: "submit-message",
+    pmReferences: previous.request.pmReferences,
     idempotencyKey,
   };
   // All identity checks and the lineage link commit before scheduling the provider.
@@ -1232,6 +1226,8 @@ export async function continueChat(
     requireRunnableThread(previous.threadId, thread.revision);
     if (getActiveChat(previous.threadId))
       throw new ThreadConflictError("当前会话已有运行中的回复。");
+    freezeThreadExecution(previous.threadId, executionSnapshot.environment!, executionSnapshot.path);
+    executionSnapshot.environment = { ...executionSnapshot.environment!, frozen: true };
     const messages = acceptMessages(request);
     const next: ChatGeneration = {
       id: crypto.randomUUID(),
@@ -1252,7 +1248,7 @@ export async function continueChat(
       executionSnapshot,
       continuationOf: id,
       nativeSession: previous.nativeSession,
-      ...(previous.pmReferences ? { pmReferences: previous.pmReferences } : {}),
+      ...(referenceEvidence ? { pmReferences: referenceEvidence.references, pmOperations: referenceEvidence.operations } : {}),
     };
     saveGeneration(next);
     initializeNativeOutput(next.id, next.threadId);
@@ -1307,7 +1303,6 @@ export async function stopChatRuntime(): Promise<void> {
     if (generation.status === "queued") settleChat(generation.id, "interrupted");
   await Promise.all(workers.values());
   await Promise.all(compactionTasks);
-  await stopPmCoreChanges();
   for (const generation of listRecords<ChatGeneration>(GENERATIONS))
     if (isChatActive(generation)) settleChat(generation.id, "interrupted");
   state.started = false;
@@ -1315,7 +1310,7 @@ export async function stopChatRuntime(): Promise<void> {
 
 export function getChatRecoveryCandidate(id: string): ChatRecoveryCandidate | null {
   const generation = getChatGeneration(id);
-  if (!generation) return null;
+  if (!generation || !generation.executionSnapshot?.environment || !getThread(generation.threadId)?.executionSelection) return null;
   return {
     id,
     threadId: generation.threadId,
@@ -1347,6 +1342,7 @@ export function getChatRecoveryCandidate(id: string): ChatRecoveryCandidate | nu
 export async function continueChatRecovery(
   id: string,
   options: { idempotencyKey: string },
+  requestHeaders?: Headers,
 ): Promise<{ id: string; status: ChatGeneration["status"] }> {
   const previous = getChatGeneration(id);
   if (!previous) throw new ThreadConflictError("找不到额度恢复的回复。", "not_found");
@@ -1371,7 +1367,7 @@ export async function continueChatRecovery(
       "中断的 CLI 没有可安全续接的原生会话，需要手动核对副作用后恢复。",
       "side_effect_confirmation_required",
     );
-  const generation = await continueChat(id, nativeRecovery, options.idempotencyKey, runtime);
+  const generation = await continueChat(id, nativeRecovery, options.idempotencyKey, runtime, requestHeaders);
   return { id: generation.id, status: generation.status };
 }
 
@@ -1424,7 +1420,7 @@ export async function forkChatGeneration(
       context,
       ...(generation.status === "completed" &&
       generation.executionSnapshot &&
-      sameAgentScope(generation.executionSnapshot.scope, getThread(generation.threadId)?.scope) &&
+      sameExecutionIdentity(generation.executionSnapshot.environment, getThread(generation.threadId)?.executionEnvironment) &&
       generation.nativeSession?.cwd === generation.executionSnapshot.path
         ? { nativeSession: generation.nativeSession }
         : {}),

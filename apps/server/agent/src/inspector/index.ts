@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { filesRoutes } from "./files.ts";
 import { gitRoutes } from "./git.ts";
+import { terminalRoutes } from "./terminal.ts";
 
 /**
  * Read-only inspector API. Mounted under `/api`, so the public paths are
@@ -9,4 +10,5 @@ import { gitRoutes } from "./git.ts";
  */
 export const inspectorRoutes = new Hono()
   .route("/inspector", filesRoutes)
-  .route("/inspector", gitRoutes);
+  .route("/inspector", gitRoutes)
+  .route("/inspector", terminalRoutes);

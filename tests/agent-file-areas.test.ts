@@ -4,7 +4,7 @@ import { it } from 'node:test';
 import { lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
-import { defaultAgentDirectory, type AgentDirectoryConfiguration } from '../packages/application/src/agent-storage.ts';
+import { agentAllowedDirectory, resolveAgentDirectory, type AgentDirectoryConfiguration } from '../packages/application/src/agent-storage.ts';
 import { runtimeConfig } from '../packages/infrastructure/src/runtime-config.ts';
 import { agentFileAreaUpdateSchema, agentScopeSchema } from '../packages/contracts/src/agent-file-areas.ts';
 
@@ -24,26 +24,20 @@ it('requires explicit two-level scope, strict LocalDirectory and a nonnegative c
   assert.equal(agentFileAreaUpdateSchema.safeParse({ directory: { mode: 'new', parentPath: '/trusted', folderName: '../escape' }, expectedRevision: 0 }).success, false);
 });
 
-it('preflights default creation without writes and rejects missing parents, symlinks and traversal', t => {
-  const root = mkdtempSync(path.join(tmpdir(), 'pm-chat-root-')); t.after(() => rmSync(root, { recursive: true, force: true }));
+it('PM storage selection requires existing parents and never allocates an Agent cwd', t => {
+  const root = mkdtempSync(path.join(tmpdir(), 'pm-storage-root-')); t.after(() => rmSync(root, { recursive: true, force: true }));
   const config: AgentDirectoryConfiguration = { enabled: false, dataRoot: root, defaultParent: null, allowedRoots: [], backupRoot: root, coreRoot: root, chatSpaceRoot: path.join(root, '.pmv4') };
-  const scope = { workspaceId: randomUUID(), projectId: null, actorId: randomUUID() };
-  const expected = path.join(config.chatSpaceRoot, 'workspaces', scope.workspaceId, 'workspace');
-  assert.equal(defaultAgentDirectory(config, config.chatSpaceRoot, scope), expected);
+  assert.throws(() => agentAllowedDirectory(config, config.chatSpaceRoot), { code: 'ENOENT' });
   assert.throws(() => lstatSync(config.chatSpaceRoot), { code: 'ENOENT' });
-  assert.equal(defaultAgentDirectory(config, config.chatSpaceRoot, scope, true), expected);
-  assert.ok(lstatSync(expected).isDirectory());
-  assert.throws(() => defaultAgentDirectory(config, config.chatSpaceRoot, { ...scope, projectId: '../escape' }, true));
-  assert.throws(() => defaultAgentDirectory(config, config.chatSpaceRoot, { ...scope, workspaceId: '../escape' }, true));
-  const absent = { ...config, chatSpaceRoot: path.join(root, 'missing-mount', '.pmv4') };
-  assert.throws(() => defaultAgentDirectory(absent, absent.chatSpaceRoot, scope, true), { code: 'ENOENT' });
-  assert.throws(() => lstatSync(path.join(root, 'missing-mount')), { code: 'ENOENT' });
+  mkdirSync(config.chatSpaceRoot);
+  const proposed = resolveAgentDirectory(config, { mode: 'new', parentPath: config.chatSpaceRoot, folderName: 'documents' });
+  assert.equal(proposed.root, path.join(config.chatSpaceRoot, 'documents'));
+  assert.throws(() => lstatSync(proposed.root), { code: 'ENOENT' });
+  assert.throws(() => resolveAgentDirectory(config, { mode: 'new', parentPath: config.chatSpaceRoot, folderName: '../escape' }));
   const target = path.join(root, 'target'); mkdirSync(target);
-  const link = path.join(root, 'linked'); symlinkSync(target, link, 'dir');
-  const unsafe = { ...config, chatSpaceRoot: path.join(link, '.pmv4') };
-  assert.throws(() => defaultAgentDirectory(unsafe, unsafe.chatSpaceRoot, scope, true));
-  assert.throws(() => lstatSync(path.join(target, '.pmv4')), { code: 'ENOENT' });
-  assert.throws(() => defaultAgentDirectory({ ...config, chatSpaceRoot: '/etc/chat-space' }, '/etc/chat-space', scope, true));
+  const link = path.join(config.chatSpaceRoot, 'linked'); symlinkSync(target, link, 'dir');
+  assert.throws(() => agentAllowedDirectory(config, link));
+  assert.throws(() => agentAllowedDirectory(config, path.join(config.chatSpaceRoot, 'missing', 'child')), { code: 'ENOENT' });
 });
 
 it('defaults Chat Space to the API user home without changing local project defaults', t => {

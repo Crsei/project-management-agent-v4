@@ -1,7 +1,7 @@
 // Host lifecycle boundary for copied McpAppRequests' ProviderSessionManager.get.
 // Native sessions are retained, never opened by an App request.
 import * as Effect from "effect/Effect";
-import type { AgentScope } from "@agent-workspace/contracts/chat";
+import type { ExecutionEnvironment } from "@agent-workspace/contracts/chat";
 import type { McpAppMetadata, McpAppProducingIdentity } from "@agent-workspace/contracts/mcp-apps";
 import type { OrchestrationV2ProviderThread } from "@t3tools/contracts";
 import type { ProviderAdapterV2McpApps, ProviderAdapterV2McpTool, ProviderAdapterV2McpCallToolResult } from "@t3tools/provider-core/server/ProviderAdapter";
@@ -10,10 +10,11 @@ import { getStoredInstance, subscribeProviderSettingsChanges } from "../provider
 import { clearMcpAppContexts } from "./context.ts";
 import type { ProviderDriverContext } from "../providers/driver-adapter.ts";
 import { assertStoredThread, currentGrant, grantIdentity } from "../mcp/grants.ts";
+import { assertMcpThread } from "../mcp/identity.ts";
 
 interface RetainedSession {
   readonly apps: readonly McpAppMetadata[];
-  readonly scope: AgentScope;
+  readonly executionEnvironment: ExecutionEnvironment;
   readonly cwd: string;
   readonly providerThread: OrchestrationV2ProviderThread;
   readonly mcpApps: ProviderAdapterV2McpApps;
@@ -64,7 +65,10 @@ export function retainMcpAppSession(input: RetainedSession): () => Promise<void>
     || app.producing.nativeSessionId !== input.providerThread.nativeThreadRef?.nativeId))
     throw new DurableError(409, "mcp_app_identity_mismatch", "The App does not belong to this live native session.");
   if (input.originatingMcpGrant) assertStoredThread(grantIdentity(currentGrant(input.originatingMcpGrant)), threadId);
-  const entry: Entry = { ...input, abort: new AbortController(), pending: new Set(), closed: false };
+  const entry: Entry = { ...input,
+    executionEnvironment: { ...input.executionEnvironment, worktree: input.executionEnvironment.worktree ? { ...input.executionEnvironment.worktree } : null },
+    ...(input.originatingMcpGrant ? { originatingMcpGrant: { ...input.originatingMcpGrant, scope: { ...input.originatingMcpGrant.scope } } } : {}),
+    abort: new AbortController(), pending: new Set(), closed: false };
   sessions.set(threadId, entry);
   unsubscribe ??= subscribeProviderSettingsChanges(() => {
     for (const entry of sessions.values()) {
@@ -87,7 +91,7 @@ export function retainMcpAppSession(input: RetainedSession): () => Promise<void>
 }
 
 export type McpAppSessionAccess = {
-  readonly scope: AgentScope;
+  readonly executionEnvironment: ExecutionEnvironment;
   readonly cwd: string;
   readonly originatingMcpGrant?: ProviderDriverContext["originatingMcpGrant"];
   readonly check: () => Promise<void>;
@@ -109,9 +113,13 @@ export async function withMcpAppSession<A>(app: McpAppMetadata, headers: Headers
     if (entry.closed || sessions.get(app.producing.threadId) !== entry || signal?.aborted)
       throw new DurableError(409, "mcp_app_session_stopped", "The producing App session is no longer current.");
     try {
+      if (entry.originatingMcpGrant)
+        await assertMcpThread(grantIdentity(currentGrant(entry.originatingMcpGrant)), app.producing.threadId);
       await entry.assertCurrent();
       await entry.authorize(headers, app.producing);
       await entry.assertCurrent();
+      if (entry.originatingMcpGrant)
+        assertStoredThread(grantIdentity(currentGrant(entry.originatingMcpGrant)), app.producing.threadId);
     } catch (error) {
       clearMcpAppContexts(app.producing.threadId);
       // Fence immediately; closing drains this request after its rejection, avoiding a self-wait.
@@ -135,7 +143,7 @@ export async function withMcpAppSession<A>(app: McpAppMetadata, headers: Headers
   };
   const work = Promise.resolve().then(async () => {
     await check();
-    const value = await use({ scope: entry.scope, cwd: entry.cwd, originatingMcpGrant: entry.originatingMcpGrant, check,
+    const value = await use({ executionEnvironment: entry.executionEnvironment, cwd: entry.cwd, originatingMcpGrant: entry.originatingMcpGrant, check,
       listTools: () => run(entry.mcpApps.listTools({ providerThread: entry.providerThread, server: app.server })),
       callTool: (tool, args) => run(entry.mcpApps.callTool({ providerThread: entry.providerThread, server: app.server, tool, arguments: args })),
       readResource: uri => run(entry.mcpApps.readResource({ providerThread: entry.providerThread, server: app.server, uri })),

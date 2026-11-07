@@ -14,141 +14,9 @@
       "ownership": "independently-inventoried-boundary"
     },
     {
-      "path": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
-      "sha256": "d7184d15d03e828e3eebdfb28d9cec61901c56982eb46b52bd5eccb141fdc430",
-      "bytes": 57480,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
-      "sha256": "f67599fd57d2241c60ba7b7f3e7315db5b3a5b4f54f7a67b72e7620cbb544f9e",
-      "bytes": 46217,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/mcp/formBits.tsx",
-      "sha256": "934ca7f99f17f2582e355597c35e81bd29afafb3cf238f16165b40bb2e241fd4",
-      "bytes": 6389,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/mcp/mcpDraft.ts",
-      "sha256": "945feb7b47fff4798868d7099f131b952932624a3baa26646c25b8bc8aa888c1",
-      "bytes": 12811,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
-      "sha256": "0418cee061dbc045e7f1b08db508b4200be89ea31161e442ba6b49e5ec2368c3",
-      "bytes": 2368,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
-      "sha256": "9505bc6a85e5c907d50000168c2086900797da6587492062f2c8eb3aace1ff10",
-      "bytes": 42648,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
-      "sha256": "11e2dfcf32a957646402ccb52e23a2f60e0036040f4e2524ece1c04d754069b5",
-      "bytes": 79444,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/ui/button.tsx",
-      "sha256": "5b91c3f8e46472baff65f03d3937540a6858232c0498ca5b0cf4d1517e4b7bf1",
-      "bytes": 4594,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/ui/dialog.tsx",
-      "sha256": "1bf841355536d50b4e9a16f7f850cf76ea2997dd00638d6167773420ee445db8",
-      "bytes": 4173,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/ui/sheet.tsx",
-      "sha256": "3d907b0f961fab3cfbc89c86268b47a5248d7428bd5fb5289a22b6d89d529a1a",
-      "bytes": 6477,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/components/ui/tooltip.tsx",
-      "sha256": "ce233ded103fbfd7847da0e4ee39bc408c8234af7fa39e05abe6b103639c826d",
-      "bytes": 1361,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/config/appConfig.tsx",
-      "sha256": "3d611db94f7b9bad026ed47489b4006342bd1046fd29abccf44842c1a5002f69",
-      "bytes": 9928,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/hooks/useMcp.ts",
-      "sha256": "595148d90e9c7e3189c681995832ccc54e9f64c0195379e67748cc600780ad54",
-      "bytes": 5273,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
-      "sha256": "12ec3b67c69d1dea6d94696665dee57c72d8ed43a9f62e33e66aceeeecc83d32",
-      "bytes": 5525,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/i18n/index.ts",
-      "sha256": "79deb22d6098c440996d84008695009b0608f75e33c421eded8e686325923263",
-      "bytes": 3167,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/lib/api/skills.ts",
-      "sha256": "485df920db6b87eed0a28235dd0ee9cac4dd57474270a866c373e34b1dece905",
-      "bytes": 9512,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/lib/api/types.ts",
-      "sha256": "2080346c5013c38ebe07a73892659e8464d2665ddd44e00f0cb34a6b1041a7c3",
-      "bytes": 288,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/lib/clipboard.ts",
-      "sha256": "ff2fb59b42b3dbbec0731ea47bb84f096a64751320351d4a3432b096214a307e",
-      "bytes": 306,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/lib/toast.ts",
-      "sha256": "08c0e0f346d2c1795f6b6fd35df079b3a7522e8ea8c099de4fcf783c8cb787cf",
-      "bytes": 1891,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/lib/unsavedChanges.ts",
-      "sha256": "902e522ac93086e358375b18db7cf8b12f1a8f29c9bce5284464e2d50906faf2",
-      "bytes": 3285,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/types.ts",
-      "sha256": "1e85b0692423a31edfed4d4b2b86d1cdfa1e79a36ee9aaf4c033da201a5a2d5a",
-      "bytes": 34803,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/web/bridge.ts",
-      "sha256": "664b55163f177dfbb0fbac0e13a6615980756a6f756bee4c82ba20902d37a6b9",
-      "bytes": 6227,
-      "ownership": "independently-inventoried-boundary"
-    },
-    {
-      "path": "vendor/cc-switch/src/web/settings.ts",
-      "sha256": "b6273b6f4fb48e7031143a71be4ca3643ccffd8bdfc1631b4dbabd61f3107db5",
-      "bytes": 1766,
+      "path": "vendor/cc-switch/src/web/index.tsx",
+      "sha256": "34387646a2d799303083d16b16ff6a1c439b72f3f2a614ba024d3e148b43de2e",
+      "bytes": 12036,
       "ownership": "independently-inventoried-boundary"
     },
     {
@@ -663,8 +531,8 @@
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/mcp-page/custom-server-editor.tsx",
-      "sha256": "70766ae1d0b0120c23e1f953d4d3f178937d24d7797394670b05964f52788fef",
-      "bytes": 1353,
+      "sha256": "20ac6cc10af9ab15c92c82782654601276014b18fa143f9f2242b63398f621da",
+      "bytes": 1325,
       "ownership": "fork-output"
     },
     {
@@ -675,38 +543,32 @@
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/mcp-page/install-server-modal.tsx",
-      "sha256": "a1bd082ee12bdc11c8b3fa59e8fd000036343dea4c3834eb5bebb875e2a67785",
-      "bytes": 11592,
+      "sha256": "8cdfc663f0006eac3ca2b7ebb52cc97e49c1747cda54c23147820e4171d030d6",
+      "bytes": 11262,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/mcp-page/installed-server-card.tsx",
-      "sha256": "3401f0d964de701cdec20911897d1c23fa9dacc6ccbfff265d81b1009971b3e5",
-      "bytes": 4063,
+      "sha256": "c8ffc8ef23ea29046c8bb3a67cdca5d1968194ab4e6afd96564bac5637fa0b7f",
+      "bytes": 4951,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/mcp-page/installed-servers-section.tsx",
-      "sha256": "448bac906ead669ea5ed2f3499112c85701a717314c96a2e30addae9064a8576",
-      "bytes": 1547,
+      "sha256": "2b740ff230318b2f5231ed477780564275d975152b964c4d7fac61005841b7bf",
+      "bytes": 1564,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/mcp-page/marketplace-card.tsx",
-      "sha256": "f2bd8fed307df61e008d8e17ed3cf18c4b0bae43018fa5b9ec03b16d12a04866",
-      "bytes": 3233,
+      "sha256": "26cfb04e681c8d3a96b3751c9f2745d11c5b6384be6a33a5bc32a7eb8c88c58e",
+      "bytes": 2617,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/mcp-page/marketplace-section.tsx",
-      "sha256": "ea5d89613d1ab335a2d9fbff3f2a9a536d31ae94397d50e2a251f1470e0f6f51",
-      "bytes": 3093,
-      "ownership": "fork-output"
-    },
-    {
-      "path": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-section-filter-dropdown.tsx",
-      "sha256": "e7cdb0425f2ab95146fcd28c6d80f9c450e86da1fa46c5f5974e8a7ac508b8c9",
-      "bytes": 849,
+      "sha256": "6f8e56246cb0a7a9b2813f170a47cff3ae6c5601fcd53e705ed22c8a3b2990c7",
+      "bytes": 2104,
       "ownership": "fork-output"
     },
     {
@@ -717,8 +579,8 @@
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-toolbar.tsx",
-      "sha256": "025f53be56541ce598ecf6c66edb7205ab0e3afeab4cf598fd38f756538a7693",
-      "bytes": 2381,
+      "sha256": "8581a38ca992f2f59cdad6720a7c859407687e66bd104749b9e3c270e2fd56a0",
+      "bytes": 1880,
       "ownership": "fork-output"
     },
     {
@@ -731,12 +593,6 @@
       "path": "vendor/openhands-extensions/src/components/features/skills/build-skill-pills.tsx",
       "sha256": "25a385fad723feb988ba9c1fbebf20ec5490c99368dabda99389d2d9ce4cd9ea",
       "bytes": 1855,
-      "ownership": "fork-output"
-    },
-    {
-      "path": "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
-      "sha256": "e079a857b02bc8f6d44f3ac50d024ccccd4d87a04467b6de9ecd88c65fe477f2",
-      "bytes": 3027,
       "ownership": "fork-output"
     },
     {
@@ -759,14 +615,14 @@
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/skills/skill-card.tsx",
-      "sha256": "5e5f2e40e1479e7e6261406b469c258987ce0599ece2e3b6124e121096ac1108",
-      "bytes": 5272,
+      "sha256": "c9b122dfb8b38686f93e9d72e14dd2b4ba928d7fab951a3ababafd508f512a85",
+      "bytes": 5193,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/skills/skill-detail-modal.tsx",
-      "sha256": "63da591a25d09173ad66e529f818c7265c714d02dc1470d8a43b0f7b7916f6bb",
-      "bytes": 4128,
+      "sha256": "e1d5723f4288e41024d13daf0e24fa0387200ff76fefeaa93561e3247eca4fd5",
+      "bytes": 4001,
       "ownership": "fork-output"
     },
     {
@@ -789,8 +645,8 @@
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/skills/skill-filters-modal.tsx",
-      "sha256": "0fc91b6dad317f297afa131733dbc952ad72c495c5bc01d27ab55d3e1b7d35f2",
-      "bytes": 1694,
+      "sha256": "8aa235f1796d52d1bf9d4d6b5f5a1c09044b219a917bd1c6265cf7d743742e82",
+      "bytes": 1669,
       "ownership": "fork-output"
     },
     {
@@ -813,20 +669,8 @@
     },
     {
       "path": "vendor/openhands-extensions/src/components/shared/buttons/circle-plus-check-toggle.tsx",
-      "sha256": "c6071f9f18d4375878320fd4c09a8bd488483806427683693759634401565bef",
-      "bytes": 3800,
-      "ownership": "fork-output"
-    },
-    {
-      "path": "vendor/openhands-extensions/src/components/shared/compact-section-navigation.tsx",
-      "sha256": "4ef78fb721e133a565b32a8eac1f54869baa319f85ad0860ad7b33a553448c80",
-      "bytes": 2782,
-      "ownership": "fork-output"
-    },
-    {
-      "path": "vendor/openhands-extensions/src/components/shared/navigation-link.tsx",
-      "sha256": "f9353d9198e4ea2a02d3932a2944881e430d404d9be218bf3f30995cdcaaffa4",
-      "bytes": 2051,
+      "sha256": "93074d86d220895602f0cc0fb500c9d95abf79a428ae1a94f78f7f2081c8b4b3",
+      "bytes": 3774,
       "ownership": "fork-output"
     },
     {
@@ -837,14 +681,14 @@
     },
     {
       "path": "vendor/openhands-extensions/src/routes/mcp.tsx",
-      "sha256": "60cc657bfc6da25dc06518cdbdb0240112bcf2d75857dc6b718e00b500dba4b0",
-      "bytes": 9619,
+      "sha256": "7fb6a4238ee5bed642956ec5445718832a0198d5ed4afb4c25b98e9921622938",
+      "bytes": 9607,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/routes/skills-settings.tsx",
-      "sha256": "7a2ec86c1d57cedf9c7e3b1ba07070b22c8a8bb1410d49ee6acc4dcfd7ab21c9",
-      "bytes": 2118,
+      "sha256": "1a24a98f59abacd241689653e36dd7b86084023b9b901218ddf7a7f0be2ac8dc",
+      "bytes": 2154,
       "ownership": "fork-output"
     },
     {
@@ -891,50 +735,56 @@
     },
     {
       "path": "vendor/openhands-extensions/src/web/bridge.ts",
-      "sha256": "b1dfbf3d1c6d87908a17b03b1f02df327c7691d5f6ce807bee488c5c09aeb934",
-      "bytes": 843,
+      "sha256": "e63cc6b99528018758db6a088f9394c446a78f4af911ea21c6a7d906764d22f3",
+      "bytes": 87,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/i18n.ts",
-      "sha256": "463f13a5f024ae2c001f389b7b195466a93ff6c82e975e67b427bd403caaeebf",
-      "bytes": 3710,
+      "sha256": "a2b125f1503a9ffe061311aa866bf5629b2b5a064ccbdbb62b8ce3618e4b47ab",
+      "bytes": 3639,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/index.tsx",
-      "sha256": "a0f28c13f2a3f77acf044357685b99c43ca86e2d356c2ef1f7358b07c5448f56",
-      "bytes": 2240,
+      "sha256": "eae805d60189fbea2acf85ec91e324366fd9c559bb7e205566ee311ef92bd6bf",
+      "bytes": 2884,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/management.css",
-      "sha256": "bffcd225cda89089c1ba4cb67a0ff5c21502728bd42ef6799b70da699b79e1c0",
-      "bytes": 12086,
+      "sha256": "b7b7e5d2f53a13fab6b36ca36ffbf6984f2d8d99c9ead62d21abf91e1c57f802",
+      "bytes": 12791,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/mcp/agent-configuration-drawer.tsx",
-      "sha256": "10ad59319fd3b0756d32892c78634116579cc7ca7248dca935baad6cc259f33a",
-      "bytes": 14208,
+      "sha256": "38e474644a2f2fd1a83f6ef55757cda359944f5cfe61e96e3d9e84bd5f7c4103",
+      "bytes": 13857,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "sha256": "06797b05e4a87b650181b15431d2b3894ae10ea3af3e14c972d0a06b72926b89",
+      "bytes": 7404,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/mcp/definition-adapter.ts",
-      "sha256": "b3b47b27fd214498d9ca318980b9eb7b729394b4533d74c270006e28b59604a8",
-      "bytes": 1407,
+      "sha256": "1029b13a5ad8f9788171512b18243cc371ec576780b99e6a47b9b78ee0a9116b",
+      "bytes": 1346,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/mcp/import-preview-dialog.tsx",
-      "sha256": "c29a05ebaff38561c1a0f4ee823912e7c1c8145e6c5332414e1937fe4b60e80a",
-      "bytes": 5496,
+      "sha256": "fcbb679f520ff853df3eaf94b55207de10a72a59b4de3b63f5db82d56bbb0c1b",
+      "bytes": 5270,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/mcp/management.css",
-      "sha256": "d9be139fd3b9069cffa125b124cb5c95b75eea00fa016da488698c246b644972",
-      "bytes": 13250,
+      "sha256": "ce0d97591ee3f639bff3c7fedefbe0b52f91af14d9678f17da606ef6ca3163e2",
+      "bytes": 25851,
       "ownership": "fork-output"
     },
     {
@@ -945,38 +795,92 @@
     },
     {
       "path": "vendor/openhands-extensions/src/web/mcp/messages.ts",
-      "sha256": "df63a295f5ef81f5cf50f0a682efeb7745c146f01d8f0b8d9ca7382565a056cb",
-      "bytes": 43894,
+      "sha256": "901f7badfcaaeeaba0b2b4b8c3391e0b9f991947e147593213bdbff994823ae2",
+      "bytes": 40391,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+      "sha256": "7d64c1a6b614c56d5b2153f96e5617e45e4d3bf85411a83437cc99445df08933",
+      "bytes": 5497,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
+      "sha256": "260c11ae94d9d426c1152d3afb645ed291493aaf1b2de29e23849d452874f3d9",
+      "bytes": 3170,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/shared/agent-matrix-table.tsx",
+      "sha256": "8e704a2ddf8808f2d6898f21634c7fa00d87f25ec2d7b3e02eea2cc4a9dccf61",
+      "bytes": 6887,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/shared/enum-filter-dropdown.tsx",
+      "sha256": "ebd8c3b64fe9dc2f56846995504e3891d21e6edd97cf17dbd163636df0022d26",
+      "bytes": 2527,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/shared/shared.css",
+      "sha256": "a303464105bb08aba84be76220ea6807970070518645f2f76614b33e7063cd1d",
+      "bytes": 15580,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/shared/status-pill.tsx",
+      "sha256": "76e8eda5c4c30e5ba42b7b565a5f625d92a9cb2294cfe844fef9c00a885fa10b",
+      "bytes": 575,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/skills/discovered-skills.tsx",
-      "sha256": "eaa4aab54ca5540982373741a0a3fa8d33a93070890e78d28ed77f26c963f889",
-      "bytes": 5424,
+      "sha256": "812d0ae4d3dc897dd70cd9a7af3ebb11709b22378240c93c1fd85a21e4b8f4be",
+      "bytes": 4383,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
-      "sha256": "0a7ad3e10fc507068392b976077bb1fba36b66f44b7aa1e340de88aa0fca8682",
-      "bytes": 11035,
+      "sha256": "d03f3167c45e1e94ff8833423ac2d01299526ab16ef425cecb392a754a13acb0",
+      "bytes": 7618,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/skills/messages.ts",
-      "sha256": "ec7e0c59189aa0fd32c23c99374999a5f910995292207b9f05cf727742164b75",
-      "bytes": 17717,
+      "sha256": "9cede1c68310494ee2d63b0b03c95ad10af2a00844396eae9318c8f100a09027",
+      "bytes": 15724,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
+      "sha256": "19bd63ca164ead72d02893852b248739edae3bd555ab0a5eff50b007a9e8078c",
+      "bytes": 4440,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "sha256": "12642cb7c6d7cf8f2684f6d0262de2436175d99c43d15465c26d7405b0288d6f",
+      "bytes": 5991,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/skills/skill-presentation.ts",
-      "sha256": "340c6c5337ea17c880486e5cf1b6e028431cf9b5e3ac94d0ae9779c97903da97",
-      "bytes": 2022,
+      "sha256": "67ec3edf185672cd0e39207aec1ce0277c08cff0e4d48d572100dfc639349add",
+      "bytes": 1890,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/openhands-extensions/src/web/skills/skills.css",
-      "sha256": "29e65b6d03e610abf2625787c520fc390dabf5977c688d1d8df7d69e7856f96f",
-      "bytes": 11862,
+      "sha256": "dc37a55d676e407ecc2237b30139a1d6821453aa3a66d38c29dabd283f9c492f",
+      "bytes": 26150,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/openhands-extensions/src/web/skills/unbound-skills-page.tsx",
+      "sha256": "33ebef5c71b5c2ae09117f0d476235eb1bde2f86da96185c3e827153aa5a65ee",
+      "bytes": 2977,
       "ownership": "fork-output"
     }
   ],
@@ -1586,8 +1490,8 @@
     {
       "source": "vendor/openhands-extensions/src/components/features/mcp-page/custom-server-editor.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/mcp/McpFormModal",
-      "target": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -1670,36 +1574,8 @@
     {
       "source": "vendor/openhands-extensions/src/components/features/mcp-page/install-server-modal.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/mcp/formBits",
-      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/install-server-modal.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/mcp/mcpDraft",
-      "target": "vendor/cc-switch/src/components/mcp/mcpDraft.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/install-server-modal.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/ui/dialog",
-      "target": "vendor/cc-switch/src/components/ui/dialog.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/install-server-modal.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/hooks/useMcp",
-      "target": "vendor/cc-switch/src/hooks/useMcp.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/install-server-modal.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/unsavedChanges",
-      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -1768,8 +1644,8 @@
     {
       "source": "vendor/openhands-extensions/src/components/features/mcp-page/installed-server-card.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/shell/AppGlyph",
-      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -1810,15 +1686,22 @@
     {
       "source": "vendor/openhands-extensions/src/components/features/mcp-page/installed-server-card.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/utils/utils",
-      "target": "vendor/openhands-extensions/src/utils/utils.ts",
+      "specifier": "@pm/openhands-source/web/i18n",
+      "target": "vendor/openhands-extensions/src/web/i18n.ts",
       "disposition": "fork-output"
     },
     {
       "source": "vendor/openhands-extensions/src/components/features/mcp-page/installed-server-card.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/web/i18n",
-      "target": "vendor/openhands-extensions/src/web/i18n.ts",
+      "specifier": "@pm/openhands-source/web/shared/agent-avatar",
+      "target": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/components/features/mcp-page/installed-server-card.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/shared/status-pill",
+      "target": "vendor/openhands-extensions/src/web/shared/status-pill.tsx",
       "disposition": "fork-output"
     },
     {
@@ -1962,52 +1845,17 @@
       "disposition": "fork-output"
     },
     {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/marketplace-section.tsx",
-      "kind": "ts-import-export",
-      "specifier": "react",
-      "target": null,
-      "disposition": "external-package"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-section-filter-dropdown.tsx",
-      "kind": "ts-import-export",
-      "specifier": "./mcp-section-filter",
-      "target": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-section-filter.ts",
-      "disposition": "fork-output"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-section-filter-dropdown.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/web/i18n",
-      "target": "vendor/openhands-extensions/src/web/i18n.ts",
-      "disposition": "fork-output"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-toolbar.tsx",
-      "kind": "ts-import-export",
-      "specifier": "./mcp-section-filter",
-      "target": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-section-filter.ts",
-      "disposition": "fork-output"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-toolbar.tsx",
-      "kind": "ts-import-export",
-      "specifier": "./mcp-section-filter-dropdown",
-      "target": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-section-filter-dropdown.tsx",
-      "disposition": "fork-output"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-toolbar.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/utils/utils",
-      "target": "vendor/openhands-extensions/src/utils/utils.ts",
-      "disposition": "fork-output"
-    },
-    {
       "source": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-toolbar.tsx",
       "kind": "ts-import-export",
       "specifier": "@pm/openhands-source/web/i18n",
       "target": "vendor/openhands-extensions/src/web/i18n.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-toolbar.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/shared/enum-filter-dropdown",
+      "target": "vendor/openhands-extensions/src/web/shared/enum-filter-dropdown.tsx",
       "disposition": "fork-output"
     },
     {
@@ -2070,55 +1918,6 @@
       "source": "vendor/openhands-extensions/src/components/features/skills/build-skill-pills.tsx",
       "kind": "ts-import-export",
       "specifier": "react",
-      "target": null,
-      "disposition": "external-package"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/components/shared/compact-section-navigation",
-      "target": "vendor/openhands-extensions/src/components/shared/compact-section-navigation.tsx",
-      "disposition": "fork-output"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/components/shared/navigation-link",
-      "target": "vendor/openhands-extensions/src/components/shared/navigation-link.tsx",
-      "disposition": "fork-output"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/utils/utils",
-      "target": "vendor/openhands-extensions/src/utils/utils.ts",
-      "disposition": "fork-output"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/web/i18n",
-      "target": "vendor/openhands-extensions/src/web/i18n.ts",
-      "disposition": "fork-output"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "lucide-react",
-      "target": null,
-      "disposition": "external-package"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "react",
-      "target": null,
-      "disposition": "external-package"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "react-router-dom",
       "target": null,
       "disposition": "external-package"
     },
@@ -2209,15 +2008,8 @@
     {
       "source": "vendor/openhands-extensions/src/components/features/skills/skill-card.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/clipboard",
-      "target": "vendor/cc-switch/src/lib/clipboard.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/skill-card.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/toast",
-      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -2300,22 +2092,8 @@
     {
       "source": "vendor/openhands-extensions/src/components/features/skills/skill-detail-modal.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/ui/dialog",
-      "target": "vendor/cc-switch/src/components/ui/dialog.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/skill-detail-modal.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/clipboard",
-      "target": "vendor/cc-switch/src/lib/clipboard.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/features/skills/skill-detail-modal.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/toast",
-      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -2440,8 +2218,8 @@
     {
       "source": "vendor/openhands-extensions/src/components/features/skills/skill-filters-modal.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/ui/dialog",
-      "target": "vendor/cc-switch/src/components/ui/dialog.tsx",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -2510,8 +2288,8 @@
     {
       "source": "vendor/openhands-extensions/src/components/shared/buttons/circle-plus-check-toggle.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/ui/tooltip",
-      "target": "vendor/cc-switch/src/components/ui/tooltip.tsx",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -2543,41 +2321,6 @@
       "disposition": "external-package"
     },
     {
-      "source": "vendor/openhands-extensions/src/components/shared/compact-section-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "lucide-react",
-      "target": null,
-      "disposition": "external-package"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/shared/compact-section-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "react",
-      "target": null,
-      "disposition": "external-package"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/shared/compact-section-navigation.tsx",
-      "kind": "ts-import-export",
-      "specifier": "react-router-dom",
-      "target": null,
-      "disposition": "external-package"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/shared/navigation-link.tsx",
-      "kind": "ts-import-export",
-      "specifier": "react",
-      "target": null,
-      "disposition": "external-package"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/components/shared/navigation-link.tsx",
-      "kind": "ts-import-export",
-      "specifier": "react-router-dom",
-      "target": null,
-      "disposition": "external-package"
-    },
-    {
       "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
       "kind": "ts-import-export",
       "specifier": "@agent-workspace/contracts/extensions",
@@ -2594,43 +2337,8 @@
     {
       "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/mcp/UnifiedMcpPanel",
-      "target": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/shell/AppGlyph",
-      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/config/appConfig",
-      "target": "vendor/cc-switch/src/config/appConfig.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/hooks/useMcp",
-      "target": "vendor/cc-switch/src/hooks/useMcp.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/hooks/useMcpConnectivity",
-      "target": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/unsavedChanges",
-      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -2671,6 +2379,13 @@
     {
       "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
       "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/mcp/agent-matrix",
+      "target": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
+      "kind": "ts-import-export",
       "specifier": "@pm/openhands-source/web/mcp/definition-adapter",
       "target": "vendor/openhands-extensions/src/web/mcp/definition-adapter.ts",
       "disposition": "fork-output"
@@ -2692,6 +2407,20 @@
     {
       "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
       "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/shared/agent-avatar",
+      "target": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/routes/mcp.tsx",
+      "kind": "ts-import-export",
       "specifier": "react",
       "target": null,
       "disposition": "external-package"
@@ -2699,29 +2428,29 @@
     {
       "source": "vendor/openhands-extensions/src/routes/skills-settings.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/skills/UnifiedSkillsPanel",
-      "target": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
       "source": "vendor/openhands-extensions/src/routes/skills-settings.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/ui/button",
-      "target": "vendor/cc-switch/src/components/ui/button.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/routes/skills-settings.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/unsavedChanges",
-      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
-      "disposition": "independently-inventoried-boundary"
+      "specifier": "@pm/openhands-source/web/bridge",
+      "target": "vendor/openhands-extensions/src/web/bridge.ts",
+      "disposition": "fork-output"
     },
     {
       "source": "vendor/openhands-extensions/src/routes/skills-settings.tsx",
       "kind": "ts-import-export",
       "specifier": "@pm/openhands-source/web/i18n",
       "target": "vendor/openhands-extensions/src/web/i18n.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/routes/skills-settings.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/shared/agent-avatar",
+      "target": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
       "disposition": "fork-output"
     },
     {
@@ -2797,29 +2526,8 @@
     {
       "source": "vendor/openhands-extensions/src/web/bridge.ts",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/unsavedChanges",
-      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/bridge.ts",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/web/bridge",
-      "target": "vendor/cc-switch/src/web/bridge.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/bridge.ts",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/web/bridge",
-      "target": "vendor/cc-switch/src/web/bridge.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/bridge.ts",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/web/bridge",
-      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -2860,8 +2568,8 @@
     {
       "source": "vendor/openhands-extensions/src/web/i18n.ts",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/i18n",
-      "target": "vendor/cc-switch/src/i18n/index.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -2895,9 +2603,30 @@
     {
       "source": "vendor/openhands-extensions/src/web/index.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/components/features/skills/extensions-navigation",
-      "target": "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
+      "specifier": "./mcp/unbound-mcp-page",
+      "target": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
       "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./shared/shared.css",
+      "target": "vendor/openhands-extensions/src/web/shared/shared.css",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./skills/unbound-skills-page",
+      "target": "vendor/openhands-extensions/src/web/skills/unbound-skills-page.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
+      "disposition": "independently-inventoried-boundary"
     },
     {
       "source": "vendor/openhands-extensions/src/web/index.tsx",
@@ -2937,43 +2666,8 @@
     {
       "source": "vendor/openhands-extensions/src/web/mcp/agent-configuration-drawer.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/shell/AppGlyph",
-      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/agent-configuration-drawer.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/ui/sheet",
-      "target": "vendor/cc-switch/src/components/ui/sheet.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/agent-configuration-drawer.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/config/appConfig",
-      "target": "vendor/cc-switch/src/config/appConfig.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/agent-configuration-drawer.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/hooks/useMcp",
-      "target": "vendor/cc-switch/src/hooks/useMcp.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/agent-configuration-drawer.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/hooks/useMcpConnectivity",
-      "target": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/agent-configuration-drawer.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/unsavedChanges",
-      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -2998,6 +2692,90 @@
       "disposition": "external-package"
     },
     {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./management",
+      "target": "vendor/openhands-extensions/src/web/mcp/management.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@agent-workspace/contracts/extensions",
+      "target": "packages/agent-contracts/src/extensions.ts",
+      "disposition": "independently-inventoried-boundary"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@openhands/extensions/integrations",
+      "target": "vendor/openhands-extensions/extensions/integrations/index.js",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
+      "disposition": "independently-inventoried-boundary"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/components/features/mcp-logo-badge",
+      "target": "vendor/openhands-extensions/src/components/features/mcp-logo-badge.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/utils/mcp-installed-server-display",
+      "target": "vendor/openhands-extensions/src/utils/mcp-installed-server-display.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/utils/mcp-marketplace-utils",
+      "target": "vendor/openhands-extensions/src/utils/mcp-marketplace-utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/i18n",
+      "target": "vendor/openhands-extensions/src/web/i18n.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/shared/agent-matrix-table",
+      "target": "vendor/openhands-extensions/src/web/shared/agent-matrix-table.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/shared/enum-filter-dropdown",
+      "target": "vendor/openhands-extensions/src/web/shared/enum-filter-dropdown.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
       "source": "vendor/openhands-extensions/src/web/mcp/definition-adapter.ts",
       "kind": "ts-import-export",
       "specifier": "@agent-workspace/contracts/extensions",
@@ -3007,15 +2785,8 @@
     {
       "source": "vendor/openhands-extensions/src/web/mcp/definition-adapter.ts",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/config/appConfig",
-      "target": "vendor/cc-switch/src/config/appConfig.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/definition-adapter.ts",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/types",
-      "target": "vendor/cc-switch/src/types.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -3042,36 +2813,8 @@
     {
       "source": "vendor/openhands-extensions/src/web/mcp/import-preview-dialog.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/mcp/formBits",
-      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/import-preview-dialog.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/shell/AppGlyph",
-      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/import-preview-dialog.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/ui/dialog",
-      "target": "vendor/cc-switch/src/components/ui/dialog.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/import-preview-dialog.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/hooks/useMcp",
-      "target": "vendor/cc-switch/src/hooks/useMcp.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/mcp/import-preview-dialog.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/unsavedChanges",
-      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -3089,6 +2832,153 @@
       "disposition": "external-package"
     },
     {
+      "source": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@openhands/extensions/integrations",
+      "target": "vendor/openhands-extensions/extensions/integrations/index.js",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/components/features/mcp-logo-badge",
+      "target": "vendor/openhands-extensions/src/components/features/mcp-logo-badge.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/components/features/mcp-page/mcp-toolbar",
+      "target": "vendor/openhands-extensions/src/components/features/mcp-page/mcp-toolbar.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/utils/extension-module-card-classes",
+      "target": "vendor/openhands-extensions/src/utils/extension-module-card-classes.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/utils/mcp-marketplace-utils",
+      "target": "vendor/openhands-extensions/src/utils/mcp-marketplace-utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/i18n",
+      "target": "vendor/openhands-extensions/src/web/i18n.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/mcp/management.css",
+      "target": "vendor/openhands-extensions/src/web/mcp/management.css",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
+      "disposition": "independently-inventoried-boundary"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
+      "disposition": "independently-inventoried-boundary"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/utils/utils",
+      "target": "vendor/openhands-extensions/src/utils/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/agent-matrix-table.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./agent-avatar",
+      "target": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/agent-matrix-table.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
+      "disposition": "independently-inventoried-boundary"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/agent-matrix-table.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/utils/utils",
+      "target": "vendor/openhands-extensions/src/utils/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/agent-matrix-table.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/agent-matrix-table.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/enum-filter-dropdown.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/utils/utils",
+      "target": "vendor/openhands-extensions/src/utils/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/enum-filter-dropdown.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/enum-filter-dropdown.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/status-pill.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/utils/utils",
+      "target": "vendor/openhands-extensions/src/utils/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/shared/status-pill.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
       "source": "vendor/openhands-extensions/src/web/skills/discovered-skills.tsx",
       "kind": "ts-import-export",
       "specifier": "./skill-presentation",
@@ -3098,15 +2988,8 @@
     {
       "source": "vendor/openhands-extensions/src/web/skills/discovered-skills.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/skills/SkillsPage",
-      "target": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/skills/discovered-skills.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/ui/button",
-      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -3154,6 +3037,20 @@
     {
       "source": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
       "kind": "ts-import-export",
+      "specifier": "./skill-agent-drawer",
+      "target": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./skill-agent-matrix",
+      "target": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
+      "kind": "ts-import-export",
       "specifier": "./skill-presentation",
       "target": "vendor/openhands-extensions/src/web/skills/skill-presentation.ts",
       "disposition": "fork-output"
@@ -3161,22 +3058,8 @@
     {
       "source": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/skills/UnifiedSkillsPanel",
-      "target": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/ui/button",
-      "target": "vendor/cc-switch/src/components/ui/button.tsx",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/web/settings",
-      "target": "vendor/cc-switch/src/web/settings.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -3231,15 +3114,15 @@
     {
       "source": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/web/bridge",
-      "target": "vendor/openhands-extensions/src/web/bridge.ts",
+      "specifier": "@pm/openhands-source/web/i18n",
+      "target": "vendor/openhands-extensions/src/web/i18n.ts",
       "disposition": "fork-output"
     },
     {
       "source": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/openhands-source/web/i18n",
-      "target": "vendor/openhands-extensions/src/web/i18n.ts",
+      "specifier": "@pm/openhands-source/web/shared/agent-avatar",
+      "target": "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
       "disposition": "fork-output"
     },
     {
@@ -3257,24 +3140,115 @@
       "disposition": "external-package"
     },
     {
-      "source": "vendor/openhands-extensions/src/web/skills/skill-presentation.ts",
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/components/shell/AppGlyph",
-      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "specifier": "./skill-presentation",
+      "target": "vendor/openhands-extensions/src/web/skills/skill-presentation.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/components/features/skills/skill-icon-badge",
+      "target": "vendor/openhands-extensions/src/components/features/skills/skill-icon-badge.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/bridge",
+      "target": "vendor/openhands-extensions/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/i18n",
+      "target": "vendor/openhands-extensions/src/web/i18n.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
+      "disposition": "independently-inventoried-boundary"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/components/features/skills/skill-icon-badge",
+      "target": "vendor/openhands-extensions/src/components/features/skills/skill-icon-badge.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/bridge",
+      "target": "vendor/openhands-extensions/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/i18n",
+      "target": "vendor/openhands-extensions/src/web/i18n.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/shared/agent-matrix-table",
+      "target": "vendor/openhands-extensions/src/web/shared/agent-matrix-table.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/shared/enum-filter-dropdown",
+      "target": "vendor/openhands-extensions/src/web/shared/enum-filter-dropdown.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
     },
     {
       "source": "vendor/openhands-extensions/src/web/skills/skill-presentation.ts",
       "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/api/skills",
-      "target": "vendor/cc-switch/src/lib/api/skills.ts",
-      "disposition": "independently-inventoried-boundary"
-    },
-    {
-      "source": "vendor/openhands-extensions/src/web/skills/skill-presentation.ts",
-      "kind": "ts-import-export",
-      "specifier": "@pm/cc-switch-source/lib/api/types",
-      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "specifier": "@pm/cc-switch-ui",
+      "target": "vendor/cc-switch/src/web/index.tsx",
       "disposition": "independently-inventoried-boundary"
     },
     {
@@ -3290,6 +3264,20 @@
       "specifier": "@pm/openhands-source/web/bridge",
       "target": "vendor/openhands-extensions/src/web/bridge.ts",
       "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/unbound-skills-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@pm/openhands-source/web/i18n",
+      "target": "vendor/openhands-extensions/src/web/i18n.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/openhands-extensions/src/web/skills/unbound-skills-page.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
     }
   ],
   "sourceReferences": [],
@@ -3318,12 +3306,16 @@
     "vendor/openhands-extensions/scripts/web-build.mjs",
     "vendor/openhands-extensions/source-manifest.json",
     "vendor/openhands-extensions/src/components/features/mcp-page/mcp-logo-stack-badge.tsx",
+    "vendor/openhands-extensions/src/components/features/mcp-page/mcp-section-filter-dropdown.tsx",
     "vendor/openhands-extensions/src/components/features/mcp-page/mcp-server-health.tsx",
     "vendor/openhands-extensions/src/components/features/mcp-page/native-integration-panel.tsx",
     "vendor/openhands-extensions/src/components/features/mcp-page/save-as-secret-toggle.tsx",
     "vendor/openhands-extensions/src/components/features/skills/add-skill-modal.tsx",
     "vendor/openhands-extensions/src/components/features/skills/extensions-mobile-hub.tsx",
+    "vendor/openhands-extensions/src/components/features/skills/extensions-navigation.tsx",
     "vendor/openhands-extensions/src/components/features/skills/get-skill-chat-launch-message.ts",
+    "vendor/openhands-extensions/src/components/shared/compact-section-navigation.tsx",
+    "vendor/openhands-extensions/src/components/shared/navigation-link.tsx",
     "vendor/openhands-extensions/src/constants/skills-docs.ts",
     "vendor/openhands-extensions/src/hooks/use-mcp-server-health.ts",
     "vendor/openhands-extensions/src/icons/activity.svg",
@@ -3468,16 +3460,26 @@
     "vendor/openhands-extensions/src/web/index.tsx",
     "vendor/openhands-extensions/src/web/management.css",
     "vendor/openhands-extensions/src/web/mcp/agent-configuration-drawer.tsx",
+    "vendor/openhands-extensions/src/web/mcp/agent-matrix.tsx",
     "vendor/openhands-extensions/src/web/mcp/definition-adapter.ts",
     "vendor/openhands-extensions/src/web/mcp/import-preview-dialog.tsx",
     "vendor/openhands-extensions/src/web/mcp/management.css",
     "vendor/openhands-extensions/src/web/mcp/management.ts",
     "vendor/openhands-extensions/src/web/mcp/messages.ts",
+    "vendor/openhands-extensions/src/web/mcp/unbound-mcp-page.tsx",
+    "vendor/openhands-extensions/src/web/shared/agent-avatar.tsx",
+    "vendor/openhands-extensions/src/web/shared/agent-matrix-table.tsx",
+    "vendor/openhands-extensions/src/web/shared/enum-filter-dropdown.tsx",
+    "vendor/openhands-extensions/src/web/shared/shared.css",
+    "vendor/openhands-extensions/src/web/shared/status-pill.tsx",
     "vendor/openhands-extensions/src/web/skills/discovered-skills.tsx",
     "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
     "vendor/openhands-extensions/src/web/skills/messages.ts",
+    "vendor/openhands-extensions/src/web/skills/skill-agent-drawer.tsx",
+    "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
     "vendor/openhands-extensions/src/web/skills/skill-presentation.ts",
     "vendor/openhands-extensions/src/web/skills/skills.css",
+    "vendor/openhands-extensions/src/web/skills/unbound-skills-page.tsx",
     "vendor/openhands-extensions/supplemental-inputs.json"
   ]
 }

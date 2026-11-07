@@ -19,7 +19,7 @@ import { StudioGitSync } from "./studio-git-sync";
 import { StudioImport, downloadStudioDefinition } from "./studio-import";
 import { StudioIntegrations } from "./studio-integrations";
 import { parseStudioDraftRoute, studioExecutionNeedsRefresh } from "./studio-view";
-import { clearStudioRecovery } from "./studio-setup";
+import { clearStudioRecovery, studioExecutionEnvironmentIssue } from "./studio-setup";
 import { redactPmReviewDrafts } from "./studio-pm-review";
 import styles from "./studio.module.css";
 import "./theme.css";
@@ -82,7 +82,7 @@ export function AutomationPage({ workspace, actorId, onExit, onRecheckAccess, on
     if (result.execution) selectExecution(result.execution);
     else if (result.command.kind === "remove") setNotice(t("定义已删除；授权历史保留。", "Definition deleted; authorized history retained."));
     else setNotice(t("定义已保存。启停不影响已开始的运行。", "Definition saved. Status changes do not cancel runs already started."));
-  }, revoke);
+  }, revoke, workspace.version);
   const pending = !!studioActions.pending;
   const leaveActive = studioDirty || surfaceDirty || pending || studioActions.storageError;
   const leaveMessage = t("有未保存修改或待核对请求。离开后不会取消运行，确定离开？", "There are unsaved changes or unreconciled requests. Leaving does not cancel runs. Leave anyway?");
@@ -123,14 +123,25 @@ export function AutomationPage({ workspace, actorId, onExit, onRecheckAccess, on
   const definitionScopeMismatch = !!projectId && !!selectedDefinition && selectedDefinition.config.projectId !== projectId;
   const queryFilters: DashboardFilters = { search: params.get("q") ?? "", status: params.get("status") ?? "", trigger: params.get("trigger") ?? "", tag: params.get("tag") ?? "", sort: params.get("sort") ?? "updated", view: params.get("mode") ?? "grid" };
   function onFilters(patch: Partial<DashboardFilters>) { setQuery(Object.fromEntries(Object.entries(patch).map(([key, value]) => [key === "search" ? "q" : key === "view" ? "mode" : key, value || undefined]))); }
-  function confirmCommand(command: StudioCommand, name = selectedDefinition?.config.name ?? command.id) { if (!locked) setConfirmation({ command, name }); }
+  function confirmCommand(command: StudioCommand, name = selectedDefinition?.config.name ?? command.id, config?: StudioConfig) {
+    if (locked) return;
+    if (command.kind === "run" || command.kind === "status" && command.status === "enabled") {
+      const definition = selectedDefinition?.id === command.id ? selectedDefinition : definitions.find(item => item.id === command.id);
+      const current = config ?? definition?.config;
+      if (!current || studioExecutionEnvironmentIssue(current.action, !!definition?.executionUnavailableReason)) {
+        setNotice(t("无法运行或启用：请选择独立 Agent Workspace 文件夹。旧目录配置必须在“编辑 → Agent 执行文件夹”明确重新选择，不会自动转换或回退 PM 文档目录。", "Cannot run or enable: select an independent Agent Workspace folder. Old directory configuration must be explicitly reselected in Edit → Agent execution folder; it is never automatically converted or replaced with PM document storage."));
+        return;
+      }
+    }
+    setConfirmation({ command, name });
+  }
   async function exportDefinition(id: string, format: "bundle" | "source" = "bundle") { try { await downloadStudioDefinition(workspace.id, id, format); } catch (cause) { accessFailure(cause); setNotice(cause instanceof Error ? cause.message : String(cause)); } }
   function itemAction(action: DashboardAction, item: StudioDefinition) {
     if (action === "view") go(`detail/${item.id}`);
     else if (action === "edit") go("setup", { automationId: item.id });
     else if (action === "export") void exportDefinition(item.id);
-    else if (action === "status") confirmCommand({ kind: "status", id: item.id, expectedRevision: item.revision, status: item.status === "enabled" ? "paused" : "enabled" }, item.config.name);
-    else confirmCommand({ kind: action, id: item.id, expectedRevision: item.revision }, item.config.name);
+    else if (action === "status") confirmCommand({ kind: "status", id: item.id, expectedRevision: item.revision, status: item.status === "enabled" ? "paused" : "enabled" }, item.config.name, item.config);
+    else confirmCommand({ kind: action, id: item.id, expectedRevision: item.revision }, item.config.name, item.config);
   }
   function submitConfirmation() {
     if (!confirmation || locked) return;

@@ -10,9 +10,9 @@ import type { CommandContext,CommandRegistry,SqlExecutor } from './ports.ts';
 import { emitNotificationInvalidation,notificationTaskVisible } from './notification-routing.ts';
 const cursor=z.string().regex(/^\d{1,19}$/).refine(value=>BigInt(value)<=9223372036854775807n);
 export const notificationInboxQuery=z.strictObject({origin:z.enum(['routed','legacy_activity']).optional(),after:cursor.optional(),through:cursor.optional()});
-type Row={fact_id:string;delivery_cursor:string;origin:'routed'|'legacy_activity';reason_set:NotificationInboxItem['reasons'];state_version:number;read_at:Date|null;archived_at:Date|null;project_id:string|null;entity_id:string;entity_kind:string;after_revision:string|null;change_kinds:string[];occurred_at:Date|null;observed_at:Date|null;recorded_at:Date;task_id:string|null;comment_id:string|null;audience_actor_id:string|null;legacy_event_type:string|null;legacy_quarantined:boolean};
-const select=`SELECT r.fact_id,r.delivery_cursor::text,r.origin,r.reason_set,r.state_version,r.read_at,r.archived_at,f.project_id,f.entity_id,f.entity_kind,f.after_revision,f.change_kinds,f.occurred_at,f.observed_at,f.recorded_at,i.task_id,i.comment_id,i.audience_actor_id,i.legacy_event_type,i.legacy_quarantined
- FROM notification_recipients r JOIN service_fact_events f USING(workspace_id,fact_id) JOIN notification_fact_inputs i USING(workspace_id,fact_id)`;
+type Row={fact_id:string;delivery_cursor:string;origin:'routed'|'legacy_activity';reason_set:NotificationInboxItem['reasons'];state_version:number;read_at:Date|null;archived_at:Date|null;project_id:string|null;entity_id:string;entity_kind:string;after_revision:string|null;change_kinds:string[];occurred_at:Date|null;observed_at:Date|null;recorded_at:Date;task_id:string|null;comment_id:string|null;audience_actor_id:string|null;legacy_event_type:string|null;legacy_quarantined:boolean;completion:boolean;changed_fields:string[];trusted_origin:'manual'|'agent'|'automation';source_kind:string;history_id:string|null};
+const select=`SELECT r.fact_id,r.delivery_cursor::text,r.origin,r.reason_set,r.state_version,r.read_at,r.archived_at,f.project_id,f.entity_id,f.entity_kind,f.after_revision,f.change_kinds,f.occurred_at,f.observed_at,f.recorded_at,i.task_id,i.comment_id,i.audience_actor_id,i.legacy_event_type,i.legacy_quarantined,i.completion,i.changed_fields,i.trusted_origin,f.source_kind,h.change_id AS history_id
+ FROM notification_recipients r JOIN service_fact_events f USING(workspace_id,fact_id) JOIN notification_fact_inputs i USING(workspace_id,fact_id) LEFT JOIN change_history_entries h ON h.workspace_id=f.workspace_id AND h.change_id=f.fact_id`;
 function state(row:Row):NotificationState{return {eventId:row.fact_id,version:row.state_version,readAt:row.read_at?.toISOString()??null,archivedAt:row.archived_at?.toISOString()??null};}
 async function visible(sql:SqlExecutor,workspaceId:string,row:Row,actorId:string,member:Membership,snapshot:ReadonlyCoreSnapshot|null):Promise<boolean> {
  if(row.audience_actor_id!==null&&row.audience_actor_id!==actorId) return false;
@@ -26,9 +26,9 @@ async function visible(sql:SqlExecutor,workspaceId:string,row:Row,actorId:string
  return true;
 }
 function item(row:Row):NotificationInboxItem {
- return {cursor:row.delivery_cursor,event:{eventId:row.fact_id,eventType:row.legacy_event_type??(row.entity_kind==='task_comment'?'TaskCommentChanged':`WorkItem:${row.change_kinds.join('+')}`),projectId:row.project_id,entityId:row.entity_id,entityKind:row.entity_kind,revision:row.after_revision,
- occurredAt:row.occurred_at?.toISOString()??null,observedAt:row.observed_at?.toISOString()??null,recordedAt:row.recorded_at.toISOString()},origin:row.origin,
- target:row.origin==='routed'&&row.task_id?{taskId:row.task_id,...(row.comment_id?{commentId:row.comment_id}:{})}:null,reasons:row.reason_set,state:state(row)};
+ return {cursor:row.delivery_cursor,event:{eventId:row.fact_id,eventType:row.legacy_event_type??(row.entity_kind==='task_comment'?'TaskCommentChanged':row.completion?'WorkItemCompleted':`WorkItem:${row.change_kinds.join('+')}`),projectId:row.project_id,entityId:row.entity_id,entityKind:row.entity_kind,revision:row.after_revision,
+ occurredAt:row.occurred_at?.toISOString()??null,observedAt:row.observed_at?.toISOString()??null,recordedAt:row.recorded_at.toISOString(),...(row.source_kind==='legacy_activity'?{}:{changedFields:row.changed_fields,completion:row.completion,origin:row.source_kind==='core_observation'?'observation' as const:row.trusted_origin})},origin:row.origin,
+ target:row.origin==='routed'&&row.task_id?{taskId:row.task_id,...(row.comment_id?{commentId:row.comment_id}:{}),...(row.history_id?{changeId:row.history_id}:{})}:null,reasons:row.reason_set,state:state(row)};
 }
 /** Scans only this actor's actual deliveries. Hidden positions still advance a fixed snapshot. */
 export async function readNotificationInbox(pool:Pool,actor:Actor,workspaceId:string,core:NotificationCorePort,options:NotificationInboxOptions={}):Promise<NotificationInboxPage> {

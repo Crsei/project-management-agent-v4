@@ -1,11 +1,10 @@
 import React from "react";
 import type { ExtensionAppId, ExtensionMcpAgentConfiguration, ExtensionMcpDefinition, ExtensionMcpManagement } from "@agent-workspace/contracts/extensions";
-import { MCP_APP_IDS } from "@pm/cc-switch-source/config/appConfig";
-import { APP_DISPLAY_NAME } from "@pm/cc-switch-source/components/shell/AppGlyph";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetBody } from "@pm/cc-switch-source/components/ui/sheet";
-import { useSetMcpAgentConfiguration, useDeleteMcpServer, useResyncMcpToApps } from "@pm/cc-switch-source/hooks/useMcp";
-import { useUnsavedChangesTracker } from "@pm/cc-switch-source/lib/unsavedChanges";
-import type { McpConnectivity } from "@pm/cc-switch-source/hooks/useMcpConnectivity";
+import {
+  MCP_APP_IDS, APP_DISPLAY_NAME, Sheet, SheetContent, SheetHeader, SheetTitle,
+  SheetBody, useSetMcpAgentConfiguration, useDeleteMcpServer,
+  useResyncMcpToApps, useUnsavedChangesTracker, type McpConnectivity,
+} from "@pm/cc-switch-ui";
 import { webPlatform } from "@pm/openhands-source/web/bridge";
 import { useOpenHandsTranslation } from "@pm/openhands-source/web/i18n";
 import { mcpReasonText } from "./management";
@@ -48,7 +47,6 @@ function AgentDraft({ row, busy, onSave, onDirtyChange }: {
     <div className="oh-mcp-saved-states"><span className="oh-mcp-badge">{t(row.override === null ? "MCP_PM$INHERITED" : "MCP_PM$OVERRIDE_SAVED")}</span><span className="oh-mcp-badge" data-sync-state={row.sync.state}>{t("MCP_PM$SYNC_LABEL", { state: t(`MCP_PM$SYNC_${row.sync.state}`) })}</span></div>
     {row.sync.reason && <p className="oh-mcp-warning">{mcpReasonText(row.sync.reason, t)}</p>}
     <label>{t("MCP_PM$MERGE_PATCH")}<textarea aria-label={t("MCP_PM$MERGE_PATCH")} spellCheck={false} value={text} disabled={busy} onChange={event => { setText(event.target.value); setError(null); }} rows={8} /></label>
-    <p className="oh-mcp-muted">{t("MCP_PM$MERGE_PATCH_HELP")}</p>
     <div className="oh-mcp-actions"><button type="button" disabled={busy || text === "null"} data-unsaved-edit onClick={() => setText("null")}>{t("MCP_PM$RESTORE_INHERITANCE")}</button><button type="button" className="oh-mcp-primary" disabled={busy || !dirty} onClick={() => void save()}>{busy ? t("SETTINGS$SAVING") : t("MCP_PM$SAVE_AGENT")}</button></div>
     {dirty && <p className="oh-mcp-warning" role="status">{t("MCP_PM$UNSAVED_AGENT")}</p>}
     {error && <p role="alert" className="oh-mcp-error">{error}</p>}
@@ -72,7 +70,7 @@ export function AgentConfigurationDrawer({ definition, definitionAvailable, mana
   const retainedRows = React.useRef(currentRows);
   if (definitionAvailable) retainedRows.current = currentRows;
   const rows = definitionAvailable ? currentRows : retainedRows.current;
-  const [selectedApp, setSelectedApp] = React.useState<ExtensionAppId>(management.boundApps[0] ?? "claude");
+  const [selectedApp, setSelectedApp] = React.useState<ExtensionAppId | null>(management.boundApps[0] ?? null);
   const [dirtyApps, setDirtyApps] = React.useState<Partial<Record<ExtensionAppId, boolean>>>({});
   const [revisions, setRevisions] = React.useState<Partial<Record<ExtensionAppId, number>>>({});
   const [failure, setFailure] = React.useState<string | null>(null);
@@ -85,6 +83,9 @@ export function AgentConfigurationDrawer({ definition, definitionAvailable, mana
   const dirty = Object.values(dirtyApps).some(Boolean);
   const dirtyCallbacks = React.useMemo(() => Object.fromEntries(MCP_APP_IDS.map(app => [app, (value: boolean) => setDirtyApps(previous => previous[app] === value ? previous : { ...previous, [app]: value })])) as Record<ExtensionAppId, (dirty: boolean) => void>, []);
   React.useEffect(() => { onInteractionBlockedChange?.(busy); return () => onInteractionBlockedChange?.(false); }, [busy, onInteractionBlockedChange]);
+  React.useEffect(() => {
+    if (!selectedApp || !management.boundApps.includes(selectedApp)) setSelectedApp(management.boundApps[0] ?? null);
+  }, [management.boundApps, selectedApp]);
   const allowDiscard = () => !dirty || window.confirm(t("MCP_PM$DISCARD"));
   const close = () => { if (!lock.current && !busy && allowDiscard()) onClose(); };
   const saveAgent = async (app: ExtensionAppId, enabled: boolean, override: Record<string, unknown> | null) => {
@@ -98,7 +99,7 @@ export function AgentConfigurationDrawer({ definition, definitionAvailable, mana
     finally { lock.current = false; }
   };
   const sync = async () => {
-    if (lock.current || busy || dirty || !management.boundApps.includes(selectedApp)) return;
+    if (lock.current || busy || dirty || !selectedApp || !management.boundApps.includes(selectedApp)) return;
     lock.current = true; setFailure(null);
     try {
       const results = await resync.mutateAsync([selectedApp]);
@@ -115,7 +116,7 @@ export function AgentConfigurationDrawer({ definition, definitionAvailable, mana
   };
   const studioUrl = context.scope ? `/agent/automations/integrations?workspace=${encodeURIComponent(context.scope.workspaceId)}&project=${encodeURIComponent(context.scope.projectId)}` : undefined;
   return <Sheet open modal={false} onOpenChange={open => { if (!open) close(); }}><SheetContent width={620} closeLabel={t("MCP_PM$CLOSE")} className="oh-mcp-drawer" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }}>
-    <SheetHeader><SheetTitle>{definition.name || definition.id}</SheetTitle><SheetDescription>{t("MCP_PM$DEFINITION_BOUNDARY")}</SheetDescription></SheetHeader>
+    <SheetHeader><SheetTitle>{definition.name || definition.id}</SheetTitle></SheetHeader>
     <SheetBody className="oh-mcp-form">
       {!definitionAvailable && <p role="alert" className="oh-mcp-warning">{t("MCP_PM$STALE_DEFINITION")}</p>}
       <fieldset disabled={!definitionAvailable} className="oh-mcp-form">
@@ -128,21 +129,20 @@ export function AgentConfigurationDrawer({ definition, definitionAvailable, mana
         </section>
         {context.kind === "project" ? <section className="oh-mcp-drawer-section"><h3>{t("MCP_PM$PROJECT_AUTHORIZATION")}</h3><p>{t("MCP_PM$PROJECT_NOTE")}</p>{studioUrl && <a href={studioUrl}>{t("MCP_PM$STUDIO_LINK")}</a>}</section> : <section className="oh-mcp-drawer-section oh-mcp-agent-section" aria-labelledby="mcp-agent-heading">
           <div><h3 id="mcp-agent-heading">{t("MCP_PM$AGENT_CONFIGURATIONS")}</h3><p className="oh-mcp-muted">{context.label}</p></div>
-          <label>{t("MCP_PM$AGENT")}<select data-unsaved-ignore value={selectedApp} disabled={busy} onChange={event => setSelectedApp(event.target.value as ExtensionAppId)}>{MCP_APP_IDS.map(app => <option key={app} value={app}>{APP_DISPLAY_NAME[app]}{!management.boundApps.includes(app) ? ` · ${t("MCP_PM$UNBOUND")}` : ""}{dirtyApps[app] ? ` · ${t("MCP_PM$UNSAVED")}` : ""}</option>)}</select></label>
+          <div className="oh-mcp-target-picker" role="group" aria-label={t("MCP_PM$AGENT")}>{management.boundApps.map(app => <button key={app} type="button" data-unsaved-ignore aria-pressed={selectedApp === app} disabled={busy} onClick={() => setSelectedApp(app)}>{APP_DISPLAY_NAME[app]}{dirtyApps[app] ? ` · ${t("MCP_PM$UNSAVED")}` : ""}</button>)}</div>
+          {!management.boundApps.length && <p className="oh-mcp-warning">{t("MCP_PM$MATRIX_NO_TARGETS")}</p>}
           {selectedApp === "pi" && <p className="oh-mcp-warning">{t("MCP_PM$PI_NOTE")}</p>}
           {selectedApp === "omp" && <p className="oh-mcp-warning">{t("MCP_PM$OMP_NOTE")}</p>}
-          {MCP_APP_IDS.map(app => <div key={app} hidden={selectedApp !== app}>{rows[app] && management.boundApps.includes(app) ? <AgentDraft key={`${app}:${revisions[app] ?? 0}`} row={rows[app]!} busy={busy} onSave={(enabled, override) => saveAgent(app, enabled, override)} onDirtyChange={dirtyCallbacks[app]} /> : <p className="oh-mcp-warning">{t("MCP_PM$MISSING_AGENT", { agent: APP_DISPLAY_NAME[app] })}</p>}</div>)}
-          <div className="oh-mcp-actions"><button type="button" disabled={busy || dirty || !rows[selectedApp] || !management.boundApps.includes(selectedApp)} onClick={() => void sync()}>{t("MCP_PM$RESYNC_AGENT")}</button></div>
+          {management.boundApps.map(app => <div key={app} hidden={selectedApp !== app}>{rows[app] ? <AgentDraft key={`${app}:${revisions[app] ?? 0}`} row={rows[app]!} busy={busy} onSave={(enabled, override) => saveAgent(app, enabled, override)} onDirtyChange={dirtyCallbacks[app]} /> : <p className="oh-mcp-warning">{t("MCP_PM$MISSING_AGENT", { agent: APP_DISPLAY_NAME[app] })}</p>}</div>)}
+          <div className="oh-mcp-actions"><button type="button" disabled={busy || dirty || !selectedApp || !rows[selectedApp] || !management.boundApps.includes(selectedApp)} onClick={() => void sync()}>{t("MCP_PM$RESYNC_AGENT")}</button></div>
         </section>}
         {context.kind !== "project" && <section className="oh-mcp-drawer-section oh-mcp-probe-section">
           <h3>{t("MCP_PM$EXPLICIT_PROBE")}</h3>
-          <p className="oh-mcp-muted">{t("MCP_PM$PROBE_HELP")}</p>
           <p role="status" className="oh-mcp-probe-status" data-probe-state={probe.states[definition.id] ?? "unavailable"}>{t("MCP_PM$PROBE_LABEL", { state: t(`MCP_PM$PROBE_${probe.states[definition.id] ?? "unavailable"}`) })}</p>
           <div className="oh-mcp-actions"><button type="button" disabled={busy || dirty || !(definition.id in probe.states)} title={!(definition.id in probe.states) ? t("MCP_PM$ASSIGN_TO_PROBE") : undefined} onClick={() => probe.checkServer(definition.id)}>{t("MCP_PM$TEST_SHARED")}</button>{probe.checking && <button type="button" onClick={probe.cancelAll}>{t("MCP_PM$CANCEL_PROBE")}</button>}</div>
         </section>}
         <details className="oh-mcp-context-details"><summary>{t("MCP_PM$AUTHORIZED_CONTEXT")}</summary><div className="oh-mcp-form">
           {platform.contexts && platform.selectContext ? <label>{t("MCP_PM$CONTEXT")}<select data-unsaved-ignore value={context.id} disabled={busy} onChange={event => { setFailure(null); void platform.selectContext!(event.target.value).then(changed => { if (!changed) setFailure(t("MCP_PM$CONTEXT_BLOCKED")); }).catch(error => setFailure(error instanceof Error ? error.message : String(error))); }}>{platform.contexts.map(item => <option key={item.id} value={item.id}>{item.label} · {t(`MCP_PM$CONTEXT_${item.kind}`)}</option>)}</select></label> : <p>{context.label} · {t(`MCP_PM$CONTEXT_${context.kind}`)}</p>}
-          <p className="oh-mcp-muted">{t("MCP_PM$CONTEXT_BOUNDARY")}</p>
           {context.sharedProviderInstanceIds.length > 0 && <p className="oh-mcp-warning">{t("MCP_PM$SHARED_ROOT", { instances: context.sharedProviderInstanceIds.join(", ") })}</p>}
         </div></details>
         {context.reloadRequired && <p className="oh-mcp-warning" role="status">{t("MCP_PM$RELOAD_REQUIRED")}</p>}

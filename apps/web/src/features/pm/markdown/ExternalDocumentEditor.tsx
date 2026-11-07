@@ -14,6 +14,8 @@ import { useCoreSession, type CoreSession } from './session';
 import { MarkdownUrlImage, MarkdownUrlLink } from './preview-url-components';
 import { documentSourceAccessLost, documentSourceError, DocumentSourceRequestError, mutateDocumentSource, readAuthorizedDocumentSourceContent, readDocumentSourceMutation, readDocumentSources } from './document-sources-api';
 import { createExternalDocumentStore, externalDocumentKey, validExternalMarkdownPath, type ExternalDocumentStore, type ExternalManagementIntent, type ExternalTarget } from './external-document-state';
+import { ChangeHistoryPanel } from './change-history';
+import { useLocation } from 'react-router';
 import './external-document-editor.css';
 
 const stores = new Map<string, { namespace: string; host: string; actor: string; store: ExternalDocumentStore }>();
@@ -76,6 +78,12 @@ export function ExternalDocumentEditor({ target, en, onBack, onDenied, refreshKe
   const [read, setRead] = useState<{ key: string; ready: boolean; error: string; missing?: boolean }>({ key: '', ready: false, error: '' });
   const [error, setError] = useState('');
   const [preview, setPreview] = useState(false);
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const historyRequested = params.get('panel') === 'changes';
+  const changeId = params.get('changeId') || undefined;
+  const [historyOpen, setHistoryOpen] = useState(historyRequested);
+  useEffect(() => { setHistoryOpen(historyRequested); }, [historyRequested, changeId, key]);
   const denied = useRef(onDenied); denied.current = onDenied;
   const heading = useRef<HTMLHeadingElement>(null);
   const [menuRevision, setMenuRevision] = useState<string | null>(null);
@@ -135,7 +143,10 @@ export function ExternalDocumentEditor({ target, en, onBack, onDenied, refreshKe
       <button type="button" className="secondary-button" onClick={reload}><RefreshCw size={14} />{en ? 'Refresh file' : '刷新文件'}</button>
       {ready && <button type="button" className="secondary-button" aria-pressed={preview} onClick={() => setPreview(value => !value)}>{preview ? en ? 'Edit Markdown' : '编辑 Markdown' : en ? 'Preview' : '预览'}</button>}
       {writable && <button type="button" className="primary-button" disabled={!dirty || pending || !!draft.observed} onClick={() => void save()}><Save size={14} />{en ? 'Save' : '保存'}</button>}
+      {ready && <button type="button" className="secondary-button" aria-expanded={historyOpen} onClick={() => setHistoryOpen(value => !value)}>{en ? 'Changes' : '变更记录'}</button>}
     </header>
+    {/* Keep the observed watermark across focus revalidation; hide stale content and discard it on an authorization error. */}
+    {historyOpen && !read.error && <div hidden={!ready}><ChangeHistoryPanel key={key} workspaceId={session.queryKey[3]} target={{ kind: 'external', sourceId: target.sourceId, path: target.path }} en={en} initialChangeId={changeId} onClose={() => setHistoryOpen(false)} /></div>}
     {ready && <p className="document-source-resource-notice">{en ? 'Editing, moving or deleting this physical file affects every folder association that refers to it.' : '编辑、移动或删除此真实文件，会影响所有引用它的文件夹关联。'}</p>}
     {ready && onManage && <div className="external-document-actions"><button type="button" className="secondary-button" disabled={!writable || pending} onClick={() => onManage({ action: 'create', sourceId: target.sourceId })}><FilePlus2 size={14} />{en ? 'New file' : '新建文件'}</button>{managementActions.map(action => <button type="button" className="secondary-button" key={action.action} disabled={!!managementReason} title={managementReason} onClick={action.select}>{action.label}</button>)}{dirty && <button type="button" className="text-button" disabled={pending} onClick={() => { if (window.confirm(en ? 'Discard this unsaved external document draft and read the current file?' : '确定放弃此未保存的外部文档草稿并读取当前文件吗？')) { store.discard(target); reload(); } }}>{en ? 'Discard draft' : '放弃草稿'}</button>}</div>}
     {(error || read.key === readKey && read.error) && <div className="document-source-state document-source-error" role="alert"><p>{error || read.error}</p><button type="button" className="secondary-button" onClick={reload}>{en ? 'Recheck source and file' : '重新核对来源及文件'}</button></div>}

@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import test from "node:test";
-import { loadProfile, recordGeneration, verifyGeneration } from "./t3code.mjs";
+import { loadProfile, recordGeneration, verifyGeneration, verifyArtifacts } from "./t3code.mjs";
+import { replayMcpSkillsAdaptations, validateAdaptationManifest, validateAdaptationStructure } from "../../vendor/t3code/scripts/mcp-skills-adaptations.mjs";
 
 const oldPin = "1".repeat(40), nextPin = "2".repeat(40), supplementalPin = "3".repeat(40);
 const base = "vendor/t3code/";
@@ -20,12 +23,42 @@ async function put(root, name, value) {
 }
 async function get(root, name) { return JSON.parse(await readFile(path.join(root, name))); }
 
+async function emittedArtifact(root, { stampedCommit = nextPin, shippedCommit } = {}) {
+  const artifactRoot = ".upstream-sync/verification-output/t3-artifact";
+  const files = [];
+  for (const name of ["source-manifest.json", "sync-inventory.json", "mcp-skills-adaptations.json", "mcp-skills-source.json", "sync-imports.json"]) {
+    let bytes = await readFile(path.join(root, base, name));
+    if (name === "source-manifest.json" && shippedCommit) {
+      const metadata = JSON.parse(bytes);
+      metadata.upstream.commit = shippedCommit;
+      bytes = json(metadata);
+    }
+    const destination = `licenses/provenance/${base}${name}`;
+    await put(root, `${artifactRoot}/${destination}`, bytes);
+    files.push({ path: destination, sha256: hash(bytes), bytes: bytes.length, mode: 0o644 });
+  }
+  // Uses the packager's version-1 JSON fields/file rows. This fixture is not
+  // executed and does not stand in for portable runtime acceptance.
+  const entrypoint = "apps/server/agent/dist/index.mjs";
+  const entrypointBytes = Buffer.from("// JSON-only artifact identity fixture; not executed\n");
+  await put(root, `${artifactRoot}/${entrypoint}`, entrypointBytes);
+  files.push({ path: entrypoint, sha256: hash(entrypointBytes), bytes: entrypointBytes.length, mode: 0o644 });
+  const manifestPath = `${artifactRoot}/artifact-manifest.json`;
+  await put(root, manifestPath, json({
+    version: 1, upstreamCommit: stampedCommit, platform: process.platform, arch: process.arch,
+    entrypoint, effectSingleton: null, packages: [], bundled: [], files, links: [],
+  }));
+  return { artifactRoot, manifestPath };
+}
+
 async function fixture(t, options = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "t3-generation-"));
   t.after(() => rm(root, { recursive: true, force: true }));
+  const packageName = options.packageName ?? "@t3tools/contracts";
+  const packageExports = options.packageExports ?? { ".": "./src/index.ts" };
   const old = new Map([
     ["LICENSE", "MIT fixture license\n"],
-    ["packages/contracts/package.json", json({ name: "@t3tools/contracts", exports: { ".": "./src/index.ts" }, dependencies: {} })],
+    ["packages/contracts/package.json", json({ name: packageName, exports: packageExports, dependencies: {} })],
     ["packages/contracts/src/index.ts", "export const upstream = 1;\n"],
     ["packages/contracts/src/ref.ts", "export const reference = 1;\n"],
     ["packages/contracts/src/drop.ts", "export const removable = true;\n"],
@@ -34,8 +67,10 @@ async function fixture(t, options = {}) {
     ["apps/server/src/reference.ts", "export const referenceOnly = true;\n"],
   ]);
   if (options.extraction) old.set("apps/web/src/settings.ts", "export const field = 1;\n");
-  if (options.dependencyUpdate) {
-    old.set("pnpm-workspace.yaml", "catalog:\n  left-pad: 1.0.0\n");
+  if (options.dependencyUpdate || options.aliasUpdate) {
+    old.set("pnpm-workspace.yaml", options.aliasUpdate
+      ? "catalog:\n  compiler: npm:@toolchain/compiler@0.8.0\n  compiler-version: npm:@toolchain/compiler@0.8.0\n"
+      : "catalog:\n  left-pad: 1.0.0\n");
     old.set("pnpm-lock.yaml", "lockfileVersion: '9.0'\n---\nlockfileVersion: '9.0'\nimporters:\n  packages/contracts:\n    dependencies: {}\npackages: {}\nsnapshots: {}\n");
   }
   const next = new Map(old);
@@ -45,8 +80,41 @@ async function fixture(t, options = {}) {
   if (options.deletion) next.delete("packages/contracts/src/drop.ts");
   if (options.targetFiles) for (const [name, value] of Object.entries(options.targetFiles)) next.set(name, value);
   if (options.dependencyUpdate) {
-    next.set("packages/contracts/package.json", json({ name: "@t3tools/contracts", exports: { ".": "./src/index.ts" }, dependencies: { "left-pad": "catalog:" } }));
+    next.set("packages/contracts/package.json", json({ name: packageName, exports: packageExports, dependencies: { "left-pad": "catalog:" } }));
     next.set("pnpm-lock.yaml", "lockfileVersion: '9.0'\n---\nlockfileVersion: '9.0'\nimporters:\n  packages/contracts:\n    dependencies:\n      left-pad:\n        specifier: 'catalog:'\n        version: 1.0.0\npackages:\n  left-pad@1.0.0:\n    resolution:\n      integrity: sha512-fixture\n  tiny-dependency@2.0.0:\n    resolution:\n      integrity: sha512-transitive-fixture\nsnapshots:\n  left-pad@1.0.0:\n    dependencies:\n      tiny-dependency: 2.0.0\n  tiny-dependency@2.0.0: {}\n");
+  }
+  if (options.aliasUpdate) {
+    const compiler = "@toolchain/compiler@0.8.0";
+    const bundler = "@toolchain/bundler@4.0.0(@toolchain/compiler@0.8.0)(patch_hash=bundler-patch)";
+    const parser = "real-parser@2.1.0(peer-api@2.0.0)";
+    const math = "math-runtime@3.1.0(patch_hash=math-patch)(peer-api@2.0.0)";
+    const dependencies = {
+      compiler: "catalog:", "compiler-version": "catalog:",
+      "bundler-alias": "npm:@toolchain/bundler@4.0.0",
+      "parser-alias": "npm:real-parser@^2.1.0", "tool-host": "1.0.0",
+    };
+    const locked = {
+      compiler: { specifier: "catalog:", version: compiler },
+      "compiler-version": { specifier: "catalog:", version: "0.8.0" },
+      "bundler-alias": { specifier: "npm:@toolchain/bundler@4.0.0", version: bundler },
+      "parser-alias": { specifier: "npm:real-parser@^2.1.0", version: "2.1.0(peer-api@2.0.0)" },
+      "tool-host": { specifier: "1.0.0", version: "1.0.0" },
+    };
+    const snapshots = {
+      [compiler]: { optionalDependencies: { "native-compiler": "@toolchain/native@0.8.0" } },
+      [bundler]: { dependencies: { compiler, "peer-api": "2.0.0" } },
+      [parser]: { dependencies: { "peer-api": "2.0.0" } },
+      "tool-host@1.0.0": { dependencies: { "math-alias": math, "explicit-npm": "npm:real-optional@1.0.0" }, optionalDependencies: { "bundler-alias": bundler } },
+      [math]: { dependencies: { "peer-api": "2.0.0" } },
+      "real-optional@1.0.0": {}, "@toolchain/native@0.8.0": {}, "peer-api@2.0.0": {},
+    };
+    const packages = Object.fromEntries(Object.keys(snapshots).map(key => [key.replace(/\(.*/, ""), { resolution: { integrity: "sha512-fixture" } }]));
+    if (options.missingAliasSnapshot) delete snapshots[math];
+    next.set("packages/contracts/package.json", json({ name: packageName, exports: packageExports, dependencies }));
+    next.set("pnpm-lock.yaml", Buffer.concat([
+      json({ lockfileVersion: "9.0" }), Buffer.from("---\n"),
+      json({ lockfileVersion: "9.0", importers: { "packages/contracts": { dependencies: locked } }, packages, snapshots }),
+    ]));
   }
   if (options.extraction) next.set("apps/web/src/settings.ts", "// moved declaration\nexport const field = 2;\n");
   // An unrelated tracked template must be listable, but never read or selected.
@@ -69,14 +137,14 @@ async function fixture(t, options = {}) {
   const manifest = {
     manifest_version: 1, upstream: { commit: oldPin },
     packages: [
-      { root: "packages/contracts", name: "@t3tools/contracts", scope: "complete-package", files: [...old.keys()].filter(name => name.startsWith("packages/contracts/")), dependencies: [] },
+      { root: "packages/contracts", name: packageName, scope: "complete-package", files: [...old.keys()].filter(name => name.startsWith("packages/contracts/")), dependencies: [] },
       { root: "apps/server", name: "fixture-selected-server", scope: "selected-sources-only", dependencies: [] },
     ],
     files, imports: [], summary: {}, implementation_inventory: { family_ledgers: [] },
     consumer_slices: [{ owner: "fixture", copy_paths: files.filter(entry => entry.action.startsWith("copy")).map(entry => entry.source_path), reference_paths: ["apps/server/src/reference.ts"] }],
     adapter_boundaries: [], runtime_resources: { static_source_resource_edges: [] },
   };
-  if (options.dependencyUpdate) manifest.external_lock_closure = { source_path: "pnpm-lock.yaml", yaml_document_index: 1, snapshots: [] };
+  if (options.dependencyUpdate || options.aliasUpdate) manifest.external_lock_closure = { source_path: "pnpm-lock.yaml", yaml_document_index: 1, snapshots: [] };
   const derivedName = "apps/server/agent/src/mcp-derived.ts";
   const derivedImports = [
     ...(options.adaptationPackages ? ['import "@agent-workspace/contracts";', 'import "@agent-workspace/client-runtime";'] : []),
@@ -90,19 +158,25 @@ async function fixture(t, options = {}) {
   const adaptations = {
     version: 1, baselineCommit: oldPin, baselineInventory: `${base}sync-inventory.json`, sourceInventory: `${base}mcp-skills-source.json`, policy: {},
     sources: [supplementalPin, oldPin].map(commit => ({ commit, role: "fixture", license: { spdx: "MIT", path: "LICENSE", sha256: hash(old.get("LICENSE")), distributedPath: `${base}LICENSE` } })),
-    outputs: [{ destination: derivedName, provenance: "adapted-upstream", reason: "Multi-input fixture with an independent supplemental primary", inputs: [input(supplementalPin, "apps/web/src/mcp.ts", supplement.get("apps/web/src/mcp.ts")), input(oldPin, "packages/contracts/src/ref.ts", old.get("packages/contracts/src/ref.ts"))], sha256: hash(derivedBytes), bytes: derivedBytes.length, mode: 0o644, recipe: { kind: "exact-line-splices", primaryInput: 0, splices: [{ start: 0, before: splitLines(supplement.get("apps/web/src/mcp.ts")), after: splitLines(derivedBytes) }] } }],
+    outputs: [{ destination: derivedName, provenance: "adapted-upstream", reason: "Multi-input fixture with an independent supplemental primary", license: "MIT; vendor/t3code/LICENSE", inputs: [input(supplementalPin, "apps/web/src/mcp.ts", supplement.get("apps/web/src/mcp.ts")), input(oldPin, "packages/contracts/src/ref.ts", old.get("packages/contracts/src/ref.ts"))], sha256: hash(derivedBytes), bytes: derivedBytes.length, mode: 0o644, recipe: { kind: "exact-line-splices", primaryInput: 0, splices: [{ start: 0, before: splitLines(supplement.get("apps/web/src/mcp.ts")), after: splitLines(derivedBytes) }] } }],
   };
+  if (options.retireDerived) adaptations.outputs[0].retirement = { sha256: hash(derivedBytes), reason: "Reviewed removal; preserve both historical input pins and the exact recipe" };
+  const retiredLocalName = "apps/server/agent/src/retired-local.ts";
+  if (options.retireLocal) {
+    const bytes = Buffer.from("export const retiredLocal = true;\n");
+    adaptations.outputs.push({ destination: retiredLocalName, provenance: "local-integration", reason: "Historical PM integration", license: "Existing repository terms", inputs: [], sha256: hash(bytes), bytes: bytes.length, mode: 0o644, recipe: { kind: "local-bytes", base64: bytes.toString("base64") }, retirement: { sha256: hash(bytes), reason: "Reviewed consumer cutover removed the obsolete integration" } });
+  }
   const adaptationPackages = [];
   if (options.adaptationPackages) for (const [directory, name] of [["agent-contracts", "@agent-workspace/contracts"], ["agent-client-runtime", "@agent-workspace/client-runtime"]]) {
     const destination = `packages/${directory}/package.json`;
     const bytes = json({ name, exports: { ".": "./dist/index.js" }, types: "./dist/index.d.ts" });
     adaptationPackages.push({ directory, destination, bytes });
-    adaptations.outputs.push({ destination, provenance: "local-integration", reason: "PM-owned package metadata, not a vendored workspace package", inputs: [], sha256: hash(bytes), bytes: bytes.length, mode: 0o644, recipe: { kind: "local-bytes", base64: bytes.toString("base64") } });
+    adaptations.outputs.push({ destination, provenance: "local-integration", reason: "PM-owned package metadata, not a vendored workspace package", license: "Existing repository terms", inputs: [], sha256: hash(bytes), bytes: bytes.length, mode: 0o644, recipe: { kind: "local-bytes", base64: bytes.toString("base64") } });
   }
   const supplemental = { version: 1, upstream: { commit: supplementalPin, existingVendorCommit: oldPin }, files: [...supplement].map(([name, value]) => ({ path: name, mode: "100644", blob: blob(value), bytes: Buffer.byteLength(value), sha256: hash(value) })) };
   const imports = {
     version: 1, upstreamCommit: oldPin, adaptationCommits: [supplementalPin, oldPin], parser: "fixture-before-generation",
-    scope: "Fixture exact actual import/resource graph", packages: [],
+    scope: "Actual selected/patched vendor inputs and explicitly mapped MCP/Skills host adaptations. Other host-boundary targets remain PM-owned; resource selections may be runtime-computed. Absolute/file/.ref source imports are forbidden. Static provenance is not behavioral acceptance.", packages: [],
     edges: (options.resources ?? []).map((entry, index) => ({
       source: derivedName, line: derivedImports.length + index + 1, specifier: entry.specifier,
       kind: "import-meta-resource", usage: "runtime", disposition: entry.disposition, target: entry.target,
@@ -117,7 +191,7 @@ async function fixture(t, options = {}) {
   await put(root, `${base}omp-source.json`, json({ classification: "Local OMP, never t3code", commit: "4".repeat(40) }));
   await put(root, `${base}integration-patches.json`, json({ reason: "Fixture accepted host adaptation" }));
   await put(root, `${base}packages/provider-omp/src/server.ts`, "export const localOmp = true;\n");
-  await put(root, derivedName, derivedBytes);
+  if (!options.retireDerived) await put(root, derivedName, derivedBytes);
   await put(root, "apps/server/agent/scripts/build.mjs", "// fingerprint fixture only; never executed\n");
   if (options.extraction) await put(root, `${base}packages/client-runtime/src/extracted.ts`, "// host annotation\nexport const field = 1;\n");
   for (const entry of adaptationPackages) {
@@ -166,8 +240,109 @@ async function fixture(t, options = {}) {
   const plan = { oldCommit: oldPin, newCommit: nextPin, changes, reviews: [], approvedSourcePaths: [] };
   const call = () => recordGeneration({ root, source: "/never-read-source-worktree", targetCommit: nextPin, plan, readBlob, listTree });
   const review = (outputPath, sourceNames) => plan.reviews.push({ outputPath, disposition: "integrated", reason: "Reviewed exact fixture inputs and retained host behavior", inputs: sourceNames.map(name => ({ path: name, commit: nextPin, sha256: hash(next.get(name)) })) });
-  return { root, old, next, supplement, plan, readBlob, listTree, reads, derivedName, call, review };
+  return { root, old, next, supplement, plan, readBlob, listTree, reads, derivedName, retiredLocalName, call, review };
 }
+
+test("accepted absent retirements retain historical recipes and immutable inputs across generations", async t => {
+  const f = await fixture(t, { retireDerived: true, retireLocal: true, secondaryChanged: true });
+  const before = await get(f.root, `${base}mcp-skills-adaptations.json`);
+  const profile = await loadProfile(f.root);
+  assert.ok(!profile.outputs.some(entry => [f.derivedName, f.retiredLocalName].includes(entry.path)));
+  assert.ok(profile.inputs.some(entry => entry.commit === supplementalPin && entry.path === "apps/web/src/mcp.ts"));
+  assert.deepEqual((await f.call()).blockers, [], "An accepted retirement is not a missing live output or a new derivation review");
+  const after = await get(f.root, `${base}mcp-skills-adaptations.json`);
+  assert.deepEqual(after.outputs, before.outputs, "Do not advance historical input pins or rewrite historical recipes");
+  assert.ok(after.sources.some(entry => entry.commit === oldPin), "Retain license authentication for retired production inputs");
+  assert.ok(after.sources.some(entry => entry.commit === nextPin), "Keep the new live production identity as well");
+  assert.deepEqual((await verifyGeneration({ root: f.root, readBlob: f.readBlob, listTree: f.listTree })).blockers, []);
+  const graph = await get(f.root, `${base}sync-imports.json`);
+  assert.ok(!graph.edges.some(entry => [f.derivedName, f.retiredLocalName].includes(entry.source) || [f.derivedName, f.retiredLocalName].includes(entry.target)));
+  for (const name of [f.derivedName, f.retiredLocalName]) await assert.rejects(lstat(path.join(f.root, name)), { code: "ENOENT" });
+  const changedHistoricalInput = async (commit, name) => commit === supplementalPin && name === "apps/web/src/mcp.ts" ? Buffer.from("forged retired input\n") : f.readBlob(commit, name);
+  await assert.rejects(verifyGeneration({ root: f.root, readBlob: changedHistoricalInput, listTree: f.listTree }), /Immutable source hash\/blob\/mode mismatch/);
+  after.outputs[0].recipe.splices[0].after = ["forged historical output\n"];
+  await put(f.root, `${base}mcp-skills-adaptations.json`, json(after));
+  await assert.rejects(verifyGeneration({ root: f.root, readBlob: f.readBlob, listTree: f.listTree }));
+});
+
+test("profile, recording and generation replay reject retired target reappearance", async t => {
+  const f = await fixture(t, { retireDerived: true });
+  await put(f.root, f.derivedName, "// even different bytes may not reappear\n");
+  await assert.rejects(loadProfile(f.root), /Retired target exists/);
+  await assert.rejects(f.call(), /Retired target exists/);
+  await assert.rejects(verifyGeneration({ root: f.root, readBlob: f.readBlob, listTree: f.listTree }), /Retired target exists/);
+});
+
+test("retirement proof, reconstruction ownership and stored import edges remain fail-closed", async t => {
+  for (const mutate of [
+    entry => { entry.retirement.sha256 = "0".repeat(64); },
+    entry => { entry.retirement.reason = " "; },
+    entry => { entry.retirement.extra = true; },
+    entry => { entry.recipe.base64 = "not canonical base64"; },
+  ]) {
+    const f = await fixture(t, { retireLocal: true });
+    const ledger = await get(f.root, `${base}mcp-skills-adaptations.json`);
+    mutate(ledger.outputs.find(entry => entry.destination === f.retiredLocalName));
+    await put(f.root, `${base}mcp-skills-adaptations.json`, json(ledger));
+    await assert.rejects(loadProfile(f.root), /Malformed adaptation retirement|Invalid local integration recipe/);
+  }
+  const f = await fixture(t, { retireLocal: true });
+  const inventory = await get(f.root, `${base}sync-inventory.json`);
+  const ledger = await get(f.root, `${base}mcp-skills-adaptations.json`);
+  inventory.files.push(ledger.outputs.find(entry => entry.destination === f.retiredLocalName));
+  await put(f.root, `${base}sync-inventory.json`, json(inventory));
+  await assert.rejects(loadProfile(f.root), /baseline reconstruction owner/);
+  inventory.files.pop();
+  await put(f.root, `${base}sync-inventory.json`, json(inventory));
+  const imports = await get(f.root, `${base}sync-imports.json`);
+  for (const edge of [{ source: f.derivedName, target: f.retiredLocalName }, { source: f.retiredLocalName, target: null }]) {
+    imports.edges = [edge];
+    await put(f.root, `${base}sync-imports.json`, json(imports));
+    await assert.rejects(loadProfile(f.root), /Retired output remains in import closure/);
+  }
+});
+
+test("generation graph denies relative and tsconfig-alias consumers of retired outputs", async t => {
+  for (const specifier of ["./retired-local", "@retired/retired-local"]) {
+    const f = await fixture(t, { retireLocal: true, derivedImport: specifier });
+    if (specifier.startsWith("@")) await put(f.root, "apps/server/agent/tsconfig.json", json({ compilerOptions: { module: "ESNext", moduleResolution: "bundler", paths: { "@retired/*": ["./src/*"] } } }));
+    const before = await readFile(path.join(f.root, `${base}source-manifest.json`));
+    await assert.rejects(f.call(), /Live consumer of retired output/);
+    assert.deepEqual(await readFile(path.join(f.root, `${base}source-manifest.json`)), before, "Rejected graph must not publish a generation");
+  }
+});
+
+test("generation-aware import check accepts new coherent pins and keeps legacy replay fixed-pin", async t => {
+  const f = await fixture(t, { retireDerived: true, retireLocal: true });
+  assert.deepEqual((await f.call()).blockers, []);
+  for (const name of ["imports.mjs", "mcp-skills-adaptations.mjs"]) await put(f.root, `${base}scripts/${name}`, await readFile(new URL(`../../vendor/t3code/scripts/${name}`, import.meta.url)));
+  await put(f.root, "package.json", json({ type: "module" }));
+  await mkdir(path.join(f.root, "node_modules"));
+  const require = createRequire(import.meta.url);
+  await symlink(path.dirname(require.resolve("typescript/package.json")), path.join(f.root, "node_modules/typescript"), "dir");
+  const check = () => spawnSync(process.execPath, [path.join(f.root, `${base}scripts/imports.mjs`), "--check"], { encoding: "utf8" });
+  const checked = check();
+  assert.equal(checked.status, 0, checked.stderr);
+  const ledger = await get(f.root, `${base}mcp-skills-adaptations.json`);
+  assert.equal(validateAdaptationStructure(ledger).length, 2);
+  assert.throws(() => validateAdaptationManifest(ledger), /Adaptation manifest identity mismatch/);
+  await assert.rejects(replayMcpSkillsAdaptations(f.root, "/must-not-read-source", ledger), /Adaptation manifest identity mismatch/);
+  const legacyPins = ["d53873b6a4799e87afd63c8d288ef0089f5a3748", "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c"];
+  const legacy = { version: 1, baselineCommit: legacyPins[1], sources: ledger.sources.slice(0, 2).map((entry, index) => ({ ...entry, commit: legacyPins[index] })), outputs: [] };
+  assert.deepEqual(validateAdaptationManifest(legacy), [], "The original two-pin legacy boundary is unchanged");
+  ledger.baselineCommit = oldPin;
+  await put(f.root, `${base}mcp-skills-adaptations.json`, json(ledger));
+  assert.match(check().stderr, /Adaptation\/import baseline identity mismatch/);
+  ledger.baselineCommit = nextPin;
+  ledger.outputs[0].retirement.sha256 = "0".repeat(64);
+  await put(f.root, `${base}mcp-skills-adaptations.json`, json(ledger));
+  assert.match(check().stderr, /Malformed adaptation retirement/);
+  ledger.outputs[0].retirement.sha256 = ledger.outputs[0].sha256;
+  await put(f.root, `${base}mcp-skills-adaptations.json`, json(ledger));
+  await put(f.root, f.retiredLocalName, "// reappeared\n");
+  assert.match(check().stderr, /Retired target exists/);
+});
+
 
 test("loadProfile derives complete roots, selected references and every dual-source input without swallowing drift", async t => {
   const f = await fixture(t);
@@ -339,6 +514,68 @@ test("reviewed dependency changes regenerate catalog declarations and complete r
   assert.equal(manifest.external_dependencies.find(entry => entry.specifier_package === "left-pad").declarations[0].resolved, "1.0.0");
   assert.equal(manifest.packages[0].dependencies[0].declared, "catalog:");
   assert.equal(manifest.packages[0].dependencies[0].catalog, "1.0.0");
+});
+
+test("pnpm aliases retain canonical scoped identities and complete peer/patch suffixes across importer and transitive references", async t => {
+  const f = await fixture(t, { aliasUpdate: true, nextText: 'import "compiler";\nimport "bundler-alias";\nimport "parser-alias";\nexport const upstream = 2;\n' });
+  f.review(`${base}packages/contracts/package.json`, ["packages/contracts/package.json"]);
+  f.review(`${base}source-manifest.json`, ["pnpm-lock.yaml"]);
+  assert.deepEqual((await f.call()).blockers, []);
+  const manifest = await get(f.root, `${base}source-manifest.json`);
+  const snapshots = manifest.external_lock_closure.snapshots;
+  assert.deepEqual(snapshots.map(entry => entry.key).sort(), [
+    "@toolchain/compiler@0.8.0",
+    "@toolchain/bundler@4.0.0(@toolchain/compiler@0.8.0)(patch_hash=bundler-patch)",
+    "real-parser@2.1.0(peer-api@2.0.0)",
+    "tool-host@1.0.0",
+    "math-runtime@3.1.0(patch_hash=math-patch)(peer-api@2.0.0)",
+    "real-optional@1.0.0", "@toolchain/native@0.8.0", "peer-api@2.0.0",
+  ].sort());
+  assert.deepEqual(snapshots.find(entry => entry.key === "@toolchain/compiler@0.8.0").direct_consumers.map(entry => entry.name).sort(), ["compiler", "compiler-version"]);
+  const declarations = manifest.packages[0].dependencies;
+  assert.equal(declarations.find(entry => entry.name === "compiler").resolved, "@toolchain/compiler@0.8.0");
+  assert.equal(declarations.find(entry => entry.name === "compiler-version").resolved, "0.8.0");
+  assert.equal(declarations.find(entry => entry.name === "parser-alias").resolved, "2.1.0(peer-api@2.0.0)");
+});
+
+test("an aliased dependency with a missing canonical lock snapshot still blocks before publication", async t => {
+  const f = await fixture(t, { aliasUpdate: true, missingAliasSnapshot: true });
+  f.review(`${base}packages/contracts/package.json`, ["packages/contracts/package.json"]);
+  f.review(`${base}source-manifest.json`, ["pnpm-lock.yaml"]);
+  const before = await readFile(path.join(f.root, `${base}source-manifest.json`));
+  const result = await f.call();
+  assert.ok(result.blockers.some(entry => entry.code === "BLOCKED_DEPENDENCY" && entry.dependency === "math-runtime@3.1.0(patch_hash=math-patch)(peer-api@2.0.0)"));
+  assert.deepEqual(result.changedPaths, []);
+  assert.deepEqual(await readFile(path.join(f.root, `${base}source-manifest.json`)), before);
+});
+
+test("owning package exports authorize generic root and wildcard self-references without fake self dependencies", async t => {
+  const name = "@fixture/native-provider";
+  const f = await fixture(t, {
+    packageName: name, packageExports: { ".": "./src/index.ts", "./*": "./src/*.ts" },
+    nextText: `import "${name}";\nimport "${name}/ref";\nexport const upstream = 2;\n`,
+  });
+  assert.deepEqual((await f.call()).blockers, []);
+  const manifest = await get(f.root, `${base}source-manifest.json`);
+  assert.equal(manifest.imports.filter(edge => edge.specifier === name || edge.specifier === `${name}/ref`).length, 2);
+  assert.ok(!manifest.packages[0].dependencies.some(entry => entry.name === name));
+  assert.ok(!manifest.external_dependencies.some(entry => entry.specifier_package === name));
+});
+
+test("self-name imports still reject unexported or missing targets and truly undeclared external imports", async t => {
+  const name = "@fixture/native-provider";
+  for (const [specifier, exports] of [
+    [`${name}/private`, { ".": "./src/index.ts" }],
+    [`${name}/missing`, { ".": "./src/index.ts", "./missing": "./src/absent.ts" }],
+    ["truly-undeclared-package", { ".": "./src/index.ts" }],
+  ]) {
+    const f = await fixture(t, { packageName: name, packageExports: exports, nextText: `import "${specifier}";\nexport const upstream = 2;\n` });
+    const before = await readFile(path.join(f.root, `${base}source-manifest.json`));
+    const result = await f.call();
+    assert.ok(result.blockers.some(entry => entry.code === "BLOCKED_UNDECLARED_DEPENDENCY"));
+    if (specifier !== "truly-undeclared-package") assert.ok(result.blockers.some(entry => entry.code === "BLOCKED_IMPORT_CLOSURE"));
+    assert.deepEqual(await readFile(path.join(f.root, `${base}source-manifest.json`)), before);
+  }
 });
 
 test("extractions are derived inputs and changed declarations require reviewed current source ranges", async t => {
@@ -561,4 +798,55 @@ test("same-pin operation performs no recapture or writes", async t => {
   assert.deepEqual(result.changedPaths, []);
   assert.deepEqual(result.blockers, []);
   assert.deepEqual(await readFile(path.join(f.root, `${base}source-manifest.json`)), before);
+});
+
+test("packaged T3 source identity rejects the legacy old-pin stamp in the actual artifact schema", async t => {
+  const f = await fixture(t);
+  assert.deepEqual((await f.call()).blockers, []);
+  await emittedArtifact(f.root, { stampedCommit: oldPin });
+  const result = await verifyArtifacts({ root: f.root, targetCommit: nextPin });
+  assert.ok(result.blockers.some(entry => entry.code === "BLOCKED_ARTIFACT_IDENTITY" && entry.actualCommit === oldPin && entry.expectedCommit === nextPin));
+});
+
+test("packaged T3 source identity accepts only current-pin exact candidate provenance", async t => {
+  const f = await fixture(t);
+  assert.deepEqual((await f.call()).blockers, []);
+  await emittedArtifact(f.root);
+  const result = await verifyArtifacts({ root: f.root, targetCommit: nextPin });
+  assert.deepEqual(result.blockers, []);
+  assert.ok(result.notes.every(note => !note.includes("full-passed")));
+});
+
+test("a current artifact stamp cannot conceal stale distributed source JSON with valid artifact file hashes", async t => {
+  const f = await fixture(t);
+  assert.deepEqual((await f.call()).blockers, []);
+  const artifact = await emittedArtifact(f.root, { stampedCommit: nextPin, shippedCommit: oldPin });
+  const packaged = await get(f.root, artifact.manifestPath);
+  assert.equal(packaged.upstreamCommit, nextPin);
+  const sourcePath = `licenses/provenance/${base}source-manifest.json`;
+  const sourceBytes = await readFile(path.join(f.root, artifact.artifactRoot, sourcePath));
+  assert.equal(packaged.files.find(entry => entry.path === sourcePath).sha256, hash(sourceBytes));
+  const result = await verifyArtifacts({ root: f.root, targetCommit: nextPin });
+  assert.ok(result.blockers.some(entry => entry.code === "BLOCKED_ARTIFACT_PROVENANCE"));
+  assert.ok(result.blockers.some(entry => entry.code === "BLOCKED_ARTIFACT_IDENTITY"));
+});
+
+test("missing artifact or provenance JSON fails packaged identity closed", async t => {
+  const f = await fixture(t);
+  assert.ok((await verifyArtifacts({ root: f.root, targetCommit: nextPin })).blockers.some(entry => entry.code === "BLOCKED_ARTIFACT_MISSING"));
+  assert.deepEqual((await f.call()).blockers, []);
+  const artifact = await emittedArtifact(f.root);
+  await rm(path.join(f.root, artifact.artifactRoot, `licenses/provenance/${base}sync-inventory.json`));
+  assert.ok((await verifyArtifacts({ root: f.root, targetCommit: nextPin })).blockers.some(entry => entry.code === "BLOCKED_ARTIFACT_MISSING"));
+});
+
+test("packaged source identity validates provenance file rows rather than trusting the top-level pin alone", async t => {
+  const f = await fixture(t);
+  assert.deepEqual((await f.call()).blockers, []);
+  const artifact = await emittedArtifact(f.root);
+  const manifest = await get(f.root, artifact.manifestPath);
+  manifest.files.find(entry => entry.path.endsWith("/source-manifest.json")).sha256 = "0".repeat(64);
+  await put(f.root, artifact.manifestPath, json(manifest));
+  const result = await verifyArtifacts({ root: f.root, targetCommit: nextPin });
+  assert.ok(result.blockers.some(entry => entry.code === "BLOCKED_ARTIFACT_PROVENANCE"));
 });

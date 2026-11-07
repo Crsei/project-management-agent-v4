@@ -44,11 +44,13 @@ export function ServiceNotifications({ variant }: { variant: "inbox3" | "inbox4"
     const root = `/pm/${encodeURIComponent(workspaceSlug)}`
     const returnTo = `${location.pathname}${location.search}`
     const project = item.event.projectId ? `/projects/${encodeURIComponent(item.event.projectId)}` : ""
-    navigate(`${root}${project}/entities/${encodeURIComponent(item.target.taskId)}?${new URLSearchParams({ returnTo })}${item.target.commentId ? `#comment-${item.target.commentId}` : ""}`, { state: { returnTo } })
+    const params = new URLSearchParams({ returnTo })
+    if (item.target.changeId) { params.set("panel", "changes"); params.set("changeId", item.target.changeId) }
+    navigate(`${root}${project}/entities/${encodeURIComponent(item.target.taskId)}?${params}${item.target.commentId ? `#comment-${encodeURIComponent(item.target.commentId)}` : ""}`, { state: { returnTo } })
   }
   const securityNotice = t(
-    "定向通知只含已保存任务的显式关注与本次个人提及；不自动关注、不赋权，不是邮件或完整历史。外部变更仅记录真实观测差异，不补造离线中间版本或作者。",
-    "Routed notifications cover explicit task watches and new personal mentions in saved changes. They never subscribe or grant access, are not email or complete history. External changes are observed differences, not reconstructed offline edits or authors.",
+    "定向通知来自已保存任务的关注、提及和有权接收的变更；不自动关注、不赋权，不是邮件或完整历史。外部变更仅记录真实观测差异，不补造离线中间版本或作者。",
+    "Routed notifications include watched tasks, mentions and authorized changes. They never subscribe or grant access, are not email or complete history. External changes are observed differences, not reconstructed offline edits or authors.",
   ) + (origin === "legacy_activity" ? t(
     " 旧版只迁入仍保留且曾保存个人状态的活动；从未操作的旧未读及已过期事件不可重建。",
     " Legacy includes only retained activities with previously saved personal state; untouched implicit unread and expired events cannot be reconstructed.",

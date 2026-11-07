@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -15,27 +17,47 @@ import { generateThreadTitle } from "./thread-title.ts";
 import { closeStore, writeRecord } from "./store.ts";
 import { ensureThread, getThread, getThreadHistory, saveFormattedMessage, updateThread } from "./threads.ts";
 import { getThreadSidebar, updateThreadSidebar } from "./thread-sidebar.ts";
-import type { ChatGeneration } from "./chat-runtime.ts";
+import { getChatGeneration, type ChatGeneration } from "./chat-runtime.ts";
 
 const originalDirectory = process.env.AGENT_WORKSPACE_DATA_DIR;
 const originalFetch = globalThis.fetch;
-const scope = { workspaceId: "11111111-1111-4111-8111-111111111111", projectId: "PRJ-001" };
+const originalPmUrl = process.env.PM_API_URL;
+const unavailablePmUrl = "http://127.0.0.1:1";
+let networkRequests: string[];
 let directory: string;
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), "thread-sidebar-"));
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
+  process.env.PM_API_URL = unavailablePmUrl;
+  networkRequests = [];
+  globalThis.fetch = async input => {
+    networkRequests.push(input instanceof Request ? input.url : String(input));
+    throw new Error("Network is unavailable.");
+  };
 });
 afterEach(async () => {
-  globalThis.fetch = originalFetch;
-  await stopPmProviderApplication();
-  closeStore();
-  await rm(directory, { recursive: true, force: true });
-  if (originalDirectory === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR;
-  else process.env.AGENT_WORKSPACE_DATA_DIR = originalDirectory;
+  try {
+    await stopPmProviderApplication();
+  } finally {
+    globalThis.fetch = originalFetch;
+    closeStore();
+    try {
+      await rm(directory, { recursive: true, force: true });
+    } finally {
+      if (originalDirectory === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR;
+      else process.env.AGENT_WORKSPACE_DATA_DIR = originalDirectory;
+      if (originalPmUrl === undefined) delete process.env.PM_API_URL;
+      else process.env.PM_API_URL = originalPmUrl;
+    }
+  }
+  // Optional provider catalog/version probes are not PM authorization requests.
+  // They also fail: successful title generation cannot depend on connectivity.
+  assert.deepEqual(networkRequests.filter(url => new URL(url).origin === unavailablePmUrl), [],
+    "Sidebar and isolated title execution must not consult PM.");
 });
 const t = (day: number, hour = 0) => `2035-01-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:00:00.000Z`;
 function seed(id: string) {
-  ensureThread(id, "Original", scope);
+  ensureThread(id, "Original");
   const thread = { ...getThread(id)!, createdAt: t(1), updatedAt: t(1) };
   writeRecord("chat:threads", id, thread);
   return thread;
@@ -68,7 +90,7 @@ interface TitleCall {
 async function titlePeer(name: string, title: string, mcpOutput = JSON.stringify([
   { name: "external.server", enabled: true },
   { name: "already-off", enabled: false },
-]), mcpExitCode = 0) {
+]), mcpExitCode = 0, gatePath?: string) {
   const executable = join(directory, name);
   const log = join(directory, `${name}.jsonl`);
   await writeFile(executable, `#!/usr/bin/env node
@@ -92,13 +114,47 @@ process.stdin.setEncoding("utf8");
 process.stdin.on("data", chunk => input += chunk);
 process.stdin.on("end", () => {
   record(input);
-  fs.writeFileSync(args[args.indexOf("--output-last-message") + 1], JSON.stringify({title: ${JSON.stringify(title)}, needsRefinement: false}));
+  const finish = () => fs.writeFileSync(args[args.indexOf("--output-last-message") + 1], JSON.stringify({title: ${JSON.stringify(title)}, needsRefinement: false}));
+  ${gatePath
+    ? `require("node:net").createConnection(${JSON.stringify(gatePath)}).on("error", () => process.exit(1)).on("end", finish).resume();`
+    : "finish();"}
 });
 `);
   await chmod(executable, 0o700);
   return {
     executable,
     calls: async () => (await readFile(log, "utf8")).trim().split("\n").map(line => JSON.parse(line) as TitleCall),
+  };
+}
+
+async function titleGate(name: string) {
+  const path = join(directory, `${name}.sock`);
+  const started = Promise.withResolvers<void>();
+  const sockets = new Set<Socket>();
+  let released = false;
+  const server = createServer(socket => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+    started.resolve();
+    if (released) socket.end();
+  });
+  server.listen(path);
+  await once(server, "listening");
+  const release = () => {
+    released = true;
+    for (const socket of sockets) socket.end();
+  };
+  return {
+    path,
+    started: started.promise,
+    release,
+    async close() {
+      release();
+      for (const socket of sockets) socket.destroy();
+      const closed = Promise.withResolvers<void>();
+      server.close(error => error ? closed.reject(error) : closed.resolve());
+      await closed.promise;
+    },
   };
 }
 
@@ -230,19 +286,12 @@ test("a new user turn reactivates settled and snoozed threads without waking a c
   assert.equal(getThreadSidebar(thread, t(1, 9)).section, "active");
 });
 
-test("sidebar and title routes enforce PM scope and title unavailable preserves history", async () => {
-  ensureThread("api", "Original", scope);
+test("sidebar and title routes work without PM and title unavailable preserves history", async () => {
+  ensureThread("api", "Original");
   saveFormattedMessage("api", { id: "message", parent_id: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Keep this" }] } });
   const history = getThreadHistory("api");
-  const area = { path: null, status: "unconfigured", revision: 1, source: null, canManage: false };
-  let allowed = true;
-  globalThis.fetch = async () => new Response(JSON.stringify({ workspaces: allowed ? [{ id: scope.workspaceId, name: "Workspace", fileArea: area, projects: [{ id: scope.projectId, name: "Project", fileArea: area }] }] : [] }), { status: 200, headers: { "content-type": "application/json" } });
   const app = new Hono().route("/api", chatRoutes);
   const post = (path: string, body: object) => app.request(`http://localhost/api/chat/threads/api/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  allowed = false;
-  assert.equal((await post("sidebar", { action: "pin", revision: 0 })).status, 403);
-  assert.equal((await post("regenerate-title", { revision: 0 })).status, 403);
-  allowed = true;
   const pin = await post("sidebar", { action: "pin", revision: 0 });
   assert.equal(pin.status, 200);
   assert.equal((await pin.json()).thread.sidebar.section, "pinned");
@@ -265,15 +314,12 @@ test("Codex title helper uses isolated ephemeral read-only execution and leaves 
   const instance = createProviderInstance({ instanceId: "title-codex", driver: "codex", label: "Fixture",
     config: { binaryPath: peer.executable, homePath: home }, customModels: [{ id: "title-model", label: "Title model" }] });
   await startTitleProvider();
-  ensureThread("title", "Original", scope);
+  ensureThread("title", "Original");
   updateThread("title", { settings: { providerInstanceId: instance.instanceId, model: "title-model", systemPrompt: "", temperature: 1 }, revision: 0 });
   saveFormattedMessage("title", { id: "prompt", parent_id: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Discuss a real topic" }] } });
+  generation("title", "completed", t(1), t(1, 1));
   const history = getThreadHistory("title");
   const revision = getThread("title")!.revision;
-  const area = { path: null, status: "unconfigured", revision: 1, source: null, canManage: false };
-  globalThis.fetch = async (input) => new Response(JSON.stringify(String(input).endsWith("/resolve")
-    ? { scope, workspaceName: "Workspace", projectName: "Project", path: directory }
-    : { workspaces: [{ id: scope.workspaceId, name: "Workspace", fileArea: area, projects: [{ id: scope.projectId, name: "Project", fileArea: area }] }] }), { status: 200, headers: { "content-type": "application/json" } });
   const app = new Hono().route("/api", chatRoutes);
   const regenerate = (revision: number) => app.request("http://localhost/api/chat/threads/title/regenerate-title", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ revision }) });
   const result = await regenerate(revision);
@@ -313,12 +359,11 @@ test("managed Codex title uses the prepared runtime and broker without weakening
     })));
   }));
   await startTitleProvider();
-  ensureThread("managed-title", "Original", scope);
+  ensureThread("managed-title", "Original");
   updateThread("managed-title", { settings: { providerInstanceId: instance.instanceId, model: "title-model", systemPrompt: "", temperature: 1 } });
   saveFormattedMessage("managed-title", { id: "prompt", parent_id: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Managed title fixture" }] } });
   const original = getThread("managed-title")!;
   const history = getThreadHistory("managed-title");
-  globalThis.fetch = async () => new Response(JSON.stringify({ scope, workspaceName: "Workspace", projectName: "Project", path: directory }), { status: 200 });
   assert.equal(await generateThreadTitle(original), "Managed title");
   const calls = await peer.calls();
   await assertIsolatedTitle(calls, instance.homeDirectory, "Managed title fixture");
@@ -333,24 +378,22 @@ test("managed Codex title uses the prepared runtime and broker without weakening
   assert.deepEqual(getThreadHistory("managed-title"), history);
 });
 
-test("Codex title generation fails closed when MCP enumeration cannot be trusted", async (t) => {
-  for (const failure of [
-    { name: "malformed", output: "not-json", exitCode: 0 },
-    { name: "invalid-schema", output: JSON.stringify([{ name: "external.server" }]), exitCode: 0 },
-    { name: "nonzero", output: "[]", exitCode: 2 },
-  ]) await t.test(failure.name, async () => {
+for (const failure of [
+  { name: "malformed", output: "not-json", exitCode: 0 },
+  { name: "invalid-schema", output: JSON.stringify([{ name: "external.server" }]), exitCode: 0 },
+  { name: "nonzero", output: "[]", exitCode: 2 },
+]) test(`Codex title generation fails closed on ${failure.name} MCP enumeration`, async () => {
     const peer = await titlePeer(`codex-invalid-${failure.name}`, "Must not generate", failure.output, failure.exitCode);
     const instance = createProviderInstance({ instanceId: `invalid-codex-${failure.name}`, driver: "codex", label: "Fixture",
       config: { binaryPath: peer.executable, homePath: join(directory, `home-${failure.name}`) },
       customModels: [{ id: "title-model", label: "Title model" }] });
     await startTitleProvider();
     const threadId = `failure-${failure.name}`;
-    ensureThread(threadId, "Original", scope);
+    ensureThread(threadId, "Original");
     updateThread(threadId, { settings: { providerInstanceId: instance.instanceId, model: "title-model", systemPrompt: "", temperature: 1 }, revision: 0 });
     saveFormattedMessage(threadId, { id: "prompt", parent_id: null, format: "ai-sdk/v6", content: { role: "user", parts: [{ type: "text", text: "Keep this history" }] } });
     const original = getThread(threadId)!;
     const history = getThreadHistory(threadId);
-    globalThis.fetch = async () => new Response(JSON.stringify({ scope, workspaceName: "Workspace", projectName: "Project", path: directory }), { status: 200, headers: { "content-type": "application/json" } });
     await assert.rejects(generateThreadTitle(original), { status: 503, code: "title_generation_unavailable" });
     const calls = await peer.calls();
     assert.equal(calls.length, 1, "enumeration failure must prevent inference dispatch");
@@ -358,5 +401,90 @@ test("Codex title generation fails closed when MCP enumeration cannot be trusted
     await assert.rejects(stat(calls[0]!.cwd), { code: "ENOENT" });
     assert.deepEqual(getThread(threadId), original);
     assert.deepEqual(getThreadHistory(threadId), history);
-  });
 });
+
+for (const status of ["queued", "running"] as const)
+  test(`a ${status} generation prevents title dispatch without changing history`, async () => {
+    const peer = await titlePeer("codex-busy", "Must not generate");
+    const instance = createProviderInstance({ instanceId: "busy-title", driver: "codex", label: "Fixture",
+      config: { binaryPath: peer.executable, homePath: join(directory, "native-home") },
+      customModels: [{ id: "title-model", label: "Title model" }] });
+    await startTitleProvider();
+    ensureThread("busy-title", "Original");
+    updateThread("busy-title", { settings: { providerInstanceId: instance.instanceId, model: "title-model", systemPrompt: "", temperature: 1 } });
+    saveFormattedMessage("busy-title", { id: "prompt", parent_id: null, format: "ai-sdk/v6",
+      content: { role: "user", parts: [{ type: "text", text: "Keep this history" }] } });
+    const run = generation("busy-title", status);
+    const originalGeneration = getChatGeneration(run.id);
+    const original = getThread("busy-title")!;
+    const history = getThreadHistory("busy-title");
+    const app = new Hono().route("/api", chatRoutes);
+    const result = await app.request("http://localhost/api/chat/threads/busy-title/regenerate-title", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ revision: original.revision }),
+    });
+    assert.equal(result.status, 409);
+    assert.equal((await result.json()).code, "chat_busy");
+    await assert.rejects(peer.calls(), { code: "ENOENT" });
+    assert.deepEqual(getThread("busy-title"), original);
+    assert.deepEqual(getThreadHistory("busy-title"), history);
+    assert.deepEqual(getChatGeneration(run.id), originalGeneration);
+  });
+
+for (const change of ["settings", "manual-title", "archive", "history", "queued", "running", "completed"] as const)
+  test(`title compare-and-swap rejects a concurrent ${change} change`, { timeout: 15000 }, async context => {
+    const gate = await titleGate("title-race");
+    context.after(() => gate.close());
+    const peer = await titlePeer("codex-race", "Stale generated title", undefined, 0, gate.path);
+    const home = join(directory, "native-home");
+    const instance = createProviderInstance({ instanceId: "racing-title", driver: "codex", label: "Fixture",
+      config: { binaryPath: peer.executable, homePath: home },
+      customModels: [{ id: "title-model", label: "Title model" }] });
+    await startTitleProvider();
+    ensureThread("racing-title", "Original");
+    updateThread("racing-title", { settings: { providerInstanceId: instance.instanceId, model: "title-model", systemPrompt: "", temperature: 1 } });
+    saveFormattedMessage("racing-title", { id: "prompt", parent_id: null, format: "ai-sdk/v6",
+      content: { role: "user", parts: [{ type: "text", text: "Discuss this original topic" }] } });
+    const original = getThread("racing-title")!;
+    const app = new Hono().route("/api", chatRoutes);
+    const pending = app.request("http://localhost/api/chat/threads/racing-title/regenerate-title", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ revision: original.revision }), signal: context.signal,
+    });
+    try {
+      await Promise.race([gate.started, Promise.resolve(pending).then(() => {
+        throw new Error("Title generation ended before reaching the native execution gate.");
+      })]);
+      switch (change) {
+        case "settings":
+          updateThread("racing-title", { settings: { ...original.settings, temperature: 0.5 }, revision: original.revision });
+          break;
+        case "manual-title":
+          updateThread("racing-title", { title: "User-chosen title", revision: original.revision });
+          break;
+        case "archive":
+          updateThread("racing-title", { status: "archived", revision: original.revision });
+          break;
+        case "history":
+          saveFormattedMessage("racing-title", { id: "new-prompt", parent_id: "prompt", format: "ai-sdk/v6",
+            content: { role: "user", parts: [{ type: "text", text: "New topic after title dispatch" }] } });
+          break;
+        default:
+          generation("racing-title", change, t(1), change === "completed" ? t(1, 1) : undefined);
+      }
+      const expectedThread = getThread("racing-title");
+      const expectedHistory = getThreadHistory("racing-title");
+      const expectedGeneration = getChatGeneration("racing-title-run");
+      gate.release();
+      const result = await pending;
+      assert.equal(result.status, 409);
+      assert.equal((await result.json()).code, "title_conflict");
+      assert.deepEqual(getThread("racing-title"), expectedThread);
+      assert.deepEqual(getThreadHistory("racing-title"), expectedHistory);
+      assert.deepEqual(getChatGeneration("racing-title-run"), expectedGeneration);
+      await assertIsolatedTitle(await peer.calls(), home, "Discuss this original topic");
+    } finally {
+      gate.release();
+      await pending;
+    }
+  });

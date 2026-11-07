@@ -3,7 +3,7 @@ import { lstatSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { extensionAppIds } from "@agent-workspace/contracts/extensions";
-import { canonicalExtensionProviderPath, extensionProviderPathsOverlap, listExtensionProviderTargets, resolveExtensionProviderBinding, assertExtensionProviderBindingCurrent, type ExtensionProviderBinding } from "./provider-bindings.ts";
+import { canonicalExtensionProviderPath, extensionProviderPathsOverlap, listExtensionProviderTargets, resolveExtensionProviderBinding, resolveRegisteredExtensionProviders, assertExtensionProviderBindingCurrent, type ExtensionProviderBinding } from "./provider-bindings.ts";
 import { assertPrivatePath } from "../../../../../packages/pm-core/private-path.ts";
 import { ExtensionError } from "./rpc.ts";
 
@@ -50,6 +50,10 @@ export function resolveExtensionHostBinding(input: ExtensionHostBindingInput): E
     if (!target) throw new ExtensionError(404, "external_target_unknown", "An external target ID is not registered by the host administrator.");
     return target;
   });
+  return assembleExtensionHostBinding(providerBinding, externalTargets);
+}
+
+function assembleExtensionHostBinding(providerBinding: ExtensionProviderBinding | undefined, externalTargets: ExternalExtensionTarget[]): ExtensionHostBinding {
   if (!externalTargets.length) {
     if (!providerBinding) throw new ExtensionError(400, "binding_target_required", "Select at least one confirmed native target.");
     return { binding: providerBinding };
@@ -82,10 +86,29 @@ export function resolveExtensionHostBinding(input: ExtensionHostBindingInput): E
   };
   return { binding, ...(providerBinding ? { providerBinding } : {}), externalTargets };
 }
+/** Refresh an already enrolled external owner, never enrolling a new external target. */
+export function refreshExistingExtensionHostBinding(stored: ExtensionHostBinding, providerBinding?: ExtensionProviderBinding): ExtensionHostBinding {
+  if (!stored.binding.bindingFingerprint) throw new ExtensionError(409, "binding_reconfirmation_required", "Restored external targets require explicit enrollment before their configuration can be managed.");
+  const registered = listExternalExtensionTargets();
+  const externalTargets = (stored.externalTargets ?? []).map(previous => {
+    const current = registered.find(target => target.id === previous.id);
+    if (!current || current.fingerprint !== previous.fingerprint) throw new ExtensionError(409, "external_binding_changed", "The external target registration changed. Reconcile its explicit enrollment before continuing.");
+    return current;
+  });
+  if (!externalTargets.length) throw new ExtensionError(409, "external_binding_changed", "The existing external target enrollment is unavailable.");
+  return assembleExtensionHostBinding(providerBinding, externalTargets);
+}
 export function assertExtensionHostBindingCurrent(stored: ExtensionHostBinding): void {
   if (!stored.binding.bindingFingerprint) throw new ExtensionError(409, "binding_reconfirmation_required", "The restored native target binding requires explicit confirmation.");
   if (!stored.externalTargets?.length) { assertExtensionProviderBindingCurrent(stored.binding); return; }
   if (stored.providerBinding) assertExtensionProviderBindingCurrent(stored.providerBinding);
-  const current = resolveExtensionHostBinding({ providerInstanceIds: stored.binding.providerInstanceIds, externalTargetIds: stored.externalTargets.map(target => target.id), confirmed: true });
-  if (current.binding.bindingFingerprint !== stored.binding.bindingFingerprint || current.binding.homeDir !== stored.binding.homeDir || current.binding.claudeMcpFile !== stored.binding.claudeMcpFile || JSON.stringify(current.binding.appDirs) !== JSON.stringify(stored.binding.appDirs) || JSON.stringify(current.binding.physicalRoots) !== JSON.stringify(stored.binding.physicalRoots)) throw new ExtensionError(409, "external_binding_changed", "The external target registration or native path identity changed. Explicitly rebind its current targets.");
+  const currentProvider = stored.binding.providerInstanceIds.length ? resolveRegisteredExtensionProviders(stored.binding.providerInstanceIds) : undefined;
+  const current = refreshExistingExtensionHostBinding(stored, currentProvider);
+  const canonical = (value: string | undefined) => value === undefined ? undefined : canonicalExtensionProviderPath(value);
+  if (current.binding.bindingFingerprint !== stored.binding.bindingFingerprint ||
+      canonical(current.binding.homeDir) !== canonical(stored.binding.homeDir) ||
+      canonical(current.binding.claudeMcpFile) !== canonical(stored.binding.claudeMcpFile) ||
+      current.binding.apps.length !== stored.binding.apps.length || current.binding.apps.some(app => canonical(current.binding.appDirs[app]) !== canonical(stored.binding.appDirs[app])) ||
+      JSON.stringify([...current.binding.physicalRoots].sort()) !== JSON.stringify([...stored.binding.physicalRoots].sort()))
+    throw new ExtensionError(409, "external_binding_changed", "The external target registration or native path identity changed. Explicitly rebind its current targets.");
 }

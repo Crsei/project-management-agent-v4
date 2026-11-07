@@ -187,7 +187,7 @@ test("account switching cannot admit native sessions under the transitional revi
     };
     const started = await startProviderAuth("codex", { methodId: "native-key" }); await ready.promise;
     await assert.rejects(resolveProviderRuntime({ providerInstanceId: "codex", modelName: "fixture-native" }), { code: "provider_busy" });
-    await assert.rejects(runNativeRuntime(oldRuntime, { prompt: "Must not execute as another account." }), { code: "session_mismatch" });
+    await assert.rejects(runNativeRuntime(oldRuntime, { prompt: "Must not execute as another account.", cwd: process.env.AGENT_WORKSPACE_DATA_DIR! }), { code: "session_mismatch" });
     writeAuthInput("codex", started.flowId!, JSON.stringify({ token: "replacement-account" }));
     assert.equal((await finish()).phase, "succeeded");
     const current = await resolveProviderRuntime({ providerInstanceId: "codex", modelName: "fixture-native" });
@@ -222,11 +222,11 @@ test("parallel native turns retain the account until every execution has settled
       await gate.promise; return { text: "native operation settled" };
     };
     codexAdapter.logout = async () => { state.authenticated = false; };
-    const first = runNativeRuntime(runtime, { prompt: "first" });
+    const first = runNativeRuntime(runtime, { prompt: "first", cwd: process.env.AGENT_WORKSPACE_DATA_DIR! });
     let second: Promise<unknown> | undefined;
     try {
       const parallelRuntime = await resolveProviderRuntime({ providerInstanceId: "codex", modelName: "fixture-native" });
-      second = runNativeRuntime(parallelRuntime, { prompt: "second" });
+      second = runNativeRuntime(parallelRuntime, { prompt: "second", cwd: process.env.AGENT_WORKSPACE_DATA_DIR! });
       await entered.promise;
       await assert.rejects(startProviderAuth("codex", { methodId: "native-key" }), { status: 409 });
       gates[0]!.resolve(); await first;

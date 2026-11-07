@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { gzipSync } from 'node:zlib';
 import { describe, it } from 'node:test';
-import { decodeAutomationTar, exportAutomationDefinition, parseAutomationTransfer } from '../packages/application/src/automation-transfer.ts';
+import { automationConfigHash, decodeAutomationTar, exportAutomationDefinition, parseAutomationTransfer } from '../packages/application/src/automation-transfer.ts';
 import { createConfiguredAutomationGitPort, decryptAutomationGitDocument, encryptAutomationGitDocument } from '../packages/infrastructure/src/automation-git.ts';
 import { studioConfigSchema, studioNativeTemplateIdSchema, studioNativeTemplateRequiresProvider, type StudioDefinition } from '../packages/contracts/src/automation-studio.ts';
 import { isPmAutomationTemplateId, pmAutomationTemplateVersion } from '../packages/contracts/src/automation-pm.ts';
@@ -22,6 +22,28 @@ describe('automation transfer safety', () => {
     assert.deepEqual(parseAutomationTransfer({ projectId: config.projectId, document: exported.document }).config, script);
     assert.equal('status' in (exported.document as object), false);
     assert.throws(() => exportAutomationDefinition({ ...definition, config: script }, 'source'), /losslessly/);
+  });
+  it('preserves absent and explicit shortcut values in bundles without changing old hashes or silently losing source fields', () => {
+    assert.equal(automationConfigHash(studioConfigSchema.parse(config)), automationConfigHash(config));
+    assert.equal(Object.hasOwn(studioConfigSchema.parse(config), 'quickAccess'), false);
+    for (const quickAccess of [undefined, false, true]) {
+      const saved = quickAccess === undefined ? config : { ...config, quickAccess };
+      const exported = exportAutomationDefinition({ ...definition, config: saved }, 'bundle');
+      const imported = parseAutomationTransfer({ projectId: config.projectId, document: exported.document }).config;
+      assert.deepEqual(imported, saved); assert.equal(automationConfigHash(imported), automationConfigHash(saved));
+      if (quickAccess !== undefined) assert.throws(() => exportAutomationDefinition({ ...definition, config: saved }, 'source'), /losslessly/);
+    }
+    const source = exportAutomationDefinition(definition, 'source').document as { spec: object };
+    assert.throws(() => parseAutomationTransfer({ projectId: config.projectId, providerInstanceId: 'configured-provider', document: { ...source, spec: { ...source.spec, quickAccess: true } } }), /Unrecognized/);
+  });
+  it('preserves explicit v2 folder selection in bundles and refuses lossy source or historical selection exports', () => {
+    const selected = studioConfigSchema.parse({ ...config, action: { ...config.action, executionSelection: { version: 2, agentWorkspaceId: 'selected-folder', agentWorkspaceRevision: 1 } } });
+    const exported = exportAutomationDefinition({ ...definition, config: selected }, 'bundle');
+    assert.deepEqual(parseAutomationTransfer({ projectId: config.projectId, document: exported.document }).config, selected);
+    assert.throws(() => exportAutomationDefinition({ ...definition, config: selected }, 'source'), /losslessly/);
+    const historical = { ...definition, historicalExecutionSelection: { version: 1, codeWorkspaceId: 'retired' }, executionUnavailableReason: 'agent_workspace_selection_required' as const };
+    assert.throws(() => exportAutomationDefinition(historical, 'bundle'), /Reselect an Agent folder/);
+    assert.throws(() => exportAutomationDefinition(historical, 'source'), /Reselect an Agent folder/);
   });
   it('round trips all native template actions and rejects lossy source conversion', () => {
     for (const templateId of studioNativeTemplateIdSchema.options) {

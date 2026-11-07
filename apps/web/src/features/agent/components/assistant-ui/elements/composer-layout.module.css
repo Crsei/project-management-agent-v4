@@ -23,11 +23,6 @@
   color: var(--foreground);
 }
 
-.alternate:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 3px;
-}
-
 .controls {
   position: relative;
   display: flex;
@@ -75,11 +70,6 @@
 
 .historyError button:hover:not(:disabled) {
   background: var(--selection);
-}
-
-.historyError button:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
 }
 
 .historyError button:disabled {

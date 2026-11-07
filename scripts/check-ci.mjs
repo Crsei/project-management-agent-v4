@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -6,62 +5,28 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ciPostgresLabel, isOwnedCiPostgres, processBirth } from './ci-postgres.ts';
-import { groupMembers, processIdentity, signalOwnedGroup } from './backend-test-process.mjs';
+import { createCiCommandRunner, createCiRecorder } from './check-ci-process.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const dockerHost = ['--host', 'unix:///var/run/docker.sock'];
 // Public PostgreSQL manifest and source-built MinIO fixture; never developer volumes.
 const postgresImage = 'postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab';
 const networkSkillTest = 'services::skill::tests::mcode_copy_updates_and_disables_without_losing_external_changes';
-let active;
+let commandRunner;
 let interrupted;
 
 function stop(signal) {
   if (interrupted) return;
   interrupted = signal;
-  if (!active) return;
-  if (active.supervised) active.child.kill(signal);
-  else void signalOwnedGroup(active.child.pid, active.known, signal);
+  commandRunner?.stop(signal);
 }
 const sigint = () => stop('SIGINT'), sigterm = () => stop('SIGTERM');
 
-/** Start one command at a time; never turn a failed or interrupted child green. */
-async function run(label, command, args, env, { capture = false, supervised = false, cleanup = false } = {}) {
-  if (interrupted && !cleanup) throw new Error(`CI interrupted by ${interrupted}`);
-  console.error(`[ci] ${label}`);
-  const child = spawn(command, args, { cwd: root, env, detached: true, stdio: ['ignore', capture ? 'pipe' : 'inherit', 'inherit'] });
-  const known = new Map();
-  if (child.pid) {
-    const identity = processIdentity(child.pid);
-    if (identity) known.set(child.pid, identity);
-  }
-  active = { child, known, supervised };
-  let output = '';
-  if (capture) child.stdout.setEncoding('utf8').on('data', chunk => {
-    output += chunk;
-    if (output.length > 4 * 1024 * 1024) child.kill('SIGTERM');
-  });
-  try {
-    const result = await new Promise((resolve, reject) => {
-      child.once('error', reject);
-      child.once('close', (code, signal) => resolve({ code, signal }));
-    });
-    if (child.pid && (await groupMembers(child.pid)).length) {
-      await signalOwnedGroup(child.pid, known, 'SIGTERM');
-      const until = Date.now() + 10_000;
-      while ((await groupMembers(child.pid)).length && Date.now() < until) await delay(50);
-      if ((await groupMembers(child.pid)).length) await signalOwnedGroup(child.pid, known, 'SIGKILL');
-      throw new Error(`${label} left live owned descendants`);
-    }
-    if (result.code !== 0 || result.signal) throw new Error(`${label} failed (${result.signal ?? result.code})`);
-    return output.trim();
-  } finally { active = undefined; }
-}
-
-async function main() {
+async function main(recorder) {
   const requested = process.argv.slice(2);
   const stage = requested.length === 0 ? 'all' : requested.length === 2 && requested[0] === '--stage' ? requested[1] : '';
   if (!['all', 'static', 'build', 'backend', 'agent', 'rust', 'rust-network'].includes(stage)) throw new Error('Usage: node scripts/check-ci.mjs [--stage all|static|build|backend|agent|rust|rust-network]');
+  recorder.record('run', 'Repository checks', 'scope', { stage });
   const selected = name => stage === name || stage === 'all' && name !== 'rust-network';
   if (process.platform !== 'linux') throw new Error('CI isolation requires Linux procfs, util-linux flock, Bubblewrap and local Docker');
   const birth = processBirth(process.pid);
@@ -85,20 +50,25 @@ async function main() {
     AWS_EC2_METADATA_DISABLED: 'true', PM_REQUIRE_S3_TESTS: 'true', PM_PREVIEW_SANDBOX_TEST: '1',
     AGENT_WORKSPACE_DATA_DIR: path.join(temporary, 'agent'), PM_CHAT_SPACE_ROOT: path.join(temporary, 'chat-space'),
   };
+  commandRunner = createCiCommandRunner({ cwd: root, recorder, interrupted: () => interrupted });
+  const { run } = commandRunner;
+  const measure = (label, operation) => recorder.measure('stage', label, operation, () => interrupted);
   const node = (label, args, options) => run(label, process.execPath, args, env, options);
   const pnpm = (label, args) => run(label, 'pnpm', args, env);
   const docker = (label, args, options = {}) => run(label, 'docker', [...dockerHost, ...args], env, options);
   process.on('SIGINT', sigint); process.on('SIGTERM', sigterm);
   let failure;
   try {
-    for (const directory of ['HOME', 'TMPDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'CARGO_HOME']) await mkdir(env[directory], { mode: 0o700 });
-    if (selected('backend') || selected('agent')) await access('/usr/bin/flock');
-    if (selected('agent')) {
-      await access('/usr/bin/bwrap'); await access('/usr/bin/prlimit');
-      // Preview binds this process's doctor-checked executable read-only into its namespace.
-    }
-    await node('Toolchain preflight', ['scripts/doctor.mjs']);
-    const prepareFixtures = async () => {
+    await measure('preflight', async () => {
+      for (const directory of ['HOME', 'TMPDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'CARGO_HOME']) await mkdir(env[directory], { mode: 0o700 });
+      if (selected('backend') || selected('agent')) await access('/usr/bin/flock');
+      if (selected('agent')) {
+        await access('/usr/bin/bwrap'); await access('/usr/bin/prlimit');
+        // Preview binds this process's doctor-checked executable read-only into its namespace.
+      }
+      await node('Toolchain preflight', ['scripts/doctor.mjs']);
+    });
+    const prepareFixtures = async () => measure('fixtures', async () => {
     await docker('Checking local Docker daemon', ['info', '--format', '{{.ServerVersion}}'], { capture: true });
     const create = async (kind, args, image, command, extraEnv = {}) => {
       const name = `dovspace-ci-${kind}-${runId}`;
@@ -186,9 +156,9 @@ process.exit(result.status ?? 1);
       }
     } finally { admin.destroy(); }
     if (!objectLayerReady) throw new Error('Owned MinIO object layer never became ready');
-    };
+    });
 
-    if (selected('static')) {
+    if (selected('static')) await measure('static', async () => {
       await node('Public documentation', ['scripts/check-docs.mjs']);
       await node('PM contract drift', ['scripts/generate-contracts.ts', '--check']);
       await node('Import boundaries', ['scripts/check-import-boundaries.mjs']);
@@ -198,9 +168,9 @@ process.exit(result.status ?? 1);
       await pnpm('Gateway lint', ['exec', 'eslint', 'apps/server/gateway.ts', 'apps/server/gateway.test.ts', '--max-warnings=0']);
       await pnpm('Agent and host lint', ['lint:agent']);
       await pnpm('Complete owned Web lint', ['--filter', '@pm/web', 'lint']);
-      await pnpm('CI entrypoint lint', ['exec', 'oxlint', '--deny-warnings', 'scripts/check-ci.mjs', 'scripts/check-sources.mjs']);
-    }
-    if (selected('build')) {
+      await pnpm('CI entrypoint lint', ['exec', 'oxlint', '--deny-warnings', 'scripts/check-ci.mjs', 'scripts/check-ci-process.mjs', 'scripts/check-ci-process.test.mjs', 'scripts/check-sources.mjs']);
+    });
+    if (selected('build')) await measure('build', async () => {
       // Package exports name emitted declarations. Fresh checkouts must produce
       // them before PM/Agent/Web type graphs can resolve workspace consumers.
       await pnpm('Agent contract declarations', ['--filter', '@agent-workspace/contracts', 'build']);
@@ -213,30 +183,30 @@ process.exit(result.status ?? 1);
       await pnpm('Marketing types', ['typecheck:marketing']);
       await pnpm('Marketing production build', ['build:marketing']);
       await node('Post-build source provenance', ['scripts/check-sources.mjs']);
-    }
-    if (selected('rust')) {
+    });
+    if (selected('rust')) await measure('rust', async () => {
       console.error(`[ci] Offline Rust scope excludes external GitHub Skill smoke: ${networkSkillTest}; use --stage rust-network for that separate acceptance`);
       await run('Rust host locked offline-scope tests (all other ignored tests enabled)', 'cargo', [
         'test', '--locked', '--all-targets', '--manifest-path', 'apps/server/cc-switch-host/Cargo.toml',
         '--', '--include-ignored', '--skip', networkSkillTest,
       ], env);
-    }
-    if (selected('rust-network')) {
+    });
+    if (selected('rust-network')) await measure('rust-network', async () => {
       await run('Explicit external GitHub Skill acceptance', 'cargo', [
         'test', '--locked', '--lib', '--manifest-path', 'apps/server/cc-switch-host/Cargo.toml', networkSkillTest, '--', '--ignored', '--exact',
       ], env);
-    }
-    if (selected('backend') || selected('agent')) {
+    });
+    if (selected('backend') || selected('agent')) await measure('regression build prerequisites', async () => {
       for (const generated of ['packages/agent-contracts/dist/pm-tools.d.ts', 'packages/agent-client-runtime/dist/index.d.ts', 'dist/apps/server/pm/src/main.js', 'apps/server/agent/dist/index.mjs']) {
         try { await access(path.join(root, generated)); }
         catch { throw new Error(`Missing ${generated}; run --stage build on this checkout before a standalone regression stage`); }
       }
-    }
-    if (selected('backend')) {
+    });
+    if (selected('backend')) await measure('backend', async () => {
       await prepareFixtures();
       await node('Complete real PostgreSQL/HTTP/Worker/PM regressions', ['scripts/backend-tests.mjs', 'backend'], { supervised: true });
-    }
-    if (selected('agent')) {
+    });
+    if (selected('agent')) await measure('agent', async () => {
       const buildRoot = path.join(root, 'apps/server/agent/dist');
       const { verifySidecar } = await import('../apps/server/agent/scripts/cc-switch.mjs');
       const native = await verifySidecar(buildRoot);
@@ -247,39 +217,59 @@ process.exit(result.status ?? 1);
         'apps/server/agent/src/**/*.test.ts', 'apps/web/src/**/*.test.ts', 'scripts/*.test.mjs',
         'vendor/cc-switch/scripts/provenance.test.mjs', 'vendor/openhands-extensions/scripts/provenance.test.mjs',
       ], { supervised: true });
-    }
+    });
   } catch (error) { failure = error; }
-  for (const name of containers.reverse()) {
-    try {
-      const result = await docker('Locating only this invocation\'s fixture', ['container', 'ls', '--all', '--filter', `name=^/${name}$`, '--filter', `label=${ciPostgresLabel}=${owner}`, '--format', '{{.ID}}'], { capture: true, cleanup: true });
-      if (!result) continue;
-      if (!/^[a-f0-9]{12,64}$/.test(result)) throw new Error('Ambiguous owned fixture cleanup identity');
-      const inspected = JSON.parse(await docker('Confirming fixture cleanup ownership', ['inspect', result], { capture: true, cleanup: true }));
-      if (inspected.length !== 1 || inspected[0]?.Name !== `/${name}` || inspected[0]?.Config?.Labels?.[ciPostgresLabel] !== owner) throw new Error('Fixture ownership changed; no unknown container was removed');
-      await docker('Stopping and removing owned fixture and disposable storage', ['rm', '--force', '--volumes', inspected[0].Id], { capture: true, cleanup: true });
-    } catch (error) { failure = failure ? new AggregateError([failure, error], 'CI and owned fixture cleanup failed') : error; }
-  }
-  if (minioBuildStarted) {
-    try {
-      const ownImage = await docker('Locating this invocation\'s MinIO fixture image', ['image', 'ls', '--filter', `reference=${minioImage}`, '--filter', `label=${ciPostgresLabel}=${owner}`, '--format', '{{.ID}}'], { capture: true, cleanup: true });
-      if (ownImage) {
-        const image = JSON.parse(await docker('Confirming MinIO image cleanup ownership', ['image', 'inspect', minioImage], { capture: true, cleanup: true }));
-        if (image.length !== 1 || image[0]?.Config?.Labels?.[ciPostgresLabel] !== owner || !image[0]?.RepoTags?.includes(minioImage)) throw new Error('Fixture image ownership changed; no unknown image was removed');
-        await docker('Removing only this invocation\'s MinIO fixture image tag', ['image', 'rm', minioImage], { capture: true, cleanup: true });
+  const cleanupErrors = [];
+  try {
+    await recorder.measure('stage', 'cleanup', async () => {
+      for (const name of containers.reverse()) {
+        try {
+          const result = await docker('Locating only this invocation\'s fixture', ['container', 'ls', '--all', '--filter', `name=^/${name}$`, '--filter', `label=${ciPostgresLabel}=${owner}`, '--format', '{{.ID}}'], { capture: true, cleanup: true });
+          if (!result) continue;
+          if (!/^[a-f0-9]{12,64}$/.test(result)) throw new Error('Ambiguous owned fixture cleanup identity');
+          const inspected = JSON.parse(await docker('Confirming fixture cleanup ownership', ['inspect', result], { capture: true, cleanup: true }));
+          if (inspected.length !== 1 || inspected[0]?.Name !== `/${name}` || inspected[0]?.Config?.Labels?.[ciPostgresLabel] !== owner) throw new Error('Fixture ownership changed; no unknown container was removed');
+          await docker('Stopping and removing owned fixture and disposable storage', ['rm', '--force', '--volumes', inspected[0].Id], { capture: true, cleanup: true });
+        } catch (error) { cleanupErrors.push(error); }
       }
-    } catch (error) { failure = failure ? new AggregateError([failure, error], 'CI and fixture image cleanup failed') : error; }
+      if (minioBuildStarted) {
+        try {
+          const ownImage = await docker('Locating this invocation\'s MinIO fixture image', ['image', 'ls', '--filter', `reference=${minioImage}`, '--filter', `label=${ciPostgresLabel}=${owner}`, '--format', '{{.ID}}'], { capture: true, cleanup: true });
+          if (ownImage) {
+            const image = JSON.parse(await docker('Confirming MinIO image cleanup ownership', ['image', 'inspect', minioImage], { capture: true, cleanup: true }));
+            if (image.length !== 1 || image[0]?.Config?.Labels?.[ciPostgresLabel] !== owner || !image[0]?.RepoTags?.includes(minioImage)) throw new Error('Fixture image ownership changed; no unknown image was removed');
+            await docker('Removing only this invocation\'s MinIO fixture image tag', ['image', 'rm', minioImage], { capture: true, cleanup: true });
+          }
+        } catch (error) { cleanupErrors.push(error); }
+      }
+      try { await rm(temporary, { recursive: true, force: true }); }
+      catch (error) { cleanupErrors.push(error); }
+      if (cleanupErrors.length) throw new AggregateError(cleanupErrors, 'Owned CI resource cleanup failed');
+    });
+  } catch (error) { failure = failure ? new AggregateError([failure, error], 'CI and owned resource cleanup failed') : error; }
+  finally {
+    process.off('SIGINT', sigint); process.off('SIGTERM', sigterm);
+    commandRunner = undefined;
   }
-  await rm(temporary, { recursive: true, force: true });
-  process.off('SIGINT', sigint); process.off('SIGTERM', sigterm);
   if (failure) throw failure;
+  if (recorder.failed) throw new Error('Safe CI timing artifact is incomplete');
   if (interrupted) throw new Error(`CI interrupted by ${interrupted}`);
   console.error(`[ci] ${stage} scope completed; no skipped/todo/incomplete Node results count as success. Native desktop, real Provider accounts and external Skill smoke are separate acceptance gates.`);
 }
 
-try { await main(); }
+let recorder;
+try {
+  recorder = createCiRecorder(root);
+  console.error(`[ci] Safe timing artifact: ${path.relative(root, recorder.file)}`);
+  await recorder.measure('run', 'Repository checks', () => main(recorder), () => interrupted);
+}
 catch (error) {
   // Underlying check output is already visible; never print generated fixture
   // connection URLs, container environments or Provider/application secrets.
   console.error(`[ci] ${error instanceof Error ? error.message : 'Failed'}`);
   process.exitCode = interrupted === 'SIGINT' ? 130 : interrupted === 'SIGTERM' ? 143 : 1;
+}
+finally {
+  try { recorder?.close(); }
+  catch { console.error('[ci] Closing the timing artifact failed'); process.exitCode ||= 1; }
 }

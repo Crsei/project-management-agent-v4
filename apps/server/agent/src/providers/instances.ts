@@ -16,6 +16,7 @@ import { expandNativePath } from "./drivers/codex-config.ts";
 import { migrateCodexManagedState } from "./t3code/families/codex-persistence.ts";
 import { readPreparedAcpRegistryConfigMigration } from "./t3code/families/acp-registry-migration.ts";
 import { beginProviderMaintenance } from "./auth.ts";
+import { nativeEnvironment, RESERVED_ENV } from "../native-environment.ts";
 
 export type ProviderObservations = {
   instanceRevision: number;
@@ -88,20 +89,12 @@ export type StoredProviderInstance = {
 };
 type RawInstance = Record<string, unknown>;
 type InstanceFile = Record<string, unknown> & { version: 1; instances: RawInstance[]; revisionClock?: number };
-// Native configuration and credential variables are inherited. Loader injection
-// and PM/server-only secrets are not part of the native provider environment.
-const RESERVED_ENV = /^(?:NODE_OPTIONS|LD_PRELOAD|LD_LIBRARY_PATH|DYLD_.*|AGENT_WORKSPACE_.*|AGENT_PM_TOOL_.*|PM_(?:API_URL|SESSION_TOKEN|EMAIL|PASSWORD|ACCESS_FILE|WORKSPACE_ID|AUTOMATION_.*)|DATABASE_URL|T3_MCP_.*|T3_PI_MCP_EXTENSION_PATH)$/i;
 export function providerDataDirectory(): string { return dataDirectory(); }
 function filePath(): string { return path.join(providerDataDirectory(), "provider-instances.json"); }
 export function expandProviderPath(value: string): string {
   return path.resolve(projectDirectory(), expandNativePath(value));
 }
 function stateDirectory(instanceId: string): string { return path.join(providerDataDirectory(), "provider-homes", instanceId); }
-function nativeEnvironment(env: Record<string, string>): NodeJS.ProcessEnv {
-  const result = { ...process.env, ...env };
-  for (const key of Object.keys(result)) if (RESERVED_ENV.test(key)) delete result[key];
-  return result;
-}
 /** The native runtime's user Home authority, distinct from Codex/Claude configuration homes. */
 export function providerUserHome(instance: Pick<StoredProviderInstance, "env">, cwd = projectDirectory()): string {
   const env = nativeEnvironment(instance.env);

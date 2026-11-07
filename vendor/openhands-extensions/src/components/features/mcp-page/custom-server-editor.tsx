@@ -1,5 +1,5 @@
 import type { ExtensionMcpDefinition, ExtensionMcpManagement } from "@agent-workspace/contracts/extensions";
-import McpFormModal from "@pm/cc-switch-source/components/mcp/McpFormModal";
+import { McpFormModal } from "@pm/cc-switch-ui";
 import { webPlatform } from "@pm/openhands-source/web/bridge";
 import { managementToSourceServers } from "@pm/openhands-source/web/mcp/definition-adapter";
 

@@ -14,7 +14,7 @@ import { readWebhookConfig } from '../../../../packages/infrastructure/src/webho
 import { runWebhookLoop } from '../../../../packages/application/src/webhook-delivery.ts';
 import { runAutomationBatch } from '../../../../packages/application/src/automation.ts';
 import { runAutomationStudioBatch } from '../../../../packages/application/src/automation-studio-worker.ts';
-import { createConfiguredAutomationExecutionPort } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
+import { createAgentWorkspaceExecutionClient, createConfiguredAutomationExecutionPort } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
 import { createAutomationStudioService } from '../../../../packages/application/src/automation-studio.ts';
 import { runAutomationGitSyncCycle } from '../../../../packages/application/src/automation-git-sync.ts';
 import { runPmAutomationSignalBatch } from '../../../../packages/application/src/automation-pm-signals.ts';
@@ -31,7 +31,8 @@ const notificationCore = readonlyCorePort(workspaceId => path.join(config.coreWo
 const automationRuntime = createConfiguredAutomationExecutionPort();
 if (!config.databaseUrl) throw new Error('DATABASE_URL is required for the Worker');
 const pool = createPool(config.databaseUrl);
-const automationStudio = createAutomationStudioService({ database: () => pool, core: notificationCore, runtime: automationRuntime });
+const workspaceExecution = createAgentWorkspaceExecutionClient();
+const automationStudio = createAutomationStudioService({ database: () => pool, core: notificationCore, runtime: automationRuntime, workspaceExecution });
 const id = `worker-${randomUUID()}`;
 const controller = new AbortController();
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => controller.abort());
@@ -60,7 +61,7 @@ try {
     runAuxiliaryLoop('notification_cycle_failed', () => routeNotificationBatch(pool, notificationCore, id, { jobLimit: 4, candidateLimit: 100 })),
     runAuxiliaryLoop('automation_cycle_failed', () => runAutomationBatch(pool, notificationCore, id)),
     runAuxiliaryLoop('automation_pm_signal_cycle_failed', () => runPmAutomationSignalBatch(pool, notificationCore)),
-    runAuxiliaryLoop('automation_execution_cycle_failed', () => runAutomationStudioBatch(pool, notificationCore, automationRuntime, id)),
+    runAuxiliaryLoop('automation_execution_cycle_failed', () => runAutomationStudioBatch(pool, notificationCore, automationRuntime, id, { workspaceExecution })),
     runAuxiliaryLoop('automation_git_sync_cycle_failed', () => runAutomationGitSyncCycle({ database: () => pool, core: notificationCore, studio: automationStudio })),
     runWebhookLoop(pool, webhooks, controller.signal, { intervalMs: config.workerIntervalMs, workerId: id }),
   );

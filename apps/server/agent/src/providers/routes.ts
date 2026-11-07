@@ -2,8 +2,10 @@ import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
-import { agentScopeSchema } from "@agent-workspace/contracts/chat";
-import { resolveAgentScope } from "../durable/agent-scope.ts";
+import { executionSelectionSchema } from "@agent-workspace/contracts/chat";
+import { resolveAgentExecution, sameExecutionIdentity } from "../durable/agent-execution.ts";
+import { getThread } from "../durable/threads.ts";
+import { resolveChatExecutionScope } from "../task-delivery/binding.ts";
 import { getPmProviderApplication } from "./t3code/application-access.ts";
 import { closeMcpAppSessionsForInstance } from "../mcp-apps/live.ts";
 import type {
@@ -180,26 +182,38 @@ providerRoutes.get("/providers", async (c) => {
 });
 
 const skillsRefreshSchema = z.strictObject({
-  scope: agentScopeSchema.strict(),
   fresh: z.boolean().optional(),
+  threadId: z.string().min(1).max(256).optional(),
+  executionSelection: executionSelectionSchema.optional(),
 });
 providerRoutes.post("/providers/:instanceId/skills/refresh", async c => {
   try {
     const body = skillsRefreshSchema.safeParse(await readJsonObject(c.req.raw));
-    if (!body.success) throw new RouteError(400, "Expected a PM scope and optional fresh boolean; cwd is not accepted.");
+    if (!body.success) throw new RouteError(400, "Expected a Session or execution selection and optional fresh boolean; cwd is not accepted.");
     const instanceId = c.req.param("instanceId");
     requireDefinition(instanceId);
     const instance = getStoredInstance(instanceId);
     if (!instance) throw new RouteError(404, "Provider instance not found.");
     if (!instance.enabled || instance.config.enabled === false) throw new RouteError(409, "Provider instance is disabled.");
-    const resolved = await resolveAgentScope(body.data.scope, c.req.raw.headers, c.req.raw.signal);
+    const resolve = async () => {
+      const thread = body.data.threadId ? getThread(body.data.threadId) : null;
+      if (body.data.threadId && !thread) throw new RouteError(404, "Skills Session not found.");
+      if (thread && body.data.executionSelection && JSON.stringify(thread.executionSelection) !== JSON.stringify(body.data.executionSelection))
+        throw new RouteError(409, "Skills selection differs from its Session.");
+      if (!thread && !body.data.executionSelection) throw new RouteError(412, "Skills require an explicit Session or execution selection.");
+      const resolved = thread ? await resolveChatExecutionScope(thread, c.req.raw.headers, "inspect", c.req.raw.signal)
+        : await resolveAgentExecution(body.data.executionSelection!, undefined, c.req.raw.signal);
+      if (!resolved.environment.agentWorkspaceId) throw new RouteError(412, "Chat-only Session has no code environment or repository Skills.");
+      return resolved;
+    };
+    const resolved = await resolve();
     const snapshot = await getPmProviderApplication().management.refreshSkills(
-      providerContext(instance, resolved.path), body.data.scope, resolved.actorId, body.data.fresh, c.req.raw.signal,
+      providerContext(instance, resolved.path), resolved.environment, body.data.threadId, body.data.fresh, c.req.raw.signal,
     );
     // Reauthorize after native I/O: neither a changed mapping nor revoked access may publish a stale inventory.
-    const current = await resolveAgentScope(body.data.scope, c.req.raw.headers, c.req.raw.signal);
-    if (current.path !== resolved.path || current.actorId !== resolved.actorId)
-      throw new RouteError(409, "PM scope or file area changed during native discovery.");
+    const current = await resolve();
+    if (current.path !== resolved.path || !sameExecutionIdentity(current.environment, resolved.environment))
+      throw new RouteError(409, "Execution directory changed during native discovery.");
     const latest = getStoredInstance(instanceId);
     if (!latest || !latest.enabled || latest.config.enabled === false || latest.revision !== instance.revision)
       throw new RouteError(409, "Provider instance changed during native discovery.");

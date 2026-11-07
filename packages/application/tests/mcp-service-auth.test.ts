@@ -6,7 +6,7 @@ import type { SqlExecutor } from '../src/ports.ts';
 
 const identity: McpInvocationIdentity = { grantId: '11111111-1111-4111-8111-111111111111', actorId: '22222222-2222-4222-8222-222222222222', scope: { workspaceId: '33333333-3333-4333-8333-333333333333', projectId: 'PRJ-001' }, threadIds: ['granted-thread'], access: 'read-only', version: 1 };
 const base = `/api/v1/workspaces/${identity.scope.workspaceId}/agent-tools`;
-const body = { name: 'pm_read', arguments: { id: 'TASK-001' }, scope: { kind: 'projects', projectIds: ['PRJ-001'] }, threadId: 'granted-thread', messageId: 'message', generationId: 'generation', operationId: 'operation' };
+const body = { name: 'pm_read', arguments: { id: 'TASK-001' }, target: { ...identity.scope }, threadId: 'granted-thread', messageId: 'message', generationId: 'generation', operationId: 'operation' };
 const oldSecret = process.env.PM_AUTOMATION_SERVICE_SECRET, oldUrl = process.env.PM_MCP_AGENT_URL;
 afterEach(() => { mock.restoreAll(); if (oldSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = oldSecret; if (oldUrl === undefined) delete process.env.PM_MCP_AGENT_URL; else process.env.PM_MCP_AGENT_URL = oldUrl; });
 
@@ -18,12 +18,35 @@ test('delegation rejects generic APIs, readonly execution, cross-project and ung
     { method: 'POST', url: '/api/v1/agent-contexts/resolve', body: identity.scope },
     { method: 'POST', url: base + '/call', body: { ...body, threadId: 'other-thread' } },
     { method: 'POST', url: base + '/call', body: { ...body, name: 'pm_create_task' } },
-    { method: 'POST', url: base + '/call', body: { ...body, scope: { kind: 'workspace', projectIds: [] } } },
-    { method: 'POST', url: base + '/call', body: { ...body, scope: { kind: 'projects', projectIds: ['PRJ-002'] } } },
+    { method: 'POST', url: base + '/call', body: { ...body, target: { workspaceId: identity.scope.workspaceId, projectId: null } } },
+    { method: 'POST', url: base + '/call', body: { ...body, target: { workspaceId: identity.scope.workspaceId, projectId: 'PRJ-002' } } },
+    { method: 'POST', url: base + '/call', body: { ...body, target: { workspaceId: '44444444-4444-4444-8444-444444444444', projectId: 'PRJ-001' } } },
+    { method: 'POST', url: base + '/call', body: { ...body, target: undefined, scope: { kind: 'projects', projectIds: ['PRJ-001'] } } },
+    { method: 'POST', url: base + '/result', body: { ...body, target: { workspaceId: identity.scope.workspaceId, projectId: 'PRJ-002' } } },
     { method: 'GET', url: base + '/core-files?projectId=PRJ-002', body: null },
     { method: 'GET', url: base + '?broaden=true', body: null },
   ]) assert.throws(() => assertMcpEndpoint(identity, request));
   assert.doesNotThrow(() => assertMcpEndpoint({ ...identity, access: 'full' }, { method: 'POST', url: '/api/v1/agent-contexts/resolve', body: identity.scope }));
+});
+test('workspace grants accept explicit targets without acquiring any directory endpoint', () => {
+  const workspaceGrant = { ...identity, scope: { ...identity.scope, projectId: null } };
+  for (const projectId of [null, 'PRJ-001', 'PRJ-002']) {
+    assert.doesNotThrow(() => assertMcpEndpoint(workspaceGrant, { method: 'POST', url: base + '/call', body: { ...body, target: { ...identity.scope, projectId } } }));
+  }
+  assert.doesNotThrow(() => assertMcpEndpoint(identity, { method: 'GET', url: '/api/v1/agent-tools', body: null }));
+  for (const url of ['/api/v1/agent-tools?workspaceId=forged', '/api/agent-workspaces', '/api/agent-workspaces/directories', '/api/v1/agent-tools/core-files']) {
+    assert.throws(() => assertMcpEndpoint(workspaceGrant, { method: 'GET', url, body: null }));
+  }
+});
+test('reference delegation requires explicit workspace and rejects forged project ceilings', () => {
+  const url = `/api/v1/workspaces/${identity.scope.workspaceId}/agent-references/resolve`;
+  const reference = { kind: 'issue', id: 'TASK-001', workspaceId: identity.scope.workspaceId, projectId: 'PRJ-001', revision: null };
+  assert.doesNotThrow(() => assertMcpEndpoint(identity, { method: 'POST', url, body: { references: [reference] } }));
+  for (const changed of [
+    { ...reference, workspaceId: '44444444-4444-4444-8444-444444444444' },
+    { ...reference, projectId: 'PRJ-002' },
+    { ...reference, workspaceId: undefined },
+  ]) assert.throws(() => assertMcpEndpoint(identity, { method: 'POST', url, body: { references: [changed] } }));
 });
 test('signed service identity is audience/domain/expiry bound and signed requests bind method path body', () => {
   process.env.PM_AUTOMATION_SERVICE_SECRET = 'test-only-mcp-secret'.repeat(4);
@@ -40,8 +63,8 @@ test('signed service identity is audience/domain/expiry bound and signed request
 });
 test('final authorization uses supplied executor without nested transaction and fails closed on live revoke', async () => {
   process.env.PM_AUTOMATION_SERVICE_SECRET = 'test-only-mcp-secret'.repeat(4); process.env.PM_MCP_AGENT_URL = 'http://127.0.0.1:4123';
-  let revoked = false;
-  mock.method(globalThis, 'fetch', async () => revoked ? Response.json({ error: 'revoked' }, { status: 401 }) : Response.json(identity));
+  let revoked = false, current = identity;
+  mock.method(globalThis, 'fetch', async () => revoked ? Response.json({ error: 'revoked' }, { status: 401 }) : Response.json(current));
   const queries: string[] = [];
   const sql = { query: async (query: string) => {
     queries.push(query);
@@ -53,6 +76,12 @@ test('final authorization uses supplied executor without nested transaction and 
   await authorizeMcpService(sql, signed, { method: 'POST', url: base + '/call', body });
   assert.equal(queries.length, 2);
   revoked = true;
+  await assert.rejects(authorizeMcpService(sql, signed, { method: 'POST', url: base + '/call', body }));
+  assert.equal(queries.length, 2);
+  revoked = false;
+  current = { ...identity, threadIds: ['different-thread'] };
+  await assert.rejects(authorizeMcpService(sql, signed, { method: 'POST', url: base + '/result', body }));
+  current = { ...identity, scope: { ...identity.scope, projectId: 'PRJ-002' } };
   await assert.rejects(authorizeMcpService(sql, signed, { method: 'POST', url: base + '/call', body }));
   assert.equal(queries.length, 2);
 });

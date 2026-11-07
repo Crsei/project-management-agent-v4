@@ -55,12 +55,14 @@ export async function readActivityAudits(
   projectIds: readonly string[],
   readPage: (projectId: string, cursor: string | undefined, signal: AbortSignal) => Promise<ProjectAuditPage>,
   signal: AbortSignal,
+  perProjectLimit?: number,
 ): Promise<ProjectAuditEntry[]> {
   const entries: ProjectAuditEntry[] = [];
   for (const projectId of projectIds) {
     const cursors = new Set<string>();
     let cursor: string | undefined;
     let previousId: bigint | undefined;
+    let projectCount = 0;
     do {
       signal.throwIfAborted();
       const page = await readPage(projectId, cursor, signal);
@@ -72,7 +74,11 @@ export async function readActivityAudits(
         if (previousId !== undefined && id >= previousId) throw new Error('invalid_response');
         previousId = id;
         entries.push(entry);
+        projectCount += 1;
       }
+      // Audit pages are newest-first; the workspace-wide newest N therefore
+      // never needs more than the newest N entries from each single project.
+      if (perProjectLimit !== undefined && projectCount >= perProjectLimit) break;
       if (page.nextCursor !== null && (!page.nextCursor || !page.entries.length || cursors.has(page.nextCursor))) throw new Error('invalid_response');
       cursor = page.nextCursor ?? undefined;
       if (cursor) cursors.add(cursor);

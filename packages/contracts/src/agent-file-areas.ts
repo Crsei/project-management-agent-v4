@@ -23,8 +23,8 @@ export type AgentCatalog = z.infer<typeof agentCatalogSchema>;
 export const agentFileAreaUpdateSchema = z.strictObject({ directory: localDirectorySchema, expectedRevision: z.number().int().nonnegative() });
 export type AgentFileAreaUpdate = z.infer<typeof agentFileAreaUpdateSchema>;
 export const agentFileAreaResponseSchema = z.strictObject({ fileArea: agentFileAreaSchema });
-export const resolvedAgentContextSchema = z.strictObject({ scope: agentScopeSchema, actorId: z.uuid(), workspaceName: z.string(), projectName: z.string().nullable(), path: z.string() });
-export type ResolvedAgentContext = z.infer<typeof resolvedAgentContextSchema>;
+export const authorizedAgentContextSchema = z.strictObject({ scope: agentScopeSchema, actorId: z.uuid(), workspaceName: z.string(), projectName: z.string().nullable() });
+export type AuthorizedAgentContext = z.infer<typeof authorizedAgentContextSchema>;
 export const agentStorageSettingsSchema = z.strictObject({
   defaultRoot: z.string().nullable(), effectiveRoot: z.string().nullable(),
   revision: z.number().int().nonnegative(), canManage: z.boolean(),

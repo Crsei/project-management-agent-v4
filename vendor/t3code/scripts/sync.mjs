@@ -4,7 +4,7 @@ import { chmod, lstat, mkdir, readFile, realpath, writeFile } from "node:fs/prom
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyHostBuildInputs } from "./host-inputs.mjs";
-import { planMcpSkillsAdaptations } from "./mcp-skills-adaptations.mjs";
+import { assertRetiredTargetsAbsent, planMcpSkillsAdaptations } from "./mcp-skills-adaptations.mjs";
 
 const toolRoot = fileURLToPath(new URL("../", import.meta.url));
 const repository = path.resolve(toolRoot, "../..");
@@ -92,7 +92,8 @@ for (const entry of manifest.files) {
   if (hash(bytes) !== entry.sha256 || bytes.length !== entry.bytes || blob !== entry.git_blob_sha1) throw new Error(`Wrong source hash/blob: ${entry.source_path}`);
   originals.set(entry.source_path, bytes);
 }
-const adaptations = options.has("--pristine") ? new Map() : await planMcpSkillsAdaptations(repository, source);
+const adaptationPlan = options.has("--pristine") ? { outputs: new Map(), retirements: [] } : await planMcpSkillsAdaptations(repository, source);
+const adaptations = adaptationPlan.outputs;
 const pending = [];
 const seen = new Set();
 function schedule(relative, bytes, mode) {
@@ -135,6 +136,7 @@ for (const [relative, adaptation] of adaptations) {
 }
 if (!options.has("--pristine")) schedule("vendor/t3code/sync-inventory.json", inventoryBytes, 0o644);
 pending.sort((left, right) => left.relative < right.relative ? -1 : left.relative > right.relative ? 1 : 0);
+await assertRetiredTargetsAbsent(destination, adaptationPlan.retirements);
 const creates = [];
 for (const entry of pending) {
   const target = await safePath(destination, entry.relative);

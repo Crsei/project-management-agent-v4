@@ -246,11 +246,6 @@
   background: var(--surface-hover);
 }
 
-.row:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
-}
-
 .row[aria-checked="true"] {
   background: var(--selection);
 }

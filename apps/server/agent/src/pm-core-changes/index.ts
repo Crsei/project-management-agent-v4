@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
-import type { AgentScope } from "@agent-workspace/contracts/chat";
+import { pmToolTargetSchema, type PmToolTarget } from "@agent-workspace/contracts/pm-tools";
 import type { PmCoreChange, PmCoreChangesPage, PmCoreObservation } from "@agent-workspace/contracts/pm-core-changes";
 import { getDatabase, readRecord, writeRecord, deleteRecord, transaction } from "../durable/store.ts";
 
-const scopeSchema = z.strictObject({ workspaceId: z.uuid(), projectId: z.string().regex(/^PRJ-\d+$/).nullable() });
+const scopeSchema = pmToolTargetSchema;
 const sourceSchema = z.object({ files: z.array(z.object({ path: z.string().min(1).max(4096), projectId: z.string(), entityId: z.string().nullable(), content: z.string().max(4 * 1024 * 1024) })).max(10000), complete: z.boolean(), error: z.string().max(1000).optional() });
-const catalogSchema = z.object({ workspaces: z.array(z.object({ id: z.string(), projects: z.array(z.object({ id: z.string().regex(/^PRJ-\d+$/) })).max(10000) })).max(10000) });
+const catalogSchema = z.object({ workspaces: z.array(z.object({ id: z.string(), workspaceAllowed: z.boolean().optional(), projects: z.array(z.object({ id: z.string().regex(/^PRJ-\d+$/) })).max(10000) })).max(10000) });
 type RequestHeaders = NonNullable<RequestInit["headers"]>;
 type ProjectScope = { workspaceId: string; projectId: string };
 type Snapshot = { path: string; entityId: string | null; hash: string; content: string };
@@ -53,12 +53,12 @@ async function pmGet(path: string, headers: RequestHeaders): Promise<unknown> {
     return JSON.parse(Buffer.concat(chunks, size).toString("utf8")) as unknown;
   } catch (error) { if (error instanceof ObservationError) throw error; throw new ObservationError(503, "PM core response is invalid or interrupted."); }
 }
-async function projects(scope: AgentScope, headers: RequestHeaders): Promise<ProjectScope[]> {
+async function projects(scope: PmToolTarget, headers: RequestHeaders): Promise<ProjectScope[]> {
   if (scope.projectId) return [{ workspaceId: scope.workspaceId, projectId: scope.projectId }];
   const parsed = catalogSchema.safeParse(await pmGet("/api/v1/agent-contexts", headers));
   if (!parsed.success) throw new ObservationError(503, "PM context catalog is invalid.");
   const workspace = parsed.data.workspaces.find(item => item.id === scope.workspaceId);
-  if (!workspace) throw new ObservationError(403, "PM workspace is not accessible.");
+  if (!workspace || workspace.workspaceAllowed !== true) throw new ObservationError(403, "PM workspace-wide target is not accessible.");
   return workspace.projects.map(item => ({ workspaceId: scope.workspaceId, projectId: item.id }));
 }
 function persist(scope: ProjectScope, data: z.infer<typeof sourceSchema>, createdProject: boolean): PmCoreObservation {
@@ -119,35 +119,9 @@ function observeProject(scope: ProjectScope, headers: RequestHeaders, createdPro
   return operation.finally(() => { if (pending.get(key) === operation) pending.delete(key); });
 }
 
-// Request credentials stay in memory only, and are discarded after the short active window.
-const active = new Map<string, { timer: NodeJS.Timeout; expires: number; headers: Headers }>();
-function activate(scope: ProjectScope, headers: RequestHeaders): void {
-  const key = scopeKey(scope), existing = active.get(key);
-  if (existing) { existing.headers = authHeaders(headers); existing.expires = Date.now() + 120_000; return; }
-  const entry = { headers: authHeaders(headers), expires: Date.now() + 120_000, timer: undefined as unknown as NodeJS.Timeout };
-  entry.timer = setInterval(() => {
-    if (Date.now() >= entry.expires) {
-      clearInterval(entry.timer); active.delete(key);
-      const last = readRecord<PmCoreObservation>(stateNs, key);
-      if (last?.status === "active") writeRecord(stateNs, key, { status: "expired", error: "Observation credentials expired; refresh to resume." } satisfies PmCoreObservation);
-      return;
-    }
-    void observeProject(scope, entry.headers).catch(error => {
-      if (active.get(key) === entry && error instanceof ObservationError && error.status < 500) {
-        clearInterval(entry.timer); active.delete(key);
-        writeRecord(stateNs, key, { status: "expired", error: "PM access expired; authenticate and refresh to resume." } satisfies PmCoreObservation);
-      }
-    });
-  }, 3000);
-  entry.timer.unref(); active.set(key, entry);
-}
-async function scanScope(scope: AgentScope, headers: RequestHeaders, createdProjectId?: string): Promise<{ selected: ProjectScope[]; observation: PmCoreObservation }> {
+async function scanScope(scope: PmToolTarget, headers: RequestHeaders, createdProjectId?: string): Promise<{ selected: ProjectScope[]; observation: PmCoreObservation }> {
   const selected = await projects(scope, headers);
-  const results = await Promise.all(selected.map(async item => {
-    const result = await observeProject(item, headers, item.projectId === createdProjectId);
-    if (scope.projectId !== null) activate(item, headers);
-    return result;
-  }));
+  const results = await Promise.all(selected.map(item => observeProject(item, headers, item.projectId === createdProjectId)));
   let observation: PmCoreObservation = results.find(item => item.status === "incomplete" || item.status === "failed") ?? { status: selected.length ? "active" : "idle" };
   if (scope.projectId === null) {
     const key = `workspace-projects:${scope.workspaceId}`;
@@ -159,7 +133,6 @@ async function scanScope(scope: AgentScope, headers: RequestHeaders, createdProj
       try {
         const result = await observeProject(item, headers);
         selected.push(item);
-        if (scope.projectId !== null) activate(item, headers);
         if (result.status === "incomplete" || result.status === "failed") observation = result;
       } catch {
         // An unavailable or newly forbidden project is not proof of deletion.
@@ -170,41 +143,20 @@ async function scanScope(scope: AgentScope, headers: RequestHeaders, createdProj
   }
   return { selected, observation };
 }
-const activeWorkspaces = new Map<string, { timer: NodeJS.Timeout; expires: number; headers: Headers; inFlight: Promise<void> | null }>();
-function activateWorkspace(scope: AgentScope, headers: RequestHeaders): void {
-  if (scope.projectId !== null) return;
-  const key = scope.workspaceId, existing = activeWorkspaces.get(key);
-  if (existing) { existing.headers = authHeaders(headers); existing.expires = Date.now() + 120_000; return; }
-  const entry = { headers: authHeaders(headers), expires: Date.now() + 120_000, timer: undefined as unknown as NodeJS.Timeout, inFlight: null as Promise<void> | null };
-  entry.timer = setInterval(() => {
-    if (entry.inFlight) return;
-    if (Date.now() >= entry.expires) { clearInterval(entry.timer); activeWorkspaces.delete(key); return; }
-    entry.inFlight = scanScope(scope, entry.headers).then(() => undefined).catch(error => {
-      if (error instanceof ObservationError && error.status < 500) { clearInterval(entry.timer); activeWorkspaces.delete(key); }
-    }).finally(() => { entry.inFlight = null; });
-  }, 3000);
-  entry.timer.unref(); activeWorkspaces.set(key, entry);
-}
-/** Start/refresh scans require the current PM session; no credential is stored across restart. */
-export async function observePmCoreChanges(scope: AgentScope, headers: RequestHeaders, correlation?: { operationId: string; createdProjectId?: string }): Promise<PmCoreObservation> {
+/** Scans use only the current request's PM credentials; no background authorization is retained. */
+export async function observePmCoreChanges(scope: PmToolTarget, headers: RequestHeaders, correlation?: { operationId: string; createdProjectId?: string }): Promise<PmCoreObservation> {
   const createdProjectId = correlation?.createdProjectId;
   if (createdProjectId !== undefined && !/^PRJ-\d+$/.test(createdProjectId)) throw new ObservationError(400, "Invalid created project ID.");
   const parsed = scopeSchema.parse(scope);
   const result = await scanScope(parsed, headers, createdProjectId);
-  activateWorkspace(parsed, headers);
   return result.observation;
 }
 export async function stopPmCoreChanges(): Promise<void> {
-  for (const item of active.values()) clearInterval(item.timer);
-  const workspaces = [...activeWorkspaces.values()];
-  for (const item of workspaces) clearInterval(item.timer);
-  active.clear(); activeWorkspaces.clear();
-  await Promise.allSettled([...pending.values(), ...workspaces.flatMap(item => item.inFlight ? [item.inFlight] : [])]);
+  await Promise.allSettled([...pending.values()]);
 }
 
-async function page(scope: AgentScope, headers: RequestHeaders, after: string | null): Promise<PmCoreChangesPage> {
+async function page(scope: PmToolTarget, headers: RequestHeaders, after: string | null): Promise<PmCoreChangesPage> {
   const { selected, observation } = await scanScope(scope, headers);
-  activateWorkspace(scope, headers);
   if (!selected.length) return { items: [], nextCursor: null, observation };
   const cursor = after === null ? 0 : Number(after);
   if (!Number.isSafeInteger(cursor) || cursor < 0 || (after !== null && !/^(0|[1-9]\d*)$/.test(after))) throw new ObservationError(400, "Invalid core changes cursor.");

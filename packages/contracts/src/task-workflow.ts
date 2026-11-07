@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { deliveryScopeSchema } from './task-code-delivery.ts';
+import { executionSelectionSchema, type ExecutionSelection } from '../../agent-contracts/src/execution.ts';
 
 export const workflowKinds = ['task', 'prepare', 'agent', 'test', 'condition', 'commit', 'push', 'pr', 'ci', 'approval', 'end'] as const;
 export type WorkflowKind = typeof workflowKinds[number];
@@ -25,13 +26,17 @@ export const workflowSaveSchema = deliveryScopeSchema.extend({ id: z.uuid(), exp
 export const workflowStartSchema = deliveryScopeSchema.extend({ id: z.uuid(), taskRevision: z.string().min(1).max(256), definitionId: z.string().min(1).max(100), definitionVersion: z.number().int().positive(),
   baseBranch: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,150}$/), repository: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
   providerInstanceId: z.string().min(1).max(256), model: z.string().min(1).max(256),
+  executionSelection: executionSelectionSchema.refine(value => value.agentWorkspaceId !== null, 'Select an explicit Agent folder'),
   consent: z.strictObject({ execute: z.literal(true), worktreeWrite: z.boolean(), commit: z.boolean(), push: z.boolean(), draftPr: z.boolean(), taskStatus: z.boolean().optional() }),
 });
 export type WorkflowStart = z.infer<typeof workflowStartSchema>;
 export type WorkflowNodeRecord = { state: 'running' | 'waiting' | 'succeeded' | 'failed'; startedAt: string; finishedAt?: string; outcome?: 'pass' | 'fail'; message?: string; generationKey?: string };
-export type WorkflowRun = { id: string; version: number; input: WorkflowStart; projectRoot: string; graph: WorkflowGraph; status: 'running' | 'waiting' | 'paused' | 'completed' | 'failed'; current: string; nodes: Record<string, WorkflowNodeRecord>; createdAt: string; updatedAt: string; message?: string; acceptedTaskRevision?: string; transitions?: Record<string, WorkflowTransitionRecord> };
+export type WorkflowRun = { id: string; version: number; input: WorkflowStart; executionSelection?: ExecutionSelection; projectRoot: string; graph: WorkflowGraph; status: 'running' | 'waiting' | 'paused' | 'completed' | 'failed'; current: string; nodes: Record<string, WorkflowNodeRecord>; createdAt: string; updatedAt: string; message?: string; acceptedTaskRevision?: string; transitions?: Record<string, WorkflowTransitionRecord> };
 export const workflowTaskRevision = (run: WorkflowRun) => run.acceptedTaskRevision ?? run.input.taskRevision;
-export const workflowControlSchema = z.strictObject({ action: z.enum(['resume', 'pause', 'approve', 'confirm-transition']), version: z.number().int().positive(), confirm: z.literal(true) });
+export const workflowControlSchema = z.discriminatedUnion('action', [
+  z.strictObject({ action: z.enum(['resume', 'pause', 'approve', 'confirm-transition']), version: z.number().int().positive(), confirm: z.literal(true) }),
+  z.strictObject({ action: z.literal('new-session'), version: z.number().int().positive(), confirm: z.literal(true), executionSelection: executionSelectionSchema.refine(value => value.agentWorkspaceId !== null, 'Select an explicit Agent folder') }),
+]);
 
 /** Same validation for canvas and execution. No eval, arbitrary conditions or unbounded loops. */
 export function workflowProblems(graph: WorkflowGraph): string[] {

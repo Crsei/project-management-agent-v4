@@ -12,8 +12,8 @@
 | SQL/身份/存储 | `packages/infrastructure/src` | PostgreSQL/Drizzle、可审阅迁移、scrypt/会话、Local/S3 BlobStore与显式绑定；附件单文件8MiB，不自动GC |
 | Worker | `apps/server/worker/src` | outbox/持久cursor、通知、邮件、受限Webhook与保留维护；核心只读，不是Agent执行器 |
 | PM 合同/客户端 | `packages/contracts`、`docs/contracts/openapi.yaml` | Zod注册表生成命令payload/OpenAPI和客户端；当前清单以生成结果为准，不手维护数量 |
-| Agent 合同/客户端 | `packages/agent-contracts`、`agent-client-runtime` | Chat/Provider/输出/用量及同源HTTP/WS，和PM业务合同分开 |
-| Agent 宿主 | `apps/server/agent/src` | Chat/输出持久化、Provider lease/transport、PM工具桥、交付/自动化；使用现有单进程Agent SQLite，不创建第二套任务权威 |
+| Agent 合同/客户端 | `packages/agent-contracts`、`agent-client-runtime` | Chat/版本化执行选择与实际环境、Provider/输出/用量及同源HTTP/WS；代码目录登记由PM应用服务拥有，不把Agent记录变成PM业务权威 |
+| Agent 宿主 | `apps/server/agent/src` | Chat/输出持久化、冻结环境复核、Provider lease/transport、PM工具桥、交付/自动化及服务内PTY；使用现有单进程Agent SQLite，不创建第二套任务权威或跨重启终端恢复 |
 | 自动化资源 | `packages/automation-resources/{catalog,pm-catalog,native-template-arguments}.ts` | 固定OpenHands目录/脚本bundle和PM目录唯一装配；`packages/contracts/src/automation-catalog.ts`只定义宿主DTO，不新增包或dependency |
 | 固定上游模块 | `vendor/t3code`、`vendor/cc-switch` | 实际协议/驱动及MCP/Skills配置能力；来源、补丁和许可按各同步/来源清单记录，不从外部仓库动态读取 |
 | Web / Desktop | `apps/web`、`apps/desktop` | 一个Web工程复用于浏览器/桌面；前端只显示真实能力，桌面管理独立本地服务组 |

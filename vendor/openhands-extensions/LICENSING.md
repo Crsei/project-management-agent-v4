@@ -43,6 +43,12 @@ not falsely represented as unchanged upstream files. The CC Switch and t3code
 license ledgers remain independent. No source hashes, copyright statements or
 license files are repurposed from those other forks.
 
+The operator's `mcp-skill-page` presentation rebuild is incorporated as a local
+adaptation, retaining the OpenHands notices above. It does not replace the
+immutable upstream selection or claim that its rebuilt components were present
+at the pinned commit. No demo backend, new package dependency or external logo
+asset is introduced by that adaptation.
+
 The production Web plugin retains this document, both original licenses, npm
 metadata and source/output ledgers under `licenses/openhands/`. It also collects
 shipped legal files for the actual dependency packages whose modules entered

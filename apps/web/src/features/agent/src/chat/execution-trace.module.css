@@ -1,0 +1,276 @@
+.trace {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.trace[data-nested] {
+  margin: 2px 0 2px 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+
+.traceRow {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.traceRow:last-child {
+  border-bottom: 0;
+}
+
+.traceTrigger {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 4px;
+  border-radius: var(--radius-agent-control);
+  text-align: left;
+  cursor: pointer;
+}
+
+.traceTrigger:hover {
+  background: var(--surface-hover);
+}
+
+.traceTrigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.traceLine {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.traceIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.traceIcon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.traceTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+
+.traceDescription {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.traceTrailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.chevron {
+  width: 13px;
+  height: 13px;
+  transition: transform var(--motion-hover) ease-out;
+}
+
+.traceTrigger[data-panel-open] .chevron {
+  transform: rotate(180deg);
+}
+
+.traceLine[data-status="running"] .traceIcon,
+.traceLine[data-status="running"] .traceTitle {
+  color: var(--info);
+}
+
+.traceLine[data-status="error"] .traceIcon,
+.traceLine[data-status="error"] .traceTitle {
+  color: var(--destructive);
+}
+
+.traceLine[data-status="pending"] .traceTitle {
+  color: var(--muted-foreground);
+}
+
+.traceContent {
+  min-width: 0;
+  padding: 4px 4px 10px 23px;
+}
+
+.traceStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--pill-radius);
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.traceStatus[data-status="running"],
+.traceStatus[data-tone="running"] {
+  border-color: color-mix(in srgb, var(--info) 40%, var(--border));
+  background: color-mix(in srgb, var(--info) 8%, var(--card));
+  color: var(--info);
+}
+
+.traceStatus[data-status="error"],
+.traceStatus[data-tone="error"] {
+  border-color: color-mix(in srgb, var(--destructive) 40%, var(--border));
+  background: color-mix(in srgb, var(--destructive) 8%, var(--card));
+  color: var(--destructive);
+}
+
+.traceStatus[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+  background: color-mix(in srgb, var(--success) 8%, var(--card));
+  color: var(--success);
+}
+
+.traceStatus[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+  background: color-mix(in srgb, var(--warning) 8%, var(--card));
+  color: var(--warning);
+}
+
+.codeBlock {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  margin-block: 4px;
+  border: 0;
+  border-radius: var(--radius-agent-control);
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+}
+
+.codeCopy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  opacity: 0.65;
+  backdrop-filter: blur(4px);
+}
+
+.codeCopy:hover,
+.codeCopy:focus-visible {
+  opacity: 1;
+}
+
+.codeContent {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 9px 36px 9px 10px;
+  color: var(--foreground);
+  font-family: var(--font-ibm-plex-mono);
+  font-size: 11px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+
+.codeContent code {
+  display: block;
+  min-width: max-content;
+}
+
+.codeLine {
+  position: relative;
+  display: block;
+  min-height: 1.65em;
+  white-space: pre;
+}
+
+.codeBlock[data-numbered] .codeLine {
+  padding-left: 2.1em;
+}
+
+.codeBlock[data-numbered] .codeLine::before {
+  content: attr(data-line);
+  position: absolute;
+  left: 0;
+  width: 1.5em;
+  color: var(--muted-foreground);
+  text-align: right;
+  opacity: 0.55;
+  user-select: none;
+}
+
+.codeLine[data-variant="context"] {
+  color: var(--muted-foreground);
+}
+
+.codeLine[data-variant="added"] {
+  background: color-mix(in srgb, var(--success) 13%, transparent);
+  color: var(--success);
+}
+
+.codeLine[data-variant="removed"] {
+  background: color-mix(in srgb, var(--destructive) 13%, transparent);
+  color: var(--destructive);
+}
+
+.codeBlock[data-wrap] .codeContent code {
+  min-width: 0;
+}
+
+.codeBlock[data-wrap] .codeLine {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.codeError {
+  padding: 0 10px 8px;
+  color: var(--destructive);
+  font-size: 10px;
+}
+
+@media (hover: none) {
+  .codeCopy {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 767px) {
+  .traceContent {
+    padding-left: 14px;
+  }
+
+  .traceTitle {
+    white-space: normal;
+  }
+
+  .traceDescription {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition-duration: 0.01ms;
+  }
+}

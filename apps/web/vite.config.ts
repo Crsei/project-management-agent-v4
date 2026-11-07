@@ -14,6 +14,7 @@ export default defineConfig(({ command, mode, isPreview }) => {
     throw new Error("PM_ENABLE_LAB must be true or false")
   }
   const labEnabled = setting === "true" || (command === "serve" && !isPreview && setting !== "false")
+  const isStorybook = process.env.STORYBOOK === "true"
   const agentTarget = new URL(env.AGENT_WORKSPACE_API_URL ?? `http://127.0.0.1:${env.AGENT_WORKSPACE_API_PORT ?? 4325}`)
   if (!['http:', 'https:'].includes(agentTarget.protocol) || agentTarget.username || agentTarget.password) {
     throw new Error("AGENT_WORKSPACE_API_URL must be an HTTP(S) server URL without credentials.")
@@ -49,25 +50,29 @@ export default defineConfig(({ command, mode, isPreview }) => {
   return {
     envDir: workspaceRoot,
     define: { "import.meta.env.PM_LAB_ENABLED": JSON.stringify(labEnabled) },
-    plugins: [react(), tailwindcss(), openHandsProvenancePlugin()],
+    plugins: [react(), tailwindcss(), ...(isStorybook ? [] : [openHandsProvenancePlugin()])],
     resolve: {
-      alias: {
-        "@agent": fileURLToPath(new URL("./src/features/agent", import.meta.url)),
-        "@pm/openhands-extensions": fileURLToPath(new URL("../../vendor/openhands-extensions/src/web/index.tsx", import.meta.url)),
-        "@pm/openhands-source": fileURLToPath(new URL("../../vendor/openhands-extensions/src", import.meta.url)),
-        "@pm/cc-switch-source": fileURLToPath(new URL("../../vendor/cc-switch/src", import.meta.url)),
-        "@openhands/extensions/integrations": fileURLToPath(new URL("../../vendor/openhands-extensions/extensions/integrations/index.js", import.meta.url)),
-        "@": fileURLToPath(new URL("./src", import.meta.url)),
-        "@contracts": fileURLToPath(new URL("../../packages/contracts/src/client.ts", import.meta.url)),
-        "@pm-schema/relations": fileURLToPath(new URL("../../packages/pm-schema/relations.ts", import.meta.url)),
-        "@pm-schema/query": fileURLToPath(new URL("../../packages/pm-schema/query.ts", import.meta.url)),
-        "@pm-schema/graph": fileURLToPath(new URL("../../packages/pm-schema/graph.ts", import.meta.url)),
-        "@pm-core/migrations": fileURLToPath(new URL("../../packages/pm-core/migrations.ts", import.meta.url)),
-        "@pm-schema": fileURLToPath(new URL("../../packages/pm-schema/index.ts", import.meta.url)),
-        "@pm-markdown": fileURLToPath(new URL("../../packages/pm-markdown/index.ts", import.meta.url)),
-        "@pm-core": fileURLToPath(new URL("../../packages/pm-core/index.ts", import.meta.url)),
-        "@pm-views": fileURLToPath(new URL("../../packages/pm-views/index.tsx", import.meta.url)),
-      },
+      alias: [
+        { find: /^@pm\/ui$/, replacement: fileURLToPath(new URL("../../packages/ui/src/index.ts", import.meta.url)) },
+        { find: /^@pm\/ui\/(.*)$/, replacement: fileURLToPath(new URL("../../packages/ui/src/$1", import.meta.url)) },
+        ...Object.entries({
+          "@agent": fileURLToPath(new URL("./src/features/agent", import.meta.url)),
+          "@pm/openhands-extensions": fileURLToPath(new URL("../../vendor/openhands-extensions/src/web/index.tsx", import.meta.url)),
+          "@pm/openhands-source": fileURLToPath(new URL("../../vendor/openhands-extensions/src", import.meta.url)),
+          "@pm/cc-switch-source": fileURLToPath(new URL("../../vendor/cc-switch/src", import.meta.url)),
+          "@openhands/extensions/integrations": fileURLToPath(new URL("../../vendor/openhands-extensions/extensions/integrations/index.js", import.meta.url)),
+          "@": fileURLToPath(new URL("./src", import.meta.url)),
+          "@contracts": fileURLToPath(new URL("../../packages/contracts/src/client.ts", import.meta.url)),
+          "@pm-schema/relations": fileURLToPath(new URL("../../packages/pm-schema/relations.ts", import.meta.url)),
+          "@pm-schema/query": fileURLToPath(new URL("../../packages/pm-schema/query.ts", import.meta.url)),
+          "@pm-schema/graph": fileURLToPath(new URL("../../packages/pm-schema/graph.ts", import.meta.url)),
+          "@pm-core/migrations": fileURLToPath(new URL("../../packages/pm-core/migrations.ts", import.meta.url)),
+          "@pm-schema": fileURLToPath(new URL("../../packages/pm-schema/index.ts", import.meta.url)),
+          "@pm-markdown": fileURLToPath(new URL("../../packages/pm-markdown/index.ts", import.meta.url)),
+          "@pm-core": fileURLToPath(new URL("../../packages/pm-core/index.ts", import.meta.url)),
+          "@pm-views": fileURLToPath(new URL("../../packages/pm-views/index.tsx", import.meta.url)),
+        }).map(([find, replacement]) => ({ find, replacement })),
+      ],
       dedupe: ["react", "react-dom", "react-router", "react-router-dom", "@assistant-ui/react", "@tanstack/react-query", "i18next", "react-i18next"],
     },
     worker: { format: "es" },

@@ -135,3 +135,108 @@
   :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-detail > footer,
   :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-detail [data-testid="skill-detail-modal-content"] { padding-inline: 16px; }
 }
+
+/* Skills catalog/config presentation adapted from mcp-skill-page. */
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-catalog-tabs { display: flex; flex-wrap: wrap; gap: 4px; align-self: flex-start; border: 1px solid var(--oh-border); border-radius: 9px; padding: 3px; background: var(--oh-color-base-secondary); }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-coverage { display: flex; align-items: center; gap: 8px; min-width: 0; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-agent-stack { display: inline-flex; flex-shrink: 0; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-agent-stack .oh-skill-agent-avatar + .oh-skill-agent-avatar { margin-inline-start: -5px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-agent-avatar { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--oh-border); border-radius: 50%; background: var(--oh-surface-raised); color: var(--oh-foreground); font-size: 9px; font-weight: 600; line-height: 1; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-heading { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-heading > div { min-width: 0; overflow-wrap: anywhere; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-body { display: flex; flex-direction: column; gap: 16px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-stats > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 10px; border: 1px solid var(--oh-border); border-radius: 8px; background: var(--oh-color-base-secondary); font-size: 11px; overflow-wrap: anywhere; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-stats span { color: var(--oh-muted); }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-drawer-stats strong { font-size: 15px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix { display: flex; flex-direction: column; min-width: 0; gap: 12px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-toolbar, :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-toolbar input[type="search"] { flex: 1 1 220px; min-width: 0; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-toolbar input, :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-toolbar select, :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-bulk-bar select { min-height: 36px; max-width: 100%; border: 1px solid var(--oh-border); border-radius: 8px; padding: 7px 10px; background: var(--oh-color-base-secondary); color: var(--oh-foreground); font-size: 13px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-bulk-bar { padding: 9px 12px; border: 1px solid var(--oh-border); border-radius: 9px; background: var(--oh-surface-raised); font-size: 12px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-scroll { overflow-x: auto; border: 1px solid var(--oh-border); border-radius: 10px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix table { width: 100%; border-collapse: collapse; font-size: 12px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix th, :where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix td { padding: 10px; border-bottom: 1px solid var(--oh-border); text-align: center; white-space: nowrap; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix thead th { color: var(--oh-muted); font-weight: 500; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix thead th > span { display: block; margin: 0 auto 5px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix tr:last-child > * { border-bottom: 0; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--oh-foreground); }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-name { display: flex; align-items: center; gap: 8px; min-width: 180px; max-width: 280px; text-align: start; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-name > span { display: flex; flex-direction: column; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-name small { color: var(--oh-muted); font-weight: 400; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-matrix-failure { margin-inline-start: 4px; color: var(--danger-text); font-weight: 700; }
+
+/* Skills setup presentation when no supported Provider has been configured. */
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound { gap: 24px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-header > div { min-width: 0; max-width: 42rem; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-header h2 { margin: 0; color: var(--oh-foreground); font-size: 20px; line-height: 1.3; font-weight: 600; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-header p { margin: 6px 0 0; color: var(--oh-muted); font-size: 13px; line-height: 1.6; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--oh-border); }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-tabs button { margin-bottom: -1px; padding: 10px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--oh-muted); font-size: 13px; cursor: pointer; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-tabs button[aria-selected="true"] { border-bottom-color: var(--oh-foreground); color: var(--oh-foreground); }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-panel { padding: 32px 20px; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-panel h3 { margin: 0; color: var(--oh-foreground); font-size: 16px; font-weight: 600; }
+:where(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-unbound-panel p { max-width: 38rem; margin: 10px auto 20px; color: var(--oh-muted); font-size: 13px; line-height: 1.6; }
+
+/* Rebuilt Skills presentation aligned with the source page. */
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-header-copy { min-width: 0; flex: 1 1 360px; max-width: 46rem; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-header-copy h2 { margin: 0; color: var(--oh-foreground); font-size: 20px; font-weight: 500; line-height: 1.3; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-header-copy > p { margin: 4px 0 0; color: var(--oh-muted); font-size: 14px; line-height: 1.5; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-agent-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-agent-banner > span:last-child { color: var(--oh-text-dim); font-size: 11px; line-height: 1.5; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-view-tabs-wrap { padding: 0; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-view-tabs { gap: 16px; border-bottom: 1px solid var(--oh-border); }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-view-tabs [role="tab"] { display: inline-flex; align-items: center; gap: 6px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-tab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--oh-surface-raised); color: var(--oh-text-dim); font-size: 10px; line-height: 16px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-cards { gap: 16px; padding: 4px 0 0; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--oh-text-dim); font-size: 11px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skill-card-meta .oh-skill-state-badge { border: 0; padding: 0; background: transparent; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-search {
+  display: flex;
+  flex: 1 1 220px;
+  min-width: 0;
+  align-items: center;
+  border: 1px solid var(--oh-border);
+  border-radius: 8px;
+  background: var(--oh-color-base-secondary);
+}
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-search:focus-within { border-color: color-mix(in srgb, var(--oh-contrast) 40%, transparent); }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-search > svg { width: 16px; height: 16px; margin-inline-start: 12px; flex-shrink: 0; color: var(--oh-text-dim); }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 8px 12px; color: var(--oh-foreground); font-size: 14px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-search button { display: inline-flex; margin-inline-end: 8px; padding: 3px; border: 0; border-radius: 4px; background: transparent; color: var(--oh-text-dim); cursor: pointer; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-search button svg { width: 16px; height: 16px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-issues-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--oh-border);
+  border-radius: 8px;
+  background: var(--oh-color-base-secondary);
+  color: var(--oh-contrast);
+  font-size: 13px;
+  cursor: pointer;
+}
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-issues-toggle[aria-pressed="true"] { border-color: color-mix(in srgb, var(--warning) 45%, transparent); background: color-mix(in srgb, var(--warning) 10%, transparent); color: var(--warning-text); }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-issues-toggle svg { width: 16px; height: 16px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix { gap: 12px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix > .oh-matrix-toolbar { justify-content: flex-end; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-discovered { padding: 0; gap: 12px; }
+:is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-discovered .oh-skills-warning { margin: 0; }
+@media (max-width: 767px) {
+  :is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-header { flex-direction: column; }
+  :is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-header-actions { width: 100%; }
+  :is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-toolbar .oh-enum-filter { flex: 1; }
+  :is(.cc-switch-web.openhands-extensions, .cc-switch-web .openhands-extensions) .oh-skills-matrix-toolbar .oh-enum-filter-trigger { width: 100%; justify-content: space-between; }
+}

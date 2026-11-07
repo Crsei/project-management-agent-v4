@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { providerConsumeResetCreditInputSchema, usageLimitSourceInputSchema, usageSettingsUpdateSchema, usageSummaryInputSchema } from "@agent-workspace/contracts/usage";
-import { assertThreadScopeAccessible } from "../chat.ts";
 import { DurableError } from "../durable/errors.ts";
 import { getThread, validThreadId } from "../durable/threads.ts";
 import { readUsageSummary, UsageInputError } from "./service.ts";
@@ -48,6 +47,5 @@ usageRoutes.get("/usage/threads/:threadId", async (c) => {
   if (!validThreadId(id)) throw new UsageInputError("Invalid thread ID.");
   const thread = getThread(id);
   if (!thread) throw new DurableError(404, "not_found", "找不到该会话。");
-  await assertThreadScopeAccessible(thread, c.req.raw.headers);
   return c.json(getThreadUsage(id));
 });

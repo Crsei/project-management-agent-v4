@@ -6,6 +6,7 @@ import { pmToolChanges } from "./pm-tool-changes.ts";
 const base: PmToolCallRecord = {
   operationId: "operation-1", name: "pm_update_task", status: "succeeded",
   threadId: "thread-1", messageId: "message-1", generationId: "generation-1", workspaceId: "workspace-1",
+  target: { workspaceId: "workspace-1", projectId: "PRJ-001" },
   createdAt: "2026-10-29T00:00:00Z", finishedAt: "2026-10-29T00:00:01Z", error: null,
   result: {
     kind: "task", nextCursor: null, truncated: false, sources: [],
@@ -34,3 +35,10 @@ test("unknown and failed writes retain their actual state without invented targe
   assert.equal(changes[1].error?.code, "revision_conflict");
 });
 
+
+test("workspace discovery never becomes a business write or a session target", () => {
+  const discovery: PmToolCallRecord = { ...base, name: "pm_list_workspaces", workspaceId: null, target: undefined, result: { kind: "workspaces", items: [{ id: "workspace-2", name: "Other PM workspace", projects: [{ id: "PRJ-002", name: "Other project" }] }], sources: [], truncated: false, nextCursor: null } };
+  assert.deepEqual(pmToolChanges([discovery]), []);
+  assert.equal(discovery.workspaceId, null);
+  assert.equal(discovery.target, undefined);
+});

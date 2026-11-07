@@ -16,10 +16,11 @@ import { TaskDetailWatch } from './TaskDetailRelated';
 import { DocumentContentEditor } from './DocumentContentEditor';
 import { applyBodyChanges, bodyEditorText, type BodyChange } from './document-body';
 import { PersonalMentionPicker } from '../service/PersonalMentionPicker';
-import { EntityAgentPanelAction } from '../agent/agent-entry';
+import { AgentAssistantMenu } from '../agent/agent-assistant-menu';
 import { getDocumentEditorPosition, retainDocumentEditorPosition } from './document-workbench-state';
 import { documentSaveRecovery } from './document-save-model';
 import { CollectionActionMenu, CollectionContextMenu, renderCollectionContextMenu } from './CollectionContextMenu';
+import { ChangeHistoryPanel } from './change-history';
 
 const HIDDEN_DETAIL_TABS: Readonly<Partial<Record<DetailTab, true>>> = { properties: true, relations: true, business: true, context: true };
 
@@ -40,6 +41,10 @@ export function EntityDetail({ controller: c, en, fullPage = false, onClose, onE
   const [copyState, setCopyState] = useState<{ id: string; status: 'copied' | 'failed' } | null>(null);
   const [discardVersion, setDiscardVersion] = useState(0);
   const [taskSection, setTaskSection] = useState<{ id: string; section: 'delivery' | 'advanced' } | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyRequested = new URLSearchParams(location.search).get('panel') === 'changes';
+  const changeId = new URLSearchParams(location.search).get('changeId') || undefined;
+  useEffect(() => { setHistoryOpen(historyRequested); }, [historyRequested, c.selectedId, changeId]);
   const task = c.selected?.entity.entity === 'work_item' && !c.unsupported;
   const isDocument = c.selected?.entity.entity === 'document' && !c.unsupported;
   const lifecycleRef = useRef({ save: c.saveDocument, session: c.session, id: c.selectedId, isDocument });
@@ -143,8 +148,7 @@ export function EntityDetail({ controller: c, en, fullPage = false, onClose, onE
   }} editable={!sourceReadonly} readOnly={sourceReadonly} basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: true, highlightSelectionMatches: true }} aria-label={en ? 'Markdown source' : 'Markdown 源码'} /></div>;
   const taskSurface = task && <TaskDetailSurface key={`${c.selectedId}:${discardVersion}`} controller={c} en={en} onEditSource={editTaskSource} onOpenDelivery={() => openTaskSection('delivery')} />;
   const agentProjectId = c.selected?.entity.entity === 'project' ? c.selected.id : c.selected?.entity.project;
-  const agentTaskId = c.selected?.entity.entity === 'work_item' ? c.selected.id : undefined;
-  const agentAction = c.selected && !c.unsupported ? <EntityAgentPanelAction entityId={c.selected.id} projectId={agentProjectId} taskId={agentTaskId} title={c.entity?.title ?? c.selected.entity.title} hasDraft={!!c.draft} /> : null;
+  const agentAction = c.selected && !c.unsupported ? <AgentAssistantMenu projectId={agentProjectId} disabledReason={!c.canWrite || c.configurationInvalid || c.accessError || c.query.error || c.writesBlocked ? (en ? 'PM writes are currently locked; resolve access, configuration or the original pending request first.' : 'PM 当前为只读或写入已锁定；请先核对权限、配置或原待处理请求。') : undefined} /> : null;
   return <section className={`entity-detail ${fullPage ? 'entity-detail-full' : ''} ${task ? 'task-entity-detail' : ''} ${task && tab === 'source' ? 'is-source-split' : ''}`} aria-label={task ? (en ? 'Task detail' : '任务详情') : (en ? 'Entity detail' : '对象详情')} data-testid="entity-detail">
     {task ? <CollectionContextMenu actions={taskActions} trigger={<header tabIndex={0} className="task-detail-toolbar" aria-label={en ? 'Task header actions' : '任务标题操作'}>
       {fullPage && <button type="button" className="icon-button" aria-label={en ? 'Back to collection' : '返回集合'} onClick={onClose}><ArrowLeft size={16} /></button>}
@@ -164,6 +168,8 @@ export function EntityDetail({ controller: c, en, fullPage = false, onClose, onE
       {!fullPage && onExpand && c.selected && <button className="icon-button" aria-label={en ? 'Expand entity' : '展开对象'} title={en ? 'Open full page · same draft' : '全页打开 · 保留草稿'} data-testid="expand-entity" onClick={onExpand}><ArrowUpRight size={18} /></button>}
       {!fullPage && <button className="icon-button" aria-label={en ? 'Close inspector' : '关闭详情'} onClick={onClose}><X size={18} /></button>}
     </div>}
+    {(task || isDocument || c.selected?.entity.entity === 'requirement') && <button type="button" className="secondary-button" aria-expanded={historyOpen} onClick={() => setHistoryOpen(value => !value)}>{en ? 'Changes' : '变更记录'}</button>}
+    {historyOpen && c.selected && <ChangeHistoryPanel key={c.selected.id} workspaceId={c.session.queryKey[3]} target={{ kind: 'core', entityId: c.selected.id }} en={en} initialChangeId={changeId} onClose={() => setHistoryOpen(false)} />}
     {task && copyState?.id === c.selectedId && <p className="task-copy-status" role={copyState.status === 'failed' ? 'alert' : 'status'}>{copyState.status === 'copied' ? (en ? 'Task link copied.' : '已复制任务链接。') : (en ? 'Clipboard is unavailable. Open the full page and copy its URL.' : '剪贴板不可用，请打开全页后复制地址。')}</p>}
     {!c.source ? <div className="empty-state" role="status">{en ? 'This entity is not available in the current workspace. It may have been deleted or access may have changed.' : '当前工作区中无法访问此对象。对象可能已删除，或访问权限已更改。'}</div> : <>
       {task ? <div className="task-detail-modes">

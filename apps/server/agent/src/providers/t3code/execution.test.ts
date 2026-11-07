@@ -32,6 +32,7 @@ import { codexDriver, codexProtocolResolver, makeCodexDriverLayer } from "./fami
 import { makePmProviderFamily } from "./registration.ts";
 import { emitNativeOutput, endNativeOutput, getNativeOutput, initializeNativeOutput } from "../../durable/native-output.ts";
 import { mcpAppCall, mcpAppSnapshot, mcpAppTools } from "../../mcp-apps/requests.ts";
+import { agentWorkspaceEnvironment } from "../../durable/execution.testkit.ts";
 
 const now = DateTime.makeUnsafe("2026-10-30T00:00:00.000Z");
 const driver = ProviderDriverKind.make("codex");
@@ -479,7 +480,7 @@ for (const during of [false, true]) {
       Effect.mapError(error => pmAdapterBoundaryError(error)), Effect.as({ protocol: "fixture:original-v2" })));
     let callbacks = 0;
     f.context.execution = { threadId: "authorized-chat", generationId: "authorized-generation", messageId: "authorized-message",
-      scope: { workspaceId: "workspace", projectId: null } };
+      environment: agentWorkspaceEnvironment(f.context.cwd) };
     f.context.authorizeExecution = async () => {
       callbacks++;
       await Promise.resolve();
@@ -749,7 +750,7 @@ test("confirmed Codex worktree uses bounded writes; no grant retains read-only a
   for (const grant of [undefined, "/workspace", "/outside"]) {
     const f = await harness(finish);
     try {
-      f.context.execution = { threadId: "delivery-thread", generationId: "delivery-generation", messageId: "delivery-message", scope: { workspaceId: "11111111-1111-4111-8111-111111111111", projectId: "PRJ-001" } };
+      f.context.execution = { threadId: "delivery-thread", generationId: "delivery-generation", messageId: "delivery-message", environment: agentWorkspaceEnvironment(f.context.cwd) };
       f.context.authorizeExecution = async () => {};
       f.context.authorizeWorktreeWrite = async () => grant;
       const operation = f.service.run(f.context, { model: "explicit", prompt: "test" });
@@ -791,7 +792,7 @@ test("fresh App output waits for the producing turn to settle before retaining i
     } });
   } });
   const context = { ...f.context, execution: { threadId: "live-app-thread", generationId: "live-app-generation", messageId: "live-app-message",
-    scope: { workspaceId: "workspace", projectId: null } }, authorizeExecution: async () => { checks++; },
+    environment: agentWorkspaceEnvironment(f.context.cwd) }, authorizeExecution: async () => { checks++; },
     authorizeMcpApp: async (headers: Headers) => { assert.equal(headers.get("cookie"), "fresh-browser"); checks++; } };
   initializeNativeOutput(context.execution.generationId, context.execution.threadId, "running");
   const run = f.service.run(context, { model: "explicit", prompt: "show forecast", userMessageText: "$weather Austin", signal: t.signal,
@@ -933,7 +934,7 @@ test("original Codex execution drains completed-only App captures after terminal
       protocols: new Map([["codex", resolveProtocol]]),
     });
     const context: ProviderDriverContext = { ...providerContext(instance, directory),
-      execution: { threadId, generationId, messageId: "native-capture-message", scope: { workspaceId: "workspace", projectId: null } },
+      execution: { threadId, generationId, messageId: "native-capture-message", environment: agentWorkspaceEnvironment(directory) },
       authorizeExecution: async () => {},
       authorizeMcpApp: async headers => { assert.equal(headers.get("cookie"), "current-native-browser"); },
     };

@@ -5,7 +5,7 @@ import { DomainError } from '../../domain/src/core.ts';
 import type { Actor, Command, CommandReceipt, Entity, EntityKind } from '../../domain/src/core.ts';
 import { lockWorkspace } from '../../infrastructure/src/database.ts';
 import { assertProjectScope, getMembership, requireCapability } from './access.ts';
-import type { CommandContext, CommandRegistry, CoreAccess, SqlExecutor } from './ports.ts';
+import type { CommandContext, CommandRegistry, CoreAccess, SqlExecutor, TrustedMutationSource } from './ports.ts';
 import { requireDashboardReadSelf } from './dashboard-read.ts';
 import { assertWebhookReceiptReadable } from './webhooks.ts';
 import { assertNotificationReceiptReadable } from './notifications.ts';
@@ -70,7 +70,7 @@ export async function getCommandReceipt(pool: Pool, actor: Actor, workspaceId: s
   return row.receipt;
 }
 
-export async function runCommand(pool: Pool, actor: Actor, workspaceId: string, incoming: Command, registry: CommandRegistry, core?: CoreAccess, notificationCore?: NotificationCorePort, beforeExecute?: (sql: SqlExecutor) => Promise<void>): Promise<CommandReceipt> {
+export async function runCommand(pool: Pool, actor: Actor, workspaceId: string, incoming: Command, registry: CommandRegistry, core?: CoreAccess, notificationCore?: NotificationCorePort, beforeExecute?: (sql: SqlExecutor) => Promise<void>, trustedSource?: TrustedMutationSource): Promise<CommandReceipt> {
   if (!z.uuid().toLowerCase().safeParse(workspaceId).success || !z.uuid().toLowerCase().safeParse(incoming?.commandId).success) throw new DomainError('validation_failed', 'Workspace and command IDs must be UUIDs');
   workspaceId = workspaceId.toLowerCase();
   // Canonical typed UUIDs/defaults before hashing and persistence; never rewrite arbitrary prose.
@@ -140,6 +140,7 @@ export async function runCommand(pool: Pool, actor: Actor, workspaceId: string, 
       };
       const context: CommandContext = {
         sql: client, actor, workspaceId, command,
+        ...(trustedSource ? { trustedSource } : {}),
         ...(core ? { core: {
           ...core,
           async get(id: string, kind?: EntityKind) {

@@ -147,8 +147,22 @@ for relative, entry in sorted(assets.items()):
 adaptation_path = vendor / "mcp-skills-adaptations.json"
 if adaptation_path.is_file():
     supplemental = json.loads(adaptation_path.read_bytes())
+    subprocess.run([
+        "node", "--input-type=module", "-e",
+        'import {pathToFileURL} from "node:url"; import {readFileSync} from "node:fs"; '
+        'const [root,helper]=process.argv.slice(1); '
+        'const {validateAdaptationManifest,assertRetiredTargetsAbsent}=await import(pathToFileURL(helper)); '
+        'await assertRetiredTargetsAbsent(root,validateAdaptationManifest(JSON.parse(readFileSync(0,"utf8"))));',
+        str(repository), str(vendor / "scripts/mcp-skills-adaptations.mjs"),
+    ], input=json.dumps(supplemental).encode(), check=True)
     for entry in supplemental["outputs"]:
         destination = entry["destination"]
+        if "retirement" in entry:
+            if destination in selected or destination in assets:
+                raise ValueError(f"Retired output retains another reconstruction owner: {destination}")
+            if safe_file(repository, destination).exists():
+                raise ValueError(f"Retired target exists: {destination}")
+            continue
         if destination in selected or not destination.startswith("vendor/t3code/"):
             continue
         if destination in assets:

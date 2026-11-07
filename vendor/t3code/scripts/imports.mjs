@@ -1,14 +1,21 @@
 import { createRequire, isBuiltin } from "node:module";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertRetiredTargetsAbsent, createRetiredImportResolver, validateAdaptationStructure } from "./mcp-skills-adaptations.mjs";
 
 const root = path.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const require = createRequire(path.join(root, "package.json"));
 const ts = require("typescript");
 const inventory = JSON.parse(readFileSync(path.join(root, "vendor/t3code/sync-inventory.json"), "utf8"));
-const adaptations = JSON.parse(readFileSync(path.join(root, "vendor/t3code/mcp-skills-adaptations.json"), "utf8"));
-const owned = new Set([...inventory.files.map((entry) => entry.destination), ...adaptations.outputs.map((entry) => entry.destination)]);
+const retirementOnly = process.argv[2] === "--check-retirements";
+const adaptations = JSON.parse(readFileSync(retirementOnly ? 0 : path.join(root, "vendor/t3code/mcp-skills-adaptations.json"), "utf8"));
+const retirements = validateAdaptationStructure(adaptations);
+if (inventory.version !== 1 || inventory.upstreamCommit !== adaptations.baselineCommit) throw new Error("Adaptation/import baseline identity mismatch");
+await assertRetiredTargetsAbsent(root, retirements);
+const retired = new Set(retirements.map((entry) => entry.destination));
+if (inventory.files.some((entry) => retired.has(entry.destination))) throw new Error("Retired output still has a baseline reconstruction owner");
+const owned = new Set([...inventory.files.map((entry) => entry.destination), ...adaptations.outputs.filter((entry) => !Object.hasOwn(entry, "retirement")).map((entry) => entry.destination)]);
 const packages = new Map(inventory.files.filter((entry) => /\/package\.json$/.test(entry.destination) && !entry.destination.includes("/third-party/")).map((entry) => {
   const metadata = JSON.parse(readFileSync(path.join(root, entry.destination), "utf8"));
   return [metadata.name, { root: path.posix.dirname(entry.destination), exports: metadata.exports ?? {}, types: metadata.types ?? null }];
@@ -53,22 +60,38 @@ function resolve(source, specifier, resource) {
   if (!target) return { disposition: resource ? "runtime-selected-resource" : "unresolved-local", target: null };
   return { disposition: owned.has(target) ? "vendored-source" : target.startsWith("vendor/t3code/") ? "uninventoried-vendor" : "pm-host-boundary", target };
 }
+const retiredTarget = createRetiredImportResolver(root, retirements, ts);
+function consumerSources(directory) {
+  const files = [];
+  if (!existsSync(path.join(root, directory))) return files;
+  for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
+    if (["node_modules", ".git", ".ref", "dist", "build", "target", "coverage", "integration-patches", "third-party"].includes(entry.name)) continue;
+    const name = path.posix.join(directory, entry.name);
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) files.push(...consumerSources(name));
+    else if (entry.isFile() && /\.(?:[cm]?tsx?|jsx?)$/.test(name)) files.push(name);
+  }
+  return files;
+}
+const consumers = retired.size ? ["apps", "packages", "vendor", "scripts"].flatMap(consumerSources) : [];
 const edges = [];
-for (const source of [...owned].filter((value) => /\.(?:[cm]?tsx?|jsx?)$/.test(value)).sort()) {
+for (const source of [...new Set([...owned, ...consumers])].filter((value) => /\.(?:[cm]?tsx?|jsx?)$/.test(value)).sort()) {
   const text = readFileSync(path.join(root, source), "utf8");
   const ast = ts.createSourceFile(source, text, ts.ScriptTarget.Latest, true);
   const requireNames = new Set(["require"]);
   function add(node, literal, kind, typeOnly = false, resource = false) {
     if (!literal) return;
     if (!ts.isStringLiteralLike(literal)) {
-      if (resource || ["dynamic-import", "require", "require-resolve"].includes(kind)) edges.push({
+      if (owned.has(source) && (resource || ["dynamic-import", "require", "require-resolve"].includes(kind))) edges.push({
         source, line: ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1,
         specifier: null, expression: literal.getText(ast), kind, usage: typeOnly ? "type-only" : "runtime",
         disposition: "runtime-selected-resource", target: null,
       });
       return;
     }
-    edges.push({ source, line: ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1, specifier: literal.text, kind, usage: typeOnly ? "type-only" : "runtime", ...resolve(source, literal.text, resource) });
+    const target = retiredTarget(source, literal.text);
+    if (target) throw new Error(`Live consumer of retired output: ${source}:${ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1} -> ${target}`);
+    if (owned.has(source)) edges.push({ source, line: ast.getLineAndCharacterOfPosition(node.getStart(ast)).line + 1, specifier: literal.text, kind, usage: typeOnly ? "type-only" : "runtime", ...resolve(source, literal.text, resource) });
   }
   function visit(node) {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && ts.isCallExpression(node.initializer) && /(?:^|\.)createRequire$/.test(node.initializer.expression.getText(ast))) requireNames.add(node.name.text);
@@ -83,8 +106,15 @@ for (const source of [...owned].filter((value) => /\.(?:[cm]?tsx?|jsx?)$/.test(v
     ts.forEachChild(node, visit);
   }
   visit(ast);
+  for (const reference of [...ast.referencedFiles, ...ast.typeReferenceDirectives]) {
+    const target = retiredTarget(source, reference.fileName);
+    if (target) throw new Error(`Live reference to retired output: ${source} -> ${target}`);
+  }
 }
 edges.sort((left, right) => left.source < right.source ? -1 : left.source > right.source ? 1 : left.line - right.line || (left.specifier < right.specifier ? -1 : left.specifier > right.specifier ? 1 : 0));
+if (retirementOnly) {
+  process.exit(0);
+}
 const result = JSON.stringify({ version: 1, upstreamCommit: inventory.upstreamCommit, adaptationCommits: adaptations.sources.map((entry) => entry.commit), parser: `typescript@${ts.version}`, scope: "Actual selected/patched vendor inputs and explicitly mapped MCP/Skills host adaptations. Other host-boundary targets remain PM-owned; resource selections may be runtime-computed. Absolute/file/.ref source imports are forbidden. Static provenance is not behavioral acceptance.", packages: [...packages].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([name, metadata]) => ({ name, ...metadata })), edges }, null, 2) + "\n";
 const output = path.join(root, "vendor/t3code/sync-imports.json");
 if (process.argv[2] === "--check") {

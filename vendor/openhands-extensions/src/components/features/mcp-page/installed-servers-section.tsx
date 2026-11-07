@@ -16,6 +16,9 @@ interface InstalledServersSectionProps {
 
 export function InstalledServersSection({ servers, hasAnyInstalled, query = "", management, probeStates, disabled, onEdit }: InstalledServersSectionProps) {
   const { t } = useOpenHandsTranslation();
-  if (!servers.length) return <div data-testid={hasAnyInstalled && query.trim() ? "mcp-installed-empty-search" : "mcp-installed-empty"} className={extensionModuleEmptyStateClassName}><p>{t(hasAnyInstalled ? "MCP$SEARCH_EMPTY" : "MCP$INSTALLED_EMPTY_TITLE")}</p>{!hasAnyInstalled && <p className="oh-mcp-muted">{t("MCP_PM$EMPTY_LIBRARY")}</p>}</div>;
+  if (!servers.length) return <div data-testid={hasAnyInstalled && query.trim() ? "mcp-installed-empty-search" : "mcp-installed-empty"} className={extensionModuleEmptyStateClassName}>
+    <p>{t(hasAnyInstalled ? "MCP$SEARCH_EMPTY" : "MCP$INSTALLED_EMPTY_TITLE")}</p>
+    {!hasAnyInstalled && <p className="oh-mcp-muted">{t("MCP$INSTALLED_EMPTY_HINT")}</p>}
+  </div>;
   return <div data-testid="mcp-installed-list" className="oh-mcp-installed-list">{servers.map(server => <InstalledServerCard key={server.id} server={server} configurations={management.agentConfigurations[server.id] ?? {}} probeState={probeStates[server.id]} disabled={disabled} onEdit={() => onEdit(server)} />)}</div>;
 }

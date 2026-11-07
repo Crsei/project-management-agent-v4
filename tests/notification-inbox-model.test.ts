@@ -10,8 +10,8 @@ function item(position:string,occurredAt:string|null,state:Partial<NotificationI
 }
 test('maps private CAS and merged reasons, not business revision, with truthful observation time',()=>{
  const source=item('99',null,{version:7});const mapped=notificationItem(source);
- assert.equal(mapped.version,'7');assert.equal(mapped.createdAt,source.event.observedAt);assert.match(mapped.title,/watch \+ mention/);
- const legacy={...source,origin:'legacy_activity' as const,target:null};assert.match(notificationItem(legacy).entityName,/Legacy/);
+ assert.equal(mapped.version,'7');assert.equal(mapped.createdAt,source.event.observedAt);
+ const legacy={...source,origin:'legacy_activity' as const,target:null};assert.equal(notificationItem(legacy).entityId,source.event.entityId);
 });
 test('sorts by actual occurrence/observation time then numeric delivery cursor without mutating the snapshot',()=>{
  const old=item('9007199254740999','2026-10-21T00:00:00.000Z'),a=item('9',null),b=item('10',null),input=[old,b,a];
@@ -22,6 +22,13 @@ test('unread-first, archive and search remain independent of delivery cursor and
  const read=item('1','2026-10-23T00:00:00.000Z',{readAt:'2026-10-23T01:00:00.000Z'}),unread=item('2',null),archived=item('3',null,{archivedAt:'2026-10-23T01:00:00.000Z'});
  for(const ordering of ['oldest','newest'] as const) assert.deepEqual(visibleNotifications([read,unread,archived],{...initial,ordering,unreadFirst:true}).map(row=>row.id),[unread,read].map(row=>row.event.eventId));
  assert.deepEqual(visibleNotifications([read,unread,archived],{...initial,folder:'archive',unreadOnly:true,query:'task-3'}).map(row=>row.id),[archived.event.eventId]);
+});
+test('completion recipients can be filtered independently without changing personal state',()=>{
+ const assigned={...item('1',null),reasons:['assignee','completion'] as NotificationInboxItem['reasons']},requested={...item('2',null),reasons:['requester','completion'] as NotificationInboxItem['reasons']},watched=item('3',null);
+ const input=[assigned,requested,watched];
+ assert.deepEqual(visibleNotifications(input,{...initial,conditions:[{field:'category',operator:'is',values:['assignee']}]}).map(row=>row.id),[assigned.event.eventId]);
+ assert.deepEqual(visibleNotifications(input,{...initial,conditions:[{field:'category',operator:'is',values:['completion']},{field:'category',operator:'isNot',values:['assignee']}]}).map(row=>row.id),[requested.event.eventId]);
+ assert.deepEqual(input.map(row=>row.state.readAt),[null,null,null]);
 });
 test('strict DTO accepts legacy non-task null navigation and rejects copied bodies/recipient lists',()=>{
  const source=item('1',null),page={items:[source],cursor:'1',head:'1',membershipVersion:1,sourceCoverage:'selected_saved_facts',historyBoundary:{activatedAt:'2026-10-23T00:00:00.000Z',legacyImplicitUnreadNotImported:true},processing:{status:'pending',asOf:'2026-10-23T00:00:00.000Z'}};

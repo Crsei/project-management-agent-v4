@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DomainError, type Actor, type Capability } from '../../domain/src/core.ts';
 import type { Entity, FileRecord } from '../../pm-schema/index.ts';
+import { pmToolTargetSchema } from '../../agent-contracts/src/pm-tools.ts';
 import type { SqlExecutor } from './ports.ts';
 
 const id = z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/).max(80);
@@ -74,7 +75,7 @@ export const AGENT_CHAT_TOOL_REGISTRY = AGENT_CHAT_TOOL_NAMES.map(name => ({
 }));
 export const agentChatToolDefinitions = AGENT_CHAT_TOOL_REGISTRY.map(tool => ({ type: 'function' as const, function: {
   name: tool.name, description: tool.description, strict: true,
-  parameters: z.toJSONSchema(agentChatToolInputSchemas[tool.name], { unrepresentable: 'any' }),
+  parameters: z.toJSONSchema(z.strictObject({ target: pmToolTargetSchema, arguments: agentChatToolInputSchemas[tool.name] }), { unrepresentable: 'any' }),
 } }));
 
 export type AgentChatToolScope = { kind: 'workspace' | 'projects'; projectIds: readonly string[] };

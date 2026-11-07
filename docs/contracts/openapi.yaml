@@ -3561,14 +3561,12 @@ paths:
         - sessionCookie: []
         - bearerAuth: []
       parameters: []
-      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
-        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
-        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
-        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
-        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
-        or unconfigured directories and never falls back to the repository root. Directory paths are execution
-        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
-        directory may survive a failed database commit.
+      description: PM business authorization and document/storage metadata only; these routes never resolve an Agent execution
+        directory or allocate chat scratch. Real membership/domain.read filters contexts, including empty projects. Host
+        path visibility requires unrestricted access.manage; configuration additionally requires planning.edit. Saves
+        use trusted LocalDirectory rules and revision CAS and never move PM data. Agent folders are selected
+        independently through the authenticated Agent directory service. An uncertain save must be re-read before
+        retrying.
       responses:
         "200":
           description: Current authorized context or saved directory mapping. Private, no-store.
@@ -3740,14 +3738,12 @@ paths:
           schema:
             type: string
             format: uuid
-      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
-        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
-        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
-        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
-        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
-        or unconfigured directories and never falls back to the repository root. Directory paths are execution
-        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
-        directory may survive a failed database commit.
+      description: PM business authorization and document/storage metadata only; these routes never resolve an Agent execution
+        directory or allocate chat scratch. Real membership/domain.read filters contexts, including empty projects. Host
+        path visibility requires unrestricted access.manage; configuration additionally requires planning.edit. Saves
+        use trusted LocalDirectory rules and revision CAS and never move PM data. Agent folders are selected
+        independently through the authenticated Agent directory service. An uncertain save must be re-read before
+        retrying.
       responses:
         "200":
           description: Current authorized context or saved directory mapping. Private, no-store.
@@ -3830,14 +3826,12 @@ paths:
           schema:
             type: string
             format: uuid
-      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
-        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
-        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
-        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
-        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
-        or unconfigured directories and never falls back to the repository root. Directory paths are execution
-        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
-        directory may survive a failed database commit.
+      description: PM business authorization and document/storage metadata only; these routes never resolve an Agent execution
+        directory or allocate chat scratch. Real membership/domain.read filters contexts, including empty projects. Host
+        path visibility requires unrestricted access.manage; configuration additionally requires planning.edit. Saves
+        use trusted LocalDirectory rules and revision CAS and never move PM data. Agent folders are selected
+        independently through the authenticated Agent directory service. An uncertain save must be re-read before
+        retrying.
       requestBody:
         required: true
         content:
@@ -3970,14 +3964,12 @@ paths:
           schema:
             type: string
             format: uuid
-      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
-        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
-        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
-        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
-        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
-        or unconfigured directories and never falls back to the repository root. Directory paths are execution
-        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
-        directory may survive a failed database commit.
+      description: PM business authorization and document/storage metadata only; these routes never resolve an Agent execution
+        directory or allocate chat scratch. Real membership/domain.read filters contexts, including empty projects. Host
+        path visibility requires unrestricted access.manage; configuration additionally requires planning.edit. Saves
+        use trusted LocalDirectory rules and revision CAS and never move PM data. Agent folders are selected
+        independently through the authenticated Agent directory service. An uncertain save must be re-read before
+        retrying.
       requestBody:
         required: true
         content:
@@ -4135,14 +4127,12 @@ paths:
           schema:
             type: string
             pattern: ^PRJ-\d+$
-      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
-        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
-        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
-        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
-        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
-        or unconfigured directories and never falls back to the repository root. Directory paths are execution
-        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
-        directory may survive a failed database commit.
+      description: PM business authorization and document/storage metadata only; these routes never resolve an Agent execution
+        directory or allocate chat scratch. Real membership/domain.read filters contexts, including empty projects. Host
+        path visibility requires unrestricted access.manage; configuration additionally requires planning.edit. Saves
+        use trusted LocalDirectory rules and revision CAS and never move PM data. Agent folders are selected
+        independently through the authenticated Agent directory service. An uncertain save must be re-read before
+        retrying.
       requestBody:
         required: true
         content:
@@ -4281,21 +4271,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  /api/v1/agent-contexts/resolve:
+  /api/v1/agent-contexts/authorize:
     post:
-      operationId: resolveAgentContext
+      operationId: authorizeAgentContext
       security:
         - sessionCookie: []
         - bearerAuth: []
       parameters: []
-      description: Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility
-        requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new
-        permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM
-        data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0
-        means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted
-        or unconfigured directories and never falls back to the repository root. Directory paths are execution
-        locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty
-        directory may survive a failed database commit.
+      description: PM business authorization and document/storage metadata only; these routes never resolve an Agent execution
+        directory or allocate chat scratch. Real membership/domain.read filters contexts, including empty projects. Host
+        path visibility requires unrestricted access.manage; configuration additionally requires planning.edit. Saves
+        use trusted LocalDirectory rules and revision CAS and never move PM data. Agent folders are selected
+        independently through the authenticated Agent directory service. An uncertain save must be re-read before
+        retrying.
       requestBody:
         required: true
         content:
@@ -4351,14 +4339,11 @@ paths:
                     type:
                       - string
                       - "null"
-                  path:
-                    type: string
                 required:
                   - scope
                   - actorId
                   - workspaceName
                   - projectName
-                  - path
                 additionalProperties: false
         "400":
           description: Authenticated PM error. Revision conflicts return agent_file_area_revision_conflict and
@@ -6132,6 +6117,1068 @@ paths:
             replay. document_source_cursor_invalid (409) requires restarting pagination. document_source_overlap (409)
             rejects equal/ancestor/descendant paths within the same association scope only. Unsafe/private paths,
             symlinks, hardlinks, special files, replaced directories, invalid UTF-8 and oversized files remain rejected.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/change-history/query:
+    post:
+      operationId: queryChangeHistory
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: Private immutable Markdown snapshots. Current workspace/project/source authorization is rechecked,
+        including moved/deleted/rebound sources. Metadata pages contain no bodies and are capped at 100 entries;
+        attention batches are capped at 500 tasks with afterTaskId pagination. More than 100 distinct retained external
+        address-binding pairs fails closed with 503 rather than truncating authorized counts. Initial observation is a
+        baseline, not invented prior history; filesystem observations have unknown author/time and only observed
+        endpoints. Opening history does not acknowledge changes, mark inbox read, accept work, or complete a task.
+        Acknowledgement requires the actor/target/exact-head observation token and unchanged authorized relation set;
+        concurrent newer edits remain pending. Personal attention includes only formally linked currently readable
+        requirements/documents. Decimal sequence strings are never JavaScript numbers. Writes are not automatically
+        retried.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                target:
+                  oneOf:
+                    - type: object
+                      properties:
+                        kind:
+                          type: string
+                          const: core
+                        entityId:
+                          type: string
+                          minLength: 1
+                          maxLength: 128
+                      required:
+                        - kind
+                        - entityId
+                      additionalProperties: false
+                    - type: object
+                      properties:
+                        kind:
+                          type: string
+                          const: external
+                        sourceId:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                          pattern: ^[A-Za-z0-9_-]+$
+                        path:
+                          type: string
+                          minLength: 1
+                          maxLength: 4096
+                      required:
+                        - kind
+                        - sourceId
+                        - path
+                      additionalProperties: false
+                includeRelated:
+                  type: boolean
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                cursor:
+                  type: string
+                  pattern: ^(0|[1-9]\d{0,18})$
+                head:
+                  type: string
+                  pattern: ^(0|[1-9]\d{0,18})$
+              required:
+                - target
+              additionalProperties: false
+      responses:
+        "200":
+          description: "Authorized immutable history or monotonic personal state. Cache-Control: private, no-store."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 100
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        changeId:
+                          type: string
+                          format: uuid
+                          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                        sequence:
+                          type: string
+                          pattern: ^(0|[1-9]\d{0,18})$
+                        target:
+                          oneOf:
+                            - type: object
+                              properties:
+                                kind:
+                                  type: string
+                                  const: core
+                                entityId:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 128
+                              required:
+                                - kind
+                                - entityId
+                              additionalProperties: false
+                            - type: object
+                              properties:
+                                kind:
+                                  type: string
+                                  const: external
+                                sourceId:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 200
+                                  pattern: ^[A-Za-z0-9_-]+$
+                                path:
+                                  type: string
+                                  minLength: 1
+                                  maxLength: 4096
+                              required:
+                                - kind
+                                - sourceId
+                                - path
+                              additionalProperties: false
+                        entityKind:
+                          type: string
+                        projectId:
+                          type:
+                            - string
+                            - "null"
+                        changeKinds:
+                          type: array
+                          items:
+                            type: string
+                        changedFields:
+                          type: array
+                          items:
+                            type: string
+                        origin:
+                          type: string
+                          enum:
+                            - manual
+                            - agent
+                            - automation
+                            - observation
+                        actorId:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            - type: "null"
+                        occurredAt:
+                          type:
+                            - string
+                            - "null"
+                        observedAt:
+                          type: string
+                        beforeRevision:
+                          type:
+                            - string
+                            - "null"
+                        afterRevision:
+                          type:
+                            - string
+                            - "null"
+                        completeness:
+                          type: string
+                          enum:
+                            - exact
+                            - observed_endpoints
+                            - baseline
+                            - missing_before
+                        relation:
+                          type: string
+                          enum:
+                            - self
+                            - related_requirement
+                            - related_document
+                      required:
+                        - changeId
+                        - sequence
+                        - target
+                        - entityKind
+                        - projectId
+                        - changeKinds
+                        - changedFields
+                        - origin
+                        - actorId
+                        - occurredAt
+                        - observedAt
+                        - beforeRevision
+                        - afterRevision
+                        - completeness
+                        - relation
+                      additionalProperties: false
+                  head:
+                    type: string
+                    pattern: ^(0|[1-9]\d{0,18})$
+                  nextCursor:
+                    anyOf:
+                      - type: string
+                        pattern: ^(0|[1-9]\d{0,18})$
+                      - type: "null"
+                  reviewedThrough:
+                    type: string
+                    pattern: ^(0|[1-9]\d{0,18})$
+                  pendingCount:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                  observationToken:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  completeness:
+                    type: string
+                    enum:
+                      - complete_since_capture
+                      - baseline_gap
+                      - observer_gap
+                required:
+                  - items
+                  - head
+                  - nextCursor
+                  - reviewedThrough
+                  - pendingCount
+                  - observationToken
+                  - completeness
+                additionalProperties: false
+        "400":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/change-history/compare:
+    post:
+      operationId: compareChangeHistory
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: Private immutable Markdown snapshots. Current workspace/project/source authorization is rechecked,
+        including moved/deleted/rebound sources. Metadata pages contain no bodies and are capped at 100 entries;
+        attention batches are capped at 500 tasks with afterTaskId pagination. More than 100 distinct retained external
+        address-binding pairs fails closed with 503 rather than truncating authorized counts. Initial observation is a
+        baseline, not invented prior history; filesystem observations have unknown author/time and only observed
+        endpoints. Opening history does not acknowledge changes, mark inbox read, accept work, or complete a task.
+        Acknowledgement requires the actor/target/exact-head observation token and unchanged authorized relation set;
+        concurrent newer edits remain pending. Personal attention includes only formally linked currently readable
+        requirements/documents. Decimal sequence strings are never JavaScript numbers. Writes are not automatically
+        retried.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                target:
+                  oneOf:
+                    - type: object
+                      properties:
+                        kind:
+                          type: string
+                          const: core
+                        entityId:
+                          type: string
+                          minLength: 1
+                          maxLength: 128
+                      required:
+                        - kind
+                        - entityId
+                      additionalProperties: false
+                    - type: object
+                      properties:
+                        kind:
+                          type: string
+                          const: external
+                        sourceId:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                          pattern: ^[A-Za-z0-9_-]+$
+                        path:
+                          type: string
+                          minLength: 1
+                          maxLength: 4096
+                      required:
+                        - kind
+                        - sourceId
+                        - path
+                      additionalProperties: false
+                fromChangeId:
+                  anyOf:
+                    - type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    - type: "null"
+                toChangeId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                through:
+                  type: string
+                  pattern: ^(0|[1-9]\d{0,18})$
+              required:
+                - target
+              additionalProperties: false
+      responses:
+        "200":
+          description: "Authorized immutable history or monotonic personal state. Cache-Control: private, no-store."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  target:
+                    oneOf:
+                      - type: object
+                        properties:
+                          kind:
+                            type: string
+                            const: core
+                          entityId:
+                            type: string
+                            minLength: 1
+                            maxLength: 128
+                        required:
+                          - kind
+                          - entityId
+                        additionalProperties: false
+                      - type: object
+                        properties:
+                          kind:
+                            type: string
+                            const: external
+                          sourceId:
+                            type: string
+                            minLength: 1
+                            maxLength: 200
+                            pattern: ^[A-Za-z0-9_-]+$
+                          path:
+                            type: string
+                            minLength: 1
+                            maxLength: 4096
+                        required:
+                          - kind
+                          - sourceId
+                          - path
+                        additionalProperties: false
+                  before:
+                    anyOf:
+                      - type: object
+                        properties:
+                          revision:
+                            type: string
+                          body:
+                            type:
+                              - string
+                              - "null"
+                          raw:
+                            type: string
+                          metadata:
+                            anyOf:
+                              - type: object
+                                propertyNames:
+                                  type: string
+                                additionalProperties: {}
+                              - type: "null"
+                        required:
+                          - revision
+                          - body
+                          - raw
+                          - metadata
+                        additionalProperties: false
+                      - type: "null"
+                  after:
+                    anyOf:
+                      - type: object
+                        properties:
+                          revision:
+                            type: string
+                          body:
+                            type:
+                              - string
+                              - "null"
+                          raw:
+                            type: string
+                          metadata:
+                            anyOf:
+                              - type: object
+                                propertyNames:
+                                  type: string
+                                additionalProperties: {}
+                              - type: "null"
+                        required:
+                          - revision
+                          - body
+                          - raw
+                          - metadata
+                        additionalProperties: false
+                      - type: "null"
+                  fromChangeId:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  toChangeId:
+                    anyOf:
+                      - type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      - type: "null"
+                  head:
+                    type: string
+                    pattern: ^(0|[1-9]\d{0,18})$
+                  completeness:
+                    type: string
+                    enum:
+                      - exact
+                      - observed_endpoints
+                      - baseline
+                      - missing_before
+                required:
+                  - target
+                  - before
+                  - after
+                  - fromChangeId
+                  - toChangeId
+                  - head
+                  - completeness
+                additionalProperties: false
+        "400":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/change-history/acknowledge:
+    post:
+      operationId: acknowledgeChangeHistory
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: Private immutable Markdown snapshots. Current workspace/project/source authorization is rechecked,
+        including moved/deleted/rebound sources. Metadata pages contain no bodies and are capped at 100 entries;
+        attention batches are capped at 500 tasks with afterTaskId pagination. More than 100 distinct retained external
+        address-binding pairs fails closed with 503 rather than truncating authorized counts. Initial observation is a
+        baseline, not invented prior history; filesystem observations have unknown author/time and only observed
+        endpoints. Opening history does not acknowledge changes, mark inbox read, accept work, or complete a task.
+        Acknowledgement requires the actor/target/exact-head observation token and unchanged authorized relation set;
+        concurrent newer edits remain pending. Personal attention includes only formally linked currently readable
+        requirements/documents. Decimal sequence strings are never JavaScript numbers. Writes are not automatically
+        retried.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                target:
+                  oneOf:
+                    - type: object
+                      properties:
+                        kind:
+                          type: string
+                          const: core
+                        entityId:
+                          type: string
+                          minLength: 1
+                          maxLength: 128
+                      required:
+                        - kind
+                        - entityId
+                      additionalProperties: false
+                    - type: object
+                      properties:
+                        kind:
+                          type: string
+                          const: external
+                        sourceId:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                          pattern: ^[A-Za-z0-9_-]+$
+                        path:
+                          type: string
+                          minLength: 1
+                          maxLength: 4096
+                      required:
+                        - kind
+                        - sourceId
+                        - path
+                      additionalProperties: false
+                through:
+                  type: string
+                  pattern: ^(0|[1-9]\d{0,18})$
+                observationToken:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - target
+                - through
+                - observationToken
+              additionalProperties: false
+      responses:
+        "200":
+          description: "Authorized immutable history or monotonic personal state. Cache-Control: private, no-store."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reviewedThrough:
+                    type: string
+                    pattern: ^(0|[1-9]\d{0,18})$
+                  head:
+                    type: string
+                    pattern: ^(0|[1-9]\d{0,18})$
+                  pendingCount:
+                    type: integer
+                    minimum: 0
+                    maximum: 9007199254740991
+                required:
+                  - reviewedThrough
+                  - head
+                  - pendingCount
+                additionalProperties: false
+        "400":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/change-history/attention:
+    post:
+      operationId: readTaskAttention
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: Private immutable Markdown snapshots. Current workspace/project/source authorization is rechecked,
+        including moved/deleted/rebound sources. Metadata pages contain no bodies and are capped at 100 entries;
+        attention batches are capped at 500 tasks with afterTaskId pagination. More than 100 distinct retained external
+        address-binding pairs fails closed with 503 rather than truncating authorized counts. Initial observation is a
+        baseline, not invented prior history; filesystem observations have unknown author/time and only observed
+        endpoints. Opening history does not acknowledge changes, mark inbox read, accept work, or complete a task.
+        Acknowledgement requires the actor/target/exact-head observation token and unchanged authorized relation set;
+        concurrent newer edits remain pending. Personal attention includes only formally linked currently readable
+        requirements/documents. Decimal sequence strings are never JavaScript numbers. Writes are not automatically
+        retried.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $schema: https://json-schema.org/draft/2020-12/schema
+              type: object
+              properties:
+                taskIds:
+                  maxItems: 500
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                    maxLength: 128
+                projectId:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                afterTaskId:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+              additionalProperties: false
+      responses:
+        "200":
+          description: "Authorized immutable history or monotonic personal state. Cache-Control: private, no-store."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    maxItems: 500
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        taskId:
+                          type: string
+                        head:
+                          type: string
+                          pattern: ^(0|[1-9]\d{0,18})$
+                        reviewedThrough:
+                          type: string
+                          pattern: ^(0|[1-9]\d{0,18})$
+                        pendingCount:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        ownPendingCount:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                        relatedPendingCount:
+                          type: integer
+                          minimum: 0
+                          maximum: 9007199254740991
+                      required:
+                        - taskId
+                        - head
+                        - reviewedThrough
+                        - pendingCount
+                        - ownPendingCount
+                        - relatedPendingCount
+                      additionalProperties: false
+                  nextTaskId:
+                    type:
+                      - string
+                      - "null"
+                required:
+                  - items
+                  - nextTaskId
+                additionalProperties: false
+        "400":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/workspaces/{workspaceId}/change-history/{changeId}:
+    get:
+      operationId: readChangeHistoryDetail
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: changeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      description: Private immutable Markdown snapshots. Current workspace/project/source authorization is rechecked,
+        including moved/deleted/rebound sources. Metadata pages contain no bodies and are capped at 100 entries;
+        attention batches are capped at 500 tasks with afterTaskId pagination. More than 100 distinct retained external
+        address-binding pairs fails closed with 503 rather than truncating authorized counts. Initial observation is a
+        baseline, not invented prior history; filesystem observations have unknown author/time and only observed
+        endpoints. Opening history does not acknowledge changes, mark inbox read, accept work, or complete a task.
+        Acknowledgement requires the actor/target/exact-head observation token and unchanged authorized relation set;
+        concurrent newer edits remain pending. Personal attention includes only formally linked currently readable
+        requirements/documents. Decimal sequence strings are never JavaScript numbers. Writes are not automatically
+        retried.
+      responses:
+        "200":
+          description: "Authorized immutable history or monotonic personal state. Cache-Control: private, no-store."
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  change:
+                    type: object
+                    properties:
+                      changeId:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      sequence:
+                        type: string
+                        pattern: ^(0|[1-9]\d{0,18})$
+                      target:
+                        oneOf:
+                          - type: object
+                            properties:
+                              kind:
+                                type: string
+                                const: core
+                              entityId:
+                                type: string
+                                minLength: 1
+                                maxLength: 128
+                            required:
+                              - kind
+                              - entityId
+                            additionalProperties: false
+                          - type: object
+                            properties:
+                              kind:
+                                type: string
+                                const: external
+                              sourceId:
+                                type: string
+                                minLength: 1
+                                maxLength: 200
+                                pattern: ^[A-Za-z0-9_-]+$
+                              path:
+                                type: string
+                                minLength: 1
+                                maxLength: 4096
+                            required:
+                              - kind
+                              - sourceId
+                              - path
+                            additionalProperties: false
+                      entityKind:
+                        type: string
+                      projectId:
+                        type:
+                          - string
+                          - "null"
+                      changeKinds:
+                        type: array
+                        items:
+                          type: string
+                      changedFields:
+                        type: array
+                        items:
+                          type: string
+                      origin:
+                        type: string
+                        enum:
+                          - manual
+                          - agent
+                          - automation
+                          - observation
+                      actorId:
+                        anyOf:
+                          - type: string
+                            format: uuid
+                            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                          - type: "null"
+                      occurredAt:
+                        type:
+                          - string
+                          - "null"
+                      observedAt:
+                        type: string
+                      beforeRevision:
+                        type:
+                          - string
+                          - "null"
+                      afterRevision:
+                        type:
+                          - string
+                          - "null"
+                      completeness:
+                        type: string
+                        enum:
+                          - exact
+                          - observed_endpoints
+                          - baseline
+                          - missing_before
+                      relation:
+                        type: string
+                        enum:
+                          - self
+                          - related_requirement
+                          - related_document
+                    required:
+                      - changeId
+                      - sequence
+                      - target
+                      - entityKind
+                      - projectId
+                      - changeKinds
+                      - changedFields
+                      - origin
+                      - actorId
+                      - occurredAt
+                      - observedAt
+                      - beforeRevision
+                      - afterRevision
+                      - completeness
+                      - relation
+                    additionalProperties: false
+                  before:
+                    anyOf:
+                      - type: object
+                        properties:
+                          revision:
+                            type: string
+                          body:
+                            type:
+                              - string
+                              - "null"
+                          raw:
+                            type: string
+                          metadata:
+                            anyOf:
+                              - type: object
+                                propertyNames:
+                                  type: string
+                                additionalProperties: {}
+                              - type: "null"
+                        required:
+                          - revision
+                          - body
+                          - raw
+                          - metadata
+                        additionalProperties: false
+                      - type: "null"
+                  after:
+                    anyOf:
+                      - type: object
+                        properties:
+                          revision:
+                            type: string
+                          body:
+                            type:
+                              - string
+                              - "null"
+                          raw:
+                            type: string
+                          metadata:
+                            anyOf:
+                              - type: object
+                                propertyNames:
+                                  type: string
+                                additionalProperties: {}
+                              - type: "null"
+                        required:
+                          - revision
+                          - body
+                          - raw
+                          - metadata
+                        additionalProperties: false
+                      - type: "null"
+                required:
+                  - change
+                  - before
+                  - after
+                additionalProperties: false
+        "400":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: PM error envelope; invalid/unobserved head, scope change and invalid comparison endpoints are rejected,
+            never silently acknowledged.
           content:
             application/json:
               schema:
@@ -8460,6 +9507,20 @@ paths:
           required: false
           schema:
             type: string
+        - name: projectId
+          in: query
+          required: false
+          description: Current authorized project scope, applied before cursor pagination. Definitions remain creator-private.
+          schema:
+            type: string
+            pattern: ^PRJ-\d+$
+        - name: quickAccess
+          in: query
+          required: false
+          description: Filter before pagination by the saved shortcut switch. Omitted config values count as false; omit this
+            query to include both.
+          schema:
+            type: boolean
       description: Creator-private PM execution definition. Every operation rechecks current actor/workspace/project
         authorization. Writes require planning.edit, requestId and expectedRevision except create/cancel. Create
         persists a draft only. Validation has no execution/model/tool effects. Explicit test freezes a saved revision
@@ -8524,6 +9585,10 @@ paths:
                                 - type: string
                                   maxLength: 200
                                 - type: "null"
+                            quickAccess:
+                              description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                                execution authority.
+                              type: boolean
                             action:
                               oneOf:
                                 - type: object
@@ -8573,6 +9638,29 @@ paths:
                                       type: integer
                                       minimum: 1
                                       maximum: 86400
+                                    executionSelection:
+                                      type: object
+                                      properties:
+                                        version:
+                                          type: number
+                                          const: 2
+                                        agentWorkspaceId:
+                                          anyOf:
+                                            - type: string
+                                              minLength: 1
+                                              maxLength: 128
+                                            - type: "null"
+                                        agentWorkspaceRevision:
+                                          anyOf:
+                                            - type: integer
+                                              exclusiveMinimum: 0
+                                              maximum: 9007199254740991
+                                            - type: "null"
+                                      required:
+                                        - version
+                                        - agentWorkspaceId
+                                        - agentWorkspaceRevision
+                                      additionalProperties: false
                                     providerInstanceId:
                                       type: string
                                       minLength: 1
@@ -8653,6 +9741,29 @@ paths:
                                       type: integer
                                       minimum: 1
                                       maximum: 86400
+                                    executionSelection:
+                                      type: object
+                                      properties:
+                                        version:
+                                          type: number
+                                          const: 2
+                                        agentWorkspaceId:
+                                          anyOf:
+                                            - type: string
+                                              minLength: 1
+                                              maxLength: 128
+                                            - type: "null"
+                                        agentWorkspaceRevision:
+                                          anyOf:
+                                            - type: integer
+                                              exclusiveMinimum: 0
+                                              maximum: 9007199254740991
+                                            - type: "null"
+                                      required:
+                                        - version
+                                        - agentWorkspaceId
+                                        - agentWorkspaceRevision
+                                      additionalProperties: false
                                     entrypoint:
                                       type: string
                                       minLength: 1
@@ -8743,6 +9854,29 @@ paths:
                                       type: integer
                                       minimum: 1
                                       maximum: 86400
+                                    executionSelection:
+                                      type: object
+                                      properties:
+                                        version:
+                                          type: number
+                                          const: 2
+                                        agentWorkspaceId:
+                                          anyOf:
+                                            - type: string
+                                              minLength: 1
+                                              maxLength: 128
+                                            - type: "null"
+                                        agentWorkspaceRevision:
+                                          anyOf:
+                                            - type: integer
+                                              exclusiveMinimum: 0
+                                              maximum: 9007199254740991
+                                            - type: "null"
+                                      required:
+                                        - version
+                                        - agentWorkspaceId
+                                        - agentWorkspaceRevision
+                                      additionalProperties: false
                                     providerInstanceId:
                                       anyOf:
                                         - type: string
@@ -8946,6 +10080,10 @@ paths:
                             - draft
                             - enabled
                             - paused
+                        historicalExecutionSelection: {}
+                        executionUnavailableReason:
+                          type: string
+                          const: agent_workspace_selection_required
                         createdAt:
                           type: string
                           format: date-time
@@ -9068,6 +10206,10 @@ paths:
                         - type: string
                           maxLength: 200
                         - type: "null"
+                    quickAccess:
+                      description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                        execution authority.
+                      type: boolean
                     action:
                       oneOf:
                         - type: object
@@ -9117,6 +10259,29 @@ paths:
                               type: integer
                               minimum: 1
                               maximum: 86400
+                            executionSelection:
+                              type: object
+                              properties:
+                                version:
+                                  type: number
+                                  const: 2
+                                agentWorkspaceId:
+                                  anyOf:
+                                    - type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    - type: "null"
+                                agentWorkspaceRevision:
+                                  anyOf:
+                                    - type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                              required:
+                                - version
+                                - agentWorkspaceId
+                                - agentWorkspaceRevision
+                              additionalProperties: false
                             providerInstanceId:
                               type: string
                               minLength: 1
@@ -9197,6 +10362,29 @@ paths:
                               type: integer
                               minimum: 1
                               maximum: 86400
+                            executionSelection:
+                              type: object
+                              properties:
+                                version:
+                                  type: number
+                                  const: 2
+                                agentWorkspaceId:
+                                  anyOf:
+                                    - type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    - type: "null"
+                                agentWorkspaceRevision:
+                                  anyOf:
+                                    - type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                              required:
+                                - version
+                                - agentWorkspaceId
+                                - agentWorkspaceRevision
+                              additionalProperties: false
                             entrypoint:
                               type: string
                               minLength: 1
@@ -9287,6 +10475,29 @@ paths:
                               type: integer
                               minimum: 1
                               maximum: 86400
+                            executionSelection:
+                              type: object
+                              properties:
+                                version:
+                                  type: number
+                                  const: 2
+                                agentWorkspaceId:
+                                  anyOf:
+                                    - type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    - type: "null"
+                                agentWorkspaceRevision:
+                                  anyOf:
+                                    - type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                              required:
+                                - version
+                                - agentWorkspaceId
+                                - agentWorkspaceRevision
+                              additionalProperties: false
                             providerInstanceId:
                               anyOf:
                                 - type: string
@@ -9539,6 +10750,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -9588,6 +10803,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -9668,6 +10906,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -9758,6 +11019,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -9960,6 +11244,10 @@ paths:
                       - draft
                       - enabled
                       - paused
+                  historicalExecutionSelection: {}
+                  executionUnavailableReason:
+                    type: string
+                    const: agent_workspace_selection_required
                   createdAt:
                     type: string
                     format: date-time
@@ -10071,6 +11359,10 @@ paths:
                         - type: string
                           maxLength: 200
                         - type: "null"
+                    quickAccess:
+                      description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                        execution authority.
+                      type: boolean
                     action:
                       oneOf:
                         - type: object
@@ -10120,6 +11412,29 @@ paths:
                               type: integer
                               minimum: 1
                               maximum: 86400
+                            executionSelection:
+                              type: object
+                              properties:
+                                version:
+                                  type: number
+                                  const: 2
+                                agentWorkspaceId:
+                                  anyOf:
+                                    - type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    - type: "null"
+                                agentWorkspaceRevision:
+                                  anyOf:
+                                    - type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                              required:
+                                - version
+                                - agentWorkspaceId
+                                - agentWorkspaceRevision
+                              additionalProperties: false
                             providerInstanceId:
                               type: string
                               minLength: 1
@@ -10200,6 +11515,29 @@ paths:
                               type: integer
                               minimum: 1
                               maximum: 86400
+                            executionSelection:
+                              type: object
+                              properties:
+                                version:
+                                  type: number
+                                  const: 2
+                                agentWorkspaceId:
+                                  anyOf:
+                                    - type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    - type: "null"
+                                agentWorkspaceRevision:
+                                  anyOf:
+                                    - type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                              required:
+                                - version
+                                - agentWorkspaceId
+                                - agentWorkspaceRevision
+                              additionalProperties: false
                             entrypoint:
                               type: string
                               minLength: 1
@@ -10290,6 +11628,29 @@ paths:
                               type: integer
                               minimum: 1
                               maximum: 86400
+                            executionSelection:
+                              type: object
+                              properties:
+                                version:
+                                  type: number
+                                  const: 2
+                                agentWorkspaceId:
+                                  anyOf:
+                                    - type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    - type: "null"
+                                agentWorkspaceRevision:
+                                  anyOf:
+                                    - type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                              required:
+                                - version
+                                - agentWorkspaceId
+                                - agentWorkspaceRevision
+                              additionalProperties: false
                             providerInstanceId:
                               anyOf:
                                 - type: string
@@ -10623,6 +11984,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -10672,6 +12037,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -10752,6 +12140,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -10842,6 +12253,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -11044,6 +12478,10 @@ paths:
                       - draft
                       - enabled
                       - paused
+                  historicalExecutionSelection: {}
+                  executionUnavailableReason:
+                    type: string
+                    const: agent_workspace_selection_required
                   createdAt:
                     type: string
                     format: date-time
@@ -11168,6 +12606,10 @@ paths:
                         - type: string
                           maxLength: 200
                         - type: "null"
+                    quickAccess:
+                      description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                        execution authority.
+                      type: boolean
                     action:
                       oneOf:
                         - type: object
@@ -11217,6 +12659,29 @@ paths:
                               type: integer
                               minimum: 1
                               maximum: 86400
+                            executionSelection:
+                              type: object
+                              properties:
+                                version:
+                                  type: number
+                                  const: 2
+                                agentWorkspaceId:
+                                  anyOf:
+                                    - type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    - type: "null"
+                                agentWorkspaceRevision:
+                                  anyOf:
+                                    - type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                              required:
+                                - version
+                                - agentWorkspaceId
+                                - agentWorkspaceRevision
+                              additionalProperties: false
                             providerInstanceId:
                               type: string
                               minLength: 1
@@ -11297,6 +12762,29 @@ paths:
                               type: integer
                               minimum: 1
                               maximum: 86400
+                            executionSelection:
+                              type: object
+                              properties:
+                                version:
+                                  type: number
+                                  const: 2
+                                agentWorkspaceId:
+                                  anyOf:
+                                    - type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    - type: "null"
+                                agentWorkspaceRevision:
+                                  anyOf:
+                                    - type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                              required:
+                                - version
+                                - agentWorkspaceId
+                                - agentWorkspaceRevision
+                              additionalProperties: false
                             entrypoint:
                               type: string
                               minLength: 1
@@ -11387,6 +12875,29 @@ paths:
                               type: integer
                               minimum: 1
                               maximum: 86400
+                            executionSelection:
+                              type: object
+                              properties:
+                                version:
+                                  type: number
+                                  const: 2
+                                agentWorkspaceId:
+                                  anyOf:
+                                    - type: string
+                                      minLength: 1
+                                      maxLength: 128
+                                    - type: "null"
+                                agentWorkspaceRevision:
+                                  anyOf:
+                                    - type: integer
+                                      exclusiveMinimum: 0
+                                      maximum: 9007199254740991
+                                    - type: "null"
+                              required:
+                                - version
+                                - agentWorkspaceId
+                                - agentWorkspaceRevision
+                              additionalProperties: false
                             providerInstanceId:
                               anyOf:
                                 - type: string
@@ -11640,6 +13151,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -11689,6 +13204,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -11769,6 +13307,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -11859,6 +13420,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -12061,6 +13645,10 @@ paths:
                       - draft
                       - enabled
                       - paused
+                  historicalExecutionSelection: {}
+                  executionUnavailableReason:
+                    type: string
+                    const: agent_workspace_selection_required
                   createdAt:
                     type: string
                     format: date-time
@@ -12291,6 +13879,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -12340,6 +13932,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -12420,6 +14035,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -12510,6 +14148,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -12712,6 +14373,10 @@ paths:
                       - draft
                       - enabled
                       - paused
+                  historicalExecutionSelection: {}
+                  executionUnavailableReason:
+                    type: string
+                    const: agent_workspace_selection_required
                   createdAt:
                     type: string
                     format: date-time
@@ -12867,6 +14532,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -12916,6 +14585,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -12996,6 +14688,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -13086,6 +14801,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -13282,6 +15020,10 @@ paths:
                       - dailyLimit
                       - cooldownMinutes
                     additionalProperties: false
+                  historicalExecutionSelection: {}
+                  executionUnavailableReason:
+                    type: string
+                    const: agent_workspace_selection_required
                   trigger:
                     type: string
                     enum:
@@ -13475,6 +15217,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -13524,6 +15270,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -13604,6 +15373,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -13694,6 +15486,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -13890,6 +15705,10 @@ paths:
                       - dailyLimit
                       - cooldownMinutes
                     additionalProperties: false
+                  historicalExecutionSelection: {}
+                  executionUnavailableReason:
+                    type: string
+                    const: agent_workspace_selection_required
                   trigger:
                     type: string
                     enum:
@@ -14068,6 +15887,10 @@ paths:
                                 - type: string
                                   maxLength: 200
                                 - type: "null"
+                            quickAccess:
+                              description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                                execution authority.
+                              type: boolean
                             action:
                               oneOf:
                                 - type: object
@@ -14117,6 +15940,29 @@ paths:
                                       type: integer
                                       minimum: 1
                                       maximum: 86400
+                                    executionSelection:
+                                      type: object
+                                      properties:
+                                        version:
+                                          type: number
+                                          const: 2
+                                        agentWorkspaceId:
+                                          anyOf:
+                                            - type: string
+                                              minLength: 1
+                                              maxLength: 128
+                                            - type: "null"
+                                        agentWorkspaceRevision:
+                                          anyOf:
+                                            - type: integer
+                                              exclusiveMinimum: 0
+                                              maximum: 9007199254740991
+                                            - type: "null"
+                                      required:
+                                        - version
+                                        - agentWorkspaceId
+                                        - agentWorkspaceRevision
+                                      additionalProperties: false
                                     providerInstanceId:
                                       type: string
                                       minLength: 1
@@ -14197,6 +16043,29 @@ paths:
                                       type: integer
                                       minimum: 1
                                       maximum: 86400
+                                    executionSelection:
+                                      type: object
+                                      properties:
+                                        version:
+                                          type: number
+                                          const: 2
+                                        agentWorkspaceId:
+                                          anyOf:
+                                            - type: string
+                                              minLength: 1
+                                              maxLength: 128
+                                            - type: "null"
+                                        agentWorkspaceRevision:
+                                          anyOf:
+                                            - type: integer
+                                              exclusiveMinimum: 0
+                                              maximum: 9007199254740991
+                                            - type: "null"
+                                      required:
+                                        - version
+                                        - agentWorkspaceId
+                                        - agentWorkspaceRevision
+                                      additionalProperties: false
                                     entrypoint:
                                       type: string
                                       minLength: 1
@@ -14287,6 +16156,29 @@ paths:
                                       type: integer
                                       minimum: 1
                                       maximum: 86400
+                                    executionSelection:
+                                      type: object
+                                      properties:
+                                        version:
+                                          type: number
+                                          const: 2
+                                        agentWorkspaceId:
+                                          anyOf:
+                                            - type: string
+                                              minLength: 1
+                                              maxLength: 128
+                                            - type: "null"
+                                        agentWorkspaceRevision:
+                                          anyOf:
+                                            - type: integer
+                                              exclusiveMinimum: 0
+                                              maximum: 9007199254740991
+                                            - type: "null"
+                                      required:
+                                        - version
+                                        - agentWorkspaceId
+                                        - agentWorkspaceRevision
+                                      additionalProperties: false
                                     providerInstanceId:
                                       anyOf:
                                         - type: string
@@ -14484,6 +16376,10 @@ paths:
                             - dailyLimit
                             - cooldownMinutes
                           additionalProperties: false
+                        historicalExecutionSelection: {}
+                        executionUnavailableReason:
+                          type: string
+                          const: agent_workspace_selection_required
                         trigger:
                           type: string
                           enum:
@@ -14660,6 +16556,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -14709,6 +16609,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -14789,6 +16712,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -14879,6 +16825,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -15075,6 +17044,10 @@ paths:
                       - dailyLimit
                       - cooldownMinutes
                     additionalProperties: false
+                  historicalExecutionSelection: {}
+                  executionUnavailableReason:
+                    type: string
+                    const: agent_workspace_selection_required
                   trigger:
                     type: string
                     enum:
@@ -15357,6 +17330,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -15406,6 +17383,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -15486,6 +17486,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -15576,6 +17599,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -15772,6 +17818,10 @@ paths:
                       - dailyLimit
                       - cooldownMinutes
                     additionalProperties: false
+                  historicalExecutionSelection: {}
+                  executionUnavailableReason:
+                    type: string
+                    const: agent_workspace_selection_required
                   trigger:
                     type: string
                     enum:
@@ -15955,6 +18005,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -16004,6 +18058,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -16084,6 +18161,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -16174,6 +18274,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -16370,6 +18493,10 @@ paths:
                       - dailyLimit
                       - cooldownMinutes
                     additionalProperties: false
+                  historicalExecutionSelection: {}
+                  executionUnavailableReason:
+                    type: string
+                    const: agent_workspace_selection_required
                   trigger:
                     type: string
                     enum:
@@ -17670,6 +19797,10 @@ paths:
                           - type: string
                             maxLength: 200
                           - type: "null"
+                      quickAccess:
+                        description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                          execution authority.
+                        type: boolean
                       action:
                         oneOf:
                           - type: object
@@ -17719,6 +19850,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 type: string
                                 minLength: 1
@@ -17799,6 +19953,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               entrypoint:
                                 type: string
                                 minLength: 1
@@ -17889,6 +20066,29 @@ paths:
                                 type: integer
                                 minimum: 1
                                 maximum: 86400
+                              executionSelection:
+                                type: object
+                                properties:
+                                  version:
+                                    type: number
+                                    const: 2
+                                  agentWorkspaceId:
+                                    anyOf:
+                                      - type: string
+                                        minLength: 1
+                                        maxLength: 128
+                                      - type: "null"
+                                  agentWorkspaceRevision:
+                                    anyOf:
+                                      - type: integer
+                                        exclusiveMinimum: 0
+                                        maximum: 9007199254740991
+                                      - type: "null"
+                                required:
+                                  - version
+                                  - agentWorkspaceId
+                                  - agentWorkspaceRevision
+                                additionalProperties: false
                               providerInstanceId:
                                 anyOf:
                                   - type: string
@@ -18255,6 +20455,10 @@ paths:
                                   - type: string
                                     maxLength: 200
                                   - type: "null"
+                              quickAccess:
+                                description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                                  execution authority.
+                                type: boolean
                               action:
                                 oneOf:
                                   - type: object
@@ -18304,6 +20508,29 @@ paths:
                                         type: integer
                                         minimum: 1
                                         maximum: 86400
+                                      executionSelection:
+                                        type: object
+                                        properties:
+                                          version:
+                                            type: number
+                                            const: 2
+                                          agentWorkspaceId:
+                                            anyOf:
+                                              - type: string
+                                                minLength: 1
+                                                maxLength: 128
+                                              - type: "null"
+                                          agentWorkspaceRevision:
+                                            anyOf:
+                                              - type: integer
+                                                exclusiveMinimum: 0
+                                                maximum: 9007199254740991
+                                              - type: "null"
+                                        required:
+                                          - version
+                                          - agentWorkspaceId
+                                          - agentWorkspaceRevision
+                                        additionalProperties: false
                                       providerInstanceId:
                                         type: string
                                         minLength: 1
@@ -18384,6 +20611,29 @@ paths:
                                         type: integer
                                         minimum: 1
                                         maximum: 86400
+                                      executionSelection:
+                                        type: object
+                                        properties:
+                                          version:
+                                            type: number
+                                            const: 2
+                                          agentWorkspaceId:
+                                            anyOf:
+                                              - type: string
+                                                minLength: 1
+                                                maxLength: 128
+                                              - type: "null"
+                                          agentWorkspaceRevision:
+                                            anyOf:
+                                              - type: integer
+                                                exclusiveMinimum: 0
+                                                maximum: 9007199254740991
+                                              - type: "null"
+                                        required:
+                                          - version
+                                          - agentWorkspaceId
+                                          - agentWorkspaceRevision
+                                        additionalProperties: false
                                       entrypoint:
                                         type: string
                                         minLength: 1
@@ -18474,6 +20724,29 @@ paths:
                                         type: integer
                                         minimum: 1
                                         maximum: 86400
+                                      executionSelection:
+                                        type: object
+                                        properties:
+                                          version:
+                                            type: number
+                                            const: 2
+                                          agentWorkspaceId:
+                                            anyOf:
+                                              - type: string
+                                                minLength: 1
+                                                maxLength: 128
+                                              - type: "null"
+                                          agentWorkspaceRevision:
+                                            anyOf:
+                                              - type: integer
+                                                exclusiveMinimum: 0
+                                                maximum: 9007199254740991
+                                              - type: "null"
+                                        required:
+                                          - version
+                                          - agentWorkspaceId
+                                          - agentWorkspaceRevision
+                                        additionalProperties: false
                                       providerInstanceId:
                                         anyOf:
                                           - type: string
@@ -18677,6 +20950,10 @@ paths:
                               - draft
                               - enabled
                               - paused
+                          historicalExecutionSelection: {}
+                          executionUnavailableReason:
+                            type: string
+                            const: agent_workspace_selection_required
                           createdAt:
                             type: string
                             format: date-time
@@ -18832,6 +21109,10 @@ paths:
                                   - type: string
                                     maxLength: 200
                                   - type: "null"
+                              quickAccess:
+                                description: Show this saved definition in the authorized project assistant shortcuts. Omitted means false; it grants no
+                                  execution authority.
+                                type: boolean
                               action:
                                 oneOf:
                                   - type: object
@@ -18881,6 +21162,29 @@ paths:
                                         type: integer
                                         minimum: 1
                                         maximum: 86400
+                                      executionSelection:
+                                        type: object
+                                        properties:
+                                          version:
+                                            type: number
+                                            const: 2
+                                          agentWorkspaceId:
+                                            anyOf:
+                                              - type: string
+                                                minLength: 1
+                                                maxLength: 128
+                                              - type: "null"
+                                          agentWorkspaceRevision:
+                                            anyOf:
+                                              - type: integer
+                                                exclusiveMinimum: 0
+                                                maximum: 9007199254740991
+                                              - type: "null"
+                                        required:
+                                          - version
+                                          - agentWorkspaceId
+                                          - agentWorkspaceRevision
+                                        additionalProperties: false
                                       providerInstanceId:
                                         type: string
                                         minLength: 1
@@ -18961,6 +21265,29 @@ paths:
                                         type: integer
                                         minimum: 1
                                         maximum: 86400
+                                      executionSelection:
+                                        type: object
+                                        properties:
+                                          version:
+                                            type: number
+                                            const: 2
+                                          agentWorkspaceId:
+                                            anyOf:
+                                              - type: string
+                                                minLength: 1
+                                                maxLength: 128
+                                              - type: "null"
+                                          agentWorkspaceRevision:
+                                            anyOf:
+                                              - type: integer
+                                                exclusiveMinimum: 0
+                                                maximum: 9007199254740991
+                                              - type: "null"
+                                        required:
+                                          - version
+                                          - agentWorkspaceId
+                                          - agentWorkspaceRevision
+                                        additionalProperties: false
                                       entrypoint:
                                         type: string
                                         minLength: 1
@@ -19051,6 +21378,29 @@ paths:
                                         type: integer
                                         minimum: 1
                                         maximum: 86400
+                                      executionSelection:
+                                        type: object
+                                        properties:
+                                          version:
+                                            type: number
+                                            const: 2
+                                          agentWorkspaceId:
+                                            anyOf:
+                                              - type: string
+                                                minLength: 1
+                                                maxLength: 128
+                                              - type: "null"
+                                          agentWorkspaceRevision:
+                                            anyOf:
+                                              - type: integer
+                                                exclusiveMinimum: 0
+                                                maximum: 9007199254740991
+                                              - type: "null"
+                                        required:
+                                          - version
+                                          - agentWorkspaceId
+                                          - agentWorkspaceRevision
+                                        additionalProperties: false
                                       providerInstanceId:
                                         anyOf:
                                           - type: string
@@ -19254,6 +21604,10 @@ paths:
                               - draft
                               - enabled
                               - paused
+                          historicalExecutionSelection: {}
+                          executionUnavailableReason:
+                            type: string
+                            const: agent_workspace_selection_required
                           createdAt:
                             type: string
                             format: date-time
@@ -61421,6 +63775,19 @@ components:
               type: string
               format: date-time
               pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+            changedFields:
+              type: array
+              items:
+                type: string
+            completion:
+              type: boolean
+            origin:
+              type: string
+              enum:
+                - manual
+                - agent
+                - automation
+                - observation
           required:
             - eventId
             - eventType
@@ -61447,6 +63814,10 @@ components:
                   type: string
                   format: uuid
                   pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                changeId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
               required:
                 - taskId
               additionalProperties: false
@@ -61459,6 +63830,9 @@ components:
               - watch
               - mention
               - legacy_activity_state
+              - assignee
+              - requester
+              - completion
         state:
           type: object
           properties:
@@ -61545,6 +63919,19 @@ components:
                     type: string
                     format: date-time
                     pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+                  changedFields:
+                    type: array
+                    items:
+                      type: string
+                  completion:
+                    type: boolean
+                  origin:
+                    type: string
+                    enum:
+                      - manual
+                      - agent
+                      - automation
+                      - observation
                 required:
                   - eventId
                   - eventType
@@ -61571,6 +63958,10 @@ components:
                         type: string
                         format: uuid
                         pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      changeId:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
                     required:
                       - taskId
                     additionalProperties: false
@@ -61583,6 +63974,9 @@ components:
                     - watch
                     - mention
                     - legacy_activity_state
+                    - assignee
+                    - requester
+                    - completion
               state:
                 type: object
                 properties:
@@ -62220,6 +64614,133 @@ components:
                   - revision
                   - version
                   - status
+                additionalProperties: false
+            nextCursor:
+              type:
+                - string
+                - "null"
+            truncated:
+              type: boolean
+            sources:
+              type: array
+              items:
+                type: object
+                properties:
+                  kind:
+                    type: string
+                    enum:
+                      - project
+                      - task
+                      - document
+                      - comment
+                      - relation
+                  workspaceId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  projectId:
+                    type:
+                      - string
+                      - "null"
+                  entityId:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                  title:
+                    type: string
+                  revision:
+                    type: string
+                  truncated:
+                    type: boolean
+                required:
+                  - kind
+                  - workspaceId
+                  - projectId
+                  - entityId
+                  - title
+                  - revision
+                  - truncated
+                additionalProperties: false
+            receipt:
+              type: object
+              properties:
+                kind:
+                  type: string
+                  enum:
+                    - command
+                    - core
+                operationId:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                commandId:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                action:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                targetId:
+                  type:
+                    - string
+                    - "null"
+                revision:
+                  type:
+                    - string
+                    - "null"
+              required:
+                - kind
+                - operationId
+                - commandId
+                - action
+                - targetId
+                - revision
+              additionalProperties: false
+          required:
+            - kind
+            - items
+            - nextCursor
+            - truncated
+            - sources
+          additionalProperties: false
+        - type: object
+          properties:
+            kind:
+              type: string
+              const: workspaces
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  name:
+                    type: string
+                  workspaceAllowed:
+                    type: boolean
+                  projects:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                        name:
+                          type: string
+                      required:
+                        - id
+                        - name
+                      additionalProperties: false
+                required:
+                  - id
+                  - name
+                  - projects
                 additionalProperties: false
             nextCursor:
               type:

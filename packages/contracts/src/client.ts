@@ -21,6 +21,7 @@ import type { WebhookOverview, WebhookDeliveryPage, WebhookDeliveryDetail } from
 import { AccountRecoveryClient } from './account-recovery-client.ts';
 import { createLocalProjectClient } from './local-project-client.ts';
 import { createAgentContextClient } from './agent-file-area-client.ts';
+import { createChangeHistoryClient } from './change-history-client.ts';
 import type { InstanceSetupStatus, SetupRequest, SetupResponse } from './instance-setup.ts';
 export type { InstanceSetupStatus, SetupRequest, SetupResponse } from './instance-setup.ts';
 export type { DashboardRecord } from '../../domain/src/dashboard.ts';
@@ -44,7 +45,7 @@ export type { NotificationState, NotificationReason, NotificationOrigin, Notific
 export type { ArtifactVisibility, ArtifactCopyOrigin, ArtifactCopyOriginResponse } from './artifact-files.ts';
 export type { WebhookOverview, WebhookTargetDto, WebhookEndpointDto, WebhookDeliveryDto, WebhookDeliveryPage, WebhookDeliveryDetail } from '../../domain/src/webhooks.ts';
 export type { LocalDirectory, LocalProjectInitialization, LocalProjectSettings, LocalProjectDirectoryListing, LocalProjectPreview, LocalProjectLocation, LocalProjectAttempt } from './local-projects.ts';
-export type { AgentScope, AgentFileArea, AgentCatalog, AgentFileAreaUpdate, ResolvedAgentContext } from './agent-file-areas.ts';
+export type { AgentScope, AgentFileArea, AgentCatalog, AgentFileAreaUpdate, AuthorizedAgentContext } from './agent-file-areas.ts';
 // BEGIN GENERATED COMMAND PAYLOAD TYPES
 export type CommandPayloadMap = {
   AcceptIntent: { "revision": number; "reason": string; "basisRefs"?: Array<{ "kind": "project" | "work_item" | "milestone" | "conversation" | "intent" | "decision" | "upload" | "artifact" | "artifact_version" | "evidence" | "submission" | "review"; "id": string; }>; };
@@ -230,6 +231,12 @@ export class ProjectManagementClient {
     const queryStart = path.indexOf('?');
     const query = queryStart < 0 ? undefined : Object.fromEntries(new URLSearchParams(path.slice(queryStart + 1)));
     const response = await this.#send(method, queryStart < 0 ? path : path.slice(0, queryStart), signal ? { signal } : {}, body, query, headers);
+    const result: unknown = await response.json();
+    if (!response.ok) throw new ApiError(response.status, result);
+    return result as T;
+  });
+  readonly changeHistory = createChangeHistoryClient(async <T>(method: string, path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal): Promise<T> => {
+    const response = await this.#send(method, path, signal ? { signal } : {}, body, undefined, headers);
     const result: unknown = await response.json();
     if (!response.ok) throw new ApiError(response.status, result);
     return result as T;

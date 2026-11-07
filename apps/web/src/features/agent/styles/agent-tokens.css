@@ -18,11 +18,12 @@
   --spacing-control-lg: var(--control-height-lg);
 }
 html[data-product="agent"] {
-  --chart-1: #4f46e5;
-  --chart-2: #1d4ed8;
-  --chart-3: #0e7490;
-  --chart-4: #92400e;
-  --chart-5: #7e22ce;
+  /* 图表沿用 PM 低饱和序列，避免在同一产品里出现第二套鲜亮蓝紫。 */
+  --chart-1: #7a6a63;
+  --chart-2: #5b6b7a;
+  --chart-3: #6b7a6a;
+  --chart-4: #8a7a5b;
+  --chart-5: #7a5b6b;
   --chart-grid: var(--border);
   --chart-reference: var(--text-secondary);
   --chart-selected: var(--ring);
@@ -31,15 +32,15 @@ html[data-product="agent"] {
   --chart-completed: var(--success);
   --chart-cancelled: var(--text-secondary);
   --surface: var(--card);
-  --surface-hover: var(--accent);
+  --surface-hover: var(--secondary);
   --surface-raised: var(--secondary);
-  --surface-pressed: var(--muted);
-  --text-secondary: var(--muted-foreground);
-  --text-muted: var(--muted-foreground);
+  --surface-pressed: #eaeae6;
+  --text-secondary: #666660;
+  --text-muted: #6f6f68;
   --border-hover: rgba(0, 0, 0, 0.18);
-  --selection: color-mix(in srgb, var(--primary) 8%, var(--surface));
-  --info: var(--brand);
-  --agent: var(--brand);
+  --selection: color-mix(in srgb, var(--brand) 9%, var(--surface));
+  --info: #1d4ed8;
+  --agent: #6b21a8;
   --status-neutral: var(--text-secondary);
   --status-queued: var(--text-secondary);
   --status-info: var(--info);
@@ -47,8 +48,22 @@ html[data-product="agent"] {
   --status-waiting: var(--warning);
   --status-success: var(--success);
   --status-error: var(--destructive);
+  --radius-inline-value: 4px;
   --control-radius: 6px;
+  --radius-popover-value: 8px;
+  --radius-module-value: 12px;
+  --radius-panel-value: 16px;
+  --radius-bubble-value: 20px;
+  --radius-composer-value: 24px;
   --pill-radius: 999px;
+  --radius-inline: var(--radius-inline-value);
+  --radius-control: var(--control-radius);
+  --radius-popover: var(--radius-popover-value);
+  --radius-module: var(--radius-module-value);
+  --radius-panel: var(--radius-panel-value);
+  --radius-bubble: var(--radius-bubble-value);
+  --radius-composer: var(--radius-composer-value);
+  --radius: var(--radius-popover-value);
   --label-height: 24px;
   --label-height-sm: 20px;
   --control-height-sm: 28px;
@@ -68,13 +83,18 @@ html[data-product="agent"] {
   --workspace-bottom-height: 240px;
   --layer-overlay: 60;
   --layer-overlay-step: 20;
-  --motion-hover: 150ms;
-  --motion-button: 180ms;
-  --motion-popover: 200ms;
-  --motion-panel: 220ms;
-  --motion-drawer: 250ms;
-  --motion-layout: 300ms;
-  --shadow-floating: 0 8px 32px rgba(0, 0, 0, 0.12);
+  --motion-hover: 140ms;
+  --motion-button: 160ms;
+  --motion-popover: 180ms;
+  --motion-panel: 200ms;
+  --motion-drawer: 240ms;
+  --motion-layout: 280ms;
+  --motion-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --motion-ease-decelerate: cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-composer: 0 1px 2px rgba(20, 18, 16, 0.06);
+  --shadow-floating:
+    0 12px 32px rgba(20, 18, 16, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
   --canvas-background: var(--background);
   --canvas-grid: var(--border-hover);
   --canvas-node-surface: var(--surface);
@@ -94,11 +114,11 @@ html[data-product="agent"] {
   --canvas-minimap-mask: rgba(127, 127, 127, 0.12);
 }
 html[data-product="agent"].dark {
-  --chart-1: #a5b4fc;
-  --chart-2: #93c5fd;
-  --chart-3: #67e8f9;
-  --chart-4: #fcd34d;
-  --chart-5: #d8b4fe;
+  --chart-1: #b9a79d;
+  --chart-2: #9fb4c6;
+  --chart-3: #a9bda6;
+  --chart-4: #cbb68a;
+  --chart-5: #c4a3b4;
   --chart-grid: var(--border);
   --chart-reference: var(--text-secondary);
   --chart-selected: var(--ring);
@@ -107,13 +127,17 @@ html[data-product="agent"].dark {
   --chart-completed: var(--success);
   --chart-cancelled: var(--text-secondary);
   --surface: var(--card);
-  --surface-hover: var(--accent);
+  --surface-hover: var(--secondary);
   --surface-raised: var(--secondary);
-  --surface-pressed: var(--muted);
-  --text-secondary: var(--muted-foreground);
-  --text-muted: var(--muted-foreground);
-  --border-hover: rgba(255, 255, 255, 0.14);
-  --info: var(--brand);
-  --agent: var(--brand);
-  --shadow-floating: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --surface-pressed: #2b2b28;
+  --text-secondary: #b0b0a8;
+  --text-muted: #a0a099;
+  --border-hover: rgba(255, 255, 255, 0.18);
+  --selection: color-mix(in srgb, var(--brand) 14%, var(--surface));
+  --info: #9fc3f0;
+  --agent: #c4a6f0;
+  --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-floating:
+    0 16px 40px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }

@@ -12,7 +12,7 @@ test('HTTP rejects cross-origin, extra cwd/actor fields and missing PM authentic
   try {
     const app = new Hono().use('/api/*', accessGuard).route('/api', taskDeliveryRoutes);
     const headers = { host: '127.0.0.1:4325', 'content-type': 'application/json' };
-    const input = { id: '11111111-1111-4111-8111-111111111111', workspaceId: '22222222-2222-4222-8222-222222222222', projectId: 'PRJ-001', taskId: 'TASK-001', taskRevision: 'rev', baseBranch: 'main' };
+    const input = { id: '11111111-1111-4111-8111-111111111111', workspaceId: '22222222-2222-4222-8222-222222222222', projectId: 'PRJ-001', taskId: 'TASK-001', taskRevision: 'rev', baseBranch: 'main', executionSelection: { version: 2, agentWorkspaceId: 'registered-folder', agentWorkspaceRevision: 1 } };
     const cross = await app.request('http://127.0.0.1:4325/api/task-deliveries', { method: 'POST', headers: { ...headers, origin: 'https://other.example' }, body: JSON.stringify(input) });
     assert.equal(cross.status, 403); assert.equal(pmCalls, 0);
     const extra = await app.request('http://127.0.0.1:4325/api/task-deliveries', { method: 'POST', headers, body: JSON.stringify({ ...input, cwd: '/etc', actorId: 'admin' }) });

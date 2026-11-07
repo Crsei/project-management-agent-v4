@@ -4,22 +4,27 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { Hono } from "hono";
-import type { RemoteThread } from "@agent-workspace/contracts/chat";
+import { chatOnlyExecutionSelection, type RemoteThread } from "@agent-workspace/contracts/chat";
 import type { ChatDefaultsResponse } from "@agent-workspace/contracts/settings";
 import { chatRoutes } from "../chat.ts";
 import { closeStore, writeRecord } from "../durable/store.ts";
-import { ensureThread, forkThreadHistory, getThread, importThreads, listThreads } from "../durable/threads.ts";
+import { ensureThread, forkThreadHistory, getThread, listThreads } from "../durable/threads.ts";
 import { createProviderInstance, deleteProviderInstance, getStoredInstance, updateProviderInstance } from "../providers/instances.ts";
 import { getNativeProviderAdapter } from "../providers/driver-registry.ts";
 import { resolveProviderRuntime } from "../providers/runtime.ts";
 import { getChatDefaults, readChatDefaults, saveChatDefaults } from "./chat-defaults.ts";
 import { settingsRoutes } from "./routes.ts";
+import { chatOnlyEnvironment } from '../durable/execution.testkit.ts';
 
 let directory: string;
 const originalDirectory = process.env.AGENT_WORKSPACE_DATA_DIR;
 const app = new Hono().route("/api", settingsRoutes).route("/api", chatRoutes);
 const adapter = getNativeProviderAdapter("codex")!;
 const originalCheck = adapter.check;
+function seedThread(id: string) { return ensureThread(id, undefined, chatOnlyExecutionSelection(), chatOnlyEnvironment()); }
+async function createCurrentThread(id: string): Promise<Response> {
+  return app.request("http://localhost/api/chat/threads", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, executionSelection: chatOnlyExecutionSelection() }) });
+}
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), "agent-chat-defaults-"));
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
@@ -44,24 +49,24 @@ test("unset defaults never auto-select the sole native provider or create a thre
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { defaults: { revision: 0, selection: null }, availability: { status: "unset" } });
   assert.equal(listThreads().length, 0);
-  ensureThread("unselected");
+  seedThread("unselected");
   assert.deepEqual(getThread("unselected")!.settings, { providerInstanceId: "", model: "", systemPrompt: "", temperature: 1 });
   assert.equal(getThread("unselected")!.defaultsRevision, 0);
 });
 
 test("explicit native defaults survive SQLite reopen and snapshot only newly created threads", async () => {
-  ensureThread("before-default");
+  seedThread("before-default");
   const first = await put("/settings/chat-defaults", { revision: 0, selection: pair });
   assert.equal(first.status, 200);
   assert.deepEqual((await first.json() as ChatDefaultsResponse).defaults, { revision: 1, selection: pair });
-  const created = await app.request("http://localhost/api/chat/threads", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: "first" }) });
+  const created = await createCurrentThread("first");
   assert.equal(created.status, 200);
   const publicFirst = (await created.json() as { thread: RemoteThread }).thread;
   assert.deepEqual(publicFirst.settings, { ...pair, systemPrompt: "", temperature: 1 });
   assert.equal(publicFirst.defaultsRevision, 1);
   assert.deepEqual(publicFirst.settings, getThread("first")!.settings);
   await saveChatDefaults({ revision: 1, selection: { ...pair, model: "native-fixture-b" } });
-  ensureThread("second");
+  seedThread("second");
   forkThreadHistory("first", "fork");
   const snapshot = getThread("first");
   closeStore();
@@ -84,7 +89,7 @@ test("model options and interaction mode persist in defaults and thread snapshot
   }] });
   const selection = { ...pair, modelOptions: [{ id: "effort", value: "xhigh" }], interactionMode: "plan" as const };
   await saveChatDefaults({ revision: 0, selection });
-  ensureThread("options-default");
+  seedThread("options-default");
   closeStore();
   assert.deepEqual(readChatDefaults().selection, selection);
   assert.deepEqual(getThread("options-default")!.settings, { ...selection, systemPrompt: "", temperature: 1 });
@@ -105,7 +110,7 @@ test("default validation and compare-and-swap never replace saved selection on f
     assert.deepEqual(readChatDefaults(), { revision: 1, selection: pair });
   }
   await saveChatDefaults({ revision: 1, selection: null });
-  ensureThread("after-clear");
+  seedThread("after-clear");
   assert.equal((await getChatDefaults()).availability.status, "unset");
   assert.equal(getThread("after-clear")!.settings.providerInstanceId, "");
   assert.equal(getThread("after-clear")!.defaultsRevision, 2);
@@ -115,7 +120,7 @@ test("disabled/deleted providers and removed custom models remain unavailable wi
   const originalModels = getStoredInstance(pair.providerInstanceId)!.customModels!;
   updateProviderInstance(pair.providerInstanceId, { customModels: [...originalModels, { id: "removed-custom", label: "Custom" }] });
   await saveChatDefaults({ revision: 0, selection: { ...pair, model: "removed-custom" } });
-  ensureThread("custom-history");
+  seedThread("custom-history");
   updateProviderInstance(pair.providerInstanceId, { customModels: originalModels });
   assert.equal((await getChatDefaults()).availability.status, "unavailable");
   assert.equal(readChatDefaults().selection!.model, "removed-custom");
@@ -129,7 +134,7 @@ test("disabled/deleted providers and removed custom models remain unavailable wi
   const defaults = await getChatDefaults();
   assert.equal(defaults.availability.status, "unavailable");
   assert.deepEqual(defaults.defaults.selection, pair);
-  ensureThread("deleted-default");
+  seedThread("deleted-default");
   assert.deepEqual(getThread("deleted-default")!.settings, { ...pair, systemPrompt: "", temperature: 1 });
   await assert.rejects(resolveProviderRuntime({ providerInstanceId: pair.providerInstanceId, modelName: pair.model }), { code: "unknown_provider" });
 });
@@ -191,7 +196,7 @@ test("obsolete saved defaults remain exact readable history but cannot be saved 
   writeRecord("settings:chat-defaults", "default", { revision: 4, selection: legacy });
   assert.equal((await getChatDefaults()).availability.status, "unavailable");
   assert.deepEqual(readChatDefaults(), { revision: 4, selection: legacy });
-  ensureThread("historical-default");
+  seedThread("historical-default");
   assert.deepEqual(getThread("historical-default")!.settings, { ...legacy, systemPrompt: "", temperature: 1 });
   await assert.rejects(saveChatDefaults({ revision: 4, selection: legacy }), { code: "unknown_provider" });
   await assert.rejects(resolveProviderRuntime({ providerInstanceId: legacy.providerInstanceId, modelName: legacy.model }), { code: "unknown_provider" });
@@ -199,7 +204,7 @@ test("obsolete saved defaults remain exact readable history but cannot be saved 
 });
 
 test("session settings update provider/model atomically and reject stale or invalid pairs", async () => {
-  ensureThread("session");
+  seedThread("session");
   const initial = getThread("session")!;
   const selected = { ...pair, systemPrompt: "Keep the saved instruction.", temperature: 0.3 };
   const saved = await put("/chat/threads/session", { revision: initial.revision, settings: selected });
@@ -216,19 +221,9 @@ test("session settings update provider/model atomically and reject stale or inva
   assert.deepEqual(getThread("session")!.settings, selected);
 });
 
-test("imported legacy history never acquires today's defaults or rewrites an existing thread", async () => {
-  await saveChatDefaults({ revision: 0, selection: pair });
-  importThreads("legacy-import", [{ remoteId: "legacy" }]);
-  assert.equal(getThread("legacy")!.settings.model, "");
-  assert.equal(getThread("legacy")!.defaultsRevision, undefined);
-  const original = getThread("legacy");
-  await saveChatDefaults({ revision: 1, selection: { ...pair, model: "native-fixture-b" } });
-  ensureThread("legacy");
-  assert.deepEqual(getThread("legacy"), original);
-});
 
 test("corrupt persisted defaults fail closed without restoring a built-in selection", () => {
   writeRecord("settings:chat-defaults", "default", { revision: 5, selection: { model: "bad" } });
-  assert.throws(() => ensureThread("must-not-create"), { code: "invalid_chat_defaults" });
+  assert.throws(() => seedThread("must-not-create"), { code: "invalid_chat_defaults" });
   assert.equal(getThread("must-not-create"), null);
 });

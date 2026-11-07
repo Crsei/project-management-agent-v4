@@ -80,7 +80,8 @@ CLI 凭据优先级为 `PM_SESSION_TOKEN` > **完整** `PM_EMAIL` + `PM_PASSWORD
 | DATABASE_URL | 私有数据库连接；不得写入文档、日志或版本库 |
 | BLOB_PROVIDER / BLOB_ROOT | 默认 local，根目录 `.local/blobs`；仍须显式绑定才可用。disabled 明确禁用，S3 必须显式选择和配置，不隐式回退 Local |
 | CORE_WORKSPACE_ROOT | `.local/pm-workspaces`；每个 PM workspace 一个真实目录，存放权威 Markdown/配置/状态 |
-| PM_CHAT_SPACE_ROOT | 默认 PM API 服务用户的 `~/.pmv4`；Chat 文件区域默认根目录，支持绝对路径覆盖，不改变 PM 核心、Agent SQLite 或 Provider homes |
+| PM_CHAT_SPACE_ROOT | 默认 PM API 服务用户的 `~/.pmv4`；仅保留 PM 文件区域／保存位置职责，不作为 Agent 代码或 scratch 执行目录 |
+| AGENT_WORKSPACE_ALLOWED_ROOTS | Agent 角色配置的绝对路径 JSON 数组；默认服务用户 Home，限制目录打开／浏览／执行解析。升级时显式核对既有代码目录所在范围，不自动从 PM 登记导入 |
 | CHOKIDAR_USEPOLLING | 默认 false；宿主 inotify 配额耗尽时设为 true，文件监听改为轮询（权威不变） |
 | COOKIE_SECURE | 本地 HTTP 为 false；HTTPS 部署需 true，并在该部署下重新验证认证 |
 | WORKER_INTERVAL_MS | 500；失败时指数退避，最大 30 秒 |
@@ -98,9 +99,26 @@ Worker 使用独立 `.env.worker`，不继承 API 的 S3/AWS 凭据；管理脚�
 
 统一 Web 构建保留旧的带哈希 JS/CSS，避免已经打开的页面稍后加载旧 chunk 失败；历史资源只在停止服务并确认旧页面不再使用后显式清理。
 
-Chat Space 目录与检查器增量需应用 `0037_agent_storage_defaults.sql`，同时更新 PM API、Agent API 和 Agent Web。`PM_CHAT_SPACE_ROOT=/absolute/path pnpm services:start` 仅将该环境覆盖传给 PM API；已有进程不会被该命令隐式重启。设置页 `/agent/settings/file-areas` 可在可信路径内保存工作区默认根目录，既有映射和原生项目路径不迁移。目录结构为 `<root>/workspaces/<workspaceId>/workspace` 或 `projects/<projectId>`；默认根父目录必须存在，首次授权解析才创建缺少的默认叶目录，已登记目录丢失不会重建。
+现行执行环境使用独立 Agent Workspace v2，需同时更新 PM API、Agent API 和 Agent Web，并在备份后应用 `0051_retire_pm_agent_code_workspaces.sql`。规范化目录、元数据 revision 与设备/inode 身份保存在 Agent SQLite，不绑定 PM 项目。旧 `0037_agent_storage_defaults.sql` 保存位置及 PM file-area 配置不自动转换为 Agent 目录，也不移动文档。纯对话 scratch 位于 Agent 数据目录的 `chat-scratch`；首次分配后丢失或身份改变时拒绝重建。
 
-Inspector 文件 / Git / PTY 请求按 PM 当前身份解析 scope；不再通过 `AGENT_WORKSPACE_PROJECT_ROOT` 给检查器兜底。PM API 和 Agent API 必须能访问同一实际文件区域；容器部署应显式挂载该目录并统一路径，不把宿主 `~` 当容器用户主目录。终端拥有服务进程 shell 权限，目录作用域不是安全沙箱；本次只验证本机隔离服务，不声明容器/公网部署验收。
+Files / Git 请求只携带 Session 与相对路径；Session Terminal 使用实际执行目录／Worktree，Workspace Terminal 使用明确打开的文件夹。普通代码环境仅要求 Agent 能访问对应绝对目录；PM 业务预检通过已有服务 HMAC 调用 Agent 的内部解析接口，不把该接口暴露给浏览器或网关。容器挂载须显式配置，不把宿主 `~` 当容器用户主目录。终端拥有服务进程 shell 权限，不是安全沙箱；不跨 Agent 服务重启存活，不自动重放创建请求或命令。
+
+#### Agent Session 执行环境切换
+
+1. 先完成受影响检查、真实隔离回归、来源校验及 PM／Agent／Web 构建；Web 保留旧哈希资源。任一门禁失败时保留现有服务，**不先删除旧 Session**。
+2. 核对本副本端口、PID、启动身份、cwd 与服务模式，再停止本副本 API／Worker／Agent；不停止数据库或其他项目服务。先制作并核对私有 Agent 离线备份及 PM 登记数据备份，再通过既有迁移入口应用 `0051_retire_pm_agent_code_workspaces.sql`。该迁移只退役旧目录登记／scratch 身份表，不移动或删除磁盘目录；仅回滚代码不能恢复旧登记或已删除聊天。
+3. 对 Agent 角色配置中实际的绝对数据目录生成新的私有清单，人工核对候选 ID、保留业务证据、命名空间分类和 blocker：
+
+   ```sh
+   node scripts/agent-session-cutover.ts --data /ABS/AgentData --stopped --output /PRIVATE/new-session-plan.json
+   node scripts/agent-session-cutover.ts --data /ABS/AgentData --stopped --apply --plan /PRIVATE/new-session-plan.json
+   ```
+
+   工具获取既有独占锁，拒绝活动进程、未核对操作、未知命名空间或指纹变化，不替操作者杀进程、不在启动时自动删除。先核对原结果，不换清单或请求 ID 绕过不确定状态。
+4. 清理执行选择为旧版 v1 或未登记版本的应用 Chat 消息／索引，更新旧删除标记为不可执行的 v2 最小标记；保留任务／工作流关联的 generation 和输出证据、PM 数据、代码／Worktree、附件字节、Provider 配置／账号和外部原生 CLI 历史。无法证明独占归属的附件不自动 GC。新版 v2 Session、Agent Workspace 和私有 scratch 记录不在删除对象中；未知的未来执行版本会阻止整次清理，不被当成旧数据。旧清单格式或指纹不匹配时必须重新盘点，不能直接套用。
+5. 安装匹配产物后重新启动本副本，在公共入口验证“打开文件夹 → Workspace → Sessions”、Files／Git、终端及旧会话不可继续。普通代码会话不要求 PM 登录或 PM 归属；PM 资料通过明确目标的工具访问。旧交付／工作流须显式重新选择 Agent 文件夹并通过受控“新建会话”保留原证据，不重放执行。纯对话仍可使用无代码环境。
+
+该切换不是统一 Session／持久化设计收口，也不代表真实 Provider、桌面 GUI、容器或公网部署已验收。
 
 
 ### 本地项目目录与附件身份

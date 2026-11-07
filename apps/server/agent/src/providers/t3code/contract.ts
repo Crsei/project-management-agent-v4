@@ -1,6 +1,6 @@
 import type * as Effect from "effect/Effect";
 import type * as Scope from "effect/Scope";
-import type { AgentScope } from "@agent-workspace/contracts/chat";
+import type { ExecutionEnvironment } from "@agent-workspace/contracts/chat";
 import type { NativeSessionRef, ProviderDriver } from "@agent-workspace/contracts/provider";
 import type {
   ProviderInstance,
@@ -15,7 +15,7 @@ export type PmExecutionIdentity = {
   readonly threadId: string;
   readonly generationId: string;
   readonly messageId: string;
-  readonly scope: AgentScope;
+  readonly environment: ExecutionEnvironment;
 };
 export type PmProviderBoundaryError = Error & {
   readonly status: number;

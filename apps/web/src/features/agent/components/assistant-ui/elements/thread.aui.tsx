@@ -140,7 +140,7 @@ export const Thread: FC<ThreadProps> = (props) => {
 
   return (
     <ThreadPrimitive.Root
-      className="aui-root aui-thread-root bg-background @container flex h-full flex-col"
+      className="aui-root aui-thread-root bg-surface @container flex h-full flex-col"
       style={{
         // Reading width follows the browser's chat appearance preference.
         ["--thread-max-width" as string]: "var(--agent-chat-content-width, 720px)",
@@ -150,8 +150,7 @@ export const Thread: FC<ThreadProps> = (props) => {
         ["--bubble-radius" as string]: "var(--radius-bubble)",
         ["--composer-padding" as string]: "10px",
         // 略抬升表面 + 一层轻阴影，顶边微光；不透明，避免在任意背景上失去可读性
-        ["--composer-shadow" as string]:
-          "0 1px 2px rgb(0 0 0 / 6%), 0 8px 24px -16px rgb(0 0 0 / 24%)",
+        ["--composer-shadow" as string]: "var(--shadow-composer)",
       }}
     >
       <ThreadPrimitive.Viewport
@@ -189,7 +188,7 @@ export const Thread: FC<ThreadProps> = (props) => {
 
           <ThreadPrimitive.ViewportFooter
             className={cn(
-              "aui-thread-viewport-footer bg-background flex flex-col gap-4 overflow-visible pb-4 md:pb-6",
+              "aui-thread-viewport-footer bg-surface flex flex-col gap-4 overflow-visible pb-4 md:pb-6",
               !isEmpty && "sticky bottom-0 mt-auto rounded-t-(--composer-radius)",
             )}
           >
@@ -225,7 +224,7 @@ const ThreadScrollToBottom: FC = () => {
       <button
         type="button"
         data-slot="aui_thread-new-content"
-        className="aui-thread-scroll-to-bottom border-border bg-card text-foreground hover:bg-accent absolute -top-12 z-10 inline-flex items-center gap-1.5 self-center rounded-full border px-3 py-1.5 text-xs shadow-[0_1px_2px_rgb(0_0_0/6%)] transition-colors duration-150 ease-out disabled:invisible motion-reduce:transition-none"
+        className="aui-thread-scroll-to-bottom border-border bg-card text-foreground hover:bg-accent absolute -top-12 z-10 inline-flex items-center gap-1.5 self-center rounded-full border px-3 py-1.5 text-xs shadow-[0_1px_2px_rgb(0_0_0/6%)] transition-colors duration-[var(--motion-button)] ease-out disabled:invisible motion-reduce:transition-none"
       >
         <ArrowDownIcon className="size-3.5" />
         <AuiIf condition={(s) => s.thread.isRunning}>
@@ -265,7 +264,7 @@ const ThreadSuggestionItem: FC = () => {
       <SuggestionPrimitive.Trigger send asChild>
         <button
           type="button"
-          className="aui-thread-welcome-suggestion group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none"
+          className="aui-thread-welcome-suggestion group hover:bg-foreground/[0.03] flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none motion-reduce:transition-none"
         >
           <span
             aria-hidden
@@ -315,7 +314,7 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
       <ComposerPrimitive.AttachmentDropzone asChild>
         <div
           data-slot="aui_composer-shell"
-          className="aui-composer-surface border-border focus-within:border-ring/60 data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) shadow-[var(--composer-shadow)] transition-[border-color] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))]"
+          className="aui-composer-surface border-border data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) shadow-[var(--composer-shadow)] transition-[border-color] duration-[var(--motion-hover)] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))]"
         >
           <ComposerQuotePreview />
           <ComposerAttachments />
@@ -395,7 +394,7 @@ const ComposerAction: FC<ThreadProps & { historyBlocked: boolean; onUsageCommand
           onRetry={onRetry}
         />}
         <DropdownMenu>
-          <DropdownMenuTrigger render={<button type="button" aria-label={t("更多输入选项", "More input options")} title={t("更多输入选项", "More input options")} className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring" />}>
+          <DropdownMenuTrigger render={<button type="button" aria-label={t("更多输入选项", "More input options")} title={t("更多输入选项", "More input options")} className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none hover:bg-foreground/[0.04] hover:text-foreground" />}>
             <MoreHorizontalIcon aria-hidden="true" className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" aria-label={t("更多输入选项", "More input options")} onKeyDown={(event) => event.stopPropagation()}>
@@ -501,7 +500,7 @@ const AssistantMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled })
       data-slot="aui_assistant-message-root"
       data-role="assistant"
       tabIndex={0}
-      className="fade-in slide-in-from-bottom-1 animate-in focus-visible:outline-ring/50 relative -mb-7.5 pb-7.5 duration-150 focus-visible:outline-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
+      className="fade-in slide-in-from-bottom-1 animate-in relative -mb-7.5 pb-7.5 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
     >
       <div
         data-slot="aui_assistant-message-content"
@@ -670,7 +669,7 @@ const UserMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
     <MessageContextMenu actionsDisabled={actionsDisabled} role="user">
     <MessagePrimitive.Root
       data-slot="aui_user-message-root"
-      className="fade-in slide-in-from-bottom-1 animate-in focus-visible:outline-ring/50 grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 focus-visible:outline-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2"
+      className="fade-in slide-in-from-bottom-1 animate-in grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2"
       data-role="user"
       tabIndex={0}
     >
@@ -728,7 +727,7 @@ const EditComposer: FC<{ providerInstanceId: string; disabled: boolean }> = ({ p
       data-slot="aui_edit-composer-wrapper"
       className="flex flex-col px-2 [contain-intrinsic-size:auto_200px] [content-visibility:auto]"
     >
-      <ComposerPrimitive.Root className="aui-edit-composer-root border-border focus-within:border-ring/60 ms-auto flex w-full max-w-[85%] cursor-text flex-col rounded-(--bubble-radius) border bg-(--composer-bg) shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color] dark:shadow-none" onSubmit={(event) => { if (disabled || handleUsageCommand()) event.preventDefault(); }}>
+      <ComposerPrimitive.Root className="aui-edit-composer-root border-border ms-auto flex w-full max-w-[85%] cursor-text flex-col rounded-(--bubble-radius) border bg-(--composer-bg) shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color] duration-[var(--motion-hover)] dark:shadow-none" onSubmit={(event) => { if (disabled || handleUsageCommand()) event.preventDefault(); }}>
         <ComposerPrimitive.Input
           className="aui-edit-composer-input text-foreground min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-base outline-none"
           autoFocus

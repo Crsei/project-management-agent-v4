@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { Workspace,type WorkspaceMutationCapture } from '../index.ts';
 import { readCurrentCore } from '../readonly.ts';
 import { readServiceFactObservations } from '../service-facts.ts';
+import { readCoreSnapshot, retainCoreSnapshot } from '../change-snapshots.ts';
+import { FileRepository } from '../repository.ts';
 const project='---\nschema: pm/v1\nid: PRJ-001\nentity: project\n---\n# Project\n';
 const task='---\nschema: pm/v1\nid: TASK-001\nentity: work_item\nproject: PRJ-001\nstatus: todo\n---\n# Task\n\nOriginal content\n';
 async function fixture() {
@@ -41,3 +43,38 @@ test('pure formatting changes have no semantic notification category while title
  await writeFile(join(root,'work-items/TASK-001.md'),task.replace('Original content\n','Original content\n\n\n'));await workspace.rescan('format');assert.deepEqual(readServiceFactObservations(root).observations[0]?.changeKinds,[]);
  const raw=await readFile(join(root,'work-items/TASK-001.md'),'utf8');await writeFile(join(root,'work-items/TASK-001.md'),raw.replace('# Task','# Renamed task'));await workspace.rescan('title');assert.deepEqual(readServiceFactObservations(root).observations.at(-1)?.changeKinds,['metadata_changed']);
 });
+test('large retained snapshots stay outside the observation ledger and unchanged scans do not rewrite it',async t=>{
+ const root=await fixture(),workspace=new Workspace(root);t.after(async()=>{await workspace.close();await rm(root,{recursive:true,force:true});});await workspace.init();
+ const body='Large immutable endpoint '.repeat(90_000);
+ const document=await workspace.createEntity({entity:'document',project:'PRJ-001',title:'Large retained document',body});
+ const before=readServiceFactObservations(root).baseline.find(value=>value.id===document.id);assert.ok(before?.snapshotKey);
+ assert.equal(readCoreSnapshot(root,before.snapshotKey).raw,document.raw);
+ const file=join(root,'.pm/state/service-observations.json'),savedLedger=await readFile(file,'utf8');
+ assert.ok(savedLedger.length<20_000);assert.equal(savedLedger.includes('Large immutable endpoint'),false);
+ await workspace.rescan('unchanged-large-source');await workspace.rescan('unchanged-again');
+ assert.equal(await readFile(file,'utf8'),savedLedger);
+ await workspace.save(document.id,document.raw.replace('Large immutable endpoint','Changed immutable endpoint'),document.revision);
+ const observed=readServiceFactObservations(root),change=observed.observations.find(value=>value.before?.id===document.id);assert.ok(change?.before?.snapshotKey);assert.ok(change.after?.snapshotKey);
+ assert.equal(readCoreSnapshot(root,change.before.snapshotKey).raw,document.raw);
+ assert.ok((await readFile(file,'utf8')).length<30_000);
+ await rm(join(root,'.pm/state/change-snapshots',`${change.before.snapshotKey}-0.txt`));
+ assert.throws(()=>readCoreSnapshot(root,change.before!.snapshotKey!),/ENOENT/,'retained history is never reconstructed from the current document');
+});
+
+for (const invalidStatus of ['status: unknown-state', 'status: [unterminated'])
+ test(`raw repair retains the actual invalid endpoint without stale parsed fields: ${invalidStatus}`,async t=>{
+  const root=await fixture(),workspace=new Workspace(root);t.after(async()=>{await workspace.close();await rm(root,{recursive:true,force:true});});await workspace.init();
+  const invalid=task.replace('status: todo',invalidStatus).replace('Original content','Externally edited invalid content');
+  await writeFile(join(root,'work-items/TASK-001.md'),invalid);await workspace.rescan('invalid-external-edit');
+  const stale=workspace.get('TASK-001');assert.equal(stale.stale,true);
+  let beforeKey:string|undefined;
+  await workspace.captureMutations({
+   prepare(before){assert.ok(before);beforeKey=retainCoreSnapshot(new FileRepository(root),before);},
+   committed(){return randomUUID();},
+  },()=>workspace.save(stale.id,task.replace('Original content','Repaired content'),stale.revision));
+  assert.ok(beforeKey);
+  const before=readCoreSnapshot(root,beforeKey);
+  assert.equal(before.raw,invalid);assert.equal(before.revision,stale.revision);
+  assert.equal(before.body,null);assert.equal(before.metadata,null);
+  assert.match(workspace.get(stale.id).entity.body,/Repaired content/);
+ });

@@ -352,9 +352,99 @@
       "ownership": "fork-output"
     },
     {
+      "path": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "sha256": "425ab808755a8a10f9fd3f2a198d953773e3df0be773714a3f64c537d5bdb92a",
+      "bytes": 17680,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "sha256": "21566923bca7f8c27e7ecd225e14eeb3d66f7d392f476861e0f08a6193b8a0f0",
+      "bytes": 56668,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "sha256": "f67599fd57d2241c60ba7b7f3e7315db5b3a5b4f54f7a67b72e7620cbb544f9e",
+      "bytes": 46217,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "sha256": "934ca7f99f17f2582e355597c35e81bd29afafb3cf238f16165b40bb2e241fd4",
+      "bytes": 6389,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/mcp/mcpDraft.ts",
+      "sha256": "945feb7b47fff4798868d7099f131b952932624a3baa26646c25b8bc8aa888c1",
+      "bytes": 12811,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/mcp/useVisibleAppIds.ts",
+      "sha256": "0379935900b3b9031a1253ca0eff0607790f0877f06710f8e81263552a461dc0",
+      "bytes": 245,
+      "ownership": "fork-output"
+    },
+    {
       "path": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
       "sha256": "0418cee061dbc045e7f1b08db508b4200be89ea31161e442ba6b49e5ec2368c3",
       "bytes": 2368,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/shell/AppPageHeader.tsx",
+      "sha256": "a43edfd4c44ea57721c7f75be509bddc8e3811e292ed588f3004dc91209a6ea5",
+      "bytes": 3709,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "sha256": "57a22fc01515c0da4c1b64d5d33749b5f6584682c3f3430fdf50a8037614c24d",
+      "bytes": 10782,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "sha256": "4785594d2979290b391bfe789d724dbb25fd44d09c1ad0057cd44ea0cf653735",
+      "bytes": 9268,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/skills/SkillRestoreDialog.tsx",
+      "sha256": "ae37cba41fa6f0ce4257882fe8cd9373a882dccfeab48c93d4676338e653e0ff",
+      "bytes": 4976,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "sha256": "9505bc6a85e5c907d50000168c2086900797da6587492062f2c8eb3aace1ff10",
+      "bytes": 42648,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "sha256": "966d8458dfd8ac2b32d29590bdc3fce3428acb0d94226e75e696212423cb1959",
+      "bytes": 14292,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "sha256": "526a42237974131a697d1eaec04e088064d4df99cc85ebc652f8817fc7b9f36b",
+      "bytes": 81390,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/skills/repoFailures.ts",
+      "sha256": "dde921be593f66092c4582f11d5dedcbe489c09b8e58d9f5afb2e83aedc395ef",
+      "bytes": 761,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/skills/useSkillInstallTargets.ts",
+      "sha256": "9a30187c67d3a3dcfabf944c5a48b94cde71cd08b080ae815043b97570e7f27d",
+      "bytes": 2897,
       "ownership": "fork-output"
     },
     {
@@ -364,9 +454,75 @@
       "ownership": "fork-output"
     },
     {
+      "path": "vendor/cc-switch/src/components/ui/checkbox.tsx",
+      "sha256": "c42cbe9131f9a02d9c05ed3928bf29f444881a38e5b51f8cc01f30f2c6f46134",
+      "bytes": 1381,
+      "ownership": "fork-output"
+    },
+    {
       "path": "vendor/cc-switch/src/components/ui/dialog.tsx",
       "sha256": "1bf841355536d50b4e9a16f7f850cf76ea2997dd00638d6167773420ee445db8",
       "bytes": 4173,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/dropdown-menu.tsx",
+      "sha256": "79999108fe2e21f7159d10fe5a6f25cc75f9c681be9144bd6a8304833c14d067",
+      "bytes": 7776,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "sha256": "11fc531ac8af14dee0369864ea90b80ede13e196e9baea42172e62f66afba717",
+      "bytes": 8188,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "sha256": "c820e6721a9a280e4971e7d64901a070b31874d504d758ae2f2f735222b7a96e",
+      "bytes": 2363,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/input.tsx",
+      "sha256": "dc56f8ffb93bb5050d240aac51eff1de52761a85a471380be6870451acbf28a7",
+      "bytes": 1337,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/notice.tsx",
+      "sha256": "2d6d135d4824b55cb1644ad6c558210d695d1f3f004e74842062af0f8ff967b4",
+      "bytes": 3373,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/page-tabs.tsx",
+      "sha256": "7d1bf80a4d0e8618d48367f50386067152d53ed9f41321569b056f9ba05b1905",
+      "bytes": 4337,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/search-field.tsx",
+      "sha256": "b025341984aaa2f930d5ea075ac117c42ca9553d1373bc4cc2ae14449d534992",
+      "bytes": 2686,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/segmented-control.tsx",
+      "sha256": "ab739e84c2e2291c8cf1c6ac4afd01eabd349f8fdc0e3b96c615509bbf44fd3b",
+      "bytes": 2994,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "sha256": "3d907b0f961fab3cfbc89c86268b47a5248d7428bd5fb5289a22b6d89d529a1a",
+      "bytes": 6477,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/components/ui/sliding-indicator.tsx",
+      "sha256": "9743f26f85d0f74314751a9cd426da580863f07db3e8bac01cba3bd790a83f60",
+      "bytes": 3748,
       "ownership": "fork-output"
     },
     {
@@ -385,6 +541,42 @@
       "path": "vendor/cc-switch/src/config/constants.ts",
       "sha256": "16b63d011ec99e95c2e69061c709b33afa8099bbeaf90b6190ab981c2b54e88d",
       "bytes": 1272,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/config/mcpPresets.ts",
+      "sha256": "76fe17a59042421f7dd030e2f72c22a10e21fc69f8605ef3f93d9ee878a24fef",
+      "bytes": 3371,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/hooks/useDelayedFlag.ts",
+      "sha256": "4ab18b66cbd5eb03508e06880fb6a10d2aa25fc632db3a20277d80c4c989940c",
+      "bytes": 742,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "sha256": "595148d90e9c7e3189c681995832ccc54e9f64c0195379e67748cc600780ad54",
+      "bytes": 5273,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
+      "sha256": "12ec3b67c69d1dea6d94696665dee57c72d8ed43a9f62e33e66aceeeecc83d32",
+      "bytes": 5525,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/hooks/useSkills.helpers.ts",
+      "sha256": "f7312a11b49d4e0bacd21fdd95c3af777ba6d175da087bac39e14420372f2bab",
+      "bytes": 2080,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "sha256": "1848d837d6437387b41e7348d4b463b739e4fc9a07ccc6361cbf8d4f0397f029",
+      "bytes": 18015,
       "ownership": "fork-output"
     },
     {
@@ -760,6 +952,12 @@
       "ownership": "fork-output"
     },
     {
+      "path": "vendor/cc-switch/src/lib/api/mcp.ts",
+      "sha256": "a38d6495a513b32a7ada0b0fc26d7ce5235ad9d4b748d3bf2d9f21dbee5167ea",
+      "bytes": 5252,
+      "ownership": "fork-output"
+    },
+    {
       "path": "vendor/cc-switch/src/lib/api/settings.ts",
       "sha256": "8be06f27666f71634a517a84c8d3609e11416af7142daac00053125d29401e93",
       "bytes": 14005,
@@ -778,6 +976,36 @@
       "ownership": "fork-output"
     },
     {
+      "path": "vendor/cc-switch/src/lib/clipboard.ts",
+      "sha256": "ff2fb59b42b3dbbec0731ea47bb84f096a64751320351d4a3432b096214a307e",
+      "bytes": 306,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/lib/errors/skillErrorParser.ts",
+      "sha256": "d874876ce1a1b8cd20e6f0858035ca641f74c18d699d4346779e8c1f14854b7c",
+      "bytes": 4175,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/lib/inputModality.ts",
+      "sha256": "faa3db3de2970991aedc6a704533efbb31ebcdc8d4aafe9380d61dfa2540d618",
+      "bytes": 1220,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/lib/platform.ts",
+      "sha256": "a7e6a60eeba6a44eaa6e02b865fe62d319754df199a1056ddec5e01fe19b31f9",
+      "bytes": 1691,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/lib/toast.ts",
+      "sha256": "08c0e0f346d2c1795f6b6fd35df079b3a7522e8ea8c099de4fcf783c8cb787cf",
+      "bytes": 1891,
+      "ownership": "fork-output"
+    },
+    {
       "path": "vendor/cc-switch/src/lib/unsavedChanges.ts",
       "sha256": "902e522ac93086e358375b18db7cf8b12f1a8f29c9bce5284464e2d50906faf2",
       "bytes": 3285,
@@ -787,6 +1015,12 @@
       "path": "vendor/cc-switch/src/lib/utils.ts",
       "sha256": "5f48d948468580b3ad2b8343e8923ba1e83da884a472982d87652db2044ec4ef",
       "bytes": 679,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/lib/utils/sequentialBulkAction.ts",
+      "sha256": "bffcc7645ae262c688d40288c494970e2c0b15328c6f189630090ae8b6be8ae7",
+      "bytes": 799,
       "ownership": "fork-output"
     },
     {
@@ -808,6 +1042,18 @@
       "ownership": "fork-output"
     },
     {
+      "path": "vendor/cc-switch/src/utils/errorUtils.ts",
+      "sha256": "c3aaee299fbe3ae4a861cd494742e3b8043a0b0e43f5ce134ecb413c8d586b17",
+      "bytes": 5732,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/utils/textNormalization.ts",
+      "sha256": "ec6309f82ab27ec994186764f484ddf1d1527d607867ed3849a0a9d54569f1e4",
+      "bytes": 5263,
+      "ownership": "fork-output"
+    },
+    {
       "path": "vendor/cc-switch/src/web/api.ts",
       "sha256": "b3e911fb191519eb6436ab2865381bccd3cc5a08381ae87eecb905ce114e816b",
       "bytes": 228,
@@ -821,14 +1067,20 @@
     },
     {
       "path": "vendor/cc-switch/src/web/index.tsx",
-      "sha256": "fedf8e451132aa0b7814432ae7d7e392aba99daaa164e5427163ddfd5ab8ee3c",
-      "bytes": 10762,
+      "sha256": "34387646a2d799303083d16b16ff6a1c439b72f3f2a614ba024d3e148b43de2e",
+      "bytes": 12036,
       "ownership": "fork-output"
     },
     {
       "path": "vendor/cc-switch/src/web/management.css",
       "sha256": "23c645f4d2f0ee75a077b578b924bfe1a98c37522e097c383a29031e1199770c",
       "bytes": 155753,
+      "ownership": "fork-output"
+    },
+    {
+      "path": "vendor/cc-switch/src/web/settings.ts",
+      "sha256": "b6273b6f4fb48e7031143a71be4ca3643ccffd8bdfc1631b4dbabd61f3107db5",
+      "bytes": 1766,
       "ownership": "fork-output"
     }
   ],
@@ -1268,6 +1520,545 @@
       "disposition": "external-package"
     },
     {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/toast",
+      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/api",
+      "target": "vendor/cc-switch/src/web/api.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppGlyph",
+      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/help-tip",
+      "target": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/hover-tip",
+      "target": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/search-field",
+      "target": "vendor/cc-switch/src/components/ui/search-field.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@radix-ui/react-popover",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../config/appConfig",
+      "target": "vendor/cc-switch/src/config/appConfig.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../config/appConfig",
+      "target": "vendor/cc-switch/src/config/appConfig.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../config/mcpPresets",
+      "target": "vendor/cc-switch/src/config/mcpPresets.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../hooks/useMcp",
+      "target": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/toast",
+      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../types",
+      "target": "vendor/cc-switch/src/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../utils/errorUtils",
+      "target": "vendor/cc-switch/src/utils/errorUtils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppGlyph",
+      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/help-tip",
+      "target": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/hover-tip",
+      "target": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/notice",
+      "target": "vendor/cc-switch/src/components/ui/notice.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/segmented-control",
+      "target": "vendor/cc-switch/src/components/ui/segmented-control.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/sheet",
+      "target": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./AppMatrix",
+      "target": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./formBits",
+      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./mcpDraft",
+      "target": "vendor/cc-switch/src/components/mcp/mcpDraft.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../config/appConfig",
+      "target": "vendor/cc-switch/src/config/appConfig.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../config/mcpPresets",
+      "target": "vendor/cc-switch/src/config/mcpPresets.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../hooks/useDelayedFlag",
+      "target": "vendor/cc-switch/src/hooks/useDelayedFlag.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../hooks/useMcp",
+      "target": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../hooks/useMcpConnectivity",
+      "target": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/mcp",
+      "target": "vendor/cc-switch/src/lib/api/mcp.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/clipboard",
+      "target": "vendor/cc-switch/src/lib/clipboard.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/toast",
+      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../types",
+      "target": "vendor/cc-switch/src/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../utils/errorUtils",
+      "target": "vendor/cc-switch/src/utils/errorUtils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/api",
+      "target": "vendor/cc-switch/src/web/api.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppGlyph",
+      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppPageHeader",
+      "target": "vendor/cc-switch/src/components/shell/AppPageHeader.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/dropdown-menu",
+      "target": "vendor/cc-switch/src/components/ui/dropdown-menu.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/help-tip",
+      "target": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/hover-tip",
+      "target": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/notice",
+      "target": "vendor/cc-switch/src/components/ui/notice.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./AppMatrix",
+      "target": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./McpFormModal",
+      "target": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./formBits",
+      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./useVisibleAppIds",
+      "target": "vendor/cc-switch/src/components/mcp/useVisibleAppIds.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@tanstack/react-query",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/dialog",
+      "target": "vendor/cc-switch/src/components/ui/dialog.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/input",
+      "target": "vendor/cc-switch/src/components/ui/input.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/sliding-indicator",
+      "target": "vendor/cc-switch/src/components/ui/sliding-indicator.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/mcpDraft.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../types",
+      "target": "vendor/cc-switch/src/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/mcpDraft.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../utils/textNormalization",
+      "target": "vendor/cc-switch/src/utils/textNormalization.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/mcpDraft.ts",
+      "kind": "ts-import-export",
+      "specifier": "smol-toml",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/mcp/useVisibleAppIds.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
       "source": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
       "kind": "ts-import-export",
       "specifier": "../../lib/utils",
@@ -1292,6 +2083,804 @@
       "source": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
       "kind": "ts-import-export",
       "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/shell/AppPageHeader.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/platform",
+      "target": "vendor/cc-switch/src/lib/platform.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/shell/AppPageHeader.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/shell/AppPageHeader.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/unsavedChanges",
+      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/api",
+      "target": "vendor/cc-switch/src/web/api.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/formBits",
+      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/hover-tip",
+      "target": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/sheet",
+      "target": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../config/appConfig",
+      "target": "vendor/cc-switch/src/config/appConfig.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/AppMatrix",
+      "target": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/formBits",
+      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppGlyph",
+      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/dialog",
+      "target": "vendor/cc-switch/src/components/ui/dialog.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/help-tip",
+      "target": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillRestoreDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillRestoreDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillRestoreDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/formBits",
+      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillRestoreDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillRestoreDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/dialog",
+      "target": "vendor/cc-switch/src/components/ui/dialog.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillRestoreDialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../config/appConfig",
+      "target": "vendor/cc-switch/src/config/appConfig.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../hooks/useSkills",
+      "target": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/errors/skillErrorParser",
+      "target": "vendor/cc-switch/src/lib/errors/skillErrorParser.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/toast",
+      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/api",
+      "target": "vendor/cc-switch/src/web/api.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/AppMatrix",
+      "target": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/formBits",
+      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppGlyph",
+      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/help-tip",
+      "target": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/hover-tip",
+      "target": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/notice",
+      "target": "vendor/cc-switch/src/components/ui/notice.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/segmented-control",
+      "target": "vendor/cc-switch/src/components/ui/segmented-control.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./RepoManagerPanel",
+      "target": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./repoFailures",
+      "target": "vendor/cc-switch/src/components/skills/repoFailures.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@radix-ui/react-popover",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@tanstack/react-virtual",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../hooks/useSkills",
+      "target": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/toast",
+      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/unsavedChanges",
+      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../types",
+      "target": "vendor/cc-switch/src/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../utils/errorUtils",
+      "target": "vendor/cc-switch/src/utils/errorUtils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/settings",
+      "target": "vendor/cc-switch/src/web/settings.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/formBits",
+      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppGlyph",
+      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/dialog",
+      "target": "vendor/cc-switch/src/components/ui/dialog.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../config/appConfig",
+      "target": "vendor/cc-switch/src/config/appConfig.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../hooks/useDelayedFlag",
+      "target": "vendor/cc-switch/src/hooks/useDelayedFlag.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../hooks/useSkills",
+      "target": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/clipboard",
+      "target": "vendor/cc-switch/src/lib/clipboard.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/toast",
+      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../utils/errorUtils",
+      "target": "vendor/cc-switch/src/utils/errorUtils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/api",
+      "target": "vendor/cc-switch/src/web/api.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../BrandIcons",
+      "target": "vendor/cc-switch/src/components/BrandIcons.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/AppMatrix",
+      "target": "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/formBits",
+      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../mcp/useVisibleAppIds",
+      "target": "vendor/cc-switch/src/components/mcp/useVisibleAppIds.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppGlyph",
+      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppPageHeader",
+      "target": "vendor/cc-switch/src/components/shell/AppPageHeader.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/checkbox",
+      "target": "vendor/cc-switch/src/components/ui/checkbox.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/dropdown-menu",
+      "target": "vendor/cc-switch/src/components/ui/dropdown-menu.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/help-tip",
+      "target": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/hover-tip",
+      "target": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/notice",
+      "target": "vendor/cc-switch/src/components/ui/notice.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../ui/page-tabs",
+      "target": "vendor/cc-switch/src/components/ui/page-tabs.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./RepoManagerPanel",
+      "target": "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./SkillImportDialog",
+      "target": "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./SkillRestoreDialog",
+      "target": "vendor/cc-switch/src/components/skills/SkillRestoreDialog.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./SkillsPage",
+      "target": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./SkillsStorageSheet",
+      "target": "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./repoFailures",
+      "target": "vendor/cc-switch/src/components/skills/repoFailures.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./useSkillInstallTargets",
+      "target": "vendor/cc-switch/src/components/skills/useSkillInstallTargets.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-dom",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react-i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/repoFailures.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/repoFailures.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/errors/skillErrorParser",
+      "target": "vendor/cc-switch/src/lib/errors/skillErrorParser.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/repoFailures.ts",
+      "kind": "ts-import-export",
+      "specifier": "i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/useSkillInstallTargets.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../config/appConfig",
+      "target": "vendor/cc-switch/src/config/appConfig.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/useSkillInstallTargets.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../hooks/useSkills",
+      "target": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/useSkillInstallTargets.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/useSkillInstallTargets.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/skills/useSkillInstallTargets.ts",
+      "kind": "ts-import-export",
+      "specifier": "react",
       "target": null,
       "disposition": "external-package"
     },
@@ -1324,6 +2913,20 @@
       "disposition": "external-package"
     },
     {
+      "source": "vendor/cc-switch/src/components/ui/checkbox.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/checkbox.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
       "source": "vendor/cc-switch/src/components/ui/dialog.tsx",
       "kind": "ts-import-export",
       "specifier": "../../lib/utils",
@@ -1346,6 +2949,279 @@
     },
     {
       "source": "vendor/cc-switch/src/components/ui/dialog.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/dropdown-menu.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/dropdown-menu.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/dropdown-menu.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@radix-ui/react-dropdown-menu",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/dropdown-menu.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@radix-ui/react-popover",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/help-tip.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/inputModality",
+      "target": "vendor/cc-switch/src/lib/inputModality.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./tooltip",
+      "target": "vendor/cc-switch/src/components/ui/tooltip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/input.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/input.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/notice.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/notice.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/notice.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/page-tabs.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/page-tabs.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./sliding-indicator",
+      "target": "vendor/cc-switch/src/components/ui/sliding-indicator.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/page-tabs.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/search-field.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/search-field.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./hover-tip",
+      "target": "vendor/cc-switch/src/components/ui/hover-tip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/search-field.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./input",
+      "target": "vendor/cc-switch/src/components/ui/input.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/search-field.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/search-field.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/segmented-control.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/segmented-control.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./sliding-indicator",
+      "target": "vendor/cc-switch/src/components/ui/sliding-indicator.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/segmented-control.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/platform",
+      "target": "vendor/cc-switch/src/lib/platform.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/unsavedChanges",
+      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../shell/AppPageHeader",
+      "target": "vendor/cc-switch/src/components/shell/AppPageHeader.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "@radix-ui/react-dialog",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "lucide-react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sliding-indicator.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../../lib/utils",
+      "target": "vendor/cc-switch/src/lib/utils.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/components/ui/sliding-indicator.tsx",
       "kind": "ts-import-export",
       "specifier": "react",
       "target": null,
@@ -1409,6 +3285,153 @@
     },
     {
       "source": "vendor/cc-switch/src/config/appConfig.tsx",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/config/mcpPresets.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/platform",
+      "target": "vendor/cc-switch/src/lib/platform.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/config/mcpPresets.ts",
+      "kind": "ts-import-export",
+      "specifier": "../types",
+      "target": "vendor/cc-switch/src/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useDelayedFlag.ts",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/api/mcp",
+      "target": "vendor/cc-switch/src/lib/api/mcp.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/utils/sequentialBulkAction",
+      "target": "vendor/cc-switch/src/lib/utils/sequentialBulkAction.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "../types",
+      "target": "vendor/cc-switch/src/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "@agent-workspace/contracts/extensions",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "@tanstack/react-query",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
+      "kind": "ts-import-export",
+      "specifier": "../config/appConfig",
+      "target": "vendor/cc-switch/src/config/appConfig.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/api/mcp",
+      "target": "vendor/cc-switch/src/lib/api/mcp.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
+      "kind": "ts-import-export",
+      "specifier": "../types",
+      "target": "vendor/cc-switch/src/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
+      "kind": "ts-import-export",
+      "specifier": "../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
+      "kind": "ts-import-export",
+      "specifier": "react",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useSkills.helpers.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/utils/sequentialBulkAction",
+      "target": "vendor/cc-switch/src/lib/utils/sequentialBulkAction.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "kind": "ts-import-export",
+      "specifier": "./useSkills.helpers",
+      "target": "vendor/cc-switch/src/hooks/useSkills.helpers.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useSkills.ts",
+      "kind": "ts-import-export",
+      "specifier": "@tanstack/react-query",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/hooks/useSkills.ts",
       "kind": "ts-import-export",
       "specifier": "react",
       "target": null,
@@ -1828,6 +3851,34 @@
       "disposition": "fork-output"
     },
     {
+      "source": "vendor/cc-switch/src/lib/api/mcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../types",
+      "target": "vendor/cc-switch/src/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/lib/api/mcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "../../web/bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/lib/api/mcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "./types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/lib/api/mcp.ts",
+      "kind": "ts-import-export",
+      "specifier": "@agent-workspace/contracts/extensions",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
       "source": "vendor/cc-switch/src/lib/api/settings.ts",
       "kind": "ts-import-export",
       "specifier": "../../types",
@@ -1863,6 +3914,20 @@
       "disposition": "fork-output"
     },
     {
+      "source": "vendor/cc-switch/src/lib/errors/skillErrorParser.ts",
+      "kind": "ts-import-export",
+      "specifier": "i18next",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/lib/toast.ts",
+      "kind": "ts-import-export",
+      "specifier": "sonner",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
       "source": "vendor/cc-switch/src/lib/unsavedChanges.ts",
       "kind": "ts-import-export",
       "specifier": "react",
@@ -1896,6 +3961,13 @@
       "specifier": "./config/constants",
       "target": "vendor/cc-switch/src/config/constants.ts",
       "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/utils/textNormalization.ts",
+      "kind": "ts-import-export",
+      "specifier": "smol-toml",
+      "target": null,
+      "disposition": "external-package"
     },
     {
       "source": "vendor/cc-switch/src/web/api.ts",
@@ -1935,8 +4007,71 @@
     {
       "source": "vendor/cc-switch/src/web/index.tsx",
       "kind": "ts-import-export",
+      "specifier": "../components/mcp/McpFormModal",
+      "target": "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/mcp/UnifiedMcpPanel",
+      "target": "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/mcp/formBits",
+      "target": "vendor/cc-switch/src/components/mcp/formBits.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/mcp/mcpDraft",
+      "target": "vendor/cc-switch/src/components/mcp/mcpDraft.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
       "specifier": "../components/shell/AppGlyph",
       "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/shell/AppGlyph",
+      "target": "vendor/cc-switch/src/components/shell/AppGlyph.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/skills/SkillsPage",
+      "target": "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/skills/UnifiedSkillsPanel",
+      "target": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/skills/UnifiedSkillsPanel",
+      "target": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/ui/button",
+      "target": "vendor/cc-switch/src/components/ui/button.tsx",
       "disposition": "fork-output"
     },
     {
@@ -1956,6 +4091,27 @@
     {
       "source": "vendor/cc-switch/src/web/index.tsx",
       "kind": "ts-import-export",
+      "specifier": "../components/ui/dialog",
+      "target": "vendor/cc-switch/src/components/ui/dialog.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/ui/sheet",
+      "target": "vendor/cc-switch/src/components/ui/sheet.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../components/ui/tooltip",
+      "target": "vendor/cc-switch/src/components/ui/tooltip.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
       "specifier": "../components/ui/tooltip",
       "target": "vendor/cc-switch/src/components/ui/tooltip.tsx",
       "disposition": "fork-output"
@@ -1970,6 +4126,27 @@
     {
       "source": "vendor/cc-switch/src/web/index.tsx",
       "kind": "ts-import-export",
+      "specifier": "../config/appConfig",
+      "target": "vendor/cc-switch/src/config/appConfig.tsx",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../hooks/useMcp",
+      "target": "vendor/cc-switch/src/hooks/useMcp.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../hooks/useMcpConnectivity",
+      "target": "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
       "specifier": "../i18n",
       "target": "vendor/cc-switch/src/i18n/index.ts",
       "disposition": "fork-output"
@@ -1977,8 +4154,64 @@
     {
       "source": "vendor/cc-switch/src/web/index.tsx",
       "kind": "ts-import-export",
+      "specifier": "../i18n",
+      "target": "vendor/cc-switch/src/i18n/index.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../lib/api/skills",
+      "target": "vendor/cc-switch/src/lib/api/skills.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../lib/api/types",
+      "target": "vendor/cc-switch/src/lib/api/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../lib/clipboard",
+      "target": "vendor/cc-switch/src/lib/clipboard.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../lib/toast",
+      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
       "specifier": "../lib/unsavedChanges",
       "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../lib/unsavedChanges",
+      "target": "vendor/cc-switch/src/lib/unsavedChanges.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "../types",
+      "target": "vendor/cc-switch/src/types.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./bridge",
+      "target": "vendor/cc-switch/src/web/bridge.ts",
       "disposition": "fork-output"
     },
     {
@@ -2000,6 +4233,13 @@
       "kind": "ts-import-export",
       "specifier": "./management.css",
       "target": "vendor/cc-switch/src/web/management.css",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/index.tsx",
+      "kind": "ts-import-export",
+      "specifier": "./settings",
+      "target": "vendor/cc-switch/src/web/settings.ts",
       "disposition": "fork-output"
     },
     {
@@ -2027,6 +4267,34 @@
       "source": "vendor/cc-switch/src/web/index.tsx",
       "kind": "ts-import-export",
       "specifier": "sonner",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/settings.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/api/settings",
+      "target": "vendor/cc-switch/src/lib/api/settings.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/settings.ts",
+      "kind": "ts-import-export",
+      "specifier": "../lib/toast",
+      "target": "vendor/cc-switch/src/lib/toast.ts",
+      "disposition": "fork-output"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/settings.ts",
+      "kind": "ts-import-export",
+      "specifier": "@tanstack/react-query",
+      "target": null,
+      "disposition": "external-package"
+    },
+    {
+      "source": "vendor/cc-switch/src/web/settings.ts",
+      "kind": "ts-import-export",
+      "specifier": "react",
       "target": null,
       "disposition": "external-package"
     }
@@ -2093,6 +4361,7 @@
     "vendor/cc-switch/scripts/closure.mjs",
     "vendor/cc-switch/scripts/provenance.mjs",
     "vendor/cc-switch/scripts/provenance.test.mjs",
+    "vendor/cc-switch/scripts/retire-local.mjs",
     "vendor/cc-switch/scripts/sync.mjs",
     "vendor/cc-switch/source-manifest.json",
     "vendor/cc-switch/src-tauri/Cargo.lock",
@@ -2503,12 +4772,6 @@
     "vendor/cc-switch/src/components/env/EnvWarningBanner.tsx",
     "vendor/cc-switch/src/components/hermes/HermesMemoryPanel.tsx",
     "vendor/cc-switch/src/components/hermes/hermesMemoryDrafts.ts",
-    "vendor/cc-switch/src/components/mcp/AppMatrix.tsx",
-    "vendor/cc-switch/src/components/mcp/McpFormModal.tsx",
-    "vendor/cc-switch/src/components/mcp/UnifiedMcpPanel.tsx",
-    "vendor/cc-switch/src/components/mcp/formBits.tsx",
-    "vendor/cc-switch/src/components/mcp/mcpDraft.ts",
-    "vendor/cc-switch/src/components/mcp/useVisibleAppIds.ts",
     "vendor/cc-switch/src/components/openclaw/AgentsDefaultsPanel.tsx",
     "vendor/cc-switch/src/components/openclaw/EnvPanel.tsx",
     "vendor/cc-switch/src/components/openclaw/OpenClawHealthBanner.tsx",
@@ -2683,42 +4946,22 @@
     "vendor/cc-switch/src/components/settings/sections/AppConfigSection.tsx",
     "vendor/cc-switch/src/components/settings/sections/GeneralSection.tsx",
     "vendor/cc-switch/src/components/settings/sections/RoutingSection.tsx",
-    "vendor/cc-switch/src/components/shell/AppPageHeader.tsx",
     "vendor/cc-switch/src/components/shell/NewLayoutDialog.tsx",
     "vendor/cc-switch/src/components/shell/Sidebar.tsx",
     "vendor/cc-switch/src/components/shell/WindowControls.tsx",
-    "vendor/cc-switch/src/components/skills/RepoManagerPanel.tsx",
-    "vendor/cc-switch/src/components/skills/SkillImportDialog.tsx",
-    "vendor/cc-switch/src/components/skills/SkillRestoreDialog.tsx",
-    "vendor/cc-switch/src/components/skills/SkillsPage.tsx",
-    "vendor/cc-switch/src/components/skills/SkillsStorageSheet.tsx",
-    "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
-    "vendor/cc-switch/src/components/skills/repoFailures.ts",
-    "vendor/cc-switch/src/components/skills/useSkillInstallTargets.ts",
     "vendor/cc-switch/src/components/theme-provider.tsx",
     "vendor/cc-switch/src/components/ui/accordion.tsx",
     "vendor/cc-switch/src/components/ui/alert.tsx",
     "vendor/cc-switch/src/components/ui/badge.tsx",
     "vendor/cc-switch/src/components/ui/card.tsx",
-    "vendor/cc-switch/src/components/ui/checkbox.tsx",
     "vendor/cc-switch/src/components/ui/collapsible.tsx",
     "vendor/cc-switch/src/components/ui/command.tsx",
-    "vendor/cc-switch/src/components/ui/dropdown-menu.tsx",
     "vendor/cc-switch/src/components/ui/form.tsx",
-    "vendor/cc-switch/src/components/ui/help-tip.tsx",
-    "vendor/cc-switch/src/components/ui/hover-tip.tsx",
     "vendor/cc-switch/src/components/ui/ime-safe-input.tsx",
-    "vendor/cc-switch/src/components/ui/input.tsx",
     "vendor/cc-switch/src/components/ui/label.tsx",
-    "vendor/cc-switch/src/components/ui/notice.tsx",
-    "vendor/cc-switch/src/components/ui/page-tabs.tsx",
     "vendor/cc-switch/src/components/ui/popover.tsx",
     "vendor/cc-switch/src/components/ui/scroll-area.tsx",
-    "vendor/cc-switch/src/components/ui/search-field.tsx",
-    "vendor/cc-switch/src/components/ui/segmented-control.tsx",
     "vendor/cc-switch/src/components/ui/select.tsx",
-    "vendor/cc-switch/src/components/ui/sheet.tsx",
-    "vendor/cc-switch/src/components/ui/sliding-indicator.tsx",
     "vendor/cc-switch/src/components/ui/sonner.tsx",
     "vendor/cc-switch/src/components/ui/switch.tsx",
     "vendor/cc-switch/src/components/ui/table.tsx",
@@ -2780,7 +5023,6 @@
     "vendor/cc-switch/src/config/kimiProviderPresets.ts",
     "vendor/cc-switch/src/config/mcodeProviderPresets.test.ts",
     "vendor/cc-switch/src/config/mcodeProviderPresets.ts",
-    "vendor/cc-switch/src/config/mcpPresets.ts",
     "vendor/cc-switch/src/config/ompProviderPresets.ts",
     "vendor/cc-switch/src/config/openclawProviderPresets.ts",
     "vendor/cc-switch/src/config/opencodeProviderPresets.ts",
@@ -2798,7 +5040,6 @@
     "vendor/cc-switch/src/hooks/useBackupManager.ts",
     "vendor/cc-switch/src/hooks/useDarkMode.ts",
     "vendor/cc-switch/src/hooks/useDebouncedValue.ts",
-    "vendor/cc-switch/src/hooks/useDelayedFlag.ts",
     "vendor/cc-switch/src/hooks/useDirectorySettings.ts",
     "vendor/cc-switch/src/hooks/useDragSort.ts",
     "vendor/cc-switch/src/hooks/useGlobalProxy.ts",
@@ -2806,8 +5047,6 @@
     "vendor/cc-switch/src/hooks/useImportExport.ts",
     "vendor/cc-switch/src/hooks/useLastValidValue.ts",
     "vendor/cc-switch/src/hooks/useLatestRef.ts",
-    "vendor/cc-switch/src/hooks/useMcp.ts",
-    "vendor/cc-switch/src/hooks/useMcpConnectivity.ts",
     "vendor/cc-switch/src/hooks/useModeActions.ts",
     "vendor/cc-switch/src/hooks/useModelMetadataFill.ts",
     "vendor/cc-switch/src/hooks/useMoneyFormat.ts",
@@ -2822,8 +5061,6 @@
     "vendor/cc-switch/src/hooks/useSettingsMetadata.ts",
     "vendor/cc-switch/src/hooks/useSidebarCollapsed.ts",
     "vendor/cc-switch/src/hooks/useSidebarStatus.ts",
-    "vendor/cc-switch/src/hooks/useSkills.helpers.ts",
-    "vendor/cc-switch/src/hooks/useSkills.ts",
     "vendor/cc-switch/src/hooks/useStreamCheck.ts",
     "vendor/cc-switch/src/hooks/useTauriEvent.ts",
     "vendor/cc-switch/src/hooks/useTrayNavigation.ts",
@@ -2912,7 +5149,6 @@
     "vendor/cc-switch/src/lib/api/hermes.ts",
     "vendor/cc-switch/src/lib/api/index.ts",
     "vendor/cc-switch/src/lib/api/kimiOAuth.ts",
-    "vendor/cc-switch/src/lib/api/mcp.ts",
     "vendor/cc-switch/src/lib/api/model-fetch.test.ts",
     "vendor/cc-switch/src/lib/api/model-fetch.ts",
     "vendor/cc-switch/src/lib/api/omo.ts",
@@ -2930,11 +5166,8 @@
     "vendor/cc-switch/src/lib/authBinding.ts",
     "vendor/cc-switch/src/lib/authLoginLink.ts",
     "vendor/cc-switch/src/lib/claudePlan.ts",
-    "vendor/cc-switch/src/lib/clipboard.ts",
     "vendor/cc-switch/src/lib/errors/liveEditConflict.ts",
-    "vendor/cc-switch/src/lib/errors/skillErrorParser.ts",
     "vendor/cc-switch/src/lib/frontendLogger.ts",
-    "vendor/cc-switch/src/lib/inputModality.ts",
     "vendor/cc-switch/src/lib/localCache.ts",
     "vendor/cc-switch/src/lib/managedAccountUsage.ts",
     "vendor/cc-switch/src/lib/modelMetadata.ts",
@@ -2944,7 +5177,6 @@
     "vendor/cc-switch/src/lib/navigation.ts",
     "vendor/cc-switch/src/lib/piPromptSlug.ts",
     "vendor/cc-switch/src/lib/piPromptTemplate.ts",
-    "vendor/cc-switch/src/lib/platform.ts",
     "vendor/cc-switch/src/lib/query/copilot.ts",
     "vendor/cc-switch/src/lib/query/customIcons.ts",
     "vendor/cc-switch/src/lib/query/failover.ts",
@@ -2962,13 +5194,11 @@
     "vendor/cc-switch/src/lib/query/usage.ts",
     "vendor/cc-switch/src/lib/requestOverrides.ts",
     "vendor/cc-switch/src/lib/schemas/provider.ts",
-    "vendor/cc-switch/src/lib/toast.ts",
     "vendor/cc-switch/src/lib/updater.ts",
     "vendor/cc-switch/src/lib/usageRange.ts",
     "vendor/cc-switch/src/lib/userAgent.ts",
     "vendor/cc-switch/src/lib/utils/base64.test.ts",
     "vendor/cc-switch/src/lib/utils/base64.ts",
-    "vendor/cc-switch/src/lib/utils/sequentialBulkAction.ts",
     "vendor/cc-switch/src/lib/version.test.ts",
     "vendor/cc-switch/src/lib/version.ts",
     "vendor/cc-switch/src/lib/whatsNew.ts",
@@ -2993,7 +5223,6 @@
     "vendor/cc-switch/src/utils/deeplinkRisk.test.ts",
     "vendor/cc-switch/src/utils/deeplinkRisk.ts",
     "vendor/cc-switch/src/utils/domUtils.ts",
-    "vendor/cc-switch/src/utils/errorUtils.ts",
     "vendor/cc-switch/src/utils/formatters.ts",
     "vendor/cc-switch/src/utils/grokBuildConfig.test.ts",
     "vendor/cc-switch/src/utils/grokBuildConfig.ts",
@@ -3007,13 +5236,11 @@
     "vendor/cc-switch/src/utils/providerMetaUtils.ts",
     "vendor/cc-switch/src/utils/routeSwitchNotification.ts",
     "vendor/cc-switch/src/utils/routingReason.ts",
-    "vendor/cc-switch/src/utils/textNormalization.ts",
     "vendor/cc-switch/src/utils/tomlUtils.ts",
     "vendor/cc-switch/src/utils/usageDisplay.ts",
     "vendor/cc-switch/src/utils/uuid.ts",
     "vendor/cc-switch/src/vite-env.d.ts",
     "vendor/cc-switch/src/web/build-css.mjs",
-    "vendor/cc-switch/src/web/settings.ts",
     "vendor/cc-switch/src/whats-new/4.0.0.json",
     "vendor/cc-switch/src/whats-new/4.0.10.json",
     "vendor/cc-switch/src/whats-new/4.0.11.json",
@@ -3342,6 +5569,7 @@
     "apps/server/agent/src/extensions/rpc.ts",
     "apps/server/agent/src/extensions/secrets.test.ts",
     "apps/server/agent/src/extensions/secrets.ts",
+    "apps/server/agent/src/extensions/service-unified.test.ts",
     "apps/server/agent/src/extensions/service.integration.test.ts",
     "apps/server/agent/src/extensions/service.ts",
     "apps/server/agent/src/extensions/storage.test.ts",
@@ -3350,7 +5578,6 @@
     "apps/server/agent/src/maintenance/agent-backup.ts",
     "apps/server/agent/src/providers/instances.ts",
     "apps/server/agent/src/providers/skills.test.ts",
-    "apps/server/agent/src/providers/t3code/management.ts",
     "apps/server/agent/src/server.ts",
     "apps/server/cc-switch-host/tests/host_protocol.rs",
     "apps/server/pm/src/app.ts",
@@ -3364,13 +5591,9 @@
     "apps/web/src/features/agent/src/settings/extensions-api.ts",
     "apps/web/src/features/agent/src/settings/extensions-page.tsx",
     "apps/web/src/features/agent/src/settings/settings-layout.tsx",
-    "apps/web/src/features/agent/src/workspace/agents-panel.tsx",
-    "apps/web/src/features/agent/src/workspace/instruction-blocks-dialog.tsx",
-    "apps/web/src/features/agent/src/workspace/instruction-blocks-panel.tsx",
     "apps/web/vite.config.ts",
     "packages/agent-contracts/package.json",
     "packages/agent-contracts/src/extensions.ts",
-    "packages/agent-contracts/src/provider.ts",
     "packages/application/src/automation-integrations-definitions.ts",
     "packages/application/src/automation-integrations-runtime.ts",
     "packages/application/src/automation-integrations-store.ts",

@@ -20,7 +20,7 @@ import type {
   InspectorTreeResponse,
 } from "@agent-workspace/contracts/inspector";
 import { errorMessage } from "./api";
-import { useInspectorUrl } from "./scope";
+import { InspectorExecution, useInspectorScope, useInspectorUrl } from "./scope";
 import { workspaceClient } from "@agent/src/network";
 import { useAgentText } from "../../i18n";
 
@@ -35,8 +35,13 @@ function formatBytes(size: number): string {
 }
 
 export function FilesPanel({ active = true }: { active?: boolean }) {
+  return <InspectorExecution><FilesRootPanel active={active} /></InspectorExecution>;
+}
+
+function FilesRootPanel({ active }: { active: boolean }) {
   const t = useAgentText();
   const inspectUrl = useInspectorUrl();
+  const inspectorScope = useInspectorScope();
   const [trees, setTrees] = useState<Record<string, InspectorTreeResponse>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [dirLoading, setDirLoading] = useState<Set<string>>(new Set());
@@ -276,6 +281,10 @@ export function FilesPanel({ active = true }: { active?: boolean }) {
                   >
                     {directory ? t("刷新目录", "Refresh directory") : t("刷新文件内容", "Refresh file contents")}
                   </ContextMenuItem>
+                  {directory && inspectorScope.onOpenTerminal && <>
+                    <ContextMenuItem onSelect={() => inspectorScope.onOpenTerminal?.({ relativePath: entry.path, scope: "workspace" })}>{t("在此目录新建 Workspace 终端", "New Workspace terminal here")}</ContextMenuItem>
+                    <ContextMenuItem onSelect={() => inspectorScope.onOpenTerminal?.({ relativePath: entry.path, scope: "session" })}>{t("在此目录新建 Session 终端", "New Session terminal here")}</ContextMenuItem>
+                  </>}
                 </ContextMenuContent>
               </ContextMenu>
               {directory && open ? (
@@ -367,6 +376,8 @@ export function FilesPanel({ active = true }: { active?: boolean }) {
         >
           <RefreshCw className={refreshing ? "animate-spin" : undefined} aria-hidden="true" />
         </Button>
+        <Button variant="ghost" size="sm" onClick={() => inspectorScope.onOpenTerminal?.({ relativePath: "", scope: "workspace" })}>{t("根目录 Workspace 终端", "Workspace terminal at root")}</Button>
+        <Button variant="ghost" size="sm" onClick={() => inspectorScope.onOpenTerminal?.({ relativePath: "", scope: "session" })}>{t("根目录 Session 终端", "Session terminal at root")}</Button>
         {selectedPath ? (
           <nav
             className="inspector-mono"

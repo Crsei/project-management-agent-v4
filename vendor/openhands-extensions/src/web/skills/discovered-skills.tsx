@@ -1,7 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import type { SkillsDiscoveryPresentation, DiscoverRow } from "@pm/cc-switch-source/components/skills/SkillsPage";
-import { Button } from "@pm/cc-switch-source/components/ui/button";
+import { Button, type SkillsDiscoveryPresentation, type DiscoverRow } from "@pm/cc-switch-ui";
 import { SkillCard } from "@pm/openhands-source/components/features/skills/skill-card";
 import { SkillDetailModal } from "@pm/openhands-source/components/features/skills/skill-detail-modal";
 import { extensionModuleCardGridClassName, extensionModuleCardGridContainerClassName } from "@pm/openhands-source/utils/extension-module-card-classes";
@@ -13,7 +12,7 @@ export function OpenHandsDiscoveredSkills(state: SkillsDiscoveryPresentation) {
   const { t } = useOpenHandsTranslation();
   const { t: sourceT } = useTranslation();
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
-  const selected = state.rows.find((row) => row.key === selectedKey);
+  const selected = state.rows.find(row => row.key === selectedKey);
   const action = (row: DiscoverRow) => {
     const status = state.statusOf(row);
     if (status.kind !== "available") return <Button variant="quiet" size="compact" disabled={state.busy} onClick={() => { setSelectedKey(null); state.onShowInstalled(status.skill.id); }}>
@@ -27,23 +26,13 @@ export function OpenHandsDiscoveredSkills(state: SkillsDiscoveryPresentation) {
     </Button>;
   };
   return <div className="oh-skills-discovered">
-    <div className="oh-skills-notice" role="note">
-      <p className="oh-skills-state-note">{t("SKILLS_PM$DISCOVERY_NOTE")}</p>
-      <p><strong>{t("SKILLS_PM$INSTALL_TARGETS")}: </strong>{state.installTargets.map(agentName).join(", ") || t("SKILLS_PM$NONE")}</p>
-      {state.installTargets.length === 0 ? <p className="oh-skills-warning">{t("SKILLS_PM$NO_TARGETS")}</p> : null}
-    </div>
+    {state.installTargets.length === 0 ? <p className="oh-skills-warning">{t("SKILLS_PM$NO_TARGETS")}</p> : null}
     <div className={extensionModuleCardGridContainerClassName}><div className={extensionModuleCardGridClassName}>
-      {state.rows.map((row) => {
+      {state.rows.map(row => {
         const status = state.statusOf(row);
         return <SkillCard key={row.key} skill={discoveredSkillInfo(row.skill, state.source)}
-          onOpen={() => setSelectedKey(row.key)} action={action(row)} summary={<div className="oh-skill-card-status">
-            <div className="oh-skill-status-badges">
-              <span className="oh-skill-state-badge">{state.source === "skillssh" ? "skills.sh" : t("SKILLS_PM$REPOSITORY_DISCOVERY")}</span>
-              <span className="oh-skill-state-badge">{status.kind === "installed" ? t("SKILLS_PM$LIBRARY_STORED") : status.kind === "conflict" ? t("SKILLS_PM$DIRECTORY_CONFLICT", { name: status.skill.name }) : t("SKILLS_PM$CATALOG_LISTING")}</span>
-            </div>
-            <span className="oh-skill-directory"><strong>{t("SKILLS_PM$DIRECTORY")}: </strong><code>{row.directory}</code></span>
-            {typeof row.installs === "number" ? <span>{sourceT("skills.skillssh.installs", { count: row.installs })}</span> : null}
-            {!row.repoOwner ? <p className="oh-skills-warning">{t("SKILLS_PM$MISSING_SOURCE")}</p> : null}
+          onOpen={() => setSelectedKey(row.key)} action={action(row)} summary={<div className="oh-skill-card-meta">
+            <span className="oh-skill-state-badge">{status.kind === "installed" ? t("SKILLS_PM$LIBRARY_STORED") : status.kind === "conflict" ? t("SKILLS_PM$DIRECTORY_CONFLICT", { name: status.skill.name }) : t("SKILLS_PM$CATALOG_LISTING")}</span>
             {state.failures[row.key] ? <p role="alert" className="oh-skill-error">{state.failures[row.key]}</p> : null}
           </div>} />;
       })}
@@ -59,7 +48,6 @@ export function OpenHandsDiscoveredSkills(state: SkillsDiscoveryPresentation) {
         {selected.skill.repoBranch ? <><dt>{t("SKILLS_PM$BRANCH")}</dt><dd><code>{selected.skill.repoBranch}</code></dd></> : null}
         <dt>{t("SKILLS_PM$INSTALL_TARGETS")}</dt><dd>{state.installTargets.map(agentName).join(", ") || t("SKILLS_PM$NONE")}</dd>
       </dl>
-      <p className="oh-skills-detail-note">{t("SKILLS_PM$DETAIL_CATALOG_NOTE")}</p>
       {state.statusOf(selected).kind === "available" && state.installTargets.length === 0 ? <p className="oh-skills-warning">{t("SKILLS_PM$NO_TARGETS")}</p> : null}
       {!selected.repoOwner ? <p className="oh-skills-warning">{t("SKILLS_PM$MISSING_SOURCE")}</p> : null}
       {state.failures[selected.key] ? <p role="alert" className="oh-skill-error">{state.failures[selected.key]}</p> : null}

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -7,12 +7,153 @@ import { createServer } from "node:http";
 import { ExtensionHost } from "./service.ts";
 import { contextDataDirectory, contextSecretKey, privateDirectory, projectExtensionContextId, readExtensionContexts, saveExtensionContexts } from "./storage.ts";
 import { makePrivatePath } from "../../../../../packages/pm-core/private-path.ts";
-import { createProviderInstance, getStoredInstance } from "../providers/instances.ts";
+import { createProviderInstance, getStoredInstance, listStoredInstances, updateProviderInstance } from "../providers/instances.ts";
 import { ExtensionSidecar } from "./rpc.ts";
 import type { ExtensionEvent, ExtensionMcpImportPreview, ExtensionMcpImportResult, ExtensionMcpManagement } from "@agent-workspace/contracts/extensions";
 
 // Requires the real cc-switch-host release binary (or explicit CC_SWITCH_HOST_BINARY).
 // No substitute child or fake implementation is used; all native roots and credentials below are synthetic fixtures.
+test("registered Provider resolution preserves real definitions, isolates roots and refreshes stale revisions", async () => {
+  const previous = { ...process.env };
+  const root = await mkdtemp(path.join(os.tmpdir(), "cc-switch-provider-resolution-"));
+  const host = new ExtensionHost();
+  try {
+    process.env.AGENT_WORKSPACE_DATA_DIR = path.join(root, "data");
+    process.env.HOME = path.join(root, "home");
+    process.env.USERPROFILE = process.env.HOME;
+    delete process.env.CC_SWITCH_EXTERNAL_TARGETS_FILE;
+    for (const key of ["CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME"]) delete process.env[key];
+    await mkdir(process.env.HOME, { recursive: true });
+    const one = path.join(root, "codex-one"), two = path.join(root, "codex-two"), moved = path.join(root, "codex-moved");
+    await mkdir(one);
+    await mkdir(two);
+    const alias = path.join(root, "codex-alias");
+    await symlink(one, alias, process.platform === "win32" ? "junction" : "dir");
+    const environment = [{ name: "HOME", value: process.env.HOME, sensitive: false }, { name: "USERPROFILE", value: process.env.HOME, sensitive: false }];
+    const firstProvider = createProviderInstance({ instanceId: "resolve-one", driver: "codex", config: { homePath: one }, environment });
+    const sharedProvider = createProviderInstance({ instanceId: "resolve-shared", driver: "codex", config: { homePath: alias }, environment });
+    createProviderInstance({ instanceId: "resolve-two", driver: "codex", config: { homePath: two }, environment });
+    createProviderInstance({ instanceId: "resolve-unsupported", driver: "opencode", config: { serverUrl: "http://127.0.0.1:4101" }, environment });
+    const [first, shared, second] = await Promise.all(["resolve-one", "resolve-shared", "resolve-two"].map(id => host.resolveProviderContext(id)));
+    assert.equal(first!.context.id, shared!.context.id);
+    assert.deepEqual(shared!.context.providerInstanceIds, ["resolve-one", "resolve-shared"]);
+    assert.notEqual(first!.context.id, second!.context.id);
+    assert.equal(first!.context.status, "stopped");
+    assert.deepEqual(await readdir(one), []);
+    assert.deepEqual(await readdir(two), []);
+    await assert.rejects(host.resolveProviderContext("resolve-unknown"), { code: "unsupported_extension_provider_target" });
+    await assert.rejects(host.resolveProviderContext("resolve-unsupported"), { code: "unsupported_extension_provider_target" });
+    await host.invoke(first!.context.id, "upsert_mcp_server", { server: { id: "retained", name: "Retained", server: { type: "http", url: "https://mcp.example.invalid" }, apps: { codex: false } } });
+    assert.deepEqual(await host.invoke(second!.context.id, "get_mcp_servers", {}), {});
+    const events: ExtensionEvent[] = [];
+    const unsubscribe = await host.subscribe(first!.context.id, event => events.push(event));
+    const revised = updateProviderInstance("resolve-one", { label: "Renamed Provider" }, firstProvider.revision);
+    const refreshed = await host.resolveProviderContext("resolve-one");
+    assert.equal(refreshed.context.id, first!.context.id);
+    assert.ok(Object.hasOwn(await host.invoke(refreshed.context.id, "get_mcp_servers", {}) as object, "retained"));
+    await host.invoke(refreshed.context.id, "upsert_mcp_server", { server: { id: "after-refresh", name: "After refresh", server: { type: "http", url: "https://mcp.example.invalid" }, apps: { codex: false } } });
+    assert.ok(events.some(event => event.event === "changed"));
+    unsubscribe();
+    updateProviderInstance("resolve-one", { config: { homePath: moved } }, revised.revision);
+    const newOwner = await host.resolveProviderContext("resolve-one");
+    assert.notEqual(newOwner.context.id, first!.context.id);
+    const previousOwner = await host.resolveProviderContext("resolve-shared");
+    assert.equal(previousOwner.context.id, first!.context.id);
+    assert.ok(Object.hasOwn(await host.invoke(previousOwner.context.id, "get_mcp_servers", {}) as object, "retained"));
+    assert.deepEqual(await host.invoke(newOwner.context.id, "get_mcp_servers", {}), {});
+    updateProviderInstance("resolve-shared", { config: { homePath: path.join(root, "shared-moved") } }, sharedProvider.revision);
+    await assert.rejects(host.invoke(previousOwner.context.id, "get_mcp_servers", {}));
+    const sharedMoved = await host.resolveProviderContext("resolve-shared");
+    assert.notEqual(sharedMoved.context.id, previousOwner.context.id);
+    assert.deepEqual(await host.invoke(sharedMoved.context.id, "get_mcp_servers", {}), {});
+    assert.ok((await readExtensionContexts()).some(context => context.id === first!.context.id));
+  } finally {
+    await host.close();
+    for (const name of Object.keys(process.env)) if (!(name in previous)) delete process.env[name];
+    Object.assign(process.env, previous);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("enabled resolution preserves a live sidecar, subscribers and reload state across revision refresh", async () => {
+  const previous = { ...process.env };
+  const root = await mkdtemp(path.join(os.tmpdir(), "cc-switch-live-refresh-"));
+  const host = new ExtensionHost();
+  try {
+    process.env.AGENT_WORKSPACE_DATA_DIR = path.join(root, "data");
+    process.env.HOME = path.join(root, "home"); process.env.USERPROFILE = process.env.HOME;
+    for (const key of ["CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME", "CC_SWITCH_EXTERNAL_TARGETS_FILE"]) delete process.env[key];
+    await mkdir(process.env.HOME, { recursive: true });
+    for (const instance of listStoredInstances()) updateProviderInstance(instance.instanceId, { enabled: false }, instance.revision);
+    const environment = [{ name: "HOME", value: process.env.HOME, sensitive: false }, { name: "USERPROFILE", value: process.env.HOME, sensitive: false }];
+    createProviderInstance({ instanceId: "live-codex", driver: "codex", environment });
+    createProviderInstance({ instanceId: "live-opencode", driver: "opencode", environment });
+    const original = (await host.resolveEnabledProviderContexts()).contexts[0]!;
+    await host.invoke(original.id, "upsert_mcp_server", { server: { id: "retained", name: "Retained", server: { type: "http", url: "https://mcp.example.invalid" }, apps: { codex: false, opencode: false } } });
+    const events: ExtensionEvent[] = [];
+    const unsubscribe = await host.subscribe(original.id, event => events.push(event));
+    const instance = getStoredInstance("live-codex")!;
+    updateProviderInstance(instance.instanceId, { label: "Renamed" }, instance.revision);
+    events.length = 0;
+    const refreshed = (await host.resolveEnabledProviderContexts()).contexts[0]!;
+    assert.equal(refreshed.id, original.id);
+    assert.equal(refreshed.status, "ready");
+    assert.equal(refreshed.reloadRequired, true);
+    assert.equal(events.some(event => event.event === "status"), false);
+    assert.ok(Object.hasOwn(await host.invoke(original.id, "get_mcp_servers", {}) as object, "retained"));
+    await host.invoke(original.id, "upsert_mcp_server", { server: { id: "after", name: "After", server: { type: "http", url: "https://mcp.example.invalid" }, apps: { codex: false, opencode: false } } });
+    assert.ok(events.some(event => event.event === "changed"));
+    createProviderInstance({ instanceId: "new-pi", driver: "pi", environment });
+    const expanded = await host.resolveEnabledProviderContexts();
+    assert.deepEqual(expanded.contexts.find(context => context.id === original.id)!.apps, ["codex", "opencode"]);
+    assert.deepEqual(expanded.contexts.find(context => context.id !== original.id)!.apps, ["pi"]);
+    assert.equal(expanded.contexts.find(context => context.id === original.id)!.status, "ready");
+    unsubscribe();
+  } finally {
+    await host.close();
+    for (const name of Object.keys(process.env)) if (!(name in previous)) delete process.env[name];
+    Object.assign(process.env, previous);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("default Claude authority through a different Home alias stays usable in either ID order", async () => {
+  for (const [codexId, claudeId] of [["aaa-codex", "zzz-claude"], ["zzz-codex", "aaa-claude"]]) {
+    const previous = { ...process.env };
+    const root = await mkdtemp(path.join(os.tmpdir(), "cc-switch-home-alias-"));
+    const host = new ExtensionHost();
+    try {
+      process.env.AGENT_WORKSPACE_DATA_DIR = path.join(root, "data");
+      process.env.HOME = path.join(root, "home"); process.env.USERPROFILE = process.env.HOME;
+      for (const key of ["CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME", "CC_SWITCH_EXTERNAL_TARGETS_FILE"]) delete process.env[key];
+      await mkdir(process.env.HOME);
+      const alias = path.join(root, "alias");
+      await symlink(process.env.HOME, alias, process.platform === "win32" ? "junction" : "dir");
+      for (const instance of listStoredInstances()) updateProviderInstance(instance.instanceId, { enabled: false }, instance.revision);
+      const environment = (home: string) => [{ name: "HOME", value: home, sensitive: false }, { name: "USERPROFILE", value: home, sensitive: false }];
+      createProviderInstance({ instanceId: codexId!, driver: "codex", environment: environment(alias) });
+      const original = (await host.resolveProviderContext(codexId!)).context;
+      const originalBinding = (await readExtensionContexts()).find(context => context.id === original.id)!.binding;
+      createProviderInstance({ instanceId: claudeId!, driver: "claude", environment: environment(process.env.HOME) });
+      const resolved = await host.resolveEnabledProviderContexts();
+      assert.deepEqual(resolved.contexts.map(context => context.providerInstanceIds).sort(), [[codexId], [claudeId]].sort());
+      assert.deepEqual((await readExtensionContexts()).find(context => context.id === original.id)!.binding!.appDirs, originalBinding!.appDirs);
+      for (const context of resolved.contexts) {
+        const management = await host.invoke(context.id, "get_mcp_management", {}) as ExtensionMcpManagement;
+        assert.deepEqual(management.boundApps, context.apps);
+      }
+      const saved = await readExtensionContexts();
+      assert.equal(saved.find(context => context.id === original.id)!.binding!.homeDir, alias);
+      assert.equal(saved.find(context => context.id !== original.id)!.binding!.claudeMcpFile, path.join(process.env.HOME, ".claude.json"));
+    } finally {
+      await host.close();
+      for (const name of Object.keys(process.env)) if (!(name in previous)) delete process.env[name];
+      Object.assign(process.env, previous);
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
 test("two same-Home native contexts stay independent in cc-switch SSOT; Unified is explicit and exclusive", async () => {
   const previous = { ...process.env };
   const root = await mkdtemp(path.join(os.tmpdir(), "cc-switch-host-integration-"));
@@ -35,6 +176,9 @@ test("two same-Home native contexts stay independent in cc-switch SSOT; Unified 
     const second = (await host.bind({ providerInstanceIds: [], externalTargetIds: ["two"], confirmed: true })).context;
     assert.notEqual(first.id, second.id);
     assert.equal(first.status, "stopped");
+    const resolvedExternalOwner = (await host.resolveProviderContext("external-codex-overlap")).context;
+    assert.equal(resolvedExternalOwner.id, first.id);
+    assert.deepEqual(resolvedExternalOwner.providerInstanceIds, ["external-codex-overlap"]);
     await assert.rejects(host.bind({ providerInstanceIds: [], externalTargetIds: ["alias"], confirmed: true }), { code: "native_root_owned" });
     assert.equal((await host.invoke(first.id, "get_settings", {}) as { skillStorageLocation: string }).skillStorageLocation, "cc_switch");
     const changes: Array<Record<string, unknown>> = [];

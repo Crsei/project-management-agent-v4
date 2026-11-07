@@ -85,7 +85,7 @@ test('update preview returns current before/after values and never writes', () =
   const response = await f.post({
     name: 'pm_update_task',
     arguments: { id: f.task, revision: current.revision, title: 'Renamed task', description: null, assigneeId: null, priority: 'high', startDate: null, dueDate: null, labels: null },
-    scope: { kind: 'projects', projectIds: [f.project] },
+    target: { workspaceId, projectId: f.project },
   });
   const body = previewBody(response);
   assert.equal(response.headers['cache-control'], 'no-store');
@@ -108,7 +108,7 @@ test('create preview plans fields without a target and allocates nothing', () =>
   const response = await f.post({
     name: 'pm_create_task',
     arguments: { projectId: f.project, title: 'New task', description: 'Details', assigneeId: null, priority: 'urgent', startDate: '', dueDate: null, labels: ['api', 'docs'] },
-    scope: { kind: 'projects', projectIds: [f.project] },
+    target: { workspaceId, projectId: f.project },
   });
   const body = previewBody(response);
   assert.deepEqual({ kind: body.kind, targetId: body.targetId, targetTitle: body.targetTitle, projectId: body.projectId },
@@ -128,7 +128,7 @@ test('relation preview shows the field change and both endpoint revisions withou
   const added = previewBody(await f.post({
     name: 'pm_add_relation',
     arguments: { sourceId: f.task, targetId: target, relation: 'parent', revision: source.revision, targetRevision: endpoint.revision },
-    scope: { kind: 'projects', projectIds: [f.project] },
+    target: { workspaceId, projectId: f.project },
   }));
   assert.deepEqual({ kind: added.kind, targetId: added.targetId, projectId: added.projectId }, { kind: 'relation', targetId: f.task, projectId: f.project });
   assert.deepEqual({ before: field(added, 'parent').before, after: field(added, 'parent').after }, { before: null, after: target });
@@ -140,7 +140,7 @@ test('relation preview shows the field change and both endpoint revisions withou
   const removed = previewBody(await f.post({
     name: 'pm_remove_relation',
     arguments: { sourceId: f.task, targetId: target, relation: 'parent', revision: linked.revision, targetRevision: endpoint.revision },
-    scope: { kind: 'projects', projectIds: [f.project] },
+    target: { workspaceId, projectId: f.project },
   }));
   assert.deepEqual({ before: field(removed, 'parent').before, after: field(removed, 'parent').after }, { before: target, after: null });
   assert.equal(f.workspace.get(f.task).revision, linked.revision);
@@ -149,7 +149,7 @@ test('relation preview shows the field change and both endpoint revisions withou
 test('lifecycle previews describe archive, restore and permanent deletion without changing the source', () => withFixture(async f => {
   const current = f.workspace.get(f.task);
   const archive = previewBody(await f.post({
-    name: 'pm_archive_task', arguments: { id: f.task, revision: current.revision }, scope: { kind: 'projects', projectIds: [f.project] },
+    name: 'pm_archive_task', arguments: { id: f.task, revision: current.revision }, target: { workspaceId, projectId: f.project },
   }));
   assert.deepEqual({ kind: archive.kind, before: field(archive, 'archived').before, after: field(archive, 'archived').after },
     { kind: 'archive', before: 'false', after: 'true' });
@@ -157,12 +157,12 @@ test('lifecycle previews describe archive, restore and permanent deletion withou
 
   const archived = await f.workspace.archive(f.task, current.revision);
   const restore = previewBody(await f.post({
-    name: 'pm_restore_task', arguments: { id: f.task, revision: archived.revision }, scope: { kind: 'projects', projectIds: [f.project] },
+    name: 'pm_restore_task', arguments: { id: f.task, revision: archived.revision }, target: { workspaceId, projectId: f.project },
   }));
   assert.deepEqual({ before: field(restore, 'archived').before, after: field(restore, 'archived').after }, { before: 'true', after: 'false' });
 
   const deletion = previewBody(await f.post({
-    name: 'pm_delete_task', arguments: { id: f.task, revision: archived.revision }, scope: { kind: 'projects', projectIds: [f.project] },
+    name: 'pm_delete_task', arguments: { id: f.task, revision: archived.revision }, target: { workspaceId, projectId: f.project },
   }));
   assert.equal(deletion.kind, 'delete');
   assert.match(deletion.summary, /Permanently delete/);
@@ -173,7 +173,7 @@ test('lifecycle previews describe archive, restore and permanent deletion withou
 test('delete preview requires an archived task and points at permanent deletion', () => withFixture(async f => {
   const current = f.workspace.get(f.task);
   const response = await f.post({
-    name: 'pm_delete_task', arguments: { id: f.task, revision: current.revision }, scope: { kind: 'projects', projectIds: [f.project] },
+    name: 'pm_delete_task', arguments: { id: f.task, revision: current.revision }, target: { workspaceId, projectId: f.project },
   });
   assert.equal(response.statusCode, 422);
   assert.equal(errorCode(response), 'DELETE_REQUIRES_ARCHIVE');
@@ -185,7 +185,7 @@ test('transition preview defers to the workflow configuration and never calls th
   const planned = previewBody(await f.post({
     name: 'pm_transition_task',
     arguments: { id: f.task, revision: current.revision, status: 'in_progress' },
-    scope: { kind: 'projects', projectIds: [f.project] },
+    target: { workspaceId, projectId: f.project },
   }));
   assert.deepEqual({ kind: planned.kind, before: field(planned, 'status').before, after: field(planned, 'status').after },
     { kind: 'status', before: 'todo', after: 'in_progress' });
@@ -195,7 +195,7 @@ test('transition preview defers to the workflow configuration and never calls th
   const unknown = await f.post({
     name: 'pm_transition_task',
     arguments: { id: f.task, revision: current.revision, status: 'imaginary' },
-    scope: { kind: 'projects', projectIds: [f.project] },
+    target: { workspaceId, projectId: f.project },
   });
   assert.equal(unknown.statusCode, 422);
   assert.equal(errorCode(unknown), 'agent_tool_transition_not_allowed');
@@ -207,33 +207,39 @@ test('read-only tools are not previewable', () => withFixture(async f => {
     ['pm_read', { id: f.task, bodyOffset: 0, bodyLimit: 200 }],
     ['pm_query', { entity: null, projectId: null, query: null, after: null, limit: 5 }],
   ] as const) {
-    const response = await f.post({ name, arguments: args, scope: { kind: 'projects', projectIds: [f.project] } });
+    const response = await f.post({ name, arguments: args, target: { workspaceId, projectId: f.project } });
     assert.equal(response.statusCode, 400);
     assert.equal(errorCode(response), 'preview_not_supported');
   }
 }));
 
-test('unknown tools and unauthorized scopes are rejected without leaking sources', () => withFixture(async f => {
-  const unknown = await f.post({ name: 'pm_drop_task', arguments: {}, scope: { kind: 'workspace', projectIds: [] } });
+test('unknown tools and unauthorized targets are rejected without leaking sources', () => withFixture(async f => {
+  const unknown = await f.post({ name: 'pm_drop_task', arguments: {}, target: { workspaceId, projectId: null } });
   assert.equal(unknown.statusCode, 403);
   assert.equal(errorCode(unknown), 'agent_tool_not_available');
 
   f.allow(ALL_CAPABILITIES, [f.project]);
   const forbidden = await f.post({ name: 'pm_create_task',
     arguments: { projectId: f.other, title: 'Hidden task', description: '', assigneeId: null, priority: null, startDate: null, dueDate: null, labels: null },
-    scope: { kind: 'projects', projectIds: [f.other] } });
+    target: { workspaceId, projectId: f.other } });
   assert.equal(forbidden.statusCode, 404);
   assert.equal(errorCode(forbidden), 'not_found_or_forbidden');
 
   const workspaceScope = await f.post({ name: 'pm_create_task',
     arguments: { projectId: f.project, title: 'Hidden task', description: '', assigneeId: null, priority: null, startDate: null, dueDate: null, labels: null },
-    scope: { kind: 'workspace', projectIds: [] } });
+    target: { workspaceId, projectId: null } });
   assert.equal(workspaceScope.statusCode, 404);
 
-  const empty = await f.post({ name: 'pm_create_task',
+  const missing = await f.post({ name: 'pm_create_task',
     arguments: { projectId: f.project, title: 'Hidden task', description: '', assigneeId: null, priority: null, startDate: null, dueDate: null, labels: null },
-    scope: { kind: 'projects', projectIds: [] } });
-  assert.equal(empty.statusCode, 400);
+    target: { workspaceId } });
+  assert.equal(missing.statusCode, 400);
+  const mismatched = await f.post({ name: 'pm_update_task',
+    arguments: { id: f.task, revision: f.workspace.get(f.task).revision, title: 'Forged', description: null, assigneeId: null, priority: null, startDate: null, dueDate: null, labels: null },
+    target: { workspaceId: '0196c319-8b1d-7000-8000-000000000099', projectId: f.project } });
+  assert.equal(mismatched.statusCode, 400);
+  assert.equal(errorCode(mismatched), 'agent_tool_target_mismatch');
+  assert.equal(f.workspace.get(f.task).entity.title, 'Preview task');
 }));
 
 test('a stale revision still previews current state and does not write', () => withFixture(async f => {
@@ -242,7 +248,7 @@ test('a stale revision still previews current state and does not write', () => w
   const response = await f.post({
     name: 'pm_update_task',
     arguments: { id: f.task, revision: stale, title: 'Latest title', description: null, assigneeId: null, priority: null, startDate: null, dueDate: null, labels: null },
-    scope: { kind: 'projects', projectIds: [f.project] },
+    target: { workspaceId, projectId: f.project },
   });
   const body = previewBody(response);
   assert.deepEqual({ before: field(body, 'title').before, after: field(body, 'title').after }, { before: 'Changed elsewhere', after: 'Latest title' });
@@ -254,7 +260,7 @@ test('a stale revision still previews current state and does not write', () => w
 
 test('a full preview batch leaves every workspace source untouched', () => withFixture(async f => {
   const before = f.snapshots();
-  const scope = { kind: 'workspace', projectIds: [] };
+  const target = { workspaceId, projectId: null };
   const current = f.workspace.get(f.task);
   for (const [name, args] of [
     ['pm_update_task', { id: f.task, revision: current.revision, title: 'Batch title', description: null, assigneeId: null, priority: 'low', startDate: null, dueDate: null, labels: null }],
@@ -264,7 +270,7 @@ test('a full preview batch leaves every workspace source untouched', () => withF
     ['pm_transition_task', { id: f.task, revision: current.revision, status: 'done' }],
     ['pm_archive_task', { id: f.task, revision: current.revision }],
   ] as const) {
-    const response = await f.post({ name, arguments: args, scope });
+    const response = await f.post({ name, arguments: args, target });
     assert.equal(response.statusCode, 200, `${name} preview should succeed`);
   }
   assert.deepEqual(f.snapshots(), before);

@@ -5,7 +5,8 @@ import { useAgentText } from "../i18n";
 
 export type PmToolRecord = PmToolCallRecord;
 
-function objectHref(workspaceId: string, kind: string, id: string, projectId?: string | null) {
+function objectHref(workspaceId: string | null, kind: string, id: string, projectId?: string | null) {
+  if (!workspaceId) return undefined;
   const root = `/pm/${encodeURIComponent(workspaceId)}`;
   return kind === "project" ? `${root}/projects/${encodeURIComponent(id)}` : `${root}${kind === "task" && projectId ? `/projects/${encodeURIComponent(projectId)}` : ""}/entities/${encodeURIComponent(id)}`;
 }
@@ -31,6 +32,7 @@ export function PmToolCard({ record, onUpdate }: { record: PmToolRecord; onUpdat
   return <section className="native-output-card pm-tool-card" data-state={record.status}>
     <header><strong>{record.name}</strong><span>{record.status === "pending_approval" ? t("等待批准", "Awaiting approval") : record.status === "running" ? t("进行中", "Running") : record.status === "succeeded" ? t("已完成", "Completed") : record.status === "unknown" ? t("结果未知", "Result unknown") : record.error?.code === "approval_rejected" ? t("已拒绝", "Rejected") : t("失败", "Failed")}</span></header>
     <div className="native-card-body">
+      {record.target && <p className="text-xs">{t("PM 目标：", "PM target: ")}<code>{record.target.workspaceId}{record.target.projectId ? ` / ${record.target.projectId}` : ""}</code></p>}
       {record.status === "pending_approval" && <>
         <p role="status">{t("该操作会更改或移除任务。批准后才会把原始请求发送给 PM；拒绝不会写入任何内容。", "This operation changes or removes tasks. The original request is sent to PM only after approval; rejecting writes nothing.")}</p>
         <button type="button" disabled={busy} onClick={() => decide("approve")}>{busy ? t("处理中…", "Working…") : t("批准执行", "Approve and run")}</button>
@@ -43,7 +45,8 @@ export function PmToolCard({ record, onUpdate }: { record: PmToolRecord; onUpdat
       {record.error && <p role="alert"><code>{record.error.code}</code>{t("：", ": ")}{record.error.message}</p>}
       {error && <p role="alert">{t("操作失败：", "Operation failed: ")}{error}</p>}
       {result && <>
-        {result.kind === "comment" ? result.items.map(item => <article key={item.id}><a href={objectHref(record.workspaceId, "task", item.taskId, item.projectId)}>{t("任务 ", "Comment on task ")}{item.taskId}{t(" 的评论", "")}</a><p>{item.content ?? t("已删除", "Deleted")}</p><small>{t("版本 ", "Version ")}{item.version}</small></article>)
+        {result.kind === "workspaces" ? result.items.map(item => <article key={item.id}><a href={`/pm/${encodeURIComponent(item.id)}/home`}>{item.name}</a> <code>{item.id}</code><ul>{item.projects.map(project => <li key={project.id}><a href={objectHref(item.id, "project", project.id)}>{project.name}</a> <code>{project.id}</code></li>)}</ul></article>)
+          : result.kind === "comment" ? result.items.map(item => <article key={item.id}><a href={objectHref(record.workspaceId, "task", item.taskId, item.projectId)}>{t("任务 ", "Comment on task ")}{item.taskId}{t(" 的评论", "")}</a><p>{item.content ?? t("已删除", "Deleted")}</p><small>{t("版本 ", "Version ")}{item.version}</small></article>)
           : result.kind === "relation" ? result.items.map(item => <p key={`${item.sourceId}:${item.relation}:${item.targetId}`}><a href={objectHref(record.workspaceId, "relation", item.sourceId)}>{item.sourceId}</a> · {item.relation} · <a href={objectHref(record.workspaceId, "relation", item.targetId)}>{item.targetId}</a> <small>{item.sourceRevision} / {item.targetRevision}</small></p>)
           : result.items.map(item => <article key={item.id}>
             <a href={objectHref(record.workspaceId, item.entity === "work_item" ? "task" : item.entity, item.id, item.projectId)}>{item.title || item.id}</a> <code>{item.id}</code> <small>revision {item.revision} · v{item.version}</small>

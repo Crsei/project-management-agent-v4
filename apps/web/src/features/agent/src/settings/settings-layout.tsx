@@ -67,22 +67,17 @@ export function SettingsNotice({ kind, children, onRetry }: {
 const pages = [
   { id: "general", title: ["通用", "General"], icon: Settings2, group: "偏好设置" },
   { id: "providers", title: ["提供商", "Providers"], icon: Plug, group: "偏好设置" },
-  { id: "mcp-servers", title: ["MCP 服务器", "MCP servers"], icon: Server, group: "自定义" },
+  { id: "mcp-servers", title: ["MCP", "MCP"], icon: Server, group: "自定义" },
   { id: "skills", title: ["Skills", "Skills"], icon: FolderOpen, group: "自定义" },
-  { id: "mcp-clients", title: ["已授权 MCP 客户端", "Authorized MCP clients"], icon: Plug, group: "偏好设置" },
   { id: "usage", title: ["用量", "Usage"], icon: ChartNoAxesCombined, group: "偏好设置" },
   { id: "usage/config", title: ["用量与价格", "Usage"], icon: Database, group: "偏好设置" },
   { id: "appearance", title: ["外观", "Appearance"], icon: Palette, group: "偏好设置" },
-  { id: "file-areas", title: ["文件区域", "File areas"], icon: FolderOpen, group: "会话与上下文" },
   { id: "history", title: ["历史与归档", "History"], icon: History, group: "会话与上下文" },
-  { id: "diagnostics", title: ["诊断", "Diagnostics"], icon: Server, group: "本机服务" },
-  { id: "storage", title: ["数据与存储", "Storage"], icon: Database, group: "本机服务" },
 ] as const;
 const groups = [
   ["偏好设置", "Preferences"],
   ["自定义", "Customize"],
   ["会话与上下文", "Sessions & context"],
-  ["本机服务", "Local service"],
 ] as const;
 
 function workspaceReturnTo(state: unknown, search: string): string {

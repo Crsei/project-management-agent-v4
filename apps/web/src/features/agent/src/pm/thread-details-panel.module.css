@@ -1,7 +1,7 @@
 .root {
   position: absolute;
   z-index: 20;
-  top: 52px;
+  top: var(--workspace-header-height, 48px);
   right: 0;
   bottom: 0;
   display: flex;
@@ -18,14 +18,14 @@
   font: inherit;
 }
 
-/* Keep the inspector accessible when both surfaces are open. */
-:global(.pm-agent-chat) > .root:has(~ :global(.pm-agent-inspector)) {
+/* Keep the right panel accessible when both surfaces are open. */
+:global(.pm-agent-chat) > .root:has(~ :global(.pm-right-panel)) {
   right: auto;
   left: var(--workspace-sidebar-width, 240px);
 }
 
-:global(.pm-agent-chat[data-embedded="true"]) > .root:has(~ :global(.pm-agent-inspector)),
-:global(.pm-agent-sidebar[data-collapsed="true"]) ~ .root:has(~ :global(.pm-agent-inspector)) {
+:global(.pm-agent-chat[data-embedded="true"]) > .root:has(~ :global(.pm-right-panel)),
+:global(.pm-agent-sidebar[data-collapsed="true"]) ~ .root:has(~ :global(.pm-right-panel)) {
   left: 0;
 }
 
@@ -40,7 +40,7 @@
 
 @media (max-width: 767px) {
   .root {
-    top: 60px;
+    top: var(--workspace-header-height, 48px);
   }
 }
 
@@ -50,8 +50,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 52px;
-  padding: 8px 12px;
+  min-height: var(--workspace-header-height, 48px);
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -70,7 +70,7 @@
   width: 30px;
   height: 30px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--control-radius);
   background: transparent;
   color: var(--text-secondary, var(--muted-foreground));
   cursor: pointer;
@@ -79,12 +79,6 @@
 .close:hover {
   background: var(--surface-hover, var(--muted));
   color: var(--foreground);
-}
-
-.close:focus-visible,
-.action:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
 }
 
 .body {
@@ -112,8 +106,8 @@
 }
 
 .facts dt {
-  color: var(--text-secondary, var(--muted-foreground));
-  font-size: 11px;
+  color: var(--text-muted);
+  font-size: 12px;
   line-height: 16px;
 }
 
@@ -121,7 +115,7 @@
   min-width: 0;
   margin: 0;
   font-size: 13px;
-  line-height: 19px;
+  line-height: 20px;
   overflow-wrap: anywhere;
 }
 
@@ -145,7 +139,7 @@
   min-height: 36px;
   padding: 7px 8px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--control-radius);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -176,5 +170,7 @@
 
 .unavailable {
   flex-shrink: 0;
-  font-size: 11px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 16px;
 }

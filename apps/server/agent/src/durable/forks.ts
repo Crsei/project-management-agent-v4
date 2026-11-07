@@ -1,13 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import type {
   ContextTransfer,
-  ForkRunOptions,
   MergePreview,
   ThreadFork,
 } from "@agent-workspace/contracts/durable";
 import type { NativeSessionRef } from "@agent-workspace/contracts/provider";
 import { boundedContext } from "./context.ts";
-import { getRun, getRunRequest, listRuns } from "./engine.ts";
+import { listRuns } from "./engine.ts";
 import { DurableError } from "./errors.ts";
 import { copyWorkspace } from "./resources.ts";
 import { readRecord, transaction, writeRecord } from "./store.ts";
@@ -21,99 +20,6 @@ import {
 import { FORKS, getThreadFork, TRANSFERS } from "./transfers.ts";
 
 const FORK_KEYS = "durable:fork-keys";
-export function forkRun(runId: string, options: ForkRunOptions = {}): { threadId: string } {
-  return transaction(() => {
-    const source = getRun(runId);
-    if (!source) throw new DurableError(404, "run_not_found", "源执行不存在。");
-    if (source.status === "running" || source.status === "queued") {
-      throw new DurableError(409, "unstable_fork_boundary", "请等待执行完成或结束后再创建分支。");
-    }
-    const key = options.idempotencyKey
-      ? JSON.stringify([runId, options.idempotencyKey])
-      : undefined;
-    const digest = createHash("sha256")
-      .update(
-        JSON.stringify({
-          runId,
-          stepId: options.stepId,
-          title: options.title,
-          threadId: options.threadId,
-        }),
-      )
-      .digest("hex");
-    if (key) {
-      const existing = readRecord<{ digest: string; threadId: string }>(FORK_KEYS, key);
-      if (existing) {
-        if (existing.digest !== digest)
-          throw new DurableError(409, "idempotency_conflict", "Fork 幂等键对应了不同边界。");
-        return { threadId: existing.threadId };
-      }
-    }
-    // Terminal failure snapshots are stable too, but are always portable. They
-    // must not pretend partial output is completed or fork the provider's live head.
-    let boundary = source.steps.length - 1;
-    if (options.stepId) {
-      boundary = source.steps.findIndex((step) => step.id === options.stepId);
-      if (
-        boundary < 0 ||
-        source.steps.slice(0, boundary + 1).some((step) => step.status !== "completed")
-      ) {
-        throw new DurableError(
-          409,
-          "unstable_fork_boundary",
-          "指定步骤必须属于已经确认完成的连续步骤边界。",
-        );
-      }
-    }
-    if (boundary < 0)
-      throw new DurableError(409, "unstable_fork_boundary", "执行没有可用于分支的步骤快照。");
-    const threadId = options.threadId ?? randomUUID();
-    if (getThread(threadId)) throw new DurableError(409, "thread_exists", "目标 Thread 已存在。");
-    const request = getRunRequest(runId);
-    const context = boundedContext([
-      `来源 Thread: ${source.threadId}\n来源执行: ${source.id}\n稳定边界: ${source.steps[boundary].name}\n原任务: ${source.input}`,
-      ...(request?.context ? [request.context] : []),
-      ...(request?.transferContext ? [request.transferContext] : []),
-      ...source.steps
-        .slice(0, boundary + 1)
-        .map((step) =>
-          step.status === "completed"
-            ? `已确认步骤「${step.name}」的输出：\n${step.output}`
-            : `未完成步骤「${step.name}」（${step.status}，不能视为成功或要求重放）：\n${step.output || "没有确认输出。"}${step.error ? `\n错误：${step.error}` : ""}`,
-        ),
-    ]);
-    const native = source.steps[boundary].nativeSession;
-    const fork: ThreadFork = {
-      parentThreadId: source.threadId,
-      sourceRunId: source.id,
-      sourceStepId: source.steps[boundary].id,
-      createdAt: new Date().toISOString(),
-      context,
-    };
-    // Only native provider-issued boundaries are safe after the parent continues.
-    if (
-      source.status === "completed" &&
-      source.steps[boundary].status === "completed" &&
-      native &&
-      (native.turnId || native.messageId)
-    ) {
-      fork.nativeFork = {
-        source: native,
-        boundary: {
-          ...(native.turnId ? { turnId: native.turnId } : {}),
-          ...(native.messageId ? { messageId: native.messageId } : {}),
-        },
-      };
-    }
-    copyWorkspace(source.threadId, threadId);
-    forkThreadHistory(source.threadId, threadId, context);
-    if (options.title) updateThread(threadId, { title: options.title });
-    if (fork.nativeFork) setThreadPendingFork(threadId, fork.nativeFork);
-    writeRecord(FORKS, threadId, fork);
-    if (key) writeRecord(FORK_KEYS, key, { digest, threadId });
-    return { threadId };
-  });
-}
 
 /** Chat owns generation stability; this function persists its authoritative snapshot atomically. */
 export function forkChatSnapshot(

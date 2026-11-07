@@ -1,9 +1,9 @@
 .settings-shell {
   display: flex;
   min-height: 100dvh;
-  background: var(--background);
+  background: var(--surface);
   color: var(--foreground);
-  font: 14px/1.5 var(--font-sans);
+  font: 14px/20px var(--font-sans);
 }
 .settings-shell * { min-width: 0; }
 /* Settings rows render provider names and other labels inside buttons. Native buttons
@@ -27,33 +27,39 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--background);
   padding: 0 12px;
 }
-.settings-product { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 0 10px; font-weight: 600; flex-shrink: 0; }
+.settings-product { display: flex; align-items: center; gap: 10px; min-height: var(--workspace-header-height); padding: 0 10px; font-weight: 600; flex-shrink: 0; }
 .settings-nav-caption { margin: 28px 10px 14px; color: var(--muted-foreground); font-size: 12px; }
 .settings-mobile-navigation-toggle { display: none; }
 .settings-navigation { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .settings-nav-group { margin-bottom: 20px; }
-.settings-nav-group > p { margin: 0 10px 6px; color: var(--muted-foreground); font-size: 11px; }
-.settings-navigation a { display: flex; align-items: center; gap: 9px; min-height: 36px; margin: 2px 0; padding: 8px 10px; border-radius: 6px; font-size: 13px; }
-.settings-navigation a:hover { background: var(--surface-hover); }
-.settings-navigation a[aria-current="page"] { background: var(--selection); font-weight: 500; }
+.settings-nav-group > p { margin: 0 10px 6px; color: var(--text-muted); font-size: 12px; line-height: 16px; }
+.settings-navigation a { display: flex; align-items: center; gap: 9px; min-height: 30px; margin: 2px 0; padding: 0 10px; border-radius: var(--control-radius); color: var(--text-secondary); font-size: 13px; line-height: 20px; }
+.settings-navigation a:hover { background: var(--surface-hover); color: var(--foreground); }
+.settings-navigation a[aria-current="page"] { background: var(--selection); color: var(--foreground); font-weight: 500; }
 .settings-sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding: 16px 8px; flex-shrink: 0; }
 .settings-sidebar-footer > a { display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--muted-foreground); font-size: 13px; }
 .settings-sidebar-footer > a:hover { color: var(--foreground); }
 .settings-main { flex: 1; min-width: 0; }
 .settings-main:focus, .settings-breadcrumb h1:focus { outline: none; }
-.settings-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: 64px; padding: 12px 28px; font-size: 13px; }
-.settings-breadcrumb > span:first-child, .settings-breadcrumb > svg { color: var(--muted-foreground); }
+.settings-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: var(--workspace-header-height); padding: 6px 28px; border-bottom: 1px solid var(--border); background: var(--surface); font-size: 13px; line-height: 20px; }
+.settings-breadcrumb > span:first-child, .settings-breadcrumb > svg { color: var(--text-muted); }
 .settings-breadcrumb > svg { width: 12px; }
 .settings-breadcrumb h1 { font-size: inherit; font-weight: 500; }
-.settings-draft-status { margin-left: auto; color: var(--muted-foreground); font-size: 11px; }
+.settings-draft-status { margin-left: auto; color: var(--text-muted); font-size: 12px; line-height: 16px; }
 .settings-content { width: 100%; max-width: 1160px; margin: 0; padding: 24px 40px 32px; }
 .settings-shell[data-extensions-page] .settings-content { max-width: none; padding-inline: 28px; }
-.settings-extensions-page { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+/* Embedded extension drawers must stay below the settings leave confirmation. */
+.settings-extensions-page { isolation: isolate; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.settings-mcp-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.settings-mcp-navigation a { padding: 10px 12px; border-bottom: 2px solid transparent; color: var(--muted-foreground); font-size: 13px; }
+.settings-mcp-navigation a:hover { color: var(--foreground); background: var(--surface-hover); }
+.settings-mcp-navigation a[aria-current="page"] { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 500; }
+.settings-mcp-external-access { max-width: 1080px; }
 .settings-extension-context { font-size: 12px; }
-.settings-extension-context-disclosure { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.settings-extension-context-disclosure { border: 1px solid var(--border); border-radius: var(--radius-module-value); background: var(--surface); }
 .settings-extension-context-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; min-height: 44px; padding: 10px 12px; list-style: none; }
 .settings-extension-context-summary::-webkit-details-marker { display: none; }
 .settings-extension-context-summary::after { content: "+"; margin-left: auto; flex-shrink: 0; color: var(--muted-foreground); font-size: 16px; line-height: 1; }
@@ -61,13 +67,13 @@
 .settings-extension-context-name { display: flex; flex: 1 1 220px; align-items: center; gap: 10px; }
 .settings-extension-context-name > span { flex-shrink: 0; color: var(--muted-foreground); }
 .settings-extension-context-name > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.settings-extension-context-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted-foreground); font-size: 11px; }
+.settings-extension-context-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--text-muted); font-size: 12px; line-height: 16px; }
 .settings-extension-context-facts [data-context-status="failed"] { color: var(--destructive); }
 .settings-extension-reload { font-weight: 500; color: var(--foreground); }
 .settings-extension-context-body { display: grid; gap: 14px; padding: 16px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
 .settings-extension-context-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
 .settings-extension-context-controls > label { display: grid; flex: 1 1 240px; gap: 6px; }
-.settings-extension-context-controls select { width: 100%; max-width: 100%; min-height: 38px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--foreground); font: inherit; text-overflow: ellipsis; }
+.settings-extension-context-controls select { width: 100%; max-width: 100%; min-height: 38px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--control-radius); background: var(--background); color: var(--foreground); font: inherit; text-overflow: ellipsis; }
 .settings-extension-scope-note { color: var(--muted-foreground); line-height: 1.7; }
 .settings-extension-selected-context { display: grid; gap: 4px; }
 .settings-extension-context-body details > summary { min-height: 32px; padding-block: 6px; color: var(--muted-foreground); }
@@ -85,10 +91,10 @@
 .settings-general > .settings-section { margin-bottom: 0; }
 .settings-section-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 12px; margin: 0 12px 10px; }
 .settings-section-heading h2 { font-size: 13px; font-weight: 500; }
-.settings-scope-badge { display: inline-block; border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--muted-foreground); font-size: 10px; }
-.settings-section-body { padding: 16px; border: 1px solid var(--border); border-radius: 10px; }
+.settings-scope-badge { display: inline-block; border: 1px solid var(--border); border-radius: var(--radius-inline-value); padding: 0 6px; color: var(--text-muted); font-size: 12px; line-height: 18px; }
+.settings-section-body { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-module-value); }
 .settings-section-body :is(p, dd, code) { overflow-wrap: anywhere; }
-.settings-notice { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.settings-notice { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-popover-value); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
 .settings-notice > svg { margin-top: 2px; }
 .settings-notice > div { flex: 1; min-width: min(180px, 100%); }
 .settings-notice > button { margin-left: auto; }
@@ -99,7 +105,7 @@
 .settings-notice[data-kind="loading"], .settings-notice[data-kind="info"] { color: var(--muted-foreground); }
 .settings-notice[data-kind="success"] { color: var(--success); }
 .settings-leave-dialog { font-family: var(--font-sans); }
-html[data-pm-sidebar-density="comfortable"] .settings-navigation a { min-height: 40px; }
+html[data-pm-sidebar-density="comfortable"] .settings-navigation a { min-height: 36px; }
 @media (max-width: 1199px) {
   .settings-sidebar { width: 216px; }
   .settings-content { padding: 20px 24px 32px; }
@@ -107,11 +113,11 @@ html[data-pm-sidebar-density="comfortable"] .settings-navigation a { min-height:
 @media (max-width: 767px) {
   .settings-shell { display: block; }
   .settings-sidebar { position: static; width: 100%; height: auto; display: grid; grid-template-columns: minmax(0, 1fr) auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 14px; }
-  .settings-product { min-height: 54px; padding: 0; font-size: 13px; }
+  .settings-product { min-height: var(--workspace-header-height); padding: 0; font-size: 13px; }
   .settings-nav-caption { display: none; }
   .settings-sidebar-footer { grid-column: 2; grid-row: 1; margin: 0; padding: 0; gap: 10px; }
   .settings-sidebar-footer > a { font-size: 12px; }
-  .settings-mobile-navigation-toggle { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; gap: 10px; min-height: 44px; margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); text-align: left; font-size: 12px; }
+  .settings-mobile-navigation-toggle { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; gap: 10px; min-height: 44px; margin-bottom: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--control-radius); background: var(--background); text-align: left; font-size: 12px; }
   .settings-mobile-navigation-toggle > span { color: var(--muted-foreground); }
   .settings-mobile-navigation-toggle > strong { flex: 1; font-weight: 500; }
   .settings-mobile-navigation-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
@@ -121,8 +127,8 @@ html[data-pm-sidebar-density="comfortable"] .settings-navigation a { min-height:
   .settings-nav-group:last-child { margin-bottom: 0; }
   .settings-nav-group > p { margin-top: 8px; }
   .settings-navigation a, html[data-pm-sidebar-density="comfortable"] .settings-navigation a { min-height: 44px; margin: 0; padding: 10px; white-space: normal; }
-  .settings-breadcrumb { min-height: 48px; padding: 10px 18px; gap: 8px; }
-  .settings-draft-status { font-size: 10px; }
+  .settings-breadcrumb { min-height: var(--workspace-header-height); padding: 6px 18px; gap: 8px; }
+  .settings-draft-status { font-size: 12px; line-height: 16px; }
   .settings-content { padding: 12px 14px 24px; }
   .settings-shell[data-extensions-page] .settings-content { padding-inline: 14px; }
   .settings-section-heading { margin-left: 4px; margin-right: 4px; }
@@ -138,4 +144,137 @@ html[data-pm-sidebar-density="comfortable"] .settings-navigation a { min-height:
 }
 @media (prefers-reduced-motion: reduce) {
   .settings-shell *, .settings-shell *::before, .settings-shell *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* Extension pages use the source presentation directly on the settings canvas. */
+.settings-shell[data-extensions-page] .settings-extension-context-controls { display: flex; justify-content: flex-end; }
+.settings-shell[data-extensions-page] .settings-extension-context-controls > label { display: flex; flex-direction: row; align-items: center; gap: 8px; flex: 0 1 360px; }
+.settings-shell[data-extensions-page] .settings-extension-context-controls > label > span { flex-shrink: 0; font-size: 12px; line-height: 16px; color: var(--text-muted); }
+.settings-shell[data-extensions-page] .settings-extension-context-controls select { flex: 1; min-width: 0; min-height: 32px; }
+.settings-shell[data-extensions-page] .settings-content { padding-top: 8px; }
+.settings-extensions-page > .cc-switch-web { background: transparent; }
+
+/* Embedded extension surfaces (cc-switch source pages plus the OpenHands MCP and
+   Skills pages and their body portals) keep the host design language. The pinned
+   sources bring their own system font stack and orange action accent; remap the
+   theme slots here rather than editing vendor code. The body-level portal shares
+   `.cc-switch-web`, so the same declarations cover dialogs and toasts. */
+html body .cc-switch-web {
+  /* shadcn HSL slots consumed as hsl(var(--token)) by the source utilities */
+  --background: 0 0% 100%;
+  --foreground: 60 1.4% 13.5%;
+  --card: 0 0% 100%;
+  --card-foreground: 60 1.4% 13.5%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 60 1.4% 13.5%;
+  --primary: 60 1.4% 13.5%;
+  --primary-foreground: 60 9.1% 97.8%;
+  --secondary: 60 8.3% 95.3%;
+  --secondary-foreground: 60 1.4% 13.5%;
+  --muted: 60 8.3% 95.3%;
+  --muted-foreground: 60 3% 38.8%;
+  --accent: 60 8.3% 95.3%;
+  --accent-foreground: 60 1.4% 13.5%;
+  --destructive: 4.2 76.5% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 60 4.8% 90%;
+  --input: 60 4.8% 90%;
+  --ring: 13.9 48.2% 43.9%;
+
+  /* source v7 tokens mapped onto host surfaces and states. Host palette values
+     stay literal where a same-named source HSL slot would shadow a var(). */
+  --bg-app: var(--surface);
+  --bg-sidebar: var(--surface);
+  --bg-subtle: var(--surface-raised);
+  --bg-selected: color-mix(in srgb, #a6533a 9%, #ffffff);
+  --bg-card: var(--surface);
+  --border-strong: var(--border-hover);
+  --text-1: #232322;
+  --text-2: #666660;
+  --text-3: #6f6f68;
+  --action-bg: hsl(var(--primary));
+  --action-fg: hsl(var(--primary-foreground));
+  --action-hover: color-mix(in srgb, hsl(var(--primary)) 90%, hsl(var(--background)));
+  --action-text: var(--focus);
+  --action-soft: color-mix(in srgb, var(--focus) 9%, hsl(var(--background)));
+  --control-off: var(--text-muted);
+  --success: #15803d;
+  --success-text: #15803d;
+  --success-soft: color-mix(in srgb, #15803d 12%, transparent);
+  --warning: #92400e;
+  --warning-text: #92400e;
+  --warning-soft: color-mix(in srgb, #92400e 12%, transparent);
+  --danger: #b42318;
+  --danger-text: #b42318;
+  --danger-soft: color-mix(in srgb, #b42318 12%, transparent);
+
+  font-family: var(--font-sans);
+  color-scheme: light;
+}
+
+html.dark body .cc-switch-web {
+  --background: 60 3% 6.5%;
+  --foreground: 60 9.5% 91.8%;
+  --card: 60 2.1% 9.2%;
+  --card-foreground: 60 9.5% 91.8%;
+  --popover: 60 2.1% 9.2%;
+  --popover-foreground: 60 9.5% 91.8%;
+  --primary: 60 9.5% 91.8%;
+  --primary-foreground: 60 3% 6.5%;
+  --secondary: 60 3% 12.9%;
+  --secondary-foreground: 60 9.5% 91.8%;
+  --muted: 60 3% 12.9%;
+  --muted-foreground: 60 4.8% 67.5%;
+  --accent: 60 3% 12.9%;
+  --accent-foreground: 60 9.5% 91.8%;
+  --destructive: 0 72.7% 78.4%;
+  --destructive-foreground: 60 3% 6.5%;
+  --border: 60 3% 20%;
+  --input: 60 3% 20%;
+  --ring: 18.8 60% 67.6%;
+
+  --bg-app: var(--surface);
+  --bg-sidebar: var(--surface);
+  --bg-subtle: var(--surface-raised);
+  --bg-selected: color-mix(in srgb, #de9a7b 14%, #181817);
+  --bg-card: var(--surface);
+  --border-strong: var(--border-hover);
+  --text-1: #ecece8;
+  --text-2: #b0b0a8;
+  --text-3: #a0a099;
+  --action-bg: hsl(var(--primary));
+  --action-fg: hsl(var(--primary-foreground));
+  --action-hover: color-mix(in srgb, hsl(var(--primary)) 90%, hsl(var(--background)));
+  --action-text: var(--focus);
+  --action-soft: color-mix(in srgb, var(--focus) 14%, hsl(var(--background)));
+  --control-off: var(--text-muted);
+  --success: #6ee7a0;
+  --success-text: #6ee7a0;
+  --success-soft: color-mix(in srgb, #6ee7a0 16%, transparent);
+  --warning: #e8c77a;
+  --warning-text: #e8c77a;
+  --warning-soft: color-mix(in srgb, #e8c77a 16%, transparent);
+  --danger: #f0a0a0;
+  --danger-text: #f0a0a0;
+  --danger-soft: color-mix(in srgb, #f0a0a0 16%, transparent);
+
+  color-scheme: dark;
+}
+
+/* Source action controls are 36px/8px with a 400 label; host controls are
+   32px/6px/500. Keep the extension buttons on the host control rhythm. */
+html body .cc-switch-web .openhands-extensions :is(
+  .oh-brand-button,
+  .oh-mcp-actions button,
+  .oh-mcp-options button,
+  .oh-mcp-page-header button,
+  .oh-mcp-error > button,
+  .oh-mcp-refresh,
+  .oh-enum-filter-trigger
+) {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  padding-block: 0;
+  border-radius: var(--control-radius);
+  font-weight: 500;
 }

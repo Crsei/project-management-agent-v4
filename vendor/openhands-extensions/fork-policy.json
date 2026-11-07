@@ -7,7 +7,7 @@
   "sourceAliases": {
     "@pm/openhands-extensions": "vendor/openhands-extensions/src/web/index.tsx",
     "@pm/openhands-source/": "vendor/openhands-extensions/src/",
-    "@pm/cc-switch-source/": "vendor/cc-switch/src/",
+    "@pm/cc-switch-ui": "vendor/cc-switch/src/web/index.tsx",
     "@openhands/extensions/integrations": "vendor/openhands-extensions/extensions/integrations/index.js",
     "@agent-workspace/contracts/extensions": "packages/agent-contracts/src/extensions.ts"
   },
@@ -61,9 +61,15 @@
     "package.json", "dependency-notices.json",
     "src/web/mcp/messages.ts", "src/web/skills/messages.ts",
     "src/web/mcp/agent-configuration-drawer.tsx", "src/web/mcp/import-preview-dialog.tsx",
+    "src/web/mcp/agent-matrix.tsx",
+    "src/web/mcp/unbound-mcp-page.tsx", "src/web/skills/unbound-skills-page.tsx",
+    "src/web/skills/skill-agent-matrix.tsx", "src/web/skills/skill-agent-drawer.tsx",
     "src/web/mcp/management.css", "src/web/skills/skill-presentation.ts",
     "src/web/skills/installed-skills.tsx", "src/web/skills/discovered-skills.tsx",
-    "src/web/skills/skills.css"
+    "src/web/skills/skills.css",
+    "src/web/shared/agent-avatar.tsx", "src/web/shared/status-pill.tsx",
+    "src/web/shared/enum-filter-dropdown.tsx", "src/web/shared/agent-matrix-table.tsx",
+    "src/web/shared/shared.css"
   ],
   "reviewRationale": "Preserve copied OpenHands Marketplace, Skills cards, real static registry and source structure. Replace hosted router/auth/settings/OAuth calls with existing scoped CC Switch host and shared runtime; retain native lifecycle and explicit unavailable states. Exact path enrollment is not hash approval: every changed original/new production file also requires --accept-change PATH=SHA256 at capture.",
   "dependencyPolicy": "Shared CC Switch TypeScript AST/resource parser with exact scoped aliases; independent CC Switch/contracts boundaries are fingerprinted, never enrolled as OpenHands-owned. Static registry/catalog and generated locale inputs remain immutable. Web production plugin records real Rollup modules, emitted resources and installed dependency legal notices; Agent/desktop packaging verifies matching Web inventory. No hosted source backend or second runtime."

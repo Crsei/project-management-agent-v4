@@ -15,6 +15,7 @@ import { makePmNativeTestHost } from "../t3code/testing/native-test-host.testkit
 import { forkChatSnapshot } from "../../durable/forks.ts";
 import { ensureThread, getThreadPendingFork } from "../../durable/threads.ts";
 import { closeStore } from "../../durable/store.ts";
+import { chatOnlyExecutionSelection } from "@agent-workspace/contracts/chat";
 
 // Metadata-only wire fixture: the production Pi RPC client, original adapter and
 // original native-history projector produce the cursor consumed by Chat below.
@@ -100,7 +101,7 @@ test("original Pi native history supplies an exact Chat fork candidate without a
       assert.equal(snapshot.nativeHistory?.completedTurnRefs.length, 1);
       const boundary = snapshot.nativeHistory!.completedTurnRefs[0]!;
       assert.equal(boundary.nativeId, "native-user");
-      ensureThread(threadId, undefined, { workspaceId: "fixture-workspace", projectId: null });
+      ensureThread(threadId, undefined, chatOnlyExecutionSelection());
       const branch = forkChatSnapshot({ threadId, generationId: "pi-original-native-generation", messageId: "pi-original-native-message",
         context: "Saved native result", nativeSession: { providerInstanceId: instanceId, driver: "pi",
           sessionId: snapshot.providerThread.nativeThreadRef!.nativeId, instanceRevision: pm.context.revision, cwd,

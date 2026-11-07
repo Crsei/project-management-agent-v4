@@ -1,18 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuiState, type AssistantRuntime } from "@assistant-ui/react";
-import type { AgentScope } from "@agent-workspace/contracts/chat";
-import { scopeKey } from "./state";
 import { agentText } from "../i18n-text.ts";
 
 const PREFIX = "pm-v3:agent-draft:";
 type ComposerDraft = ReturnType<AssistantRuntime["thread"]["composer"]["getState"]>;
 const memoryDrafts = new Map<string, Pick<ComposerDraft, "text" | "quote" | "attachments">>();
-export function useChatDrafts(runtime: AssistantRuntime, scope?: AgentScope) {
+export function useChatDrafts(runtime: AssistantRuntime) {
   const localId = useAuiState((s) => s.threads.mainThreadId);
   const remoteId = useAuiState((s) => s.threads.threadItems.find((item) => item.id === s.threads.mainThreadId)?.remoteId);
   const [storageError, setStorageError] = useState<string>();
   const previous = useRef<{ localId: string; key: string } | null>(null);
-  const key = remoteId ? `thread:${remoteId}` : scope ? `new:${scopeKey(scope)}` : `unscoped:${localId}`;
+  const key = remoteId ? `thread:${remoteId}` : `draft:${localId}`;
   useEffect(() => {
     const composer = runtime.threads.getById(localId).composer;
     const previousOwner = previous.current;

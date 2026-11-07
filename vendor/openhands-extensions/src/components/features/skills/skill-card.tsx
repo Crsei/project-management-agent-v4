@@ -3,8 +3,7 @@ import { useOpenHandsTranslation } from "@pm/openhands-source/web/i18n";
 import type { SkillInfo } from "@pm/openhands-source/types/settings";
 import { cn } from "@pm/openhands-source/utils/utils";
 import { Copy as CopyIcon, Check as CheckmarkIcon } from "lucide-react";
-import { copyText } from "@pm/cc-switch-source/lib/clipboard";
-import { toast } from "@pm/cc-switch-source/lib/toast";
+import { copyText, toast } from "@pm/cc-switch-ui";
 import { SkillIconBadge } from "./skill-icon-badge";
 import { SkillCardPillRow } from "./skill-card-pill-row";
 import { getSkillCardDescription } from "./get-skill-card-description";
@@ -138,7 +137,7 @@ export function SkillCard({
           ) : null}
           {summary ? <div className="text-xs text-tertiary-light">{summary}</div> : null}
 
-          {!summary && pills.length > 0 ? (
+          {pills.length > 0 ? (
             <SkillCardPillRow
               pills={pills}
               testId={`skill-triggers-${skill.name}`}

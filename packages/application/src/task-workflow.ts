@@ -1,6 +1,7 @@
 import type { DeliveryScope, TaskCodeDelivery } from '../../contracts/src/task-code-delivery.ts';
 import { workflowProblems, workflowTemplates, workflowTaskRevision, type WorkflowDefinition, type WorkflowGraph, type WorkflowNode, type WorkflowRun, type WorkflowStart, type WorkflowTransitionRequest, type WorkflowTransitionResult } from '../../contracts/src/task-workflow.ts';
 import { DeliveryError, type DeliveryTask, type TaskCodeDeliveryService } from './task-code-delivery.ts';
+import { executionSelectionSchema, type ExecutionSelection } from '../../agent-contracts/src/execution.ts';
 
 export interface WorkflowPorts {
   readDefinition(id: string): WorkflowDefinition | null;
@@ -9,7 +10,7 @@ export interface WorkflowPorts {
   readRun(id: string): WorkflowRun | null;
   runs(): WorkflowRun[];
   saveRun(v: WorkflowRun): void;
-  authorize(scope: DeliveryScope, write: boolean): Promise<DeliveryTask>;
+  authorize(scope: DeliveryScope & { executionSelection?: ExecutionSelection | undefined }, write: boolean): Promise<DeliveryTask>;
   repository(root: string): Promise<string>;
   defaultBase?(root: string, scope?: DeliveryScope): Promise<string | null>;
   provider(input: WorkflowStart): Promise<void>;
@@ -25,16 +26,23 @@ export class TaskWorkflowService {
   private readonly active: Set<string>;
   constructor(p: WorkflowPorts, active = new Set<string>()) { this.p = p; this.active = active; }
   private time() { return new Date(this.p.now?.() ?? Date.now()).toISOString(); }
+  private executionScope(v: WorkflowRun) {
+    const selection = executionSelectionSchema.safeParse(v.executionSelection ?? v.input.executionSelection);
+    if (!selection.success || selection.data.agentWorkspaceId === null) return fail('agent_workspace_required', '历史工作流仅保留收据；请明确选择 Agent 目录并创建新 Session 后再执行。');
+    return { ...v.input, executionSelection: selection.data };
+  }
   private save(v: WorkflowRun) { v.version++; v.updatedAt = this.time(); this.p.saveRun(v); return v; }
   private async lock<T>(id: string, fn: () => Promise<T>): Promise<T> {
     if (this.active.has(id)) fail('workflow_busy', '工作流正在推进，请读取最新结果。');
     this.active.add(id); try { return await fn(); } finally { this.active.delete(id); }
   }
-  async catalog(scope: DeliveryScope) {
+  async catalog(scope: DeliveryScope & { executionSelection?: ExecutionSelection }) {
     const task = await this.p.authorize(scope, false);
     const definitions = this.p.definitions().filter(v => sameProject(v, scope));
     let repository: string | null = null;
-    try { repository = await this.p.repository(task.root); } catch { /* Template editing does not require Git readiness. */ }
+    const selection = executionSelectionSchema.safeParse(scope.executionSelection);
+    if (selection.success && selection.data.agentWorkspaceId !== null && task.root)
+      try { repository = await this.p.repository(task.root); } catch { /* Template editing does not require Git readiness. */ }
     let defaultBase: string | null = null;
     if (repository) try { defaultBase = await this.p.defaultBase?.(task.root, scope) ?? null; } catch { /* Explicit user selection remains available. */ }
     return { definitions: [...structuredClone(workflowTemplates), ...definitions], runs: this.p.runs().filter(v => sameProject(v.input, scope) && v.input.taskId === scope.taskId), repository, defaultBase, hasManualDelivery: (await this.p.delivery.list(scope)).some(d => !this.p.readRun(d.id)) };
@@ -64,6 +72,8 @@ export class TaskWorkflowService {
   }
   async start(input: WorkflowStart) {
     return this.lock(`${input.workspaceId}:${input.taskId}`, async () => {
+      const selection = executionSelectionSchema.safeParse(input.executionSelection);
+      if (!selection.success || selection.data.agentWorkspaceId === null) fail('agent_workspace_required', '启动工作流必须明确选择一个 Agent 目录。');
       const task = await this.p.authorize(input, true);
       const old = this.p.readRun(input.id);
       if (old) {
@@ -84,14 +94,18 @@ export class TaskWorkflowService {
   }
   async read(id: string) {
     const v = this.p.readRun(id) ?? fail('not_found', '工作流运行不可用。');
-    await this.p.authorize(v.input, false); return v;
+    await this.p.authorize({ workspaceId: v.input.workspaceId, projectId: v.input.projectId, taskId: v.input.taskId }, false); return v;
   }
   async control(id: string, action: 'pause' | 'resume' | 'approve' | 'confirm-transition', version: number) {
     return this.lock(id, async () => {
-      const v = await this.read(id); let task = await this.p.authorize(v.input, true);
+      const v = await this.read(id);
       if (v.version !== version) fail('workflow_conflict', '运行已更新，请刷新后操作。');
       if (['completed', 'failed'].includes(v.status)) fail('workflow_terminal', '运行已结束。');
-      if (action === 'pause') { v.status = 'paused'; v.message = '已暂停后续步骤；在途 Agent / 命令不会因此取消。'; return this.save(v); }
+      if (action === 'pause') {
+        await this.p.authorize({ workspaceId: v.input.workspaceId, projectId: v.input.projectId, taskId: v.input.taskId }, true);
+        v.status = 'paused'; v.message = '已暂停后续步骤；在途 Agent / 命令不会因此取消。'; return this.save(v);
+      }
+      let task = await this.p.authorize(this.executionScope(v), true);
       if (task.root !== v.projectRoot || await this.p.repository(task.root) !== v.input.repository) fail('repository_changed', '仓库已变化。');
       this.validateConsent(v.input, v.graph);
       const transition = v.transitions?.[v.current];
@@ -100,7 +114,7 @@ export class TaskWorkflowService {
         if (result.status !== 'applied') return fail('workflow_transition_unknown', '未查到已提交的原状态转换收据；不会重放或接纳人工状态变更。');
         Object.assign(transition, { state: 'applied', revision: result.revision, commandId: result.commandId, appliedAt: this.time(), message: '已核对原业务状态转换收据。' });
         v.acceptedTaskRevision = result.revision; this.save(v);
-        task = await this.p.authorize(v.input, true);
+        task = await this.p.authorize(this.executionScope(v), true);
       }
       if (task.revision !== workflowTaskRevision(v)) fail('task_changed', '任务存在原状态转换之外的变化，不能恢复旧运行。');
       if (action === 'confirm-transition') {
@@ -111,6 +125,22 @@ export class TaskWorkflowService {
         if (node.kind !== 'approval' || v.nodes[node.id]?.state !== 'waiting') fail('workflow_approval', '当前没有待确认节点。');
         this.complete(v, node, true, '用户确认继续；不代表业务审核通过。');
       } else { v.status = 'running'; delete v.message; }
+      return this.save(v);
+    });
+  }
+  async replaceSession(id: string, version: number, executionSelection: ExecutionSelection) {
+    return this.lock(id, async () => {
+      const v = await this.read(id);
+      if (v.version !== version) fail('workflow_conflict', '运行已更新，请刷新后操作。');
+      if (v.status === 'running' || v.status === 'waiting') fail('workflow_busy', '先明确暂停并核对在途执行；替换 Session 不停止或重放原操作。');
+      const selection = executionSelectionSchema.safeParse(executionSelection);
+      if (!selection.success || selection.data.agentWorkspaceId === null) fail('agent_workspace_required', '替换 Session 需要明确选择原仓库的 Agent 目录。');
+      const task = await this.p.authorize({ ...v.input, executionSelection }, true);
+      if (task.root !== v.projectRoot || task.revision !== workflowTaskRevision(v) || await this.p.repository(task.root) !== v.input.repository) fail('repository_changed', '替换 Session 不能更换原任务、目录或已确认仓库。');
+      const delivery = this.p.readDelivery(id);
+      if (!delivery) fail('prepare_unknown', '原独立工作目录尚未确认；不能创建替代执行。');
+      await this.p.delivery.act(id, { action: 'new-session', executionSelection, confirm: true });
+      v.executionSelection = executionSelection;
       return this.save(v);
     });
   }
@@ -146,7 +176,7 @@ export class TaskWorkflowService {
     v.acceptedTaskRevision = result.revision;
     // Persist the exact receipt before allowing any subsequent Agent authorization.
     this.save(v);
-    const task = await this.p.authorize(v.input, true);
+    const task = await this.p.authorize(this.executionScope(v), true);
     if (task.revision !== workflowTaskRevision(v) || task.root !== v.projectRoot) fail('task_changed', '状态转换之后任务或目录又有变化，停止后续执行。');
     return true;
   }
@@ -156,7 +186,8 @@ export class TaskWorkflowService {
       const v = this.p.readRun(id) ?? fail('not_found', '运行不存在。');
       if (v.status !== 'running' && v.status !== 'waiting') return v;
       try {
-        const task = await this.p.authorize(v.input, true);
+        const scope = this.executionScope(v);
+        const task = await this.p.authorize(scope, true);
         if (task.revision !== workflowTaskRevision(v)) fail('task_changed', '任务版本已变化，原工作流已暂停。');
         if (task.root !== v.projectRoot || await this.p.repository(task.root) !== v.input.repository) fail('repository_changed', '仓库身份变化，原工作流已暂停。');
         this.validateConsent(v.input, v.graph);
@@ -173,7 +204,7 @@ export class TaskWorkflowService {
         switch (node.kind) {
           case 'task': this.complete(v, node, true, `固定任务版本 ${v.input.taskRevision}`); break;
           case 'prepare':
-            if (!existing) d = await this.p.delivery.prepare({ workspaceId: v.input.workspaceId, projectId: v.input.projectId, taskId: v.input.taskId, id: v.id, taskRevision: v.input.taskRevision, baseBranch: v.input.baseBranch });
+            if (!existing) d = await this.p.delivery.prepare({ workspaceId: v.input.workspaceId, projectId: v.input.projectId, taskId: v.input.taskId, id: v.id, taskRevision: v.input.taskRevision, baseBranch: v.input.baseBranch, ...(scope.executionSelection ? { executionSelection: scope.executionSelection } : {}) });
             if (d?.git && !d.pending) this.complete(v, node, true, `独立分支 ${d.git.branch}`);
             else this.unknown(v, '分支准备结果未知，请核对原工作目录；不会重新创建。');
             break;

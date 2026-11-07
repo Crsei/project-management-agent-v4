@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { ProjectAuditChange, ProjectAuditEntry } from '../../domain/src/project-audit.ts';
 export { artifactCopyOrigins } from './artifact-files-schema.ts';
 export * from './notification-schema.ts';
+export * from './change-history-schema.ts';
 export { accountRecoveryTokens, accountRecoveryMailQueue, accountRecoveryRequests, accountPasswordResetActions } from './account-recovery-schema.ts';
 export { blobStorageBinding, blobStorageOperations, projectBlobStores, projectBlobObjectRoutes, blobStoreAliases, localProjectStorageOperations } from './blob-storage-schema.ts';
 export * from './webhook-schema.ts';
@@ -41,6 +42,7 @@ export const workspaces = pgTable('workspaces', {
   streamCursor: bigint('stream_cursor', { mode: 'bigint' }).notNull().default(0n),
   serviceFactHead: bigint('service_fact_head', { mode: 'bigint' }).notNull().default(0n),
   notificationHead: bigint('notification_head', { mode: 'bigint' }).notNull().default(0n),
+  changeHistoryHead: bigint('change_history_head', { mode: 'bigint' }).notNull().default(0n),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const memberships = pgTable('memberships', {

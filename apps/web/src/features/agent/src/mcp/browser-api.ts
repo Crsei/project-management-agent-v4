@@ -16,6 +16,6 @@ export type McpApproval = {
   authorization: Record<string, string>; defaultAccess: "read-only";
   allowedAccess: ("read-only" | "full")[];
   catalog: { workspaces: { id: string; name: string; workspaceAllowed: boolean; projects: { id: string; name: string }[] }[] };
-  threads: { id: string; title: string; scope: McpScope }[];
+  threads: { id: string; title: string }[];
 };
 export type McpClients = { csrfToken: string; items: { id: string; clientName: string; scope: McpScope; access: "read-only" | "full"; threadIds: string[]; createdAt: string; expiresAt: string; revokedAt: string | null }[] };

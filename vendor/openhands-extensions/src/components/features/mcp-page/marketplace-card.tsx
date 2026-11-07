@@ -17,82 +17,47 @@ interface MarketplaceCardProps {
   disabled?: boolean;
 }
 
-export function MarketplaceCard({
-  entry,
-  onClick,
-  onAdd,
-  disabled = false,
-}: MarketplaceCardProps) {
+export function MarketplaceCard({ entry, onClick, onAdd, disabled = false }: MarketplaceCardProps) {
   const { t } = useOpenHandsTranslation();
   const transport = getDefaultMcpTransport(entry);
-  const transportLabel = (() => {
-    switch (transport?.kind) {
-      case "stdio":
-        return "STDIO";
-      case "shttp":
-        return "HTTP";
-      case "sse":
-        return "SSE";
-      default:
-        return "";
-    }
-  })();
-
+  const transportLabel = transport?.kind === "stdio" ? "STDIO" : transport?.kind === "sse" ? "SSE" : transport?.kind === "shttp" ? "HTTP" : "";
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) {
-      return;
-    }
-
+    if (event.target !== event.currentTarget) return;
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       if (!disabled) onClick();
     }
   };
-
-  return (
-    <div
-      role="button"
-      tabIndex={disabled ? -1 : 0}
-      aria-disabled={disabled}
-      aria-label={`${t("MCP$TOGGLE_ADD_SERVER")} · ${entry.name}`}
-      onClick={() => { if (!disabled) onClick(); }}
-      onKeyDown={handleKeyDown}
-      data-testid={`mcp-marketplace-card-${entry.id}`}
-      className={cn(
-        "oh-mcp-marketplace-card flex flex-col overflow-hidden p-4 text-left",
-        extensionModuleCardSurfaceClassName,
-        extensionModuleCardInteractiveClassName,
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <McpLogoBadge entry={entry} />
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <header className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <h3 className="truncate text-sm font-semibold">{entry.name}</h3>
-              <p className="mt-0.5 text-xs text-tertiary-alt">
-                {transportLabel}
-              </p>
-            </div>
-            <CirclePlusCheckToggle
-              testId={`mcp-marketplace-toggle-${entry.id}`}
-              isSelected={false}
-              isDisabled={disabled}
-              onToggle={(selected) => {
-                if (selected) {
-                  onAdd();
-                }
-              }}
-              enableLabelKey="MCP$TOGGLE_ADD_SERVER"
-              disableLabelKey="MCP$TOGGLE_ADD_SERVER"
-              enableTooltipKey="MCP$TOGGLE_ADD_SERVER"
-            />
-          </header>
-          <p className="line-clamp-3 text-xs leading-relaxed text-tertiary-light">
-            {entry.description}
-          </p>
-        </div>
+  return <div
+    role="button"
+    tabIndex={disabled ? -1 : 0}
+    aria-disabled={disabled}
+    aria-label={`${t("MCP$TOGGLE_ADD_SERVER")} · ${entry.name}`}
+    onClick={() => { if (!disabled) onClick(); }}
+    onKeyDown={handleKeyDown}
+    data-testid={`mcp-marketplace-card-${entry.id}`}
+    className={cn("oh-mcp-marketplace-card", extensionModuleCardSurfaceClassName, extensionModuleCardInteractiveClassName)}
+  >
+    <div className="oh-mcp-marketplace-copy">
+      <McpLogoBadge entry={entry} />
+      <div>
+        <header>
+          <div>
+            <h3 title={entry.name}>{entry.name}</h3>
+            <p>{transportLabel}</p>
+          </div>
+          <CirclePlusCheckToggle
+            testId={`mcp-marketplace-toggle-${entry.id}`}
+            isSelected={false}
+            isDisabled={disabled}
+            onToggle={selected => { if (selected) onAdd(); }}
+            enableLabelKey="MCP$TOGGLE_ADD_SERVER"
+            disableLabelKey="MCP$TOGGLE_ADD_SERVER"
+            enableTooltipKey="MCP$TOGGLE_ADD_SERVER"
+          />
+        </header>
+        <p className="oh-mcp-marketplace-description">{entry.description}</p>
       </div>
     </div>
-  );
+  </div>;
 }

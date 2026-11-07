@@ -1,8 +1,11 @@
+import * as electron from "electron";
 import { app, BrowserWindow, Menu, dialog, ipcMain, screen, session, shell } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { LocalServer } from "./local-server.mjs";
+import { PreviewManager } from "./preview/manager.mjs";
+import { isAllowedPreviewUrl } from "./preview/preview-policy.mjs";
 import { backupDesktop, restoreDesktop } from "./maintenance.mjs";
 import { captureWindowState, restoredWindowBounds } from "./window-state.mjs";
 import {
@@ -26,6 +29,7 @@ let localServer;
 let workspaceSession;
 let workspaceMode;
 let workspaceUrl;
+let previewManager;
 let allowQuit = false;
 let quitting = false;
 let quitPrompt = false;
@@ -171,15 +175,39 @@ async function createWorkspace(url, targetSession, mode) {
   const window = new BrowserWindow({
     ...restoredWindowBounds(windowStates.workspace, { width: 1440, height: 980, minWidth: 900, minHeight: 640 }, screen.getAllDisplays()),
     title: "PM Agent v4", backgroundColor: "#fafaf9", show: false,
-    webPreferences: { ...securePreferences(), session: targetSession },
+    webPreferences: {
+      ...securePreferences(undefined, join(here, "preload.workspace.cjs")),
+      session: targetSession,
+      webviewTag: true,
+      additionalArguments: mode === "local" ? ["--pm-native-preview"] : [],
+    },
   });
   workspaceWindow = window;
   workspaceSession = targetSession;
   workspaceMode = mode;
   workspaceUrl = url;
+  previewManager?.dispose();
+  if (mode === "local") previewManager?.setWorkspaceOrigin(origin);
   watchWindow("workspace", window);
   window.webContents.setWindowOpenHandler(({ url: destination }) => { void externalLink(destination); return { action: "deny" }; });
-  window.webContents.on("will-attach-webview", (event) => event.preventDefault());
+  window.webContents.on("will-attach-webview", (event, webPreferences, params) => {
+    if (mode !== "local" || !previewManager?.validateAttach(params)) { event.preventDefault(); return; }
+    // The guest preload is the picker overlay. Force every security-relevant
+    // preference here; a renderer must not be able to weaken the guest.
+    webPreferences.preload = previewManager.guestPreloadPath;
+    webPreferences.sandbox = true;
+    webPreferences.nodeIntegration = false;
+    webPreferences.nodeIntegrationInWorker = false;
+    webPreferences.nodeIntegrationInSubFrames = false;
+    webPreferences.contextIsolation = false;
+    webPreferences.webSecurity = true;
+    webPreferences.allowRunningInsecureContent = false;
+    webPreferences.webviewTag = false;
+    webPreferences.additionalArguments = [];
+    webPreferences.navigateOnDragDrop = false;
+    webPreferences.safeDialogs = true;
+    webPreferences.disableHtmlFullscreenWindowResize = true;
+  });
   window.webContents.on("will-navigate", (event, destination) => {
     if (!sameService(destination, origin)) { event.preventDefault(); void externalLink(destination); }
   });
@@ -209,6 +237,7 @@ async function createWorkspace(url, targetSession, mode) {
   window.on("closed", () => {
     if (workspaceWindow !== window) return;
     workspaceWindow = null;
+    previewManager?.dispose();
     if (!quitting) {
       publish({ message: mode === "local"
         ? "Workspace window closed. Local services and scheduled tasks are still running. Open it again, or Quit to stop them."
@@ -230,6 +259,7 @@ async function createWorkspace(url, targetSession, mode) {
 }
 
 async function closeWorkspace() {
+  previewManager?.dispose();
   const previous = workspaceWindow;
   workspaceWindow = null;
   if (previous && !previous.isDestroyed()) { rememberWindow("workspace", previous); previous.destroy(); }
@@ -403,6 +433,7 @@ function finishQuit() {
     try {
       if (maintenancePromise) await maintenancePromise;
       await stopConnection();
+      previewManager?.destroy();
       if (localRunning()) throw new Error("Owned local processes are still running. Retry Quit; do not manually remove workspace data.");
       if (connectionWindow && !connectionWindow.isDestroyed()) rememberWindow("connection", connectionWindow);
       await windowStateWrite;
@@ -441,6 +472,47 @@ async function requestQuit() {
 function trustedConnection(event) {
   return Boolean(connectionWindow && !connectionWindow.isDestroyed() &&
     trustedConnectionFrame(event, connectionWindow.webContents, connectionUrl));
+}
+
+function trustedWorkspace(event) {
+  if (!workspaceWindow || workspaceWindow.isDestroyed() || !workspaceUrl) return false;
+  if (event.sender !== workspaceWindow.webContents) return false;
+  if (!event.senderFrame || event.senderFrame !== workspaceWindow.webContents.mainFrame) return false;
+  try {
+    return sameService(event.senderFrame.url, new URL(workspaceUrl).origin);
+  } catch {
+    return false;
+  }
+}
+
+async function previewAction(event, input) {
+  if (!trustedWorkspace(event)) throw new Error("Preview controls are available only in the trusted workspace window.");
+  if (workspaceMode !== "local") throw new Error("Native preview is available only for the local workspace.");
+  if (!previewManager) throw new Error("Preview is unavailable.");
+  if (!input || typeof input !== "object" || typeof input.action !== "string") throw new Error("Invalid preview action.");
+  switch (input.action) {
+    case "state": return previewManager.getState(input.tabId);
+    case "create-tab": return previewManager.createTab(input.tabId, input.options);
+    case "close-tab": previewManager.closeTab(input.tabId); return { closed: true };
+    case "register-webview": return previewManager.registerWebview(input.tabId, input.webContentsId);
+    case "navigate": return previewManager.navigate(input.tabId, input.url);
+    case "back": return previewManager.back(input.tabId);
+    case "forward": return previewManager.forward(input.tabId);
+    case "reload": return previewManager.reload(input.tabId);
+    case "stop": return previewManager.stop(input.tabId);
+    case "capture": return previewManager.capture(input.tabId);
+    case "pick": return previewManager.pick(input.tabId);
+    case "cancel-pick": return previewManager.cancelPick(input.tabId);
+    case "pip-open": return previewManager.openPiP(input.tabId);
+    case "pip-close": if (previewManager.isPiPOpen(input.tabId)) previewManager.closePiP(); return { open: false };
+    case "devtools": await previewManager.openDevTools(input.tabId); return { open: true };
+    case "open-external": {
+      if (!isAllowedPreviewUrl(input.url)) throw new Error("Only http(s) preview links can be opened externally.");
+      await externalLink(input.url);
+      return { opened: true };
+    }
+    default: throw new Error("Unknown preview action.");
+  }
 }
 
 async function maintenance(action) {
@@ -605,6 +677,16 @@ else {
       if (launch.dataDir && !launch.projectRoot) configuration.projectRoot = join(launch.dataDir, "projects");
     } catch (cause) { configError = safeDesktopMessage(cause); }
     installMenu();
+    previewManager = new PreviewManager({
+      electron,
+      guestPreloadPath: join(here, "preview-pick-preload.cjs"),
+      pipPreloadPath: join(here, "preview-pip-preload.cjs"),
+      getWindow: () => workspaceWindow,
+      onOpenLink: ({ tabId, url }) => {
+        if (workspaceWindow && !workspaceWindow.isDestroyed()) workspaceWindow.webContents.send("desktop:preview-open-link", { tabId, url });
+      },
+    });
+    ipcMain.handle("desktop:preview", previewAction);
     ipcMain.handle("desktop:action", desktopAction);
     showConnection();
     if (configError) publish({ status: "error", error: configError });

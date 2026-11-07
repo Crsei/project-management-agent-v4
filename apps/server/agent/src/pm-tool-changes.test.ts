@@ -15,6 +15,7 @@ import { closeStore, writeRecord } from "./durable/store.ts";
 import { ensureThread } from "./durable/threads.ts";
 
 const workspaceId = randomUUID();
+const target = { workspaceId, projectId: null }, actorId = randomUUID();
 const threadId = "changes-thread";
 const createdAt = "2026-10-01T10:00:00.000Z";
 const finishedAt = "2026-10-01T10:00:05.000Z";
@@ -27,7 +28,6 @@ const taskSource = {
   kind: "task" as const, workspaceId, projectId: "PRJ-1", entityId: "TASK-1",
   title: "Ship the change view", revision: "rev-7", truncated: false,
 };
-const fileArea = { path: null, status: "unconfigured" as const, revision: 0, source: null, canManage: false };
 
 function receipt(operationId: string, action: string, targetId: string | null): AgentChatToolReceipt {
   return { kind: "command", operationId, commandId: `command-${operationId}`, action, targetId, revision: "rev-7" };
@@ -36,7 +36,7 @@ function receipt(operationId: string, action: string, targetId: string | null): 
 function callRecord(name: string, status: PmToolCallRecord["status"], extra: Partial<PmToolCallRecord> = {}): PmToolCallRecord {
   return {
     operationId: randomUUID(), name, status, result: null, error: null,
-    threadId, messageId: "message-1", generationId: "generation-1", workspaceId,
+    threadId, messageId: "message-1", generationId: "generation-1", workspaceId, target, actorId,
     createdAt, finishedAt: status === "succeeded" || status === "failed" ? finishedAt : null,
     ...extra,
   };
@@ -182,31 +182,31 @@ test("thread endpoints expose bounded arguments and isolated change sets", async
   const previousFetch = globalThis.fetch;
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
   const thread = "changes-route-thread", other = "changes-route-other";
-  const scope = { workspaceId, projectId: null };
+  const requestTarget = { workspaceId, projectId: null };
   const headers = { cookie: "pm_v4_session=fixture" };
   try {
-    ensureThread(thread, "Changes", scope);
-    ensureThread(other, "Other", scope);
-    globalThis.fetch = (async (input: string | URL | Request) =>
-      new URL(input instanceof Request ? input.url : String(input)).pathname === "/api/v1/agent-contexts"
-        ? Response.json({ workspaces: [{ id: workspaceId, name: "Workspace", fileArea, projects: [] }] })
+    ensureThread(thread, "Changes");
+    ensureThread(other, "Other");
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
+      new URL(input instanceof Request ? input.url : String(input)).pathname === "/api/v1/agent-contexts/authorize"
+        ? Response.json({ actorId, scope: JSON.parse(String(init?.body)) })
         : new Response("{}", { status: 404 })) as typeof fetch;
 
     const operationId = randomUUID();
     const argumentsValue = { projectId: "PRJ-1", title: "Route task" };
     writeRecord("pm-tool-calls", operationId, {
       record: callRecord("pm_create_task", "running", { operationId, threadId: thread }),
-      request: { operationId, name: "pm_create_task", arguments: argumentsValue, scope: { kind: "workspace", projectIds: [] }, threadId: thread, messageId: "m", generationId: "g" },
+      request: { operationId, name: "pm_create_task", arguments: argumentsValue, target: requestTarget, threadId: thread, messageId: "m", generationId: "g" },
     });
     const bulkyId = randomUUID();
     writeRecord("pm-tool-calls", bulkyId, {
       record: callRecord("pm_save_document", "failed", { operationId: bulkyId, threadId: thread, error: { code: "rejected", message: "No" } }),
-      request: { operationId: bulkyId, name: "pm_save_document", arguments: { body: "x".repeat(20_000) }, scope: { kind: "workspace", projectIds: [] }, threadId: thread, messageId: "m", generationId: "g" },
+      request: { operationId: bulkyId, name: "pm_save_document", arguments: { body: "x".repeat(20_000) }, target: requestTarget, threadId: thread, messageId: "m", generationId: "g" },
     });
     const foreignId = randomUUID();
     writeRecord("pm-tool-calls", foreignId, {
       record: callRecord("pm_update_task", "succeeded", { operationId: foreignId, threadId: other, result: taskResult(foreignId) }),
-      request: { operationId: foreignId, name: "pm_update_task", arguments: { id: "TASK-1" }, scope: { kind: "workspace", projectIds: [] }, threadId: other, messageId: "m", generationId: "g" },
+      request: { operationId: foreignId, name: "pm_update_task", arguments: { id: "TASK-1" }, target: requestTarget, threadId: other, messageId: "m", generationId: "g" },
     });
 
     const calls = await pmToolRoutes.request(`http://localhost/pm-tools/threads/${thread}/calls`, { headers });
@@ -232,7 +232,7 @@ test("thread endpoints expose bounded arguments and isolated change sets", async
     assert.equal((await pmToolRoutes.request("http://localhost/pm-tools/threads/absent/changes", { headers })).status, 404);
     assert.equal((await pmToolRoutes.request("http://localhost/pm-tools/threads/absent/calls", { headers })).status, 404);
 
-    globalThis.fetch = (async () => Response.json({ workspaces: [] })) as typeof fetch;
+    globalThis.fetch = (async () => Response.json({ error: "forbidden" }, { status: 403 })) as typeof fetch;
     assert.equal((await pmToolRoutes.request(`http://localhost/pm-tools/threads/${thread}/changes`, { headers })).status, 403);
     assert.equal((await pmToolRoutes.request(`http://localhost/pm-tools/threads/${thread}/calls`, { headers })).status, 403);
   } finally {

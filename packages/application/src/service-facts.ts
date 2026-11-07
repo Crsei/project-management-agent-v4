@@ -4,6 +4,7 @@ import { DomainError } from '../../domain/src/core.ts';
 import type { SqlExecutor } from './ports.ts';
 import { pmAutomationEventSchema } from '../../contracts/src/automation-pm.ts';
 import { insertPmAutomationSignal } from './automation-pm-signals.ts';
+import { capturedChangeSchema, insertChangeHistory, type HistorySnapshotReader } from './change-history.ts';
 
 export const serviceFactSchema = z.strictObject({
  factId: z.uuid(), schemaVersion: z.literal(1), sourceKind: z.enum(['command','core_http','core_observation','legacy_activity']),
@@ -19,14 +20,16 @@ export const notificationInputSchema = z.strictObject({
  commentId: z.uuid().nullable().default(null), commentVersion: z.number().int().positive().nullable().default(null),
  watchCandidates: z.array(z.strictObject({ ownerId: z.uuid(), watchRecordId: z.uuid(), watchVersion: z.number().int().positive() })),
  newMentionIds: z.array(z.uuid()).max(50),
+ completion: z.boolean().optional(), assigneeId: z.uuid().nullable().optional(), requesterId: z.uuid().nullable().optional(),
+ trustedOrigin: z.enum(['manual','agent','automation']).optional(), changedFields: z.array(z.string()).optional(),
 });
 export type NotificationFactInput = z.infer<typeof notificationInputSchema>;
-export const capturedServiceFactSchema = z.strictObject({ fact: serviceFactSchema, input: notificationInputSchema.nullable(), pmSignals: z.array(pmAutomationEventSchema).max(4).optional() });
+export const capturedServiceFactSchema = z.strictObject({ fact: serviceFactSchema, input: notificationInputSchema.nullable(), pmSignals: z.array(pmAutomationEventSchema).max(4).optional(), history: capturedChangeSchema.optional() });
 export type CapturedServiceFact = z.infer<typeof capturedServiceFactSchema>;
 export function factDigest(value: unknown): string { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
 
 /** Caller holds the workspace transaction lock. Frozen input participates in conflict detection. */
-export async function insertServiceFact(sql: SqlExecutor, workspaceId: string, captured: CapturedServiceFact): Promise<string> {
+export async function insertServiceFact(sql: SqlExecutor, workspaceId: string, captured: CapturedServiceFact, readSnapshot?: HistorySnapshotReader): Promise<string> {
  const parsed = capturedServiceFactSchema.parse(captured), { fact, input } = parsed;
  const digest = factDigest(parsed);
  const prior = await sql.query<{ fact_id: string; source_digest: string }>('SELECT fact_id,source_digest FROM service_fact_events WHERE workspace_id=$1 AND source_kind=$2 AND source_key=$3', [workspaceId,fact.sourceKind,fact.sourceKey]);
@@ -40,9 +43,16 @@ export async function insertServiceFact(sql: SqlExecutor, workspaceId: string, c
  if (!head.rows[0]) throw new DomainError('not_found_or_forbidden',undefined,404);
  await sql.query(`INSERT INTO service_fact_events(fact_id,workspace_id,fact_sequence,schema_version,source_kind,source_key,source_digest,project_id,entity_kind,entity_id,before_revision,after_revision,change_kinds,occurred_at,observed_at,safety_class)
  VALUES($1,$2,$3,1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,[fact.factId,workspaceId,head.rows[0].sequence,fact.sourceKind,fact.sourceKey,digest,fact.projectId,fact.entityKind,fact.entityId,fact.beforeRevision,fact.afterRevision,fact.changeKinds,fact.occurredAt,fact.observedAt,fact.safetyClass]);
+ if(parsed.history) {
+  const {beforeKey,afterKey,...history}=parsed.history;
+  if(!readSnapshot)throw new DomainError('history_snapshots_unavailable','The protected snapshot reader is required',503);
+  const before=beforeKey?readSnapshot(beforeKey):null,after=afterKey?readSnapshot(afterKey):null;
+  if(history.target.kind!=='core'||history.target.entityId!==fact.entityId||history.entityKind!==fact.entityKind||history.projectId!==fact.projectId||(before&&before.revision!==fact.beforeRevision)||(after&&after.revision!==fact.afterRevision))throw new DomainError('history_fact_scope_mismatch',undefined,409);
+  await insertChangeHistory(sql,workspaceId,{...history,before,after,changeId:fact.factId,sourceKey:`fact:${fact.factId}`,changeKinds:fact.changeKinds,observedAt:fact.observedAt??new Date().toISOString(),occurredAt:fact.occurredAt});
+ }
  if (input) {
-  await sql.query(`INSERT INTO notification_fact_inputs(workspace_id,fact_id,actor_id,task_id,original_project_id,comment_id,comment_version,watch_candidates,new_mention_ids)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,[workspaceId,fact.factId,input.actorId,input.taskId,input.originalProjectId,input.commentId,input.commentVersion,JSON.stringify(input.watchCandidates),input.newMentionIds]);
+  await sql.query(`INSERT INTO notification_fact_inputs(workspace_id,fact_id,actor_id,task_id,original_project_id,comment_id,comment_version,watch_candidates,new_mention_ids,completion,assignee_id,requester_id,trusted_origin,changed_fields)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14)`,[workspaceId,fact.factId,input.actorId,input.taskId,input.originalProjectId,input.commentId,input.commentVersion,JSON.stringify(input.watchCandidates),input.newMentionIds,input.completion??false,input.assigneeId??null,input.requesterId??null,input.trustedOrigin??'manual',input.changedFields??[]]);
   if(input.taskId && input.originalProjectId && fact.changeKinds.length && fact.sourceKind!=='legacy_activity') await sql.query(`INSERT INTO notification_route_jobs(workspace_id,fact_id)
    SELECT $1,$2 FROM notification_activations WHERE workspace_id=$1 AND activation_fact_sequence<$3::bigint`,[workspaceId,fact.factId,head.rows[0].sequence]);
  }

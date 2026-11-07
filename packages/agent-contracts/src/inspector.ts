@@ -70,15 +70,20 @@ export type GitDiffResponse = {
 
 export type InspectorErrorBody = { error: string; code?: string };
 
+export type TerminalDescriptor = {
+  id: string; requestId: string; serviceId: string; scope: "workspace" | "session";
+  agentWorkspaceId: string; agentWorkspaceRevision: number;
+  threadId: string | null; startCwd: string; status: "running" | "exited";
+  createdAt: string; lastSeq: number; exitCode: number | null; signal: number | null;
+};
 export type TerminalClientMessage =
-  | { type: "input"; data: string }
+  | { type: "input"; seq: number; data: string }
   | { type: "resize"; cols: number; rows: number }
-  | { type: "restart" }
   | { type: "ping" };
-
 export type TerminalServerMessage =
-  | { type: "ready"; cwd: string; shell: string }
-  | { type: "output"; data: string }
+  | { type: "ready"; terminal: TerminalDescriptor; acceptedInputSeq: number; replayFrom: number; truncated: boolean }
+  | { type: "output"; seq: number; data: string }
+  | { type: "ack"; seq: number }
   | { type: "exit"; exitCode: number; signal?: number }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; code?: string }
   | { type: "pong" };

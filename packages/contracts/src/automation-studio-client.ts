@@ -1,5 +1,5 @@
 import { AutomationApiError } from './automation-client.ts';
-import type { StudioActionKind, StudioCapabilities, StudioConfig, StudioDefinition, StudioExecution, StudioExecutionEvent, StudioPage, StudioReceipt, StudioValidation } from './automation-studio.ts';
+import type { StudioActionKind, StudioCapabilities, StudioConfig, StudioDefinition, StudioDefinitionFilters, StudioExecution, StudioExecutionEvent, StudioPage, StudioReceipt, StudioValidation } from './automation-studio.ts';
 import {
   pmAutomationCandidateEditSchema, pmAutomationCandidatePreviewSchema, pmAutomationApplyRequestSchema,
   pmAutomationPreviewRequestSchema, pmAutomationResultSchema, pmAutomationReviewReceiptSchema, pmAutomationReviewRequestSchema,
@@ -22,7 +22,7 @@ export class StudioClient {
     return value as T;
   }
   capabilities(projectId: string, options?: Options & { actionKind?: StudioActionKind }) { const query = new URLSearchParams({ projectId }); if (options?.actionKind) query.set('actionKind', options.actionKind); return this.send<StudioCapabilities>('GET', '/studio-capabilities?' + query, undefined, options); }
-  definitions(cursor?: string, options?: Options) { return this.send<StudioPage<StudioDefinition>>('GET', '/definitions' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : ''), undefined, options); }
+  definitions(cursor?: string, options?: Options & StudioDefinitionFilters) { const query = new URLSearchParams(); if (cursor) query.set('cursor', cursor); if (options?.projectId) query.set('projectId', options.projectId); if (options?.quickAccess !== undefined) query.set('quickAccess', String(options.quickAccess)); return this.send<StudioPage<StudioDefinition>>('GET', '/definitions' + (query.size ? '?' + query : ''), undefined, options); }
   definition(id: string, options?: Options) { return this.send<StudioDefinition>('GET', '/definitions/' + encodeURIComponent(id), undefined, options); }
   create(requestId: string, config: StudioConfig) { return this.send<StudioDefinition>('POST', '/definitions', { requestId, config }); }
   update(id: string, requestId: string, expectedRevision: number, config: StudioConfig) { return this.send<StudioDefinition>('PUT', '/definitions/' + encodeURIComponent(id), { requestId, expectedRevision, config }); }

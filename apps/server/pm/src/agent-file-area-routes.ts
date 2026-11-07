@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
-import { listAgentContexts, resolveAgentContext, saveAgentFileArea, type AgentFileAreaContext } from '../../../../packages/application/src/agent-file-areas.ts';
+import { listAgentContexts, authorizeAgentContext, saveAgentFileArea, type AgentFileAreaContext } from '../../../../packages/application/src/agent-file-areas.ts';
 import { agentStorageSettings, saveAgentStorageSettings, type AgentDirectoryConfiguration } from '../../../../packages/application/src/agent-storage.ts';
 import { agentFileAreaUpdateSchema, agentScopeSchema, agentStorageSettingsUpdateSchema, type AgentScope } from '../../../../packages/contracts/src/agent-file-areas.ts';
 import type { Actor } from '../../../../packages/domain/src/core.ts';
@@ -67,10 +67,10 @@ export function registerAgentFileAreaRoutes(app: FastifyInstance, options: Route
     const scope = projectParams.parse(request.params), input = agentFileAreaUpdateSchema.parse(request.body);
     return inScope(request, scope, context => saveAgentFileArea(context, scope, input));
   });
-  app.post('/api/v1/agent-contexts/resolve', async (request, reply) => {
+  app.post('/api/v1/agent-contexts/authorize', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
     z.strictObject({}).parse(request.query);
     const scope = agentScopeSchema.parse(request.body);
-    return inScope(request, scope, context => resolveAgentContext(context, scope));
+    return inScope(request, scope, context => authorizeAgentContext(context, scope));
   });
 }

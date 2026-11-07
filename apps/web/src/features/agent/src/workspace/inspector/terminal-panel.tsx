@@ -1,491 +1,141 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
-import type { ITheme } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
+import type { TerminalDescriptor, TerminalServerMessage } from "@agent-workspace/contracts/inspector";
+import { WorkspaceClientError } from "@agent-workspace/client-runtime";
 import "@xterm/xterm/css/xterm.css";
 import { Button } from "@agent/components/ui/button";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import type {
-  TerminalClientMessage,
-  TerminalServerMessage,
-} from "@agent-workspace/contracts/inspector";
-import { errorMessage } from "./api";
-import { useInspectorUrl } from "./scope";
 import { workspaceClient } from "@agent/src/network";
-import {
-  getChatBrowserPreferences,
-  useChatBrowserPreferences,
-} from "@agent/src/settings/browser-preferences";
-import { useAgentText, type AgentText } from "../../i18n";
+import { getChatBrowserPreferences, useChatBrowserPreferences } from "@agent/src/settings/browser-preferences";
+import { useAgentText } from "../../i18n";
 import { agentText } from "../../i18n-text.ts";
-
-type TerminalStatus = "connecting" | "connected" | "disconnected" | "error";
-
-type ReadyInfo = { cwd: string; shell: string };
-type ExitInfo = { exitCode: number; signal?: number };
-
-function statusLabels(t: AgentText): Record<TerminalStatus, string> {
-  return {
-    connecting: t("连接中", "Connecting"),
-    connected: t("已连接", "Connected"),
-    disconnected: t("已断开", "Disconnected"),
-    error: t("错误", "Error"),
-  };
-}
-
-const STATUS_DOT_CLASS: Record<TerminalStatus, string> = {
-  connecting: "bg-warning",
-  connected: "bg-success",
-  disconnected: "bg-muted-foreground",
-  error: "bg-destructive",
-};
-
-/** Keeps the PTY websocket alive while the panel is mounted. */
-const PING_INTERVAL_MS = 30_000;
-
-function cssColor(styles: CSSStyleDeclaration, token: string, fallback: string): string {
-  const value = styles.getPropertyValue(token).trim();
-  return value || fallback;
-}
+import { nextTerminalInput, reconcileTerminalInput, shouldRenderTerminalOutput, terminalClientIdentity } from "./terminal-client-state";
 
 function readTerminalTheme(): ITheme {
   const styles = getComputedStyle(document.documentElement);
-  const background = cssColor(styles, "--background", "#111110");
-  const foreground = cssColor(styles, "--foreground", "#ecece8");
-  const brand = cssColor(styles, "--brand", "#de9a7b");
-  const mutedForeground = cssColor(styles, "--muted-foreground", "#b0b0a8");
-  return {
-    background,
-    foreground,
-    cursor: brand,
-    cursorAccent: background,
-    brightBlack: mutedForeground,
-  };
+  const color = (token: string, fallback: string) => styles.getPropertyValue(token).trim() || fallback;
+  return { background: color("--background", "#111110"), foreground: color("--foreground", "#ecece8"), cursor: color("--brand", "#de9a7b"), cursorAccent: color("--background", "#111110"), brightBlack: color("--muted-foreground", "#b0b0a8") };
 }
 
-function readMonoFontFamily(): string {
-  const styles = getComputedStyle(document.documentElement);
-  return (
-    cssColor(styles, "--font-ibm-plex-mono", "") ||
-    'ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace'
-  );
-}
-
-type RawServerMessage = {
-  type?: unknown;
-  cwd?: unknown;
-  shell?: unknown;
-  data?: unknown;
-  exitCode?: unknown;
-  signal?: unknown;
-  message?: unknown;
-};
-
-function parseServerMessage(raw: unknown): TerminalServerMessage | null {
-  if (typeof raw !== "string") return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw) as unknown;
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== "object" || parsed === null) return null;
-  const message = parsed as RawServerMessage;
-  if (typeof message.type !== "string") return null;
-  switch (message.type) {
-    case "ready":
-      return typeof message.cwd === "string" && typeof message.shell === "string"
-        ? { type: "ready", cwd: message.cwd, shell: message.shell }
-        : null;
-    case "output":
-      return typeof message.data === "string" ? { type: "output", data: message.data } : null;
-    case "exit":
-      return typeof message.exitCode === "number"
-        ? {
-            type: "exit",
-            exitCode: message.exitCode,
-            ...(typeof message.signal === "number" ? { signal: message.signal } : {}),
-          }
-        : null;
-    case "error":
-      return typeof message.message === "string"
-        ? { type: "error", message: message.message }
-        : null;
-    case "pong":
-      return { type: "pong" };
-    default:
-      return null;
-  }
-}
-
-export function TerminalPanel({ active = true }: { active?: boolean }) {
+/** Only attaches to an already-created service-owned PTY. Unmount never terminates it. */
+export function TerminalPanel({ terminal: descriptor, active = true, onExit }: { terminal: TerminalDescriptor; active?: boolean; onExit?: (exitCode: number, signal?: number) => void }) {
   const t = useAgentText();
-  const inspectUrl = useInspectorUrl();
   const { preferences } = useChatBrowserPreferences();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const socketRef = useRef<WebSocket | null>(null);
-  const pingTimerRef = useRef<number | null>(null);
-  const connectionIdRef = useRef(0);
-  const disposedRef = useRef(false);
-  const exitedRef = useRef(false);
-  const menuActionSelected = useRef(false);
-
-  const [status, setStatus] = useState<TerminalStatus>("connecting");
-  const [readyInfo, setReadyInfo] = useState<ReadyInfo | null>(null);
-  const [exitInfo, setExitInfo] = useState<ExitInfo | null>(null);
-  const [errorText, setErrorText] = useState<string | null>(null);
-
-  const sendClientMessage = useCallback((message: TerminalClientMessage) => {
-    const socket = socketRef.current;
-    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
-  }, []);
-
+  const container = useRef<HTMLDivElement>(null);
+  const xterm = useRef<Terminal | null>(null);
+  const fit = useRef<FitAddon | null>(null);
+  const socket = useRef<WebSocket | null>(null);
+  const inputReady = useRef(false);
+  const onExitRef = useRef(onExit);
+  onExitRef.current = onExit;
+  const lastRendered = useRef(0);
+  const [storage] = useState<Storage | undefined>(() => { try { return sessionStorage; } catch { return undefined; } });
+  const [identity] = useState(() => terminalClientIdentity(descriptor.id, storage));
+  const [status, setStatus] = useState("connecting");
+  const [error, setError] = useState<string>();
+  const [inputWarning, setInputWarning] = useState(false);
+  const [reconnect, setReconnect] = useState(0);
   const fitTerminal = useCallback(() => {
-    const container = containerRef.current;
-    const terminal = terminalRef.current;
-    const fitAddon = fitAddonRef.current;
-    if (!container || !terminal || !fitAddon) return;
-    // Hidden panels (and the mobile sheet before it opens) report a zero box.
-    if (container.clientWidth < 24 || container.clientHeight < 24) return;
-    try {
-      fitAddon.fit();
-    } catch {
-      // Keep the current dimensions; still tell the PTY about them.
-    }
-    if (terminal.cols > 0 && terminal.rows > 0) {
-      sendClientMessage({ type: "resize", cols: terminal.cols, rows: terminal.rows });
-    }
-  }, [sendClientMessage]);
-
-  const clearPingTimer = useCallback(() => {
-    if (pingTimerRef.current !== null) {
-      window.clearInterval(pingTimerRef.current);
-      pingTimerRef.current = null;
-    }
+    if (!container.current || container.current.clientWidth < 24 || container.current.clientHeight < 24 || !fit.current || !xterm.current) return;
+    fit.current.fit();
+    if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify({ type: "resize", cols: xterm.current.cols, rows: xterm.current.rows }));
   }, []);
 
-  const startPingTimer = useCallback(
-    (connectionId: number) => {
-      clearPingTimer();
-      pingTimerRef.current = window.setInterval(() => {
-        if (disposedRef.current || connectionIdRef.current !== connectionId) {
-          clearPingTimer();
-          return;
-        }
-        sendClientMessage({ type: "ping" });
-      }, PING_INTERVAL_MS);
-    },
-    [clearPingTimer, sendClientMessage],
-  );
-
-  const handleServerMessage = useCallback((raw: unknown) => {
-    const message = parseServerMessage(raw);
-    if (!message) return;
-    const terminal = terminalRef.current;
-    switch (message.type) {
-      case "output":
-        terminal?.write(message.data);
-        return;
-      case "ready":
-        setReadyInfo({ cwd: message.cwd, shell: message.shell });
-        setStatus("connected");
-        setExitInfo(null);
-        setErrorText(null);
-        exitedRef.current = false;
-        terminal?.write(
-          agentText(
-            `\r\n\x1b[2m[已连接 ${message.shell} · ${message.cwd}]\x1b[0m\r\n`,
-            `\r\n\x1b[2m[Connected ${message.shell} · ${message.cwd}]\x1b[0m\r\n`,
-          ),
-        );
-        return;
-      case "exit": {
-        exitedRef.current = true;
-        setExitInfo({ exitCode: message.exitCode, signal: message.signal });
-        setStatus("disconnected");
-        const signalText =
-          message.signal !== undefined
-            ? agentText(`，信号 ${message.signal}`, `, signal ${message.signal}`)
-            : "";
-        terminal?.write(
-          agentText(
-            `\r\n\x1b[33m[终端进程已退出，退出码 ${message.exitCode}${signalText}]\x1b[0m\r\n`,
-            `\r\n\x1b[33m[Terminal process exited with code ${message.exitCode}${signalText}]\x1b[0m\r\n`,
-          ),
-        );
-        return;
-      }
-      case "error":
-        setStatus("error");
-        setErrorText(message.message);
-        terminal?.write(
-          agentText(
-            `\r\n\x1b[31m[错误] ${message.message}\x1b[0m\r\n`,
-            `\r\n\x1b[31m[Error] ${message.message}\x1b[0m\r\n`,
-          ),
-        );
-        return;
-      case "pong":
-        return;
-    }
-  }, []);
-
-  const openConnection = useCallback(() => {
-    if (disposedRef.current) return;
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-
-    const connectionId = connectionIdRef.current + 1;
-    connectionIdRef.current = connectionId;
-    clearPingTimer();
-
-    // Detach the previous socket first so its events cannot touch this connection.
-    const previous = socketRef.current;
-    socketRef.current = null;
-    if (previous) {
-      previous.onopen = null;
-      previous.onmessage = null;
-      previous.onerror = null;
-      previous.onclose = null;
-      previous.close();
-    }
-
-    setStatus("connecting");
-    setReadyInfo(null);
-    setExitInfo(null);
-    setErrorText(null);
-    exitedRef.current = false;
-
-    let socket: WebSocket;
-    try {
-      socket = new WebSocket(workspaceClient.webSocketUrl(inspectUrl("/api/terminal")));
-    } catch (error) {
-      setStatus("error");
-      setErrorText(errorMessage(error));
-      return;
-    }
-    socketRef.current = socket;
-
-    socket.onopen = () => {
-      if (disposedRef.current || connectionIdRef.current !== connectionId) return;
-      setStatus("connected");
-      fitTerminal();
-      startPingTimer(connectionId);
-    };
-    socket.onmessage = (event) => {
-      if (disposedRef.current || connectionIdRef.current !== connectionId) return;
-      handleServerMessage(event.data);
-    };
-    socket.onerror = () => {
-      if (disposedRef.current || connectionIdRef.current !== connectionId) return;
-      setStatus("error");
-      setErrorText(agentText("终端连接发生错误。", "The terminal connection failed."));
-    };
-    socket.onclose = (event) => {
-      if (disposedRef.current || connectionIdRef.current !== connectionId) return;
-      clearPingTimer();
-      socketRef.current = null;
-      setReadyInfo(null);
-      setStatus((current) => (current === "error" ? "error" : "disconnected"));
-      if (!exitedRef.current && event.code !== 1000 && event.reason.trim()) {
-        setErrorText(
-          agentText(
-            `连接已关闭：${event.reason.trim()}`,
-            `Connection closed: ${event.reason.trim()}`,
-          ),
-        );
-      }
-    };
-  }, [clearPingTimer, fitTerminal, handleServerMessage, startPingTimer, inspectUrl]);
-
   useEffect(() => {
-    disposedRef.current = false;
-    const container = containerRef.current;
-    if (!container) return;
-
-    const terminal = new Terminal({
-      cursorBlink: true,
-      fontSize: getChatBrowserPreferences().terminalFontSize,
-      fontFamily: readMonoFontFamily(),
-      scrollback: 5000,
-      theme: readTerminalTheme(),
+    if (!container.current) return;
+    const term = new Terminal({ cursorBlink: true, fontSize: getChatBrowserPreferences().terminalFontSize, fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--font-ibm-plex-mono").trim() || 'ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace', scrollback: 5000, theme: readTerminalTheme() });
+    const addon = new FitAddon(); term.loadAddon(addon); term.open(container.current);
+    xterm.current = term; fit.current = addon; lastRendered.current = 0;
+    const observer = new ResizeObserver(fitTerminal); observer.observe(container.current);
+    const input = term.onData(data => {
+      if (!inputReady.current || socket.current?.readyState !== WebSocket.OPEN) return;
+      socket.current.send(JSON.stringify(nextTerminalInput(identity, descriptor.id, data, storage)));
     });
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-    terminal.open(container);
-
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
-
     fitTerminal();
+    return () => { observer.disconnect(); input.dispose(); addon.dispose(); term.dispose(); xterm.current = null; fit.current = null; };
+  }, [descriptor.id, fitTerminal]);
 
-    const dataSubscription = terminal.onData((data) => {
-      sendClientMessage({ type: "input", data });
-    });
-    const observer = new ResizeObserver(() => fitTerminal());
-    observer.observe(container);
-
-    openConnection();
-
-    return () => {
-      disposedRef.current = true;
-      connectionIdRef.current += 1;
-      clearPingTimer();
-      observer.disconnect();
-      dataSubscription.dispose();
-
-      const socket = socketRef.current;
-      socketRef.current = null;
-      if (socket) {
-        socket.onopen = null;
-        socket.onmessage = null;
-        socket.onerror = null;
-        socket.onclose = null;
-        socket.close();
-      }
-
-      fitAddon.dispose();
-      terminal.dispose();
-      terminalRef.current = null;
-      fitAddonRef.current = null;
+  useEffect(() => {
+    let disposed = false;
+    let retryTimer: number | undefined;
+    let heartbeat: number | undefined;
+    let connection: WebSocket | undefined;
+    let ended = descriptor.status === "exited";
+    let attempt = 0;
+    let attaching = false;
+    const controller = new AbortController();
+    const connect = async () => {
+      if (disposed || attaching || connection) return;
+      attaching = true;
+      inputReady.current = false;
+      if (retryTimer !== undefined) { window.clearTimeout(retryTimer); retryTimer = undefined; }
+      setStatus("connecting"); setError(undefined);
+      try {
+        const { terminal } = await workspaceClient.json<{ terminal: TerminalDescriptor }>(`/api/inspector/terminals/${encodeURIComponent(descriptor.id)}`, { signal: controller.signal });
+        if (disposed) return;
+        ended = terminal.status === "exited";
+        const query = new URLSearchParams({ terminalId: terminal.id, afterSeq: String(lastRendered.current), clientId: identity.clientId });
+        connection = new WebSocket(workspaceClient.webSocketUrl(`/api/inspector/terminal?${query}`));
+        socket.current = connection;
+        connection.onmessage = event => {
+          if (disposed) return;
+          let message: TerminalServerMessage;
+          try { message = JSON.parse(String(event.data)) as TerminalServerMessage; } catch { setError(agentText("终端响应无效。", "Invalid terminal response.")); return; }
+          switch (message.type) {
+            case "ready":
+              ended = message.terminal.status === "exited";
+              try {
+                if (reconcileTerminalInput(identity, descriptor.id, message.acceptedInputSeq, storage).unreceivedInput) setInputWarning(true);
+              } catch (cause) {
+                ended = true; setStatus("unavailable"); setError(cause instanceof Error ? cause.message : String(cause)); connection?.close(); return;
+              }
+              inputReady.current = !ended;
+              setStatus(ended ? "exited" : "connected"); attempt = 0;
+              if (message.truncated) xterm.current?.write(agentText("\r\n[较早输出已超出回放上限]\r\n", "\r\n[Earlier output exceeded the replay limit]\r\n"));
+              fitTerminal();
+              break;
+            case "output":
+              if (shouldRenderTerminalOutput(lastRendered.current, message.seq)) { lastRendered.current = message.seq; xterm.current?.write(message.data); }
+              break;
+            case "ack": identity.acknowledgedSeq = Math.max(identity.acknowledgedSeq, message.seq); break;
+            case "exit":
+              ended = true; inputReady.current = false; setStatus("exited");
+              xterm.current?.write(`\r\n[${agentText("进程已退出", "Process exited")}: ${message.exitCode}${message.signal === undefined ? "" : ` · signal ${message.signal}`}]\r\n`);
+              onExitRef.current?.(message.exitCode, message.signal);
+              break;
+            case "error": ended = true; inputReady.current = false; setStatus("unavailable"); setError(message.message); break;
+            case "pong": break;
+          }
+        };
+        connection.onopen = () => { heartbeat = window.setInterval(() => { if (connection?.readyState === WebSocket.OPEN) connection.send(JSON.stringify({ type: "ping" })); }, 30_000); };
+        connection.onerror = () => { if (!disposed) setStatus("disconnected"); };
+        connection.onclose = () => {
+          inputReady.current = false;
+          if (heartbeat !== undefined) window.clearInterval(heartbeat);
+          if (socket.current === connection) socket.current = null;
+          connection = undefined;
+          if (disposed || ended) return;
+          setStatus("disconnected");
+          if (identity.acknowledgedSeq < identity.inputSeq) setInputWarning(true);
+          retryTimer = window.setTimeout(() => void connect(), Math.min(10_000, 1000 * 2 ** attempt++));
+        };
+      } catch (cause) {
+        if (disposed) return;
+        const definitive = cause instanceof WorkspaceClientError && cause.kind === "http" && [400, 401, 403, 404, 409, 410, 412].includes(cause.status);
+        ended = definitive;
+        setStatus(definitive ? "unavailable" : "disconnected");
+        setError(`${cause instanceof Error ? cause.message : String(cause)} · ${agentText("只能附加原终端；服务重启不会恢复进程或重放命令。", "Only the original terminal can be attached. Service restart does not restore processes or rerun commands.")}`);
+        if (!definitive) retryTimer = window.setTimeout(() => void connect(), Math.min(10_000, 1000 * 2 ** attempt++));
+      } finally { attaching = false; }
     };
-  }, [clearPingTimer, fitTerminal, openConnection, sendClientMessage]);
+    void connect();
+    const online = () => { if (!ended && !connection) void connect(); };
+    window.addEventListener("online", online);
+    return () => { disposed = true; inputReady.current = false; controller.abort(); window.removeEventListener("online", online); if (retryTimer !== undefined) window.clearTimeout(retryTimer); if (heartbeat !== undefined) window.clearInterval(heartbeat); if (connection) { connection.onclose = null; connection.onmessage = null; connection.close(); } if (socket.current === connection) socket.current = null; };
+  }, [descriptor.id, reconnect, fitTerminal]);
 
-  // Live preference updates: keep the session and socket, only restyle and refit.
-  useEffect(() => {
-    const terminal = terminalRef.current;
-    if (!terminal || terminal.options.fontSize === preferences.terminalFontSize) return;
-    terminal.options.fontSize = preferences.terminalFontSize;
-    fitTerminal();
-  }, [preferences.terminalFontSize, fitTerminal]);
-
-  useEffect(() => {
-    if (!active) return;
-    const frame = requestAnimationFrame(() => {
-      fitTerminal();
-      terminalRef.current?.focus();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [active, fitTerminal]);
-
-  const handleClear = () => {
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-    terminal.clear();
-    terminal.focus();
-  };
-
-  const handleRestart = () => {
-    const terminal = terminalRef.current;
-    const socket = socketRef.current;
-    if (socket?.readyState === WebSocket.OPEN) {
-      setStatus("connecting");
-      setReadyInfo(null);
-      setExitInfo(null);
-      setErrorText(null);
-      exitedRef.current = false;
-      terminal?.write(
-        agentText(
-          "\r\n\x1b[2m[正在重启终端…]\x1b[0m\r\n",
-          "\r\n\x1b[2m[Restarting terminal…]\x1b[0m\r\n",
-        ),
-      );
-      sendClientMessage({ type: "restart" });
-      terminal?.focus();
-      return;
-    }
-    openConnection();
-    terminal?.focus();
-  };
-
-  const handleReconnect = () => {
-    terminalRef.current?.write(
-      agentText(
-        "\r\n\x1b[2m[重新连接终端…]\x1b[0m\r\n",
-        "\r\n\x1b[2m[Reconnecting terminal…]\x1b[0m\r\n",
-      ),
-    );
-    openConnection();
-    terminalRef.current?.focus();
-  };
-
-  const terminalActions = [
-    { id: "clear", label: t("清屏", "Clear"), description: t("仅清除本地终端显示，不发送命令。", "Clears the local terminal display without sending a command."), onSelect: handleClear },
-    { id: "restart", label: t("重启 Shell", "Restart shell"), description: t("结束当前终端 Shell 并启动新 Shell；正在运行的工作可能中断。", "Terminates the current terminal shell and starts a new shell; running work may be interrupted."), onSelect: handleRestart },
-    { id: "reconnect", label: t("重新连接", "Reconnect"), description: t("重新建立连接并启动新 Shell，不会恢复旧 Shell。当前 Shell 可能被结束。", "Reconnects with a new shell, not the old shell. The current shell may be terminated."), onSelect: handleReconnect },
-  ];
-
-  return (
-    <div className="inspector-panel">
-      <ContextMenu onOpenChange={(isOpen) => { if (isOpen) menuActionSelected.current = false; }}>
-        <ContextMenuTrigger asChild>
-      <div className="inspector-toolbar" tabIndex={0} aria-label={t("终端工具", "Terminal tools")}>
-        <span
-          className="flex shrink-0 items-center gap-1.5 text-xs"
-          role="status"
-          aria-live="polite"
-        >
-          <span className={`size-2 rounded-full ${STATUS_DOT_CLASS[status]}`} aria-hidden="true" />
-          {statusLabels(t)[status]}
-        </span>
-        {readyInfo && (
-          <span
-            className="inspector-muted inspector-mono min-w-0 truncate"
-            title={`${readyInfo.shell} · ${readyInfo.cwd}`}
-          >
-            {readyInfo.shell} · {readyInfo.cwd}
-          </span>
-        )}
-        <span className="inspector-toolbar-spacer" />
-        {terminalActions.map((action) => (
-          <Button key={action.id} type="button" variant="ghost" size="sm" title={action.description} onClick={action.onSelect}>
-            {action.label}
-          </Button>
-        ))}
-      </div>
-        </ContextMenuTrigger>
-        <ContextMenuContent onCloseAutoFocus={(event) => {
-          if (menuActionSelected.current) event.preventDefault();
-        }}>
-          <ContextMenuLabel className="max-w-72 whitespace-normal px-3 py-1.5 text-xs text-muted-foreground">
-            {t("重启或重新连接会启动新 Shell，可能中断当前工作。", "Restarting or reconnecting starts a new shell and may interrupt current work.")}
-          </ContextMenuLabel>
-          {terminalActions.map((action) => (
-            <ContextMenuItem key={action.id} title={action.description} onSelect={() => {
-              menuActionSelected.current = true;
-              action.onSelect();
-            }}>
-              {action.label}
-            </ContextMenuItem>
-          ))}
-        </ContextMenuContent>
-      </ContextMenu>
-      {errorText && (
-        <p className="text-xs text-destructive" role="alert">
-          {errorText}
-        </p>
-      )}
-      {exitInfo && (
-        <p className="text-xs text-muted-foreground" role="status">
-          {t(
-            `终端进程已退出（退出码 ${exitInfo.exitCode}${
-              exitInfo.signal !== undefined ? ` · 信号 ${exitInfo.signal}` : ""
-            }）。`,
-            `The terminal process exited (code ${exitInfo.exitCode}${
-              exitInfo.signal !== undefined ? ` · signal ${exitInfo.signal}` : ""
-            }).`,
-          )}
-        </p>
-      )}
-      <div ref={containerRef} className="inspector-terminal" data-native-context-menu />
-    </div>
-  );
+  useEffect(() => { if (!xterm.current) return; xterm.current.options.fontSize = preferences.terminalFontSize; fitTerminal(); }, [preferences.terminalFontSize, fitTerminal]);
+  useEffect(() => { if (!active) return; const frame = requestAnimationFrame(() => { fitTerminal(); xterm.current?.focus(); }); return () => cancelAnimationFrame(frame); }, [active, fitTerminal]);
+  const unconfirmedInput = inputWarning && <p role="alert" className="text-destructive text-xs">{t("断线前有输入未确认；不会自动重发。请核对输出后确认。", "Input was unacknowledged before disconnect and will not be resent. Inspect the output before dismissing.")}<Button size="sm" variant="ghost" onClick={() => setInputWarning(false)}>{t("已核对", "Reviewed")}</Button></p>;
+  return <div className="inspector-panel inspector-panel--bare"><div className="inspector-toolbar"><span role="status">{status === "connected" ? t("已附加", "Attached") : status === "exited" ? t("进程已结束", "Process exited") : status === "unavailable" ? t("不可用", "Unavailable") : status === "connecting" ? t("正在附加", "Attaching") : t("已分离", "Detached")}</span><Button size="sm" variant="ghost" onClick={() => { xterm.current?.clear(); xterm.current?.focus(); }}>{t("清屏", "Clear")}</Button><Button size="sm" variant="ghost" disabled={status === "connecting"} onClick={() => setReconnect(value => value + 1)}>{t("重新附加（不重启）", "Reattach (no restart)")}</Button></div>{unconfirmedInput}{error && <p role="alert" className="text-destructive text-xs">{error}</p>}<div ref={container} className="inspector-terminal" data-native-context-menu /></div>;
 }

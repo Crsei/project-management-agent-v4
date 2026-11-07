@@ -2,6 +2,7 @@
 @import "./styles/fonts.css";
 @import "./styles/theme.css";
 @import "./features/agent/styles/globals.css";
+@source "../../../packages/ui/src";
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {

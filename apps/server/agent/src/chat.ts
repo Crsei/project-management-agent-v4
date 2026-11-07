@@ -3,16 +3,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { ProviderRuntimeError } from "./providers/runtime.ts";
 import { resolveProviderModelOptions } from "./providers/catalog.ts";
-import { agentCatalogSchema } from "../../../../packages/contracts/src/agent-file-areas.ts";
 import { ChatDefaultsError } from "./settings/chat-defaults.ts";
 import {
   chatBodySchema,
   createThreadSchema,
-  importBodySchema,
   storedMessageSchema,
   threadPatchSchema,
   threadSidebarActionSchema,
-  type PmContext,
 } from "@agent-workspace/contracts/chat";
 import { nativeInteractionResponseSchema } from "@agent-workspace/contracts/output";
 import {
@@ -41,7 +38,6 @@ import {
   ensureThread,
   getThread,
   getThreadHistory,
-  importThreads,
   listThreads,
   saveFormattedMessage,
   ThreadConflictError,
@@ -51,18 +47,19 @@ import {
 } from "./durable/threads.ts";
 import { getThreadSidebar, updateThreadSidebar } from "./durable/thread-sidebar.ts";
 import { generateThreadTitle } from "./durable/thread-title.ts";
-import { resolvePmContextBinding } from "./durable/pm-context.ts";
 import { transaction } from "./durable/store.ts";
-import { resolveAgentScope } from "./durable/agent-scope.ts";
+import { resolveAgentExecution } from "./durable/agent-execution.ts";
 import { listRuns } from "./durable/engine.ts";
 import { setThreadNativeSession } from "./durable/threads.ts";
 import { closeMcpAppSession } from "./mcp-apps/live.ts";
+import { resolveChatExecutionScope } from "./task-delivery/binding.ts";
+import { terminateSessionTerminals } from "./inspector/terminal.ts";
 
 export const chatRoutes = new Hono();
 export const publicThread = (thread: ThreadMetadata) => ({
   remoteId: thread.remoteId,
-  scope: thread.scope,
-  ...(thread.pmContext ? { pmContext: thread.pmContext } : {}),
+  executionSelection: thread.executionSelection,
+  executionEnvironment: thread.executionEnvironment,
   title: thread.title,
   status: thread.status,
   custom: thread.custom,
@@ -91,50 +88,12 @@ export const publicChatGeneration = (generation: ChatGeneration) => ({
   handoff: generation.handoff,
   pmReferences: generation.pmReferences,
 });
-export async function assertThreadScopeAccessible(thread: ThreadMetadata, requestHeaders: Headers): Promise<void> {
-  if (!thread.scope)
-    throw new DurableError(412, "scope_required", "旧历史没有原始工作区归属，不能归档、恢复或删除，也不会重新分派。");
-  let endpoint: URL;
-  try {
-    const base = new URL(process.env.PM_API_URL?.trim() || "http://127.0.0.1:4194");
-    if (!["http:", "https:"].includes(base.protocol) || base.username || base.password)
-      throw new Error("Invalid PM origin");
-    endpoint = new URL("/api/v1/agent-contexts", base.origin);
-  } catch {
-    throw new DurableError(503, "scope_unavailable", "PM API 地址配置无效，未更改会话。");
-  }
-  const headers = new Headers();
-  for (const name of ["cookie", "authorization"]) {
-    const value = requestHeaders.get(name);
-    if (value) headers.set(name, value);
-  }
-  let response: Response;
-  try {
-    response = await fetch(endpoint, { headers, redirect: "error" });
-  } catch {
-    throw new DurableError(503, "scope_unavailable", "无法核验当前 PM 访问范围，未更改会话。");
-  }
-  if (!response.ok)
-    throw new DurableError(
-      response.status === 401 || response.status === 403 || response.status === 404 ? response.status : 503,
-      "scope_unavailable", "无法核验当前 PM 访问范围，请检查登录及原始分组权限。",
-    );
-  const catalog = agentCatalogSchema.safeParse(await response.json().catch(() => null));
-  if (!catalog.success)
-    throw new DurableError(503, "scope_unavailable", "PM 目录册响应无效，未更改会话。");
-  const workspace = catalog.data.workspaces.find((item) => item.id === thread.scope!.workspaceId);
-  if (!workspace || (thread.scope.projectId !== null && !workspace.projects.some((item) => item.id === thread.scope!.projectId)))
-    throw new DurableError(403, "scope_unavailable", "原始工作区或项目当前不可访问，不能更改此会话。");
-  // A bound task that is no longer accessible must reject every scope-sensitive change.
-  if (thread.pmContext) await resolvePmContextBinding(thread.pmContext, thread.scope, requestHeaders);
-}
 
-async function accessibleGeneration(id: string, headers: Headers): Promise<ChatGeneration> {
+async function accessibleGeneration(id: string): Promise<ChatGeneration> {
   const generation = getChatGeneration(id);
   if (!generation) throw new DurableError(404, "not_found", "找不到该回复。");
   const thread = getThread(generation.threadId);
   if (!thread) throw new DurableError(404, "not_found", "找不到该会话。");
-  await assertThreadScopeAccessible(thread, headers);
   return generation;
 }
 
@@ -169,20 +128,14 @@ chatRoutes.onError((error, c) => {
 });
 chatRoutes.get("/chat/threads", (c) => c.json({ threads: listThreads().map(publicThread) }));
 chatRoutes.post("/chat/threads", async (c) => {
-  const { id, scope, pmContext } = createThreadSchema.parse(await c.req.json());
+  const { id, executionSelection } = createThreadSchema.parse(await c.req.json());
   if (!validThreadId(id)) return c.json({ error: "无效的会话 ID。", code: "invalid_request" }, 400);
-  const binding = await resolvePmContextBinding(pmContext, scope, c.req.raw.headers, c.req.raw.signal);
-  ensureThread(id, undefined, scope, binding);
+  const execution = await resolveAgentExecution(executionSelection, id, c.req.raw.signal);
+  ensureThread(id, undefined, executionSelection, execution.environment);
   const thread = getThread(id);
   if (!thread) return c.json({ error: "会话已删除。", code: "thread_deleted" }, 409);
   updateThread(id, {});
   return c.json({ thread: publicThread(thread) });
-});
-chatRoutes.post("/chat/import", async (c) => {
-  const body = importBodySchema.parse(await c.req.json());
-  if (body.threads.some((thread) => !validThreadId(thread.remoteId)))
-    return c.json({ error: "导入含无效会话 ID。", code: "invalid_request" }, 400);
-  return c.json(importThreads(body.migrationId, body.threads));
 });
 chatRoutes.get("/chat/threads/:id", (c) => {
   const thread = getThread(c.req.param("id"));
@@ -190,23 +143,27 @@ chatRoutes.get("/chat/threads/:id", (c) => {
     ? c.json({ thread: publicThread(thread) })
     : c.json({ error: "找不到会话。", code: "not_found" }, 404);
 });
+chatRoutes.get("/chat/threads/:id/execution", async c => {
+  const thread = getThread(c.req.param("id"));
+  if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
+  const snapshot = await resolveChatExecutionScope(thread, c.req.raw.headers, "inspect", c.req.raw.signal);
+  return c.json({ environment: snapshot.environment });
+});
 chatRoutes.post("/chat/threads/:id/native-session/restart", async c => {
   z.strictObject({}).parse(await c.req.json());
   const id = c.req.param("id");
   const thread = getThread(id);
   if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
-  await assertThreadScopeAccessible(thread, c.req.raw.headers);
   const assertIdle = () => {
     if (getActiveChat(id) || listRuns(id).some(run => run.status === "queued" || run.status === "running"))
       throw new DurableError(409, "chat_busy", "会话仍在运行；请等待完成或显式停止，不能自动取消。");
   };
   assertIdle();
   await closeMcpAppSession(id);
-  await assertThreadScopeAccessible(thread, c.req.raw.headers);
   const current = transaction(() => {
     const latest = getThread(id);
     if (!latest) throw new DurableError(404, "not_found", "找不到会话。");
-    if (latest.revision !== thread.revision || JSON.stringify(latest.scope) !== JSON.stringify(thread.scope) ||
+    if (latest.revision !== thread.revision || JSON.stringify(latest.executionSelection) !== JSON.stringify(thread.executionSelection) ||
         JSON.stringify(latest.nativeSession) !== JSON.stringify(thread.nativeSession) ||
         JSON.stringify(latest.pendingFork) !== JSON.stringify(thread.pendingFork))
       throw new ThreadConflictError("会话已更改，请重新载入。");
@@ -219,22 +176,30 @@ chatRoutes.post("/chat/threads/:id/native-session/restart", async c => {
 chatRoutes.put("/chat/threads/:id", async (c) => {
   const id = c.req.param("id");
   const patch = threadPatchSchema.parse(await c.req.json());
+  if (!getThread(id)) throw new DurableError(404, "not_found", "找不到会话。");
   if (patch.settings && patch.revision === undefined)
     return c.json({ error: "保存设置必须提供 revision。", code: "invalid_request" }, 400);
-  let pmContext: PmContext | null | undefined;
-  if (patch.pmContext !== undefined) {
+  if (patch.executionSelection) {
+    if (Object.keys(patch).some(key => !["executionSelection", "revision"].includes(key)))
+      throw new DurableError(400, "invalid_request", "Save execution selection separately from other Session changes.");
     const thread = getThread(id);
     if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
-    if (getActiveChat(id))
-      throw new DurableError(409, "chat_busy", "生成进行中，不能更改绑定的 PM 议题；请先停止生成。");
-    // Clearing a stale binding must not be blocked by the issue it removes.
-    if (patch.pmContext !== null) await assertThreadScopeAccessible(thread, c.req.raw.headers);
-    pmContext = (await resolvePmContextBinding(patch.pmContext, thread.scope, c.req.raw.headers, c.req.raw.signal)) ?? null;
+    if (patch.revision === undefined) throw new DurableError(400, "revision_required", "Execution selection requires revision.");
+    if (thread.revision !== patch.revision) throw new ThreadConflictError("Session changed; reload before selecting its directory.");
+    if (!thread.executionSelection || thread.executionEnvironment?.frozen || listChatGenerations(id).length || getActiveChat(id) ||
+        listRuns(id).some(run => run.status === "queued" || run.status === "running"))
+      throw new DurableError(409, "execution_frozen", "Create a new Session to change execution directories.");
+    const snapshot = await resolveAgentExecution(patch.executionSelection, id, c.req.raw.signal);
+    await closeMcpAppSession(id);
+    const latest = getThread(id);
+    if (!latest || latest.revision !== thread.revision || latest.executionEnvironment?.frozen || listChatGenerations(id).length ||
+        listRuns(id).some(run => run.status === "queued" || run.status === "running"))
+      throw new ThreadConflictError("Session execution changed while saving its directory.", "execution_frozen");
+    return c.json({ thread: publicThread(updateThread(id, { ...patch, executionEnvironment: snapshot.environment })) });
   }
   if (patch.status) {
     const thread = getThread(id);
     if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
-    await assertThreadScopeAccessible(thread, c.req.raw.headers);
     if (patch.status === "archived" && getActiveChat(id))
       throw new DurableError(409, "chat_busy", "请等待后台生成结束或在聊天中显式停止后再归档；归档不会自动取消生成。");
   }
@@ -248,30 +213,25 @@ chatRoutes.put("/chat/threads/:id", async (c) => {
       );
     }
   }
-  if (patch.settings || patch.status === "archived" || pmContext !== undefined) {
+  if (patch.settings || patch.status === "archived") {
     const thread = getThread(id);
     if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
     if (patch.revision !== undefined && patch.revision !== thread.revision)
       throw new ThreadConflictError("会话已更改，请重新载入。");
-    // Unscoped drafts may save settings, but cannot own an executable native App.
-    // Clearing an inaccessible issue still requires authorization for its underlying scope.
-    if (pmContext === null) await resolveAgentScope(thread.scope, c.req.raw.headers, c.req.raw.signal);
-    else if (thread.scope) await assertThreadScopeAccessible(thread, c.req.raw.headers);
     await closeMcpAppSession(id);
     const latest = getThread(id);
     if (!latest || latest.revision !== thread.revision)
       throw new ThreadConflictError("会话已更改，请重新载入。");
-    if ((patch.status === "archived" || pmContext !== undefined) && getActiveChat(id))
+    if (patch.status === "archived" && getActiveChat(id))
       throw new DurableError(409, "chat_busy", "会话仍在运行，请先停止生成。");
   }
-  return c.json({ thread: publicThread(updateThread(id, { ...patch, ...(pmContext !== undefined ? { pmContext } : {}) })) });
+  return c.json({ thread: publicThread(updateThread(id, patch)) });
 });
 chatRoutes.post("/chat/threads/:id/sidebar", async (c) => {
   const id = c.req.param("id");
   const action = threadSidebarActionSchema.parse(await c.req.json());
   const thread = getThread(id);
   if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
-  await assertThreadScopeAccessible(thread, c.req.raw.headers);
   updateThreadSidebar(id, action);
   const current = getThread(id);
   if (!current) throw new DurableError(404, "not_found", "找不到会话。");
@@ -280,20 +240,22 @@ chatRoutes.post("/chat/threads/:id/sidebar", async (c) => {
 chatRoutes.post("/chat/threads/:id/regenerate-title", async (c) => {
   const id = c.req.param("id");
   const { revision } = z.object({ revision: z.number().int().nonnegative() }).parse(await c.req.json());
-  const thread = getThread(id);
-  if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
-  await assertThreadScopeAccessible(thread, c.req.raw.headers);
   const current = getThread(id);
   if (!current) throw new DurableError(404, "not_found", "找不到会话。");
   if (current.revision !== revision) throw new ThreadConflictError("会话设置已更改，请重新载入。");
+  const generations = listChatGenerations(id);
+  if (generations.some(isChatActive))
+    throw new DurableError(409, "chat_busy", "会话仍在运行，请等待生成结束后重新生成标题。");
   const history = JSON.stringify(getThreadHistory(id));
-  const title = await generateThreadTitle(current, c.req.raw.headers, c.req.raw.signal);
-  await assertThreadScopeAccessible(current, c.req.raw.headers);
+  const title = await generateThreadTitle(current, c.req.raw.signal);
   const saved = transaction(() => {
     const latest = getThread(id);
     if (!latest) throw new DurableError(404, "not_found", "找不到会话。");
+    const latestGenerations = listChatGenerations(id);
     if (latest.revision !== revision || latest.title !== current.title ||
-        latest.status !== current.status || JSON.stringify(getThreadHistory(id)) !== history)
+        latest.status !== current.status || JSON.stringify(getThreadHistory(id)) !== history ||
+        latestGenerations.length !== generations.length ||
+        latestGenerations.some((generation, index) => isChatActive(generation) || generation.id !== generations[index]?.id))
       throw new ThreadConflictError("生成标题期间会话已更改，请重新载入。", "title_conflict");
     return title === current.title || title === "New thread" ? latest : updateThread(id, { title, revision });
   });
@@ -303,7 +265,6 @@ chatRoutes.delete("/chat/threads/:id", async (c) => {
   const id = c.req.param("id");
   const thread = getThread(id);
   if (!thread) return c.json({ deleted: true });
-  await assertThreadScopeAccessible(thread, c.req.raw.headers);
   for (const generation of listChatGenerations(id))
     if (isChatActive(generation)) await cancelChat(generation.id);
   if (getActiveChat(id))
@@ -311,6 +272,7 @@ chatRoutes.delete("/chat/threads/:id", async (c) => {
   await closeMcpAppSession(id);
   if (getActiveChat(id))
     throw new DurableError(409, "chat_busy", "后台生成尚未确认停止，历史未删除。");
+  terminateSessionTerminals(id);
   deleteThread(id);
   return c.json({ deleted: true });
 });
@@ -359,7 +321,6 @@ chatRoutes.post("/chat/threads/:id/cancel", async (c) => {
   const id = c.req.param("id");
   const thread = getThread(id);
   if (thread && !getActiveChat(id)) {
-    await assertThreadScopeAccessible(thread, c.req.raw.headers);
     await closeMcpAppSession(id);
   }
   await cancelThreadChat(id, body);
@@ -382,7 +343,7 @@ chatRoutes.post("/chat/generations/:id/fork", async (c) => {
   return c.json(await forkChatGeneration(c.req.param("id"), options), 201);
 });
 chatRoutes.get("/chat/generations/:id/output", async (c) => {
-  const generation = await accessibleGeneration(c.req.param("id"), c.req.raw.headers);
+  const generation = await accessibleGeneration(c.req.param("id"));
   const after = c.req.query("after");
   if (after !== undefined && (!/^\d+$/.test(after) || !Number.isSafeInteger(Number(after))))
     return c.json({ error: "无效的输出序号。", code: "invalid_request" }, 400);
@@ -392,14 +353,14 @@ chatRoutes.get("/chat/generations/:id/output", async (c) => {
   return outputSse(subscribeNativeOutput(generation.id, c.req.raw.signal));
 });
 chatRoutes.get("/chat/generations/:id/items/:itemId/output", async (c) => {
-  const generation = await accessibleGeneration(c.req.param("id"), c.req.raw.headers);
+  const generation = await accessibleGeneration(c.req.param("id"));
   const item = getNativeOutput(generation.id)?.items.find((entry) => entry.id === c.req.param("itemId"));
   if (!item || item.type !== "command_execution")
     return c.json({ error: "找不到该命令。", code: "not_found" }, 404);
   return outputSse(subscribeCommandOutput(generation.id, item.id, c.req.raw.signal));
 });
 chatRoutes.post("/chat/generations/:id/requests/:requestId/respond", async (c) => {
-  const generation = await accessibleGeneration(c.req.param("id"), c.req.raw.headers);
+  const generation = await accessibleGeneration(c.req.param("id"));
   const response = nativeInteractionResponseSchema.parse(await c.req.json());
   respondNativeInteraction(generation.id, c.req.param("requestId"), response);
   return c.json({ accepted: true });

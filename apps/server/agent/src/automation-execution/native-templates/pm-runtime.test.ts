@@ -28,6 +28,7 @@ import { createPmAutomationBridge, preparedPmAutomationResult } from './pm-bridg
 import { createNativeTemplateState } from './state.ts';
 import { resolveNativeTemplateHandler } from './registry.ts';
 import type { NativeTemplateContext } from './ports.ts';
+import { chatOnlyEnvironment } from '../../durable/execution.testkit.ts';
 
 const at = '2026-11-01T08:00:00.000Z';
 const request = (): StudioExecutionRequest => ({ executionId: '11111111-1111-4111-8111-111111111111', requestId: '22222222-2222-4222-8222-222222222222', actorId: '33333333-3333-4333-8333-333333333333', workspaceId: '44444444-4444-4444-8444-444444444444', projectId: 'PRJ-001', definitionId: '55555555-5555-4555-8555-555555555555', definitionRevision: 1, config: { name: 'PM analysis test', description: '', projectId: 'PRJ-001', tags: [], templateId: 'pm-project-digest', templateVersion: '1.0.0', templateInputs: {}, action: { kind: 'template', templateId: 'pm-project-digest', arguments: {}, repositories: [], plugins: [], providerInstanceId: null, model: null, options: {}, timeoutSeconds: 30 }, trigger: { kind: 'manual' }, dailyLimit: 2, cooldownMinutes: 0 }, trigger: 'test', payload: null, issuedAt: at });
@@ -40,7 +41,7 @@ function context(req: StudioExecutionRequest): NativeTemplateContext {
   return { request: req, arguments: req.config.action.kind === 'template' ? req.config.action.arguments : {}, signal: new AbortController().signal, now: new Date(at), log() {}, state: createNativeTemplateState(req), requestJson: async () => { throw new Error('Unexpected external read'); }, fetchPublic: async () => { throw new Error('Unexpected public read'); }, runAgent: async () => { throw new Error('Deterministic handler must not invoke a model'); } };
 }
 function generation(req: StudioExecutionRequest, id = '66666666-6666-4666-8666-666666666666'): ChatGeneration {
-  return { id, threadId: 'scoped-thread', messageId: `answer:${id}`, parentId: null, status: 'completed', createdAt: at, endedAt: '2026-11-01T08:01:00.000Z', seq: 0, request: { id: 'scoped-thread', messages: [{ id: `question:${id}`, role: 'user', parts: [{ type: 'text', text: 'Investigate this task' }] }] }, providerInstanceId: 'fixture', providerInstanceRevision: 1, modelId: 'fixture', temperature: 0, executionSnapshot: { actorId: req.actorId, scope: { workspaceId: req.workspaceId, projectId: req.projectId }, workspaceName: 'workspace', projectName: 'project', path: '/unused-project-path' }, output: { id: `answer:${id}`, role: 'assistant', parts: [{ type: 'text', text: 'No verification claim is inferred from this prose.' }] }, pmReferences: [{ kind: 'issue', id: 'TASK-001', projectId: req.projectId, revision: 'task-r1', availability: 'available', reason: null, title: 'Actual linked task' }] };
+  return { id, threadId: 'scoped-thread', messageId: `answer:${id}`, parentId: null, status: 'completed', createdAt: at, endedAt: '2026-11-01T08:01:00.000Z', seq: 0, request: { id: 'scoped-thread', messages: [{ id: `question:${id}`, role: 'user', parts: [{ type: 'text', text: 'Investigate this task' }] }] }, providerInstanceId: 'fixture', providerInstanceRevision: 1, modelId: 'fixture', temperature: 0, executionSnapshot: { path: '/unused-private-scratch', environment: chatOnlyEnvironment() }, pmOperations: [{ actorId: req.actorId, target: { workspaceId: req.workspaceId, projectId: req.projectId } }], output: { id: `answer:${id}`, role: 'assistant', parts: [{ type: 'text', text: 'No verification claim is inferred from this prose.' }] }, pmReferences: [{ kind: 'issue', id: 'TASK-001', workspaceId: req.workspaceId, projectId: req.projectId, revision: 'task-r1', availability: 'available', reason: null, title: 'Actual linked task' }] };
 }
 let directory: string;
 const previousData = process.env.AGENT_WORKSPACE_DATA_DIR, previousSecret = process.env.PM_AUTOMATION_SERVICE_SECRET;
@@ -65,19 +66,20 @@ test('test evidence comes from recognized native runner receipts, not assistant 
 });
 
 test('Agent facts enforce actor/project scope and immutable actual task refs; current thread title/binding is not evidence', () => {
-  const req = request(); ensureThread('scoped-thread', 'TASK-999 is only a title', { workspaceId: req.workspaceId, projectId: req.projectId });
+  const req = request(); ensureThread('scoped-thread', 'TASK-999 is only a title');
   const run = generation(req); writeRecord('chat:generations', run.id, run);
   initializeNativeOutput(run.id, run.threadId);
   emitNativeOutput(run.id, { type: 'item.upsert', item: { id: 'machine', type: 'command_execution', status: 'completed', input: 'node --test actual.test.js', output: 'TAP version 13\nok 1 - actual assertion\n1..1\n', exitCode: 0 } });
   emitNativeOutput(run.id, { type: 'item.upsert', item: { id: 'diff', type: 'file_change', status: 'completed', changes: [{ path: 'src/actual.ts', operation: 'update' }] } });
   const foreign = generation({ ...req, actorId: '77777777-7777-4777-8777-777777777777' }, '77777777-7777-4777-8777-777777777777'); writeRecord('chat:generations', foreign.id, foreign);
-  const legacy = generation(req, '88888888-8888-4888-8888-888888888888'); delete legacy.executionSnapshot!.actorId; writeRecord('chat:generations', legacy.id, legacy);
+  const legacy = generation(req, '88888888-8888-4888-8888-888888888888'); delete legacy.pmOperations; writeRecord('chat:generations', legacy.id, legacy);
   const evidence = collectPmAgentEvidence(req);
   assert.deepEqual(evidence.executions.map(value => value.id), [run.id]);
   assert.equal(evidence.executions[0]?.taskId, 'TASK-001'); assert.equal(evidence.executions[0]?.taskRevision, 'task-r1');
   assert.equal(evidence.executions[0]?.testsComplete, true); assert.equal(evidence.executions[0]?.tests[0]?.name, 'actual assertion');
   assert.deepEqual(evidence.executions[0]?.diffPaths, ['src/actual.ts']);
-  assert.deepEqual(pmGenerationTaskAssociations({ ...run, pmReferences: [] }, req.projectId), []);
+  assert.deepEqual(pmGenerationTaskAssociations({ ...run, pmReferences: [] }, req), []);
+  assert.deepEqual(pmGenerationTaskAssociations(run, { workspaceId: 'another-workspace', projectId: req.projectId }), []);
   assert.ok(evidence.coverage.some(value => value.status === 'partial' && value.reason?.includes('actor identity')));
   assert.ok(evidence.sources.every(value => value.actorId === req.actorId && value.projectId === req.projectId));
 });
@@ -118,16 +120,18 @@ test('Claude original query runner enforces no tools only for a private trusted 
 });
 
 test('public thread custom metadata cannot forge PM analysis admission, and bound analysis uses empty private data cwd without project mapping', async () => {
-  const req = request(); ensureThread('claimed-analysis', 'Claim', { workspaceId: req.workspaceId, projectId: req.projectId });
+  const req = request(); ensureThread('claimed-analysis', 'Claim');
   updateThread('claimed-analysis', { custom: { automationExecutionId: req.executionId, pmAnalysis: true, nativeChildKey: 'claimed' } });
   assert.equal(pmAnalysisRequestForNativeThread('claimed-analysis', 'caller-key'), null);
-  assert.equal(await resolvePmAnalysisChatSnapshot('claimed-analysis', 'caller-key', { workspaceId: req.workspaceId, projectId: req.projectId }), null);
+  assert.equal(await resolvePmAnalysisChatSnapshot('claimed-analysis', 'caller-key'), null);
   writeRecord('pm-automation:executions', req.executionId, { request: req, fingerprint: automationRequestFingerprint(req), phase: 'running' });
   registerAutomationNativeThread(req, 'server-analysis', 'server-key', true);
   globalThis.fetch = async input => { assert.ok(new URL(String(input)).pathname.endsWith('/snapshot')); return Response.json(snapshot(req)); };
-  const scoped = await resolvePmAnalysisChatSnapshot('server-analysis', 'server-key', { workspaceId: req.workspaceId, projectId: req.projectId });
+  const scoped = await resolvePmAnalysisChatSnapshot('server-analysis', 'server-key');
   assert.ok(scoped?.path.startsWith(path.join(directory, 'pm-analysis', req.executionId))); assert.notEqual(scoped?.path, process.cwd());
-  await assert.rejects(resolvePmAnalysisChatSnapshot('server-analysis', 'server-key', { workspaceId: req.workspaceId, projectId: 'PRJ-002' }), /scope differs/);
+  assert.deepEqual(scoped?.environment, chatOnlyEnvironment());
+  globalThis.fetch = async () => Response.json(snapshot({ ...req, projectId: 'PRJ-002' }));
+  await assert.rejects(resolvePmAnalysisChatSnapshot('server-analysis', 'server-key'), /immutable analysis scope/);
 });
 
 test('PM result lost response reconciles original immutable identity across store restart, never a second model/result', async () => {
@@ -148,11 +152,11 @@ test('PM result lost response reconciles original immutable identity across stor
 });
 
 test('terminal signal outbox is durable/idempotent and suppresses legacy or automation-origin sessions', () => {
-  const req = request(); ensureThread('scoped-thread', 'Normal Chat', { workspaceId: req.workspaceId, projectId: req.projectId });
+  const req = request(); ensureThread('scoped-thread', 'Normal Chat');
   const run = generation(req); writeRecord('chat:generations', run.id, run);
   queuePmAgentTerminal(run); queuePmAgentTerminal(run); closeStore();
   assert.equal(listRecords('pm-automation:agent-signal-outbox').length, 1);
-  const legacy = generation(req, '99999999-9999-4999-8999-999999999999'); delete legacy.executionSnapshot!.actorId; queuePmAgentTerminal(legacy);
+  const legacy = generation(req, '99999999-9999-4999-8999-999999999999'); delete legacy.pmOperations; queuePmAgentTerminal(legacy);
   updateThread('scoped-thread', { custom: { automationExecutionId: req.executionId } }); queuePmAgentTerminal({ ...run, id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' });
   assert.equal(listRecords('pm-automation:agent-signal-outbox').length, 1);
   updateThread('scoped-thread', { custom: {} });
@@ -160,6 +164,18 @@ test('terminal signal outbox is durable/idempotent and suppresses legacy or auto
   registerAutomationNativeThread(req, run.threadId, 'server-automation-origin');
   queuePmAgentTerminal({ ...run, id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', request: { ...run.request, idempotencyKey: 'server-automation-origin' } });
   assert.equal(listRecords('pm-automation:agent-signal-outbox').length, 1);
+});
+test('one ordinary Session emits independent PM receipts only for its explicit authorized operation targets', () => {
+  const req = request(); ensureThread('scoped-thread', 'Independent Session');
+  const run = generation(req);
+  run.pmOperations!.push({ actorId: req.actorId, target: { workspaceId: req.workspaceId, projectId: 'PRJ-002' } });
+  run.pmOperations!.push(run.pmOperations![0]!);
+  writeRecord('chat:generations', run.id, run);
+  queuePmAgentTerminal(run);
+  const events = listRecords<{ event: { projectId: string; eventId: string } }>('pm-automation:agent-signal-outbox');
+  assert.deepEqual(events.map(record => record.event.projectId).sort(), ['PRJ-001', 'PRJ-002']);
+  assert.equal(new Set(events.map(record => record.event.eventId)).size, 2);
+  assert.equal(collectPmAgentEvidence({ ...req, projectId: 'PRJ-002' }).executions[0]?.taskId, null, 'TASK-001 from the first PM target is never joined to the second');
 });
 
 test('explicit PR ref mismatch is reported rather than silently capturing another branch', async () => {

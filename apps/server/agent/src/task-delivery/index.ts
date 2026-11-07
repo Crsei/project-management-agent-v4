@@ -11,12 +11,14 @@ import type { UIMessage } from 'ai';
 import { deliveryActionSchema, deliveryScopeSchema, prepareDeliverySchema } from '../../../../../packages/contracts/src/task-code-delivery.ts';
 import { DeliveryError, TaskCodeDeliveryService } from '../../../../../packages/application/src/task-code-delivery.ts';
 import { DurableError } from '../durable/errors.ts';
-import { getActiveChat, listChatGenerations, submitChat } from '../durable/chat-runtime.ts';
+import { getActiveChat, getChatGeneration, listChatGenerations, submitChat } from '../durable/chat-runtime.ts';
 import { ensureThread, getThread, getThreadBranch, updateThread } from '../durable/threads.ts';
-import { deliveryStore, deliveryTaskRevision } from './binding.ts';
+import { deliveryStore, deliveryTaskRevision, resolveChatExecutionScope } from './binding.ts';
 import { authorizeDelivery } from './authority.ts';
 import { git, preflightPrepare, reconcileCommit, commitTree, prepareWorktree, pushTree, readRemoteHead, readTree, testTree, verifyWorktree } from './git.ts';
 import { DeliveryGitHub } from './github.ts';
+import type { TaskCodeDelivery } from '../../../../../packages/contracts/src/task-code-delivery.ts';
+import { executionSelectionSchema } from '@agent-workspace/contracts/chat';
 
 const active = new Set<string>();
 const github = new DeliveryGitHub();
@@ -43,18 +45,33 @@ export function deliveryService(headers: Headers) {
     }, verify: verifyWorktree, tree: v => readTree(v), test: testTree, commit: commitTree, push: pushTree, remoteHead: readRemoteHead,
     findPr: v => github.find(v), createPr: v => github.create(v), feedback: v => github.feedback(v),
     busy: v => !!getActiveChat(v.threadId),
-    generation: v => { const generation = listChatGenerations(v.threadId).find(g => g.request.idempotencyKey === v.generationKey); return generation ? { id: generation.id, status: generation.status } : null; },
+    generation: v => {
+      const receipt = v.generationId ? getChatGeneration(v.generationId) : null;
+      const generation = receipt && [v.threadId, ...(v.previousThreadIds ?? [])].includes(receipt.threadId) && receipt.request.idempotencyKey === v.generationKey
+        ? receipt : listChatGenerations(v.threadId).find(g => g.request.idempotencyKey === v.generationKey);
+      return generation ? { id: generation.id, status: generation.status } : null;
+    },
     develop: async (v, providerInstanceId, model) => {
-      ensureThread(v.threadId, `${v.taskId} · ${v.title}`, { workspaceId: v.workspaceId, projectId: v.projectId }, { taskId: v.taskId, entityId: null });
+      const selection = executionSelectionSchema.safeParse(v.executionSelection);
+      if (!selection.success || selection.data.agentWorkspaceId === null) throw new DurableError(412, 'session_cutover_required', '交付缺少新版 Agent 目录选择；请明确创建新的 Session。');
+      ensureThread(v.threadId, `${v.taskId} · ${v.title}`, selection.data);
       const thread = getThread(v.threadId)!;
       const next = updateThread(v.threadId, { revision: thread.revision, settings: { ...thread.settings, providerInstanceId, model, modelOptions: [] } });
       const request = await submitChat({ id: v.threadId, idempotencyKey: v.generationKey!, trigger: 'submit-message', messages: [
         ...getThreadBranch(v.threadId).map(entry => ({ id: entry.id, ...entry.content }) as UIMessage),
         { id: crypto.randomUUID(), role: 'user', parts: [{ type: 'text', text: `${v.developmentPurpose === 'analysis' ? '只读分析以下任务与代码，输出实现建议、风险、验收标准草稿；不要修改文件或运行有写入副作用的命令。' : '在本次独立工作目录中开发并验证下面任务。'}遵守仓库 AGENTS.md。不要提交、推送、创建 PR、合并、部署或修改 PM 任务状态；这些步骤由用户在任务交付入口分别确认。不要读取或输出凭据。先检查工作目录与现有改动，不覆盖他人内容。完成后说明代码变更、实际运行的验证、失败和未验证项。\n\n任务 ${v.taskId}（版本 ${v.taskRevision}）\n${v.title}\n\n${v.description}\n\n本次节点要求：${v.developmentInstruction ?? ''}` }] },
-      ], config: { providerInstanceId, modelName: model, threadSettingsRevision: next.revision } }, undefined, headers);
+      ], pmReferences: [{ workspaceId: v.workspaceId, projectId: v.projectId, kind: 'issue', id: v.taskId, revision: deliveryTaskRevision(v) }],
+      config: { providerInstanceId, modelName: model, threadSettingsRevision: next.revision } }, undefined, headers);
       return request.id;
     },
   }, active);
+}
+export async function createDeliverySession(value: TaskCodeDelivery, headers: Headers): Promise<void> {
+  const selection = executionSelectionSchema.safeParse(value.executionSelection);
+  if (!selection.success || selection.data.agentWorkspaceId === null) throw new DurableError(412, 'agent_workspace_required', 'Select an Agent Workspace before creating a Session.');
+  ensureThread(value.threadId, `${value.taskId} · ${value.title}`, selection.data);
+  const snapshot = await resolveChatExecutionScope(getThread(value.threadId)!, headers, 'inspect');
+  updateThread(value.threadId, { executionEnvironment: snapshot.environment });
 }
 export const taskDeliveryRoutes = new Hono();
 taskDeliveryRoutes.use('/task-deliveries/*', bodyLimit({ maxSize: 32 * 1024 }));
@@ -80,7 +97,9 @@ taskDeliveryRoutes.post('/task-deliveries/:id/actions', async c => {
     if (value) await authorizeDelivery(value, true, c.req.raw.headers);
     throw new DeliveryError('workflow_managed', '此交付由工作流管理，不能手动穿插修改。');
   }
-  return c.json(await deliveryService(c.req.raw.headers).act(id, action));
+  const result = await deliveryService(c.req.raw.headers).act(id, action);
+  if (action.action === 'new-session') await createDeliverySession(result, c.req.raw.headers);
+  return c.json(result);
 });
 
 async function authorizedPreview(id: string, write: boolean, headers: Headers, stopping = false) {

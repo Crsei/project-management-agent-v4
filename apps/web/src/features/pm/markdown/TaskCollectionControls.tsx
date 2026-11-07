@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Bot, Braces, CalendarDays, ChartGantt, CircleHelp, Columns3, List, ListFilter, MoreHorizontal, Network, PanelLeft, Plus, Rows3, Save, Search, Table2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Braces, CalendarDays, ChartGantt, CircleHelp, Columns3, List, ListFilter, MoreHorizontal, Network, PanelLeft, Plus, Rows3, Save, Search, Table2, X } from 'lucide-react';
 import { workflowFor } from '@pm-schema';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -10,6 +10,7 @@ import TaskFilterCard from './TaskFilterCard';
 import { taskFilterFieldLabel, taskFilterOperatorLabel, taskFilterOptions, taskFilterValueSummary } from './task-filter';
 import type { WorkspaceProps } from './workspace';
 import personalStyles from './task-personal-chrome.module.css';
+import { AgentAssistantMenu } from '../agent/agent-assistant-menu';
 
 const scopes: Record<TaskScope, [string, string]> = { all: ['All tasks', '全部任务'], mine: ['My Tasks', '我的任务'], important: ['Important / Watching', '重要 / 我关注的'] };
 type MenuLayout = Exclude<CollectionLayout, 'tree'>;
@@ -17,7 +18,7 @@ const layouts: [MenuLayout, string, string][] = [['list', 'List', '列表'], ['k
 const layoutIcons = { list: List, kanban: Columns3, table: Table2, calendar: CalendarDays, gantt: ChartGantt, graph: Network };
 const sortOptions: [string, string, string][] = [['id', 'Task ID', '任务编号'], ['title', 'Title', '标题'], ['priority', 'Priority', '优先级'], ['status', 'Status', '状态'], ['due', 'Due date', '截止日期']];
 
-type TaskWorkspaceProps = Pick<WorkspaceProps, 'en' | 'projectId' | 'taskContext' | 'onNewPage' | 'onScope' | 'onPresentation' | 'onSavedView' | 'onAgent'>;
+type TaskWorkspaceProps = Pick<WorkspaceProps, 'en' | 'projectId' | 'taskContext' | 'onNewPage' | 'onScope' | 'onPresentation' | 'onSavedView'>;
 interface Props extends TaskWorkspaceProps {
   controller: WorkspaceController;
   title: string;
@@ -34,7 +35,7 @@ interface Props extends TaskWorkspaceProps {
 }
 
 /** Task-only chrome; generic entities retain their existing collection workspace. */
-export default function TaskCollectionControls({ controller: c, en, projectId, taskContext, title, filtersOpen, onFiltersOpenChange, explorerOpen, onExplorerOpenChange, advancedSplit, onAdvancedSplitChange, onHelp, onNewPage, onScope, onPresentation, onSavedView, onAgent, onToolbarTargetChange, onGraphScopeTargetChange, onGraphToggleTargetChange }: Props) {
+export default function TaskCollectionControls({ controller: c, en, projectId, taskContext, title, filtersOpen, onFiltersOpenChange, explorerOpen, onExplorerOpenChange, advancedSplit, onAdvancedSplitChange, onHelp, onNewPage, onScope, onPresentation, onSavedView, onToolbarTargetChange, onGraphScopeTargetChange, onGraphToggleTargetChange }: Props) {
   const panelId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
   const graph = c.prefs.layout === 'graph';
@@ -60,7 +61,7 @@ export default function TaskCollectionControls({ controller: c, en, projectId, t
   const personalScope = !projectId && taskContext.scope === 'mine';
   const personalChrome = personalScope && (c.prefs.layout === 'list' || c.prefs.layout === 'calendar');
   const agentProject = projectId || c.prefs.project || undefined;
-  const activeFilters = c.prefs.conditions.filter(condition => condition.values.length).length + Number(!!c.prefs.project && !projectId) + Number(c.prefs.archived !== 'exclude') + Number(!!c.advancedView);
+  const activeFilters = c.prefs.conditions.filter(condition => condition.values.length).length + Number(!!c.prefs.project && !projectId) + Number(c.prefs.archived !== 'exclude') + Number(!!c.advancedView) + Number(c.pendingChangesOnly);
   const activeGroup = c.config.group_by || 'status';
   const groupLabel = activeGroup === 'status' ? t('Status', '状态') : activeGroup === 'priority' ? t('Priority', '优先级') : `${t('Saved field', '保存的字段')}: ${activeGroup}`;
   const sortLabel = sortOptions.find(([value]) => value === c.prefs.sort)?.[en ? 1 : 2] ?? c.prefs.sort;
@@ -70,7 +71,7 @@ export default function TaskCollectionControls({ controller: c, en, projectId, t
     if (view) c.useView(view, view); else c.clearView();
     onSavedView(id);
   };
-  const agentEntry = <button type="button" className="secondary-button task-agent-entry" data-testid="agent-assistant" aria-label={agentProject ? t('Open the Agent assistant and show this project as context', '打开 Agent 助手并显示当前项目上下文') : t('Open the Agent assistant for this workspace', '打开工作区 Agent 助手')} title={agentProject ? t('The project is shown as entry context; messages do not include project data automatically', '项目仅作为入口上下文显示；消息不会自动携带项目数据') : t('No project selected; open the workspace Agent chat', '未选择项目，打开工作区 Agent 对话')} onClick={() => onAgent(agentProject)}><Bot size={15} aria-hidden="true" /><span className="task-agent-entry-label">{t('Agent assistant', 'Agent 助手')}</span></button>;
+  const agentEntry = <AgentAssistantMenu projectId={agentProject} className="task-agent-entry" disabledReason={!c.canWrite || c.configurationInvalid || c.accessError || c.query.error || c.writesBlocked ? t('PM writes are currently locked; resolve access, configuration or the original pending request first.', 'PM 当前为只读或写入已锁定；请先核对权限、配置或原待处理请求。') : undefined} />;
   const searchControl = <label className="task-search task-heading-search">
     <Search size={14} aria-hidden="true" />
     <input ref={searchRef} type="search" aria-label={t('Search tasks', '搜索任务')} value={c.search} onChange={event => c.setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && c.search) { c.setSearch(''); event.stopPropagation(); } }} placeholder={t('Search tasks…', '搜索任务…')} />
@@ -79,6 +80,7 @@ export default function TaskCollectionControls({ controller: c, en, projectId, t
   const filterControl = <Popover open={filtersOpen} onOpenChange={onFiltersOpenChange}>
     <PopoverTrigger render={<button type="button" className={`task-toolbar-button task-filter-trigger ${filtersOpen ? 'active' : ''}`} data-testid="view-filters" aria-controls={panelId} />}><ListFilter size={14} aria-hidden="true" /><span>{t('Filter', '筛选')}</span>{activeFilters > 0 && <span className="task-active-filter-count">{activeFilters}</span>}</PopoverTrigger>
     <PopoverContent id={panelId} className="task-filter-popover" align="end" aria-label={t('Task filters', '任务筛选')}>
+      <label className="task-attention-filter"><input type="checkbox" checked={c.pendingChangesOnly} onChange={event => c.setPendingChangesOnly(event.target.checked)} /> {t('Pending review only', '仅待审阅变更')}</label>
       <TaskFilterCard controller={c} en={en} projectId={projectId} today={taskContext.today} actors={actors} onClose={() => onFiltersOpenChange(false)} onSavedView={onSavedView} />
     </PopoverContent>
   </Popover>;
@@ -123,7 +125,8 @@ export default function TaskCollectionControls({ controller: c, en, projectId, t
     {timeline && <div className="collection-toolbar task-controls task-timeline-controls" role="toolbar" aria-label={t('Timeline tools', '时间线工具')}>
       <div ref={onToolbarTargetChange} className="task-timeline-toolbar-target" />
     </div>}
-    {(c.prefs.conditions.some(condition => condition.values.length) || (!!c.prefs.project && !projectId) || c.prefs.archived !== 'exclude' || c.advancedView || c.activeView) && <div className="task-active-filters task-chipsbar" aria-label={t('Active task filters', '当前任务筛选')}>
+    {(c.pendingChangesOnly || c.prefs.conditions.some(condition => condition.values.length) || (!!c.prefs.project && !projectId) || c.prefs.archived !== 'exclude' || c.advancedView || c.activeView) && <div className="task-active-filters task-chipsbar" aria-label={t('Active task filters', '当前任务筛选')}>
+      {c.pendingChangesOnly && <div className="task-active-query"><span>{t('Pending review only', '仅待审阅变更')}</span><button type="button" className="task-clear-filter" aria-label={t('Clear pending review filter', '清除待审阅变更筛选')} onClick={() => c.setPendingChangesOnly(false)}><X size={12} aria-hidden="true" /></button></div>}
       {!projectId && c.prefs.project && <div className="task-active-query"><span>{t('Project', '项目')}: {c.projects.find(file => file.id === c.prefs.project)?.entity.title ?? c.prefs.project}</span><button type="button" className="task-clear-filter" aria-label={t('Clear project filter', '清除项目筛选')} onClick={() => c.preference('project', '')}><X size={12} aria-hidden="true" /></button></div>}
       {c.prefs.conditions.map((condition, index) => {
         if (!condition.values.length) return null;

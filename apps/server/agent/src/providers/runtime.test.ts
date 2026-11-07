@@ -10,6 +10,7 @@ import { bindPmProviderExecutionService } from "./native.ts";
 import { createProviderInstance, getStoredInstance, updateProviderInstance } from "./instances.ts";
 import { resolveProviderRuntime, runNativeRuntime } from "./runtime.ts";
 import { closeStore } from "../durable/store.ts";
+import { agentWorkspaceEnvironment } from "../durable/execution.testkit.ts";
 
 test("runtime preserves trusted Chat identity and rejects PM bridge without it before native dispatch", async () => {
   const directory = await mkdtemp(join(tmpdir(), "native-runtime-identity-"));
@@ -20,7 +21,7 @@ test("runtime preserves trusted Chat identity and rejects PM bridge without it b
     codexAdapter.check = async () => ({ installation: { status: "installed" }, authentication: "authenticated", nativeSessionReady: true, models: [], methods: [], canLogout: false });
     updateProviderInstance("codex", { customModels: [{ id: "fixture", label: "Fixture" }] }, getStoredInstance("codex")!.revision);
     const runtime = await resolveProviderRuntime({ providerInstanceId: "codex", modelName: "fixture" });
-    const execution = { threadId: "trusted-thread", generationId: "trusted-generation", messageId: "trusted-message", scope: { workspaceId: "workspace", projectId: null } };
+    const execution = { threadId: "trusted-thread", generationId: "trusted-generation", messageId: "trusted-message", environment: agentWorkspaceEnvironment(directory, true) };
     let calls = 0;
     codexAdapter.run = async (context, options) => {
       calls++;
@@ -30,6 +31,11 @@ test("runtime preserves trusted Chat identity and rejects PM bridge without it b
       return { text: "native output" };
     };
     const pmToolBridge = { command: "/node", args: ["/agent-tools", "http://127.0.0.1/generation"] };
+    // Deliberately bypass the typed caller contract to exercise the runtime boundary.
+    // @ts-expect-error Server-resolved cwd is required even for plain native calls.
+    await assert.rejects(runNativeRuntime(runtime, { prompt: "once" }), { code: "execution_environment_required", status: 412 });
+    for (const cwd of ["", "relative-directory", "/invalid\0directory"])
+      await assert.rejects(runNativeRuntime(runtime, { prompt: "once", cwd }), { code: "execution_environment_required", status: 412 });
     await assert.rejects(runNativeRuntime(runtime, { prompt: "once", cwd: directory, pmToolBridge }), { code: "scope_required", status: 412 });
     assert.equal(calls, 0);
     await assert.rejects(runNativeRuntime(runtime, { prompt: "once", cwd: directory, pmToolBridge, execution }), { code: "scope_required", status: 412 });

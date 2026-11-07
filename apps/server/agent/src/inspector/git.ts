@@ -8,7 +8,7 @@ import type {
   GitStatusResponse,
   InspectorErrorBody,
 } from "@agent-workspace/contracts/inspector";
-import { InspectorPathError, resolveInsideRoot, toPosix } from "./paths.ts";
+import { InspectorPathError, resolveInsideRoot } from "./paths.ts";
 import { DurableError } from "../durable/errors.ts";
 import { resolveInspectorRoot } from "./scope.ts";
 
@@ -55,7 +55,7 @@ async function repositoryRoot(root: string): Promise<string | null> {
   try {
     const { stdout } = await runGit(["rev-parse", "--show-toplevel"], root);
     const resolved = stdout.trim();
-    return resolved.length > 0 ? resolved : null;
+    return resolved.length > 0 && path.resolve(resolved) === path.resolve(root) ? resolved : null;
   } catch {
     return null;
   }
@@ -170,33 +170,17 @@ async function readStatus(root: string): Promise<GitStatusResponse> {
     return { repo: false, ahead: 0, behind: 0, files: [], truncated: false };
   }
   const { stdout } = await runGit(
-    // Limit a nested project to its own subtree; for a repo root this is the whole repo.
+    // Only an exact selected repository root reaches this command.
     ["status", "--porcelain=v1", "-z", "--branch", "--untracked-files=all", "--", "."],
     root,
   );
   const parsed = parseStatus(stdout);
-  // Porcelain paths are repository-relative even when git runs in a subdirectory.
-  // The UI and the diff endpoint use project-relative paths, so normalize and drop
-  // entries outside the inspected project (a no-op when the roots are equal).
-  const files: GitChangedFile[] = [];
-  for (const file of parsed.files) {
-    const relative = toPosix(path.resolve(repoRoot, file.path), root);
-    if (relative === ".." || relative.startsWith(`..${path.sep}`)) continue;
-    const normalized: GitChangedFile = { ...file, path: relative };
-    if (file.oldPath !== undefined) {
-      delete normalized.oldPath;
-      const oldRelative = toPosix(path.resolve(repoRoot, file.oldPath), root);
-      if (oldRelative !== ".." && !oldRelative.startsWith(`..${path.sep}`))
-        normalized.oldPath = oldRelative;
-    }
-    files.push(normalized);
-  }
   const response: GitStatusResponse = {
     repo: true,
     root,
     ahead: parsed.ahead,
     behind: parsed.behind,
-    files,
+    files: parsed.files,
     truncated: false,
   };
   if (parsed.branch !== undefined) response.branch = parsed.branch;

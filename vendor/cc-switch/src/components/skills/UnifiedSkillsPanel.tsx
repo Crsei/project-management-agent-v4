@@ -75,7 +75,7 @@ import { useSkillInstallTargets } from "./useSkillInstallTargets";
 import { describeRepoFailures } from "./repoFailures";
 import type { ZipSkippedSkill } from "../../lib/api/skills";
 
-type SkillsView = "installed" | "discover";
+type SkillsView = "installed" | "discover" | "config";
 type StatusFilter = "all" | "updates" | "none" | `app:${AppId}`;
 
 interface WriteFailure {
@@ -101,6 +101,8 @@ export interface SkillsInstalledPresentation {
   onClearUpdateFilter: () => void;
   failures: Record<string, WriteFailure>;
   onToggle: (id: string, app: AppId, enabled: boolean) => void;
+  /** Completes after native writes and reconciliation; per-assignment failures stay visible. */
+  onBulkToggle: (ids: string[], app: AppId, enabled: boolean) => Promise<void>;
   onUpdate: (id: string) => void;
   onUninstall: (id: string) => void;
   onOpenDirectory: (skill: InstalledSkill) => void;
@@ -113,8 +115,12 @@ interface UnifiedSkillsPanelProps {
   initialView?: SkillsView;
   onInteractionBlockedChange?: (blocked: boolean) => void;
   onNavigationBlockedChange?: (blocked: boolean) => void;
-  renderInstalled?: (state: SkillsInstalledPresentation) => React.ReactNode;
+  renderInstalled?: (state: SkillsInstalledPresentation, mode?: "catalog" | "config") => React.ReactNode;
   renderDiscovery?: React.ComponentProps<typeof SkillsPage>["renderCards"];
+  /** OpenHands uses its own page header and adds a Config tab. */
+  presentation?: "default" | "openhands";
+  renderHeader?: (parts: { actions: React.ReactNode; appIds: AppId[]; installedCount: number; assignedCount: number; view: SkillsView }) => React.ReactNode;
+  presentationLabels?: { catalog?: string; discover?: string; config?: string };
 }
 
 function isEditableTarget(target: EventTarget | null) {
@@ -142,7 +148,11 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
   onNavigationBlockedChange,
   renderInstalled,
   renderDiscovery,
+  presentation = "default",
+  renderHeader,
+  presentationLabels,
 }) => {
+  const openhandsPresentation = presentation === "openhands";
   const { t, i18n } = useTranslation();
   const BACKUP_DIR = t("SKILLS_PM$BACKUP_STORAGE");
   const appIds = useVisibleAppIds(SKILLS_APP_IDS);
@@ -921,6 +931,7 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
 
   // ─── 渲染：页头 ─────────────────────────────────────────────────────
   const nInstalled = installedSkills.length;
+  const assignedSkillCount = installedSkills.filter(skill => appIds.some(app => Boolean(skill.apps[app]))).length;
   const nUpdates = applicableSkillUpdates.length;
   const nUnmanaged = unmanagedSkills?.length ?? 0;
   const loadOk = !isLoading && !isError;
@@ -934,53 +945,7 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
     setStatusFilter("updates");
   };
 
-  const header = (
-    <AppPageHeader
-      className="oh-skills-source-header"
-      icon={<SkillsIcon size={20} />}
-      title="Skills"
-      titleExtra={
-        <>
-          <HelpTip title={t("skillsPage.helpTitle")}>
-            {t("skillsPage.help")}
-          </HelpTip>
-          {renderInstalled && (updateProgress || isCheckingUpdates) ? <span role="status" className="flex items-center gap-1.5 text-caption text-fg-2">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {updateProgress ? t("skillsPage.updatingProgress", {
-              done: Math.min(updateProgress.done + 1, updateProgress.total),
-              total: updateProgress.total,
-            }) : t("skills.checkingUpdates")}
-          </span> : null}
-          {/* 已安装数量只写在页签上；页头只留可点的「N 个可更新」 */}
-          {loadOk && nUpdates > 0 && (
-            <span className="ms-2 flex items-center whitespace-nowrap text-body">
-              {/* 可点：把表格筛到可更新的项，再点恢复；「全部更新」在搜索框旁 */}
-              <HoverTip
-                content={
-                  updatesOnly
-                    ? t("skillsPage.headerUpdatesClear")
-                    : t("skillsPage.headerUpdatesShow")
-                }
-              >
-                <button
-                  type="button"
-                  aria-pressed={updatesOnly}
-                  onClick={toggleUpdatesFilter}
-                  className={cn(
-                    "-mx-1 inline-flex h-6 items-center rounded-control px-1.5 text-body font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    updatesOnly
-                      ? "bg-selected text-fg-1"
-                      : "text-fg-2 underline decoration-border-strong underline-offset-[3px] hover:bg-subtle hover:text-fg-1",
-                  )}
-                >
-                  {t("skillsPage.headerUpdates", { count: nUpdates })}
-                </button>
-              </HoverTip>
-            </span>
-          )}
-        </>
-      }
-      actions={
+  const headerActions = (
         <>
           {view === "installed" && renderInstalled ? <InstallToPopover
             label={targets.length ? targets.length <= 2 ? names(targets) : t("skillsPage.installTo.many", { first: APP_DISPLAY_NAME[targets[0]], count: targets.length }) : t("SKILLS_PM$NONE")}
@@ -1060,7 +1025,57 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
             </DropdownMenuContent>
           </DropdownMenu>
         </>
+  );
+
+  const header = renderHeader
+    ? renderHeader({ actions: headerActions, appIds, installedCount: nInstalled, assignedCount: assignedSkillCount, view })
+    : (
+    <AppPageHeader
+      className="oh-skills-source-header"
+      icon={<SkillsIcon size={20} />}
+      title="Skills"
+      titleExtra={
+        <>
+          <HelpTip title={t("skillsPage.helpTitle")}>
+            {t("skillsPage.help")}
+          </HelpTip>
+          {renderInstalled && (updateProgress || isCheckingUpdates) ? <span role="status" className="flex items-center gap-1.5 text-caption text-fg-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {updateProgress ? t("skillsPage.updatingProgress", {
+              done: Math.min(updateProgress.done + 1, updateProgress.total),
+              total: updateProgress.total,
+            }) : t("skills.checkingUpdates")}
+          </span> : null}
+          {/* 已安装数量只写在页签上；页头只留可点的「N 个可更新」 */}
+          {loadOk && nUpdates > 0 && (
+            <span className="ms-2 flex items-center whitespace-nowrap text-body">
+              {/* 可点：把表格筛到可更新的项，再点恢复；「全部更新」在搜索框旁 */}
+              <HoverTip
+                content={
+                  updatesOnly
+                    ? t("skillsPage.headerUpdatesClear")
+                    : t("skillsPage.headerUpdatesShow")
+                }
+              >
+                <button
+                  type="button"
+                  aria-pressed={updatesOnly}
+                  onClick={toggleUpdatesFilter}
+                  className={cn(
+                    "-mx-1 inline-flex h-6 items-center rounded-control px-1.5 text-body font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    updatesOnly
+                      ? "bg-selected text-fg-1"
+                      : "text-fg-2 underline decoration-border-strong underline-offset-[3px] hover:bg-subtle hover:text-fg-1",
+                  )}
+                >
+                  {t("skillsPage.headerUpdates", { count: nUpdates })}
+                </button>
+              </HoverTip>
+            </span>
+          )}
+        </>
       }
+      actions={headerActions}
     />
   );
 
@@ -1085,14 +1100,20 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
       items={[
         {
           value: "installed",
-          label: loadOk
-            ? t("skillsPage.viewInstalledCount", { count: nInstalled })
-            : t("skillsPage.viewInstalled"),
+          label: openhandsPresentation
+            ? <>{presentationLabels?.catalog ?? "Catalog"}<span className="oh-skills-tab-count">{nInstalled}</span></>
+            : loadOk
+              ? t("skillsPage.viewInstalledCount", { count: nInstalled })
+              : t("skillsPage.viewInstalled"),
         },
         {
           value: "discover",
-          label: t("skillsPage.viewDiscover"),
+          label: openhandsPresentation ? presentationLabels?.discover ?? "Discover" : t("skillsPage.viewDiscover"),
         },
+        ...(openhandsPresentation ? [{
+          value: "config" as const,
+          label: <>{presentationLabels?.config ?? "Config"}<span className="oh-skills-tab-count">{assignedSkillCount}</span></>,
+        }] : []),
       ]}
       trailing={<div ref={setTabsTrailingSlot} className="flex items-center" />}
     />
@@ -1151,6 +1172,17 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
         onClearUpdateFilter: () => setStatusFilter("all"),
         failures: fails,
         onToggle: (id, app, enabled) => { void writeOne(id, app, enabled); },
+        onBulkToggle: async (ids, app, enabled) => {
+          if (!appIds.includes(app)) return;
+          const selectedIds = new Set(ids);
+          const changedIds = installedSkills
+            .filter(skill => selectedIds.has(skill.id) && Boolean(skill.apps[app]) !== enabled)
+            .map(skill => skill.id);
+          if (changedIds.length) await bulkToggle(changedIds, app, enabled, {
+            on: "appMatrix.toast.enabled",
+            off: "skillsPage.toast.disabledSelection",
+          });
+        },
         onUpdate: (id) => { void updateIds([id]); },
         onUninstall: (id) => {
           if (!writeLockRef.current && !interactionBlocked) {
@@ -1160,7 +1192,7 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
         onOpenDirectory: (skill) => { void openDirectory(skill); },
         onOpenDocs: (skill) => { void openDocs(skill); },
         onOpenStorage: () => setStorageOpen(true),
-      });
+      }, view === "config" ? "config" : "catalog");
     }
     if (nInstalled === 0) {
       return (
@@ -1524,7 +1556,7 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
     <>
       {header}
       <div id="main-content" className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 px-6 pt-1">{viewTabs}</div>
+        <div className={cn("shrink-0 px-6 pt-1", openhandsPresentation && "oh-skills-view-tabs-wrap")}>{viewTabs}</div>
         {/* 两段打开过就一直挂着，切回来不重新加载；不在看的那段只是隐藏 */}
         {discoverMounted && (
           <div
@@ -1554,7 +1586,7 @@ const UnifiedSkillsPanel: React.FC<UnifiedSkillsPanelProps> = ({
         <div
           className={cn(
             "min-h-0 flex-1 flex-col",
-            view === "installed" ? "flex" : "hidden",
+            view !== "discover" ? "flex" : "hidden",
           )}
         >
           {viewTabsTrailing(

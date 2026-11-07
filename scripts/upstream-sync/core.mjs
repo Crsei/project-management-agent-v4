@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { canonical, cleanEnvironment, directory, encode, file, git, identity, inside, listTree, mergeBytes, publish, readBlob, readObjects, relative, repository, resolveCommit, run, sha256, sourceRepository, walk } from './io.mjs';
+import { assertRetiredTargetsAbsent, validateAdaptationStructure } from '../../vendor/t3code/scripts/mcp-skills-adaptations.mjs';
 
 export const toolRoot = fileURLToPath(new URL('../../', import.meta.url));
 const profiles = new Set(['t3code', 'cc-switch']);
@@ -104,10 +105,15 @@ async function bindingsFor(root, project) {
       const name = `vendor/${fork}/${leaf}`;
       const input = await file(root, name, { optional: true });
       if (!input) continue;
+      const document = JSON.parse(input.bytes);
+      const retirements = fork === 't3code' && leaf === 'mcp-skills-adaptations.json' ? validateAdaptationStructure(document) : [];
+      await assertRetiredTargetsAbsent(root, retirements);
+      const retired = new Set(retirements);
       const references = new Map();
       const visit = value => {
         if (Array.isArray(value)) { for (const item of value) visit(item); return; }
         if (!value || typeof value !== 'object') return;
+        if (retired.has(value)) return;
         // Supplemental input/license paths are relative to an immutable source
         // commit, not PM files. Its destination records are still host outputs.
         const sourceIdentity = fullCommit(value.commit);
@@ -122,7 +128,7 @@ async function bindingsFor(root, project) {
         if (sourceIdentity) return;
         for (const child of Object.values(value)) if (child && typeof child === 'object') visit(child);
       };
-      visit(JSON.parse(input.bytes));
+      visit(document);
       bindings.push({ path: name, sha256: sha256(input.bytes), references: [...references.values()].sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0) });
     }
   }
@@ -528,7 +534,8 @@ export async function runIsolatedVerification(candidate, commands) {
       results.push({ id: command.id, command: command.command, args: command.args, started, status: 'passed', stdoutSha256: sha256(result.stdout), stderrSha256: sha256(result.stderr) });
     } catch (error) {
       const prerequisite = /(?:bwrap:|execvp).*(?:No such file|Operation not permitted|namespace|Permission denied)/is.test(error.message);
-      results.push({ id: command.id, command: command.command, args: command.args, started, status: prerequisite ? 'blocked' : 'failed', message: error.message });
+      const stdout = error.result?.stdout ?? Buffer.alloc(0), stderr = error.result?.stderr ?? Buffer.alloc(0);
+      results.push({ id: command.id, command: command.command, args: command.args, started, status: prerequisite ? 'blocked' : 'failed', message: error.message, stdoutSha256: sha256(stdout), stderrSha256: sha256(stderr), stdoutExcerpt: stdout.toString('utf8').slice(0, 4096), stderrExcerpt: stderr.toString('utf8').slice(0, 4096) });
       break;
     }
   }
@@ -558,6 +565,14 @@ export async function verify({ candidate, scope = 'provenance' }) {
     for (const command of commands) if (typeof command.command !== 'string' || !Array.isArray(command.args) || command.args.some(arg => typeof arg !== 'string')) throw new Error('Invalid trusted verification command');
     try { checks.push(...await runIsolatedVerification(candidate, commands)); }
     catch (error) { checks.push({ id: 'isolation', status: 'blocked', message: error.message }); }
+    if (checks.every(check => check.status === 'passed') && (state.plan.project === 't3code' || typeof module.verifyArtifacts === 'function')) {
+      try {
+        if (typeof module.verifyArtifacts !== 'function') throw new Error('Trusted profile lacks packaged source identity verifier');
+        const result = await module.verifyArtifacts({ root: candidate, targetCommit: state.plan.targetCommit });
+        if (!result || !Array.isArray(result.blockers) || !Array.isArray(result.notes)) throw new Error('INVALID_TRUSTED_ARTIFACT_RESULT');
+        checks.push({ id: 'packaged-source-identity', status: result.blockers.length ? 'failed' : 'passed', blockers: result.blockers, notes: result.notes });
+      } catch (error) { checks.push({ id: 'packaged-source-identity', status: 'failed', message: error.message }); }
+    }
   }
   const after = await candidateChanges(candidate, state.plan);
   if (identity(after.files) !== state.candidateFingerprint) checks.push({ id: 'candidate-stability', status: 'failed', message: 'Verification changed candidate source/configuration' });

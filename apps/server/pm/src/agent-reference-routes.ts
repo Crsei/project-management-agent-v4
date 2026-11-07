@@ -25,7 +25,7 @@ const entityFor: Record<PmReferenceKind, FileRecord['entity']['entity']> = {
 };
 
 function forbidden(input: PmReferenceInput, reason: string): PmReferenceResolution {
-  return { kind: input.kind, id: input.id, projectId: input.projectId, title: '', revision: null, availability: 'forbidden', reason };
+  return { kind: input.kind, id: input.id, workspaceId: input.workspaceId, projectId: input.projectId, title: '', revision: null, availability: 'forbidden', reason };
 }
 
 function readReference(workspace: ReferenceSource, id: string): FileRecord | null {
@@ -66,14 +66,14 @@ export async function resolveReferences(
       continue;
     }
     if (record.entity.archived === true) {
-      items.push({ kind: input.kind, id: record.id, projectId, title: record.entity.title, revision: record.revision, availability: 'deleted', reason: 'The reference was archived.' });
+      items.push({ kind: input.kind, id: record.id, workspaceId: input.workspaceId, projectId, title: record.entity.title, revision: record.revision, availability: 'deleted', reason: 'The reference was archived.' });
       continue;
     }
     if (input.revision !== null && input.revision !== record.revision) {
-      items.push({ kind: input.kind, id: record.id, projectId, title: record.entity.title, revision: record.revision, availability: 'stale', reason: 'The reference changed since the selected revision.' });
+      items.push({ kind: input.kind, id: record.id, workspaceId: input.workspaceId, projectId, title: record.entity.title, revision: record.revision, availability: 'stale', reason: 'The reference changed since the selected revision.' });
       continue;
     }
-    items.push({ kind: input.kind, id: record.id, projectId, title: record.entity.title, revision: record.revision, availability: 'available', reason: null });
+    items.push({ kind: input.kind, id: record.id, workspaceId: input.workspaceId, projectId, title: record.entity.title, revision: record.revision, availability: 'available', reason: null });
   }
   return items;
 }
@@ -85,6 +85,8 @@ export function registerAgentReferenceRoutes(app: FastifyInstance, options: {
     reply.header('Cache-Control', 'no-store');
     const { workspaceId } = params.parse(request.params);
     const input = pmReferenceResolveRequestSchema.parse(request.body);
+    if (input.references.some(reference => reference.workspaceId !== workspaceId)) throw new DomainError('agent_reference_target_mismatch', 'Every reference must match the URL workspace', 400);
+    await recheckMcpRequest(options.database(), request);
     const member = await getMembership(options.database(), await options.actor(request), workspaceId);
     if (!member.capabilities.includes('domain.read')) throw new DomainError('permission_denied', 'Capability domain.read is required', 403);
     if (!options.coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);

@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import { executionSelectionSchema, type ExecutionSelection } from '../../agent-contracts/src/execution.ts';
 
 export const deliveryScopeSchema = z.strictObject({ workspaceId: z.uuid(), projectId: z.string().regex(/^PRJ-\d+$/), taskId: z.string().regex(/^TASK-\d+$/) });
 export type DeliveryScope = z.infer<typeof deliveryScopeSchema>;
-export const prepareDeliverySchema = deliveryScopeSchema.extend({ id: z.uuid(), taskRevision: z.string().min(1).max(256), baseBranch: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,150}$/) });
+export const prepareDeliverySchema = deliveryScopeSchema.extend({ id: z.uuid(), taskRevision: z.string().min(1).max(256), baseBranch: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._/-]{0,150}$/), executionSelection: executionSelectionSchema.refine(value => value.agentWorkspaceId !== null, 'Select an explicit Agent folder') });
 export const deliveryActionSchema = z.discriminatedUnion('action', [
+  z.strictObject({ action: z.literal('new-session'), executionSelection: executionSelectionSchema.refine(value => value.agentWorkspaceId !== null, 'Select an explicit Agent folder'), confirm: z.literal(true) }),
   z.strictObject({ action: z.literal('develop'), providerInstanceId: z.string().min(1).max(256), model: z.string().min(1).max(256), allowWorktreeWrite: z.literal(true).optional(), purpose: z.enum(['analysis', 'development']).optional(), instruction: z.string().max(8000).optional() }),
   z.strictObject({ action: z.literal('test'), command: z.string().trim().min(1).max(2000), confirm: z.literal(true) }),
   z.strictObject({ action: z.literal('commit'), fingerprint: z.string().min(1), confirm: z.literal(true) }),
@@ -21,6 +23,7 @@ export type TaskCodeDelivery = DeliveryScope & {
   id: string; baseBranch: string; taskRevision: string; title: string; description: string; createdAt: string; updatedAt: string;
   step: DeliveryStep; version: number; threadId: string; git?: DeliveryGit;
   worktreeWriteConfirmed?: boolean; developmentPurpose?: 'analysis' | 'development'; developmentInstruction?: string;
+  executionSelection?: ExecutionSelection; previousThreadIds?: string[];
   generationId?: string; generationStatus?: string; generationKey?: string;
   test?: { command: string; fingerprint: string; passed: boolean; exitCode: number | null; outputDigest: string; at: string };
   head?: string; pr?: { number: number; url: string }; feedback?: DeliveryFeedback;

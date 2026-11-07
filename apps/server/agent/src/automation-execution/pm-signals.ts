@@ -10,23 +10,30 @@ import { isAutomationOriginGeneration } from './context.ts';
 const namespace = 'pm-automation:agent-signal-outbox';
 const cursors = 'pm-automation:agent-signal-cursors';
 type Pending = { event: PmAutomationEvent; attempts: number; nextAttemptAt: number };
-type Cursor = { terminal: string; idle: string | null };
+type Cursor = { terminal: string; idle: { at: string; eventIds: string[] } | null };
 let timer: NodeJS.Timeout | undefined, cycle: Promise<void> | undefined, controller: AbortController | undefined;
 const watermark = (generation: ChatGeneration) => `${generation.endedAt ?? generation.createdAt}:${generation.id}`;
-function sourceEvent(generation: ChatGeneration, key: 'agent.run.terminal' | 'agent.session.idle', at: string): PmAutomationEvent | null {
-  const snapshot = generation.executionSnapshot, thread = getThread(generation.threadId);
-  if (!snapshot?.actorId || !snapshot.scope.projectId || thread?.scope?.workspaceId !== snapshot.scope.workspaceId || thread.scope.projectId !== snapshot.scope.projectId || thread.custom?.automationExecutionId || isAutomationOriginGeneration(generation) || generation.idleCompaction || ['running', 'queued'].includes(generation.status)) return null;
-  const revision = createHash('sha256').update(JSON.stringify([generation.id, generation.status, generation.seq, generation.endedAt, ...(key === 'agent.session.idle' ? [at] : [])])).digest('hex');
-  const id = key === 'agent.run.terminal' ? generation.id : generation.threadId;
-  return { eventId: `agent:${key}:${generation.id}:${revision.slice(0, 20)}`, source: 'pm', key, actorId: snapshot.actorId, workspaceId: snapshot.scope.workspaceId, projectId: snapshot.scope.projectId, at, sourceRef: { refId: `agent:${key}:${revision}`, kind: key === 'agent.run.terminal' ? 'execution' : 'session', id, revision, actorId: snapshot.actorId, workspaceId: snapshot.scope.workspaceId, projectId: snapshot.scope.projectId, label: key === 'agent.run.terminal' ? `Agent generation ${generation.status}` : 'Agent session idle for at least 60 seconds', url: `/agent/workspace?workspace=${encodeURIComponent(snapshot.scope.workspaceId)}&project=${encodeURIComponent(snapshot.scope.projectId)}&threadId=${encodeURIComponent(generation.threadId)}`, updatedAt: generation.endedAt ?? generation.createdAt }, originExecutionId: null, before: null, after: null, lastVisitAt: null, visitedAt: null };
+function sourceEvents(generation: ChatGeneration, key: 'agent.run.terminal' | 'agent.session.idle', at: string): PmAutomationEvent[] {
+  const thread = getThread(generation.threadId);
+  if (!thread || thread.custom?.automationExecutionId || isAutomationOriginGeneration(generation) || generation.idleCompaction || ['running', 'queued'].includes(generation.status)) return [];
+  const operations = [...new Map((generation.pmOperations ?? []).filter(operation => operation.target.projectId !== null)
+    .map(operation => [JSON.stringify([operation.actorId, operation.target]), operation])).values()];
+  return operations.map<PmAutomationEvent>(({ actorId, target }) => {
+    const projectId = target.projectId!;
+    const revision = createHash('sha256').update(JSON.stringify([actorId, target, generation.id, generation.status, generation.seq, generation.endedAt, ...(key === 'agent.session.idle' ? [at] : [])])).digest('hex');
+    const id = key === 'agent.run.terminal' ? generation.id : generation.threadId;
+    return { eventId: `agent:${key}:${generation.id}:${revision.slice(0, 20)}`, source: 'pm', key, actorId, workspaceId: target.workspaceId, projectId, at,
+      sourceRef: { refId: `agent:${key}:${revision}`, kind: key === 'agent.run.terminal' ? 'execution' : 'session', id, revision, actorId, workspaceId: target.workspaceId, projectId, label: key === 'agent.run.terminal' ? `Agent generation ${generation.status}` : 'Agent session idle for at least 60 seconds', url: `/agent/workspace?threadId=${encodeURIComponent(generation.threadId)}`, updatedAt: generation.endedAt ?? generation.createdAt },
+      originExecutionId: null, before: null, after: null, lastVisitAt: null, visitedAt: null };
+  });
 }
 export function queuePmAgentTerminal(generation: ChatGeneration): void {
   if (!generation.endedAt) return;
-  const event = sourceEvent(generation, 'agent.run.terminal', generation.endedAt);
-  if (!event) return;
+  const events = sourceEvents(generation, 'agent.run.terminal', generation.endedAt);
+  if (!events.length) return;
   const cursor = readRecord<Cursor>(cursors, generation.threadId);
   if (cursor && cursor.terminal >= watermark(generation)) return;
-  if (!readRecord(namespace, event.eventId)) writeRecord<Pending>(namespace, event.eventId, { event, attempts: 0, nextAttemptAt: 0 });
+  for (const event of events) if (!readRecord(namespace, event.eventId)) writeRecord<Pending>(namespace, event.eventId, { event, attempts: 0, nextAttemptAt: 0 });
 }
 async function sweep(signal: AbortSignal): Promise<void> {
   const threads = listThreads().sort((left, right) => left.remoteId.localeCompare(right.remoteId));
@@ -35,10 +42,10 @@ async function sweep(signal: AbortSignal): Promise<void> {
   const batch = (after.length ? after : threads).slice(0, 50);
   let recovered = 0, pendingCount = listRecords<Pending>(namespace).length;
   for (const thread of batch) {
-    if (!thread.scope?.projectId || thread.custom?.automationExecutionId) continue;
+    if (thread.custom?.automationExecutionId) continue;
     const generations = listChatGenerations(thread.remoteId).filter(generation => !generation.idleCompaction && !isAutomationOriginGeneration(generation));
     const terminalCursor = readRecord<Cursor>(cursors, thread.remoteId)?.terminal ?? '';
-    const recovery = generations.filter(generation => generation.executionSnapshot?.actorId && generation.endedAt && watermark(generation) > terminalCursor).sort((left, right) => watermark(left).localeCompare(watermark(right))).slice(0, 25);
+    const recovery = generations.filter(generation => generation.pmOperations?.length && generation.endedAt && watermark(generation) > terminalCursor).sort((left, right) => watermark(left).localeCompare(watermark(right))).slice(0, 25);
     for (const generation of recovery) {
       if (recovered >= 50 || pendingCount >= 500) break;
       queuePmAgentTerminal(generation); recovered++; pendingCount++;
@@ -47,8 +54,11 @@ async function sweep(signal: AbortSignal): Promise<void> {
     if (!latest?.endedAt || generations.some(generation => generation.status === 'running' || generation.status === 'queued')) continue;
     const eligibleAt = Math.max(Date.parse(latest.endedAt), Date.parse(thread.updatedAt)) + 60000;
     if (Date.now() < eligibleAt) continue;
-    const event = sourceEvent(latest, 'agent.session.idle', new Date(eligibleAt).toISOString());
-    if (pendingCount < 500 && event && readRecord<Cursor>(cursors, thread.remoteId)?.idle !== event.eventId && !readRecord(namespace, event.eventId)) { writeRecord<Pending>(namespace, event.eventId, { event, attempts: 0, nextAttemptAt: 0 }); pendingCount++; }
+    const events = sourceEvents(latest, 'agent.session.idle', new Date(eligibleAt).toISOString());
+    const idle = readRecord<Cursor>(cursors, thread.remoteId)?.idle;
+    for (const event of events) if (pendingCount < 500 && !(idle && typeof idle === 'object' && idle.eventIds.includes(event.eventId)) && !readRecord(namespace, event.eventId)) {
+      writeRecord<Pending>(namespace, event.eventId, { event, attempts: 0, nextAttemptAt: 0 }); pendingCount++;
+    }
   }
   if (batch.length) writeRecord(cursors, 'scan', { lastThreadId: batch.at(-1)!.remoteId });
   if (Buffer.byteLength(process.env.PM_AUTOMATION_SERVICE_SECRET ?? '') < 32) return;
@@ -61,8 +71,8 @@ async function sweep(signal: AbortSignal): Promise<void> {
       const latest = listChatGenerations(record.event.sourceRef.id).find(generation => !generation.idleCompaction);
       const active = listChatGenerations(record.event.sourceRef.id).some(generation => generation.status === 'queued' || generation.status === 'running');
       const lastActivity = latest?.endedAt ? Math.max(Date.parse(latest.endedAt), Date.parse(getThread(record.event.sourceRef.id)?.updatedAt ?? latest.endedAt)) : null;
-      const current = latest?.endedAt && lastActivity !== null ? sourceEvent(latest, 'agent.session.idle', new Date(lastActivity + 60000).toISOString()) : null;
-      if (active || current?.eventId !== record.event.eventId) { deleteRecord(namespace, record.event.eventId); continue; }
+      const current = latest?.endedAt && lastActivity !== null ? sourceEvents(latest, 'agent.session.idle', new Date(lastActivity + 60000).toISOString()).find(event => event.eventId === record.event.eventId) : null;
+      if (active || !current) { deleteRecord(namespace, record.event.eventId); continue; }
     }
     const endpoint = new URL(`/api/v1/workspaces/${encodeURIComponent(record.event.workspaceId)}/automations/pm/signals`, base);
     const body = JSON.stringify(record.event);
@@ -74,7 +84,7 @@ async function sweep(signal: AbortSignal): Promise<void> {
         const threadId = record.event.key === 'agent.session.idle' ? record.event.sourceRef.id : getThreadForGeneration(record.event.sourceRef.id);
         if (!threadId) throw new Error('Original Agent signal association no longer exists.');
         const cursor = readRecord<Cursor>(cursors, threadId) ?? { terminal: '', idle: null };
-        if (record.event.key === 'agent.session.idle') cursor.idle = record.event.eventId;
+        if (record.event.key === 'agent.session.idle') cursor.idle = { at: record.event.at, eventIds: [...new Set([...(cursor.idle && typeof cursor.idle === 'object' && cursor.idle.at === record.event.at ? cursor.idle.eventIds : []), record.event.eventId])] };
         else {
           const generation = listChatGenerations(threadId).find(value => value.id === record.event.sourceRef.id);
           if (generation && cursor.terminal < watermark(generation)) cursor.terminal = watermark(generation);

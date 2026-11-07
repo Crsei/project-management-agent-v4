@@ -71,13 +71,19 @@ export function ErrorPage({
       data-error-code={code}
       className={cn("w-full max-w-[480px] text-center", className)}
     >
-      <div aria-hidden="true" className="relative mx-auto w-fit pb-8">
+      <div
+        aria-hidden="true"
+        className={cn(
+          "mx-auto flex w-fit flex-col items-center gap-4 pb-4",
+          compact && "gap-3 pb-3",
+        )}
+      >
         <span className="block text-[96px] leading-none font-semibold tracking-[-0.06em] text-muted-foreground tabular-nums">
           {code}
         </span>
         <div
           className={cn(
-            "absolute bottom-4 left-1/2 grid size-14 -translate-x-1/2 place-items-center rounded-xl border bg-background",
+            "grid size-14 place-items-center rounded-xl border bg-background",
             compact && "size-12",
           )}
         >

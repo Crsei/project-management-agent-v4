@@ -156,6 +156,7 @@ export async function runAutomationGitSyncCycle(options: AutomationGitSyncOption
       if (row.config.encryptionEnabled && !key) throw new DomainError('automation_git_encryption_key_required', 'Encryption key is unavailable; no files were decrypted or synchronized', 409);
       const maps = (await pool.query<Mapping>('SELECT * FROM automation_git_mappings WHERE config_id=$1', [row.id])).rows;
       const local = await definitions(options.studio, actor, row.workspace_id, row.project_id), known = new Map(local.map(definition => [definition.id, definition]));
+      if (local.some(definition => definition.historicalExecutionSelection !== undefined)) throw new DomainError('agent_workspace_selection_required', 'Reselect Agent folders for historical definitions before synchronization; no historical selection will be silently removed or replaced', 409);
       const remoteConfigs = new Map<string, StudioConfig>(), canonicalPaths = new Set<string>();
       for (const [path, value] of Object.entries(remote.files)) {
         const encrypted = path.endsWith('.enc');
@@ -181,7 +182,8 @@ export async function runAutomationGitSyncCycle(options: AutomationGitSyncOption
             const rejection = prior.result as { error?: { code?: unknown; message?: unknown } } | null;
             throw new DomainError(typeof rejection?.error?.code === 'string' ? rejection.error.code : 'automation_git_import_rejected', typeof rejection?.error?.message === 'string' ? rejection.error.message : 'The original Git import was rejected', prior.httpStatus);
           }
-          saved = studioDefinitionSchema.parse(prior.result);
+          const original = studioDefinitionSchema.pick({ id: true }).passthrough().parse(prior.result);
+          saved = await options.studio.definition(actor, row.workspace_id, original.id);
         }
         if (!saved) {
           if (map && (!existing || automationConfigHash(existing.config) !== map.config_hash)) throw new DomainError('automation_git_conflict', `Both local definition and remote file changed: ${path}`, 409);

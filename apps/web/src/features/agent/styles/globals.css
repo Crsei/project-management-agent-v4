@@ -82,7 +82,7 @@
 }
 
 html[data-product="agent"] {
-  --radius: 8px;
+  --radius: var(--radius-popover-value);
   /* canvas / surface / raised / ink / secondary / border / accent（DESIGN-PATTERNS 候选初值，映射到本项目语义变量） */
   --background: #fafaf9;
   --foreground: #232322;
@@ -98,10 +98,10 @@ html[data-product="agent"] {
   --muted-foreground: #666660;
   --accent: #f4f4f2;
   --accent-foreground: #232322;
-  --destructive: #b4342a;
-  --success: #2f7d5b;
-  --warning: #8a6100;
-  --danger: #b4342a;
+  --destructive: #b42318;
+  --success: #15803d;
+  --warning: #92400e;
+  --danger: #b42318;
   --brand: #a6533a;
   --brand-foreground: #fafaf9;
   --border: rgb(0 0 0 / 10%);
@@ -132,10 +132,10 @@ html[data-product="agent"].dark {
   --muted-foreground: #b0b0a8;
   --accent: #222220;
   --accent-foreground: #ecece8;
-  --destructive: #ff9e8f;
-  --success: #6fcba0;
-  --warning: #e0b15c;
-  --danger: #ff9e8f;
+  --destructive: #f0a0a0;
+  --success: #6ee7a0;
+  --warning: #e8c77a;
+  --danger: #f0a0a0;
   --brand: #de9a7b;
   --brand-foreground: #111110;
   --border: rgb(255 255 255 / 10%);

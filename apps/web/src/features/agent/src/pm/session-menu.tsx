@@ -64,13 +64,13 @@ export function SessionMenu(props: MenuProps) {
   };
   useEffect(() => {
     setBranch(undefined);
-    if (!open || !thread.scope || !path) return;
+    if (!open || !thread.executionSelection?.agentWorkspaceId || !path) return;
     const controller = new AbortController();
-    void workspaceClient.json<GitStatusResponse>(inspectUrl("/api/inspector/git", { workspaceId: thread.scope.workspaceId, projectId: thread.scope.projectId ?? undefined, threadId: thread.remoteId }), { signal: controller.signal })
+    void workspaceClient.json<GitStatusResponse>(inspectUrl("/api/inspector/git", { threadId: thread.remoteId }), { signal: controller.signal })
       .then((result) => { if (!controller.signal.aborted && result.repo && result.branch) setBranch(result.branch); })
       .catch(() => {});
     return () => controller.abort();
-  }, [open, thread.remoteId, thread.scope?.workspaceId, thread.scope?.projectId, path]);
+  }, [open, thread.remoteId, path]);
   const copy = (value: string) => { void (async () => { try { await navigator.clipboard.writeText(value); } catch (error) { onError(error instanceof Error ? error.message : String(error)); } })(); };
   const showDialog = (action: () => void) => { dialogOpening.current = true; action(); };
   const closeAutoFocus = (event: Event) => { if (dialogOpening.current) event.preventDefault(); };
@@ -90,11 +90,11 @@ export function SessionMenu(props: MenuProps) {
       {item(t("重命名", "Rename"), () => showDialog(onRename))}
       {item(t("重新生成标题", "Regenerate title"), onRegenerate)}
       {item(t("标为未读", "Mark unread"), () => onSidebar("mark-unread"))}
-      {thread.scope?.projectId && item(filtered ? t("显示所有项目", "Show all projects") : t("仅显示此项目", "Filter by project"), onFilter)}
+      {thread.executionSelection?.agentWorkspaceId && item(filtered ? t("显示所有文件夹", "Show all folders") : t("仅显示此文件夹", "Filter by folder"), onFilter)}
       {submenu(t("自动归置", "Auto-settle"), <>{item(`${sidebar.autoSettle ? "✓ " : ""}${t("启用", "Enabled")}`, () => onSidebar("auto-settle", { enabled: true }))}{item(`${!sidebar.autoSettle ? "✓ " : ""}${t("停用", "Disabled")}`, () => onSidebar("auto-settle", { enabled: false }))}</>)}
       <Separator className="pm-agent-menu-separator" />
       {submenu(t("复制", "Copy"), <>{path && item(t("路径", "Path"), () => copy(path))}{branch && item(t("分支", "Branch"), () => copy(branch))}{item(t("会话 ID", "Thread ID"), () => copy(thread.remoteId))}</>)}
-      {item(t("文件区域设置", "File area settings"), () => showDialog(onSettings), !thread.scope)}
+      {item(t("重命名文件夹", "Rename folder"), () => showDialog(onSettings), !thread.executionSelection?.agentWorkspaceId)}
       <Separator className="pm-agent-menu-separator" />
       {item(t("归档会话", "Archive"), onArchive, running, running ? t("请先停止生成，再归档会话。", "Stop generation before archiving the session.") : undefined)}
       <Item className="pm-session-menu-item pm-session-menu-danger" disabled={disabled} title={running ? t("删除会先请求停止生成；未确认停止时会保留历史。", "Deleting first requests generation to stop; history is kept until stopping is confirmed.") : undefined} onSelect={() => showDialog(onDelete)}>{t("删除会话", "Delete")}</Item>

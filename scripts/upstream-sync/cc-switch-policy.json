@@ -2,11 +2,12 @@
   "version": 1,
   "id": "cc-switch",
   "selectionAuthority": "vendor/cc-switch/source-manifest.json#selection",
-  "replayAuthority": "vendor/cc-switch/output-inventory.json and its existing exact-byte JSON recipes",
+  "replayAuthority": "vendor/cc-switch/output-inventory.json and its existing exact-byte JSON recipes own CC outputs only. externalHostOutputs references the current T3 adaptation owner without copying or freezing its implementation bytes.",
   "generation": "Read immutable Git objects, preserve complete selected trees, three-way merge source outputs in core, then record the reviewed candidate. Never execute candidate capture/sync/build scripts to authorize a generation.",
   "dependencyPolicy": "New files inside selected trees are included. Dependencies outside selection require exact --approve-source paths; unresolved resources or computed expressions remain blockers. Host locks are never replaced by upstream locks.",
   "crossForkPolicy": "OpenHands inventory hostBuildInputs and resource-closure inputs are read-only consumers, including snapshot-only CC files. A changed or deleted consumed input produces BLOCKED_CROSS_FORK; never recapture the other fork.",
   "derivedPolicy": "Each derived output keeps its original source identity. A changed source requires --reviewed-derived for the exact output after semantic review; the existing exact-byte recipe then records that port without claiming runtime acceptance.",
+  "externalOwnerPolicy": "Exactly management.ts and provider.ts remain T3 adapted-upstream outputs. Validate current owner registration, source tuples, recipe preimages and output hash/size/mode in production. Owner evidence and outputs are read-only protected candidate inputs; only the independent owner's reviewed generation may change them. Standalone CC replay creates neither host outputs nor owner metadata, and validates an existing host against its own current owner before writing.",
   "adapters": [
     {
       "id": "headless-context-paths",

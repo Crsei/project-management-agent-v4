@@ -17,6 +17,7 @@ import { webhookResponseSchemas } from './webhook-schemas.ts';
 import { localProjectPaths } from './local-project-openapi.ts';
 import { agentFileAreaPaths } from './agent-file-area-openapi.ts';
 import { documentSourcePaths } from './document-source-openapi.ts';
+import { changeHistoryPaths } from './change-history-openapi.ts';
 import { automationPaths } from './automation-openapi.ts';
 import { automationStudioPaths } from './automation-studio-openapi.ts';
 import { automationStudioHelperPaths } from './automation-studio-helpers-openapi.ts';
@@ -268,6 +269,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     ...localProjectPaths(),
     ...agentFileAreaPaths(),
     ...documentSourcePaths(),
+    ...changeHistoryPaths(),
     ...automationPaths(),
     ...automationStudioPaths(),
     ...automationStudioHelperPaths(),

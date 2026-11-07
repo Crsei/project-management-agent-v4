@@ -6,7 +6,7 @@ import type { EntityKind, FileRecord, ProtocolConfiguration } from '../pm-schema
 import { buildEntityGraph } from '../pm-schema/graph.ts';
 import type { GraphData, GraphNode, GraphQuery } from '../pm-schema/graph.ts';
 import './knowledge-graph.css';
-import { RadixSelect } from './RadixSelect.tsx';
+import { CompactSelect as RadixSelect } from "@pm/ui/radix/compact-select";
 import type { GraphCanvasViewState } from './KnowledgeGraphCanvas.tsx';
 import type { ContextMenuAction, ContextMenuRenderer } from './index.tsx';
 

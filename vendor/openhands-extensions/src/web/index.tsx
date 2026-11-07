@@ -1,10 +1,13 @@
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
+import { i18n } from "@pm/cc-switch-ui";
 import { OpenHandsMcpPage } from "@pm/openhands-source/routes/mcp";
 import { OpenHandsSkillsPage } from "@pm/openhands-source/routes/skills-settings";
-import { ExtensionsCompactNavigation } from "@pm/openhands-source/components/features/skills/extensions-navigation";
 import { webPlatform } from "./bridge";
 import { useOpenHandsTranslation } from "./i18n";
+import { UnboundMcpPage } from "./mcp/unbound-mcp-page";
+import { UnboundSkillsPage } from "./skills/unbound-skills-page";
 import "./management.css";
+import "./shared/shared.css";
 
 export interface OpenHandsExtensionSurfaceProps {
   view: "mcp" | "skills";
@@ -22,13 +25,31 @@ export function OpenHandsExtensionSurface({ view, onInteractionBlockedChange }: 
     return () => { platform.portal.classList.remove("openhands-extensions"); };
   }, [platform]);
   useEffect(() => () => { onInteractionBlockedChange?.(false); }, [onInteractionBlockedChange]);
+  return <ExtensionFrame view={view}>
+    {noNativeSkills ? <div className="oh-module-empty" role="note"><h2>{t("PM$NATIVE_SKILLS_UNAVAILABLE")}</h2><p>{t("PM$NATIVE_SKILLS_BINDING")}</p></div> : view === "mcp" ? <OpenHandsMcpPage onInteractionBlockedChange={onInteractionBlockedChange} /> : <OpenHandsSkillsPage onInteractionBlockedChange={onInteractionBlockedChange} />}
+  </ExtensionFrame>;
+}
+
+/** Catalog/setup presentation for installations without a supported Provider.
+ * No management platform, event stream or native target is created here. */
+export function OpenHandsProviderSetupSurface({ view, locale, onConfigureProvider }: {
+  view: OpenHandsExtensionSurfaceProps["view"];
+  locale: string;
+  onConfigureProvider: () => void;
+}) {
+  useLayoutEffect(() => { void i18n.changeLanguage(locale.startsWith("zh") ? "zh" : "en"); }, [locale]);
+  return <div className="cc-switch-web">
+    <ExtensionFrame view={view}>
+      {view === "mcp" ? <UnboundMcpPage onBind={onConfigureProvider} /> : <UnboundSkillsPage onBind={onConfigureProvider} />}
+    </ExtensionFrame>
+  </div>;
+}
+
+function ExtensionFrame({ view, children }: { view: OpenHandsExtensionSurfaceProps["view"]; children: ReactNode }) {
   return <section className="openhands-extensions oh-extension-surface" data-testid="openhands-extension-surface" data-view={view}>
     <div className="oh-extension-frame">
       <div className="oh-extension-main">
-        <div className="oh-extension-tools"><ExtensionsCompactNavigation /></div>
-        <div className="oh-extension-route">
-          {noNativeSkills ? <div className="oh-module-empty" role="note"><h2>{t("PM$NATIVE_SKILLS_UNAVAILABLE", { defaultValue: "No authorized native Skills target" })}</h2><p>{t("PM$NATIVE_SKILLS_BINDING", { defaultValue: "Project-private contexts manage MCP definitions only. Choose an explicitly bound native context to discover, install, update, restore or migrate Skills." })}</p></div> : view === "mcp" ? <OpenHandsMcpPage onInteractionBlockedChange={onInteractionBlockedChange} /> : <OpenHandsSkillsPage onInteractionBlockedChange={onInteractionBlockedChange} />}
-        </div>
+        <div className="oh-extension-route">{children}</div>
       </div>
     </div>
   </section>;

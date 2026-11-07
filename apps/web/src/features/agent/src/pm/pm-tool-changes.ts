@@ -21,7 +21,7 @@ export function pmToolChanges(calls: readonly PmToolCallRecord[]): PmChangeSet[]
     const definition = writes[call.name];
     if (!definition) return [];
     const result = call.result;
-    const entity = result && result.kind !== "comment" && result.kind !== "relation" ? result.items[0] : undefined;
+    const entity = result && result.kind !== "comment" && result.kind !== "relation" && result.kind !== "workspaces" ? result.items[0] : undefined;
     const comment = result?.kind === "comment" ? result.items[0] : undefined;
     const relation = result?.kind === "relation" ? result.items[0] : undefined;
     const targetId = result?.receipt?.targetId ?? entity?.id ?? comment?.taskId ?? relation?.sourceId ?? null;

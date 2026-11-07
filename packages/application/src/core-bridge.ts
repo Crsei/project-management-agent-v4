@@ -6,6 +6,7 @@ import { assertReceiptReadable, requestHash } from './kernel.ts';
 import { lockWorkspace } from '../../infrastructure/src/database.ts';
 import { appendProjectAudit, type ProjectAuditWrite } from './project-audit.ts';
 import { insertServiceFact, type CapturedServiceFact } from './service-facts.ts';
+import type { HistorySnapshotReader } from './change-history.ts';
 
 export { requestHash };
 
@@ -58,7 +59,7 @@ export async function readExternalReceipt(pool: Pool, actor: Actor, workspaceId:
 }
 
 /** Persist an external command receipt with the same request hash algorithm as the kernel. */
-export async function recordExternalReceipt(pool: Pool, actor: Actor, workspaceId: string, command: Command, receipt: CommandReceipt, affectedProjectIds: readonly string[] = [], audit: readonly ProjectAuditWrite[] = [], facts: readonly CapturedServiceFact[] = []): Promise<void> {
+export async function recordExternalReceipt(pool: Pool, actor: Actor, workspaceId: string, command: Command, receipt: CommandReceipt, affectedProjectIds: readonly string[] = [], audit: readonly ProjectAuditWrite[] = [], facts: readonly CapturedServiceFact[] = [], readSnapshot?: HistorySnapshotReader): Promise<void> {
   if (!uuid.safeParse(workspaceId).success || !uuid.safeParse(command.commandId).success) throw new DomainError('validation_failed', 'Workspace and command IDs must be UUIDs');
   workspaceId = workspaceId.toLowerCase();
   const hash = requestHash(command as unknown as Record<string, unknown>);
@@ -87,7 +88,7 @@ export async function recordExternalReceipt(pool: Pool, actor: Actor, workspaceI
         scope.projectIds, scope.workspaceScope ? 1 : 0, JSON.stringify(receipt)]);
     }
     await appendProjectAudit(client, workspaceId, actor, audit);
-    for (const fact of facts) await insertServiceFact(client, workspaceId, fact);
+    for (const fact of facts) await insertServiceFact(client, workspaceId, fact, readSnapshot);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

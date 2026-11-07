@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
-import { studioConfigSchema, studioNativeTemplateRequiresProvider, studioRequiredProviderToolFeature, type StudioActionKind, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioExecution, type StudioExecutionEvent, type StudioExecutionPort, type StudioPage, type StudioReceipt, type StudioValidation } from '../../contracts/src/automation-studio.ts';
+import { studioConfigSchema, studioNativeTemplateRequiresProvider, studioRequiredProviderToolFeature, studioActionRequiresAgentWorkspace, type StudioActionKind, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioDefinitionFilters, type StudioExecution, type StudioExecutionEvent, type StudioExecutionPort, type StudioPage, type StudioReceipt, type StudioValidation } from '../../contracts/src/automation-studio.ts';
+import type { StudioWorkspaceExecutionPort } from '../../contracts/src/automation-studio.ts';
 import { validateNativeTemplateArguments } from '../../automation-resources/native-template-arguments.ts'
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema } from '../../contracts/src/automation-pm.ts';
 import { DomainError, type Actor } from '../../domain/src/core.ts';
@@ -9,11 +10,12 @@ import type { NotificationCorePort } from '../../pm-core/readonly.ts';
 import { getMembership } from './access.ts';
 import { requestHash } from './kernel.ts';
 import { nextStudioDue } from './automation-studio-schedule.ts';
-import { appendStudioEvent, assertStudioConfig, enqueueStudioExecution, studioAuthorize, studioClock, studioDefinitionDto, studioExecutionDto, studioIntegrationSupportsAction, type StudioDefinitionRow, type StudioExecutionRow } from './automation-studio-store.ts';
+import { appendStudioEvent, assertStudioConfig, enqueueStudioExecution, studioAuthorize, studioClock, studioDirectorySelection, studioDefinitionDto, studioExecutionDto, studioIntegrationSupportsAction, type StudioDefinitionRow, type StudioExecutionRow } from './automation-studio-store.ts';
 import { reconcileStudioExecution } from './automation-studio-worker.ts';
 import { createAutomationIntegrationsService } from './automation-integrations.ts';
 import { validatePmAutomationScope } from './automation-pm.ts';
 import type { AutomationDefinitionResolver } from './automation-integrations-definitions.ts';
+import { automationSnapshot, authorizeAutomationProject } from './automation-report.ts';
 export { enqueueAutomationStudioEvent } from './automation-studio-store.ts';
 
 type ReceiptRow = { request_hash: string; project_ids: string[]; http_status: number; result: unknown };
@@ -22,7 +24,7 @@ type Mutation = { requestId: string } & ({ kind: 'create'; config: StudioConfig 
 export interface AutomationStudioService {
   capabilities(actor: Actor, workspaceId: string, projectId: string, actionKind?: StudioActionKind): Promise<StudioCapabilities>;
   validate(actor: Actor, workspaceId: string, config: StudioConfig): Promise<StudioValidation>;
-  definitions(actor: Actor, workspaceId: string, cursor?: string): Promise<StudioPage<StudioDefinition>>;
+  definitions(actor: Actor, workspaceId: string, cursor?: string, filters?: StudioDefinitionFilters): Promise<StudioPage<StudioDefinition>>;
   definition(actor: Actor, workspaceId: string, id: string): Promise<StudioDefinition>;
   get(actor: Actor, workspaceId: string, id: string): Promise<StudioDefinition>;
   create(actor: Actor, workspaceId: string, input: { requestId: string; config: StudioConfig }): Promise<StudioDefinition>;
@@ -38,7 +40,7 @@ export interface AutomationStudioService {
   cancel(actor: Actor, workspaceId: string, id: string, input: { requestId: string }): Promise<StudioExecution>;
   receipt(actor: Actor, workspaceId: string, requestId: string): Promise<StudioReceipt>;
 }
-export function createAutomationStudioService(options: { database: () => Pool; core: NotificationCorePort; runtime: StudioExecutionPort; definitionResolver?: AutomationDefinitionResolver }): AutomationStudioService {
+export function createAutomationStudioService(options: { database: () => Pool; core: NotificationCorePort; runtime: StudioExecutionPort; definitionResolver?: AutomationDefinitionResolver; workspaceExecution?: StudioWorkspaceExecutionPort }): AutomationStudioService {
   const integrations = createAutomationIntegrationsService(options);
   async function scoped<T>(actor: Actor, workspaceId: string, operation: (sql: PoolClient) => Promise<T>): Promise<T> {
     const sql = await options.database().connect();
@@ -60,6 +62,16 @@ export function createAutomationStudioService(options: { database: () => Pool; c
     if (!row) throw new DomainError('not_found_or_forbidden', 'Automation execution is not accessible', 404);
     await studioAuthorize(sql, options.core, actor, workspaceId, row.project_id); return row;
   }
+  async function preflightStudioDirectory(config: StudioConfig): Promise<void> {
+    const selection = studioDirectorySelection(config);
+    if (!selection) return;
+    if (!options.workspaceExecution) throw new DomainError('agent_workspace_unavailable', 'The authenticated Agent folder preflight is not configured', 503);
+    try { await options.workspaceExecution.resolve(selection); }
+    catch (error) {
+      if (error instanceof DomainError) throw error;
+      throw new DomainError('agent_workspace_unavailable', 'The selected Agent folder could not be verified; no execution directory was substituted', 503);
+    }
+  }
   async function mutate(actor: Actor, workspaceId: string, input: Mutation): Promise<unknown> {
     let preflightError: DomainError | null = null;
     if (input.kind === 'update' || input.kind === 'status' && input.status === 'enabled' || input.kind === 'run' || input.kind === 'test') {
@@ -70,9 +82,9 @@ export function createAutomationStudioService(options: { database: () => Pool; c
           return definitionRow(sql, actor, workspaceId, input.id);
         });
         const dispatch = input.kind === 'run' || input.kind === 'test';
-        if (current && (dispatch ? studioRequiredProviderToolFeature(current.config) !== null : input.kind === 'status' || current.status === 'enabled')) {
+        if (current && (dispatch ? studioRequiredProviderToolFeature(current.config) !== null || studioActionRequiresAgentWorkspace(current.config.action) || current.config.action.executionSelection !== undefined : input.kind === 'status' || current.status === 'enabled')) {
           const validation = await service.validate(actor, workspaceId, input.kind === 'update' ? input.config : current.config);
-          const issues = dispatch ? validation.issues.filter(issue => issue.code === 'provider_tool_protocol_unavailable') : validation.issues;
+          const issues = dispatch ? validation.issues.filter(issue => issue.code === 'provider_tool_protocol_unavailable' || issue.path === 'action.executionSelection') : validation.issues;
           if (issues.length) preflightError = new DomainError('automation_configuration_unavailable', issues.map(issue => `${issue.path}: ${issue.message}`).join('; '), 409);
         }
       } catch (error) { if (!(error instanceof DomainError)) throw error; preflightError = error; }
@@ -107,6 +119,14 @@ export function createAutomationStudioService(options: { database: () => Pool; c
           if (preflightError) throw preflightError;
           const scopedConfig = input.kind === 'update' ? input.config : row.config;
           if (input.kind !== 'remove' && !(input.kind === 'status' && input.status === 'paused') && scopedConfig.action.kind === 'template' && isPmAutomationTemplateId(scopedConfig.action.templateId)) await validatePmAutomationScope(sql, options.core, actor, workspaceId, scopedConfig.projectId, pmAutomationArgumentsSchema.parse(scopedConfig.action.arguments));
+          if (input.kind === 'run' || input.kind === 'test' || input.kind === 'status' && input.status === 'enabled' || input.kind === 'update' && row.status === 'enabled') {
+            // Remote preflight settled before locking; CAS pins that config and the Agent rechecks directory identity at dispatch.
+            try { studioDirectorySelection(scopedConfig); }
+            catch (error) {
+              if (!(error instanceof DomainError)) throw error;
+              throw new DomainError('automation_configuration_unavailable', `action.executionSelection: ${error.message}`, 409);
+            }
+          }
           if (input.kind === 'remove') {
             await sql.query('UPDATE automation_studio_definitions SET deleted_at=$2,next_due_at=NULL,revision=revision+1,updated_at=$2 WHERE id=$1 AND revision=$3', [row.id, now, input.expectedRevision]); result = { deleted: true };
           } else if (input.kind === 'run' || input.kind === 'test') {
@@ -145,6 +165,8 @@ export function createAutomationStudioService(options: { database: () => Pool; c
     async validate(actor: Actor, workspaceId: string, config: StudioConfig): Promise<StudioValidation> {
       await scoped(actor, workspaceId, sql => studioAuthorize(sql, options.core, actor, workspaceId, config.projectId));
       const issues: StudioValidation['issues'] = []; let nextDueAt: string | null = null;
+      try { await preflightStudioDirectory(config); }
+      catch (error) { if (!(error instanceof DomainError)) throw error; issues.push({ path: 'action.executionSelection', code: error.code, message: error.message }); }
       if (config.action.kind === 'template' && isPmAutomationTemplateId(config.action.templateId)) {
         try { await scoped(actor, workspaceId, sql => validatePmAutomationScope(sql, options.core, actor, workspaceId, config.projectId, pmAutomationArgumentsSchema.parse(config.action.kind === 'template' ? config.action.arguments : {}))); }
         catch (error) { if (!(error instanceof DomainError)) throw error; issues.push({ path: 'action.arguments', code: error.code, message: error.message }); }
@@ -165,10 +187,27 @@ export function createAutomationStudioService(options: { database: () => Pool; c
       for (const plugin of config.action.plugins) if (plugin.version === null || !capabilities.plugins.some(item => item.id === plugin.id && item.version === plugin.version)) issues.push({ path: 'action.plugins', code: 'plugin_unavailable', message: 'Select an exact currently available plugin revision' });
       return { valid: issues.length === 0, issues, nextDueAt };
     },
-    definitions: (actor: Actor, workspaceId: string, cursor?: string): Promise<StudioPage<StudioDefinition>> => scoped(actor, workspaceId, async sql => {
-      const rows = (await sql.query<StudioDefinitionRow>('SELECT * FROM automation_studio_definitions d WHERE workspace_id=$1 AND actor_id=$2 AND deleted_at IS NULL AND ($3::uuid IS NULL OR (d.created_at,d.id)<(SELECT c.created_at,c.id FROM automation_studio_definitions c WHERE c.id=$3 AND c.workspace_id=$1 AND c.actor_id=$2)) ORDER BY created_at DESC,id DESC LIMIT 51', [workspaceId, actor.id, cursor ?? null])).rows;
-      const items: StudioDefinition[] = []; for (const row of rows.slice(0, 50)) { try { await studioAuthorize(sql, options.core, actor, workspaceId, row.project_id); items.push(studioDefinitionDto(row)); } catch (error) { if (!(error instanceof DomainError) || ![403,404].includes(error.status)) throw error; } }
-      return { items, nextCursor: rows.length > 50 ? rows[49]!.id : null };
+    definitions: (actor: Actor, workspaceId: string, cursor?: string, filters: StudioDefinitionFilters = {}): Promise<StudioPage<StudioDefinition>> => scoped(actor, workspaceId, async sql => {
+      const projects = filters.projectId === undefined
+        ? (await sql.query<{ project_id: string }>('SELECT DISTINCT project_id FROM automation_studio_definitions WHERE workspace_id=$1 AND actor_id=$2 AND deleted_at IS NULL', [workspaceId, actor.id])).rows.map(row => row.project_id)
+        : [filters.projectId];
+      if (!projects.length) return { items: [], nextCursor: null };
+      const snapshot = await automationSnapshot(options.core, workspaceId), authorizedProjects: string[] = [];
+      for (const projectId of projects) {
+        try { await authorizeAutomationProject(sql, actor, workspaceId, projectId, snapshot); authorizedProjects.push(projectId); }
+        catch (error) { if (filters.projectId !== undefined || !(error instanceof DomainError) || ![403, 404].includes(error.status)) throw error; }
+      }
+      const rows = (await sql.query<StudioDefinitionRow>(`
+        WITH visible AS (
+          SELECT * FROM automation_studio_definitions
+          WHERE workspace_id=$1 AND actor_id=$2 AND deleted_at IS NULL AND project_id=ANY($4::text[])
+            AND ($5::boolean IS NULL OR coalesce(config->'quickAccess','false'::jsonb)=to_jsonb($5::boolean))
+        )
+        SELECT * FROM visible d
+        WHERE $3::uuid IS NULL OR (d.created_at,d.id)<(SELECT c.created_at,c.id FROM visible c WHERE c.id=$3)
+        ORDER BY created_at DESC,id DESC LIMIT 51
+      `, [workspaceId, actor.id, cursor ?? null, authorizedProjects, filters.quickAccess ?? null])).rows;
+      return { items: rows.slice(0, 50).map(studioDefinitionDto), nextCursor: rows.length > 50 ? rows[49]!.id : null };
     }),
     definition: (actor: Actor, workspaceId: string, id: string): Promise<StudioDefinition> => scoped(actor, workspaceId, async sql => studioDefinitionDto(await definitionRow(sql, actor, workspaceId, id))),
     create: (actor: Actor, workspaceId: string, input: { requestId: string; config: StudioConfig }) => mutate(actor, workspaceId, { ...input, kind: 'create' }) as Promise<StudioDefinition>,

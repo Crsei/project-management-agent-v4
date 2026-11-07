@@ -6,7 +6,7 @@ import type { DeliveryGit, DeliveryTree, TaskCodeDelivery } from '../../contract
 function fixture() {
   const records = new Map<string, TaskCodeDelivery>();
   const task: DeliveryTask = { workspaceId: '11111111-1111-4111-8111-111111111111', projectId: 'PRJ-001', taskId: 'TASK-001', revision: 'revision-1', title: 'Example', description: 'Implement one thing', root: '/project' };
-  const input = { ...task, taskRevision: task.revision, id: '11111111-1111-4111-8111-222222222222', baseBranch: 'main' };
+  const input = { ...task, taskRevision: task.revision, id: '11111111-1111-4111-8111-222222222222', baseBranch: 'main', executionSelection: { version: 2 as const, agentWorkspaceId: 'agent-folder', agentWorkspaceRevision: 1 } };
   const git: DeliveryGit = { root: task.root, directory: '/delivery', directoryIdentity: '1:2', commonDirectory: '/project/.git', remote: 'https://github.com/o/r.git', owner: 'o', repo: 'r', branch: 'codex/task-001-id', baseBranch: 'main', baseSha: 'base' };
   let tree: DeliveryTree = { head: 'base', fingerprint: 'clean', files: [], diff: '' };
   let remote: string | null = null;
@@ -120,4 +120,37 @@ test('worktree write confirmation is explicit per development attempt, persisted
   await f.service.act(f.input.id, { action: 'refresh' });
   await f.service.act(f.input.id, { action: 'develop', providerInstanceId: 'p', model: 'm' });
   assert.deepEqual(seen, [true, false]);
+});
+test('explicit replacement Session preserves immutable generation/test/Git evidence and never dispatches development', async () => {
+  const f = fixture(), old = await f.committed();
+  const calls = [...f.calls];
+  const changed = await f.service.act(old.id, { action: 'new-session', executionSelection: f.input.executionSelection, confirm: true });
+  assert.notEqual(changed.threadId, old.threadId);
+  assert.deepEqual(changed.previousThreadIds, [old.threadId]);
+  assert.equal(changed.generationId, old.generationId);
+  assert.deepEqual(changed.git, old.git); assert.deepEqual(changed.test, old.test);
+  assert.deepEqual(f.calls.filter(call => call.startsWith('develop:')), calls.filter(call => call.startsWith('develop:')));
+  await assert.rejects(f.service.prepare({ ...f.input, executionSelection: { ...f.input.executionSelection, agentWorkspaceRevision: 2 } }), /更换范围/);
+});
+test('missing explicit code selection never prepares a worktree', async () => {
+  const f = fixture();
+  const { executionSelection: _selection, ...withoutSelection } = f.input;
+  await assert.rejects(f.service.prepare(withoutSelection), /明确选择/);
+  assert.equal(f.calls.includes('prepare'), false);
+});
+test('historical delivery receipts remain readable but never inspect or resume old execution without explicit reselection', async () => {
+  const f = fixture(), current = await f.service.prepare(f.input);
+  const historical = { ...current, executionSelection: { version: 1 }, head: 'retained-commit', generationId: 'retained-generation', worktreeWriteConfirmed: true } as unknown as TaskCodeDelivery;
+  f.records.set(current.id, historical);
+  f.ports.tree = async () => { throw new Error('Historical cwd must not be read'); };
+  const read = await f.service.inspect(current.id);
+  assert.equal(read.tree, null); assert.equal(read.delivery.head, 'retained-commit');
+  assert.deepEqual(await f.service.act(current.id, { action: 'refresh' }), historical);
+  await assert.rejects(f.service.act(current.id, { action: 'develop', providerInstanceId: 'p', model: 'm' }), /历史交付/);
+  const replaced = await f.service.act(current.id, { action: 'new-session', executionSelection: f.input.executionSelection, confirm: true });
+  assert.notEqual(replaced.threadId, current.threadId);
+  assert.equal(replaced.head, historical.head); assert.equal(replaced.generationId, historical.generationId);
+  assert.deepEqual(replaced.executionSelection, f.input.executionSelection);
+  assert.equal(replaced.worktreeWriteConfirmed, false, 'A replacement Session does not inherit an old development-attempt grant');
+  assert.ok(!f.calls.some(call => call.startsWith('develop:')));
 });

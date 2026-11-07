@@ -328,6 +328,18 @@ test('full namespace hides host files and credentials and protects control recei
   assert.equal(await readFile(path.join(control, 'verification-output/owned-result'), 'utf8'), 'isolated');
 });
 
+test('failed namespace tests retain stdout diagnostics for missing dependencies', async t => {
+  const { root, commit } = await fixture(t);
+  await publish(root, 'dependency.test.mjs', Buffer.from("import test from 'node:test';\ntest('loads its runtime dependency', async () => { await import('@upstream-maintenance/missing-for-smoke'); });\n"));
+  await commit();
+  await mkdir(path.join(root, '.upstream-sync'));
+  const [result] = await runIsolatedVerification(root, [{ id: 'dependency-check', command: process.execPath, args: ['--test', 'dependency.test.mjs'] }]);
+  assert.equal(result.status, 'failed');
+  assert.match(result.stdoutExcerpt, /ERR_MODULE_NOT_FOUND/);
+  assert.match(result.stdoutExcerpt, /@upstream-maintenance\/missing-for-smoke/);
+  assert.equal(result.stderrExcerpt, '');
+});
+
 async function lifecycleFixture(t) {
   const upstream = await fixture(t), host = await fixture(t);
   const original = Buffer.from('export const upstream = 1;\n\nexport const keep = true;\n\nexport const host = 1;\n');
@@ -537,7 +549,7 @@ async function sharedForkFixture(t) {
     policy: { sourceManifest: 'Immutable fixture originals', replay: 'Exact line splices' },
     version: 1, baselineCommit: f.old, baselineInventory: t3 + 'sync-inventory.json', sourceInventory: t3 + 'mcp-skills-source.json',
     sources: [f.old, supplemental].map(commit => ({ commit, role: 'fixture', license: { spdx: 'MIT', path: 'LICENSE', sha256: sha256(license), distributedPath: t3 + 'LICENSE' } })),
-    outputs: [{ destination: shared, provenance: 'adapted-upstream', reason: 'Reviewed shared provider fixture', inputs: [await sourceIdentity(supplemental, supplementalPath), await sourceIdentity(f.old, 'src/main.ts')], sha256: sha256(sharedBytes), bytes: sharedBytes.length, mode: 0o644, recipe: { kind: 'exact-line-splices', primaryInput: 0, splices: [{ start: 0, before: [supplementalBytes.toString()], after: [sharedBytes.toString()] }] } }],
+    outputs: [{ destination: shared, provenance: 'adapted-upstream', reason: 'Reviewed shared provider fixture', license: 'MIT; vendor/t3code/LICENSE', inputs: [await sourceIdentity(supplemental, supplementalPath), await sourceIdentity(f.old, 'src/main.ts')], sha256: sha256(sharedBytes), bytes: sharedBytes.length, mode: 0o644, recipe: { kind: 'exact-line-splices', primaryInput: 0, splices: [{ start: 0, before: [supplementalBytes.toString()], after: [sharedBytes.toString()] }] } }],
   };
   const supplementalFiles = [];
   for (const name of ['LICENSE', supplementalPath]) {
@@ -584,6 +596,33 @@ test('cross-fork supplemental-only T3 output blocks an explicitly approved CC sh
   assert.ok(result.blockers.some(entry => entry.code === 'BLOCKED_CROSS_FORK' && entry.path === f.shared && entry.inventory === f.t3SupplementalPath));
   assert.equal(JSON.parse((await file(f.candidate, f.prefix + 'source-manifest.json')).bytes).commit, f.old, 'The new pin must not be written before the cross-fork check');
 });
+
+test('CC cross-fork bindings omit accepted retired T3 paths without weakening active owners or proof checks', async t => {
+  const f = await sharedForkFixture(t);
+  const ledger = JSON.parse((await file(f.host.root, f.t3SupplementalPath)).bytes);
+  const destination = 'apps/web/src/retired-owner.ts';
+  const bytes = Buffer.from('export const obsolete = true;\n');
+  const retired = { destination, provenance: 'local-integration', inputs: [], reason: 'Historical host integration', license: 'Existing repository terms', sha256: sha256(bytes), bytes: bytes.length, mode: 0o644, recipe: { kind: 'local-bytes', base64: bytes.toString('base64') }, retirement: { sha256: sha256(bytes), reason: 'Reviewed removal with no consumers' } };
+  ledger.outputs.push(retired);
+  await publish(f.host.root, f.t3SupplementalPath, encode(ledger));
+  await f.host.commit('accepted absent retirement fixture');
+  const report = await inspect({ root: f.host.root, source: f.upstream.root, project: 'cc-switch', target: f.target });
+  assert.deepEqual(report.blockers, []);
+  const binding = report.externalBindings.find(entry => entry.path === f.t3SupplementalPath);
+  assert.ok(binding.references.some(entry => entry.path === f.shared), 'Active external owner remains fingerprinted');
+  assert.ok(!binding.references.some(entry => entry.path === destination), 'Historical hash is not an active external binding');
+  await prepare({ plan: report, destination: f.candidate });
+  const result = await record({ candidate: f.candidate });
+  assert.equal(result.status, 'recorded', JSON.stringify(result.blockers));
+  retired.retirement.sha256 = '0'.repeat(64);
+  await publish(f.host.root, f.t3SupplementalPath, encode(ledger));
+  await assert.rejects(inspect({ root: f.host.root, source: f.upstream.root, project: 'cc-switch', target: f.target }), /Malformed adaptation retirement/);
+  retired.retirement.sha256 = retired.sha256;
+  await publish(f.host.root, f.t3SupplementalPath, encode(ledger));
+  await publish(f.host.root, destination, bytes);
+  await assert.rejects(inspect({ root: f.host.root, source: f.upstream.root, project: 'cc-switch', target: f.target }), /Retired target exists/);
+});
+
 
 test('first record rejects coherent old-generation inventory and patch forgery hiding an unchanged host safety patch', async t => {
   const f = await lifecycleFixture(t);

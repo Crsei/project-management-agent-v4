@@ -1,8 +1,9 @@
-import { studioRequiredProviderToolFeature, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioExecution } from "../../../../../../../../packages/contracts/src/automation-studio.ts";
+import { studioActionRequiresAgentWorkspace, studioRequiredProviderToolFeature, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioExecution } from "../../../../../../../../packages/contracts/src/automation-studio.ts";
 import type { AutomationCatalogField, AutomationCatalogTemplate } from "../../../../../../../../packages/contracts/src/automation-catalog";
 import { automationIntegrationSupportsMcp, automationIntegrationSupportsNativeApi, type AutomationIntegrationConnection } from "../../../../../../../../packages/contracts/src/automation-integrations.ts";
 import { isPmAutomationTemplateId, pmAutomationArgumentsSchema, type PmAutomationArguments } from "../../../../../../../../packages/contracts/src/automation-pm.ts";
 import { pmAutomationDefaultArguments } from "../../../../../../../../packages/automation-resources/pm-catalog.ts";
+import { executionSelectionSchema } from "../../../../../../../../packages/agent-contracts/src/execution.ts";
 
 export type StudioFrequency = "manual" | "once" | "hourly" | "daily" | "weekdays" | "weekly" | "custom" | "event";
 export type StudioFormValues = Record<string, string | number | boolean | null | string[] | PmAutomationArguments["repository"]>;
@@ -23,6 +24,15 @@ export function studioProviderToolReadiness(config: StudioConfig, capabilities: 
   return feature?.available === true
     ? { featureId, available: true, reason: null }
     : { featureId, available: false, reason: feature?.reason ?? "The selected Provider has not advertised support for the required tool adapter." };
+}
+
+/** Selection admission only; current directory identity/revision comes from the Agent server. */
+export function studioExecutionEnvironmentIssue(action: StudioConfig["action"], requiresReselection = false): "agent-workspace-required" | null {
+  const selection = action.executionSelection;
+  if (selection === undefined) return studioActionRequiresAgentWorkspace(action) || requiresReselection ? "agent-workspace-required" : null;
+  const parsed = executionSelectionSchema.safeParse(selection);
+  if (!parsed.success) return "agent-workspace-required";
+  return parsed.data.agentWorkspaceId || !studioActionRequiresAgentWorkspace(action) && !requiresReselection ? null : "agent-workspace-required";
 }
 export function emptyStudioConfig(projectId = ""): StudioConfig {
   return { name: "", description: "", projectId, tags: [], templateId: null, action: { kind: "prompt", providerInstanceId: "", model: "", options: {}, prompt: "", repositories: [], plugins: [], timeoutSeconds: 600 }, trigger: { kind: "manual" }, dailyLimit: 10, cooldownMinutes: 0 };
@@ -145,6 +155,7 @@ export function parseStudioObject(text: string): Record<string, unknown> {
 /** Typed assistant updates are limited to fields the user has never edited. Nested paths are checked individually. */
 export function applyStudioAssistantPatch(config: StudioConfig, patch: Partial<StudioConfig>, touched: ReadonlySet<string>): StudioConfig {
   function merge(current: unknown, proposal: unknown, path: string): unknown {
+    if (path === "action.executionSelection") return structuredClone(current);
     if (touched.has(path) || (path.startsWith("templateInputs.") && touched.has(path.replace("templateInputs.", "template.")))) return structuredClone(current);
     if (proposal === undefined) return structuredClone(current);
     if (proposal && typeof proposal === "object" && !Array.isArray(proposal)) {
@@ -152,7 +163,7 @@ export function applyStudioAssistantPatch(config: StudioConfig, patch: Partial<S
       const next = proposal as Record<string, unknown>;
       if ((path === "action" || path === "trigger") && next.kind !== undefined && next.kind !== before.kind) {
         if ([...touched].some(item => item.startsWith(`${path}.`))) return structuredClone(current);
-        before = {};
+        before = before.executionSelection === undefined ? {} : { executionSelection: before.executionSelection };
       }
       const result = { ...before };
       for (const [key, value] of Object.entries(next)) {

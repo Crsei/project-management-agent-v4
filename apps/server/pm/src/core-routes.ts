@@ -10,7 +10,7 @@ import { ProtocolError, statusCategory, type Diagnostic, type Entity, type FileR
 import { graphQuerySchema, type GraphQuery } from '../../../../packages/pm-schema/graph.ts';
 import { getMembership, type Membership } from '../../../../packages/application/src/access.ts';
 import { DomainError, type Actor, type Capability } from '../../../../packages/domain/src/core.ts';
-import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
+import type { SqlExecutor, TrustedMutationSource } from '../../../../packages/application/src/ports.ts';
 import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
 import { appendProjectAudit } from '../../../../packages/application/src/project-audit.ts';
 import { requestHash } from '../../../../packages/application/src/kernel.ts';
@@ -20,6 +20,7 @@ import type { CoreCreationAttempt } from '../../../../packages/contracts/src/cor
 import { coreProjectAuditWrites } from './core-adapter.ts';
 import { CoreCommandJournal, type CoreHttpCreation, type CoreHttpOutcome } from './core-journal.ts';
 import { captureCoreFacts, recoverPreparedCoreCreations } from './core-facts.ts';
+import { readCoreSnapshot } from '../../../../packages/pm-core/change-snapshots.ts';
 import { insertServiceFact, type CapturedServiceFact } from '../../../../packages/application/src/service-facts.ts';
 import { initializeLocalProject, beginLocalProjectOperation, readLocalProjectOperation, requireLocalManagement, assertLocalProjectWritable, assertLocalProjectTargetAvailable, type LocalProjectConfiguration } from '../../../../packages/application/src/local-projects.ts';
 import { assertCoreDeletionSafe } from '../../../../packages/application/src/core-deletion.ts';
@@ -121,7 +122,10 @@ export class CoreWorkspacePool {
       }
       workspace = new Workspace(root);
       const opened = workspace;
-      await opened.init(history => { recoverPreparedCoreCreations(opened.root, new CoreCommandJournal(opened.root), history); });
+      await opened.init(history => {
+        const entries = recoverPreparedCoreCreations(opened.root, new CoreCommandJournal(opened.root), history);
+        opened.retireMutationProofs(new Set(entries.flatMap(entry => entry.kind === 'fact_completed' ? [entry.captured.fact.factId] : [])));
+      });
       return opened;
     })().catch(async (error: unknown) => {
       this.entries.delete(workspaceId);
@@ -249,7 +253,7 @@ async function recoverCoreHttpOutcome(sql: SqlExecutor, pool: CoreWorkspacePool,
   }
   if (saved?.kind === 'http_completed') {
     await appendProjectAudit(sql, workspaceId, principal, saved.audit);
-    for (const fact of saved.facts ?? recoveredFacts) await insertServiceFact(sql, workspaceId, fact);
+    for (const fact of saved.facts ?? recoveredFacts) await insertServiceFact(sql, workspaceId, fact, key => readCoreSnapshot(root, key));
   }
   return saved;
 }
@@ -277,6 +281,7 @@ export type CoreMutationOptions = {
   log?: Pick<FastifyRequest['log'], 'error'>;
   checkAuthorization?: (sql: SqlExecutor) => Promise<void>;
   guard?: WorkspaceMutationGuard;
+  trustedSource?: TrustedMutationSource;
 };
 
 /** Shared native service: HTTP and trusted Agent calls retain identical guards, facts and journal keys. */
@@ -324,7 +329,7 @@ export async function executeAuditedCoreMutation(options: CoreMutationOptions): 
           await options.bindLocalProject(sql, mount);
         }
         await appendProjectAudit(sql, scope.workspaceId, principal, saved.audit);
-        for (const fact of saved.facts ?? []) await insertServiceFact(sql, scope.workspaceId, fact);
+        for (const fact of saved.facts ?? []) await insertServiceFact(sql, scope.workspaceId, fact, key => readCoreSnapshot(workspace.root, key));
         await sql.query('COMMIT');
         if (saved.revision === null) return { id: saved.targetId, deleted: true };
         let current: FileRecord;
@@ -383,7 +388,8 @@ export async function executeAuditedCoreMutation(options: CoreMutationOptions): 
       const facts: CapturedServiceFact[] = [];
       let result: FileRecord | { id: string; deleted: true };
       try { result = await workspace.captureMutations(captureCoreFacts({ sql, workspaceId: scope.workspaceId, root: workspace.root,
-        sourceKind: 'core_http', operationId: commandId, requestHash: hash, actorId: principal.id, facts, configuration: workspace.configuration().config }),
+        sourceKind: 'core_http', operationId: commandId, requestHash: hash, actorId: principal.id, facts, configuration: workspace.configuration().config, reusePrepared: local?.recovering ?? false,
+        ...(options.trustedSource ? { trustedSource: options.trustedSource } : {}) }),
         () => mutate(isCreation ? coreKey : headerKey, guard, prepared)); }
       catch (error) {
         const uncertain = !!local && workspace.projectLocations().some(location => location.initialization.key === coreKey) || error instanceof WorkspaceError && error.diagnostics.some(item => ['TRANSACTION_FAILED', 'PERSISTENT_STATE_INVALID', 'FILE_UNWRITABLE', 'PROJECT_INITIALIZATION_PENDING'].includes(item.code));
@@ -410,7 +416,7 @@ export async function executeAuditedCoreMutation(options: CoreMutationOptions): 
       journal.completeHttp({ commandId, actorId: principal.id, hash, targetId: result.id, revision: after?.revision ?? null, audit, facts, ...(creation ? { creation } : {}) });
       journalCompleted = true;
       await appendProjectAudit(sql, scope.workspaceId, principal, audit);
-      for (const fact of facts) await insertServiceFact(sql, scope.workspaceId, fact);
+      for (const fact of facts) await insertServiceFact(sql, scope.workspaceId, fact, key => readCoreSnapshot(workspace.root, key));
       await sql.query('COMMIT');
       return result;
     } catch (error) {

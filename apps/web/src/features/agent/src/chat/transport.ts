@@ -57,8 +57,8 @@ export class DurableChatTransport extends AssistantChatTransport<UIMessage> {
         // failed/conflicting save never silently falls back to a global model.
         const settings = await flushThreadSettings(options.id);
         if (!canSendThread(options.id, options.id, settings.settings.providerInstanceId, settings.settings.model, settings.settings.modelOptions))
-          throw new Error(agentText("无法发送：请确认会话绑定的工作区或项目、文件区域和 Provider 均可用。", "Cannot send: check that the workspace or project bound to this session, the file area, and the provider are all available."));
-        const pmReferences = getPmReferences();
+          throw new Error(agentText("无法发送：请确认会话执行绑定、Provider 和模型选项均可用。", "Cannot send: check the session execution binding, Provider, and model options."));
+        const pmReferences = getPmReferences(options.id);
         return {
           body: {
             ...options.body,

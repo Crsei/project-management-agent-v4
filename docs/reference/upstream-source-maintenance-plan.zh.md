@@ -1,7 +1,7 @@
 # t3code / cc-switch 上游源码维护与 Skill PR 流程计划
 
-> 状态：可评审计划草稿，尚未实施。日期：2026-11-05。
-> 本轮只研究参考项目并编写本文件；没有升级两个上游、改写运行源码、迁移目录、拆包、安装更新工具、启用定时任务、提交、推送或创建 PR。
+> 状态：本地维护工具、Skill 与受控发布协议已实施；生产基线、完整版本升级及真实 GitHub 发布仍有明确前置条件。日期：2026-11-05。实施与验收记录见第 14 节。
+> 保留以下原研究与计划依据。本次实施没有迁移或拆分源码，没有升级生产 pin、改写其他 fork 清单、启用 schedule、提交本项目、推送或创建真实 PR；公开操作入口为[维护指南](../guides/upstream-source-maintenance.md)。
 > 本计划基于本仓库源码及公开参考仓库，未查询 PM 中已有任务，因此不宣称任务已去重、已创建或已派发。下文 `draft:*` 仅是计划内编号。
 
 ## 1. 决策与目标
@@ -406,3 +406,72 @@ Skill 另设行为案例：缺基线、dirty tree、源码提示注入、语义�
 - 此次 pnpm 入口在执行检查前自动整理了已安装依赖（输出 `Packages: +6 -7`）；没有主动引入新的更新工具或参考项目构建依赖。
 
 并行研究中 cc-switch 专项代理遭遇模型服务鉴权/计费错误而未交付结论；该部分由主线程读取 Rust 装配、headless 配置、MCP DAO/服务及 Web bridge 补齐。其余参考研究和 t3code 专项返回了源码证据。子代理输出不作为未执行测试的替代。
+
+## 14. 实施结果与实际验收边界
+
+### 14.1 已交付的本地维护能力
+
+实现、复核及 Skill 行为代理均使用 `openai-codex/gpt-6.1-sol:xhigh`。维护机制沿用现有来源账本与两种精确 JSON recipe，不安装 vendir/Copybara、不新增第二套补丁栈，不迁移 vendor 或拆分应用。
+
+| 交付物 | 已实现行为 |
+| --- | --- |
+| [更新 CLI](../../scripts/upstream-sync.mjs)及 [core](../../scripts/upstream-sync/core.mjs) | inspect、隔离 prepare、三方合并、record、分层 verify、handoff；不可变 Git 对象读取、旧 metadata 认证、共享输出指纹、工具/候选失效、凭据隔离 |
+| [t3code profile](../../scripts/upstream-sync/t3code.mjs)与[策略](../../scripts/upstream-sync/t3code-policy.json) | 生产/补充双 pin、完整/选定模块、既有 adapter 与 OMP 边界、精确行 recipe、真实导入/目录资源、pnpm alias/peer/patch 与 package self-reference 闭包、打包来源身份校验 |
+| [cc-switch profile](../../scripts/upstream-sync/cc-switch.mjs)与[策略](../../scripts/upstream-sync/cc-switch-policy.json) | 原格式精确字节/本地 asset recipe、派生输入、Rust/TS/资源闭包、加密接点保护与只读 OpenHands 边界 |
+| [发布器](../../scripts/upstream-publish.mjs) | 本地 status、分别授权 commit/push/Draft PR、精确私有 index、create-only GitHub ref、未知结果核对、跨 base PR 去重、当前 SHA 的固定 workflow/job 验证 |
+| [维护 Skill](../../.agents/skills/upstream-source-update/SKILL.md) | 调用真实工具的授权编排、冲突/语义审阅、分阶段发布；不创建 PM 任务，不自动 merge/deploy |
+| [手动发现 workflow](../../.github/workflows/upstream-discover.yml) | 固定公开来源、受信 default-branch 工具、只读 fetch/inspect、保留 blocker 与报告；无依赖安装、写 token、schedule 或付费 Agent |
+| [公开指南](../guides/upstream-source-maintenance.md)与[CI](../../.github/workflows/ci.yml) | 完整命令、同 pin authoring、审阅参数、边界与停用流程；原 CI 增加维护协议回归/lint，不替代原全仓检查 |
+
+同 pin 的本地修改使用明确的 `prepare --purpose local-authoring`：默认 no-change 仍不创建目录；逐个输出用实际 SHA256 审阅，不能手改旧清单后“重新认证”。这与跨版本升级分开，既不抹掉原始来源，也不自动批准新的源码范围。
+
+现有适配接点已记录必要性、替代方向与移除条件；本轮没有为了追求“零补丁”而删除加密、租约、路径、权限或续接保护。两份原 `vendor/*/SYNC.md` 自身是被指纹绑定的既有资产，本轮保持原字节，不利用写文档之名 recapture 未审阅的生产账本；新的操作说明从根 README、开发指南和 Skill 索引公开链接。
+
+### 14.2 已执行的验证
+
+开始时已有 818 项并行修改，涉及 Easyuse/showcase 移除及来源漂移，未由本任务接管。演练使用独立的已提交宿主基线 `19be07a009c9f3dc357918b4062a01030a9a87ec`，不把它称为包含当前 dirty 工作的生产基线。
+
+期间并行工作再次改变 `scripts/check-ci.mjs` 和 `scripts/check-third-party-notices.mjs`，实际触发 `STALE_PLAN`。没有重签旧计划；之后固定独立工具副本：宿主/verifier 使用上述提交，新增维护代码逐字节复制当前实现，TypeScript/YAML 解析器单独固定。没有读取操作员凭据、借用 CLI Home、启动或接管服务。
+
+| 实际检查 | 观察结果 | 证据边界 |
+| --- | --- | --- |
+| `node --test scripts/upstream-sync/*.test.mjs scripts/upstream-publish.test.mjs` | 最终固定副本 112/112 通过，0 skipped | 包含真实临时 Git、namespace、冲突/重建/失效/发布恢复；GitHub API 使用 fixture，不是实际 PR |
+| 当前主工作树维护源码 `oxlint --deny-warnings` | 通过，无 warning | 仅本次维护工具，不是全仓 lint/类型/构建 |
+| 两项目真实旧 pin 的 inspect / 默认 prepare | no-change；未创建目标目录 | 不代表目标新版本已集成 |
+| 两项目真实同 pin local-authoring | 隔离候选内仅追加可丢弃注释，经精确批准后 record 成功；各自 provenance 通过 | 实际运行完整真实来源账本与生成器，不是业务功能变更或生产升级 |
+| t3code `full` | provenance、原 `actual-import-closure --check` 通过；随后因隔离环境无 `pnpm` 阻塞 | 未执行后续类型、构建、打包和真实 Provider 验收 |
+| cc-switch `full` | provenance 通过；首组 host tests 因未预置 `@agent-workspace/contracts` 等工作区依赖失败 | 不是 native/Rust/Web/真实 Agent 行为通过；失败 stdout 已作为有界诊断保留 |
+| 两项目诊断 handoff 与本地 publisher | 明确 provenance-only、`ready=false`；publisher 均拒绝 `FULL_VERIFICATION_REQUIRED` | 没有将失败/环境阻塞换成 full 成功；真实 commit/push/PR 均未执行 |
+| Skill 行为烟测 | 14 个案例经输出/动作核对符合本轮边界；22 次合成调用，无发布写入请求 | 两个指定模型代理各七例、按 scenario ID 隔离，不是十四次统计独立调用或真实工具权限验收 |
+| workflow 本地执行 | 原 Node body 通过指定代理真实 fetch 两个公开上游并生成报告；无安装依赖，inspect 的 TypeScript runtime 为 null | 本地脚本演练，不是已部署的 GitHub Actions run；blocker 保持非零状态 |
+
+发现脚本的本地夹具首次额外复制了未提交的 publisher 测试文件，工具正确报告 `DIRTY_BASELINE`。仅删除本次复制的夹具文件后，使用已取得的同一 Git 对象再 inspect，dirty 列表为空，仍精确保留下面的跨 fork 阻塞；没有放宽生产 dirty 检查。
+
+专项回归还覆盖了审查/实跑发现的修正：其他 fork 的 `destination` 与补充输出漏绑定、首轮候选伪造旧 recipe/清单、supplemental-only 路径误入主 pin、宿主 package 被误当上游 workspace、目录 URL 资源、pnpm alias/self-import、旧打包 pin 冒充新来源、无关绿色 CI、未知 PR 状态被重复 push 清除、人工 retarget 后重复 PR。没有用放宽原 verifier 或删除安全检查来让它们通过。
+
+### 14.3 真实上游目标及共享阻塞
+
+| 检查 | 目标完整 commit | 选定变化条目 | 精确共享阻塞 |
+| --- | --- | --- | --- |
+| t3code 指定目标演练 | `df0cc36dea0c36d155b39f58e33fef66b426be19` | 524 | cc-switch 绑定的两个宿主输出；prepare 拒绝且不创建目录 |
+| t3code 随后手动发现的 HEAD | `2d0efd35840dd3118939cd27b096340ea522a541` | 532 | 同两个宿主输出；发现不等于已接受该版本 |
+| cc-switch 目标演练与手动发现 | `4e13413ff236860b445e6c7f3f7590e999de0eea` | 169 | OpenHands 绑定的五个输出；prepare 拒绝且不创建目录 |
+
+t3code 的共享输出为 `apps/server/agent/src/providers/t3code/management.ts`、`packages/agent-contracts/src/provider.ts`。cc-switch 的共享输出为其 `src/components/mcp/McpFormModal.tsx`、`src/components/mcp/UnifiedMcpPanel.tsx`、`src/components/ui/dialog.tsx`、`src/hooks/useMcpConnectivity.ts`、`src/types.ts`。没有自动改写 cc-switch/OpenHands 的相应清单。
+
+此外，`apps/server/agent/scripts/package.mjs` 仍写固定旧 upstreamCommit，并由 t3code、cc-switch、OpenHands 绑定；cc-switch 还保留其精确本地 asset recipe。PM `continuation.ts` 独立固定 `PM_UPSTREAM_COMMIT` 和 schema。实际升级必须独立审阅共享打包身份及续接兼容性，不能仅修改来源版本号。新 full 验证核对实际 artifact 与五份分发 provenance 的目标 pin/精确内容，旧 stamp 或旧 JSON 不能冒充新版本。
+
+旧 t3code adaptation replay helper 的固定 pin 只影响旧 `sync` / `verify-sync` 入口，不是新 full 命令链的前提；新 profile 已提供 generation-aware 精确重放。保持旧守卫，不冒称旧入口已经支持任意新 pin。
+
+### 14.4 尚未闭合的计划项
+
+- **T1：生产来源基线。** 等并行所有者完成并确认已接受的源码/来源记录；不 reset、clean、批量 capture 或接管其他 fork。
+- **T7：完整版本升级与业务/产物验证。** 需要批准上述共享范围、处理实际语义移植和续接边界，并在凭据隔离、锁一致且工具链齐备的环境完成完整 profile/全仓 CI。当前来源重放成功不是升级验收。
+- **T9：真实发布链。** 本地协议与恢复回归已实现；本项目 commit、push、Draft PR 仍分别需要明确授权，并需实际 GitHub 权限、审批策略及同 HEAD CI。没有创建真实 PR。
+- **T10 的远端启用部分。** 手动发现和指南已交付；schedule 仍未启用，也没有将工作流发布到远端或注册自动执行 Agent。
+
+会话与持久化仍未统一设计收口，继续沿用 Agent Chat；本次不新增存储模型、权限体系或业务完成规则。全仓 `check:docs` 的既有来源漂移阻塞仍单列，不以专项文档检查代替；真实 Provider/平台/GUI、许可发布授权和生产部署未验收。
+
+文档专项检查覆盖本次七份 Markdown、90 个本地链接，另核对计划的 12 个固定研究源码路径及 10 个任务的依赖闭包/无环；YAML、Skill frontmatter 与 14 个场景结构有效。未重跑已知会被来源漂移前置检查阻止的全仓 `check:docs`。
+
+本轮创建的独立候选、工具副本、下载 cache、临时注释和验证目录已删除；没有删除用户原有上游仓库或此前按要求取得的参考项目。以上是历史验证记录，不是可直接发布的存活 handoff。

@@ -1,73 +1,54 @@
-import { Search, X } from "lucide-react";
+import { Search, SlidersHorizontal, X } from "lucide-react";
 import { useOpenHandsTranslation } from "@pm/openhands-source/web/i18n";
-import { cn } from "@pm/openhands-source/utils/utils";
-import type { McpSectionFilter } from "./mcp-section-filter";
-import { McpSectionFilterDropdown } from "./mcp-section-filter-dropdown";
+import { EnumFilterDropdown } from "@pm/openhands-source/web/shared/enum-filter-dropdown";
 
-interface McpToolbarProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  sectionFilter: McpSectionFilter;
-  onSectionFilterChange: (filter: McpSectionFilter) => void;
-}
+type McpQuickFilter = "all" | "http" | "stdio" | "issues";
 
-/**
- * Full-width search plus section filter for the MCP page. Filters both the
- * Installed and Library sections (or limits which section is visible).
- */
+/** Search plus the source presentation's enum filter dropdown. */
 export function McpToolbar({
   search,
   onSearchChange,
-  sectionFilter,
-  onSectionFilterChange,
-}: McpToolbarProps) {
+  quickFilter,
+  onQuickFilterChange,
+  showIssues = true,
+}: {
+  search: string;
+  onSearchChange: (value: string) => void;
+  quickFilter: McpQuickFilter;
+  onQuickFilterChange: (filter: McpQuickFilter) => void;
+  showIssues?: boolean;
+}) {
   const { t } = useOpenHandsTranslation();
-
-  return (
-    <div data-testid="mcp-toolbar" className="flex items-stretch gap-2">
-      <div
-        data-testid="mcp-search"
-        className={cn(
-          "relative flex flex-1 min-w-0 items-center",
-          "rounded-lg border border-border bg-base-secondary",
-          "focus-within:border-contrast/40 focus-within:ring-1 focus-within:ring-contrast/20",
-          "transition-colors",
-        )}
-      >
-        <Search
-          className="ml-3 h-4 w-4 text-tertiary-alt shrink-0"
-          aria-hidden
-        />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={t("MCP$SEARCH_PLACEHOLDER")}
-          aria-label={t("MCP$SEARCH_PLACEHOLDER")}
-          data-testid="mcp-search-input"
-          className={cn(
-            "flex-1 min-w-0 bg-transparent border-0 outline-none",
-            "px-3 py-2 text-sm placeholder:text-tertiary-alt",
-            "[&::-webkit-search-cancel-button]:hidden",
-          )}
-        />
-        {search ? (
-          <button
-            type="button"
-            onClick={() => onSearchChange("")}
-            aria-label={t("MCP$SEARCH_CLEAR")}
-            data-testid="mcp-search-clear"
-            className="mr-2 p-1 rounded text-tertiary-alt hover:text-content cursor-pointer"
-          >
-            <X className="h-4 w-4" aria-hidden />
-          </button>
-        ) : null}
-      </div>
-
-      <McpSectionFilterDropdown
-        value={sectionFilter}
-        onChange={onSectionFilterChange}
+  const options: McpQuickFilter[] = showIssues ? ["all", "http", "stdio", "issues"] : ["all", "http", "stdio"];
+  const labels: Record<string, string> = {
+    all: t("MCP$SECTION_FILTER_ALL"),
+    http: "HTTP",
+    stdio: "STDIO",
+    issues: t("MCP_PM$ATTENTION"),
+  };
+  return <div data-testid="mcp-toolbar" className="oh-mcp-toolbar">
+    <div data-testid="mcp-search" className="oh-mcp-search">
+      <Search aria-hidden />
+      <input
+        type="search"
+        value={search}
+        onChange={event => onSearchChange(event.target.value)}
+        placeholder={t("MCP$SEARCH_PLACEHOLDER")}
+        aria-label={t("MCP$SEARCH_PLACEHOLDER")}
+        data-testid="mcp-search-input"
       />
+      {search ? <button type="button" onClick={() => onSearchChange("")} aria-label={t("MCP$SEARCH_CLEAR")} data-testid="mcp-search-clear">
+        <X aria-hidden />
+      </button> : null}
     </div>
-  );
+    <EnumFilterDropdown
+      testId="mcp-filter"
+      value={quickFilter}
+      onChange={onQuickFilterChange}
+      options={options}
+      labelByValue={labels}
+      ariaLabel={t("MCP$SECTION_FILTER_LABEL")}
+      startContent={<SlidersHorizontal aria-hidden />}
+    />
+  </div>;
 }

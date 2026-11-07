@@ -4,8 +4,11 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import i18n from "i18next";
 import en from "@/i18n/locales/en.json";
 
-import UnifiedSkillsPanel from "@/components/skills/UnifiedSkillsPanel";
-import { settingsApi, skillsApi } from "@/lib/api";
+import UnifiedSkillsPanel, {
+  type SkillsInstalledPresentation,
+} from "@/components/skills/UnifiedSkillsPanel";
+import { settingsApi } from "@/lib/api/settings";
+import { skillsApi } from "@/lib/api/skills";
 import type {
   InstalledSkill,
   SkillBackupEntry,
@@ -285,6 +288,83 @@ describe("UnifiedSkillsPanel", () => {
         enabled: false,
       }),
     );
+  });
+
+  it("awaits each Agent bulk write, keeps failures visible and never replays a failed assignment", async () => {
+    m.installed = [
+      makeSkill({ id: "a", name: "A", apps: { claude: true, codex: true } }),
+      makeSkill({ id: "b", name: "B", apps: { claude: true, codex: true } }),
+    ];
+    type BulkResult = {
+      succeeded: string[];
+      failed: Array<{ item: string; error: Error }>;
+    };
+    const pending: Array<(result: BulkResult) => void> = [];
+    m.bulkToggle.mockImplementation(() => {
+      const { promise, resolve } = Promise.withResolvers<BulkResult>();
+      pending.push(resolve);
+      return promise;
+    });
+    let presentation: SkillsInstalledPresentation | undefined;
+    const onNavigation = vi.fn();
+    renderPanel({
+      onNavigationBlockedChange: onNavigation,
+      renderInstalled: (state) => {
+        presentation = state;
+        return null;
+      },
+    });
+
+    const initial = presentation!;
+    let completed = false;
+    let clearing: Promise<void>;
+    act(() => {
+      clearing = (async () => {
+        for (const app of ["claude", "codex"] as const) {
+          await initial.onBulkToggle(["a", "b"], app, false);
+        }
+        completed = true;
+      })();
+    });
+    await waitFor(() => expect(m.bulkToggle).toHaveBeenCalledTimes(1));
+    expect(m.bulkToggle).toHaveBeenNthCalledWith(1, {
+      ids: ["a", "b"], app: "claude", enabled: false,
+    });
+    expect(completed).toBe(false);
+    expect(presentation!.busy).toBe(true);
+    expect(onNavigation).toHaveBeenLastCalledWith(true);
+
+    await act(async () => {
+      pending[0]!({
+        succeeded: ["a"],
+        failed: [{ item: "b", error: new Error("native sync failed") }],
+      });
+    });
+    await waitFor(() => expect(m.bulkToggle).toHaveBeenCalledTimes(2));
+    expect(m.bulkToggle).toHaveBeenNthCalledWith(2, {
+      ids: ["a", "b"], app: "codex", enabled: false,
+    });
+    expect(completed).toBe(false);
+    expect(presentation!.busy).toBe(true);
+    expect(onNavigation).toHaveBeenLastCalledWith(true);
+    expect(presentation!.failures["b\u0000claude"]).toEqual({
+      desired: false,
+      error: expect.stringContaining("native sync failed"),
+    });
+
+    await act(async () => {
+      pending[1]!({ succeeded: ["a", "b"], failed: [] });
+      await clearing!;
+    });
+    expect(completed).toBe(true);
+    expect(presentation!.busy).toBe(false);
+    expect(onNavigation).toHaveBeenLastCalledWith(false);
+    expect(presentation!.failures["b\u0000claude"]).toEqual({
+      desired: false,
+      error: expect.stringContaining("native sync failed"),
+    });
+    expect(m.bulkToggle).toHaveBeenCalledTimes(2);
+    expect(m.toastWarning).toHaveBeenCalledTimes(1);
   });
 
   it.each([true, false])(
@@ -820,44 +900,6 @@ describe("UnifiedSkillsPanel", () => {
     ).toBeInTheDocument();
   });
 
-  it("says which ZIP Skills were skipped because the folder name is taken", async () => {
-    m.installed = [makeSkill()];
-    const dialog = vi
-      .spyOn(skillsApi, "openZipFileDialog")
-      .mockResolvedValue("/tmp/team.zip");
-    m.installFromZip.mockResolvedValueOnce({
-      installed: [],
-      skipped: [
-        {
-          directory: "my-helper",
-          existingId: "local:my-helper",
-          existingName: "My Helper",
-        },
-      ],
-    });
-    renderPanel();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /skillsPage.add/ }),
-    );
-    await userEvent.click(
-      await screen.findByRole("menuitem", { name: "skillsPage.addMenu.zip" }),
-    );
-
-    await waitFor(() =>
-      expect(m.toastWarning).toHaveBeenCalledWith(
-        "skills.installFromZip.allSkipped",
-        expect.objectContaining({
-          description: "skills.installFromZip.skippedBody",
-        }),
-      ),
-    );
-    expect(m.toastInfo).not.toHaveBeenCalledWith(
-      "skills.installFromZip.noSkillsFound",
-      expect.anything(),
-    );
-    dialog.mockRestore();
-  });
 
   it("blocks actions but not navigation while checking updates", async () => {
     m.installed = [makeSkill()];

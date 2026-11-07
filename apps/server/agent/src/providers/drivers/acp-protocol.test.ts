@@ -7,6 +7,7 @@ import type { NativeOutputEvent } from "@agent-workspace/contracts/output";
 import { continuationKey, PM_CONTINUATIONS } from "../t3code/continuation.ts";
 import { deleteRecord, listRecords } from "../../durable/store.ts";
 import { createAcpTestHarness } from "./acp-test-harness.ts";
+import { agentWorkspaceEnvironment } from "../../durable/execution.testkit.ts";
 
 for (const family of ["grok", "fx", "acpRegistry"] as const) {
   test(`original ${family} typed ACP-v2 owns one fresh process/session, arithmetic, streaming and native resume`, { timeout: 40_000 }, async t => {
@@ -123,7 +124,7 @@ for (const family of ["grok", "fx", "acpRegistry"] as const) {
     try {
       const context = { ...f.context,
         execution: { threadId: `${family}-pm-thread`, generationId: `${family}-pm-generation`, messageId: "message-1",
-          scope: { workspaceId: "controlled-workspace", projectId: null } },
+          environment: agentWorkspaceEnvironment(f.context.cwd, true) },
         pmToolBridge: { command: process.execPath, args: [fileURLToPath(new URL("../../../../../../vendor/t3code/packages/provider-acp/src/server/mcpOverAcpBridge.test-peer.ts", import.meta.url))] },
         authorizeExecution: async (action: "compaction" | "tool") => {
           if (action !== "tool") throw new Error("Compaction was not granted."); authorized++;

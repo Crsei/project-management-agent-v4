@@ -21,6 +21,25 @@ test("cross-origin requests, MCP bearers and PM service credentials cannot enter
     assert.equal((await app.request(url, { headers: { host: "127.0.0.1", "x-pm-automation-signature": "synthetic" } })).status, 403);
   } finally { if (previous === undefined) delete process.env.AGENT_WORKSPACE_ACCESS_TOKEN; else process.env.AGENT_WORKSPACE_ACCESS_TOKEN = previous; }
 });
+test("registered Provider resolver rejects forged authority and keeps browser access guards", async () => {
+  const previous = process.env.AGENT_WORKSPACE_ACCESS_TOKEN;
+  delete process.env.AGENT_WORKSPACE_ACCESS_TOKEN;
+  const url = "http://127.0.0.1/api/extensions/providers/unknown/context";
+  try {
+    const request = (body: unknown, extra: Record<string, string> = {}) => app.request(url, {
+      method: "POST", headers: { host: "127.0.0.1", "content-type": "application/json", ...extra }, body: JSON.stringify(body),
+    });
+    assert.equal((await request({}, { origin: "https://evil.invalid" })).status, 403);
+    assert.equal((await request({}, { authorization: "Bearer pm-mcp-access-v1.synthetic" })).status, 401);
+    assert.equal((await request({}, { "x-pm-automation-signature": "synthetic" })).status, 403);
+    for (const forged of [{ confirmed: true }, { homeDir: "/tmp/forged" }, { externalTargetIds: ["one"] }, { providerInstanceIds: ["other"] }]) {
+      const response = await request(forged);
+      assert.equal(response.status, 400);
+      assert.equal((await response.json() as { code: string }).code, "invalid_request");
+    }
+  } finally { if (previous === undefined) delete process.env.AGENT_WORKSPACE_ACCESS_TOKEN; else process.env.AGENT_WORKSPACE_ACCESS_TOKEN = previous; }
+});
+
 test("private service control requires body/path-bound HMAC and rejects browser-origin even with a valid signature", async () => {
   const previous = { ...process.env };
   const root = await mkdtemp(path.join(os.tmpdir(), "extension-route-fixture-"));

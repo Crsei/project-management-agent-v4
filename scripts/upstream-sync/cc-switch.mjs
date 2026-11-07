@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resourceClosure } from "../../vendor/cc-switch/scripts/closure.mjs";
-import { applyPatch, encode, file, patchBytes, policyInputs, publish, relative, safePath, sha256, walk } from "../../vendor/cc-switch/scripts/provenance.mjs";
+import { applyPatch, encode, externalHostOutputs, file, patchBytes, policyInputs, publish, relative, safePath, sha256, verifyExternalHostOutputs, walk } from "../../vendor/cc-switch/scripts/provenance.mjs";
 
 const prefix = "vendor/cc-switch/";
 const manifestPath = prefix + "source-manifest.json";
@@ -73,6 +73,8 @@ async function loadData(root) {
   if (sha256(closureBytes) !== inventory.closureSha256 || sha256(treeBytes) !== inventory.upstreamTreeSha256) throw new Error("CC closure/upstream tree identity is inconsistent.");
   const closure = JSON.parse(closureBytes), tree = JSON.parse(treeBytes);
   if (closure.version !== 1 || tree.version !== 1 || closure.upstreamCommit !== data.manifest.commit || tree.upstreamCommit !== data.manifest.commit) throw new Error("Wrong CC closure/upstream tree pin.");
+  externalHostOutputs(data.policy, inventory, closure);
+  const externalHost = await verifyExternalHostOutputs(root, data.policy);
   const inputs = new Map(data.manifest.files.map((entry) => [entry.path, checkedInput(entry, data.manifest.commit)]));
   const outputs = new Set(), recipes = new Map();
   for (const recipe of inventory.patches) {
@@ -94,7 +96,7 @@ async function loadData(root) {
   for (const input of inputs.values()) if (!inventory.files.some((entry) => entry.destination === prefix + input.path && entry.source === input.path)) throw new Error(`Unmapped selected CC source: ${input.path}`);
   if (JSON.stringify(inventory.hostBuildInputs.map((entry) => entry.path)) !== JSON.stringify(data.policy.hostBuildInputs ?? [])) throw new Error("CC host input enrollment changed.");
   for (const name of tree.paths) relative(name);
-  return { ...data, inventory, inventoryBytes, closure, closureBytes, tree, treeBytes, inputs, recipes };
+  return { ...data, inventory, inventoryBytes, closure, closureBytes, tree, treeBytes, inputs, recipes, externalHost };
 }
 
 async function otherFork(root, policy = {}) {
@@ -123,8 +125,9 @@ export async function loadProfile(root) {
   const data = await loadData(root);
   const policy = await json(trustedRoot, maintenancePolicyPath);
   const other = await otherFork(root, data.policy);
-  const metadataPaths = unique([manifestPath, inventoryPath, forkPolicyPath, closurePath, treePath, ...protectedTools, ...data.inventory.patches.map((entry) => entry.path), ...other.paths]);
-  const host = new Map(data.inventory.hostBuildInputs.map((entry) => [entry.path, entry]));
+  const ownerPaths = data.externalHost.metadata.map((entry) => entry.path);
+  const metadataPaths = unique([manifestPath, inventoryPath, forkPolicyPath, closurePath, treePath, ...protectedTools, ...data.inventory.patches.map((entry) => entry.path), ...other.paths, ...ownerPaths]);
+  const host = new Map([...data.inventory.hostBuildInputs, ...data.externalHost.inputs].map((entry) => [entry.path, entry]));
   for (const input of data.closure.inputs) if (!data.inventory.files.some((entry) => entry.destination === input.path)) host.set(input.path, { path: input.path, sha256: input.sha256, bytes: input.bytes });
   const derived = new Set((data.policy.derivedOutputs ?? []).map((entry) => entry.destination));
   return {
@@ -133,11 +136,12 @@ export async function loadProfile(root) {
     outputs: data.inventory.files.map((entry) => ({ path: entry.destination, sourcePath: entry.source ?? null, sourceCommit: entry.source ? data.manifest.commit : null, sha256: entry.sha256, bytes: entry.bytes, mode: entry.mode, kind: !entry.source ? "local" : derived.has(entry.destination) ? "derived" : entry.patch ? "patched" : "pristine", ...(derived.has(entry.destination) ? { inputs: [data.inputs.get(entry.source)] } : {}) })),
     hostInputs: [...host.values()], selection: selections(data.manifest),
     crossForkInputs: other.inputs.map((entry) => ({ ...entry, consumer: "openhands-extensions" })),
-    protectedPaths: ["vendor/openhands-extensions", ...protectedTools],
+    protectedPaths: ["vendor/openhands-extensions", ...protectedTools, ...ownerPaths, ...data.externalHost.inputs.map((entry) => entry.path)],
     authoringPaths: unique([manifestPath, inventoryPath, forkPolicyPath, closurePath, treePath, ...data.inventory.patches.map((entry) => entry.path)]),
     authoringTrees: [prefix + "integration-patches"],
     verification: [
       { id: "cc-host-tests", command: "node", args: ["--conditions=development", "--test", "apps/server/agent/src/extensions/secrets.test.ts", "apps/server/agent/src/extensions/routes.test.ts", "apps/server/agent/src/extensions/external-targets.test.ts", "apps/server/agent/src/extensions/provider-bindings.test.ts", "apps/server/agent/src/extensions/storage.test.ts", "apps/server/agent/src/extensions/service.integration.test.ts"] },
+      { id: "cc-provider-skills-contracts", command: "node", args: ["--conditions=development", "--test", "apps/server/agent/src/providers/t3code/management.test.ts"] },
       { id: "cc-headless-tests", command: "cargo", args: ["test", "--locked", "--offline", "--manifest-path", "apps/server/cc-switch-host/Cargo.toml"] },
       { id: "cc-native-build", command: "cargo", args: ["build", "--locked", "--offline", "--release", "--manifest-path", "apps/server/cc-switch-host/Cargo.toml"] },
       { id: "cc-web-typecheck", command: "pnpm", args: ["--filter", "@pm/web", "typecheck"] },
@@ -213,6 +217,8 @@ async function unchangedInputs(root, data) {
     const current = await optionalFile(root, entry.path);
     if (!current || sha256(current.bytes) !== entry.sha256 || current.bytes.length !== entry.bytes) failures.push(blocker("BLOCKED_BASELINE_DRIFT", `Unapproved host/resource input changed: ${entry.path}`, { path: entry.path }));
   }
+  const currentOwner = await verifyExternalHostOutputs(root, data.policy);
+  if (JSON.stringify(currentOwner) !== JSON.stringify(data.externalHost)) failures.push(blocker("BLOCKED_EXTERNAL_OWNER_DRIFT", "External host owner generation changed during CC recording."));
   return failures;
 }
 
@@ -247,6 +253,8 @@ export async function recordGeneration({ root, source: _source, targetCommit, pl
   blockers.push(...await unchangedInputs(root, data));
   const changes = new Map((plan.changes ?? []).filter((entry) => entry.outputPath).map((entry) => [relative(entry.outputPath), entry]));
   const approvals = plan.approvedOutputHashes ?? {};
+  const ownerPaths = new Set([...data.externalHost.inputs, ...data.externalHost.metadata].map((entry) => entry.path));
+  for (const name of Object.keys(approvals)) if (ownerPaths.has(name)) throw new Error(`CC cannot approve an external owner generation: ${name}`);
   const reviewedDerived = new Set((plan.reviewedDerivedOutputs ?? []).map(relative));
   const derived = new Map((data.policy.derivedOutputs ?? []).map((entry) => [relative(entry.destination), entry]));
   for (const name of reviewedDerived) if (!derived.has(name)) throw new Error(`Reviewed derivation is not enrolled in CC fork policy: ${name}`);
@@ -350,6 +358,7 @@ export async function recordGeneration({ root, source: _source, targetCommit, pl
   let closure;
   try { closure = await closureFor(root, data, policy, files, [...newTree.keys()].sort(compare), pending); }
   catch (error) { return { changedPaths: [], notes, blockers: [blocker("BLOCKED_RESOURCE_CLOSURE", error.message)] }; }
+  externalHostOutputs(policy, { ...data.inventory, files }, JSON.parse(closure));
   const upstreamTree = encode({ version: 1, upstreamCommit: targetCommit, paths: [...newTree.keys()].sort(compare) });
   const result = encode({ ...data.inventory, upstreamCommit: targetCommit, sourceManifestSha256: sha256(manifestBytes), policySha256: sha256(pending.get(forkPolicyPath).bytes), closureSha256: sha256(closure), upstreamTreeSha256: sha256(upstreamTree), files: files.sort((a, b) => compare(a.destination, b.destination)), patches: [...recipes].map(([name, bytes]) => ({ path: name, sha256: sha256(bytes) })).sort((a, b) => compare(a.path, b.path)), summary: { originalInputs: targetEntries.length, pristine: files.filter((entry) => entry.provenance === "pristine-upstream").length, adapted: files.filter((entry) => entry.provenance === "patched-upstream").length, extracted: files.filter((entry) => derived.has(entry.destination)).length, local: files.filter((entry) => !entry.source).length } });
   pending.set(closurePath, { bytes: closure, mode: 0o644 });

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, FlaskConical, MessageSquare, Save, Sparkles } from "lucide-react";
 import { Button } from "@agent/components/ui/button";
 import { Input } from "@agent/components/ui/input";
 import type { Entity } from "../../../../../../../../packages/contracts/src/client";
-import { studioConfigSchema, studioDefinitionSchema, studioExecutionSchema, studioNativeTemplateIdSchema, studioNativeTemplateRequiresProvider, studioProviderOptionsSchema, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioExecution, type StudioValidation } from "../../../../../../../../packages/contracts/src/automation-studio";
+import { studioActionRequiresAgentWorkspace, studioConfigSchema, studioDefinitionSchema, studioExecutionSchema, studioNativeTemplateIdSchema, studioNativeTemplateRequiresProvider, studioProviderOptionsSchema, type StudioCapabilities, type StudioConfig, type StudioDefinition, type StudioExecution, type StudioValidation } from "../../../../../../../../packages/contracts/src/automation-studio";
 import { StudioApiError, StudioClient } from "../../../../../../../../packages/contracts/src/automation-studio-client";
 import { AutomationTransferClient } from "../../../../../../../../packages/contracts/src/automation-transfer-client";
 import { AUTOMATION_TRANSFER_LIMITS, type AutomationBundleUpload } from "../../../../../../../../packages/contracts/src/automation-transfer";
@@ -14,12 +14,13 @@ import { validateNativeTemplateArguments } from "../../../../../../../../package
 import { isPmAutomationTemplateId } from "../../../../../../../../packages/contracts/src/automation-pm";
 import { useAgentText } from "../../i18n";
 import { studioPrerequisites, useStudioConnections } from "./studio-setup-dependencies";
-import { applyStudioAssistantPatch, clearStudioRecovery, cronEditorClock, cronFor, emptyStudioConfig, frequencyOf, interpolateStudioExpression, interpolateStudioTemplate, localTimeInZone, normalizeStudioTemplateValues, onceInZone, parseStudioObject, readStudioDraft, redactStudioRecovery, serializeStudioDraft, settleStudioPriorRequest, studioConnectionSupportsAction, studioDraftKey, studioFieldIssue, studioPendingFromPriorMembership, studioProviderToolReadiness, templateDefaults, type StudioDraftState, type StudioFormValues, type StudioFrequency, type StudioPending } from "./studio-setup";
+import { applyStudioAssistantPatch, clearStudioRecovery, cronEditorClock, cronFor, emptyStudioConfig, frequencyOf, interpolateStudioExpression, interpolateStudioTemplate, localTimeInZone, normalizeStudioTemplateValues, onceInZone, parseStudioObject, readStudioDraft, redactStudioRecovery, serializeStudioDraft, settleStudioPriorRequest, studioConnectionSupportsAction, studioDraftKey, studioExecutionEnvironmentIssue, studioFieldIssue, studioPendingFromPriorMembership, studioProviderToolReadiness, templateDefaults, type StudioDraftState, type StudioFormValues, type StudioFrequency, type StudioPending } from "./studio-setup";
 import { StudioSetupField as Field } from "./studio-setup-field";
 import { StudioSetupAction } from "./studio-setup-action";
 import { StudioPmParameters } from "./studio-pm-parameters";
 import styles from "./studio-setup.module.css";
 import { RadixSelect } from "@/components/ui/radix-select"
+import { ExecutionSelectionField } from "../execution-workspace";
 
 export type StudioAssistRequest = { prompt: string; projectId: string; definitionId?: string; draftId?: string; templateId?: string; config?: StudioConfig; onApply?: (patch: Partial<StudioConfig>) => void };
 export type StudioAssistCallback = (request: StudioAssistRequest) => void | Promise<void>;
@@ -83,6 +84,16 @@ export function StudioEditor(props: Props) {
   const [assisting, setAssisting] = useState(false);
   const connections = useStudioConnections(workspaceId, state.config.projectId);
   const config = state.config;
+  const selectionKey = JSON.stringify(config.action.executionSelection ?? null);
+  const [availableSelection, setAvailableSelection] = useState<string | null>(null);
+  const reportExecutionAvailability = useCallback((available: boolean) => setAvailableSelection(available ? selectionKey : null), [selectionKey]);
+  const executionAvailable = availableSelection === selectionKey;
+  const requiresReselection = state.definition?.executionUnavailableReason === "agent_workspace_selection_required";
+  const executionIssue = studioExecutionEnvironmentIssue(config.action, requiresReselection);
+  const executionReady = !executionIssue && (!config.action.executionSelection?.agentWorkspaceId || executionAvailable);
+  const executionWarning = executionIssue
+    ? t("请选择一个独立 Agent Workspace 文件夹。旧目录配置不会自动转换；脚本及仓库模板不能使用仅对话临时目录。文件夹与下方 PM 业务项目相互独立。", "Select an independent Agent Workspace folder. Old directory configuration is never converted automatically; scripts and repository templates cannot use chat-only scratch. The folder is independent of the PM business project.")
+    : !executionReady ? t("所选文件夹不可用、已关闭或版本过期，请刷新目录并明确重新选择；不会自动替换执行目录。", "The selected folder is unavailable, closed, or stale. Refresh and explicitly reselect it; the execution directory is never replaced automatically.") : undefined;
   const saved = state.definition;
   const scopeMismatch = Boolean(props.projectId && config.projectId !== props.projectId);
   const usableConnections = connections.connections.filter(connection => studioConnectionSupportsAction(connection, config.action.kind));
@@ -291,7 +302,9 @@ export function StudioEditor(props: Props) {
   }
   async function sendMutation(pending: StudioPending) {
     if (props.projectId && pending.config && pending.config.projectId !== props.projectId) { setError(t("恢复配置与当前 URL 项目不一致。请先选择匹配项目；请求未发送。", "The recovery configuration does not match the URL project. Select the matching scope first; no request was sent.")); return; }
+    const needsReselection = live.current.definition?.executionUnavailableReason === "agent_workspace_selection_required";
     if (pending.config && (pending.kind === "test" || pending.kind === "enable" || (pending.kind === "update" && live.current.definition?.status === "enabled"))) {
+      if (studioExecutionEnvironmentIssue(pending.config.action, needsReselection) || pending.config.action.executionSelection?.agentWorkspaceId && (!executionAvailable || JSON.stringify(pending.config.action.executionSelection) !== selectionKey)) { setError(t("执行文件夹未就绪。请选择当前可用、版本有效的 Agent Workspace；旧配置必须明确重新选择，不会回退临时对话或 PM 文档目录。", "The execution folder is not ready. Select an available, current-revision Agent Workspace. Old configuration requires explicit reselection; chat-scratch and PM-document directories are never substituted.")); return; }
       const tools = studioProviderToolReadiness(pending.config, capabilities);
       if (!tools.available) { setError(tools.reason ?? t("所选 Provider 不支持此操作所需工具。", "The selected Provider cannot receive the tools required for this action.")); return; }
     }
@@ -316,7 +329,9 @@ export function StudioEditor(props: Props) {
     inFlight.current = true; setBusy(true); setError(""); setNotice("");
     try {
       const value = await prepareTemplateConfig(); if (!value) return;
+      if (requiresReselection && studioExecutionEnvironmentIssue(value.action, true)) { setError(t("此旧配置需要先明确选择新的 Agent Workspace 文件夹，原业务配置与收据会保留。", "This old configuration requires an explicitly selected Agent Workspace folder first. Business configuration and receipts are preserved.")); return; }
       if (after || saved?.status === "enabled") {
+        if (studioExecutionEnvironmentIssue(value.action, requiresReselection) || value.action.executionSelection?.agentWorkspaceId && (!executionAvailable || JSON.stringify(value.action.executionSelection) !== selectionKey)) { setError(t("请先确认当前可用的 Agent Workspace 文件夹。脚本及仓库模板不能使用仅对话临时目录；未启用草稿可单独保存。", "Confirm an available Agent Workspace folder first. Scripts and repository templates cannot use chat-only scratch; an inactive draft can be saved separately.")); return; }
         const tools = studioProviderToolReadiness(value, capabilities);
         if (!tools.available) { setError(tools.reason ?? t("所选 Provider 不支持此操作所需工具。", "The selected Provider cannot receive the tools required for this action.")); return; }
       }
@@ -407,7 +422,13 @@ export function StudioEditor(props: Props) {
       <Button variant="ghost" disabled={locked} onClick={() => loadServerVersion(latest)}>{t("载入服务器配置", "Load server configuration")}</Button></div>
     </section>}
     <Field label={t("项目", "Project")} issue={issues.projectId}>{id => <RadixSelect id={id} disabled={locked || Boolean(saved)} value={config.projectId} onChange={event => change({ projectId: event.target.value })}><option value="">{t("选择项目", "Choose a project")}</option>{projects.map(project => <option key={project.id} value={project.id}>{typeof project.data.name === "string" ? project.data.name : project.id} ({project.id})</option>)}</RadixSelect>}</Field>
+    {renderConfiguration && <Field label={t("Agent 助手快捷入口", "Agent assistant shortcut")} help={t("在此项目的 Agent 助手箭头菜单显示已保存自动化。不会因勾选或打开菜单而运行；草稿仍不能直接运行。", "Show this saved automation in the project's Agent assistant arrow menu. Checking this or opening the menu never runs it; drafts still cannot run.")} issue={issues.quickAccess}>{id => <input id={id} type="checkbox" data-testid="automation-quick-access" checked={config.quickAccess === true} disabled={locked || !canWrite} onChange={event => change({ quickAccess: event.target.checked })} />}</Field>}
     {scopeMismatch && <section className={styles.warning} role="alert"><strong>{t("恢复草稿与当前项目范围不一致", "Recovery draft does not match the current project scope")}</strong><p>{t(`草稿项目：${config.projectId || "未选择"}；URL 项目：${props.projectId}。输入不会自动改写。请在项目字段选择 URL 项目，或返回草稿所属项目后继续。保存、上传、测试与启用均被阻止。`, `Draft project: ${config.projectId || "not selected"}; URL project: ${props.projectId}. Your input is not rewritten. Select the URL project in the project field, or return to the draft's project. Saving, uploading, testing and enabling are blocked.`)}</p></section>}
+    <section className={styles.section}><h2>{t("Agent 执行文件夹", "Agent execution folder")}</h2>
+      <ExecutionSelectionField value={config.action.executionSelection} allowChatOnly={!requiresReselection && !studioActionRequiresAgentWorkspace(config.action)} disabled={locked} onChange={executionSelection => actionChange({ executionSelection })} onAvailabilityChange={reportExecutionAvailability} />
+      {executionWarning && <p role="status" className={styles.dependency}>{executionWarning}</p>}
+      {!executionWarning && !config.action.executionSelection?.agentWorkspaceId && <p className={styles.notice}>{t("非仓库模板、普通对话及无工具 PM 分析可使用仅对话环境；外部 API 仓库元数据不等于本机执行文件夹。PM 目标仅由上方项目字段确定。", "Non-repository templates, ordinary chat and no-tools PM analysis may remain chat-only. External API repository metadata is not a local execution folder. The project field above alone determines the PM business target.")}</p>}
+    </section>
     {(capabilityError || connections.error) && <div className={styles.error} role="alert">{capabilityError || connections.error}<Button variant="ghost" size="sm" onClick={() => { setCapabilityVersion(value => value + 1); connections.refresh(); }}>{t("刷新能力", "Refresh capabilities")}</Button></div>}
     {!providerTools.available && <section className={styles.warning} role="status"><strong>{needsReadOnlyAnalysis ? t("无工具只读分析 Provider 尚未就绪", "No-tools read-only analysis Provider is not ready") : t("所选 Provider 的工具能力不可用", "Selected Provider tool capability is unavailable")}</strong><p>{providerTools.reason}</p><p>{needsReadOnlyAnalysis ? t("请选择明确声明 pmAnalysis 能力且已认证的 Provider；工具沙箱不等于无工具执行。没有兼容 Provider 时可保存草稿，但不能试运行或启用。无需模型的确定性模板不受影响。", "Choose an authenticated Provider explicitly advertising pmAnalysis. A tool sandbox is not a no-tools boundary. Without a compatible Provider you can save a draft, but cannot test or enable it. Deterministic templates do not require a model.") : t("未启用的配置仍可保存；已启用定义请先暂停或选择支持的 Provider。此限制只针对当前需要连接器/工作区工具的操作，不会禁用普通 Prompt、新闻摘要或确定性工作流。", "Non-enabled configurations can still be saved; pause an enabled definition or choose a supported Provider before updating it. This applies only to the current connector/workspace-tool action; ordinary prompts, news summaries and deterministic workflows remain available.")}</p><code>{providerTools.featureId}</code><Button variant="ghost" size="sm" onClick={() => setCapabilityVersion(value => value + 1)}>{t("刷新 Provider 能力", "Refresh Provider capabilities")}</Button></section>}
     {(stage === "prerequisites" || (template && stage === "review")) && <section className={styles.section}><h2>{t("必需能力与连接", "Required capabilities and connections")}</h2>{!prerequisites.length && <p>{t("此模板不要求额外外部连接。", "This template requires no additional external integration.")}</p>}<ul className={styles.prerequisites}>{prerequisites.map(item => <li key={item.id}><span className={item.available ? styles.connected : styles.dependency}>{item.available ? <Check size={14} /> : "○"} {item.id} {!item.required && t("（可选）", " (optional)")}</span><p>{item.reason}</p><small>{item.available ? t("已就绪", "Available") : t("尚未就绪", "Not available")}</small></li>)}</ul><div className={styles.actions}><Button variant="outline" onClick={() => { connections.refresh(); setCapabilityVersion(value => value + 1); }}>{t("刷新前提条件", "Refresh prerequisites")}</Button>{onIntegrations && <Button variant="ghost" onClick={onIntegrations}>{t("管理项目连接", "Manage project integrations")}</Button>}<Button disabled={locked || !config.projectId} onClick={() => setStage("form")}>{blocked.length ? t("继续配置（尚不可运行）", "Configure (not ready to run)") : t("继续", "Continue")}</Button></div></section>}
@@ -462,15 +483,15 @@ export function StudioEditor(props: Props) {
     {stage === "review" && <section className={styles.section}>
       <h2>{t("审查配置", "Review configuration")}</h2><p>{mode === "direct" ? t("只读预检不执行模型、不产生运行记录。保存草稿、试运行与启用是分开的动作。", "Read-only preflight does not invoke a model or create a run. Save draft, test, and enable are separate actions.") : t("这些起点将预填到现有 Chat。您仍需在对话中确认并发送，不会在此创建规则。", "These starting points prefill the existing Chat. You still review and send there; this does not create a rule.")}</p>
       {validation && <><p className={validation.valid ? styles.connected : styles.dependency}>{validation.valid ? t("预检通过", "Preflight passed") : t("预检发现问题", "Preflight found issues")}{validation.nextDueAt && ` · ${t("下次", "Next")}: ${validation.nextDueAt}`}</p><ul>{validation.issues.map(issue => <li key={`${issue.path}:${issue.code}`} className={styles.dependency}><code>{issue.path}</code>: {issue.message}</li>)}</ul></>}
-      <details open><summary>{t("冻结配置预览", "Frozen configuration preview")}</summary><pre>{JSON.stringify(mode === "direct" ? config : { templateId: template?.id, projectId: config.projectId, values: state.values }, null, 2)}</pre></details><Button variant="ghost" onClick={() => setStage("form")}>{t("返回修改", "Back to edit")}</Button>
+      <details open><summary>{t("冻结配置预览", "Frozen configuration preview")}</summary><pre>{JSON.stringify(mode === "direct" ? config : { templateId: template?.id, projectId: config.projectId, values: state.values, executionSelection: config.action.executionSelection }, null, 2)}</pre></details><Button variant="ghost" onClick={() => setStage("form")}>{t("返回修改", "Back to edit")}</Button>
     </section>}
     {renderConfiguration && <>
       <section className={styles.section}>
         <Field label={t("试运行事件 Payload（JSON object）", "Test event payload (JSON object)")}>{id => <textarea id={id} rows={3} value={state.testPayload} disabled={locked} onChange={event => { const next = { ...live.current, testPayload: event.target.value }; live.current = next; setState(next); }} />}</Field>
         <div className={styles.actions}>
-          <Button variant="outline" disabled={locked || !canWrite || Boolean(latest) || (saved?.status === "enabled" && !providerTools.available)} onClick={() => { void save(null); }}><Save size={14} />{saved ? t("保存修改", "Save changes") : t("保存草稿", "Save draft")}</Button>
-          <Button variant="outline" disabled={locked || !canWrite || Boolean(latest) || blocked.length > 0 || !actionAvailable?.available} onClick={() => { void save("test"); }}><FlaskConical size={14} />{t("保存并真实试运行", "Save and run real test")}</Button>
-          <Button disabled={locked || !canWrite || Boolean(latest) || blocked.length > 0 || !actionAvailable?.available || ((config.trigger.kind === "once" || config.trigger.kind === "cron") && !capabilities?.scheduler.ready)} onClick={() => { void save("enable"); }}>{saved ? t("保存并启用", "Save and enable") : t("创建并启用", "Create and enable")}</Button>
+          <Button variant="outline" disabled={locked || !canWrite || Boolean(latest) || (saved?.status === "enabled" && (!providerTools.available || !executionReady))} onClick={() => { void save(null); }}><Save size={14} />{saved ? t("保存修改", "Save changes") : t("保存草稿", "Save draft")}</Button>
+          <Button variant="outline" disabled={locked || !canWrite || Boolean(latest) || blocked.length > 0 || !actionAvailable?.available || !executionReady} onClick={() => { void save("test"); }}><FlaskConical size={14} />{t("保存并真实试运行", "Save and run real test")}</Button>
+          <Button disabled={locked || !canWrite || Boolean(latest) || blocked.length > 0 || !actionAvailable?.available || !executionReady || ((config.trigger.kind === "once" || config.trigger.kind === "cron") && !capabilities?.scheduler.ready)} onClick={() => { void save("enable"); }}>{saved ? t("保存并启用", "Save and enable") : t("创建并启用", "Create and enable")}</Button>
         </div>
         {!canWrite && <p className={styles.dependency}>{t("需要当前项目的编辑权限与实时能力响应。", "Current project edit permission and a live capability response are required.")}</p>}
       </section>

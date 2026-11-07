@@ -1,159 +1,59 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { pmJson, PmApiError, usePmChatState } from "./state";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import type { PmToolTarget } from "@agent-workspace/contracts/pm-tools";
 import type { Entity } from "../../../../../../../packages/contracts/src/client";
+import { pmJson, PmApiError, refreshCatalog, usePmChatState } from "./state";
 import type { PmChangeSet, PmIssue, PmReference } from "./pm-types";
-import { setPmChatContext, setPmReferences } from "./pm-chat-bridge";
+import { clearPmReferences, setPmReferences } from "./pm-chat-bridge";
 import { agentText } from "../i18n-text.ts";
 
 export const PM_REFERENCE_LIMIT = 20;
-
-type State = {
-  issues: readonly PmIssue[];
-  loading: boolean;
-  error: string | null;
-  hasMore: boolean;
-  query: string;
-  selectedIds: ReadonlySet<string>;
-  references: readonly PmReference[];
-  currentIssueId: string | null;
-  currentIssue: PmIssue | null;
-  changes: readonly PmChangeSet[];
+type Value = {
+  workspaceId: string | null; projectId: string | null; workspaceName: string | null; projectName: string | null;
+  issues: readonly PmIssue[]; filteredIssues: readonly PmIssue[]; loading: boolean; error: string | null;
+  hasMore: boolean; query: string; selectedIds: ReadonlySet<string>; references: readonly PmReference[];
+  currentIssueId: string | null; currentIssue: PmIssue | null; changes: readonly PmChangeSet[];
+  pickerOpen: boolean; referenceError: string | null;
+  setQuery: (value: string) => void; loadMore: () => void; refresh: () => void;
+  toggleSelection: (id: string) => void; selectVisible: () => void; clearSelection: () => void;
+  addSelectedToReferences: () => void; toggleReference: (issue: PmIssue) => void;
+  removeReference: (reference: PmReference) => void; clearReferences: () => void;
+  selectCurrentIssue: (id: string | null) => void; openPicker: () => void; closePicker: () => void;
+  selectTarget: (target: PmToolTarget | null) => void; setChanges: (changes: readonly PmChangeSet[]) => void;
 };
-
-type Value = State & {
-  workspaceId: string | null;
-  projectId: string | null;
-  workspaceName: string | null;
-  projectName: string | null;
-  filteredIssues: readonly PmIssue[];
-  pickerOpen: boolean;
-  referenceError: string | null;
-  setQuery: (value: string) => void;
-  loadMore: () => void;
-  refresh: () => void;
-  toggleSelection: (id: string) => void;
-  selectVisible: () => void;
-  clearSelection: () => void;
-  addSelectedToReferences: () => void;
-  toggleReference: (issue: PmIssue) => void;
-  removeReference: (id: string) => void;
-  clearReferences: () => void;
-  selectCurrentIssue: (id: string | null) => void;
-  openPicker: () => void;
-  closePicker: () => void;
-  setChanges: (changes: readonly PmChangeSet[]) => void;
-};
-
 const Context = createContext<Value | null>(null);
+type SearchItem = { id: string; title: string; status: string | null; priority: string | null; projectId: string | null; assigneeId: string | null; dueDate: string | null; revision: string; updatedAt: string | null };
+type SearchPage = { items: SearchItem[]; nextCursor: string | null };
+const referenceIdentity = (reference: Pick<PmReference, "workspaceId" | "projectId" | "kind" | "id">) => JSON.stringify([reference.workspaceId, reference.projectId, reference.kind, reference.id]);
 
-function asString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value : null;
+function readError(error: unknown) {
+  return error instanceof PmApiError && [401, 403].includes(error.status)
+    ? agentText("PM 登录已过期或无权读取此目标；请重新登录 PM。", "Your PM session expired or this target is unauthorized. Sign in to PM again.")
+    : error instanceof Error ? error.message : String(error);
 }
 
-function statusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    backlog: "Backlog",
-    todo: agentText("待办", "To do"),
-    in_progress: agentText("进行中", "In progress"),
-    in_review: agentText("待审", "In review"),
-    done: agentText("完成", "Done"),
-    canceled: agentText("已取消", "Canceled"),
-    cancelled: agentText("已取消", "Canceled"),
-    blocked: agentText("阻塞", "Blocked"),
-  };
-  return labels[status] ?? status.replaceAll("_", " ");
-}
-
-function mapIssue(entity: Entity, projectName?: string): PmIssue {
-  const data = entity.data ?? {};
-  const projectId = entity.projectId ?? asString(data.projectId) ?? "";
-  const status = asString(data.status) ?? asString(data.labStatus) ?? "unknown";
-  return {
-    id: entity.id,
-    title: asString(data.title) ?? asString(data.name) ?? entity.id,
-    projectId,
-    ...(projectName ? { projectName } : {}),
-    status,
-    statusLabel: statusLabel(status),
-    priority: asString(data.priority),
-    assigneeId: asString(data.assigneeId) ?? asString(data.assignee),
-    assigneeName: asString(data.assigneeName),
-    dueDate: asString(data.dueDate) ?? asString(data.due),
-    updatedAt: entity.updatedAt,
-    revision: data.contentRevision != null ? String(data.contentRevision) : null,
-    archived: data.archived === true || entity.kind === "work_item" && data.archivedAt != null,
-  };
-}
-
-type AgentIssueSearchItem = {
-  id: string; title: string; status: string | null; priority: string | null;
-  projectId: string | null; assigneeId: string | null; dueDate: string | null;
-  revision: string; updatedAt: string | null;
-};
-type AgentIssueSearchPage = { items: AgentIssueSearchItem[]; nextCursor: string | null };
-
-function mapSearchItem(item: AgentIssueSearchItem, projectName?: string): PmIssue {
-  const status = item.status ?? "unknown";
-  return {
-    id: item.id,
-    title: item.title,
-    projectId: item.projectId ?? "",
-    ...(projectName ? { projectName } : {}),
-    status,
-    statusLabel: statusLabel(status),
-    priority: item.priority,
-    assigneeId: item.assigneeId,
-    dueDate: item.dueDate,
-    updatedAt: item.updatedAt,
-    revision: item.revision,
-    archived: false,
-  };
-}
-
-async function readIssues(workspaceId: string, projectId: string | null, after: string | null, queryText: string, signal: AbortSignal): Promise<AgentIssueSearchPage> {
-  const query = new URLSearchParams({ limit: "100" });
-  if (projectId) query.set("projectId", projectId);
-  if (after) query.set("after", after);
-  if (queryText.trim()) query.set("q", queryText.trim());
-  return pmJson<AgentIssueSearchPage>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/agent-issues?${query.toString()}`, { signal });
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof PmApiError && (error.status === 401 || error.status === 403)) return agentText("PM 登录已过期或无权读取任务；请重新登录 PM。", "Your PM session expired or you lack permission to read tasks; sign in to PM again.");
-  return error instanceof Error ? error.message : String(error);
-}
-
-export function PmIssueWorkspaceProvider({ workspaceId, projectId, initialIssueId = null, initialEntityId = null, referenceKey, localThreadId, children }: {
-  workspaceId: string | null;
-  projectId: string | null;
-  initialIssueId?: string | null;
-  /** PM hand-off entity (document or project) that is not a work item. */
-  initialEntityId?: string | null;
-  referenceKey: string;
-  localThreadId: string;
-  children: ReactNode;
+export function PmIssueWorkspaceProvider({ workspaceId: entryWorkspaceId, projectId: entryProjectId, initialIssueId = null, initialEntityId = null, referenceKey, localThreadId, children }: {
+  workspaceId: string | null; projectId: string | null; initialIssueId?: string | null; initialEntityId?: string | null;
+  referenceKey: string; localThreadId: string; children: ReactNode;
 }) {
   const chatState = usePmChatState();
+  const [target, setTarget] = useState<PmToolTarget | null>(() => entryWorkspaceId ? { workspaceId: entryWorkspaceId, projectId: entryProjectId } : null);
+  const workspaceId = target?.workspaceId ?? null, projectId = target?.projectId ?? null;
   const [issues, setIssues] = useState<readonly PmIssue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
-  const [query, setQueryState] = useState("");
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [query, setQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const [references, setReferences] = useState<readonly PmReference[]>([]);
   const [currentIssueId, setCurrentIssueId] = useState<string | null>(initialIssueId);
-  const [currentIssue, setCurrentIssue] = useState<PmIssue | null>(null);
-  /** Entity kind of the resolved entry object; null means "not proven". */
-  const [currentIssueKind, setCurrentIssueKind] = useState<Entity["kind"] | null>(null);
-  const [changes, setChangesState] = useState<readonly PmChangeSet[]>([]);
+  const [changes, setChanges] = useState<readonly PmChangeSet[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const cursor = useRef<string | null>(null);
-  const loadedScope = useRef<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   const referenceOwner = useRef<{ key: string; localId: string } | null>(null);
   const skipReferenceSave = useRef(false);
-
+  useEffect(() => { setTarget(entryWorkspaceId ? { workspaceId: entryWorkspaceId, projectId: entryProjectId } : null); }, [entryWorkspaceId, entryProjectId, localThreadId]);
   useEffect(() => {
     const previous = referenceOwner.current;
     referenceOwner.current = { key: referenceKey, localId: localThreadId };
@@ -165,7 +65,7 @@ export function PmIssueWorkspaceProvider({ workspaceId, projectId, initialIssueI
     }
     try {
       const value: unknown = JSON.parse(sessionStorage.getItem(`pm-v3:agent-references:${referenceKey}`) ?? "[]");
-      setReferences(Array.isArray(value) ? value.filter((item): item is PmReference => item && typeof item.id === "string" && typeof item.title === "string" && ["issue", "project", "document"].includes(item.kind)).slice(0, PM_REFERENCE_LIMIT) : []);
+      setReferences(Array.isArray(value) ? value.filter((item): item is PmReference => item && typeof item.workspaceId === "string" && typeof item.id === "string" && typeof item.title === "string" && (item.projectId === null || typeof item.projectId === "string") && ["issue", "project", "document"].includes(item.kind)).slice(0, PM_REFERENCE_LIMIT) : []);
     } catch { setReferences([]); setReferenceError(agentText("浏览器无法恢复引用。", "The browser could not restore references.")); }
   }, [referenceKey, localThreadId]);
   useEffect(() => {
@@ -175,235 +75,84 @@ export function PmIssueWorkspaceProvider({ workspaceId, projectId, initialIssueI
       else sessionStorage.removeItem(`pm-v3:agent-references:${referenceKey}`);
     } catch { setReferenceError(agentText("浏览器无法保存引用。", "The browser could not save references.")); }
   }, [referenceKey, references]);
+  useEffect(() => {
+    setPmReferences(localThreadId, references.map(({ workspaceId, projectId, kind, id, revision }) => ({ workspaceId, projectId, kind, id, revision })));
+    return () => clearPmReferences(localThreadId);
+  }, [localThreadId, references]);
 
-  const catalogWorkspace = chatState.catalog?.workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
-  const catalogProject = catalogWorkspace?.projects.find((project) => project.id === projectId) ?? null;
-  const workspaceName = catalogWorkspace?.name ?? null;
-  const projectName = catalogProject?.name ?? null;
-
-  const mapWithProject = useCallback((entity: Entity) => {
-    const projectIdForIssue = entity.projectId ?? asString(entity.data?.projectId) ?? "";
-    const name = chatState.catalog?.workspaces
-      .flatMap((workspace) => workspace.projects)
-      .find((project) => project.id === projectIdForIssue)?.name;
-    return mapIssue(entity, name);
-  }, [chatState.catalog]);
-
-  const load = useCallback(async (mode: "replace" | "append", signal: AbortSignal) => {
-    if (!workspaceId) {
-      setIssues([]);
-      setHasMore(false);
-      setLoading(false);
-      setError(null);
-      cursor.current = null;
-      return;
-    }
-    setLoading(true);
-    setError(null);
+  const workspace = chatState.catalog?.workspaces.find(item => item.id === workspaceId);
+  const projectName = workspace?.projects.find(item => item.id === projectId)?.name ?? null;
+  const load = useCallback(async (append: boolean, signal: AbortSignal) => {
+    if (!workspaceId) { setIssues([]); setLoading(false); setHasMore(false); return; }
+    setLoading(true); setError(null);
     try {
-      const page = await readIssues(workspaceId, projectId, mode === "append" ? cursor.current : null, query, signal);
+      const params = new URLSearchParams({ limit: "100" });
+      if (projectId) params.set("projectId", projectId);
+      if (append && cursor.current) params.set("after", cursor.current);
+      if (query.trim()) params.set("q", query.trim());
+      const page = await pmJson<SearchPage>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/agent-issues?${params}`, { signal });
       if (signal.aborted) return;
-      const mapped = page.items.map((item) => {
-        const name = chatState.catalog?.workspaces.flatMap((workspace) => workspace.projects).find((project) => project.id === item.projectId)?.name;
-        return mapSearchItem(item, name);
-      });
-      setIssues((previous) => {
-        const next = mode === "append" ? [...previous, ...mapped] : mapped;
-        return [...new Map(next.map((issue) => [issue.id, issue])).values()];
-      });
-      cursor.current = page.nextCursor;
-      setHasMore(page.nextCursor !== null);
-    } catch (cause) {
-      if (!signal.aborted) setError(errorMessage(cause));
-    } finally {
-      if (!signal.aborted) setLoading(false);
-    }
-  }, [chatState.catalog, projectId, query, workspaceId]);
-
+      const mapped: PmIssue[] = page.items.map(item => ({ ...item, projectId: item.projectId ?? "", projectName: workspace?.projects.find(project => project.id === item.projectId)?.name, status: item.status ?? "unknown", archived: false }));
+      setIssues(previous => [...new Map([...(append ? previous : []), ...mapped].map(issue => [issue.id, issue])).values()]);
+      cursor.current = page.nextCursor; setHasMore(page.nextCursor !== null);
+    } catch (cause) { if (!signal.aborted) setError(readError(cause)); }
+    finally { if (!signal.aborted) setLoading(false); }
+  }, [workspaceId, projectId, query, workspace]);
   useEffect(() => {
-    const scopeKey = `${workspaceId ?? ""}:${projectId ?? ""}`;
-    const scoped = loadedScope.current === scopeKey;
-    loadedScope.current = scopeKey;
-    abort.current?.abort();
-    const controller = new AbortController();
-    abort.current = controller;
-    if (!scoped) {
-      setIssues([]);
-      setSelectedIds(new Set());
-      setCurrentIssueId(initialIssueId);
-      setCurrentIssue(null);
-      setCurrentIssueKind(null);
-      setChangesState([]);
-      cursor.current = null;
-    }
-    void load("replace", controller.signal);
+    abort.current?.abort(); const controller = new AbortController(); abort.current = controller;
+    setIssues([]); setSelectedIds(new Set()); cursor.current = null;
+    void load(false, controller.signal);
     return () => controller.abort();
-  }, [initialIssueId, load, projectId, workspaceId]);
-
-
+  }, [load]);
+  // An explicit PM entry may become a message reference, but never Session ownership.
   useEffect(() => {
-    if (!currentIssueId || !workspaceId) {
-      setCurrentIssue(null);
-      setCurrentIssueKind(null);
-      return;
-    }
-    const found = issues.find((issue) => issue.id === currentIssueId);
-    if (found) {
-      setCurrentIssue(found);
-      setCurrentIssueKind("work_item");
-      return;
-    }
-    let cancelled = false;
+    const id = initialIssueId ?? initialEntityId;
+    if (!entryWorkspaceId || !id) return;
     const controller = new AbortController();
-    void pmJson<Entity>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/entities/${encodeURIComponent(currentIssueId)}`, { signal: controller.signal })
-      .then((entity) => {
-        if (cancelled) return;
-        const mapped = mapWithProject(entity);
-        setCurrentIssue(mapped);
-        setCurrentIssueKind(entity.kind);
-        setIssues((previous) => previous.some((issue) => issue.id === mapped.id) ? previous : [...previous, mapped]);
-      })
-      .catch((cause) => {
-        if (!cancelled) setError(errorMessage(cause));
-      });
-    return () => { cancelled = true; controller.abort(); };
-  }, [currentIssueId, issues, mapWithProject, workspaceId]);
-
-  // Publish the resolved PM entry object to the transport bridge. A missing
-  // kind never becomes an entity binding; an unresolved hand-off is treated as
-  // the task ID PM itself passed in, which is what the create call needs.
-  useEffect(() => {
-    const resolvedId = currentIssue?.id ?? null;
-    const taskId = currentIssueKind === "work_item"
-      ? resolvedId
-      : currentIssueKind === null
-        ? resolvedId ?? initialIssueId
-        : null;
-    const entityId = initialEntityId ?? (currentIssueKind === "project" ? resolvedId : null);
-    setPmChatContext({ taskId, entityId });
-  }, [currentIssue, currentIssueKind, initialEntityId, initialIssueId]);
-
-  // Publish only schema-valid reference inputs: unknown project IDs are dropped
-  // instead of making the whole chat body fail PM validation.
-  useEffect(() => {
-    setPmReferences(references.map((reference) => ({
-      kind: reference.kind,
-      id: reference.id,
-      projectId: reference.projectId && /^PRJ-\d+$/.test(reference.projectId) ? reference.projectId : null,
-      revision: reference.revision,
-    })));
-  }, [references]);
-
-  const filteredIssues = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return issues;
-    return issues.filter((issue) => [issue.id, issue.title, issue.statusLabel, issue.priority, issue.projectName]
-      .some((value) => value?.toLowerCase().includes(needle)));
-  }, [issues, query]);
-
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const selectVisible = useCallback(() => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous);
-      for (const issue of filteredIssues) next.add(issue.id);
-      return next;
-    });
-  }, [filteredIssues]);
-
-  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
-
-  const toggleReference = useCallback((issue: PmIssue) => {
-    setReferences((previous) => {
-      const found = previous.some((reference) => reference.kind === "issue" && reference.id === issue.id);
-      if (found) return previous.filter((reference) => !(reference.kind === "issue" && reference.id === issue.id));
-      if (previous.length >= PM_REFERENCE_LIMIT) {
-        setReferenceError(agentText(`单次最多引用 ${PM_REFERENCE_LIMIT} 个任务；请先移除部分引用。`, `You can reference at most ${PM_REFERENCE_LIMIT} tasks at once; remove some references first.`));
-        return previous;
-      }
-      setReferenceError(null);
-      return [...previous, { kind: "issue", id: issue.id, projectId: issue.projectId, title: issue.title, revision: issue.revision, availability: "unverified" }];
-    });
-  }, []);
+    void pmJson<Entity>(`/api/v1/workspaces/${encodeURIComponent(entryWorkspaceId)}/entities/${encodeURIComponent(id)}`, { signal: controller.signal }).then(entity => {
+      if (controller.signal.aborted) return;
+      if (!["work_item", "project", "document"].includes(entity.kind)) throw new Error(agentText("此 PM 对象类型不支持消息引用。", "This PM entity type does not support message references."));
+      const kind = entity.kind === "work_item" ? "issue" : entity.kind === "project" ? "project" : "document";
+      const reference: PmReference = { workspaceId: entryWorkspaceId, projectId: entity.projectId ?? entryProjectId, kind, id: entity.id, title: String(entity.data.title ?? entity.data.name ?? entity.id), revision: entity.data.contentRevision == null ? null : String(entity.data.contentRevision), availability: "unverified" };
+      setReferences(previous => previous.some(item => referenceIdentity(item) === referenceIdentity(reference)) ? previous : [...previous, reference].slice(0, PM_REFERENCE_LIMIT));
+    }).catch(cause => { if (!controller.signal.aborted) setReferenceError(readError(cause)); });
+    return () => controller.abort();
+  }, [entryWorkspaceId, entryProjectId, initialIssueId, initialEntityId, localThreadId]);
 
   const addSelectedToReferences = useCallback(() => {
-    setReferences((previous) => {
-      const existing = new Set(previous.map((reference) => `${reference.kind}:${reference.id}`));
-      const additions = issues
-        .filter((issue) => selectedIds.has(issue.id) && !existing.has(`issue:${issue.id}`))
-        .slice(0, Math.max(0, PM_REFERENCE_LIMIT - previous.length))
-        .map((issue) => ({ kind: "issue" as const, id: issue.id, projectId: issue.projectId, title: issue.title, revision: issue.revision, availability: "unverified" as const }));
-      if (previous.length + additions.length > PM_REFERENCE_LIMIT) setReferenceError(agentText(`单次最多引用 ${PM_REFERENCE_LIMIT} 个任务；超出的任务未加入。`, `You can reference at most ${PM_REFERENCE_LIMIT} tasks at once; the extra tasks were not added.`));
-      else setReferenceError(null);
-      return [...previous, ...additions];
+    if (!workspaceId) return;
+    setReferences(previous => {
+      const existing = new Set(previous.map(referenceIdentity));
+      const additions = issues.filter(issue => selectedIds.has(issue.id)).map((issue): PmReference => ({ workspaceId, projectId: issue.projectId || null, kind: "issue", id: issue.id, title: issue.title, revision: issue.revision, availability: "unverified" })).filter(item => !existing.has(referenceIdentity(item)));
+      if (previous.length + additions.length > PM_REFERENCE_LIMIT) setReferenceError(agentText(`单次最多引用 ${PM_REFERENCE_LIMIT} 个对象。`, `At most ${PM_REFERENCE_LIMIT} references per message.`));
+      return [...previous, ...additions].slice(0, PM_REFERENCE_LIMIT);
     });
-  }, [issues, selectedIds]);
-
-  const removeReference = useCallback((id: string) => {
-    setReferences((previous) => previous.filter((reference) => !(reference.kind === "issue" && reference.id === id)));
-    setReferenceError(null);
-  }, []);
+    setSelectedIds(new Set());
+  }, [workspaceId, issues, selectedIds]);
+  const toggleReference = useCallback((issue: PmIssue) => {
+    if (!workspaceId) return;
+    const reference: PmReference = { workspaceId, projectId: issue.projectId || null, kind: "issue", id: issue.id, title: issue.title, revision: issue.revision, availability: "unverified" };
+    setReferences(previous => previous.some(item => referenceIdentity(item) === referenceIdentity(reference)) ? previous.filter(item => referenceIdentity(item) !== referenceIdentity(reference)) : [...previous, reference].slice(0, PM_REFERENCE_LIMIT));
+  }, [workspaceId]);
+  const toggleSelection = useCallback((id: string) => setSelectedIds(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; }), []);
+  const selectVisible = useCallback(() => setSelectedIds(new Set(issues.map(issue => issue.id))), [issues]);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
   const clearReferences = useCallback(() => { setReferences([]); setReferenceError(null); }, []);
-  const selectCurrentIssue = useCallback((id: string | null) => setCurrentIssueId(id), []);
-  const openPicker = useCallback(() => setPickerOpen(true), []);
+  const removeReference = useCallback((reference: PmReference) => { setReferences(previous => previous.filter(item => referenceIdentity(item) !== referenceIdentity(reference))); setReferenceError(null); }, []);
+  const selectTarget = useCallback((next: PmToolTarget | null) => { addSelectedToReferences(); setTarget(next); setQuery(""); setCurrentIssueId(null); }, [addSelectedToReferences]);
+  const openPicker = useCallback(() => { setPickerOpen(true); void refreshCatalog().catch(() => {}); }, []);
   const closePicker = useCallback(() => setPickerOpen(false), []);
-  const setChanges = useCallback((next: readonly PmChangeSet[]) => setChangesState(next), []);
-  const refresh = useCallback(() => {
-    abort.current?.abort();
-    const controller = new AbortController();
-    abort.current = controller;
-    void load("replace", controller.signal);
-  }, [load]);
-  const loadMore = useCallback(() => {
-    if (!hasMore || loading) return;
-    const controller = new AbortController();
-    abort.current = controller;
-    void load("append", controller.signal);
-  }, [hasMore, load, loading]);
-
-  const value = useMemo<Value>(() => ({
-    workspaceId: workspaceId ?? null,
-    projectId: projectId ?? null,
-    workspaceName,
-    projectName,
-    issues,
-    filteredIssues,
-    loading,
-    error,
-    hasMore,
-    query,
-    selectedIds,
-    references,
-    currentIssueId,
-    currentIssue,
-    changes,
-    pickerOpen,
-    referenceError,
-    setQuery: setQueryState,
-    loadMore,
-    refresh,
-    toggleSelection,
-    selectVisible,
-    clearSelection,
-    addSelectedToReferences,
-    toggleReference,
-    removeReference,
-    clearReferences,
-    selectCurrentIssue,
-    openPicker,
-    closePicker,
-    setChanges,
-  }), [addSelectedToReferences, changes, clearReferences, clearSelection, closePicker, currentIssue, currentIssueId, error, filteredIssues, hasMore, issues, loadMore, loading, openPicker, pickerOpen, projectId, projectName, query, referenceError, references, refresh, removeReference, selectCurrentIssue, selectVisible, selectedIds, setChanges, toggleReference, toggleSelection, workspaceId, workspaceName]);
-
+  const refresh = useCallback(() => { abort.current?.abort(); const controller = new AbortController(); abort.current = controller; void load(false, controller.signal); }, [load]);
+  const loadMore = useCallback(() => { if (!hasMore || loading) return; const controller = new AbortController(); abort.current = controller; void load(true, controller.signal); }, [hasMore, loading, load]);
+  const value: Value = {
+    workspaceId, projectId, workspaceName: workspace?.name ?? null, projectName, issues, filteredIssues: issues, loading, error,
+    hasMore, query, selectedIds, references, currentIssueId, currentIssue: issues.find(issue => issue.id === currentIssueId) ?? null,
+    changes, pickerOpen, referenceError, setQuery, loadMore, refresh, toggleSelection, selectVisible, clearSelection,
+    addSelectedToReferences, toggleReference, removeReference, clearReferences, selectCurrentIssue: setCurrentIssueId,
+    openPicker, closePicker, selectTarget, setChanges,
+  };
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
-
 export function usePmIssueWorkspace(): Value {
   const value = useContext(Context);
   if (!value) throw new Error("PmIssueWorkspaceProvider is required inside Agent Chat");

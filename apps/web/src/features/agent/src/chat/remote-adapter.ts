@@ -12,11 +12,9 @@ import {
 import { createSimpleTitleAdapter } from "@assistant-ui/core/react";
 import { workspaceClient } from "../network";
 import { agentText } from "../i18n-text.ts";
-import type { ChatGenerationView, PmContext, RemoteThread } from "@agent-workspace/contracts/chat";
-import { ensureChatMigration } from "./migration";
+import type { ChatGenerationView, RemoteThread } from "@agent-workspace/contracts/chat";
 import { chatStreams } from "./transport";
-import { getPmChatContext } from "../pm/pm-chat-bridge";
-import { acceptRemoteThread, acceptRemoteThreads, reportThreadError, threadScope } from "../pm/state";
+import { acceptRemoteThread, acceptRemoteThreads, reportThreadError, threadExecutionSelection } from "../pm/state";
 import { acceptInitializedThread, acceptThreadSettings } from "../../hooks/use-chat-settings";
 
 type Entry = {
@@ -108,15 +106,10 @@ const metadata = (thread: RemoteThread) => {
   };
 };
 
-export async function initializeScopedThread(id: string, pmContext: PmContext | null | undefined = getPmChatContext()): Promise<{ remoteId: string }> {
-  const scope = threadScope(id);
-  if (!scope) throw new Error(agentText("请先选择工作区或项目，再新建会话。", "Select a workspace or project before creating a session."));
-  await ensureChatMigration();
-  // Only new threads carry the PM binding. Existing threads keep the binding
-  // they were created with; switching never rewrites it from module state.
+export async function initializeAgentThread(id: string): Promise<{ remoteId: string }> {
   const { thread } = await workspaceClient.json<{ thread: RemoteThread }>("/api/chat/threads", {
     method: "POST",
-    body: JSON.stringify({ id, scope, ...(pmContext ? { pmContext } : {}) }),
+    body: JSON.stringify({ id, executionSelection: threadExecutionSelection(id) }),
   });
   acceptInitializedThread(id, thread);
   acceptRemoteThread(thread);
@@ -133,7 +126,6 @@ export function createServerThreadAdapter(historyStatus: HistoryLoadStore): Remo
   return {
     async list() {
       try {
-        await ensureChatMigration();
         const body = await workspaceClient.json<{ threads: RemoteThread[] }>("/api/chat/threads");
         acceptRemoteThreads(body.threads);
         for (const thread of body.threads) acceptThreadSettings(thread);
@@ -146,7 +138,7 @@ export function createServerThreadAdapter(historyStatus: HistoryLoadStore): Remo
         throw error;
       }
     },
-    initialize: (threadId) => initializeScopedThread(threadId),
+    initialize: (threadId) => initializeAgentThread(threadId),
     async fetch(id) {
       return metadata(
         (

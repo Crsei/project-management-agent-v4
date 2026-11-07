@@ -8,7 +8,7 @@ Dovspace 将项目管理与 Agent Chat 放在同一工作台：项目、任务�
 
 - **项目管理**：项目/任务/里程碑、列表/看板/表格/日历/时间线/关系图、成员与团队、项目规划与真实服务端授权。
 - **Markdown 优先**：项目核心文件、共享配置与恢复台账；多文档工作台、授权的外部 Markdown 来源及显式文件操作。
-- **统一 Agent**：原生 Provider、流式输出、Files/Git/Terminal/Browser 检查器、MCP、原生 Skills、用量与离线备份；可用性按实际驱动和配置区分。
+- **统一 Agent**：按独立绝对路径文件夹组织 Sessions，不绑定 PM 工作区／项目；也可仅对话。Files/Git/Provider 使用当前 Session 的同一实际执行目录，PM 资料通过明确目标的工具与引用访问。Workspace／Session Terminal 共用视图且不跨服务重启存活；另有 Browser、原生 Provider、MCP、Skills、用量与离线备份。
 - **任务代码交付**：独立 worktree、明确选择 Provider、验证/提交/推送/Draft PR、同提交 CI 核对、有限节点工作流与本机隔离 App 预览。
 - **自动化与集成**：显式授权的执行定义、PM 分析候选、时间/事件触发及 Git Sync；邮件、私有 S3、受限出站 Webhook 均须独立配置与验收。
 

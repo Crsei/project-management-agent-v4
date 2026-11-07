@@ -96,6 +96,9 @@ export function NotificationInboxView(props: NotificationInboxViewProps) {
     { id: "category", label: text("分类", "Category"), options: [
       { value: "watch", label: text("任务关注", "Task watch") },
       { value: "mention", label: text("个人提及", "Personal mention") },
+      { value: "assignee", label: text("任务负责人", "Task assignee") },
+      { value: "requester", label: text("任务发起人", "Task requester") },
+      { value: "completion", label: text("任务完成", "Task completion") },
       { value: "legacy_activity_state", label: text("历史活动", "Legacy activity") },
     ] },
     { id: "read", label: text("阅读状态", "Read state"), options: [

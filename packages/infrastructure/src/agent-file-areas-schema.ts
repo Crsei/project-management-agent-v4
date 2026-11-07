@@ -32,3 +32,4 @@ export const agentStorageSettings = pgTable('agent_storage_settings', {
   check('agent_storage_settings_root_check', sql`length(${table.defaultRoot}) BETWEEN 1 AND 4096 AND (left(${table.defaultRoot},1)='/' OR (left(${table.defaultRoot},1) ~ '^[A-Za-z]$' AND substring(${table.defaultRoot},2,1)=':' AND substring(${table.defaultRoot},3,1) IN ('/',chr(92))))`),
   check('agent_storage_settings_revision_check', sql`${table.revision}>0`),
 ]);
+

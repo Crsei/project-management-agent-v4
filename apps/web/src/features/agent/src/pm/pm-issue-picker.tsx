@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Check, ChevronDown, ListFilter, Search, X } from "lucide-react";
 
 import { Button } from "@agent/components/ui/button";
@@ -26,6 +26,7 @@ export type PmIssuePickerProps = {
   onSelectVisible: () => void;
   onClear: () => void;
   projectName?: string | null;
+  targetControls?: ReactNode;
   loading?: boolean;
   error?: string | null;
   hasMore?: boolean;
@@ -59,6 +60,7 @@ export function PmIssuePicker({
   onSelectVisible,
   onClear,
   projectName,
+  targetControls,
   loading = false,
   error = null,
   hasMore = false,
@@ -81,6 +83,7 @@ export function PmIssuePicker({
         <DialogHeader>
           <DialogTitle>{t("引用 PM 任务", "Reference PM tasks")}</DialogTitle>
         </DialogHeader>
+        {targetControls}
 
         <div className={styles.search}>
           <Search className={styles.searchIcon} aria-hidden="true" />

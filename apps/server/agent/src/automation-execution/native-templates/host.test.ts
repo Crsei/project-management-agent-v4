@@ -5,17 +5,18 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, test } from 'node:test';
 import type { StudioExecutionRequest } from '../../../../../../packages/contracts/src/automation-studio.ts';
-import type { AgentExecutionSnapshot } from '../../durable/agent-scope.ts';
+import { resolveAgentExecution, type AgentExecutionSnapshot } from '../../durable/agent-execution.ts';
 import type { ChatGeneration } from '../../durable/chat-runtime.ts';
 import { emitNativeOutput, initializeNativeOutput } from '../../durable/native-output.ts';
 import { closeStore, listRecords, readRecord, writeRecord } from '../../durable/store.ts';
 import { automationRequestFingerprint, registerAutomationNativeThread } from '../context.ts';
 import { createNativeTemplateExecutionPort, nativeCommandEvidence } from './host.ts';
 import { createNativeTemplateHttp, decodeNativeFeed, fetchNativePublicFeed, validatePublicFeedUrl } from './http.ts';
-import { assertNativeTemplateChatSnapshot, prepareNativeRepository, readNativeRepositoryChanges, resolveNativeTemplateChatSnapshot, validateNativeRepositoryPath } from './repository.ts';
+import { assertNativeTemplateChatSnapshot, prepareNativeRepository, readNativeRepositoryChanges, resolveSessionNativeTemplateSnapshot, validateNativeRepositoryPath } from './repository.ts';
 import { admitNativeOperation, createNativeTemplateState, finishNativeOperation, nativeDefinitionScope, nativeHash } from './state.ts';
 import { openNativeTemplateScratchTools } from './workspace-tools.ts';
 import { createProviderInstance } from '../../providers/instances.ts';
+import { openAgentWorkspace } from '../../agent-workspaces.ts';
 
 function fixture(): StudioExecutionRequest {
   return { executionId: '11111111-1111-4111-8111-111111111111', requestId: '22222222-2222-4222-8222-222222222222', actorId: '33333333-3333-4333-8333-333333333333', workspaceId: '44444444-4444-4444-8444-444444444444', projectId: 'PRJ-001', definitionId: '55555555-5555-4555-8555-555555555555', definitionRevision: 1, config: { name: 'Native fixture', description: '', projectId: 'PRJ-001', tags: [], templateId: 'news-digest', action: { kind: 'template', templateId: 'news-digest', arguments: { feeds: 'https://news.ycombinator.com/rss', topics: '' }, repositories: [], plugins: [], providerInstanceId: 'fixture', model: 'fixture', options: {}, timeoutSeconds: 30 }, trigger: { kind: 'manual' }, dailyLimit: 2, cooldownMinutes: 0 }, trigger: 'test', payload: null, issuedAt: '2026-10-31T00:00:00.000Z' };
@@ -24,15 +25,34 @@ function repositoryFixture(): StudioExecutionRequest {
   const request = fixture();
   if (request.config.action.kind !== 'template') throw new Error('fixture');
   request.config.templateId = request.config.action.templateId = 'github-issue-to-pr';
+  // The concrete Agent directory is selected by authorizedWorkspace below.
   request.config.action.arguments = { repositories: ['owner/repo'], githubTokenSecret: 'GITHUB_TOKEN', triggerLabel: 'openhands', branchPrefix: 'openhands/issue', pullRequestMode: 'draft' };
   return request;
 }
+async function authorizedWorkspace(request: StudioExecutionRequest, root: string): Promise<AgentExecutionSnapshot> {
+  const workspace = openAgentWorkspace({ path: root });
+  const selection = { version: 2 as const, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+  request.config.action.executionSelection = selection;
+  return resolveAgentExecution(selection);
+}
 let directory: string;
-const originalData = process.env.AGENT_WORKSPACE_DATA_DIR;
+const originalData = process.env.AGENT_WORKSPACE_DATA_DIR, originalRoots = process.env.AGENT_WORKSPACE_ALLOWED_ROOTS;
 const originalServiceSecret = process.env.PM_AUTOMATION_SERVICE_SECRET;
 const originalFetch = globalThis.fetch;
-beforeEach(async () => { directory = await mkdtemp(path.join(tmpdir(), 'native-template-host-')); process.env.AGENT_WORKSPACE_DATA_DIR = path.join(directory, 'store'); });
-afterEach(async () => { closeStore(); globalThis.fetch = originalFetch; if (originalServiceSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = originalServiceSecret; if (originalData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = originalData; await rm(directory, { recursive: true, force: true }); });
+beforeEach(async () => {
+  directory = await mkdtemp(path.join(tmpdir(), 'native-template-host-'));
+  process.env.AGENT_WORKSPACE_DATA_DIR = path.join(directory, 'store');
+  process.env.AGENT_WORKSPACE_ALLOWED_ROOTS = JSON.stringify([directory]);
+  process.env.PM_AUTOMATION_SERVICE_SECRET = 'native-host-test-private-service-secret-32bytes';
+  globalThis.fetch = async (input, init) => {
+    if (String(input).includes('/agent-contexts/authorize')) {
+      const target = JSON.parse(String(init?.body));
+      return Response.json({ actorId: fixture().actorId, scope: target, workspaceName: 'Fixture', projectName: 'Fixture' });
+    }
+    throw new Error(`Unexpected fixture request ${String(input)}`);
+  };
+});
+afterEach(async () => { closeStore(); globalThis.fetch = originalFetch; if (originalServiceSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = originalServiceSecret; if (originalData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = originalData; if (originalRoots === undefined) delete process.env.AGENT_WORKSPACE_ALLOWED_ROOTS; else process.env.AGENT_WORKSPACE_ALLOWED_ROOTS = originalRoots; await rm(directory, { recursive: true, force: true }); });
 
 test('CAS and claims survive restart, retain immutable revisions and reject lost updates', async () => {
   const request = fixture(), state = createNativeTemplateState(request);
@@ -106,21 +126,31 @@ test('native repository paths reject traversal, git control directories, links-b
 
 test('trusted child cwd is a registered canonical descendant, never a caller path or an ordinary Chat override', async () => {
   const request = fixture(), root = path.join(directory, 'project'); await mkdir(root);
-  const authorized: AgentExecutionSnapshot = { scope: { workspaceId: request.workspaceId, projectId: request.projectId }, workspaceName: 'Fixture', projectName: 'Fixture', path: root };
+  const authorized = await authorizedWorkspace(request, root);
   const threadId = 'native-fixture-child', idempotencyKey = 'native-fixture-key';
   const binding = await prepareNativeRepository({ request, threadId, idempotencyKey, authorized, requestJson: async () => { throw new Error('No remote request expected'); }, signal: new AbortController().signal });
-  assert.deepEqual(await resolveNativeTemplateChatSnapshot('unregistered', idempotencyKey, authorized), authorized);
-  await assert.rejects(resolveNativeTemplateChatSnapshot(threadId, idempotencyKey, authorized), /active original/);
+  assert.deepEqual(await resolveSessionNativeTemplateSnapshot('unregistered', authorized, 'execute'), authorized);
+  await assert.rejects(resolveSessionNativeTemplateSnapshot(threadId, authorized, 'execute'), /original automation/);
   writeRecord('pm-automation:executions', request.executionId, { request, fingerprint: automationRequestFingerprint(request), phase: 'running' });
   registerAutomationNativeThread(request, threadId, idempotencyKey);
-  const childSnapshot = await resolveNativeTemplateChatSnapshot(threadId, idempotencyKey, authorized);
+  const childSnapshot = await resolveSessionNativeTemplateSnapshot(threadId, authorized, 'execute');
   assert.equal(childSnapshot.path, binding.executionPath);
+  assert.equal(childSnapshot.environment.sourcePath, root);
+  assert.equal(childSnapshot.environment.executionPath, binding.executionPath);
+  assert.equal(childSnapshot.environment.worktree, null, 'A private repository copy is not a Git worktree receipt');
   const generation = { threadId, request: { idempotencyKey }, executionSnapshot: childSnapshot } as ChatGeneration;
-  await assertNativeTemplateChatSnapshot(generation, authorized);
-  await assert.rejects(assertNativeTemplateChatSnapshot({ ...generation, threadId: 'ordinary' }, authorized), /directory changed/);
-  await assert.rejects(assertNativeTemplateChatSnapshot(generation, { ...authorized, path: directory }), /currently authorized/);
+  await assertNativeTemplateChatSnapshot(generation, childSnapshot);
+  await assert.rejects(assertNativeTemplateChatSnapshot(generation, await resolveSessionNativeTemplateSnapshot('ordinary', authorized, 'execute')), /filesystem changed/);
+  await assert.rejects(resolveSessionNativeTemplateSnapshot(threadId, { ...authorized, path: directory }, 'execute'), /selected Agent directory/);
+  const authorizedFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('PM offline'); };
+  try { assert.equal((await resolveSessionNativeTemplateSnapshot(threadId, authorized, 'inspect')).path, binding.executionPath); }
+  finally { globalThis.fetch = authorizedFetch; }
+  writeRecord('pm-automation:native-repositories', JSON.stringify([threadId, idempotencyKey]), { ...binding, executionVersion: 1 });
+  await assert.rejects(resolveSessionNativeTemplateSnapshot(threadId, authorized, 'inspect'), /selected Agent directory/);
+  writeRecord('pm-automation:native-repositories', JSON.stringify([threadId, idempotencyKey]), binding);
   const old = binding.executionPath; await rm(old, { recursive: true }); await symlink(directory, old);
-  await assert.rejects(assertNativeTemplateChatSnapshot(generation, authorized), /replaced|escaped/);
+  await assert.rejects(resolveSessionNativeTemplateSnapshot(threadId, authorized, 'execute'), /replaced|escaped/);
   assert.equal(readRecord<{ phase: string }>('pm-automation:executions', request.executionId)?.phase, 'running');
 });
 
@@ -158,7 +188,7 @@ test('fixed-origin connector preserves API status and never replays a possibly a
 
 test('published file evidence comes from the actual worktree versus its private pinned base', async () => {
   const request = repositoryFixture(), root = path.join(directory, 'artifacts'); await mkdir(root);
-  const authorized: AgentExecutionSnapshot = { scope: { workspaceId: request.workspaceId, projectId: request.projectId }, workspaceName: 'Fixture', projectName: 'Fixture', path: root };
+  const authorized = await authorizedWorkspace(request, root);
   const files = { 'keep.ts': 'original\n', 'delete.ts': 'original\n', '.gitignore': 'node_modules/\n', 'node_modules/tracked.ts': 'tracked\n' };
   const blobs = Object.entries(files).map(([filename, content]) => { const bytes = Buffer.from(content); return { filename, bytes, sha: createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex') }; });
   const commit = 'a'.repeat(40), tree = 'b'.repeat(40);
@@ -214,14 +244,14 @@ test('scratch bridge writes actual files only with the live original generation 
   process.env.PM_AUTOMATION_SERVICE_SECRET = 'native-host-test-private-service-secret-32bytes';
   const provider = createProviderInstance({ instanceId: 'fixture', driver: 'codex', config: { setupMode: 'managed' } });
   const request = repositoryFixture(), root = path.join(directory, 'scratch'); await mkdir(root);
-  const authorized: AgentExecutionSnapshot = { scope: { workspaceId: request.workspaceId, projectId: request.projectId }, workspaceName: 'Fixture', projectName: 'Fixture', path: root };
+  const authorized = await authorizedWorkspace(request, root);
   const threadId = 'scratch-fixture', idempotencyKey = 'scratch-key', generationId = '88888888-8888-4888-8888-888888888888', commit = 'a'.repeat(40);
   const binding = await prepareNativeRepository({ request, threadId, idempotencyKey, authorized, repository: { provider: 'github', repository: 'owner/repo', ref: commit, write: true }, signal: new AbortController().signal, requestJson: async <T>(_provider: 'github' | 'gitlab', apiPath: string): Promise<T> => apiPath.includes('/commits/') ? { sha: commit, commit: { tree: { sha: commit } } } as T : { truncated: false, tree: [] } as T });
   writeRecord('pm-automation:executions', request.executionId, { request, fingerprint: automationRequestFingerprint(request), phase: 'running' });
   registerAutomationNativeThread(request, threadId, idempotencyKey);
-  const generation = { id: generationId, threadId, status: 'running', providerInstanceId: provider.instanceId, request: { idempotencyKey }, executionSnapshot: { ...authorized, path: binding.executionPath } } as ChatGeneration;
+  const executionSnapshot = await resolveSessionNativeTemplateSnapshot(threadId, authorized, 'execute');
+  const generation = { id: generationId, threadId, status: 'running', providerInstanceId: provider.instanceId, request: { idempotencyKey }, executionSnapshot } as ChatGeneration;
   writeRecord('chat:generations', generationId, generation);
-  globalThis.fetch = async (url, init) => String(url).includes('/agent-contexts/resolve') ? Response.json(authorized) : originalFetch(url, init);
   const bridge = await openNativeTemplateScratchTools(generation, undefined, async () => {});
   try {
     const descriptor = bridge.mcpServers?.[0]; assert.ok(descriptor);
@@ -239,7 +269,7 @@ test('scratch bridge writes actual files only with the live original generation 
 
 test('read-only stages prove the actual snapshot remained unchanged instead of assuming an empty delta', async () => {
   const request = repositoryFixture(), root = path.join(directory, 'readonly'); await mkdir(root);
-  const authorized: AgentExecutionSnapshot = { scope: { workspaceId: request.workspaceId, projectId: request.projectId }, workspaceName: 'Fixture', projectName: 'Fixture', path: root };
+  const authorized = await authorizedWorkspace(request, root);
   const threadId = 'readonly-fixture', idempotencyKey = 'readonly-key', commit = 'a'.repeat(40);
   const binding = await prepareNativeRepository({ request, threadId, idempotencyKey, authorized, repository: { provider: 'github', repository: 'owner/repo', ref: commit, write: false }, signal: new AbortController().signal, requestJson: async <T>(_provider: 'github' | 'gitlab', apiPath: string): Promise<T> => apiPath.includes('/commits/') ? { sha: commit, commit: { tree: { sha: commit } } } as T : { truncated: false, tree: [] } as T });
   writeRecord('pm-automation:executions', request.executionId, { request, fingerprint: automationRequestFingerprint(request), phase: 'running' });

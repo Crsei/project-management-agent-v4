@@ -17,6 +17,7 @@ export function registerAgentCoreFilesRoutes(app: FastifyInstance, options: Opti
   app.get('/api/v1/workspaces/:workspaceId/agent-tools/core-files', async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
     const { workspaceId } = params.parse(request.params), { projectId } = query.parse(request.query);
+    await recheckMcpRequest(options.database(), request);
     const scope = await authorizeCoreScope(options.database(), await options.actor(request), workspaceId, 'domain.read');
     if (!options.coreWorkspaces) throw new DomainError('backend_not_initialized', 'The Markdown core is unavailable', 503);
     if (!scope.allowsProject(projectId)) throw new DomainError('not_found_or_forbidden', 'Project is not accessible', 404);

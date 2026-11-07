@@ -22,7 +22,8 @@ export type WorkspaceActivity = {
 };
 
 /** One authorized PM identity, existing provider SSE, and no business writes. */
-export function useWorkspaceActivity(): WorkspaceActivity {
+export function useWorkspaceActivity(options: { recentLimit?: number } = {}): WorkspaceActivity {
+  const recentLimit = options.recentLimit;
   const service = usePmService();
   const { actor, workspace } = service;
   const t = useText();
@@ -81,8 +82,10 @@ export function useWorkspaceActivity(): WorkspaceActivity {
   const projects = useMemo(() => activityProjects(core.data?.files ?? [], workspace?.projectIds ?? null), [core.data, workspace?.projectIds]);
   const changes = usePrivateQuery(pmKeys.changes(window.location.origin, actor?.id ?? 'anonymous', workspace?.id ?? 'none'), 'domain.read', undefined,
     (client, workspaceId, signal) => readAllChanges(client, workspaceId, undefined, signal), canRead);
-  const audit = usePrivateQuery([...key, 'workspace-activity', 'audit', projects], 'audit.read', undefined,
-    (client, workspaceId, signal) => readActivityAudits(projects, (projectId, cursor, pageSignal) => client.getProjectAudit(workspaceId, projectId, { limit: 100, ...(cursor ? { cursor } : {}) }, { signal: pageSignal }), signal),
+  const audit = usePrivateQuery([...key, 'workspace-activity', 'audit', projects, recentLimit ?? 'all'], 'audit.read', undefined,
+    (client, workspaceId, signal) => readActivityAudits(projects,
+      (projectId, cursor, pageSignal) => client.getProjectAudit(workspaceId, projectId, { limit: Math.min(recentLimit ?? 100, 100), ...(cursor ? { cursor } : {}) }, { signal: pageSignal }),
+      signal, recentLimit),
     canReadAudit && !!core.data);
   const directory = usePrivateQuery<MemberDirectory>([...key, 'members', 'directory'], allowed(workspace, 'access.manage') ? 'access.manage' : 'directory.read', undefined,
     (client, workspaceId, signal) => client.getMemberDirectory(workspaceId, { signal }), canRead && canReadDirectory);

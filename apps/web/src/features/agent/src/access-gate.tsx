@@ -4,6 +4,7 @@ import { Input } from "@agent/components/ui/input";
 import { workspaceClient } from "./network";
 import { useAgentText } from "./i18n";
 import { agentText } from "./i18n-text.ts";
+import { setApprovalMode } from "./runtime-config.ts";
 
 export function AccessGate({ children }: { children: ReactNode }) {
   const t = useAgentText();
@@ -17,10 +18,11 @@ export function AccessGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     const controller = new AbortController();
     workspaceClient
-      .json<{ authorized: boolean; configured: boolean; message?: string | null }>("/api/access", {
+      .json<{ authorized: boolean; configured: boolean; approvalMode?: string; message?: string | null }>("/api/access", {
         signal: controller.signal,
       })
       .then((result) => {
+        setApprovalMode(result.approvalMode);
         setAuthorized(result.authorized === true);
         setConfigured(result.configured === true);
         setError(result.message ?? null);

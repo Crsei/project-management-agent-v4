@@ -72,7 +72,8 @@ async function recordChange(ctx: CommandContext, row: CommentRow, action: Revisi
       projectId: row.project_id, entityKind: 'task_comment', entityId: row.id, beforeRevision: row.version === 1 ? null : String(row.version - 1), afterRevision: String(row.version),
       changeKinds: [action === 'created' ? 'created' : action === 'edited' ? 'content_changed' : 'lifecycle_changed'], occurredAt: row.updated_at.toISOString(), observedAt: null, safetyClass: 'restricted_internal' },
     input: { actorId: ctx.actor.id, taskId: row.task_id, originalProjectId: row.project_id, commentId: row.id, commentVersion: row.version,
-      watchCandidates: await freezeTaskWatchCandidates(ctx.sql, ctx.workspaceId, row.task_id, row.project_id), newMentionIds },
+      watchCandidates: await freezeTaskWatchCandidates(ctx.sql, ctx.workspaceId, row.task_id, row.project_id), newMentionIds,
+      ...(ctx.trustedSource ? { trustedOrigin: ctx.trustedSource.kind, requesterId: ctx.trustedSource.requesterId ?? null } : {}) },
   });
   return { id: row.id, taskId: row.task_id, projectId: row.project_id, version: row.version, action };
 }

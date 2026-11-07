@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { extensionAppIds, extensionBindSchema } from "@agent-workspace/contracts/extensions";
 import { makePrivatePath } from "../../../../../packages/pm-core/private-path.ts";
-import { assertExtensionHostBindingCurrent, listExternalExtensionTargets, resolveExtensionHostBinding } from "./external-targets.ts";
+import { assertExtensionHostBindingCurrent, listExternalExtensionTargets, refreshExistingExtensionHostBinding, resolveExtensionHostBinding } from "./external-targets.ts";
 import { ExtensionHost } from "./service.ts";
 import { readExtensionContexts } from "./storage.ts";
 import { createProviderInstance } from "../providers/instances.ts";
@@ -31,6 +31,7 @@ test("all twelve upstream applications can be explicit external targets without 
     assert.ok(result.binding.physicalRoots.includes(canonicalExtensionProviderPath(path.join(root, "native-claude", ".claude.json"))));
     assert.match(result.binding.warnings.join(" "), /do not add a PM Chat Provider/);
     assertExtensionHostBindingCurrent(result);
+    assert.throws(() => refreshExistingExtensionHostBinding({ ...result, binding: { ...result.binding, bindingFingerprint: "" } }), { code: "binding_reconfirmation_required" });
     await writeFile(filename, JSON.stringify(targets.map(target => target.app === "codex" ? { ...target, appDir: path.join(root, "changed-codex") } : target)), { mode: 0o600 });
     assert.throws(() => assertExtensionHostBindingCurrent(result), { code: "external_binding_changed" });
     assert.throws(() => resolveExtensionHostBinding({ providerInstanceIds: [], externalTargetIds: ["unknown"], confirmed: true }), { code: "external_target_unknown" });

@@ -3,12 +3,13 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { configureDocumentSources, listDocumentSourceDirectories, listDocumentSourceFiles, listDocumentSources, mutateDocumentSource, queryDocumentSourceMutation, readDocumentSourceContent, type DocumentSourceContext } from '../../../../packages/application/src/document-sources.ts';
 import type { AgentDirectoryConfiguration } from '../../../../packages/application/src/agent-storage.ts';
+import type { ExternalDocumentHistorySink } from '../../../../packages/application/src/external-document-history.ts';
 import { documentSourceConfigurationInputSchema, documentSourceContentQuerySchema, documentSourceDirectoriesQuerySchema, documentSourceFilesQuerySchema, documentSourceIdSchema, documentSourceMutationSchema } from '../../../../packages/contracts/src/document-sources.ts';
 import type { Actor } from '../../../../packages/domain/src/core.ts';
 import { lockWorkspace } from '../../../../packages/infrastructure/src/database.ts';
 import type { Workspace } from '../../../../packages/pm-core/index.ts';
 
-type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config: AgentDirectoryConfiguration; workspace: (workspaceId: string) => Promise<Workspace> };
+type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; config: AgentDirectoryConfiguration; workspace: (workspaceId: string) => Promise<Workspace>; history?: ExternalDocumentHistorySink };
 const workspaceParams = z.strictObject({ workspaceId: z.uuid().toLowerCase() });
 const sourceParams = workspaceParams.extend({ sourceId: documentSourceIdSchema });
 const base = '/api/v1/workspaces/:workspaceId/document-sources';
@@ -23,7 +24,7 @@ export function registerDocumentSourceRoutes(app: FastifyInstance, options: Opti
       await sql.query('BEGIN'); await lockWorkspace(sql, workspaceId);
       // Same ordering/key as native project claims; sources never change Agent cwd.
       await sql.query("SELECT pg_advisory_xact_lock(hashtextextended('local-project-directories',724631))");
-      const result = await operation({ sql, actor, config: options.config, workspace: options.workspace });
+      const result = await operation({ sql, actor, config: options.config, workspace: options.workspace, ...(options.history ? { history: options.history } : {}) });
       await sql.query('COMMIT'); return result;
     } catch (error) { await sql.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { sql.release(); }
@@ -36,7 +37,7 @@ export function registerDocumentSourceRoutes(app: FastifyInstance, options: Opti
       // dispatch and receipt statements. No transaction pretends to roll back IO.
       await sql.query('SELECT pg_advisory_lock(hashtextextended($1::uuid::text,724631))', [workspaceId]);
       await sql.query("SELECT pg_advisory_lock(hashtextextended('local-project-directories',724631))");
-      return await operation({ sql, actor, config: options.config, workspace: options.workspace });
+      return await operation({ sql, actor, config: options.config, workspace: options.workspace, ...(options.history ? { history: options.history } : {}) });
     } finally {
       try {
         await sql.query("SELECT pg_advisory_unlock(hashtextextended('local-project-directories',724631))");

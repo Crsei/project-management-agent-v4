@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createRequire, isBuiltin } from "node:module";
 import { chmod, lstat, mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { assertNoRetiredImportEdges, assertRetiredTargetsAbsent, createRetiredImportResolver, validateAdaptationStructure } from "../../vendor/t3code/scripts/mcp-skills-adaptations.mjs";
 
 const require = createRequire(import.meta.url);
 const base = "vendor/t3code/";
@@ -55,7 +56,12 @@ async function documents(root) {
     bytes.set(name, data);
     values[key] = JSON.parse(data);
   }
-  const { manifest, inventory, adaptations, supplemental, policy } = values;
+  const { manifest, inventory, adaptations, supplemental, imports, policy } = values;
+  const retirements = validateAdaptationStructure(adaptations);
+  const retired = new Set(retirements.map(entry => entry.destination));
+  if (inventory.files.some(entry => retired.has(entry.destination))) throw new Error("Retired output still has a baseline reconstruction owner");
+  await assertRetiredTargetsAbsent(root, retirements);
+  assertNoRetiredImportEdges(imports, retirements);
   if (!/^[a-f0-9]{40}$/.test(manifest.upstream?.commit) || inventory.version !== 1 || adaptations.version !== 1 || policy.version !== 1 || policy.id !== "t3code" || inventory.upstreamCommit !== manifest.upstream.commit || inventory.sourceManifestSha256 !== hash(bytes.get(paths.manifest)) || adaptations.baselineCommit !== manifest.upstream.commit) throw new Error("T3 source manifest/inventory identity mismatch");
   if (!adaptations.sources.some(entry => entry.commit === manifest.upstream.commit) || !adaptations.sources.some(entry => entry.commit === supplemental.upstream.commit)) throw new Error("T3 dual-source identity mismatch");
   return { ...values, bytes };
@@ -78,7 +84,8 @@ export async function loadProfile(root) {
   const originals = new Map(manifest.files.map(entry => [relative(entry.source_path), entry]));
   for (const entry of manifest.files) addInput(inputs, inputFrom(entry, commit));
   for (const source of adaptations.sources) {
-    const entry = source.commit === commit ? originals.get(source.license.path) : supplemental.files.find(entry => entry.path === source.license.path);
+    const entry = source.license.gitMode ? source.license
+      : source.commit === commit ? originals.get(source.license.path) : supplemental.files.find(entry => entry.path === source.license.path);
     if (!entry || entry.sha256 !== source.license.sha256) throw new Error(`Uninventoried source license: ${source.commit}`);
     addInput(inputs, inputFrom(entry, source.commit));
   }
@@ -95,6 +102,7 @@ export async function loadProfile(root) {
     const mapped = (entry.inputs ?? []).map(value => inputFrom(value));
     for (const input of mapped) addInput(inputs, input);
     const name = relative(entry.destination);
+    if (Object.hasOwn(entry, "retirement")) continue;
     const previous = outputs.get(name);
     if (previous && (previous.sha256 !== entry.sha256 || previous.mode !== entry.mode)) throw new Error(`Contradictory baseline/adaptation output: ${name}`);
     outputs.set(name, { path: name, sourcePath: mapped[0]?.path ?? null, sourceCommit: mapped[0]?.commit ?? null, sha256: entry.sha256, bytes: entry.bytes, mode: entry.mode, kind: mapped.length ? "derived" : "local", inputs: mapped });
@@ -209,7 +217,7 @@ function decision(plan, name, changedInputs = []) {
 
 // Uses the installed, trusted parser, never a parser or script supplied by the
 // source repository or candidate. Output fields/order match scripts/imports.mjs.
-async function scanGraph(names, getBytes, exists, packageNames, owned = new Set(names)) {
+async function scanGraph(names, getBytes, exists, packageNames, owned = new Set(names), retiredTarget = () => null) {
   const ts = require("typescript");
   const packages = new Map();
   for (const name of packageNames.sort(order)) {
@@ -227,6 +235,8 @@ async function scanGraph(names, getBytes, exists, packageNames, owned = new Set(
     return null;
   }
   async function resolve(source, specifier, resource) {
+    const retired = retiredTarget(source, specifier);
+    if (retired) throw new Error(`Live consumer of retired output: ${source} -> ${retired}`);
     if (path.posix.isAbsolute(specifier) || /^[A-Za-z]:[\\/]/.test(specifier) || specifier.split(/[\\/]/).includes(".ref") || specifier.startsWith("file:")) return { disposition: "forbidden-source-path", target: null };
     let target;
     if (specifier.startsWith(".")) target = await fileTarget(path.posix.normalize(path.posix.join(path.posix.dirname(source), specifier)));
@@ -272,11 +282,27 @@ async function scanGraph(names, getBytes, exists, packageNames, owned = new Set(
       ts.forEachChild(node, visit);
     }
     visit(ast);
+    for (const reference of [...ast.referencedFiles, ...ast.typeReferenceDirectives]) {
+      const retired = retiredTarget(source, reference.fileName);
+      if (retired) throw new Error(`Live reference to retired output: ${source} -> ${retired}`);
+    }
     edges.push(...await Promise.all(pending));
   }
   edges.sort((a, b) => order(a.source, b.source) || a.line - b.line || order(a.specifier, b.specifier));
   return { parser: `typescript@${ts.version}`, packages: [...packages].sort(([a], [b]) => order(a, b)).map(([name, metadata]) => ({ name, ...metadata })), edges };
 }
+// pnpm references can already carry the real package name behind an install
+// alias. Preserve their peer/patch suffixes rather than prefixing the alias.
+function lockSnapshotKey(name, reference, specifier) {
+  if (typeof reference !== "string" || !reference) throw new Error(`Invalid pnpm resolution for ${name}`);
+  const value = reference.startsWith("npm:") ? reference.slice(4) : reference;
+  const qualified = /^((?:@[^/@()]+\/)?[^/@()]+)@[^@()]+$/;
+  if (qualified.test(value.split("(", 1)[0])) return value;
+  const alias = typeof specifier === "string" && specifier.startsWith("npm:")
+    ? qualified.exec(specifier.slice(4).split("(", 1)[0]) : null;
+  return `${alias?.[1] ?? name}@${value}`;
+}
+
 async function dependencyGraph(manifest, objects, commit, blockers) {
   const yaml = require("yaml");
   const files = new Set(manifest.files.map(entry => entry.source_path));
@@ -296,7 +322,8 @@ async function dependencyGraph(manifest, objects, commit, blockers) {
     for (const section of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) for (const [dependency, declared] of Object.entries(metadata[section] ?? {}).sort(([a], [b]) => order(a, b))) {
       const catalogName = declared.startsWith("catalog:") ? declared.slice(8) : null;
       const catalog = catalogName === null ? null : (catalogName ? workspace.catalogs?.[catalogName] : workspace.catalog)?.[dependency] ?? null;
-      const resolved = lock ? lock.importers?.[pkg.root]?.[section]?.[dependency]?.version ?? null : previous.get(`${section}:${dependency}`)?.resolved ?? null;
+      const locked = lock?.importers?.[pkg.root]?.[section]?.[dependency];
+      const resolved = lock ? locked?.version ?? null : previous.get(`${section}:${dependency}`)?.resolved ?? null;
       const entry = { ...previous.get(`${section}:${dependency}`), name: dependency, section, declared, catalog, resolved, observed_uses: previous.get(`${section}:${dependency}`)?.observed_uses ?? [] };
       delete entry.workspace_source_root;
       if (declared.startsWith("workspace:")) entry.workspace_source_root = manifest.packages.find(value => value.name === dependency)?.root ?? (resolved?.startsWith("link:") ? path.posix.normalize(path.posix.join(pkg.root, resolved.slice(5))) : null);
@@ -306,7 +333,8 @@ async function dependencyGraph(manifest, objects, commit, blockers) {
         catalogs[dependency].consumers.push({ root: pkg.root, section });
       }
       if (resolved && !/^(?:link:|workspace:|file:)/.test(resolved)) {
-        const key = resolved.startsWith("npm:") ? resolved.slice(4) : `${dependency}@${resolved}`;
+        const specifier = typeof locked?.specifier === "string" && locked.specifier.startsWith("npm:") ? locked.specifier : catalog ?? declared;
+        const key = lockSnapshotKey(dependency, resolved, specifier);
         if (!direct.has(key)) direct.set(key, []);
         direct.get(key).push({ package: pkg.root, section, name: dependency });
       } else if (!declared.startsWith("workspace:") && section !== "peerDependencies" && lock) blockers.push({ code: "BLOCKED_DEPENDENCY", path: name, dependency, reason: "Missing scoped lock resolution" });
@@ -323,7 +351,7 @@ async function dependencyGraph(manifest, objects, commit, blockers) {
     const metadata = lock.packages?.[key.replace(/\(.*/, "")];
     if (!snapshot || !metadata) { blockers.push({ code: "BLOCKED_DEPENDENCY", path: lockPath, dependency: key, reason: "Missing reachable lock snapshot/package" }); continue; }
     snapshots.push({ key, package: metadata, snapshot, direct_consumers: direct.get(key) ?? [] });
-    for (const section of ["dependencies", "optionalDependencies"]) for (const [name, version] of Object.entries(snapshot[section] ?? {})) if (!/^(?:link:|file:)/.test(version)) queue.push(version.startsWith("npm:") ? version.slice(4) : `${name}@${version}`);
+    for (const section of ["dependencies", "optionalDependencies"]) for (const [name, version] of Object.entries(snapshot[section] ?? {})) if (!/^(?:link:|workspace:|file:)/.test(version)) queue.push(lockSnapshotKey(name, version));
   }
   manifest.external_lock_closure.snapshots = snapshots.sort((a, b) => order(a.key, b.key));
 }
@@ -335,6 +363,9 @@ function refreshExternalDependencies(manifest, blockers) {
     if (!edge.specifier || edge.specifier.startsWith(".") || isBuiltin(edge.specifier)) continue;
     const name = edge.specifier.startsWith("@") ? edge.specifier.split("/").slice(0, 2).join("/") : edge.specifier.split("/")[0];
     const owner = manifest.packages.filter(pkg => pkg.root === "." || under(edge.source, pkg.root)).sort((a, b) => b.root.length - a.root.length)[0];
+    // The resolver has already checked the owning manifest's exports and file
+    // target. A valid package self-reference is not a dependency declaration.
+    if (owner && name === owner.name && edge.resolution === "workspace" && edge.target && (owner.root === "." || under(edge.target, owner.root))) continue;
     const declarations = (owner?.dependencies ?? []).filter(entry => entry.name === name || entry.name === `@types/${name.replace(/^@/, "").replace("/", "__")}`);
     if (!declarations.length) blockers.push({ code: "BLOCKED_UNDECLARED_DEPENDENCY", path: edge.source, dependency: name });
     const context = `${edge.context}:${edge.usage}`;
@@ -495,7 +526,7 @@ export async function recordGeneration({ root, source, targetCommit, plan, readB
   for (const [name, previous] of [...entries].sort(([a], [b]) => order(a, b))) {
     const old = originalEntries.get(name), exists = tree.has(name);
     if (!exists) {
-      const consumer = adaptations.outputs.find(entry => entry.inputs.some(input => input.commit === oldCommit && input.path === name));
+      const consumer = adaptations.outputs.find(entry => !Object.hasOwn(entry, "retirement") && entry.inputs.some(input => input.commit === oldCommit && input.path === name));
       if (consumer || oldRecipes.get(name)?.patch && !decision(plan, previous.destination_path)) blockers.push({ code: "BLOCKED_REMOVED_INPUT", path: name, outputPath: consumer?.destination ?? previous.destination_path, reason: "Removed adapted/derived input needs explicit disposition" });
       if (previous.action.startsWith("copy")) {
         if (await current(previous.destination_path)) blockers.push({ code: "BLOCKED_REMOVED_OUTPUT", path: previous.destination_path, reason: "Candidate still contains removed upstream output" });
@@ -538,6 +569,7 @@ export async function recordGeneration({ root, source, targetCommit, plan, readB
     recipes.push(recipe);
   }
   for (const entry of adaptations.outputs) {
+    if (Object.hasOwn(entry, "retirement")) continue;
     const previousSha256 = entry.sha256, previousPrimarySha256 = entry.inputs[0]?.sha256;
     const changedInputs = [];
     for (let index = 0; index < entry.inputs.length; index++) {
@@ -608,14 +640,24 @@ export async function recordGeneration({ root, source, targetCommit, plan, readB
   adaptations.baselineCommit = targetCommit;
   adaptations.policy.sourceManifest = "This generation records verified immutable originals at baselineCommit; prior generation contents remain in Git history. The independent MCP/Skills snapshot is unchanged.";
   adaptations.policy.replay = "Use trusted scripts/upstream-sync/t3code.mjs verifyGeneration for this generation. Legacy same-pin capture/sync commit guards are intentionally unchanged.";
-  for (const entry of adaptations.sources) if (entry.commit === oldCommit) { entry.commit = targetCommit; entry.role = "production baseline for this generation; independent supplemental pin retained"; entry.license.sha256 = (await objects.get(targetCommit, entry.license.path)).identity.sha256; }
+  for (const entry of [...adaptations.sources]) if (entry.commit === oldCommit) {
+    const nextLicense = (await objects.get(targetCommit, entry.license.path)).identity;
+    const next = { ...entry, commit: targetCommit, role: "production baseline for this generation; independent supplemental pin retained", license: { ...entry.license, sha256: nextLicense.sha256, bytes: nextLicense.bytes, gitBlobSha1: nextLicense.blob, gitMode: nextLicense.gitMode } };
+    if (targetCommit !== oldCommit && adaptations.outputs.some(output => Object.hasOwn(output, "retirement") && output.inputs.some(input => input.commit === oldCommit))) {
+      // Retired recipes retain their original pins, including that pin's license.
+      const oldLicense = (await objects.get(oldCommit, entry.license.path)).identity;
+      entry.license = { ...entry.license, bytes: oldLicense.bytes, gitBlobSha1: oldLicense.blob, gitMode: oldLicense.gitMode };
+      adaptations.sources.push(next);
+    } else Object.assign(entry, next);
+  }
   // A source update must not change source license coverage silently.
   for (const entry of adaptations.sources) if (!(await objects.get(entry.commit, entry.license.path)).bytes.equals((await current(entry.license.distributedPath))?.bytes ?? Buffer.alloc(0))) blockers.push({ code: "BLOCKED_LICENSE", path: entry.license.distributedPath, commit: entry.commit });
   schedule(paths.manifest, encode(manifest));
   schedule(paths.adaptations, encode(adaptations));
   const inventoryOutputs = sorted([...recipes.map(entry => entry.destination), ...inventory.files.filter(entry => !entry.source && !entry.destination.startsWith(`${base}integration-patches/`)).map(entry => entry.destination)]);
-  const allOutputs = sorted([...inventoryOutputs, ...adaptations.outputs.map(entry => entry.destination)]);
-  const actualGraph = await scanGraph(allOutputs, async name => pending.get(name)?.bytes ?? bytesAt(root, name), async name => pathExists(root, name), inventoryOutputs.filter(name => name.endsWith("/package.json") && !name.includes("/third-party/")), new Set(allOutputs));
+  const allOutputs = sorted([...inventoryOutputs, ...adaptations.outputs.filter(entry => !Object.hasOwn(entry, "retirement")).map(entry => entry.destination)]);
+  const retiredTarget = createRetiredImportResolver(root, adaptations.outputs.filter(entry => Object.hasOwn(entry, "retirement")), require("typescript"));
+  const actualGraph = await scanGraph(allOutputs, async name => pending.get(name)?.bytes ?? bytesAt(root, name), async name => pathExists(root, name), inventoryOutputs.filter(name => name.endsWith("/package.json") && !name.includes("/third-party/")), new Set(allOutputs), retiredTarget);
   for (const edge of actualGraph.edges) if (["unresolved-local", "unresolved-workspace-export", "uninventoried-vendor", "forbidden-source-path"].includes(edge.disposition)) blockers.push({ code: "BLOCKED_IMPORT_CLOSURE", path: edge.source, dependency: edge.target ?? edge.specifier });
   const resourceKey = edge => JSON.stringify([edge.source, edge.kind, edge.specifier, edge.expression ?? null]);
   const previousResources = new Set(docs.imports.edges.filter(edge => edge.disposition === "runtime-selected-resource").map(resourceKey));
@@ -721,4 +763,61 @@ export async function verifyGeneration({ root, readBlob, listTree }) {
     if (!info || hash(await bytesAt(root, output.path)) !== output.sha256 || output.mode !== undefined && Boolean(info.mode & 0o111) !== Boolean(output.mode & 0o111)) blockers.push({ code: "BLOCKED_GENERATION_DRIFT", path: output.path });
   }
   return { blockers, notes: ["Exact committed-input and recipe replay only; not native behavior, full verification or write authorization."], changedPaths: [] };
+}
+
+/** Check the packager's concrete JSON identities after full isolated commands. */
+export async function verifyArtifacts({ root, targetCommit }) {
+  const artifactRoot = ".upstream-sync/verification-output/t3-artifact";
+  const manifestPath = `${artifactRoot}/artifact-manifest.json`;
+  const blockers = [];
+  const notes = ["Data-only packaged T3 source identity check; native behavior and publication authorization are separate."];
+  let reading = manifestPath;
+  try {
+    if (!/^[a-f0-9]{40}$/.test(targetCommit)) throw new Error("Expected a full immutable target commit");
+    const artifact = JSON.parse(await bytesAt(root, manifestPath));
+    if (artifact.version !== 1 || artifact.entrypoint !== "apps/server/agent/dist/index.mjs" || !Array.isArray(artifact.files)) {
+      return { blockers: [{ code: "BLOCKED_ARTIFACT_SCHEMA", path: manifestPath, reason: "Expected the version-1 Agent package manifest and entrypoint" }], notes };
+    }
+    if (artifact.upstreamCommit !== targetCommit) {
+      return {
+        blockers: [{ code: "BLOCKED_ARTIFACT_IDENTITY", path: manifestPath, expectedCommit: targetCommit, actualCommit: artifact.upstreamCommit ?? null, reason: "Packaged upstream identity differs from the verified candidate target" }],
+        notes: [...notes, "A stale packager stamp requires a separately approved shared-host-tool change and its T3/CC/OpenHands provenance updates; this check never enrolls those changes."],
+      };
+    }
+    const candidate = await documents(root);
+    if (candidate.manifest.upstream.commit !== targetCommit) blockers.push({ code: "BLOCKED_ARTIFACT_IDENTITY", path: paths.manifest, expectedCommit: targetCommit, actualCommit: candidate.manifest.upstream.commit, reason: "Candidate identity differs from the requested artifact target" });
+    const provenance = ["manifest", "inventory", "adaptations", "supplemental", "imports"];
+    const expectedPaths = new Set(provenance.map(key => `licenses/provenance/${paths[key]}`));
+    const records = new Map();
+    for (const record of artifact.files) {
+      if (!expectedPaths.has(record?.path)) continue;
+      if (records.has(record.path)) blockers.push({ code: "BLOCKED_ARTIFACT_SCHEMA", path: record.path, reason: "Duplicate packaged source identity record" });
+      records.set(record.path, record);
+    }
+    const shipped = {};
+    for (const key of provenance) {
+      const relative = `licenses/provenance/${paths[key]}`;
+      reading = `${artifactRoot}/${relative}`;
+      const bytes = await bytesAt(root, reading), record = records.get(relative);
+      if (!record || record.sha256 !== hash(bytes) || record.bytes !== bytes.length || record.mode !== 0o644) blockers.push({ code: "BLOCKED_ARTIFACT_PROVENANCE", path: reading, reason: "Packaged provenance bytes do not match their version-1 artifact file record" });
+      if (!bytes.equals(candidate.bytes.get(paths[key]))) blockers.push({ code: "BLOCKED_ARTIFACT_PROVENANCE", path: reading, reason: "Packaged provenance is not the exact accepted candidate generation" });
+      shipped[key] = { bytes, value: JSON.parse(bytes) };
+    }
+    if (shipped.manifest.value.upstream?.commit !== targetCommit
+      || shipped.inventory.value.upstreamCommit !== targetCommit
+      || shipped.inventory.value.sourceManifestSha256 !== hash(shipped.manifest.bytes)
+      || shipped.adaptations.value.baselineCommit !== targetCommit
+      || shipped.imports.value.upstreamCommit !== targetCommit) {
+      blockers.push({ code: "BLOCKED_ARTIFACT_IDENTITY", path: manifestPath, expectedCommit: targetCommit, reason: "Distributed T3 source, replay, adaptation and import identities do not agree with the target" });
+    }
+    const sources = shipped.adaptations.value.sources;
+    if (!Array.isArray(sources) || !sources.some(source => source.commit === targetCommit)
+      || !sources.some(source => source.commit === shipped.supplemental.value.upstream?.commit)
+      || JSON.stringify(shipped.imports.value.adaptationCommits) !== JSON.stringify(sources.map(source => source.commit))) {
+      blockers.push({ code: "BLOCKED_ARTIFACT_IDENTITY", path: `${artifactRoot}/licenses/provenance/${paths.adaptations}`, reason: "Distributed production and supplemental source pins disagree" });
+    }
+  } catch (error) {
+    blockers.push({ code: error.code === "ENOENT" ? "BLOCKED_ARTIFACT_MISSING" : "BLOCKED_ARTIFACT_PROVENANCE", path: reading, reason: error.message });
+  }
+  return { blockers, notes };
 }

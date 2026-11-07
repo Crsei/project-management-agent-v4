@@ -83,7 +83,7 @@ export async function inspectRoadmapDelivery(scope: RoadmapDeliveryScope, header
     }
     items.push({ taskId: row?.taskId ?? '', title: node.title, deliveryId: value?.id ?? null, head: value?.head ?? null, pr: value?.pr?.url ?? null, tested: !!value?.test?.passed, ci: value ? confirmedDelivery(value) : false, included: false, observedAt: value?.feedback?.observedAt ?? null, issue });
   }
-  const candidate = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const candidate = records.filter(record => !items.find(item => item.deliveryId === record.id)?.issue).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   if (candidate?.head && candidate.git && confirmedDelivery(candidate)) {
     await ports.verify(candidate);
     for (const item of items) {

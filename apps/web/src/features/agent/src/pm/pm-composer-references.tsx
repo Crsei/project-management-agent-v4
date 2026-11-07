@@ -14,7 +14,7 @@ export function PmComposerReferences() {
   return <>
     <PmReferenceTray
       references={workspace.references}
-      onRemove={(reference) => workspace.removeReference(reference.id)}
+      onRemove={workspace.removeReference}
       onClear={workspace.clearReferences}
       max={PM_REFERENCE_LIMIT}
     />

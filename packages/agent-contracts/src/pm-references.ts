@@ -4,6 +4,7 @@ export const pmReferenceKindSchema = z.enum(["issue", "project", "document"]);
 export type PmReferenceKind = z.infer<typeof pmReferenceKindSchema>;
 
 export const pmReferenceInputSchema = z.strictObject({
+  workspaceId: z.uuid().toLowerCase(),
   kind: pmReferenceKindSchema,
   id: z.string().trim().min(1).max(200),
   projectId: z.string().regex(/^PRJ-\d+$/).nullable(),
@@ -16,6 +17,7 @@ export const pmReferenceAvailabilitySchema = z.enum(["available", "stale", "forb
 export type PmReferenceAvailability = z.infer<typeof pmReferenceAvailabilitySchema>;
 
 export const pmReferenceResolutionSchema = z.strictObject({
+  workspaceId: z.uuid().toLowerCase(),
   kind: pmReferenceKindSchema,
   id: z.string().min(1),
   projectId: z.string().nullable(),

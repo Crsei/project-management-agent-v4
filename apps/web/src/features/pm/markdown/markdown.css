@@ -478,7 +478,6 @@
   .markdown-workbench .task-collection-heading .collection-heading-actions { flex-wrap: wrap; }
   .markdown-workbench .task-collection-heading .task-heading-search { flex: 1 1 100%; width: auto; max-width: none; }
   .markdown-workbench .task-agent-entry { padding-inline: 8px; }
-  .markdown-workbench .task-agent-entry-label { display: none; }
   .markdown-workbench .task-controls { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
   .markdown-workbench .task-controls > .task-search { flex: 1 1 100%; width: 100%; max-width: none; }
   .markdown-workbench .task-toolbar-spacer { display: none; }

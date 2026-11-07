@@ -108,3 +108,15 @@
 @media (prefers-reduced-motion: reduce) {
   :is(.cc-switch-web .openhands-extensions, .cc-switch-web.openhands-extensions) * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* The rebuilt OpenHands pages are not wrapped in a second card. */
+.cc-switch-web .oh-extension-surface { border: 0; border-radius: 0; background: transparent; }
+.cc-switch-web .oh-extension-frame { padding: 0; }
+.cc-switch-web .oh-extension-main { gap: 20px; }
+.cc-switch-web .oh-extension-surface[data-view="mcp"] .oh-extension-main { width: 100%; max-width: 52rem; }
+.cc-switch-web .oh-extension-surface[data-view="skills"] .oh-extension-main { width: 100%; max-width: 68rem; }
+@media (max-width: 767px) {
+  .cc-switch-web .oh-extension-frame { padding: 0; }
+}
+.cc-switch-web .cc-switch-management-content { background: transparent; }
+.cc-switch-web.openhands-extensions { background: transparent; }

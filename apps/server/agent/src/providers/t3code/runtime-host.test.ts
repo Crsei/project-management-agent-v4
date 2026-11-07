@@ -6,9 +6,10 @@ import * as Exit from "effect/Exit";
 import { ThreadId, ProviderInstanceId } from "@t3tools/contracts";
 import { makePmProviderRuntimeHost, pmRuntimeBinding } from "./runtime-host.ts";
 import type { ProviderDriverContext } from "../driver-adapter.ts";
+import { agentWorkspaceEnvironment } from "../../durable/execution.testkit.ts";
 
 const context: ProviderDriverContext = { instanceId: "account", driver: "codex", config: {}, homeDirectory: "/private/home", stateDirectory: "/private/state",
-  cwd: "/workspace", env: {}, revision: 1, execution: { threadId: "chat", generationId: "generation", messageId: "message", scope: { workspaceId: "workspace", projectId: null } },
+  cwd: "/workspace", env: {}, revision: 1, execution: { threadId: "chat", generationId: "generation", messageId: "message", environment: agentWorkspaceEnvironment("/workspace", true) },
   pmToolBridge: { command: "/node", args: ["/agent-tools.mjs", "http://127.0.0.1:1/generation"] },
   authorizeExecution: async () => { throw new Error("Binding-only fixture must not authorize execution."); } };
 
@@ -92,7 +93,7 @@ test("authorization requires a live captured execution and revocable callback; c
   const actions: string[] = [];
   const authorization = (action: "compaction" | "tool") => Effect.suspend(() => {
     actions.push(action);
-    return live ? Effect.void : Effect.fail(new Error("PM access revoked"));
+    return live ? Effect.void : Effect.fail(new Error("Execution grant revoked"));
   });
   await assert.rejects(Effect.runPromise(host.authorize(input)), { code: "stale_execution" });
   await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
@@ -105,7 +106,7 @@ test("authorization requires a live captured execution and revocable callback; c
     yield* host.authorize({ ...input, action: "compaction" });
     yield* Effect.tryPromise({ try: () => assert.rejects(Effect.runPromise(host.authorize({ ...input, executionId: "later-generation" })), { code: "stale_execution" }), catch: error => error });
     live = false;
-    yield* Effect.tryPromise({ try: () => assert.rejects(Effect.runPromise(host.authorize(input)), /PM access revoked/), catch: error => error });
+    yield* Effect.tryPromise({ try: () => assert.rejects(Effect.runPromise(host.authorize(input)), /Execution grant revoked/), catch: error => error });
     yield* Effect.tryPromise({ try: () => assert.rejects(Effect.runPromise(Effect.scoped(host.bind(binding, () => Effect.void))), { code: "provider_busy", status: 409 }), catch: error => error });
   })));
   assert.deepEqual(actions, ["tool", "compaction", "tool"]);
@@ -113,7 +114,7 @@ test("authorization requires a live captured execution and revocable callback; c
   await assert.rejects(Effect.runPromise(host.authorize(input)), { code: "stale_execution" });
 });
 
-test("draining or replacing a binding during an asynchronous PM recheck never authorizes its stale owner", async () => {
+test("draining or replacing a binding during an asynchronous grant recheck never authorizes its stale owner", async () => {
   for (const replace of [false, true]) {
     const host = makePmProviderRuntimeHost();
     const binding = pmRuntimeBinding(context, ThreadId.make("chat"), "generation");

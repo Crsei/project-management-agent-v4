@@ -61,6 +61,27 @@ test("request and item ordering joins once, default-denies native approval, and 
   assert.match(offered[1].unavailableReason!, /PM business approvals remain separate/);
 });
 
+test("auto-approve labels native approvals as configuration decisions", () => {
+  const previousMode = process.env.AGENT_APPROVAL_MODE;
+  process.env.AGENT_APPROVAL_MODE = "auto-approve";
+  try {
+    const offered: NativeInteractionRequest[] = [];
+    const adapter = makePmEventAdapter({ canRespond: true, onRequest: (value) => offered.push(value), onRequestClosed: () => {},
+      isLiveRequest: (value) => value.responseCapability.type === "live" && value.responseCapability.providerSessionId === "session" });
+    const live = request({ id: "question", nodeId: "root", providerTurnId: "native-turn", nativeRequestRef: null, kind: "user_input", status: "pending",
+      responseCapability: { type: "live", providerSessionId: "session" }, createdAt: now, resolvedAt: null });
+    adapter.handle({ type: "turn_item.updated", driver, turnItem: item({ ...base, id: "approval-item", type: "approval_request", requestId: "approval", requestKind: "command", prompt: "Run shell?" }) });
+    adapter.handle({ type: "runtime_request.updated", driver, runtimeRequest: { ...live, id: Schema.decodeUnknownSync(OrchestrationV2RuntimeRequest.fields.id)("approval"), kind: "command" } });
+    assert.equal(offered.length, 1);
+    assert.equal(offered[0].kind, "approval");
+    assert.equal(offered[0].respondable, false);
+    assert.equal(offered[0].title, "Native permission auto-approved");
+    assert.match(offered[0].unavailableReason!, /Auto-approved by configuration/);
+  } finally {
+    if (previousMode === undefined) delete process.env.AGENT_APPROVAL_MODE; else process.env.AGENT_APPROVAL_MODE = previousMode;
+  }
+});
+
 test("plan-before-row does not duplicate a visible artifact; command deltas stay separate from final output", () => {
   const events: NativeOutputEvent[] = [];
   const adapter = makePmEventAdapter({ canRespond: false, onRequest: () => {}, onRequestClosed: () => {}, onEvent: (event) => events.push(event) });

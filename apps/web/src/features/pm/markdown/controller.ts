@@ -59,6 +59,7 @@ export interface WorkspaceController {
   projects: FileRecord[]; projected: FileRecord[]; draftIds: Set<string>; draftDiagnostics: Diagnostic[]; draftInvalid: boolean; ahead: boolean;
   config: ViewConfig; advancedView: ViewConfig | null; matching: FileRecord[]; matchingResult: { files: FileRecord[]; error: string }; viewProps: ViewProps;
   taskCollection: TaskCollection | null; scopeCounts: TaskScopeCounts; scopeError: string; scopePending: boolean; writesBlocked: boolean;
+  pendingChangesOnly: boolean; setPendingChangesOnly: Dispatch<SetStateAction<boolean>>;
   graphSource: GraphSource; graphQuery: GraphQuery; graphRefreshKey: number;
   search: string; setSearch: Dispatch<SetStateAction<string>>; connection: string; notice: string; setNotice: Dispatch<SetStateAction<string>>;
   creationOutsideScope: string | null;
@@ -182,6 +183,15 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
   const writesBlocked = nativeWriteUncertain || creationWriteUncertain || command.pending || !!command.unknownCommand;
   const setDrafts = useCallback<Dispatch<SetStateAction<Drafts>>>(next => updateSessionDrafts(previous => preserveUncertainProjectTaskDrafts(previous, typeof next === 'function' ? next(previous) : next)), [updateSessionDrafts]);
   const [search, setSearch] = useState(() => stored(searchKey, ''));
+  const pendingChangesOnly = params.get('pendingChanges') === 'true';
+  const setPendingChangesOnly = useCallback<Dispatch<SetStateAction<boolean>>>(update => {
+    setParams(previous => {
+      const next = new URLSearchParams(previous);
+      const value = typeof update === 'function' ? update(previous.get('pendingChanges') === 'true') : update;
+      if (value) next.set('pendingChanges', 'true'); else next.delete('pendingChanges');
+      return next;
+    }, { replace: true });
+  }, [setParams]);
   const [connection, setConnection] = useState('Connecting');
   const [notice, setNotice] = useState('');
   const [creationFeedback, setCreationFeedback] = useState<{ id: string; message: string } | null>(null);
@@ -720,7 +730,7 @@ export function useWorkspaceController(options: ControllerOptions): WorkspaceCon
     documentWorkbench: options.documentWorkbench,
     session, query, accessError, handleAccessError, files, unsupportedFiles, configuration, configurationInvalid, prefs, setPrefs, preference,
     selectedId, selected, unsupported, source, draft, drafts, setDrafts, raw, entity, projects, projected, draftIds,
-    draftDiagnostics, draftInvalid, ahead, config, advancedView, matching, matchingResult, viewProps, taskCollection, scopeCounts, scopeError, scopePending, writesBlocked, graphSource, graphQuery, graphRefreshKey, search, setSearch,
+    draftDiagnostics, draftInvalid, ahead, config, advancedView, matching, matchingResult, viewProps, taskCollection, scopeCounts, scopeError, scopePending, writesBlocked, pendingChangesOnly, setPendingChangesOnly, graphSource, graphQuery, graphRefreshKey, search, setSearch,
     connection, notice, setNotice, error: documentRecoveryNeeded ? 'A document save result needs recovery. Read the authoritative source and explicitly adopt the observed revision before replacing it. Local drafts are retained.' : nativeWriteUncertain && !hasUncertainDocumentSave(drafts) ? 'A project task write has an uncertain result. Return to its project to read the authoritative source, then deliberately adopt or discard the retained fields. Writes and editing are locked until recovery; local drafts are retained.' : error, setError, busy, requestDiagnostics, setRequestDiagnostics,
     creationOutsideScope: creationFeedback?.message === notice ? creationFeedback.id : null,
     deleteTarget, setDeleteTarget, deleteConfirmation, setDeleteConfirmation, conflict, setConflict, rebaseReviewed, setRebaseReviewed,

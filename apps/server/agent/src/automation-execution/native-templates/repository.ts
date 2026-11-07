@@ -4,18 +4,21 @@ import { chmod, lstat, mkdir, open, readdir, realpath, writeFile } from 'node:fs
 import path from 'node:path';
 import ignore from 'ignore';
 import type { StudioExecutionRequest } from '../../../../../../packages/contracts/src/automation-studio.ts';
-import type { AgentExecutionSnapshot } from '../../durable/agent-scope.ts';
+import { sameExecutionIdentity, type AgentExecutionSnapshot } from '../../durable/agent-execution.ts';
 import type { ChatGeneration } from '../../durable/chat-runtime.ts';
-import { readRecord, transaction, writeRecord } from '../../durable/store.ts';
+import { listRecords, readRecord, transaction, writeRecord } from '../../durable/store.ts';
 import { automationRequestFingerprint } from '../context.ts';
 import type { NativeRepository, NativeRepositoryChange, NativeTemplateContext } from './ports.ts';
 import { nativeHash } from './state.ts';
 import { DurableError } from '../../durable/errors.ts';
+import { chatOnlyExecutionSelection, executionSelectionSchema, type ExecutionEnvironment } from '@agent-workspace/contracts/chat';
 
 const namespace = 'pm-automation:native-repositories';
 export type NativeRepositoryBinding = {
   threadId: string; idempotencyKey: string; request: StudioExecutionRequest; fingerprint: string;
+  executionVersion: 2; authorizationEnvironment: ExecutionEnvironment;
   authorizationPath: string; executionPath: string; repository: NativeRepository | null;
+  executionDirectoryIdentity?: string;
   commit: string | null; phase: 'preparing' | 'ready'; files: number; bytes: number;
 };
 type BaseFile = { sha256: string; executable: boolean; ignoreRules?: string };
@@ -41,42 +44,45 @@ async function privateDirectory(root: string, components: string[]): Promise<str
   }
   return directory;
 }
-function originalRuntime(binding: NativeRepositoryBinding): void {
+function originalRuntime(binding: NativeRepositoryBinding, inspect = false): void {
   const execution = readRecord<{ request: StudioExecutionRequest; fingerprint: string; phase: string }>('pm-automation:executions', binding.request.executionId);
   const registration = readRecord<{ executionId: string; fingerprint: string }>('pm-automation:native-thread-bindings', bindingKey(binding.threadId, binding.idempotencyKey));
-  if (!execution || execution.phase === 'finished' || execution.fingerprint !== binding.fingerprint || automationRequestFingerprint(execution.request) !== binding.fingerprint || registration?.executionId !== binding.request.executionId || registration.fingerprint !== binding.fingerprint) throw new Error('Native repository binding is not owned by the active original automation execution.');
+  if (!execution || !inspect && execution.phase === 'finished' || execution.fingerprint !== binding.fingerprint || automationRequestFingerprint(execution.request) !== binding.fingerprint || automationRequestFingerprint(binding.request) !== binding.fingerprint || registration?.executionId !== binding.request.executionId || registration.fingerprint !== binding.fingerprint) throw new Error('Native repository binding is not owned by its original automation execution.');
 }
-async function validateBinding(binding: NativeRepositoryBinding, authorized: AgentExecutionSnapshot): Promise<void> {
-  originalRuntime(binding);
+async function validateBinding(binding: NativeRepositoryBinding, authorized: AgentExecutionSnapshot, inspect = false): Promise<void> {
+  originalRuntime(binding, inspect);
+  const selection = executionSelectionSchema.safeParse(binding.request.config.action.executionSelection ?? chatOnlyExecutionSelection());
   const relative = path.relative(authorized.path, binding.executionPath);
-  if (binding.phase !== 'ready' || authorized.scope.workspaceId !== binding.request.workspaceId || authorized.scope.projectId !== binding.request.projectId || authorized.path !== binding.authorizationPath || !relative || relative.startsWith('..') || path.isAbsolute(relative) || relative !== path.join('.pm-automations', 'native-repositories', nativeHash([binding.threadId, binding.idempotencyKey]))) throw new Error('Native repository no longer belongs to its currently authorized PM project area.');
+  if (binding.executionVersion !== 2 || !selection.success || selection.data.agentWorkspaceId !== authorized.environment.agentWorkspaceId ||
+      selection.data.agentWorkspaceRevision !== authorized.environment.agentWorkspaceRevision || !sameExecutionIdentity(binding.authorizationEnvironment, authorized.environment) ||
+      binding.phase !== 'ready' || authorized.path !== binding.authorizationPath || !relative || relative.startsWith('..') || path.isAbsolute(relative) ||
+      relative !== path.join('.pm-automations', 'native-repositories', nativeHash([binding.threadId, binding.idempotencyKey])))
+    throw new Error('Native repository no longer belongs to its explicitly selected Agent directory.');
   let current = authorized.path;
   for (const component of relative.split(path.sep)) {
     current = path.join(current, component);
     const info = await lstat(current);
     if (!info.isDirectory() || info.isSymbolicLink() || info.mode & 0o7077 || await realpath(current) !== current) throw new Error('Native repository private path was replaced, exposed or escaped its authorized project.');
   }
+  const info = await lstat(binding.executionPath, { bigint: true });
+  if (binding.executionDirectoryIdentity !== `${info.dev}:${info.ino}`) throw new Error('Native repository directory identity changed; no replacement is accepted.');
 }
-/** Called only by trusted Chat admission; a user-supplied key alone grants no directory authority. */
-export async function resolveNativeTemplateChatSnapshot(threadId: string, idempotencyKey: string | undefined, authorized: AgentExecutionSnapshot): Promise<AgentExecutionSnapshot> {
-  if (!idempotencyKey) return authorized;
-  const binding = readRecord<NativeRepositoryBinding>(namespace, bindingKey(threadId, idempotencyKey));
-  if (!binding) return authorized;
-  await validateBinding(binding, authorized);
-  return { ...authorized, path: binding.executionPath };
+export async function resolveSessionNativeTemplateSnapshot(threadId: string, authorized: AgentExecutionSnapshot, purpose: 'execute' | 'inspect'): Promise<AgentExecutionSnapshot> {
+  const bindings = listRecords<NativeRepositoryBinding>(namespace).filter(value => value.threadId === threadId);
+  if (!bindings.length) return authorized;
+  if (bindings.length !== 1) throw new DurableError(409, 'native_repository_binding_changed', 'Session has ambiguous native repository ownership.');
+  const binding = bindings[0]!;
+  await validateBinding(binding, authorized, purpose === 'inspect');
+  const environment = authorized.environment;
+  if (!environment) throw new DurableError(412, 'execution_environment_required', 'Native repository requires a versioned environment.');
+  return { ...authorized, path: binding.executionPath, environment: { ...environment,
+    executionPath: environment.agentWorkspaceId ? binding.executionPath : null, worktree: null } };
 }
-/** Ordinary and unbound Chat retain their original strict PM path check. */
+/** Both ordinary and native Chat retain their exact independent execution identity. */
 export async function assertNativeTemplateChatSnapshot(generation: ChatGeneration, authorized: AgentExecutionSnapshot): Promise<void> {
   const snapshot = generation.executionSnapshot;
-  if (!snapshot || snapshot.scope.workspaceId !== authorized.scope.workspaceId || snapshot.scope.projectId !== authorized.scope.projectId) throw new DurableError(409, 'scope_conflict', 'Native Chat PM scope changed.');
-  const key = generation.request.idempotencyKey;
-  const binding = key ? readRecord<NativeRepositoryBinding>(namespace, bindingKey(generation.threadId, key)) : null;
-  if (!binding) {
-    if (snapshot.path !== authorized.path) throw new DurableError(409, 'scope_conflict', 'Native Chat authorized PM directory changed.');
-    return;
-  }
-  await validateBinding(binding, authorized);
-  if (snapshot.path !== binding.executionPath) throw new DurableError(409, 'scope_conflict', 'Native Chat repository snapshot changed.');
+  if (!snapshot || snapshot.environment.version !== 2 || snapshot.path !== authorized.path || !sameExecutionIdentity(snapshot.environment, authorized.environment))
+    throw new DurableError(409, 'execution_environment_changed', 'Native Chat actual execution filesystem changed.');
 }
 
 export async function prepareNativeRepository(input: {
@@ -85,15 +91,18 @@ export async function prepareNativeRepository(input: {
   requestJson: NativeTemplateContext['requestJson']; signal: AbortSignal;
 }): Promise<NativeRepositoryBinding> {
   const { request, threadId, idempotencyKey, authorized, repository, requestJson, signal } = input;
+  if (repository && !authorized.environment.agentWorkspaceId)
+    throw new DurableError(412, 'agent_workspace_required', 'A repository automation requires an explicitly selected Agent Workspace; chat-only scratch is not a code directory.');
   const key = bindingKey(threadId, idempotencyKey), fingerprint = automationRequestFingerprint(request);
   const previous = readRecord<NativeRepositoryBinding>(namespace, key);
   if (previous) {
     if (previous.fingerprint !== fingerprint || nativeHash(previous.repository) !== nativeHash(repository ?? null)) throw new Error('Native repository identity already belongs to another immutable request.');
     if (previous.phase !== 'ready') throw new Error('Native repository preparation was interrupted; it is never silently replayed.');
+    await validateBinding(previous, authorized);
     return previous;
   }
   for (const reference of request.config.action.repositories) {
-    if (reference.id !== `project:${request.projectId}` || reference.ref !== null) throw new Error('Native templates accept only the current authorized PM project file-area reference. Source repository picker values are separate remote repository identifiers.');
+    if (reference.id !== `project:${request.projectId}` || reference.ref !== null) throw new Error('Native templates accept only the immutable PM project reference. Local execution is selected separately by Agent Workspace; remote repository picker values are separate identifiers.');
   }
   if (repository && (repository.provider !== 'github' && repository.provider !== 'gitlab' || !repository.repository || repository.repository.length > 500 || repository.repository.split('/').some(part => !part || part === '.' || part === '..') || /[\u0000-\u0020\\?#]/.test(repository.repository))) throw new Error('Invalid scoped remote repository identity.');
   if (repository) {
@@ -103,7 +112,9 @@ export async function prepareNativeRepository(input: {
     if (!Array.isArray(selected) || !selected.some(value => typeof value === 'string' && (repository.provider === 'github' ? value.toLowerCase() === repository.repository.toLowerCase() : value === repository.repository))) throw new Error('The native repository was not selected in this immutable source-form configuration.');
   }
   const directory = await privateDirectory(authorized.path, ['.pm-automations', 'native-repositories', nativeHash([threadId, idempotencyKey])]);
-  const binding: NativeRepositoryBinding = { threadId, idempotencyKey, request, fingerprint, authorizationPath: authorized.path, executionPath: directory, repository: repository ?? null, commit: null, phase: 'preparing', files: 0, bytes: 0 };
+  const binding: NativeRepositoryBinding = { threadId, idempotencyKey, request, fingerprint, executionVersion: 2, authorizationEnvironment: authorized.environment, authorizationPath: authorized.path, executionPath: directory, repository: repository ?? null, commit: null, phase: 'preparing', files: 0, bytes: 0 };
+  const directoryInfo = await lstat(directory, { bigint: true });
+  binding.executionDirectoryIdentity = `${directoryInfo.dev}:${directoryInfo.ino}`;
   transaction(() => {
     if (readRecord(namespace, key)) throw new Error('Native repository preparation was concurrently admitted.');
     writeRecord(namespace, key, binding);

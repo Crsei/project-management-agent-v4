@@ -5,6 +5,7 @@ import { chatRoutes } from "./chat.ts";
 import { inspectorRoutes } from "./inspector/index.ts";
 import { providerRoutes } from "./providers/routes.ts";
 import { workspaceRoutes } from "./workspace.ts";
+import { agentWorkspaceRoutes, internalAgentWorkspaceRoutes } from "./agent-workspace-routes.ts";
 import { accessGuard, accessRoutes } from "./access.ts";
 import { automationRoutes } from "./automation/index.ts";
 import { settingsRoutes } from "./settings/routes.ts";
@@ -26,6 +27,7 @@ export const app = new Hono()
   .route("/", mcpRoutes)
   .route("/internal/automation-executions", automationExecutionRoutes)
   .route("/internal/extensions/definitions", extensionDefinitionRoutes)
+  .route("/internal/agent-workspaces", internalAgentWorkspaceRoutes)
   .route("/api", accessRoutes)
   .use("/api/*", accessGuard)
   .route("/api", mcpAppRoutes)
@@ -37,6 +39,7 @@ export const app = new Hono()
   .route("/api", pmCoreChangesRoutes)
   .route("/api", pmCapabilityRoutes)
   .route("/api", workspaceRoutes)
+  .route("/api", agentWorkspaceRoutes)
   .route("/api", automationRoutes)
   .route("/api", providerRoutes)
   .route("/api", settingsRoutes)

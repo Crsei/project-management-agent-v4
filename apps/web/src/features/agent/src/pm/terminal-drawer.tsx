@@ -1,23 +1,16 @@
-import { lazy, Suspense, useRef } from "react";
-import { PanelBottom, XIcon } from "lucide-react";
-import { InspectorScopeProvider } from "../workspace/inspector/scope";
-import type { AgentScope } from "./state";
+import { useRef, type ReactNode } from "react";
 import { useAgentText } from "../i18n";
 import "../../styles/inspector.css";
 
-const TerminalPanel = lazy(() => import("../workspace/inspector/terminal-panel").then((module) => ({ default: module.TerminalPanel })));
 
 export const TERMINAL_DRAWER_MIN_HEIGHT = 300;
 const clampHeight = (height: number) => Math.max(TERMINAL_DRAWER_MIN_HEIGHT, Math.min(720, window.innerHeight * 0.7, height));
 
-/** Bottom terminal drawer. Closing unmounts the panel, which disconnects the PTY. */
-export function TerminalDrawer({ scope, threadId, path, height, onHeightChange, onClose }: {
-  scope: AgentScope;
-  threadId?: string;
-  path?: string | null;
+/** A resizable dock for the shared terminal view; hiding only detaches it. */
+export function TerminalDrawer({ children, height, onHeightChange }: {
+  children: ReactNode;
   height: number;
   onHeightChange: (height: number) => void;
-  onClose: () => void;
 }) {
   const t = useAgentText();
   const drag = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
@@ -39,17 +32,8 @@ export function TerminalDrawer({ scope, threadId, path, height, onHeightChange, 
         event.preventDefault();
         onHeightChange(clampHeight(height + (event.key === "ArrowUp" ? 24 : -24)));
       }} />
-    <header>
-      <PanelBottom aria-hidden="true" />
-      <strong>{t("终端", "Terminal")}</strong>
-
-      <button type="button" className="pm-agent-icon" aria-label={t("关闭终端抽屉", "Close terminal drawer")} title={t("关闭终端抽屉", "Close terminal drawer")} onClick={onClose}><XIcon /></button>
-    </header>
-    <code className="pm-agent-inspector-path" title={path ?? undefined}>{path ?? t("未配置目录", "No directory configured")}</code>
     <div className="pm-agent-terminal-body">
-      <InspectorScopeProvider scope={{ ...scope, threadId }}>
-        <Suspense fallback={<p role="status">{t("正在加载终端…", "Loading terminal…")}</p>}><TerminalPanel active /></Suspense>
-      </InspectorScopeProvider>
+      {children}
     </div>
   </section>;
 }

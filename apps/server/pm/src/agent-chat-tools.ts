@@ -348,7 +348,7 @@ export function createAgentChatTools(options: AgentChatToolsOptions): AgentChatT
       await authorizeCoreScope(options.database(), context.actor, context.workspaceId, capability);
       const request = lifecycleRequest(name, input, workspace, before);
       assertAgentToolNotAborted(context);
-      const result = await executeAuditedCoreMutation({ database: options.database, principal: context.actor, workspace, scope, action: request.action, input: request.input,
+      const result = await executeAuditedCoreMutation({ database: options.database, principal: context.actor, workspace, scope, action: request.action, input: request.input, trustedSource: { kind: 'agent', requesterId: context.actor.id },
         key: context.operationId, mutate: request.mutate, capability, guard: lifecycleGuard(context, workspace, lifecycleExpectation(name, input)),
         ...(context.checkAuthorization ? { checkAuthorization: context.checkAuthorization } : {}),
         ...(request.targetId ? { targetId: request.targetId } : {}), before });
@@ -389,7 +389,7 @@ export function createAgentChatTools(options: AgentChatToolsOptions): AgentChatT
     }
     const request = nativeRequest(name, input, workspace, read);
     assertAgentToolNotAborted(context);
-    const record = await executeAuditedCoreMutation({ database: options.database, principal: context.actor, workspace, scope, action: request.action, input: request.input,
+    const record = await executeAuditedCoreMutation({ database: options.database, principal: context.actor, workspace, scope, action: request.action, input: request.input, trustedSource: { kind: 'agent', requesterId: context.actor.id },
       key: context.operationId, mutate: request.mutate, guard: guardFor(context, workspace),
       ...(context.checkAuthorization ? { checkAuthorization: context.checkAuthorization } : {}),
       ...(request.targetId ? { targetId: request.targetId } : {}), ...(request.before ? { before: request.before } : {}) });

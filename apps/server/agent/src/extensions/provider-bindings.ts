@@ -91,7 +91,7 @@ export function extensionProviderPathsOverlap(left: string, right: string): bool
 function targetForInstance(instance: StoredProviderInstance): ExtensionProviderTarget | undefined {
   const context = providerUsageContext(instance);
   const env = context.env;
-  // This is the existing runtime's authority, not a sidecar fallback. Nothing is writable until bind confirmation.
+  // Registered Provider settings are the authority; resolution does not inspect credentials or write native files.
   const directories = resolveProviderNativeDirectories(context, providerUserHome(instance, context.cwd));
   const homeDir = directories.homeDirectory;
   let app: ExtensionAppId;
@@ -167,7 +167,7 @@ function targetForInstance(instance: StoredProviderInstance): ExtensionProviderT
 
 /** Metadata only: no CLI probes, credential reads, native writes or grants; Provider store initialization stays authoritative. */
 export function listExtensionProviderTargets(): ExtensionProviderTarget[] {
-  const targets = listStoredInstances().flatMap(instance => {
+  const targets = listStoredInstances().filter(instance => instance.enabled).flatMap(instance => {
     const target = targetForInstance(instance);
     return target ? [target] : [];
   });
@@ -184,11 +184,16 @@ export function listExtensionProviderTargets(): ExtensionProviderTarget[] {
 export function resolveExtensionProviderBinding(input: { providerInstanceIds: string[]; confirmed: true }): ExtensionProviderBinding {
   if (input.confirmed !== true)
     throw bindingError("Explicit native target confirmation is required.", "extension_provider_confirmation_required", 400);
-  if (!Array.isArray(input.providerInstanceIds) || !input.providerInstanceIds.length || input.providerInstanceIds.length > 100 ||
-      input.providerInstanceIds.some(id => typeof id !== "string" || !id) || new Set(input.providerInstanceIds).size !== input.providerInstanceIds.length)
+  return resolveRegisteredExtensionProviders(input.providerInstanceIds);
+}
+
+/** Resolve already-registered Provider authority without accepting a browser binding confirmation. */
+export function resolveRegisteredExtensionProviders(providerInstanceIds: string[]): ExtensionProviderBinding {
+  if (!Array.isArray(providerInstanceIds) || !providerInstanceIds.length || providerInstanceIds.length > 100 ||
+      providerInstanceIds.some(id => typeof id !== "string" || !id) || new Set(providerInstanceIds).size !== providerInstanceIds.length)
     throw bindingError("Select distinct current Provider instances.", "invalid_extension_provider_selection", 400);
   const targets = listExtensionProviderTargets();
-  const selected = input.providerInstanceIds.map(id => {
+  const selected = providerInstanceIds.map(id => {
     const target = targets.find(item => item.providerInstanceId === id);
     if (!target) throw bindingError("A selected Provider has no supported local upstream application target.", "unsupported_extension_provider_target");
     return target;
@@ -225,13 +230,15 @@ export function resolveExtensionProviderBinding(input: { providerInstanceIds: st
   };
 }
 
-/** Recheck immediately before every sidecar operation; settings changes/symlink retargeting require rebind. */
+/** Recheck immediately before every sidecar operation; changed authority requires re-resolution. */
 export function assertExtensionProviderBindingCurrent(binding: ExtensionProviderBinding): void {
-  const current = resolveExtensionProviderBinding({ providerInstanceIds: binding.providerInstanceIds, confirmed: true });
-  if (current.bindingFingerprint !== binding.bindingFingerprint || JSON.stringify(current.appDirs) !== JSON.stringify(binding.appDirs) ||
-      current.homeDir !== binding.homeDir || current.claudeMcpFile !== binding.claudeMcpFile ||
-      JSON.stringify(current.physicalRoots) !== JSON.stringify(binding.physicalRoots))
-    throw bindingError("Provider native targets changed; explicitly bind the current targets before continuing.");
+  const current = resolveRegisteredExtensionProviders(binding.providerInstanceIds);
+  const canonical = (value: string | undefined) => value === undefined ? undefined : canonicalExtensionProviderPath(value);
+  if (current.bindingFingerprint !== binding.bindingFingerprint ||
+      canonical(current.homeDir) !== canonical(binding.homeDir) || canonical(current.claudeMcpFile) !== canonical(binding.claudeMcpFile) ||
+      current.apps.length !== binding.apps.length || current.apps.some(app => canonical(current.appDirs[app]) !== canonical(binding.appDirs[app])) ||
+      JSON.stringify([...current.physicalRoots].sort()) !== JSON.stringify([...binding.physicalRoots].sort()))
+    throw bindingError("Provider native targets changed; reopen management for the current Provider before continuing.");
 }
 
 /** Successful mutation notification only; no execution cancellation, account/reset or tool-policy changes. */

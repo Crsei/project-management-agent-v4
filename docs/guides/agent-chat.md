@@ -2,33 +2,53 @@
 
 本页描述当前源码的使用方式和已知限制，不代表当前工作树已通过检查、真实供应商账号验收或生产部署。历史计划和本机验收原件保留在本地，不作为公开安装依赖。
 
-左上产品切换进入 `/agent/workspace?workspace=<真实ID>`。侧栏顶部集中搜索、作用域筛选、工作区/项目选择与新建会话；选择器展示真实授权目录，包括没有会话的工作区和项目。新会话先绑定作用域，服务端接受生成时重新核验目录并持久化快照，原生 Agent 使用该目录；目录不是权限或沙箱。无 scope 的旧会话只查看，不猜归属。选择器内的文件区域设置可使用现有目录或显式新建目录。目录优先级为已保存映射、已登记本地项目目录、Chat Space 默认目录；已有目录不自动迁移。Provider 在 `/agent/settings/providers` 配置，原生 Home 留空时沿用服务端 CLI 环境和账号；受管 ChatGPT 使用应用私有账号状态。旧 API Provider 历史只读保留，继续发送须显式选择原生 Agent，不自动替换模型。离页保留草稿保护，不自动取消后台生成。主题直接复用 PM 偏好存储，首次切换、刷新和双产品导航保持一致。范围、合同、已执行检查与剩余验收边界见[Agent 使用与边界](agent-chat.md)。
+左上产品切换进入 `/agent/workspace`，PM 仍为默认产品入口。Agent 侧栏按“文件夹 → Sessions”组织：点击“打开文件夹”，浏览或输入 Agent 服务器上已有目录的绝对路径，再点击该文件夹下的“会话”。一个 Agent Workspace 对应一个规范化目录，不绑定 PM 工作区或项目；同名目录以完整路径区分。也可新建“仅对话”会话。首次执行受理后目录绑定冻结，改换执行环境须新建 Session。顶部显示当前 Session 的文件夹、Local、实际执行路径及收据证明的 Worktree；点击目录标签可展开来源路径与执行路径。
 
-会话行支持右键或省略号菜单：Pin、Settle、Snooze、重命名、隔离生成标题、未读、项目筛选、Auto-settle、复制、文件区域设置、Archive 与 Delete。列表按“置顶 / 活跃 / 稍后提醒 / 已归置”平铺，每行显示作用域、时间、标题及 Provider；作用域筛选只过滤列表，不改写当前会话归属。归置不是归档，更不代表 PM 工作完成。状态由服务端持久化并用独立 revision 防止覆盖；自动归置为默认 3 天无活动，不在运行成功时立即执行。归档可从 `/agent/settings/history` 恢复，运行中不能归档；删除沿用现有停止生成后再明确确认的流程，且不可恢复。标题重生成仅对具备隔离无工具调用能力的 Codex / Claude 开放，不修改原消息或原生会话游标。
+Provider 在 `/agent/settings/providers` 配置，原生 Home 留空时沿用服务端 CLI 环境和账号；受管 ChatGPT 使用应用私有账号状态。旧 Provider 选择不会自动替换模型；离页保留草稿保护，不自动取消后台生成。主题直接复用 PM 偏好存储，首次切换、刷新和双产品导航保持一致。目录不是权限或文件系统沙箱。
 
-主页沿用 t3code 的排列：自动化为独立横向导航行；设置、用量、快捷键工具栏位于登录信息上方。顶栏集中面包屑、侧栏开关、会话详情、终端和右侧面板；Files / Git / Terminal / Browser 标签仅在面板打开后出现。详情显示实际作用域、文件区域与会话参数入口，`Ctrl / ⌘ + Shift + B` 切换；内嵌页保留展开、关闭和 PM 返回上下文，窄屏使用侧栏抽屉。
+文件夹支持重命名显示名称、关闭和重新打开；关闭只隐藏列表，不删除代码或 Sessions，也不改变已绑定目录身份。会话行支持右键或省略号菜单：Pin、Settle、Snooze、重命名、隔离生成标题、未读、文件夹筛选、Auto-settle、复制、选择文件夹、Archive 与 Delete。各文件夹内按“置顶 / 活跃 / 稍后提醒 / 已归置”组织，每行显示目录、时间、标题及 Provider；侧栏导航不改绑当前会话。归置不是归档，更不代表 PM 工作完成。状态由服务端持久化并用独立 revision 防止覆盖；自动归置为默认 3 天无活动，不在运行成功时立即执行。归档可从 `/agent/settings/history` 恢复，运行中不能归档；删除沿用现有停止生成后再明确确认的流程，且不可恢复。标题重生成仅对具备隔离无工具调用能力的 Codex / Claude 开放，不修改原消息或原生会话游标。
 
-新会话及成功读取的空历史显示项目化欢迎区和居中输入框，已有消息时输入框停靠底部。Composer 左侧排列模型、原生能力选项和交互模式，右侧放任务引用、附件、可选听写及发送/停止；引用芯片仅在存在引用时占行。历史读取失败明确阻止发送并提供“刷新重试”，不冒充空会话；刷新仍遵循现有文字草稿恢复和附件/引用丢失提醒，不新增持久化协议。
+主页保留自动化独立导航行、设置／用量／快捷键工具栏，以及顶栏面包屑和面板开关。右侧 Files / Git 复用单标签，Browser 可以新增多个标签；Terminal 是同一组服务端终端的单一视图，可在右侧和底部停靠，不另建第二套进程。标签支持关闭、排序、最大化和窄屏抽屉；隐藏终端只断开视图，显式“终止”才停止进程。底部高度可调整，`Ctrl / ⌘ + J` 切换显示。
 
-当前只面向本机单操作者适配；尚未按 PM 成员建立 Agent 会话所有权隔离。不要将本次目录绑定视作多用户授权或文件沙箱，也不要据此开放公网使用。权限、审批和业务边界按本次要求留待后续沟通。
+Browser surface 使用单行浏览器工具栏：后退／前进／刷新、地址栏、元素选择／截图／浮层／菜单；地址栏按 Enter 打开 URL，非 URL 文本在新标签页搜索。跨域页面以 iframe 打开；同源地址不在沙箱中预览，改为引导至新标签页。最近使用记录只存在本机浏览器 localStorage（最多 12 条），可删除或清空；跨域 iframe 明确禁用元素选择、截图和浮层。v4 公共入口是 `3224`，v3 的 `3223` 不共享登录或数据。内嵌页保留展开、关闭和返回 PM 上下文。
 
-#### Chat Space 保存位置与检查器
+#### 桌面端原生 Browser
 
-默认根目录为运行 PM API 的用户主目录下 `~/.pmv4`，不是浏览器电脑或仓库根目录。通过 PM API 环境变量 `PM_CHAT_SPACE_ROOT`（程序入口 `buildApp({ chatSpaceRoot })`）指定绝对路径；服务管理器只向 PM API 转发此覆盖。`/agent/settings/file-areas` 可在现有可信根目录内按工作区更改默认保存根目录，携带 revision 保存，冲突或结果未知时先重读。设置只影响将来首次分配的默认区域，不移动已有目录、PM 数据库、Agent SQLite 或 Provider homes。
+桌面版（Electron）的 Browser surface 使用受控 `<webview>` 而不是 iframe。工作区窗口新增最小 `desktopWorkspace.preview` preload；主进程 `PreviewManager` 为每个 Browser tab 维护独立 preview session、导航状态、标题、favicon、截图、元素选择和 PiP。地址栏、前进/后退、标题和加载状态由主进程的 `did-navigate` / `page-title-updated` / `page-favicon-updated` / `did-start-loading` 事件同步，Browser 标签标题跟随页面标题；元素选择和截图会作为图片附件加入 Composer，浮动预览是只读帧流。桌面端可以安全预览同源或跨域地址，因为 guest 使用独立 partition，不共享工作区 cookie。
 
-```text
-<默认保存根目录>/workspaces/<workspaceId>/workspace/
-<默认保存根目录>/workspaces/<workspaceId>/projects/<projectId>/
-```
+原生预览只对**本地工作区**启用：工作区窗口以 `--pm-native-preview` 启动参数决定是否暴露 preload bridge；远程工作区不注入 bridge，继续使用 iframe fallback，避免远程页面驱动本机网络访问。
 
-目录册读取不创建目录；安全且未分配的默认区域显示“首次使用时创建”，首次有权解析才创建并登记设备/inode 身份。父目录缺失、软链接、越界或已登记目录丢失时拒绝，不重建丢失磁盘、不回退仓库根目录。文件和 Git 只读；终端为真实本机 shell，不是隔离沙箱。Inspector HTTP / WebSocket 请求必须携带 `workspaceId`、可选 `projectId`，已持久会话另带 `threadId` 核验绑定；每次由 PM 使用当前请求身份解析。终端连接固定本次 cwd，切换会话/目录或关闭面板即断开，聊天后台生成不因此取消。顶栏提供“切换终端抽屉”和“切换右侧面板”按钮，分别对应 `Ctrl / ⌘ + J`、`Ctrl / ⌘ + Alt + B`；抽屉高度可拖动或键盘调整并保存在当前浏览器。网页预览保留 iframe sandbox，不放开同源权限。
+安全边界：连接窗口仍禁用 webview；只有工作区窗口启用 `webviewTag`，`will-attach-webview` 校验 partition、http(s) URL 和预置 preload，并强制 `sandbox:true`、`nodeIntegration:false`、`webviewTag:false`。preview session 只允许 http(s)/data/blob/ws，权限只允许剪贴板写入和全屏；IPC 只接受工作区主 frame 且必须是当前工作区 origin。纯 Web（`3224`）没有这些原生能力，继续使用 iframe fallback，元素选择/截图/浮动预览按钮会显示“仅桌面版可用”。服务端无头浏览器流尚未接入。
+
+新会话及成功读取的空历史显示当前文件夹名称和居中输入框，纯对话不伪造 PM 项目名；已有消息时输入框停靠底部。Composer 左侧排列模型、原生能力选项和交互模式，右侧放任务引用、附件、可选听写及发送/停止；引用芯片仅在存在引用时占行。历史读取失败明确阻止发送并提供“刷新重试”，不冒充空会话；刷新仍遵循现有文字草稿恢复和附件/引用丢失提醒，不新增持久化协议。
+
+当前只面向本机单操作者适配；尚未按 PM 成员建立 Agent 会话所有权隔离。不要将目录绑定视作多用户授权或文件沙箱，也不要据此开放公网使用。本次不新增权限体系；PM 工具继续逐次核验原有身份、成员能力与业务边界。
+
+PM 中“Agent 助手”是文字与向下箭头合并的圆角下拉按钮：点击后先显示当前项目已配置的快捷自动化，菜单最下方“前往 Agent Chat”进入独立 Chat，并保留返回 PM 地址和明确的业务引用入口，不把 PM 范围设为 Session 所有者或代码目录。菜单也提供自动化管理页与运行历史。配置方法、确认规则与原请求核对见[PM Agent 助手快捷执行](automations.md#pm-agent-助手快捷执行)。快捷执行不自动发送 Chat 消息，也不以 Run 成功完成业务任务。
+
+#### PM 文档、代码目录与终端
+
+- **PM 文档**继续由 PM 管理。Agent 通过带明确工作区／项目目标的工具和引用读取 PM 资料；不把 PM 文档存储自动挂载为代码区。一个 Git 只管理一个独立文件夹，Git 面板不会借用父目录仓库。
+- **打开文件夹**只登记服务器上的已有目录，不上传浏览器文件、不创建目录、不复制仓库。允许范围由 Agent 角色的 `AGENT_WORKSPACE_ALLOWED_ROOTS` 配置为绝对路径 JSON 数组，未设置时使用服务用户 Home。目录记录保存在 Agent SQLite，规范路径与设备/inode 身份不可改写；缺失、替换、越界或符号链接改指时拒绝，不自动重建或回退。原 Code Workspace 登记页及其 PM API 已退役。
+- **Session 环境**使用 v2 `agentWorkspaceId + agentWorkspaceRevision`，不再保存 PM 归属、代码组合或 `rootIds`。重命名、关闭、重新打开只增加元数据 revision，不使原 Session 改绑或失效；未来版本仍拒绝。Files / Git 按 Session 与相对路径读取同一实际执行目录；受控交付指向收据拥有的 Worktree，原生仓库模板显示实际仓库副本路径而不冒充 Worktree。
+- **多个仓库**分别打开为不同的 Agent Workspaces，各自创建 Sessions；不存在把多个根拼成一个 Code Workspace 的运行层。普通代码会话、文件检查、Git、终端和原生 Skills 目录解析不依赖 PM 登录或 PM 服务可用。
+- **纯对话**不要求代码仓库。服务端在 Agent 私有数据目录的 `chat-scratch` 下按 Session 分配 scratch 并保存目录身份；Files / Git / Terminal 不把它展示为代码环境。已登记 scratch 丢失或身份改变时拒绝重建；PM 文件区域与保存根配置不是执行回退。
+
+| 终端 | 起始目录与切换行为 |
+| --- | --- |
+| Workspace Terminal | 显式选择的 Agent 文件夹／子目录；跨 Session 保留，隐藏与停靠切换只重附着 |
+| Session Terminal | 当前 Session 的实际目录／Worktree；切换 Session 时切走原 Session 终端 |
+
+文件夹菜单可以从该目录打开终端；终端内 `cd` 不改变 Agent 主目录。服务端在本次进程生命周期内拥有 PTY，校验目录身份和 Session 执行身份，保留有界输出用于重附着。创建请求有稳定 ID：响应未知先按原请求核对，不自动重复创建；未知输入不重放。显式终止以实际退出为准。**不支持跨 Agent 服务重启存活**：旧终端不可用，不恢复进程、不重放命令，用户须明确创建新终端。
+
+Inspector 请求携带当前 Session，不接受浏览器任意 cwd 或旧 `rootId`。Terminal 使用服务进程的本机 shell 权限，不是文件沙箱；它与 Provider 共用原生环境过滤规则，保留正常 CLI 环境，但不继承服务端 PM 凭据、Agent 私有控制变量或加载器注入变量。`Ctrl / ⌘ + Alt + B` 切换右侧面板；网页预览继续保留 iframe sandbox。
 
 
 若已打开的页面在更新后点击面板出现“页面暂时不可用”，还需检查动态模块请求，而不是重发消息。本机 Web 重建现在保留旧哈希资源，避免已打开页面依赖的模块被删除；历史资源只在停机维护时清理，见[部署手册](../../deploy/README.md)。修复前已经缺失的模块仍需手动重新加载一次页面；不会自动提交、重试消息或取消后台生成。
 
 #### Chat 设置
 
-统一入口为 `/agent/settings/general`；设置页共用导航、作用范围标识和未保存 / 保存中离页保护。这里的服务配置适用于本机 Agent 的全部工作区 / 项目，不是新增的 PM 权限或项目级 Provider 覆盖。
+统一入口为 `/agent/settings/general`；设置页共用导航和未保存 / 保存中离页保护。服务配置适用于本机 Agent 的全部目录与 Sessions，不是新增的 PM 权限或项目级 Provider 覆盖。
 
 设置布局参考 t3code 的“全宽外壳与独立正文宽度”分层：PM 设置导航贴齐主工作区左侧内边距，不再与正文一起限制在 1440px 居中容器；Agent 设置侧栏保持贴左，正文紧随侧栏左对齐。两者正文最大宽度为 1160px，避免超宽表单；窄屏保留 PM 页面选择器与 Agent 横向导航，不按 2560×1440 固定比例缩放。布局调整不改变保存、权限或会话持久化。
 
@@ -40,13 +60,12 @@
 | 当前会话参数 | 模型右侧直接显示当前思考程度（如 Extra High = `xhigh`）；点击后按 t3code 的分组单选菜单选择原生声明的档位和其他 select / boolean 能力，保存成功后关闭；default / plan 由相邻独立按钮切换。共用当前会话原子保存和 revision 检查，不改新会话默认值；失败保留修改并提供重试、阻止发送，不凭空生成 reasoning 档位。system prompt 与支持的 temperature 仍由会话参数编辑 |
 | 输入与快捷键 | Enter 或 Ctrl/Cmd+Enter 发送，保留 IME 组合输入；Ctrl/Cmd+Shift+O 新会话、Ctrl/Cmd+K 搜索、Ctrl/Cmd+. 停止、`?` 帮助。输入和弹窗不触发全局快捷键；停止需服务端确认 |
 | 外观 | 主题 / 跟随系统、减少动态效果、侧栏密度复用 PM 浏览器偏好；Agent 正文字号、内容宽度、代码换行仅影响阅读，不改写消息 |
-| 文件区域 | 汇总真实授权工作区 / 项目、空组、路径来源、状态和 revision；保存继续使用既有权限、allowedRoots 和版本检查 |
-| 历史与归档 | 归档保留历史，恢复到原工作区 / 项目；运行中不可归档。恢复 / 删除重新核验原范围，永久删除需明确确认 |
-| 诊断、数据与存储 | 展示实际版本、SQLite 所有权 / 完整性 / 计数、最近失败类别及私有目录；安全诊断下载采用状态白名单，不导出消息、提示词、凭据、目录或原始日志 |
+| 文件夹入口 | 位于 Chat 侧栏“打开文件夹”，不再提供 Code Workspace／文件区域登记设置页；目录允许范围由服务端配置 |
+| 历史与归档 | 归档保留原 Session 的目录选择与历史，不按 PM 项目归属恢复；运行中不可归档，永久删除需明确确认 |
 
 Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity、Muse Code、Pi、OMP（Oh My Pi）、ACP Registry。初始化仍只持久创建 Codex / Claude；其他默认位仅在已配置、有效启用或定向访问时显示，浏览页面不创建实例。FX 位于“显示更多”，ACP Registry 为独立搜索 / 准备入口；Registry 先显式准备，再填写身份并按协议认证，local 命令走较短路径。实例 ID 固定、字母开头、最多64字符，显示名称可清空回退驱动名；默认实例可重置，额外实例可删除。普通字段失焦或 Enter 保存，环境变量和模型显式保存。非敏感环境变量可回显编辑，敏感值遮蔽且空值回传保留；旧环境变量默认按敏感值迁移。模型段统一管理隐藏、排序、收藏、自定义能力选项；Antigravity 不开放自定义模型。独立 OpenAI / Anthropic / DeepSeek API 卡片及新执行入口不恢复，原始历史和私有凭据不删除。
 
-适配以 `t3code@30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c` 为配置与协议基准；MIT 归属见 [LICENSE.t3code](../../LICENSE.t3code)。Codex 通过“使用现有 CLI”与“继续使用 ChatGPT”进入对应流程，不再展示模式下拉框。existing 复用原生配置 / 外部认证，可使用 API Key 或第三方服务，不强制 ChatGPT 登录；managed 使用受管运行时、ChatGPT 多账号 OAuth / token broker，私有状态保留在本副本 `provider-homes`。Claude 的四种 idle compaction 模式接入实际宿主调度并重新核验 PM 范围；Cursor 的 `CURSOR_API_KEY` 位于专属 Setup，填写密钥后隐藏浏览器登录，清除并保存后恢复该入口。Grok / FX / Muse / Pi / OMP 与 existing Codex / Claude / OpenCode 遵循来源的外部认证边界，不另造应用内登录 / 登出。
+适配以 `t3code@30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c` 为配置与协议基准；MIT 归属见 [LICENSE.t3code](../../LICENSE.t3code)。Codex 通过“使用现有 CLI”与“继续使用 ChatGPT”进入对应流程，不再展示模式下拉框。existing 复用原生配置 / 外部认证，可使用 API Key 或第三方服务，不强制 ChatGPT 登录；managed 使用受管运行时、ChatGPT 多账号 OAuth / token broker，私有状态保留在本副本 `provider-homes`。Claude 的四种 idle compaction 模式接入实际宿主调度并重新核验执行身份；业务来源仍受原授权上限约束。Cursor 的 `CURSOR_API_KEY` 位于专属 Setup，填写密钥后隐藏浏览器登录，清除并保存后恢复该入口。Grok / FX / Muse / Pi / OMP 与 existing Codex / Claude / OpenCode 遵循来源的外部认证边界，不另造应用内登录 / 登出。
 
 安装、更新、取消与移除仅对实际支持的驱动开放；“继续使用 ChatGPT”先准备运行时，再发起登录，只读检查或发送消息不会自动下载。维护与认证 / 执行互斥。原生 Home 留空时继承宿主规则，显式 Home 和实例环境覆盖对应配置，不重写进程 HOME / XDG，也不清除宿主 Provider 凭据。应用自有状态与原生 Home 分离，重置、删除和备份不收集、创建或删除外部 Home。PM 作用域、审批与完成规则不变。
 
@@ -67,7 +86,7 @@ Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity�
 OMP 是新增的独立 `@t3tools/provider-omp`，不是 Pi 命令别名。协议基线为 OMP `18.13.2`；实施计划、来源与分层验收见 [OMP 适配说明](agent-chat.md)。本次未发布或重启 `3224` 常驻服务。
 
 - 在服务机器外部安装并认证 OMP；添加“OMP / Oh My Pi”，Runtime binary 默认 `omp`，也可填写实际可执行文件绝对路径。应用不代装、登录、更新或复制账号；保存后检查、明确选择发现的模型再发送消息。认证未知与运行可检查并不矛盾，也不代表推理成功。
-- 原生 Home / 实例 Environment 按 OMP 自身语义生效，支持 `OMP_PROFILE`、`PI_CODING_AGENT_DIR` 等原生目录变量；不使用 Pi 的 `~/.pi/agent`。Profile 不替代 PM scope、revision 或 session lease，也不能绕过启动预检。
+- 原生 Home / 实例 Environment 按 OMP 自身语义生效，支持 `OMP_PROFILE`、`PI_CODING_AGENT_DIR` 等原生目录变量；不使用 Pi 的 `~/.pi/agent`。Profile 不替代显式 PM 工具目标、执行身份、revision 或 session lease，也不能绕过启动预检。
 - stock OMP 无法通过一个开关关闭所有环境扩展 / 插件 / MCP。适配器启动前只检查相关路径元数据；存在无法证明安全的启动源时明确拒绝，含可能触发原生加载的 `.claude.json`。必要时明确指定无这些启动源的 Home / 项目目录，不通过启动参数绕过。该门禁不是操作系统沙箱，不读取或清除全局凭据。
 - 原生工具权限遵循现有 PM `deny-ungranted`；PM 工具通过 OMP Host Tools 进入既有授权和业务审批。技术性标题 / 压缩生成显式无工具；Fork、Rollback、主动子 Agent、Goal、原生历史 Usage 和账号额度读取未开放。
 - 已用真实 OMP + 受控模型验证流式、取消、多轮及重启恢复、真实 PM 查询与审批 / 拒绝，并在网页观察配置、选模、历史恢复与取消。真实模型验收尚未通过：本机 Ollama 返回 `unable to load model`，未改动该服务或读取供应商账号。运行事件 Usage 不等于历史扫描或订阅账单。
@@ -76,9 +95,15 @@ OMP 是新增的独立 `@t3tools/provider-omp`，不是 Pi 命令别名。协议
 
 MCP、Skills 与交互 Apps 的源码能力须与实例部署、实际账号及授权前提分别核对。
 
-- **外部连接：** `/agent/settings/mcp-clients` 提供连接地址与已授权客户端撤销；外部 HTTP MCP 客户端经 `/connect-agent` 完成 PM 登录主体同意、授权码与 S256 交换，再访问 `/mcp`。默认只读，明确选择工作区／项目和线程；full 只是权限上限，不绕过既有审批。外部 token 不可登录普通 PM／Agent API，也不能枚举同项目的全部历史。
-- **原生工具：** PM 工具继续经 Provider 的 MCP／ACP／SDK／Host Tools 注入，复用现有 scope、当前成员能力、审批、revision、幂等与结果核对。不是新权限系统；Chat 成功不会完成 WorkItem。OpenCode 的单 transport、Pi 的 generation-owned 扩展、OMP 的单 `pm_tools` Host Tools 桥仍有各自限制，不承诺任意多个 Server。
-- **Skills：** 全页和 PM 内嵌 Chat 共用 Composer 的 `$` 搜索、原生 `/` commands、引用 chip、刷新目录及显式重启 Agent session。目录绑定 Provider 实例／revision 和 PM 核验的 cwd；失败、pending、空目录分别展示，禁用及不可由用户调用的条目不能选。原生安装／修改仍在各 Provider 支持的位置进行；刷新不安装插件，重启保留 Chat 历史但废弃原生 continuation。既有 WorkspaceSkill 指令块独立保留，不是通用 Skill 协议。
+设置侧栏统一使用 **MCP** 入口，页内分为“MCP 服务器”（Agent 使用外部工具）和“外部访问”（外部客户端访问本系统）；切换分区保留 URL 中的 Provider／上下文与工作区／项目参数，并沿用未保存草稿及操作进行中的离页保护。
+
+- **MCP 管理：** `/agent/settings/mcp-servers` 只显示已启用并绑定的 Agent / Provider 实例；同一用户 Home 下路径兼容且尚未启动管理服务的 Provider（如 Codex / Pi / OpenCode）可共用一个管理上下文，MCP / Skills 矩阵同时显示这些 Agent 列。不同 Home、同类实例的不同原生根及不兼容的 Claude 路径拼写分别管理；停用的 Provider 实例不会进入目标列表。已有独立配置库不自动合并。页面使用“已安装 / 探索 / 配置”管理连接；后端从 Provider 的真实配置解析目标；同类实例显示独立名称与实例 ID，不按“Codex”等类型名称混写。原生导入先只读预览，再逐项应用；保存、文件同步和显式连接探测分别展示，不把“已保存”当成“已连接”。
+- **Skills 管理：** `/agent/settings/skills` 与 MCP 共用已启用 Provider 的管理上下文，提供“目录 / 发现 / 配置”、筛选、Agent 覆盖、分配矩阵和详情抽屉，以及真实发现、ZIP 安装、原生导入、更新与备份。MCP 与 Skills 页面间保留同一管理上下文；有草稿或操作进行中不能切换。安装不等于运行时已加载；Pi / OMP 的目录观测也不是安全隔离或可调用证明。
+- **目标与保存位置：** 后端内部保留配置记录，不再作为用户绑定流程。兼容且尚未启动的上下文可以扩展绑定；已启动的管理服务不因新增目标被关闭，新目标使用独立上下文。实例 revision 更新且原生根未变时原位重新核验，保留定义、事件订阅和待重新加载状态。跨 Home 的物理根重叠、已登记根的符号链接改指等冲突明确拒绝，不自动搬迁或导出旧配置，也不删除已有定义和 Skills。共享目录的影响显示在目标详情。没有支持扩展管理的 Provider 时，MCP 仍可浏览公开目录，Skills 明确显示尚未读取，入口引导至 Provider 设置，而不是要求额外授权。
+- **保留的边界：** 仅已有 Provider 的正常管理使用上述直接流程；宿主登记的外部 CLI 仍使用其明确登记/绑定流程，不开放浏览器任意路径。旧的明确配置链接仍访问原数据；项目私有配置仍受 PM 身份与范围检查，不导出到原生 Home。MCP 自身的 API Key / OAuth 和项目工具审批不因配置页面简化而取消。事件流断开时暂停新写入，重连只重读状态，不重放操作；结果不明确时先刷新核对，配置变更不会自动重启活跃原生会话。
+- **外部连接：** MCP 设置的“外部访问”（`/agent/settings/mcp-servers?section=external`）提供连接地址与已授权客户端撤销。部署未配置或元数据读取失败时明确显示外部访问尚未就绪，下方仍保留 PM 登录及已有授权的查看／撤销；不把读取失败当作没有授权。外部 HTTP MCP 客户端经 `/connect-agent` 完成 PM 登录主体同意、授权码与 S256 交换，再访问 `/mcp`。默认只读，明确选择 PM 工作区／项目上限及纯对话线程；目录型 Session 不接受外部委托，线程中的 PM 引用和工具历史也须在授权上限内。full 不绕过既有审批；外部 token 不可登录普通 PM／Agent API，也不能枚举同项目的全部历史。
+- **原生工具：** 工具注册在本机读取真实 schema，不为启动普通代码会话访问 PM。`pm_list_workspaces` 只发现当前授权的业务 ID／名称，不选择目录或 Session 所有者；其他 PM 工具每次明确携带 `target: { workspaceId, projectId }`，可在同一 Session 内访问多个已授权目标。PM 不可用时工具明确失败，普通代码环境仍可用。当前成员能力、审批、revision、幂等与原结果核对不变；Chat 成功不会完成 WorkItem。OpenCode 的单 transport、Pi 的 generation-owned 扩展、OMP 的单 `pm_tools` Host Tools 桥仍有各自限制。
+- **Skills：** 全页和 PM 内嵌 Chat 共用 Composer 的 `$` 搜索、原生 `/` commands 与引用 chip；目录在输入、执行环境或实例变化时自动读取，Composer 不提供目录工具栏或 session 重启按钮。目录绑定 Provider 实例／revision 和同一服务端核验的 Session cwd；失败、pending、空目录在建议菜单分别展示，禁用及不可由用户调用的条目不能选。原生安装／修改仍在各 Provider 支持的位置进行；既有 WorkspaceSkill 指令块不再从 Composer 进入，且不是通用 Skill 协议。
 - **Provider 差异：** Codex 使用 `skills/list` 与原生 mention；Claude 保留 frontmatter／最后一个 Skill 展开；OpenCode 1.x 文本／命令与 2.x 结构化 IDs 不混同，目录只借用当前已授权且匹配的 live session，不为刷新启动插件／MCP；Grok／Pi 使用 leading mention，Cursor／FX／Antigravity 按各自发现和分派语义。Muse 只公布原生 commands，ACP Registry 只调用当前会话实际公布的 commands（虚拟 skill URI 不当作文件）；OMP 目录可见不等于可调用，Skill 调用禁用，命令仅开放既有 `session` 白名单。逐家真实账号／Skill 行为尚未全部验收。
 - **MCP Apps：** 当前原生交互能力由 Codex adapter 提供；其他 Provider 保留真实工具结果，不假造 App 支持。类型化 producing item 绑定原 Server／thread／session；成功工具结果结束后可保留 live session，停止、配置／范围变化、显式重启、撤权或服务关闭使相应能力失效。历史可读不代表仍可交互，打开 App 不隐式启动新模型轮次。frame 使用 `sandbox="allow-scripts allow-forms"`，不含 `allow-same-origin`；工具确认不能替代服务端授权。App 模型上下文按产生项替换／清除，仅在匹配的有效范围／session 内送入后续轮次。
 
@@ -100,7 +125,8 @@ MCP、Skills 与交互 Apps 的源码能力须与实例部署、实际账号及�
 - Composer“更多输入选项”中的“逐段 / 整轮”只改变显示时机。逐段按完整 Markdown 边界约 400ms 释放；整轮在结束时展示正文，工具过程仍实时显示；错误和取消保留已收到的内容。
 - 输出投影保存在 Agent SQLite，SSE 以序号和完整快照恢复；断开页面不取消原生执行。条目更新约 50ms 合并，慢消费者重置为快照，不无限积压。
 - 命令仅在展开时单独订阅，约 100ms 合并输出；折叠释放订阅但不停止命令。终端处理 ANSI、回车覆盖和跨块控制序列，尾部有界且标明截断，最终结果持久保存。工具没有实时命令协议时只显示实际最终结果。
-- Codex、OpenCode、Grok、Muse 的明确**信息提问**可回答或取消；重复、过期和不匹配回答被拒绝，服务重启后失去原生回调的请求不可回答。回答本身不写入输出投影。原有命令/文件/权限审批继续拒绝；Pi 通用扩展 UI、ACP 含义不明确的 elicitation 不自动当成安全提问放行。
+- Codex、OpenCode、Grok、Muse 的明确**信息提问**可回答或取消；重复、过期和不匹配回答被拒绝，服务重启后失去原生回调的请求不可回答。回答本身不写入输出投影。原有命令/文件/权限审批默认继续拒绝；Pi 通用扩展 UI、ACP 含义不明确的 elicitation 不自动当成安全提问放行。
+- 部署开关 `AGENT_APPROVAL_MODE`：默认 `ask` 保留人工审批；`auto-approve` 时 assistant-ui 工具审批、PM 破坏性工具审批与原生权限审批全部自动放行并直接执行，审批代码与端点保留。该开关不改变 PM 业务校验，也不表示 WorkItem 完成。
 
 端点、源码归属、各驱动限制和验收记录见[运行输出说明](project-management.md)。该功能不新增 PM 权限或业务完成规则；受控原生协议验证不代表真实供应商账号和模型已验收。
 
@@ -117,7 +143,7 @@ MCP、Skills 与交互 Apps 的源码能力须与实例部署、实际账号及�
 
 #### Agent 离线备份与恢复
 
-先核对所属 PID、工作目录和服务，再停止**本副本 Agent**；工具不会替你停止进程。数据目录从“数据与存储”读取，备份目录与恢复目标必须和源目录分离，恢复目标必须为空。不要对运行中的目录直接打包 SQLite。
+先核对所属 PID、工作目录和服务，再停止**本副本 Agent**；工具不会替你停止进程。数据目录由 Agent 角色配置的 `AGENT_WORKSPACE_DATA_DIR` 指定（示例配置为 `.local/agent-data`），备份目录与恢复目标必须和源目录分离，恢复目标必须为空。不要对运行中的目录直接打包 SQLite。
 
 ```bash
 pnpm agent:backup create --source <Agent数据目录> --bundle <新的私有备份目录> --secrets exclude --stopped
@@ -127,6 +153,8 @@ pnpm agent:backup:verify --bundle <私有备份目录> --target <恢复目录> -
 
 必须显式选择 `--secrets exclude` 或 `--secrets include`。两种备份都包含私有会话及 `provider-attachments` 内的Agent附件，目录 / 文件权限为 0700 / 0600，不能放在公共 Web 根目录。`exclude` 保留一致的会话、历史、设置和模型配置，但排除凭据、`provider-private` 凭据/环境身份、实例环境、原生私有配置及应用自有 home，清除原生续聊引用并停用恢复的实例；恢复后必须明确检查原生配置并启用。`include` 纳入上述私有凭据/身份、私有实例配置及数据目录内部的应用自有 homes；外部 Home 只保留路径引用，不收集其内容，恢复时也不创建该目录；应用目录内的符号链接仍被拒绝。可重建的 `provider-cache` 探测缓存不进入任一备份；两种模式均不修改原始数据。
 
+两种模式均包含应用拥有的 `chat-scratch` 内容及目录／Session 元数据，但外部代码文件夹仅保留引用，不复制源码。恢复不会把旧目录身份自动绑定到另一个路径或新建 inode；后续执行仍须通过身份核验，不能借恢复流程补建或接管丢失目录。
+
 恢复时同样核验 `exclude` 策略：原生实例必须明确为 `enabled:false`，不得携带旧 `cliHome` 覆盖；缺失禁用标志也会拒绝，即使备份文件摘要已重新计算。拒绝发生在创建恢复目标之前。
 
 工具校验文件摘要、SQLite 一致快照和记录覆盖，拒绝活跃 / 陈旧锁、不明确的文件、路径穿越及非空目标；不通过 HTTP 提供秘密备份。Agent 备份包含 Chat 保存的 PM 工具结果和核心文件差异快照，仍**不包含完整权威 PM 数据**：PostgreSQL、Markdown 根目录、PM附件、用户项目源码、`.env.agent`、浏览器登录或全局 / 外部 CLI home 不在其中；PM 仍需既有完整备份流程。恢复校验通过不代表 Provider 已登录、PM 范围已获授权或真实模型可执行。
@@ -135,14 +163,19 @@ pnpm agent:backup:verify --bundle <私有备份目录> --target <恢复目录> -
 
 PM 侧栏与完整 Chat 页共享会话、模型选择、生成订阅和草稿交接；会话列表、历史、取消、归档及删除全部归 Agent Chat。旧 `/pm/<workspace>/agent` 仅重定向到 Chat，不映射旧 PM 线程。模型统一使用 Chat Provider，不再读取 `AGENT_CHAT_BASE_URL/MODEL/API_KEY`。**会话与持久化尚未经过统一设计，当前暂沿用 Agent Chat。**
 
-17 个 PM 工具共用一个注册表和执行入口：查询/读取，项目与任务创建及普通字段修改，文档创建/保存，评论读取/创建，关系读取/添加/删除，以及任务归档、恢复、永久删除和状态转换。Codex、Claude、Cursor、Grok、OpenCode、Antigravity、Muse、Pi、ACP Registry 通过原生 MCP 或 Pi 工具扩展接入，OMP 使用原生 Host Tools 接入同一 PM 桥；同一代生成还提供统一 CLI。Provider 工具配置随生成建立，标题生成和空闲压缩不获得业务工具。接入源码不等于真实供应商账号已验收。
+PM 业务工具共用一个注册表和执行入口：查询/读取，项目与任务创建及普通字段修改，文档创建/保存，评论读取/创建，关系读取/添加/删除，以及任务归档、恢复、永久删除和状态转换；另有 `pm_list_workspaces` 进行授权目标发现。Codex、Claude、Cursor、Grok、OpenCode、Antigravity、Muse、Pi、ACP Registry 通过原生 MCP 或 Pi 工具扩展接入，OMP 使用原生 Host Tools 接入同一 PM 桥；同一代生成还提供统一 CLI。标题生成和空闲压缩不获得业务工具。接入源码不等于真实供应商账号已验收。
 
-PM API 的 `/api/v1/workspaces/:workspaceId/agent-tools` 提供注册表，`/call` 执行，`/result` 核对原结果。Chat 只在内存中转发本次 PM 请求认证信息，不创建第二套工具凭据，不把 Cookie/Authorization 保存进会话或放进 Provider 环境。PM 仍在服务端检查成员、项目 scope、原生能力、revision、幂等键、关系防环和领域规则；目录不是权限或沙箱。
+PM API 的 `/api/v1/agent-tools` 提供经认证的 schema 目录，`/api/v1/workspaces/:workspaceId/agent-tools/call` 执行，`/result` 核对原结果。请求保存明确目标和原操作者证据；Chat 只在当前请求内存中转发 PM 认证，不把 Cookie/Authorization 保存进会话、后台计时器或 Provider 环境。PM 仍在服务端检查成员、项目 scope、原生能力、revision、幂等键、关系防环和领域规则；目录不是权限或沙箱。
 
 工具卡显示状态、来源、revision、收据和原对象链接。写入结果未知时只核对原 operationId 的原收据，不自动重派，也不把后来修改的对象冒充原结果。停止生成只阻止后续派发，不回滚已经提交的业务修改。PM 工具仅开放注册表明确声明的动作；归档、恢复、删除和状态转换仍受对应能力、确认与原生生命周期保护。它们不开放 ACL 修改、跨项目移动或任意 shell；Provider 自己的本地执行能力不因此成为 PM 授权。
 
-Chat 的“PM 核心文件变更记录”保存已登记共享/独立核心目录的文件新增、修改、删除及前后内容，非 Git 目录和无效 Markdown 也可观察。记录是观测快照，不是完整 Git 历史或防绕过审计；无法证明操作来源时不归因给某次工具调用。当前认证活动后保持短期轮询；重启后需新的合法请求恢复扫描，权限丢失或不完整快照不得推断删除。界面明确区分正在观测、空闲、过期、不完整和失败。
+Chat 的“PM 核心文件变更记录”保存明确目标下已登记共享/独立核心目录的文件新增、修改、删除及前后内容，非 Git 目录和无效 Markdown 也可观察。记录是观测快照，不是完整 Git 历史或防绕过审计；无法证明操作来源时不归因给某次工具调用。扫描由当前合法请求触发，不保留 Cookie/Authorization 进行后台轮询；权限丢失或不完整快照不得推断删除。界面明确区分观测结果、空闲、过期、不完整和失败。
+
+PM 原生详情和文档工作台另提供持久“变更记录”、Markdown Diff 与个人待审阅提示，见 [PM 变更记录说明](project-management.md#变更记录待审阅与完成通知)。来源仅由服务端工具/自动化执行上下文标记，不能由浏览器请求自行声明；无法证明来源的磁盘编辑保持未知。实际任务完成通知沿用现有 PM 通知路由，不以生成结束代替任务完成，不增加 Submission 或自动验收。打开变更、确认已阅、通知已读和人工验收彼此独立；不建立新的 Agent 执行引擎或会话存储。
+
 
 ## 迁移与历史
 
 开发阶段迁移 `0038_unified_agent_tools.sql` 移除旧 PM 聊天表，不迁入旧 PM thread ID；PM业务对象、审计、命令收据和现有 Agent Chat 历史保留。旧 API Provider 历史只读，不能自动替换为另一个模型。会话与持久化尚未统一设计收口。
+
+`0049_agent_code_workspaces.sql` 仅为旧版本历史迁移；当前 `0051_retire_pm_agent_code_workspaces.sql` 退役其 Code Workspace 与 scratch 登记表，新目录身份归 Agent SQLite。旧应用 Session 由明确的停服清理命令切换，不在启动时自动删除，也不通过浏览器旧历史导入恢复。清理保留业务关联的 generation／输出证据、PM 数据、源码／Worktree、附件字节、Provider 账号及外部 CLI 历史；旧 Session 只留下不可执行的最小删除标记，新版 v2 Session 与目录记录保留。工具核对活动操作、命名空间归属和精确清单指纹，步骤见[部署手册](../../deploy/README.md#agent-session-执行环境切换)。这不表示会话与持久化统一设计已经收口。

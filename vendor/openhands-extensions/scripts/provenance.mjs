@@ -161,6 +161,7 @@ export async function closure(root, policy, outputs) {
     if (input.path.startsWith(prefix) && !owned.has(input.path)) throw new Error(`Unenrolled OpenHands production dependency: ${input.path}`);
   }
   for (const edge of base.edges) {
+    if (edge.target?.startsWith("vendor/cc-switch/") && (edge.specifier !== "@pm/cc-switch-ui" || edge.target !== "vendor/cc-switch/src/web/index.tsx")) throw new Error(`CC Switch public entry required: ${edge.source}: ${edge.specifier}`);
     if (edge.disposition === "external-package" && /^(?:@pm\/|@openhands\/|#\/)/.test(edge.specifier)) throw new Error(`Unresolved source alias: ${edge.source}: ${edge.specifier}`);
     if (edge.source.startsWith(prefix) && /^(?:@\/|#\/|@cc-switch\/)/.test(edge.specifier)) throw new Error(`Unscoped source alias refused: ${edge.source}: ${edge.specifier}`);
   }

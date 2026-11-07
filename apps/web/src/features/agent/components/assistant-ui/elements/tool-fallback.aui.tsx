@@ -4,6 +4,7 @@ import {
   forwardRef,
   memo,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useRef,
@@ -31,6 +32,7 @@ import {
   type ToolCallMessagePartComponent,
 } from "@assistant-ui/react";
 import { cn } from "@agent/lib/utils";
+import { autoApprovalsEnabled } from "@agent/src/runtime-config";
 import {
   CollapsibleRoot as Collapsible,
   CollapsibleContent,
@@ -41,7 +43,7 @@ import { Textarea } from "@agent/components/ui/textarea";
 
 const ANIMATION_DURATION = 200;
 
-const pressable = "active:scale-[0.98]";
+const pressable = "transition-colors duration-[var(--motion-button)]";
 
 export type ToolFallbackRootProps = Omit<
   React.ComponentProps<typeof Collapsible>,
@@ -713,6 +715,7 @@ function ToolFallbackApprovalImpl({
   const pendingGroupRef = useRef<HTMLDivElement | null>(null);
   const receiptRef = useRef<HTMLDivElement | null>(null);
   const focusReceiptRef = useRef<string | null | undefined>(null);
+  const autoRespondedRef = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (carryFocusRef.current) {
       carryFocusRef.current = false;
@@ -745,6 +748,30 @@ function ToolFallbackApprovalImpl({
   useLayoutEffect(() => {
     if (hidePendingApproval) focusReceiptRef.current = null;
   }, [hidePendingApproval]);
+  // The deployment switch keeps the approval protocol intact but answers it for the user.
+  // Questions are not approvals; auto-answering them would fabricate input.
+  useEffect(() => {
+    if (
+      !autoApprovalsEnabled() ||
+      !respondToApproval ||
+      approval == null ||
+      isSettled(approval) ||
+      isQuestion(approval) ||
+      autoRespondedRef.current === approval.id
+    )
+      return;
+    autoRespondedRef.current = approval.id;
+    // Prefer a one-shot grant so auto-approval never widens permissions for later calls.
+    const allow = approval.options?.find((option) => option.kind === "allow-once")
+      ?? approval.options?.find((option) => isAllowKind(option.kind));
+    const response = allow
+      ? { optionId: allow.id, ...(isKnownKind(allow.kind) ? {} : { approved: true }) }
+      : { approved: true };
+    void Promise.resolve(respondToApproval(response)).catch((cause: unknown) => {
+      autoRespondedRef.current = null;
+      setError(cause instanceof Error ? cause.message : String(cause));
+    });
+  }, [approval, respondToApproval]);
   const focusPendingGroup = () => {
     const group = pendingGroupRef.current;
     if (group?.contains(group.ownerDocument.activeElement)) {

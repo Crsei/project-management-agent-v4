@@ -34,7 +34,7 @@ export function createPmAutomationMutationPort(options: { database: () => Pool; 
       const description = args.description ?? String(original.data.description ?? '');
       const content = updateWorkItemRaw(before, args.title, description, (args.acceptanceCriteria ?? before.entity.checklist.map(item => item.text)).map(text => ({ text })));
       const raw = args.progressNote === null ? content : patchMarkdown(content, { 'x-pm-progress-note': args.progressNote }, workspace.configuration().config);
-      const result = await executeAuditedCoreMutation({ database: options.database, principal: context.actor, workspace, scope, action, input: args, targetId: args.id, before, key: context.operationId,
+      const result = await executeAuditedCoreMutation({ database: options.database, principal: context.actor, workspace, scope, action, input: args, targetId: args.id, before, key: context.operationId, trustedSource: { kind: 'automation', requesterId: context.actor.id },
         mutate: (_key, guard) => workspace.save(args.id, raw, args.revision, guard),
         guard: (previous, after) => { if (previous) assertAgentToolRecord(context.scope, previous); assertAgentToolOrdinaryMutation(previous, after); if (after.project !== before.entity.project) throw new DomainError('automation_pm_scope_forbidden', 'A content proposal cannot move projects', 403); assertTaskCreationProject(workspace.get(String(after.project)), workspace.configuration().config); },
         ...(context.checkAuthorization ? { checkAuthorization: context.checkAuthorization } : {}) });

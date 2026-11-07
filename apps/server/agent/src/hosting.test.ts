@@ -30,6 +30,7 @@ async function host(t: TestContext, apiOnly: boolean) {
       AGENT_WORKSPACE_PROJECT_ROOT: directory,
       AGENT_WORKSPACE_DATA_DIR: path.join(directory, "data"),
       AGENT_WORKSPACE_ACCESS_TOKEN: token,
+      AGENT_APPROVAL_MODE: "ask",
     },
     stdio: ["ignore", "pipe", "pipe", "ipc"],
   });
@@ -83,12 +84,13 @@ test("API-only hosting needs no Web build, reports PORT=0 and shuts down through
   assert.deepEqual(await unauthorized.json(), {
     authorized: false,
     configured: true,
+    approvalMode: "ask",
     message: null,
   });
   const authorized = await fetch(`${url}/api/access`, {
     headers: { authorization: `Bearer ${token}` },
   });
-  assert.deepEqual(await authorized.json(), { authorized: true, configured: true, message: null });
+  assert.deepEqual(await authorized.json(), { authorized: true, configured: true, approvalMode: "ask", message: null });
   assert.equal((await fetch(`${url}/workspace`)).status, 404);
   child.send({ type: "agent-workspace:shutdown" });
   const [code] = await exited;

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { gzipSync } from "node:zlib";
 import test from "node:test";
-import { applyPatch, outputPath, patchBytes, prefix, registryFiles, sha256 } from "./provenance.mjs";
+import { applyPatch, closure, outputPath, patchBytes, prefix, registryFiles, repository, sha256 } from "./provenance.mjs";
 
 function archive(entries) {
   const blocks = [];
@@ -56,4 +58,67 @@ test("exact binary adaptation rejects changed preimages and retains source ident
 test("OpenHands cannot enroll CC Switch, automation, credentials or traversal as local", () => {
   for (const name of ["vendor/cc-switch/src/web/index.tsx", "vendor/openhands-automations/interface.json", `${prefix}../escape`, `${prefix}auth.json`, `${prefix}node_modules/package.js`]) assert.throws(() => outputPath(name));
   assert.equal(outputPath(prefix + "src/web/index.tsx"), prefix + "src/web/index.tsx");
+});
+
+async function boundaryFixture() {
+  const root = await realpath(await mkdtemp(path.join(repository, ".tmp-openhands-boundary-")));
+  const entry = `${prefix}src/web/index.tsx`;
+  const publicEntry = "vendor/cc-switch/src/web/index.tsx";
+  const internal = "vendor/cc-switch/src/hooks/useMcp.ts";
+  const put = async (name, text) => {
+    await mkdir(path.dirname(path.join(root, name)), { recursive: true });
+    await writeFile(path.join(root, name), text);
+  };
+  await put("package.json", "{}");
+  await put(publicEntry, 'export { useMcpManagement } from "../hooks/useMcp";\n');
+  await put(internal, "export const useMcpManagement = () => true;\n");
+  const policy = {
+    productionRoots: [entry],
+    sourceAliases: { "@pm/cc-switch-ui": publicEntry },
+    independentForkRoots: ["vendor/cc-switch"],
+  };
+  return { root, entry, publicEntry, internal, policy, put, close: () => rm(root, { recursive: true, force: true }) };
+}
+
+test("OpenHands records only the independent CC public entry without owning its implementation", async () => {
+  const f = await boundaryFixture();
+  try {
+    await f.put(f.entry, 'import { useMcpManagement } from "@pm/cc-switch-ui";\n');
+    const result = JSON.parse(await closure(f.root, f.policy, [{ destination: f.entry }]));
+    const ccInputs = result.inputs.filter(input => input.path.startsWith("vendor/cc-switch/"));
+    assert.deepEqual(ccInputs.map(input => [input.path, input.ownership]), [[f.publicEntry, "independently-inventoried-boundary"]]);
+    assert.ok(result.edges.some(edge => edge.source === f.entry && edge.specifier === "@pm/cc-switch-ui" && edge.target === f.publicEntry && edge.disposition === "independently-inventoried-boundary"));
+    assert.ok(!result.inputs.some(input => input.path === f.internal));
+  } finally { await f.close(); }
+});
+
+test("OpenHands refuses CC internal imports, exports, type-only and dynamic paths even with a source alias", async () => {
+  const f = await boundaryFixture();
+  try {
+    f.policy.sourceAliases["@pm/cc-switch-source/"] = "vendor/cc-switch/src/";
+    for (const source of [
+      'import { useMcpManagement } from "@pm/cc-switch-source/hooks/useMcp";',
+      'export { useMcpManagement } from "@pm/cc-switch-source/hooks/useMcp";',
+      'import { useMcpManagement } from "../../../cc-switch/src/hooks/useMcp";',
+      'export type { InternalMcpState } from "../../../cc-switch/src/hooks/useMcp";',
+      'const load = () => import("../../../cc-switch/src/hooks/useMcp");',
+      'import { useMcpManagement } from "../../../cc-switch/src/web/index";',
+    ]) {
+      await f.put(f.entry, source);
+      await assert.rejects(closure(f.root, f.policy, [{ destination: f.entry }]), /CC Switch public entry required/);
+    }
+    f.policy.sourceAliases["@pm/cc-switch-ui"] = f.internal;
+    await f.put(f.entry, 'import { useMcpManagement } from "@pm/cc-switch-ui";');
+    await assert.rejects(closure(f.root, f.policy, [{ destination: f.entry }]), /CC Switch public entry required/);
+  } finally { await f.close(); }
+});
+
+test("the removed CC source alias and unpublished package subpaths remain unresolved", async () => {
+  const f = await boundaryFixture();
+  try {
+    for (const specifier of ["@pm/cc-switch-source/hooks/useMcp", "@pm/cc-switch-ui/hooks/useMcp"]) {
+      await f.put(f.entry, `import { useMcpManagement } from "${specifier}";`);
+      await assert.rejects(closure(f.root, f.policy, [{ destination: f.entry }]), /Unresolved source alias/);
+    }
+  } finally { await f.close(); }
 });

@@ -15,7 +15,7 @@ flowchart LR
     Agent --> SQLite[(Agent 私有 SQLite)]
     Agent --> Provider[原生 Provider / CLI]
     Agent --> PM
-    PM --> Scope[服务端目录 resolve]
+    PM --> Scope[版本化目录登记与执行环境 resolve]
     Scope --> Provider
 ```
 
@@ -31,6 +31,8 @@ flowchart LR
 ## 权威与安全边界
 
 Markdown 拥有核心实体、正文与正式关系；PostgreSQL 拥有身份、授权和 PM 附加事实；Agent SQLite 拥有 Chat 及其执行附属记录，核心索引 SQLite 只是可重建投影。SQL/core/blob/Agent 不是全系统原子事务，未知结果按原操作身份核对。详见[数据所有权](data-ownership.md)及[模块契约](module-contracts.md)。
+
+Agent Workspace 与 PM 工作区／项目独立：一个规范化的服务器绝对目录对应一个 Agent SQLite 登记，路径与设备/inode 身份不可改写。Session 保存 v2 目录选择并在首次受理时冻结；重命名／关闭仅改变登记元数据。PM 文档与信息通过明确目标的工具／引用访问，不是代码 cwd 回退。Files/Git/Skills/Provider/Session Terminal 使用同一服务端解析的实际执行路径；受控业务执行仍需原 PM 授权和 Worktree 收据。PTY 仅归本次 Agent 服务进程所有，不跨重启恢复。
 
 Agent 当前仅为可信本机单操作者，尚无按 PM 成员隔离的会话所有权。目录/cwd/allowedRoots 不是文件沙箱，真实 Terminal 使用服务用户权限；部分预览/任务隔离不改变整个 Provider 的边界。**会话与持久化统一设计尚未收口，当前仍暂沿用 Agent Chat。**
 

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { applyStudioAssistantPatch, clearStudioRecovery, cronFor, emptyStudioConfig, frequencyOf, interpolateStudioExpression, interpolateStudioTemplate, onceInZone, parseStudioObject, readStudioDraft, redactStudioRecovery, settleStudioPriorRequest, studioConnectionSupportsAction, studioDraftKey, studioPendingFromPriorMembership, studioProviderToolReadiness, type StudioDraftState, type StudioPending } from "./studio-setup.ts";
+import { applyStudioAssistantPatch, clearStudioRecovery, cronFor, emptyStudioConfig, frequencyOf, interpolateStudioExpression, interpolateStudioTemplate, onceInZone, parseStudioObject, readStudioDraft, redactStudioRecovery, serializeStudioDraft, settleStudioPriorRequest, studioConnectionSupportsAction, studioDraftKey, studioExecutionEnvironmentIssue, studioPendingFromPriorMembership, studioProviderToolReadiness, type StudioDraftState, type StudioPending } from "./studio-setup.ts";
 import type { AutomationIntegrationConnection } from "../../../../../../../../packages/contracts/src/automation-integrations.ts";
-import type { StudioCapabilities, StudioConfig } from "../../../../../../../../packages/contracts/src/automation-studio.ts";
+import type { StudioCapabilities, StudioConfig, StudioNativeTemplateId } from "../../../../../../../../packages/contracts/src/automation-studio.ts";
+import type { ExecutionSelection } from "../../../../../../../../packages/agent-contracts/src/execution.ts";
 
 function installStorage(t: TestContext) {
   const entries = new Map<string, string>();
@@ -156,4 +157,122 @@ test("workspace-tool limits apply to repository templates, not news or determini
   assert.deepEqual(studioProviderToolReadiness(news, capabilities), { featureId: null, available: true, reason: null });
   const deterministic = { ...config, action: { ...config.action, templateId: "github-delivery-watchdog" as const, providerInstanceId: null, model: null, options: {} } };
   assert.deepEqual(studioProviderToolReadiness(deterministic, capabilities), { featureId: null, available: true, reason: null });
+});
+
+test("quick-access preference survives draft reload and explicit user edits remain protected", t => {
+  const entries = installStorage(t);
+  const key = studioDraftKey("actor", "workspace", 1, "new:blank:PRJ-001");
+  const baseline = { ...emptyStudioConfig("PRJ-001"), name: "Saved shortcut" };
+  assert.equal(baseline.quickAccess, undefined);
+  const config = { ...baseline, quickAccess: true };
+  const draft: StudioDraftState = { version: 1, config, baseline, definition: null, values: {}, touched: ["quickAccess"], pending: null, test: null, testPayload: "{}" };
+  entries.set(key, serializeStudioDraft(draft));
+  const restored = readStudioDraft(key)!;
+  assert.equal(restored.config.quickAccess, true);
+  assert.equal(restored.baseline.quickAccess, undefined);
+  assert.equal(applyStudioAssistantPatch(restored.config, { quickAccess: false }, new Set(restored.touched)).quickAccess, true);
+  entries.set(key, serializeStudioDraft({ ...restored, config: { ...restored.config, quickAccess: false } }));
+  assert.equal(readStudioDraft(key)?.config.quickAccess, false);
+});
+
+test("repository-producing native templates require an independent v2 Agent Workspace before enable or test", () => {
+  const ids: StudioNativeTemplateId[] = ["github-pr-reviewer", "github-issue-to-pr", "github-issue-triage", "github-agents-md-maintainer", "gitlab-issue-to-mr"];
+  const executionSelection: ExecutionSelection = { version: 2, agentWorkspaceId: "independent-folder", agentWorkspaceRevision: 3 };
+  for (const templateId of ids) {
+    const action: StudioConfig["action"] = { kind: "template", templateId, arguments: {}, providerInstanceId: "configured-provider", model: "configured-model", options: {}, repositories: [], plugins: [], timeoutSeconds: 600 };
+    assert.equal(studioExecutionEnvironmentIssue(action), "agent-workspace-required", templateId);
+    assert.equal(studioExecutionEnvironmentIssue({ ...action, executionSelection }), null, templateId);
+    assert.equal(studioExecutionEnvironmentIssue({ ...action, executionSelection: { version: 2, agentWorkspaceId: null, agentWorkspaceRevision: null } }), "agent-workspace-required", templateId);
+    assert.equal(studioExecutionEnvironmentIssue({ ...action, executionSelection: { ...executionSelection, agentWorkspaceRevision: null } }), "agent-workspace-required", templateId);
+    assert.equal(studioExecutionEnvironmentIssue({ ...action, executionSelection: { ...executionSelection, agentWorkspaceRevision: 0 } }), "agent-workspace-required", templateId);
+  }
+  assert.deepEqual(executionSelection, { version: 2, agentWorkspaceId: "independent-folder", agentWorkspaceRevision: 3 });
+});
+
+test("API-only PM repository metadata and non-repository templates remain chat-only", () => {
+  for (const templateId of ["news-digest", "github-delivery-watchdog", "github-stale-ci-pr-closer", "pm-pr-acceptance-coverage", "pm-project-digest"] as const) {
+    const action: StudioConfig["action"] = { kind: "template", templateId, arguments: { repository: { provider: "github", repository: "owner/repo", ref: null, pullRequestNumber: 12 } }, providerInstanceId: null, model: null, options: {}, repositories: [], plugins: [], timeoutSeconds: 600 };
+    assert.equal(studioExecutionEnvironmentIssue(action), null, templateId);
+  }
+  assert.equal(studioExecutionEnvironmentIssue(emptyStudioConfig("PRJ-001").action), null);
+  const script: StudioConfig["action"] = { kind: "script", entrypoint: "python3 main.py", setup: "", content: "print(1)", files: [], bundleRef: null, repositories: [], plugins: [], timeoutSeconds: 600 };
+  assert.equal(studioExecutionEnvironmentIssue(script), "agent-workspace-required");
+  assert.equal(studioExecutionEnvironmentIssue({ ...script, executionSelection: { version: 2, agentWorkspaceId: "script-folder", agentWorkspaceRevision: 1 } }), null);
+});
+
+test("execution selection survives setup draft, pending enable snapshot, and protected assistant edits", t => {
+  const entries = installStorage(t);
+  const executionSelection: ExecutionSelection = { version: 2, agentWorkspaceId: "explicit-folder", agentWorkspaceRevision: 7 };
+  const base = emptyStudioConfig("PRJ-001");
+  const config: StudioConfig = { ...base, action: { ...base.action, executionSelection } };
+  const pending: StudioPending = { requestId: "original-enable-request", kind: "create", definitionId: null, expectedRevision: null, config, after: "enable", payload: null };
+  const draft: StudioDraftState = { version: 1, config, baseline: config, definition: null, values: {}, touched: ["action.executionSelection"], pending, test: null, testPayload: "{}" };
+  const key = studioDraftKey("actor", "workspace", 1, "explicit-folder-draft");
+  entries.set(key, serializeStudioDraft(draft));
+  const restored = readStudioDraft(key)!;
+  assert.deepEqual(restored.config.action.executionSelection, executionSelection);
+  assert.deepEqual(restored.pending?.config?.action.executionSelection, executionSelection);
+  const assistant = { ...restored.config.action, executionSelection: { ...executionSelection, agentWorkspaceId: "assistant-replacement" } };
+  const updated = applyStudioAssistantPatch(restored.config, { action: assistant }, new Set(restored.touched));
+  assert.deepEqual(updated.action.executionSelection, executionSelection);
+  assert.equal(updated.projectId, "PRJ-001");
+  assert.equal(restored.pending?.requestId, "original-enable-request");
+});
+
+test("legacy and malformed selections require explicit reselection even for ordinary prompts", t => {
+  const entries = installStorage(t);
+  const base = emptyStudioConfig("PM-PROJECT");
+  const selections: unknown[] = [
+    { version: 1 },
+    { version: 2, agentWorkspaceId: "folder", agentWorkspaceRevision: null },
+    { version: 2, agentWorkspaceId: null, agentWorkspaceRevision: 1 },
+    { version: 2, agentWorkspaceId: "folder", agentWorkspaceRevision: 1, path: "/untrusted-client-path" },
+  ];
+  for (const executionSelection of selections) {
+    const config = { ...base, action: { ...base.action, executionSelection: executionSelection as ExecutionSelection } };
+    assert.equal(studioExecutionEnvironmentIssue(config.action), "agent-workspace-required");
+    const pending: StudioPending = { requestId: "original-unknown-request", kind: "test", definitionId: "definition", expectedRevision: 4, config, after: null, payload: {} };
+    const draft: StudioDraftState = { version: 1, config, baseline: config, definition: null, values: {}, touched: [], pending, test: null, testPayload: "{}" };
+    const key = studioDraftKey("actor", "workspace", 1, "legacy-directory");
+    entries.set(key, serializeStudioDraft(draft));
+    const restored = readStudioDraft(key)!;
+    assert.deepEqual(restored.config.action.executionSelection, executionSelection);
+    assert.equal(restored.config.projectId, "PM-PROJECT");
+    assert.equal(restored.pending?.requestId, pending.requestId);
+    assert.equal(studioExecutionEnvironmentIssue(restored.config.action), "agent-workspace-required");
+  }
+  assert.equal(studioExecutionEnvironmentIssue(base.action, true), "agent-workspace-required");
+  assert.equal(studioExecutionEnvironmentIssue({ ...base.action, executionSelection: { version: 2, agentWorkspaceId: null, agentWorkspaceRevision: null } }, true), "agent-workspace-required");
+  assert.equal(studioExecutionEnvironmentIssue({ ...base.action, executionSelection: { version: 2, agentWorkspaceId: "user-selected-folder", agentWorkspaceRevision: 2 } }, true), null);
+});
+
+test("assistant updates cannot choose or silently replace execution folders", () => {
+  const config = emptyStudioConfig("PM-PROJECT");
+  const executionSelection: ExecutionSelection = { version: 2, agentWorkspaceId: "user-selected-folder", agentWorkspaceRevision: 2 };
+  const patch = { action: { ...config.action, executionSelection } };
+  assert.equal(applyStudioAssistantPatch(config, patch, new Set()).action.executionSelection, undefined);
+  const selected = { ...config, action: { ...config.action, executionSelection } };
+  const switched = applyStudioAssistantPatch(selected, { action: { kind: "script", entrypoint: "python3 main.py", setup: "", content: "print(1)", files: [], bundleRef: null, repositories: [], plugins: [], timeoutSeconds: 600, executionSelection: { ...executionSelection, agentWorkspaceId: "assistant-folder" } } }, new Set());
+  assert.deepEqual(switched.action.executionSelection, executionSelection);
+  assert.equal(switched.projectId, "PM-PROJECT");
+});
+
+test("legacy definition markers and historical directory evidence survive local recovery", t => {
+  const entries = installStorage(t);
+  const config = emptyStudioConfig("PM-PROJECT");
+  const historicalExecutionSelection = { version: 1, original: "immutable-directory-evidence" };
+  const definition: NonNullable<StudioDraftState["definition"]> = {
+    id: "legacy-definition", revision: 4, config, status: "paused",
+    createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z", lastRunAt: null, nextDueAt: null,
+    historicalExecutionSelection, executionUnavailableReason: "agent_workspace_selection_required",
+  };
+  const draft: StudioDraftState = { version: 1, config, baseline: config, definition, values: {}, touched: [], pending: null, test: null, testPayload: "{}" };
+  const key = studioDraftKey("actor", "workspace", 1, "legacy-definition");
+  entries.set(key, serializeStudioDraft(draft));
+  const restored = readStudioDraft(key)!;
+  assert.deepEqual(restored.definition?.historicalExecutionSelection, historicalExecutionSelection);
+  assert.equal(restored.definition?.revision, 4);
+  assert.equal(restored.config.action.executionSelection, undefined);
+  assert.equal(studioExecutionEnvironmentIssue(restored.config.action, !!restored.definition?.executionUnavailableReason), "agent-workspace-required");
+  assert.equal(restored.config.projectId, "PM-PROJECT");
 });

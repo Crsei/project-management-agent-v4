@@ -30,7 +30,9 @@ beforeEach(async () => {
     if (path === '/api/v1/agent-contexts') return Response.json({ workspaces: [{ id: workspaceId, name: 'Workspace', workspaceAllowed: true, projects: [{ id: 'PRJ-001', name: 'One' }, { id: 'PRJ-002', name: 'Two' }] }] });
     throw new Error(`Unexpected PM request: ${path}`);
   });
-  for (const [id, projectId] of [['thread-one', 'PRJ-001'], ['thread-two', 'PRJ-002']]) writeRecord('chat:threads', id!, { remoteId: id, scope: { workspaceId, projectId }, title: id, status: 'regular', updatedAt: '2026-01-01T00:00:00Z' });
+  for (const id of ['thread-one', 'thread-two']) writeRecord('chat:threads', id, { remoteId: id,
+    executionSelection: { version: 2, agentWorkspaceId: id === 'thread-one' ? null : 'directory-id', agentWorkspaceRevision: id === 'thread-one' ? null : 1 },
+    title: id, status: 'regular', updatedAt: '2026-01-01T00:00:00Z' });
   writeRecord('chat:threads', 'legacy', { remoteId: 'legacy', title: 'Legacy', status: 'regular', updatedAt: '2026-01-01T00:00:00Z' });
 });
 afterEach(async () => {
@@ -74,9 +76,10 @@ test('shared Agent cookie, foreign Origin, forged client and missing state canno
   assert.equal((await post('/oauth/mcp/approval', { ...authorization, client_id: authorization.client_id + 'x' })).status, 400);
   assert.equal((await post('/oauth/mcp/approval', { ...authorization, state: '' })).status, 400);
 });
-test('CSRF is authorization/session-bound and only explicit same-scope threads may be granted', async () => {
+test('CSRF is authorization/session-bound and PM consent cannot confer directory access', async () => {
   const { authorization, details } = await authorize();
   assert.equal(details.threads.some(item => item.id === 'legacy'), false);
+  assert.equal(details.threads.some(item => item.id === 'thread-two'), false);
   const decision = { _tag: 'approve', csrfToken: details.csrfToken, scope, threadIds: ['thread-one'], access: 'read-only' };
   assert.equal((await post('/oauth/mcp/decision', { authorization: { ...authorization, state: 'changed' }, decision })).status, 403);
   assert.equal((await post('/oauth/mcp/decision', { authorization, decision: { ...decision, csrfToken: 'forged' } })).status, 403);

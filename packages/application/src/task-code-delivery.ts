@@ -1,4 +1,5 @@
 import type { DeliveryAction, DeliveryFeedback, DeliveryGit, DeliveryScope, DeliveryTree, TaskCodeDelivery } from '../../contracts/src/task-code-delivery.ts';
+import { executionSelectionSchema, type ExecutionSelection } from '../../agent-contracts/src/execution.ts';
 
 export class DeliveryError extends Error {
   readonly code: string;
@@ -9,7 +10,7 @@ export interface DeliveryPorts {
   read(id: string): TaskCodeDelivery | null;
   list(): TaskCodeDelivery[];
   save(value: TaskCodeDelivery): void;
-  authorize(scope: DeliveryScope, write: boolean): Promise<DeliveryTask>;
+  authorize(scope: DeliveryScope & { executionSelection?: ExecutionSelection | undefined }, write: boolean): Promise<DeliveryTask>;
   expectedTaskRevision?(value: TaskCodeDelivery): string;
   preflightTask?(task: DeliveryTask, baseBranch: string): Promise<void>;
   preflightPrepare?(root: string, baseBranch: string): Promise<void>;
@@ -47,12 +48,15 @@ export class TaskCodeDeliveryService {
     await this.ports.authorize(scope, false);
     return this.ports.list().filter(v => v.workspaceId === scope.workspaceId && v.projectId === scope.projectId && v.taskId === scope.taskId);
   }
-  async prepare(input: DeliveryScope & { id: string; taskRevision: string; baseBranch: string }): Promise<TaskCodeDelivery> {
+  async prepare(input: DeliveryScope & { id: string; taskRevision: string; baseBranch: string; executionSelection?: ExecutionSelection }): Promise<TaskCodeDelivery> {
     return this.exclusive(`${input.workspaceId}:${input.taskId}`, async () => {
+      const selection = executionSelectionSchema.safeParse(input.executionSelection);
+      if (!selection.success || selection.data.agentWorkspaceId === null)
+        fail('agent_workspace_required', '准备代码交付必须明确选择一个 Agent 目录。');
       const task = await this.ports.authorize(input, true);
       const old = this.ports.read(input.id);
       if (old) {
-        if (old.workspaceId !== input.workspaceId || old.projectId !== input.projectId || old.taskId !== input.taskId || old.taskRevision !== input.taskRevision || old.baseBranch !== input.baseBranch)
+        if (old.workspaceId !== input.workspaceId || old.projectId !== input.projectId || old.taskId !== input.taskId || old.taskRevision !== input.taskRevision || old.baseBranch !== input.baseBranch || JSON.stringify(old.executionSelection) !== JSON.stringify(input.executionSelection))
           fail('idempotency_conflict', '原请求已存在，不能更换范围或输入重放。');
         return old;
       }
@@ -71,19 +75,35 @@ export class TaskCodeDeliveryService {
   async inspect(id: string): Promise<{ delivery: TaskCodeDelivery; tree: DeliveryTree | null; taskChanged: boolean }> {
     const value = this.ports.read(id) ?? fail('not_found', '交付记录不可用。');
     const task = await this.ports.authorize(value, false);
-    return { delivery: value, tree: value.git ? await this.ports.tree(value) : null, taskChanged: task.revision !== (this.ports.expectedTaskRevision?.(value) ?? value.taskRevision) };
+    const selection = executionSelectionSchema.safeParse(value.executionSelection);
+    const current = selection.success && selection.data.agentWorkspaceId !== null;
+    if (current && value.git && task.root !== value.git.root) fail('execution_directory_changed', 'Agent 目录与原交付仓库不一致。');
+    return { delivery: value, tree: current && value.git ? await this.ports.tree(value) : null, taskChanged: task.revision !== (this.ports.expectedTaskRevision?.(value) ?? value.taskRevision) };
   }
   async act(id: string, input: DeliveryAction): Promise<TaskCodeDelivery> {
     return this.exclusive(id, async () => {
       const value = this.ports.read(id) ?? fail('not_found', '交付记录不可用。');
-      const task = await this.ports.authorize(value, input.action !== 'refresh');
+      const task = await this.ports.authorize(input.action === 'new-session' ? { ...value, executionSelection: input.executionSelection } : value, input.action !== 'refresh');
+      const selection = executionSelectionSchema.safeParse(input.action === 'new-session' ? input.executionSelection : value.executionSelection);
+      if (!selection.success || selection.data.agentWorkspaceId === null) {
+        if (input.action === 'refresh') return value;
+        fail('agent_workspace_required', '历史交付仅保留收据；请明确选择 Agent 目录并创建新 Session 后再执行。');
+      }
       if (input.action !== 'refresh' && task.revision !== (this.ports.expectedTaskRevision?.(value) ?? value.taskRevision)) fail('task_changed', '任务版本已改变；不能使用旧需求继续执行或发布。');
       if (!value.git) fail('prepare_unknown', '分支准备尚未确认，请人工核对原操作。');
-      if (task.root !== value.git!.root) fail('project_directory_changed', '项目目录已重新绑定，停止原交付。');
+      if (task.root !== value.git!.root) fail('execution_directory_changed', 'Agent 目录与原交付仓库不同，停止原交付。');
       await this.ports.verify(value);
       if (input.action === 'refresh') return this.refresh(value);
       if (value.pending) fail('outcome_unknown', '原步骤尚未确认；先刷新核对，不能重放副作用。');
       if (this.ports.busy(value)) fail('agent_busy', 'Agent 仍在执行，不能同时测试或发布。');
+      if (input.action === 'new-session') {
+        if (!selection.success || selection.data.agentWorkspaceId === null) fail('agent_workspace_required', '替换 Session 必须明确选择原仓库的 Agent 目录。');
+        value.previousThreadIds = [...(value.previousThreadIds ?? []), value.threadId];
+        value.threadId = `delivery-${value.id}-${crypto.randomUUID()}`;
+        value.executionSelection = input.executionSelection;
+        value.worktreeWriteConfirmed = false;
+        return this.save(value);
+      }
       const tree = await this.ports.tree(value);
       if (input.action === 'develop' && !['ready', 'developed', 'tested'].includes(value.step)) fail('invalid_step', '当前交付阶段不能启动开发。');
       if (input.action === 'test' && !['developed', 'tested'].includes(value.step)) fail('invalid_step', '先完成一次 Agent 开发，再运行验证。');

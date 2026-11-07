@@ -5,13 +5,13 @@ import path from "node:path";
 import { z } from "zod";
 import { extensionAppIds, extensionProjectScopeSchema, type ExtensionAppId, type ExtensionContext, type ExtensionDirectory, type ExtensionEvent, type ExtensionFailure, type ExtensionMcpDefinition, type ExtensionMcpManagement, type ExtensionProjectScope, type ExtensionDefinitionReference, type ResolvedExtensionDefinition } from "@agent-workspace/contracts/extensions";
 import { validateAutomationMcpEndpoint, validateAutomationPrivateHeaders } from "../../../../../packages/infrastructure/src/automation-integrations.ts";
-import { canonicalExtensionProviderPath, invalidateExtensionProviderBindings, listExtensionProviderTargets, type ExtensionProviderBinding, type ExtensionProviderInvalidation } from "./provider-bindings.ts";
+import { canonicalExtensionProviderPath, invalidateExtensionProviderBindings, listExtensionProviderTargets, resolveRegisteredExtensionProviders, type ExtensionProviderBinding, type ExtensionProviderInvalidation } from "./provider-bindings.ts";
 import { isExtensionMutationCommand, parseExtensionCommand, type ExtensionCommand } from "./commands.ts";
 import { ExtensionError, ExtensionSidecar } from "./rpc.ts";
 import { contextDataDirectory, contextSecretKey, privateDirectory, projectExtensionContextId, readExtensionContexts, saveExtensionContexts, type StoredExtensionContext } from "./storage.ts";
 import { definitionFingerprint, hasOperationFailures, mergeMcpDefinitionSecrets, mergeMcpOverrideSecrets, mergeMcpServerSecrets, redactMcpImportPreview, redactMcpManagement, redactMcpServers, redactOperationResult } from "./secrets.ts";
 import { assertDefinitionNotReferenced, authorizeExtensionProject, extensionPmCallback, resolveExtensionBrowserScope } from "./pm.ts";
-import { assertExtensionHostBindingCurrent, listExternalExtensionTargets, resolveExtensionHostBinding, type ExtensionHostBindingInput } from "./external-targets.ts";
+import { assertExtensionHostBindingCurrent, listExternalExtensionTargets, refreshExistingExtensionHostBinding, resolveExtensionHostBinding, type ExtensionHostBindingInput } from "./external-targets.ts";
 import { readExtensionMaintenance, saveExtensionMaintenance, type ExtensionMaintenance } from "./maintenance.ts";
 import { parseMcpDefinition, parseMcpImportPreview, parseMcpImportResult, parseMcpManagement } from "./mcp-wire.ts";
 
@@ -27,10 +27,28 @@ function writableRoots(binding: ExtensionProviderBinding, unifiedOwned = false):
   const appRoots = Object.values(binding.appDirs).map(root => canonicalExtensionProviderPath(root));
   return binding.physicalRoots.filter(root => root !== binding.unifiedSkillsRoot || unifiedOwned || appRoots.includes(root));
 }
+function sameBindingRoots(a: ExtensionProviderBinding, b: ExtensionProviderBinding): boolean {
+  // Preserve sidecar path spellings while rechecking their physical identity on every operation.
+  const canonical = (value: string | undefined) => value === undefined ? undefined : canonicalExtensionProviderPath(value);
+  return canonical(a.homeDir) === canonical(b.homeDir) &&
+    canonical(a.claudeMcpFile) === canonical(b.claudeMcpFile) &&
+    a.apps.length === b.apps.length && a.apps.every(app => b.apps.includes(app) && canonical(a.appDirs[app]) === canonical(b.appDirs[app])) &&
+    a.unifiedSkillsRoot === b.unifiedSkillsRoot &&
+    JSON.stringify([...a.physicalRoots].sort()) === JSON.stringify([...b.physicalRoots].sort());
+}
+
+function ownsProviderTarget(owner: ExtensionProviderBinding, target: ExtensionProviderBinding): boolean {
+  const app = target.apps[0]!;
+  return canonicalExtensionProviderPath(owner.homeDir) === canonicalExtensionProviderPath(target.homeDir) &&
+    owner.appDirs[app] !== undefined &&
+    canonicalExtensionProviderPath(owner.appDirs[app]!) === canonicalExtensionProviderPath(target.appDirs[app]!) &&
+    (app !== "claude" || (owner.claudeMcpFile !== undefined && target.claudeMcpFile !== undefined &&
+      canonicalExtensionProviderPath(owner.claudeMcpFile) === canonicalExtensionProviderPath(target.claudeMcpFile)));
+}
 function assertNativeApps(context: StoredExtensionContext, value: unknown): void {
   if (!value || typeof value !== "object") return;
   const allowed = context.binding?.apps ?? [];
-  for (const [app, enabled] of Object.entries(value)) if (enabled === true && !allowed.includes(app as typeof extensionAppIds[number])) throw new ExtensionError(403, "native_target_unbound", "An enabled application has no explicitly confirmed native target in this context.");
+  for (const [app, enabled] of Object.entries(value)) if (enabled === true && !allowed.includes(app as typeof extensionAppIds[number])) throw new ExtensionError(403, "native_target_unbound", "An enabled application has no authorized native target in this context.");
 }
 
 /** One process-owned manager. Definitions and installation algorithms live exclusively in the copied Rust services. */
@@ -90,6 +108,9 @@ export class ExtensionHost {
       for (const listener of listeners) listener(event);
     };
     const runtime: RuntimeContext = { stored, listeners, queue: Promise.resolve(), reloadRequired: false, operationWarning: false, sidecar: new ExtensionSidecar(async () => {
+      // A stopped owner's roots may expand during registry publication. Startup
+      // waits for that publication before freezing the native child configuration.
+      await this.registryQueue;
       if (stored.binding) assertExtensionHostBindingCurrent({ binding: stored.binding, providerBinding: stored.providerBinding, externalTargets: stored.externalTargets });
       const dataDir = contextDataDirectory(stored.id);
       await privateDirectory(path.dirname(dataDir));
@@ -149,6 +170,152 @@ export class ExtensionHost {
     }));
     return { targets };
   }
+  /** Prepare metadata for a saved Provider; native configuration and the cc-switch database are untouched. */
+  async resolveProviderContext(providerInstanceId: string): Promise<{ context: ExtensionContext }> {
+    const next = this.registryQueue.then(async () => {
+      const contexts = await this.load();
+      const binding = resolveRegisteredExtensionProviders([providerInstanceId]);
+      let owner: RuntimeContext | undefined;
+      for (const existing of contexts.values()) {
+        const owned = existing.stored.binding;
+        if (!owned) continue;
+        const incomingRoots = writableRoots(binding);
+        const ownedRoots = writableRoots(owned, existing.stored.unifiedSkillsOwned);
+        if (!incomingRoots.some(root => ownedRoots.some(other => overlaps(root, other) || overlaps(other, root)))) continue;
+        if (!ownsProviderTarget(owned, binding) || owner) throw new ExtensionError(409, "native_root_owned", "The Provider overlaps an incompatible management context. Reconcile the existing native root ownership before continuing.");
+        owner = existing;
+      }
+      if (owner) {
+        const stored = owner.stored;
+        // Associate the selected Provider, and retain only existing Providers which still
+        // authorize an exact part of this owner. A moved Provider gets its own context.
+        const ids = [...new Set([...stored.binding!.providerInstanceIds, providerInstanceId])];
+        const matching = ids.filter(id => {
+          try { return ownsProviderTarget(stored.binding!, resolveRegisteredExtensionProviders([id])); }
+          catch { return false; }
+        });
+        let current: ExtensionProviderBinding;
+        try { current = resolveRegisteredExtensionProviders(matching); }
+        catch { throw new ExtensionError(409, "native_owner_stale", "The existing owner has unavailable or changed Providers. Reconcile its binding without deleting its saved definitions."); }
+        const resolved = stored.externalTargets?.length
+          ? refreshExistingExtensionHostBinding({ binding: stored.binding!, providerBinding: stored.providerBinding, externalTargets: stored.externalTargets }, current)
+          : { binding: current };
+        if (!sameBindingRoots(stored.binding!, resolved.binding)) throw new ExtensionError(409, "native_owner_stale", "The existing owner has changed native roots. Reconcile its binding without moving or deleting its saved definitions.");
+        const updated: StoredExtensionContext = { ...stored, providerBinding: undefined, ...resolved, binding: { ...resolved.binding, homeDir: stored.binding!.homeDir, appDirs: stored.binding!.appDirs, claudeMcpFile: stored.binding!.claudeMcpFile } };
+        if (JSON.stringify(stored) !== JSON.stringify(updated)) {
+          await saveExtensionContexts([...contexts.values()].map(item => item === owner ? updated : item.stored));
+          // Preserve the runtime, sidecar, queued work and SSE listeners; only same-root authority changes.
+          Object.assign(stored, updated);
+        }
+        return { context: this.describe(owner) };
+      }
+      const stored: StoredExtensionContext = { id: randomUUID(), label: binding.label, kind: "native", binding, createdAt: new Date().toISOString() };
+      await saveExtensionContexts([...contexts.values()].map(item => item.stored).concat(stored));
+      const runtime = this.runtime(stored);
+      contexts.set(stored.id, runtime);
+      return { context: this.describe(runtime) };
+    });
+    this.registryQueue = next.then(() => undefined, () => undefined);
+    return next;
+  }
+  /** Combine compatible unopened targets, preserving saved libraries and live runtimes. */
+  async resolveEnabledProviderContexts(): Promise<{ contexts: ExtensionContext[] }> {
+    const next = this.registryQueue.then(async () => {
+      const contexts = await this.load();
+      const targets = listExtensionProviderTargets();
+      const groups: { owner?: RuntimeContext; ids: string[]; binding: ExtensionProviderBinding }[] = [];
+      const unowned: typeof targets = [];
+      for (const target of targets) {
+        const binding = resolveRegisteredExtensionProviders([target.providerInstanceId]);
+        const owners = [...contexts.values()].filter(context => context.stored.binding &&
+          writableRoots(binding).some(root => writableRoots(context.stored.binding!, context.stored.unifiedSkillsOwned).some(other => overlaps(root, other) || overlaps(other, root))));
+        if (owners.length > 1 || owners[0] && !ownsProviderTarget(owners[0].stored.binding!, binding))
+          throw new ExtensionError(409, "native_root_owned", "The Provider overlaps an incompatible management context. Reconcile native root ownership before continuing.");
+        const owner = owners[0];
+        if (!owner) { unowned.push(target); continue; }
+        if (owner.stored.externalTargets?.length)
+          throw new ExtensionError(409, "native_context_external_targets", "Use the explicitly enrolled context to manage its external targets.");
+        const existing = owner.stored.binding!;
+        // Validate the pinned old physical identities before considering any expansion.
+        // Disabled aliases no longer confer authority, but an enabled same-root
+        // instance can retain the complete physical owner without moving its data.
+        const currentIds = [...new Set([...existing.providerInstanceIds, target.providerInstanceId])].filter(id =>
+          targets.some(candidate => candidate.providerInstanceId === id) && ownsProviderTarget(existing, resolveRegisteredExtensionProviders([id])));
+        const current = resolveRegisteredExtensionProviders(currentIds);
+        if (!sameBindingRoots(existing, current))
+          throw new ExtensionError(409, "native_owner_stale", "An owned native root changed. Reconcile it without moving the saved library.");
+        const group = groups.find(item => item.owner === owner);
+        if (group) {
+          group.ids.push(target.providerInstanceId);
+          group.binding = resolveRegisteredExtensionProviders(group.ids);
+        } else groups.push({ owner, ids: [target.providerInstanceId], binding });
+      }
+      for (const target of unowned) {
+        const group = groups.find(item => {
+          // Rust initialization fixes native paths for the lifetime of its child.
+          if (item.owner && item.owner.sidecar.status !== "stopped") return false;
+          const binding = item.binding;
+          if (canonicalExtensionProviderPath(binding.homeDir) !== canonicalExtensionProviderPath(target.homeDir)) return false;
+          const appDir = binding.appDirs[target.app];
+          if (appDir !== undefined && canonicalExtensionProviderPath(appDir) !== canonicalExtensionProviderPath(target.appDir)) return false;
+          let candidate: ExtensionProviderBinding;
+          try { candidate = resolveRegisteredExtensionProviders([...item.ids, target.providerInstanceId]); }
+          catch (error) {
+            if (error instanceof Error && "code" in error && error.code === "extension_provider_claude_mcp_conflict") return false;
+            throw error;
+          }
+          // Native initialization validates exact Claude spellings, not just canonical
+          // roots. A retained owner's Home cannot be rewritten to fit a new target.
+          const old = item.owner?.stored.binding;
+          const claudeFile = old?.claudeMcpFile ?? candidate.claudeMcpFile;
+          const claudeDir = old?.appDirs.claude ?? candidate.appDirs.claude;
+          if (claudeFile && claudeFile !== path.join(old?.homeDir ?? candidate.homeDir, ".claude.json") &&
+              (!claudeDir || claudeFile !== path.join(claudeDir, ".claude.json"))) return false;
+          item.ids.push(target.providerInstanceId);
+          item.binding = candidate;
+          return true;
+        });
+        if (!group) groups.push({ ids: [target.providerInstanceId], binding: resolveRegisteredExtensionProviders([target.providerInstanceId]) });
+      }
+      // Preflight the whole registry before publishing any group, including conflicts
+      // between newly discovered targets with different Homes but the same app root.
+      const updates = groups.map(group => {
+        const { owner, binding } = group;
+        if (!owner) return { group, stored: { id: randomUUID(), label: binding.label, kind: "native" as const, binding, createdAt: new Date().toISOString() } };
+        const old = owner.stored.binding!;
+        if (!old.apps.every(app => binding.apps.includes(app)) ||
+            !old.physicalRoots.every(root => binding.physicalRoots.includes(root)) ||
+            old.unifiedSkillsRoot !== binding.unifiedSkillsRoot)
+          throw new ExtensionError(409, "native_owner_stale", "An owned native root is no longer available. Reconcile the existing context without moving its saved definitions.");
+        const stored: StoredExtensionContext = { ...owner.stored, providerBinding: undefined, label: binding.label,
+          binding: { ...binding, homeDir: old.homeDir, appDirs: { ...binding.appDirs, ...old.appDirs }, claudeMcpFile: old.claudeMcpFile ?? binding.claudeMcpFile } };
+        return { group, stored };
+      });
+      const planned = [...contexts.values()].map(runtime => updates.find(item => item.group.owner === runtime)?.stored ?? runtime.stored)
+        .concat(updates.filter(item => !item.group.owner).map(item => item.stored));
+      for (const { stored } of updates) {
+        const roots = writableRoots(stored.binding!, stored.unifiedSkillsOwned);
+        if (planned.some(other => other.id !== stored.id && other.binding &&
+          roots.some(root => writableRoots(other.binding!, other.unifiedSkillsOwned).some(owned => overlaps(root, owned) || overlaps(owned, root)))))
+          throw new ExtensionError(409, "native_root_owned", "Separate management contexts cannot own overlapping native roots.");
+      }
+      if (updates.some(({ group, stored }) => !group.owner || JSON.stringify(group.owner.stored) !== JSON.stringify(stored)))
+        await saveExtensionContexts(planned);
+      const results = updates.map(({ group, stored }) => {
+        if (group.owner) {
+          Object.assign(group.owner.stored, stored);
+          return this.describe(group.owner);
+        }
+        const runtime = this.runtime(stored);
+        contexts.set(stored.id, runtime);
+        return this.describe(runtime);
+      });
+      return { contexts: results };
+    });
+    this.registryQueue = next.then(() => undefined, () => undefined);
+    return next;
+  }
+
   async bind(input: ExtensionHostBindingInput): Promise<{ context: ExtensionContext }> {
     const next = this.registryQueue.then(async () => {
       const contexts = await this.load();
@@ -186,7 +353,7 @@ export class ExtensionHost {
   }
   private async claimUnified(runtime: RuntimeContext): Promise<void> {
     const binding = runtime.stored.binding;
-    if (!binding) throw new ExtensionError(403, "native_target_unbound", "Unified storage requires a confirmed native user Home.");
+    if (!binding) throw new ExtensionError(403, "native_target_unbound", "Unified storage requires an authorized native user Home.");
     const next = this.registryQueue.then(async () => {
       const contexts = await this.load();
       if (contexts.get(runtime.stored.id) !== runtime) throw new ExtensionError(409, "context_unbound", "This native context was unbound before the operation.");
@@ -326,12 +493,12 @@ export class ExtensionHost {
     if (stored.kind === "project") {
       // Keep this ahead of generic target checks: PM verification is a separate transport/authorization boundary.
       if (command === "start_mcp_connectivity_checks" || command === "cancel_mcp_connectivity_checks") throw new ExtensionError(403, "project_connectivity_requires_pm", "Verify project connections explicitly in Studio. Native probes do not implement PM's pinned-DNS, no-proxy transport and cannot authorize project tools.");
-      if (command === "set_mcp_agent_configuration" || command === "toggle_mcp_app" || command === "resync_mcp_to_apps") throw new ExtensionError(403, "project_native_assignment_unavailable", "Project-private definitions have no native Agent targets. Select an explicitly bound native context to manage assignments.");
+      if (command === "set_mcp_agent_configuration" || command === "toggle_mcp_app" || command === "resync_mcp_to_apps") throw new ExtensionError(403, "project_native_assignment_unavailable", "Project-private definitions have no native Agent targets. Open a registered Provider to manage native assignments.");
       if (command === "preview_mcp_import" || command === "apply_mcp_import") throw new ExtensionError(403, "project_native_import_unavailable", "Native import reads bound user configuration roots; a project-private context has no such authority.");
       if (!["get_mcp_servers", "get_mcp_management", "save_mcp_definition", "upsert_mcp_server", "delete_mcp_server", "get_settings"].includes(command)) throw new ExtensionError(403, "project_native_operation_unavailable", "This project-private context manages eligible HTTP definitions only; native process, filesystem and Skills operations require a bound native context.");
     }
-    if (typeof args.app === "string" && !stored.binding?.apps.includes(args.app as ExtensionAppId)) throw new ExtensionError(403, "native_target_unbound", "This application has no confirmed native target in the selected context.");
-    if (typeof args.currentApp === "string" && !stored.binding?.apps.includes(args.currentApp as ExtensionAppId)) throw new ExtensionError(403, "native_target_unbound", "Installing into this application requires an explicitly confirmed native target.");
+    if (typeof args.app === "string" && !stored.binding?.apps.includes(args.app as ExtensionAppId)) throw new ExtensionError(403, "native_target_unbound", "This application has no authorized native target in the selected context.");
+    if (typeof args.currentApp === "string" && !stored.binding?.apps.includes(args.currentApp as ExtensionAppId)) throw new ExtensionError(403, "native_target_unbound", "Installing into this application requires an authorized native target.");
     if (Array.isArray(args.apps)) for (const app of args.apps) if (!stored.binding?.apps.includes(app as ExtensionAppId)) throw new ExtensionError(403, "native_target_unbound", "One of the requested native targets is not bound.");
     if (command === "upsert_mcp_server") assertNativeApps(stored, (args.server as Record<string, unknown>).apps);
     if (command === "import_skills_from_apps") for (const item of args.imports as Array<{ apps: unknown }>) assertNativeApps(stored, item.apps);
@@ -342,7 +509,7 @@ export class ExtensionHost {
     this.validateTargets(runtime, command, args);
     if (runtime.stored.scope && isExtensionMutationCommand(command)) this.assertProjectMutationAvailable();
     const execute = async () => {
-      if ((await this.load()).get(id) !== runtime) throw new ExtensionError(409, "context_binding_changed", "This context was unbound or rebound before the operation. Select its current confirmed binding before continuing.");
+      if ((await this.load()).get(id) !== runtime) throw new ExtensionError(409, "context_binding_changed", "This context changed before the operation. Reopen management for its current Provider or external target.");
       if (runtime.stored.binding) assertExtensionHostBindingCurrent({ binding: runtime.stored.binding, providerBinding: runtime.stored.providerBinding, externalTargets: runtime.stored.externalTargets });
       const mutation = isExtensionMutationCommand(command);
       if (mutation) { runtime.operationWarning = false; this.publish(runtime, { event: "operation", data: { command, state: "running" } }); }
@@ -472,7 +639,7 @@ export class ExtensionHost {
   }
   async upload(id: string, body: ReadableStream<Uint8Array> | null): Promise<{ uploadId: string }> {
     const runtime = await this.require(id);
-    if (runtime.stored.kind === "project") throw new ExtensionError(403, "project_native_operation_unavailable", "Native Skills uploads require a confirmed native context, not a project-private HTTP definition context.");
+    if (runtime.stored.kind === "project") throw new ExtensionError(403, "project_native_operation_unavailable", "Native Skills uploads require an authorized native context, not a project-private HTTP definition context.");
     if (!body) throw new ExtensionError(400, "zip_required", "A ZIP request body is required.");
     const uploads = path.join(contextDataDirectory(id), "uploads");
     await privateDirectory(path.dirname(uploads));

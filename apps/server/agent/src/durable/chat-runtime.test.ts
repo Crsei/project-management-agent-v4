@@ -1,20 +1,18 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import type { UIMessage, UIMessageChunk } from "ai";
-import type { AgentScope } from "@agent-workspace/contracts/chat";
+import { chatOnlyExecutionSelection, type ExecutionEnvironment, type ExecutionSelection } from "@agent-workspace/contracts/chat";
 import type { NativeSessionRef, ProviderOptionSelection } from "@agent-workspace/contracts/provider";
-import type { AgentCatalog } from "../../../../../packages/contracts/src/agent-file-areas.ts";
 import { codexAdapter } from "../providers/drivers/codex.ts";
 import { claudeAdapter } from "../providers/drivers/claude.ts";
 import { getThreadUsage } from "../usage/ledger.ts";
 import { createProviderInstance, getStoredInstance, updateProviderInstance } from "../providers/instances.ts";
 import { chatRoutes } from "../chat.ts";
-import { stopPmCoreChanges } from "../pm-core-changes/index.ts";
+import { openAgentWorkspace, updateAgentWorkspace } from "../agent-workspaces.ts";
 import { createUsageSummaryReader } from "../usage/service.ts";
 import { parseRateTable } from "../usage/pricing.ts";
 import {
@@ -41,85 +39,47 @@ import {
   deleteThread,
   ensureThread,
   forkThreadHistory,
+  freezeThreadExecution,
   getThread,
   getThreadBranch,
   getThreadHistory,
   getThreadStableOutputs,
-  importThreads,
   saveFormattedMessage,
   setThreadNativeSession,
   updateThread,
 } from "./threads.ts";
 import { consumeTransfers, getThreadFork, TRANSFERS } from "./transfers.ts";
 import { getMergePreview, mergeThread } from "./forks.ts";
-import { resolveAgentScope } from "./agent-scope.ts";
+import { resolveAgentExecution } from "./agent-execution.ts";
 import { startPmProviderApplication, stopPmProviderApplication } from "../providers/t3code/application.ts";
 import { providerApplicationOptions } from "../providers/t3code/production.ts";
+import { chatOnlyEnvironment } from './execution.testkit.ts';
 
 let directory: string;
-let pmServer: Server;
+let fixtureSelection: ExecutionSelection;
+let fixtureEnvironment: ExecutionEnvironment;
+let networkRequests: string[];
+let onProviderCheck: (() => void) | undefined;
+const originalFetch = globalThis.fetch;
 const originalPmUrl = process.env.PM_API_URL;
-const fixtureScope: AgentScope = { workspaceId: "00000000-0000-4000-8000-000000000001", projectId: null };
-const secondWorkspace = "00000000-0000-4000-8000-000000000002";
-const thirdWorkspace = "00000000-0000-4000-8000-000000000003";
-let scopePaths: Map<string, string>;
-let resolvedRequests: { scope: AgentScope; cookie?: string; authorization?: string }[];
-let pmStatus: number;
-let onScopeResolution: (() => void) | undefined;
+const originalAllowedRoots = process.env.AGENT_WORKSPACE_ALLOWED_ROOTS;
 const originalDirectory = process.env.AGENT_WORKSPACE_DATA_DIR;
 const originalCodexCheck = codexAdapter.check;
 const originalCodexRun = codexAdapter.run;
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), "durable-chat-"));
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
-  scopePaths = new Map();
-  resolvedRequests = [];
-  pmStatus = 200;
-  onScopeResolution = undefined;
-  const catalog: AgentCatalog = {
-    workspaces: [fixtureScope.workspaceId, secondWorkspace, thirdWorkspace].map((id) => ({
-      id, name: "Fixture workspace",
-      fileArea: { path: directory, status: "available", revision: 1, source: "explicit", canManage: false },
-      projects: [],
-    })),
+  process.env.AGENT_WORKSPACE_ALLOWED_ROOTS = JSON.stringify([directory]);
+  process.env.PM_API_URL = "http://127.0.0.1:1";
+  networkRequests = [];
+  onProviderCheck = undefined;
+  globalThis.fetch = async input => {
+    networkRequests.push(input instanceof Request ? input.url : String(input));
+    throw new Error("Plain Agent execution must not require a network request.");
   };
-  pmServer = createServer(async (incoming, outgoing) => {
-    if (incoming.method === "GET" && incoming.url === "/api/v1/agent-contexts") {
-      outgoing.writeHead(200, { "content-type": "application/json" });
-      outgoing.end(JSON.stringify(catalog));
-      return;
-    }
-    if (incoming.method === "GET" && /^\/api\/v1\/workspaces\/[^/]+\/agent-tools\/core-files\?projectId=PRJ-\d+$/.test(incoming.url ?? "")) {
-      outgoing.writeHead(200, { "content-type": "application/json" });
-      outgoing.end(JSON.stringify({ files: [], complete: true }));
-      return;
-    }
-    assert.equal(incoming.method, "POST");
-    assert.equal(incoming.url, "/api/v1/agent-contexts/resolve");
-    let body = "";
-    for await (const chunk of incoming) body += String(chunk);
-    const scope = JSON.parse(body) as AgentScope;
-    resolvedRequests.push({
-      scope,
-      cookie: incoming.headers.cookie,
-      authorization: incoming.headers.authorization,
-    });
-    onScopeResolution?.();
-    outgoing.writeHead(pmStatus, { "content-type": "application/json" });
-    outgoing.end(JSON.stringify({
-      scope,
-      workspaceName: "Fixture workspace",
-      projectName: scope.projectId,
-      path: scopePaths.get(JSON.stringify(scope)) ?? directory,
-    }));
-  });
-  const listening = Promise.withResolvers<void>();
-  pmServer.once("error", listening.reject);
-  pmServer.listen(0, "127.0.0.1", listening.resolve);
-  await listening.promise;
-  const address = pmServer.address();
-  assert.ok(address && typeof address === "object");
-  process.env.PM_API_URL = `http://127.0.0.1:${address.port}/ignored-prefix`;
+  const workspace = openAgentWorkspace({ path: directory, name: "Fixture directory" });
+  fixtureSelection = { version: 2, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+  fixtureEnvironment = (await resolveAgentExecution(fixtureSelection, "fixture")).environment;
   await startPmProviderApplication(providerApplicationOptions);
 });
 afterEach(async () => {
@@ -128,12 +88,11 @@ afterEach(async () => {
   codexAdapter.check = originalCodexCheck;
   codexAdapter.run = originalCodexRun;
   closeStore();
-  pmServer.closeAllConnections();
-  const closed = Promise.withResolvers<void>();
-  pmServer.close(error => error ? closed.reject(error) : closed.resolve());
-  await closed.promise;
+  globalThis.fetch = originalFetch;
   if (originalPmUrl === undefined) delete process.env.PM_API_URL;
   else process.env.PM_API_URL = originalPmUrl;
+  if (originalAllowedRoots === undefined) delete process.env.AGENT_WORKSPACE_ALLOWED_ROOTS;
+  else process.env.AGENT_WORKSPACE_ALLOWED_ROOTS = originalAllowedRoots;
   await rm(directory, { recursive: true, force: true });
   if (originalDirectory === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR;
   else process.env.AGENT_WORKSPACE_DATA_DIR = originalDirectory;
@@ -164,6 +123,9 @@ async function localProvider(gate?: Promise<void>) {
   });
   codexAdapter.check = async (context, signal) => {
     if (context.instanceId !== instance.instanceId) return originalCodexCheck(context, signal);
+    const onCheck = onProviderCheck;
+    onProviderCheck = undefined;
+    onCheck?.();
     return {
       installation: { status: "installed", checkedAt: new Date().toISOString() },
       authentication: "authenticated",
@@ -250,8 +212,8 @@ async function structuredProvider(initialText: string) {
   };
   return { ...provider, started: started.promise, native, finish: () => finished.resolve() };
 }
-function configure(id = "chat-thread") {
-  ensureThread(id, undefined, fixtureScope);
+function configure(id = "chat-thread", selection = fixtureSelection) {
+  ensureThread(id, undefined, selection);
   updateThread(id, {
     settings: {
       providerInstanceId: "chat-local",
@@ -330,7 +292,7 @@ test("reported native usage survives cancellation and retains cumulative turn an
   assert.equal(getChatGeneration(generation.id)?.status, "cancelled");
   assert.equal(getChatGeneration(generation.id)?.usage?.totals?.outputTokens, 8);
   assert.equal(getThreadUsage("chat-thread").context?.usedTokens, 13);
-  await stopPmCoreChanges();
+  await stopChatRuntime();
   closeStore();
   assert.equal(getThreadUsage("chat-thread").totals?.cachedInputTokens, 3);
 });
@@ -359,28 +321,28 @@ test("incomplete native turn counters survive in metadata without categorized to
   assert.deepEqual(getChatGeneration(generation.id)?.usage?.reportedTurn, { inputTokens: 120, outputTokens: 8, cachedInputTokens: 40 });
   assert.equal(getChatGeneration(generation.id)?.usage?.totals, undefined);
   assert.match(JSON.stringify(getThreadHistory("chat-thread")), /reportedTurn/);
-  await stopPmCoreChanges();
+  await stopChatRuntime();
   closeStore();
   assert.equal(getThreadUsage("chat-thread").reportedTurn?.cachedInputTokens, 40);
 });
 
 async function controlledCliProvider() {
-  const executable = join(directory, "scope-cli.mjs");
-  const log = join(directory, "scope-cli.jsonl");
+  const executable = join(directory, "directory-cli.mjs");
+  const log = join(directory, "directory-cli.jsonl");
   await writeFile(executable, await readFile(new URL("../providers/drivers/codex-protocol-fixture.mjs", import.meta.url), "utf8"));
   await chmod(executable, 0o700);
   const instance = createProviderInstance({
-    instanceId: "scope-cli",
+    instanceId: "directory-cli",
     driver: "codex",
-    label: "Controlled scope subprocess",
+    label: "Controlled directory subprocess",
     config: { binaryPath: executable, homePath: directory },
     environment: [{ name: "SCOPE_LOG", value: log, sensitive: false }],
   });
   return { instance, log };
 }
 
-function configureScopedCli(id: string, scope: AgentScope, providerInstanceId: string) {
-  ensureThread(id, undefined, scope);
+function configureDirectoryCli(id: string, selection: ExecutionSelection, providerInstanceId: string) {
+  ensureThread(id, undefined, selection);
   updateThread(id, {
     settings: { ...getThread(id)!.settings, providerInstanceId, model: "scope-model" },
   });
@@ -397,7 +359,7 @@ function nextRequest(id: string, messageId: string): ChatRequest {
   };
 }
 
-test("thread settings are isolated, revision checked, and migration never overwrites live history", () => {
+test("thread settings and authoritative history are isolated and revision checked", () => {
   ensureThread("a");
   ensureThread("b");
   const before = getThread("a")!;
@@ -420,31 +382,8 @@ test("thread settings are isolated, revision checked, and migration never overwr
     },
     true,
   );
-  const payload = [
-    { remoteId: "a", title: "stale browser", histories: [{ format: CHAT_FORMAT, messages: [] }] },
-    {
-      remoteId: "legacy",
-      title: "Imported",
-      histories: [
-        {
-          format: CHAT_FORMAT,
-          messages: [
-            {
-              id: "old-user",
-              parent_id: null,
-              format: CHAT_FORMAT,
-              content: { role: "user", parts: [{ type: "text", text: "old history" }] },
-            },
-          ],
-        },
-      ],
-    },
-  ];
-  assert.deepEqual(importThreads("migration-once", payload), { imported: 1, skipped: 1 });
-  assert.deepEqual(importThreads("migration-once", payload), { imported: 1, skipped: 1 });
   assert.equal(getThreadHistory("a").messages[0].content.parts instanceof Array, true);
   assert.match(JSON.stringify(getThreadHistory("a")), /authoritative/);
-  assert.match(JSON.stringify(getThreadHistory("legacy")), /old history/);
 });
 
 test("stale browser snapshots cannot replace generated text but frontend tool results survive", () => {
@@ -519,7 +458,6 @@ test(
       assert.equal(getChatGeneration(first.id)!.status, "completed");
       assert.equal(provider.prompts.length, 1);
       assert.match(provider.prompts[0].prompt, /引用原文/);
-      assert.match(provider.prompts[0].prompt, /Fixture workspace/);
       assert.equal(provider.prompts[0].cwd, directory);
       assert.equal(provider.prompts[0].model, "chat-model");
       assert.equal(getChatGeneration(first.id)!.temperature, 0.4);
@@ -534,7 +472,6 @@ test(
         events.map((event) => event.chunk),
       );
       assert.equal(getThreadStableOutputs("chat-thread").texts.length, 1);
-      await stopPmCoreChanges();
       closeStore();
       assert.match(JSON.stringify(getThreadHistory("chat-thread")), /最终结果/);
     } finally {
@@ -554,7 +491,6 @@ test("saved model options and interaction mode reach the provider; invalid optio
     updateThread("chat-thread", { settings: invalid });
     await assert.rejects(submitChat(request()), { code: "invalid_model_options" });
     assert.equal(provider.prompts.length, 0);
-    assert.equal(resolvedRequests.length, 0);
     assert.equal(getThreadHistory("chat-thread").messages.length, 0);
     const revision = getThread("chat-thread")!.revision;
     const invalidSave = await chatRoutes.request("http://localhost/chat/threads/chat-thread", {
@@ -567,7 +503,6 @@ test("saved model options and interaction mode reach the provider; invalid optio
       method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ revision, settings }),
     });
     assert.equal(saved.status, 200);
-    await stopPmCoreChanges();
     closeStore();
     assert.deepEqual(getThread("chat-thread")!.settings, settings);
     const generation = await submitChat(request());
@@ -653,7 +588,7 @@ for (const mode of ["onReturn", "beforeCacheExpires"] as const) {
       });
       claudeAdapter.run = async (context, options) => {
         assert.equal(context.execution?.threadId, "compact-thread");
-        assert.deepEqual(context.execution?.scope, fixtureScope);
+        assert.deepEqual(context.execution?.environment, { ...fixtureEnvironment, frozen: true });
         assert.ok(context.execution?.generationId);
         assert.ok(context.execution?.messageId);
         if (options.prompt === "/compact") assert.equal(context.pmToolBridge, undefined);
@@ -668,7 +603,7 @@ for (const mode of ["onReturn", "beforeCacheExpires"] as const) {
         options.onText?.("done");
         return { text: "done", nativeSession };
       };
-      ensureThread("compact-thread", undefined, fixtureScope);
+      ensureThread("compact-thread", undefined, fixtureSelection);
       updateThread("compact-thread", { settings: { providerInstanceId: "compact-claude",
         model: "compact-model", systemPrompt: "", temperature: 1 } });
       const headers = new Headers({ cookie: "fixture-session=authorized" });
@@ -691,8 +626,7 @@ for (const mode of ["onReturn", "beforeCacheExpires"] as const) {
       assert.equal(calls[1].prompt, "/compact");
       assert.equal(calls[1].resume?.sessionId, "compact-session");
       assert.ok(listChatGenerations("compact-thread").some((entry) => entry.idleCompaction === mode && entry.status === "completed"));
-      assert.ok(resolvedRequests.length >= 2);
-      assert.ok(resolvedRequests.every((entry) => entry.cookie === "fixture-session=authorized"));
+      assert.deepEqual(networkRequests, []);
     } finally {
       await stopChatRuntime();
       claudeAdapter.check = originalCheck;
@@ -788,7 +722,10 @@ test("restart reconstructs the last committed delta and never blindly replays an
     providerInstanceRevision: 1,
     modelId: "chat-model",
     temperature: 0.4,
+    threadSettingsSnapshot: { ...getThread(value.id)!.settings },
+    executionSnapshot: { path: directory, environment: { ...fixtureEnvironment, frozen: true } },
   };
+  freezeThreadExecution(value.id, generation.executionSnapshot!.environment!, directory);
   writeRecord("chat:generations", generation.id, generation);
   const chunks: UIMessageChunk[] = [
     { type: "start", messageId: generation.messageId },
@@ -950,41 +887,13 @@ test("history endpoint excludes active snapshots and stale client writes cannot 
   assert.match(JSON.stringify(getThreadHistory("chat-thread")), /live authoritative output/);
 });
 
-test("resource-first migration fills an unclaimed thread but never replaces claimed settings", () => {
-  ensureThread("resource-first", "workspace shell");
-  const imported = importThreads("resource-order", [
-    {
-      remoteId: "resource-first",
-      title: "old chat title",
-      settings: {
-        providerInstanceId: "deepseek",
-        model: "deepseek-reasoner",
-        systemPrompt: "old settings",
-        temperature: 0.3,
-      },
-      histories: [
-        {
-          format: CHAT_FORMAT,
-          messages: [
-            {
-              id: "old",
-              parent_id: null,
-              format: CHAT_FORMAT,
-              content: { role: "user", parts: [{ type: "text", text: "old chat" }] },
-            },
-          ],
-        },
-      ],
-    },
-  ]);
-  assert.equal(imported.imported, 1);
-  assert.equal(getThread("resource-first")!.title, "old chat title");
-  ensureThread("claimed");
-  updateThread("claimed", {
-    settings: { ...getThread("claimed")!.settings, model: "chosen-model" },
-  });
-  assert.equal(importThreads("other-browser", [{ remoteId: "claimed" }]).skipped, 1);
-  assert.equal(getThread("claimed")!.settings.model, "chosen-model");
+test("obsolete browser import route cannot create or overwrite Sessions", async () => {
+  configure("claimed");
+  const original = getThread("claimed");
+  const response = await chatRoutes.request("http://localhost/chat/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ migrationId: "old-browser", threads: [{ remoteId: "claimed", title: "overwrite" }, { remoteId: "legacy-import" }] }) });
+  assert.equal(response.status, 404);
+  assert.deepEqual(getThread("claimed"), original);
+  assert.equal(getThread("legacy-import"), null);
 });
 
 test(
@@ -1084,7 +993,8 @@ test("normal chat fork preserves an immutable historical boundary, uses native c
     modelId: "fixture-model",
     temperature: 0.4,
     executionSnapshot: {
-      scope: fixtureScope, workspaceName: "Fixture workspace", projectName: null, path: directory,
+      path: directory,
+      environment: { ...fixtureEnvironment, frozen: true },
     },
     nativeSession: {
       providerInstanceId: "native-fixture",
@@ -1100,6 +1010,7 @@ test("normal chat fork preserves an immutable historical boundary, uses native c
       parts: [{ type: "text", text: "EXACT_ORIGINAL_BOUNDARY" }],
     },
   };
+  freezeThreadExecution("source-chat", generation.executionSnapshot!.environment, directory);
   writeRecord("chat:generations", generation.id, generation);
   saveFormattedMessage(
     "source-chat",
@@ -1197,51 +1108,83 @@ test("normal chat fork preserves an immutable historical boundary, uses native c
   assert.equal(getChatGeneration(generation.id)!.status, "completed");
 });
 
-test("thread scope is persistent and the same ID cannot acquire a different or previously missing scope", async () => {
-  const create = (id: string, scope?: AgentScope) => chatRoutes.request("http://localhost/chat/threads", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ id, scope }),
-  });
-  assert.equal((await create("scoped", fixtureScope)).status, 200);
-  assert.equal((await create("scoped", { ...fixtureScope, projectId: "other-project" })).status, 409);
-  assert.equal((await create("scoped")).status, 200);
-  ensureThread("legacy-readable");
-  updateThread("legacy-readable", {
-    settings: { ...getThread("legacy-readable")!.settings, providerInstanceId: "deepseek", model: "deepseek-chat" },
-  });
-  assert.equal((await create("legacy-readable", fixtureScope)).status, 409);
-  assert.equal((await chatRoutes.request("http://localhost/chat/threads/legacy-readable/history")).status, 200);
-  await assert.rejects(submitChat(request("legacy-readable")), { code: "scope_required" });
-  assert.equal(resolvedRequests.length, 0);
-  await stopPmCoreChanges();
-  closeStore();
-  const listed = await chatRoutes.request("http://localhost/chat/threads");
-  const body = await listed.json() as { threads: { remoteId: string; scope?: AgentScope }[] };
-  assert.deepEqual(body.threads.find((thread) => thread.remoteId === "scoped")?.scope, fixtureScope);
-  assert.equal(body.threads.find((thread) => thread.remoteId === "legacy-readable")?.scope, undefined);
+test("a fork of a frozen controlled worktree starts independently at its selected source directory", async () => {
+  const provider = await localProvider();
+  try {
+    configure("controlled-source");
+    const worktreePath = join(directory, "controlled-worktree");
+    await mkdir(worktreePath);
+    const worktreeEnvironment: ExecutionEnvironment = {
+      ...fixtureEnvironment,
+      executionPath: worktreePath,
+      worktree: { deliveryId: "controlled-delivery", branch: "controlled-branch" },
+      frozen: true,
+    };
+    freezeThreadExecution("controlled-source", worktreeEnvironment, worktreePath);
+    updateThread("controlled-source", { custom: { worktreeWriteConfirmed: true } });
+    forkThreadHistory("controlled-source", "standalone-branch", "Saved controlled worktree findings.");
+    const branch = getThread("standalone-branch")!;
+    assert.deepEqual(branch.executionSelection, fixtureSelection);
+    assert.deepEqual(branch.executionEnvironment, fixtureEnvironment);
+    assert.equal(branch.executionPath, undefined);
+    assert.equal(branch.custom?.worktreeWriteConfirmed, undefined);
+    const generation = await submitChat(nextRequest(branch.remoteId, "standalone-turn"));
+    await drain(generation.id);
+    assert.equal(getChatGeneration(generation.id)!.status, "completed");
+    assert.deepEqual(getChatGeneration(generation.id)!.executionSnapshot, {
+      path: directory,
+      environment: { ...fixtureEnvironment, frozen: true },
+    });
+    assert.equal(provider.prompts[0]!.cwd, directory);
+  } finally {
+    await provider.close();
+  }
 });
 
-test("scope resolve forwards only request-local PM credentials, rejects PM failures and ignores browser cwd", async () => {
+test("independent directory and chat-only Sessions persist without PM ownership or network access", async () => {
+  const create = (id: string, executionSelection = chatOnlyExecutionSelection(), extra: object = {}) => chatRoutes.request("http://localhost/chat/threads", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id, executionSelection, ...extra }),
+  });
+  assert.equal((await create("directory-session", fixtureSelection)).status, 200);
+  assert.equal((await create("directory-session", fixtureSelection)).status, 200);
+  assert.equal((await create("directory-session")).status, 409);
+  assert.equal((await create("scratch-session")).status, 200);
+  ensureThread("default-session");
+  assert.deepEqual(getThread("default-session")!.executionSelection, chatOnlyExecutionSelection());
+  for (const field of ["scope", "pmContext"]) {
+    assert.equal((await create(`rejected-${field}`, fixtureSelection, { [field]: {} })).status, 400);
+    assert.equal(getThread(`rejected-${field}`), null);
+    const patched = await chatRoutes.request("http://localhost/chat/threads/directory-session", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ [field]: {} }),
+    });
+    assert.equal(patched.status, 400);
+  }
+  closeStore();
+  const listed = await chatRoutes.request("http://localhost/chat/threads");
+  assert.equal(listed.status, 200);
+  const body = await listed.json() as { threads: { remoteId: string; executionSelection: ExecutionSelection; executionEnvironment?: ExecutionEnvironment }[] };
+  assert.deepEqual(body.threads.find(thread => thread.remoteId === "directory-session")?.executionSelection, fixtureSelection);
+  assert.deepEqual(body.threads.find(thread => thread.remoteId === "scratch-session")?.executionEnvironment, chatOnlyEnvironment());
+  assert.ok(body.threads.every(thread => !Object.hasOwn(thread, "scope") && !Object.hasOwn(thread, "pmContext")));
+  assert.deepEqual(networkRequests, []);
+});
+
+test("plain directory execution ignores browser cwd and never persists request-local PM credentials", async () => {
   const provider = await localProvider();
   try {
     configure();
-    const headers = {
-      "content-type": "application/json",
-      cookie: "pm_v4_session=request-cookie-only",
-      authorization: "Bearer request-bearer-only",
-      "x-forwarded-host": "untrusted.invalid",
-    };
-    pmStatus = 403;
-    const rejected = await chatRoutes.request("http://localhost/chat", {
-      method: "POST", headers, body: JSON.stringify(request()),
-    });
-    assert.equal(rejected.status, 403);
-    assert.equal(provider.prompts.length, 0);
-    pmStatus = 200;
     const response = await chatRoutes.request("http://localhost/chat", {
       method: "POST",
-      headers,
+      headers: {
+        "content-type": "application/json",
+        cookie: "pm_v4_session=request-cookie-only",
+        authorization: "Bearer request-bearer-only",
+        "x-forwarded-host": "untrusted.invalid",
+      },
       body: JSON.stringify({
         ...request(),
         cwd: "/untrusted-browser-directory",
@@ -1251,98 +1194,156 @@ test("scope resolve forwards only request-local PM credentials, rejects PM failu
     assert.equal(response.status, 200);
     await response.text();
     const generationId = response.headers.get("x-resumable-stream-id")!;
-    const accepted = getChatGeneration(generationId)!;
-    assert.deepEqual(accepted.executionSnapshot, {
-      scope: fixtureScope,
-      workspaceName: "Fixture workspace",
-      projectName: null,
-      path: directory,
-    });
-    assert.equal(resolvedRequests.at(-1)?.cookie, headers.cookie);
-    assert.equal(resolvedRequests.at(-1)?.authorization, headers.authorization);
-    assert.doesNotMatch(JSON.stringify(accepted), /request-cookie-only|request-bearer-only/);
     await drain(generationId);
-    await stopPmCoreChanges();
+    const accepted = getChatGeneration(generationId)!;
+    assert.equal(accepted.status, "completed");
+    assert.deepEqual(accepted.executionSnapshot, { path: directory, environment: { ...fixtureEnvironment, frozen: true } });
+    assert.equal(provider.prompts[0]!.cwd, directory);
+    assert.deepEqual(networkRequests, []);
+    await stopChatRuntime();
     closeStore();
     assert.equal(getChatGeneration(generationId)!.executionSnapshot?.path, directory);
-    await resolveAgentScope(fixtureScope);
-    assert.equal(resolvedRequests.at(-1)?.cookie, undefined);
-    assert.equal(resolvedRequests.at(-1)?.authorization, undefined);
+    const persisted = JSON.stringify({
+      thread: getThread("chat-thread"),
+      generation: getChatGeneration(generationId),
+      history: getThreadHistory("chat-thread"),
+    });
+    assert.doesNotMatch(persisted, /request-cookie-only|request-bearer-only|pm_v4_session|authorization/i);
   } finally {
     await provider.close();
   }
 });
 
-test("two scoped CLI sessions execute in separate cwd and queued snapshots survive directory reconfiguration", { timeout: 30000 }, async () => {
+test("chat-only Sessions resolve private stable scratch and forks receive independent scratch", async () => {
+  const provider = await localProvider();
+  try {
+    const selection = chatOnlyExecutionSelection();
+    configure("scratch-source", selection);
+    const first = await submitChat(request("scratch-source"));
+    await drain(first.id);
+    const accepted = getChatGeneration(first.id)!;
+    const firstPath = accepted.executionSnapshot!.path;
+    assert.deepEqual(accepted.executionSnapshot!.environment, chatOnlyEnvironment(true));
+    assert.equal(provider.prompts[0]!.cwd, firstPath);
+    assert.notEqual(firstPath, directory);
+    assert.equal((await resolveAgentExecution(selection, "scratch-source")).path, firstPath);
+    const fork = await forkChatGeneration(first.id);
+    const child = getThread(fork.threadId)!;
+    assert.deepEqual(child.executionSelection, selection);
+    assert.deepEqual(child.executionEnvironment, chatOnlyEnvironment());
+    assert.equal(child.executionPath, undefined);
+    const turn = await submitChat(nextRequest(fork.threadId, "scratch-fork-turn"));
+    await drain(turn.id);
+    assert.equal(getChatGeneration(turn.id)!.handoff?.mode, "portable");
+    assert.notEqual(getChatGeneration(turn.id)!.executionSnapshot!.path, firstPath);
+    assert.equal(provider.prompts[1]!.resume, undefined);
+    assert.deepEqual(getChatGeneration(turn.id)!.executionSnapshot!.environment, chatOnlyEnvironment(true));
+    const publicThread = await chatRoutes.request(`http://localhost/chat/threads/${fork.threadId}`);
+    assert.doesNotMatch(await publicThread.text(), new RegExp(firstPath));
+    assert.deepEqual(networkRequests, []);
+  } finally {
+    await provider.close();
+  }
+});
+
+test("two directory CLI Sessions keep cwd, native identity and durable history independent", { timeout: 30000 }, async () => {
   const { instance, log } = await controlledCliProvider();
   const originalCwd = process.cwd();
-  const scopeA = { ...fixtureScope, projectId: "PRJ-001" };
-  const scopeB = { workspaceId: secondWorkspace, projectId: null };
-  const dirA = join(directory, "scope-a");
-  const dirB = join(directory, "scope-b");
-  const changedA = join(directory, "scope-a-reconfigured");
-  for (const [cwd, marker] of [[dirA, "A_ONLY"], [dirB, "B_ONLY"], [changedA, "A_NEW_ONLY"]]) {
-    await mkdir(cwd, { recursive: true });
+  const dirA = join(directory, "directory-a");
+  const dirB = join(directory, "directory-b");
+  for (const [cwd, marker] of [[dirA, "A_ONLY"], [dirB, "B_ONLY"]]) {
+    await mkdir(cwd);
     await writeFile(join(cwd, "scope.txt"), marker);
   }
-  scopePaths.set(JSON.stringify(scopeA), dirA);
-  scopePaths.set(JSON.stringify(scopeB), dirB);
-  configureScopedCli("scope-a-thread", scopeA, instance.instanceId);
-  configureScopedCli("scope-b-thread", scopeB, instance.instanceId);
+  const workspaceA = openAgentWorkspace({ path: dirA, name: "Repository" });
+  const workspaceB = openAgentWorkspace({ path: dirB, name: "Repository" });
+  const selectionA: ExecutionSelection = { version: 2, agentWorkspaceId: workspaceA.id, agentWorkspaceRevision: workspaceA.revision };
+  const selectionB: ExecutionSelection = { version: 2, agentWorkspaceId: workspaceB.id, agentWorkspaceRevision: workspaceB.revision };
+  assert.notEqual(workspaceA.id, workspaceB.id);
+  configureDirectoryCli("directory-a-thread", selectionA, instance.instanceId);
+  configureDirectoryCli("directory-b-thread", selectionB, instance.instanceId);
+  const a = await submitChat(request("directory-a-thread"));
+  await drain(a.id);
+  const b = await submitChat(request("directory-b-thread"));
+  await drain(b.id);
+  const resumedA = await submitChat(nextRequest("directory-a-thread", "directory-a-next"));
+  await drain(resumedA.id);
+  assert.equal(getChatGeneration(resumedA.id)!.handoff?.mode, "native");
+  assert.notEqual(getChatGeneration(a.id)!.nativeSession!.sessionId, getChatGeneration(b.id)!.nativeSession!.sessionId);
+  const events = (await readFile(log, "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.deepEqual(events.filter(event => event.turn).map(event => [event.cwd, event.marker]), [
+    [dirA, "A_ONLY"], [dirB, "B_ONLY"], [dirA, "A_ONLY"],
+  ]);
+  assert.match(JSON.stringify(getThreadHistory("directory-a-thread")), /A_ONLY/);
+  assert.doesNotMatch(JSON.stringify(getThreadHistory("directory-a-thread")), /B_ONLY/);
+  assert.match(JSON.stringify(getThreadHistory("directory-b-thread")), /B_ONLY/);
+  assert.doesNotMatch(JSON.stringify(getThreadHistory("directory-b-thread")), /A_ONLY/);
+  assert.equal(getStoredInstance(instance.instanceId)!.config.binaryPath, join(directory, "directory-cli.mjs"));
+  assert.equal(process.cwd(), originalCwd);
+  await stopChatRuntime();
+  closeStore();
+  assert.deepEqual(getThread("directory-a-thread")!.executionSelection, selectionA);
+  assert.deepEqual(getThread("directory-b-thread")!.executionSelection, selectionB);
+  assert.equal(getChatGeneration(a.id)!.executionSnapshot!.path, dirA);
+  assert.equal(getChatGeneration(b.id)!.executionSnapshot!.path, dirB);
+  // Catalog and CLI-version discovery may attempt optional upstream fetches;
+  // every fetch still fails, and no PM request is allowed.
+  assert.deepEqual(networkRequests.filter(url => new URL(url).origin === new URL(process.env.PM_API_URL!).origin), []);
+});
+
+test("missing or replaced roots reject queued and future turns without adopting replacement directories", { timeout: 10000 }, async () => {
+  const provider = await localProvider();
+  const root = join(directory, "frozen-root");
+  const originalRoot = join(directory, "original-root");
+  await mkdir(root);
+  const workspace = openAgentWorkspace({ path: root });
+  const selection: ExecutionSelection = { version: 2, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+  configure("replacement-thread", selection);
   const held = Promise.withResolvers<void>();
   const acquired = Promise.withResolvers<void>();
-  const lock = withThreadExecution("scope-a-thread", async () => {
+  const lock = withThreadExecution("replacement-thread", async () => {
     acquired.resolve();
     await held.promise;
   });
   try {
     await acquired.promise;
-    const aRequest = request("scope-a-thread");
-    const a = await submitChat(aRequest);
-    assert.equal(a.status, "queued");
-    const b = await submitChat(request("scope-b-thread"));
-    await drain(b.id);
-    scopePaths.set(JSON.stringify(scopeA), changedA);
-    assert.equal((await submitChat(aRequest)).id, a.id);
+    const submitted = request("replacement-thread");
+    const generation = await submitChat(submitted);
+    assert.equal(generation.status, "queued");
+    assert.equal(getThread("replacement-thread")!.executionEnvironment!.frozen, true);
+    await rename(root, originalRoot);
+    await assert.rejects(resolveAgentExecution(selection, "replacement-thread"), { code: "directory_unavailable" });
+    await mkdir(root);
+    await assert.rejects(resolveAgentExecution(selection, "replacement-thread"), { code: "workspace_directory_changed" });
+    assert.throws(() => openAgentWorkspace({ path: root }), { code: "workspace_directory_changed" });
+    await assert.rejects(submitChat(submitted), { code: "workspace_directory_changed" });
     held.resolve();
     await lock;
-    await drain(a.id);
-    assert.equal(getChatGeneration(a.id)!.status, "completed");
-    assert.equal(getChatGeneration(b.id)!.status, "completed");
-    assert.equal(getChatGeneration(a.id)!.executionSnapshot?.path, dirA);
-    const next = await submitChat(nextRequest("scope-a-thread", "new-directory-turn"));
-    await drain(next.id);
-    assert.equal(getChatGeneration(next.id)!.executionSnapshot?.path, changedA);
-    assert.equal(getChatGeneration(next.id)!.handoff?.mode, "portable");
-    const events = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
-    const executions = events.filter((event) => event.turn);
-    assert.deepEqual(executions.map((event) => [event.cwd, event.marker]), [
-      [dirB, "B_ONLY"], [dirA, "A_ONLY"], [changedA, "A_NEW_ONLY"],
-    ]);
-    assert.ok(events.filter((event) => event.session).every((event) => event.session === "thread/start"));
-    assert.equal(getStoredInstance(instance.instanceId)!.config.binaryPath, join(directory, "scope-cli.mjs"));
-    assert.equal(process.cwd(), originalCwd);
-    await stopPmCoreChanges();
-    closeStore();
-    assert.deepEqual(getThread("scope-a-thread")!.scope, scopeA);
-    assert.equal(getChatGeneration(a.id)!.executionSnapshot?.path, dirA);
+    await drain(generation.id);
+    assert.equal(getChatGeneration(generation.id)!.status, "failed");
+    assert.equal(getChatGeneration(generation.id)!.executionSnapshot!.path, root);
+    await assert.rejects(submitChat(nextRequest("replacement-thread", "replacement-next")), { code: "workspace_directory_changed" });
+    assert.equal(provider.prompts.length, 0);
+    assert.deepEqual(getThread("replacement-thread")!.executionSelection, selection);
   } finally {
     held.resolve();
     await lock;
+    await provider.close();
   }
 });
 
-test("native resume, continuation and fork require matching scope and accepted directory", { timeout: 90000 }, async () => {
+test("native resume, continuation and fork require the accepted independent directory identity", { timeout: 90000 }, async () => {
   const { instance, log } = await controlledCliProvider();
-  const scope = { ...fixtureScope, projectId: "PRJ-002" };
   const initialPath = join(directory, "native-initial");
-  const changedPath = join(directory, "native-changed");
+  const changedPath = join(directory, "native-other");
+  const originalPath = join(directory, "native-original-identity");
   for (const cwd of [initialPath, changedPath]) {
-    await mkdir(cwd, { recursive: true });
+    await mkdir(cwd);
     await writeFile(join(cwd, "scope.txt"), cwd);
   }
-  scopePaths.set(JSON.stringify(scope), initialPath);
-  configureScopedCli("native-thread", scope, instance.instanceId);
+  const workspace = openAgentWorkspace({ path: initialPath });
+  const selection: ExecutionSelection = { version: 2, agentWorkspaceId: workspace.id, agentWorkspaceRevision: workspace.revision };
+  configureDirectoryCli("native-thread", selection, instance.instanceId);
   const first = await submitChat(request("native-thread"));
   await drain(first.id);
   const resumed = await submitChat(nextRequest("native-thread", "native-next"));
@@ -1354,7 +1355,7 @@ test("native resume, continuation and fork require matching scope and accepted d
   assert.equal(getChatGeneration(failure.id)!.status, "failed");
   assert.match(JSON.stringify(getChatGeneration(failure.id)!.output), new RegExp(initialPath));
   assert.equal(getThreadStableOutputs("native-thread").texts.length, 2);
-  assert.ok(readChatEvents(failure.id).some((event) => event.chunk.type === "error"));
+  assert.ok(readChatEvents(failure.id).some(event => event.chunk.type === "error"));
   await assert.rejects(continueChat(failure.id, false), { code: "side_effect_confirmation_required" });
   const recovered = await continueChat(failure.id, true);
   await drain(recovered.id);
@@ -1362,54 +1363,61 @@ test("native resume, continuation and fork require matching scope and accepted d
   await writeFile(join(initialPath, "fail-next"), "");
   const changedFailure = await submitChat(nextRequest("native-thread", "changed-fail"));
   await drain(changedFailure.id);
-  scopePaths.set(JSON.stringify(scope), changedPath);
-  const portable = await continueChat(changedFailure.id, true);
-  await drain(portable.id);
-  assert.equal(getChatGeneration(portable.id)!.status, "completed");
-  assert.equal(getChatGeneration(portable.id)!.handoff?.mode, "portable");
-  assert.equal(getChatGeneration(portable.id)!.executionSnapshot?.path, changedPath);
+  await rename(initialPath, originalPath);
+  await mkdir(initialPath);
+  await assert.rejects(continueChat(changedFailure.id, true), { code: "workspace_directory_changed" });
+  assert.equal(getChatGeneration(changedFailure.id)!.continuationId, undefined);
+  await rm(initialPath, { recursive: true });
+  await rename(originalPath, initialPath);
+  const restored = await continueChat(changedFailure.id, true);
+  await drain(restored.id);
+  assert.equal(getChatGeneration(restored.id)!.status, "completed");
+  assert.equal(getChatGeneration(restored.id)!.handoff?.mode, "native");
+  assert.equal(getChatGeneration(restored.id)!.executionSnapshot!.path, initialPath);
   const oldFork = await forkChatGeneration(first.id);
-  assert.deepEqual(getThread(oldFork.threadId)!.scope, scope);
+  assert.deepEqual(getThread(oldFork.threadId)!.executionSelection, selection);
+  assert.equal(getThread(oldFork.threadId)!.executionEnvironment!.frozen, false);
+  assert.equal(getThread(oldFork.threadId)!.executionEnvironment!.worktree, null);
+  assert.equal(getThread(oldFork.threadId)!.executionPath, undefined);
   const oldForkTurn = await submitChat(nextRequest(oldFork.threadId, "old-fork-turn"));
   await drain(oldForkTurn.id);
-  assert.equal(getChatGeneration(oldForkTurn.id)!.handoff?.mode, "portable");
-  const compatibleFork = await forkChatGeneration(portable.id);
+  assert.equal(getChatGeneration(oldForkTurn.id)!.handoff?.mode, "native-fork");
+  const compatibleFork = await forkChatGeneration(restored.id);
   const compatibleTurn = await submitChat(nextRequest(compatibleFork.threadId, "compatible-fork-turn"));
   await drain(compatibleTurn.id);
   assert.equal(getChatGeneration(compatibleTurn.id)!.handoff?.mode, "native-fork");
-  const changedInstructionsFork = await forkChatGeneration(portable.id);
+  const changedInstructionsFork = await forkChatGeneration(restored.id);
   const branch = getThread(changedInstructionsFork.threadId)!;
   updateThread(branch.remoteId, { settings: { ...branch.settings, systemPrompt: "Different instructions require portable context." } });
   const changedInstructions = await submitChat(nextRequest(branch.remoteId, "changed-instructions-fork"));
   await drain(changedInstructions.id);
   assert.equal(getChatGeneration(changedInstructions.id)!.handoff?.mode, "portable");
-
-  const otherScope = { ...scope, workspaceId: thirdWorkspace };
-  scopePaths.set(JSON.stringify(otherScope), changedPath);
-  configureScopedCli("wrong-native-owner", otherScope, instance.instanceId);
-  const foreign = getChatGeneration(portable.id)!;
+  const otherWorkspace = openAgentWorkspace({ path: changedPath });
+  const otherSelection: ExecutionSelection = { version: 2, agentWorkspaceId: otherWorkspace.id, agentWorkspaceRevision: otherWorkspace.revision };
+  configureDirectoryCli("wrong-native-owner", otherSelection, instance.instanceId);
+  const foreign = getChatGeneration(restored.id)!;
   saveFormattedMessage("wrong-native-owner", {
     id: "foreign-boundary", parent_id: null, format: CHAT_FORMAT,
     content: { role: "user", parts: [{ type: "text", text: "saved boundary" }] },
   }, true);
-  setThreadNativeSession("wrong-native-owner", foreign.nativeSession, "foreign-boundary", "", scope);
+  setThreadNativeSession("wrong-native-owner", foreign.nativeSession, "foreign-boundary", "", foreign.executionSnapshot!.environment);
   const wrongOwner = await submitChat(nextRequest("wrong-native-owner", "wrong-owner-turn"));
   await drain(wrongOwner.id);
   assert.equal(getChatGeneration(wrongOwner.id)!.handoff?.mode, "portable");
-  const events = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
-  assert.equal(events.filter((event) => event.rpc).length, 1);
-  assert.equal(events.find((event) => event.rpc).cwd, changedPath);
-  assert.equal(events.filter((event) => event.session).at(-1).session, "thread/start");
+  const events = (await readFile(log, "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(events.filter(event => event.rpc).length, 2);
+  assert.ok(events.filter(event => event.rpc).every(event => event.cwd === initialPath));
+  assert.equal(events.filter(event => event.session).at(-1).session, "thread/start");
 });
 
-test("a configured scope does not turn an uninstalled native Provider into a successful response", async () => {
+test("an independent directory does not turn an uninstalled native Provider into a successful response", async () => {
   createProviderInstance({
     instanceId: "no-executable",
     driver: "codex",
     label: "Explicitly unavailable native executable",
     config: { binaryPath: join(directory, "missing-codex") },
   });
-  ensureThread("no-provider-thread", undefined, fixtureScope);
+  ensureThread("no-provider-thread", undefined, fixtureSelection);
   updateThread("no-provider-thread", {
     settings: { ...getThread("no-provider-thread")!.settings, providerInstanceId: "no-executable", model: "chat-model" },
   });
@@ -1430,7 +1438,7 @@ test("historical API selections remain readable and inert until explicit native 
     instances: [{ instanceId: "retired-api", driver: "deepseek", label: "Historical API selection", revision: 1, env: {} }],
   });
   await writeFile(registryPath, historicalRegistry);
-  ensureThread("historical-selection", undefined, fixtureScope);
+  ensureThread("historical-selection", undefined, fixtureSelection);
   updateThread("historical-selection", {
     settings: {
       ...getThread("historical-selection")!.settings,
@@ -1487,7 +1495,7 @@ test("archive, deletion and model edits win over a pending submission before acc
     ];
     for (const entry of cases) {
       configure(entry.id);
-      onScopeResolution = () => entry.mutate(entry.id);
+      onProviderCheck = () => entry.mutate(entry.id);
       await assert.rejects(submitChat(request(entry.id)), { code: entry.code });
       assert.equal(getThreadHistory(entry.id).messages.length, 0);
     }
@@ -1506,11 +1514,17 @@ test("restoring a thread is required before retrying an interrupted generation",
     await provider.started;
     await cancelChat(generation.id);
     const before = getThreadHistory("chat-thread");
-    onScopeResolution = () => updateThread("chat-thread", { status: "archived" });
+    onProviderCheck = () => updateThread("chat-thread", { status: "archived" });
     await assert.rejects(continueChat(generation.id, true), { code: "thread_archived" });
     assert.deepEqual(getThreadHistory("chat-thread"), before);
     assert.equal(getChatGeneration(generation.id)!.continuationId, undefined);
     assert.equal(provider.prompts.length, 1);
+    updateThread("chat-thread", { status: "regular" });
+    hold.resolve();
+    const continued = await continueChat(generation.id, true);
+    await drain(continued.id);
+    assert.equal(getChatGeneration(continued.id)!.status, "completed");
+    assert.equal(provider.prompts.length, 2);
   } finally {
     hold.resolve();
     await stopChatRuntime();
@@ -1536,7 +1550,7 @@ test("trusted Chat identity reaches native execution and native interrupted is n
   const provider = await localProvider();
   try {
     configure();
-    let identity: { threadId: string; generationId: string; messageId: string; scope: AgentScope } | undefined;
+    let identity: { threadId: string; generationId: string; messageId: string; environment: ExecutionEnvironment } | undefined;
     codexAdapter.run = async (context, options) => {
       identity = context.execution;
       assert.ok(context.pmToolBridge);
@@ -1545,7 +1559,7 @@ test("trusted Chat identity reaches native execution and native interrupted is n
     };
     const generation = await submitChat(request());
     await drain(generation.id);
-    assert.deepEqual(identity, { threadId: generation.threadId, generationId: generation.id, messageId: generation.messageId, scope: fixtureScope });
+    assert.deepEqual(identity, { threadId: generation.threadId, generationId: generation.id, messageId: generation.messageId, environment: { ...fixtureEnvironment, frozen: true } });
     assert.equal(getChatGeneration(generation.id)?.status, "interrupted");
     assert.equal(getNativeOutput(generation.id)?.status, "interrupted");
     assert.equal(getNativeOutput(generation.id)?.items[0].text, "saved partial");
@@ -1627,6 +1641,51 @@ test("turn mode retains structured native paragraphs until the native terminal",
   } finally {
     provider.finish();
     await stopChatRuntime();
+    await provider.close();
+  }
+});
+
+test("directory selection requires CAS and freezes on first execution while metadata edits preserve the binding", async () => {
+  const provider = await localProvider();
+  try {
+    configure();
+    const one = join(directory, "selected-one");
+    const two = join(directory, "selected-two");
+    await mkdir(one);
+    await mkdir(two);
+    const workspaceOne = openAgentWorkspace({ path: one });
+    const workspaceTwo = openAgentWorkspace({ path: two });
+    const selectionOne: ExecutionSelection = { version: 2, agentWorkspaceId: workspaceOne.id, agentWorkspaceRevision: workspaceOne.revision };
+    const selectionTwo: ExecutionSelection = { version: 2, agentWorkspaceId: workspaceTwo.id, agentWorkspaceRevision: workspaceTwo.revision };
+    const put = (input: object) => chatRoutes.request("http://localhost/chat/threads/chat-thread", {
+      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
+    });
+    const revision = getThread("chat-thread")!.revision;
+    assert.equal((await put({ executionSelection: selectionOne })).status, 400);
+    assert.equal((await put({ executionSelection: selectionOne, revision: revision - 1 })).status, 409);
+    assert.deepEqual(getThread("chat-thread")!.executionSelection, fixtureSelection);
+    assert.equal((await put({ executionSelection: selectionOne, revision })).status, 200);
+    assert.deepEqual(getThread("chat-thread")!.executionSelection, selectionOne);
+    assert.equal(getThread("chat-thread")!.executionEnvironment!.frozen, false);
+    assert.equal((await put({ executionSelection: selectionTwo, revision: getThread("chat-thread")!.revision })).status, 200);
+    const generation = await submitChat(request());
+    assert.equal(getThread("chat-thread")!.executionEnvironment!.frozen, true);
+    await drain(generation.id);
+    assert.equal(provider.prompts[0]!.cwd, two);
+    const acceptedEnvironment = getChatGeneration(generation.id)!.executionSnapshot!.environment;
+    updateAgentWorkspace(workspaceTwo.id, { expectedRevision: workspaceTwo.revision, name: "Renamed directory", archived: true });
+    const next = await submitChat(nextRequest("chat-thread", "after-metadata-edit"));
+    await drain(next.id);
+    assert.equal(getChatGeneration(next.id)!.status, "completed");
+    assert.equal(getChatGeneration(next.id)!.handoff?.mode, "native");
+    assert.equal(provider.prompts[1]!.cwd, two);
+    assert.deepEqual(getThread("chat-thread")!.executionSelection, selectionTwo);
+    const currentEnvironment = getChatGeneration(next.id)!.executionSnapshot!.environment;
+    assert.deepEqual({ ...currentEnvironment, agentWorkspaceName: acceptedEnvironment.agentWorkspaceName }, acceptedEnvironment);
+    assert.equal((await put({ executionSelection: selectionOne, revision: getThread("chat-thread")!.revision })).status, 409);
+    assert.equal((await put({ executionSelection: chatOnlyExecutionSelection(), revision: getThread("chat-thread")!.revision })).status, 409);
+    assert.deepEqual(networkRequests, []);
+  } finally {
     await provider.close();
   }
 });

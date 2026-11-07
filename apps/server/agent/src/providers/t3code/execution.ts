@@ -30,6 +30,7 @@ import { assertPmContinuationCursor, bindPmContinuationSink, decodePmNativeHisto
   type PmProviderProtocolProbe } from "./continuation.ts";
 import { closeMcpAppSession, retainMcpAppSession } from "../../mcp-apps/live.ts";
 import { mcpAppContextForDispatch, mcpAppContextForTurn } from "../../mcp-apps/context.ts";
+import { autoApproveApprovals } from "../../approval-mode.ts";
 
 /** Single application instance, configured by parent lifecycle assembly. No driver or protocol registry here. */
 export function makePmProviderExecutionService(host: PmProviderHostService, runtimeHost: ProviderRuntimeHostService): PmProviderExecutionService {
@@ -205,7 +206,8 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
               if (sourceRequest.responseCapability.type !== "live" || sourceRequest.responseCapability.providerSessionId !== runtime.providerSessionId) return;
               if (request.kind === "approval") {
                 await assertCurrent();
-                await runOperation(runtime.respondToRuntimeRequest({ requestId: sourceRequest.id, decision: "decline" }));
+                await runOperation(runtime.respondToRuntimeRequest({ requestId: sourceRequest.id,
+                  decision: autoApproveApprovals() ? "accept" : "decline" }));
                 return;
               }
               const answered = Promise.resolve().then(() => options.onRequest!(request)).catch((error) => {
@@ -525,11 +527,12 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
             const savedGeneration = context.execution ? readRecord<{ createdAt: string }>("chat:generations", runId) : null;
             const savedThread = context.execution ? readRecord<{ title: string; createdAt: string }>("chat:threads", threadId) : null;
             const now = DateTime.makeUnsafe(savedGeneration?.createdAt ?? savedThread?.createdAt ?? new Date());
-            const scope = context.execution?.scope;
+            const environment = context.execution?.environment;
             const appThread = Schema.decodeUnknownSync(Schema.toType(OrchestrationV2AppThread))({ id: threadId,
-              projectId: ProjectId.make(scope?.projectId ?? (scope ? `pm-workspace:${scope.workspaceId}` : threadId)),
+              projectId: ProjectId.make(environment?.agentWorkspaceId ?? threadId),
               title: typeof savedThread?.title === "string" ? savedThread.title.trim() || threadId : threadId, providerInstanceId: lease.instance.instanceId, modelSelection,
-              runtimeMode: runtimePolicy.runtimeMode, interactionMode: runtimePolicy.interactionMode, branch: null, worktreePath: null,
+              runtimeMode: runtimePolicy.runtimeMode, interactionMode: runtimePolicy.interactionMode,
+              branch: environment?.worktree?.branch ?? null, worktreePath: environment?.worktree ? lease.cwd : null,
               activeProviderThreadId: thread.id, lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId }, forkedFrom: null,
               createdBy: "user", creationSource: "server", createdAt: now, updatedAt: now, archivedAt: null, deletedAt: null,
               settledOverride: null, settledAt: null, lastVisitedAt: null });
@@ -652,7 +655,7 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
           if (watchSubscription) await Effect.runPromise(Scope.addFinalizer(sessionScope, watchSubscription.close));
           const watchAbort = new AbortController();
           let watchTask: Promise<unknown> | undefined;
-          const invalidate = retainMcpAppSession({ apps, scope: context.execution.scope, cwd: lease.cwd, providerThread: thread, mcpApps: runtime.mcpApps,
+          const invalidate = retainMcpAppSession({ apps, executionEnvironment: context.execution.environment, cwd: lease.cwd, providerThread: thread, mcpApps: runtime.mcpApps,
             blockedServers: ["pm_tools", ...(context.mcpServers ?? []).map(server => server.name)],
             assertCurrent, authorize: context.authorizeMcpApp,
             originatingMcpGrant: context.originatingMcpGrant,
@@ -662,7 +665,8 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
               await Effect.runPromise(Scope.close(sessionScope, Exit.void));
             } });
           // Drain the original native stream without starting work. Late permissions are
-          // denied, never promoted into a generation or a PM business approval.
+          // denied unless auto-approve is configured; they are never promoted into a
+          // generation or a PM business approval.
           watchTask = Effect.runPromiseExit(Stream.runForEach(watchSubscription?.events ?? runtime.events, event => Effect.gen(function* () {
             yield* lease.assertCurrent;
             if (event.type === "provider_session.updated" && event.providerSession.id === runtime.providerSessionId
@@ -677,7 +681,8 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
             if (event.type === "runtime_request.updated" && event.runtimeRequest.status === "pending"
               && event.runtimeRequest.responseCapability.type === "live" && event.runtimeRequest.responseCapability.providerSessionId === runtime.providerSessionId)
               yield* runtime.respondToRuntimeRequest({ requestId: event.runtimeRequest.id,
-                decision: event.runtimeRequest.kind === "user_input" ? "cancel" : "decline" });
+                decision: event.runtimeRequest.kind === "user_input" ? "cancel"
+                  : autoApproveApprovals() ? "accept" : "decline" });
           })), { signal: watchAbort.signal }).then(() => {
             if (!watchAbort.signal.aborted) void invalidate().catch(() => undefined);
           });

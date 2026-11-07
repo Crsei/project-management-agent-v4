@@ -19,9 +19,12 @@ export type CoreAccess = {
   /** Revalidate authoritative inputs after external I/O, before committing dependent facts. */
   refresh?(): Promise<void>;
 };
+/** In-process producer proof only; public command envelopes never accept this field. */
+export type TrustedMutationSource = { kind: 'agent' | 'automation'; requesterId?: string };
 export type CommandContext = {
   sql: SqlExecutor; actor: Actor; workspaceId: string; command: Command;
   core?: CoreAccess;
+  trustedSource?: TrustedMutationSource;
   requireSelf(): Promise<void>;
   require(capability: Capability, projectId?: string | null): Promise<void>;
   get(id: string, kind?: EntityKind): Promise<Entity>;

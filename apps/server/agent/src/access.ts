@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { getCookie, setCookie } from "hono/cookie";
+import { approvalMode } from "./approval-mode.ts";
 
 const COOKIE = "agent_v4_access";
 const TOKEN_ENV = "AGENT_WORKSPACE_ACCESS_TOKEN";
@@ -89,6 +90,7 @@ export const accessRoutes = new Hono()
     return c.json({
       authorized: authorizeHeaders(c.req.raw.headers),
       configured: token.length >= 32,
+      approvalMode: approvalMode(),
       message:
         token && token.length < 32
           ? `${TOKEN_ENV} 至少需要 32 个字符。`

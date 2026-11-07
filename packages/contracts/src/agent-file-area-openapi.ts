@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { agentCatalogSchema, agentFileAreaResponseSchema, agentFileAreaUpdateSchema, agentScopeSchema, agentStorageSettingsSchema, agentStorageSettingsUpdateSchema, resolvedAgentContextSchema } from './agent-file-areas.ts';
+import { agentCatalogSchema, agentFileAreaResponseSchema, agentFileAreaUpdateSchema, agentScopeSchema, agentStorageSettingsSchema, agentStorageSettingsUpdateSchema, authorizedAgentContextSchema } from './agent-file-areas.ts';
 
 /** Browser-safe source contract; generation is performed by the normal contract pipeline. */
 export function agentFileAreaPaths(): Record<string, Record<string, unknown>> {
@@ -12,7 +12,7 @@ export function agentFileAreaPaths(): Record<string, Record<string, unknown>> {
       content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
     }]));
     return { operationId, security: [{ sessionCookie: [] }, { bearerAuth: [] }], parameters,
-      description: 'Real PM membership/domain.read filters all contexts, including empty projects. Host path visibility requires existing unrestricted access.manage; configuration additionally requires planning.edit. No new permissions are granted. Directory selection uses trusted LocalDirectory existing/new rules and never moves PM data. Workspace directories must be explicit; projects may use their original verified local mount. Revision 0 means no explicit configuration; saves increment revision. Resolve refuses hidden, missing, replaced, untrusted or unconfigured directories and never falls back to the repository root. Directory paths are execution locations, not a sandbox. An uncertain save must be re-read before retrying; an explicitly created empty directory may survive a failed database commit.',
+      description: 'PM business authorization and document/storage metadata only; these routes never resolve an Agent execution directory or allocate chat scratch. Real membership/domain.read filters contexts, including empty projects. Host path visibility requires unrestricted access.manage; configuration additionally requires planning.edit. Saves use trusted LocalDirectory rules and revision CAS and never move PM data. Agent folders are selected independently through the authenticated Agent directory service. An uncertain save must be re-read before retrying.',
       ...(input ? { requestBody: { required: true, content: { 'application/json': { schema: z.toJSONSchema(input, { io: 'input', target: 'draft-2020-12' }) } } } } : {}),
       responses: { 200: { description: 'Current authorized context or saved directory mapping. Private, no-store.', content: { 'application/json': { schema } } }, ...failures },
     };
@@ -25,6 +25,6 @@ export function agentFileAreaPaths(): Record<string, Record<string, unknown>> {
     },
     '/api/v1/workspaces/{workspaceId}/agent-file-area': { put: endpoint('saveWorkspaceAgentFileArea', agentFileAreaResponseSchema, [workspace], agentFileAreaUpdateSchema) },
     '/api/v1/workspaces/{workspaceId}/projects/{projectId}/agent-file-area': { put: endpoint('saveProjectAgentFileArea', agentFileAreaResponseSchema, [workspace, project], agentFileAreaUpdateSchema) },
-    '/api/v1/agent-contexts/resolve': { post: endpoint('resolveAgentContext', resolvedAgentContextSchema, [], agentScopeSchema) },
+    '/api/v1/agent-contexts/authorize': { post: endpoint('authorizeAgentContext', authorizedAgentContextSchema, [], agentScopeSchema) },
   };
 }

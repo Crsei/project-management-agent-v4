@@ -19,7 +19,8 @@ import { providerBoundaryError } from "./config-mapping.ts";
 import { makePmProviderPlatformLayer } from "./host-runtime.ts";
 import { getStoredInstance, providerDataDirectory } from "../instances.ts";
 import { sanitizeProviderMessage } from "../catalog.ts";
-import type { AgentScope } from "@agent-workspace/contracts/chat";
+import type { ExecutionEnvironment } from "@agent-workspace/contracts/chat";
+import { sameExecutionIdentity } from "../../durable/agent-execution.ts";
 import { ProviderAuthSessionInvalidation } from "../../../../../../vendor/t3code/apps/server/src/provider/ProviderAuthService.ts";
 import { listRecords, readRecord } from "../../durable/store.ts";
 import type { ChatGeneration } from "../../durable/chat-runtime.ts";
@@ -52,7 +53,7 @@ export type PmProviderInstallationMethods = {
 };
 export type PmProviderManagement = Pick<NativeProviderAdapter, "check" | "authenticate" | "logout" | "prepare" | "update" | "removeInstallation"> & {
   readonly shutdown: () => Promise<void>;
-  readonly refreshSkills: (context: ProviderDriverContext, scope: AgentScope, actorId: string | undefined, fresh?: boolean, signal?: AbortSignal) => Promise<ProviderSkillsSnapshot>;
+  readonly refreshSkills: (context: ProviderDriverContext, environment: ExecutionEnvironment, threadId?: string, fresh?: boolean, signal?: AbortSignal) => Promise<ProviderSkillsSnapshot>;
 };
 export type PmProviderCapabilitiesProjector = (input: {
   readonly context: ProviderDriverContext;
@@ -323,8 +324,12 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
   };
   return {
     shutdown,
-    refreshSkills: async (context, scope, actorId, fresh = false, signal) => {
-      const key = JSON.stringify([context.instanceId, context.revision, context.cwd, actorId ?? null, scope.workspaceId, scope.projectId]);
+    refreshSkills: async (context, environment, threadId, fresh = false, signal) => {
+      const key = JSON.stringify([context.instanceId, context.revision, context.cwd, environment, threadId ?? null]);
+      const matchesExecution = (item: ChatGeneration) => (!threadId || item.threadId === threadId) &&
+        item.status === "running" && item.providerInstanceId === context.instanceId &&
+        item.providerInstanceRevision === context.revision && item.executionSnapshot?.path === context.cwd &&
+        sameExecutionIdentity(item.executionSnapshot.environment, environment);
       const previous = skillSnapshots.get(key);
       const configurationChange = skillChanges.get(context.instanceId);
       const withConfiguration = (snapshot: ProviderSkillsSnapshot): ProviderSkillsSnapshot =>
@@ -345,11 +350,7 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
         return withConfiguration(cached);
       }
       if (context.driver === "opencode") {
-        const active = actorId && listRecords<ChatGeneration>("chat:generations").find(item =>
-          item.status === "running" && item.providerInstanceId === context.instanceId &&
-          item.providerInstanceRevision === context.revision && item.executionSnapshot?.path === context.cwd &&
-          item.executionSnapshot.actorId === actorId && item.executionSnapshot.scope.workspaceId === scope.workspaceId &&
-          item.executionSnapshot.scope.projectId === scope.projectId &&
+        const active = listRecords<ChatGeneration>("chat:generations").find(item => matchesExecution(item) &&
           liveOpenCodeInventory(context.instanceId, item.threadId, item.id, context.cwd));
         if (!active) return withConfiguration({ instanceId: context.instanceId, revision: context.revision, cwd: context.cwd,
           checkedAt: previous?.checkedAt ?? new Date().toISOString(), pending: true, skills: previous?.skills ?? [], commands: previous?.commands ?? [],
@@ -369,11 +370,7 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
           if ((fresh || configurationChange) && lease.instance.invalidateCaches) yield* lease.instance.invalidateCaches;
           if (!lease.instance.snapshotForCwd) {
             const machine = yield* lease.instance.snapshot.getSnapshot;
-            const generation = actorId && listRecords<ChatGeneration>("chat:generations").find(item =>
-              item.status === "running" && item.providerInstanceId === context.instanceId &&
-              item.providerInstanceRevision === context.revision && item.executionSnapshot?.path === context.cwd &&
-              item.executionSnapshot.actorId === actorId && item.executionSnapshot.scope.workspaceId === scope.workspaceId &&
-              item.executionSnapshot.scope.projectId === scope.projectId &&
+            const generation = listRecords<ChatGeneration>("chat:generations").find(item => matchesExecution(item) &&
               liveAcpWorkspace(context.instanceId, item.threadId, item.id, context.cwd));
             const read = generation ? liveAcpWorkspace(context.instanceId, generation.threadId, generation.id, context.cwd) : undefined;
             const advertised = read?.();
@@ -382,8 +379,7 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
               const latest = readRecord<ChatGeneration>("chat:generations", generation.id);
               if (!latest || latest.status !== "running" || latest.providerInstanceRevision !== context.revision ||
                   liveAcpWorkspace(context.instanceId, generation.threadId, generation.id, context.cwd) !== read ||
-                  latest.executionSnapshot?.actorId !== actorId || latest.executionSnapshot.path !== context.cwd ||
-                  latest.executionSnapshot.scope.workspaceId !== scope.workspaceId || latest.executionSnapshot.scope.projectId !== scope.projectId)
+                  !matchesExecution(latest))
                 return yield* Effect.fail(providerBoundaryError("Native Chat session changed during workspace discovery.", "session_mismatch", 409));
               const inventory = normalizeAcpRegistryCommands(advertised);
               return { ...base, pending: false, skills: inventory.skills, commands: inventory.slashCommands,
@@ -399,11 +395,7 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
           // Reuse only the native connection already admitted for this exact live Chat.
           // Starting a separate OpenCode server for discovery could execute project plugins/MCP.
           if (context.driver === "opencode") {
-            const generation = actorId && listRecords<ChatGeneration>("chat:generations").find(item =>
-              item.status === "running" && item.providerInstanceId === context.instanceId &&
-              item.providerInstanceRevision === context.revision && item.executionSnapshot?.path === context.cwd &&
-              item.executionSnapshot.actorId === actorId && item.executionSnapshot.scope.workspaceId === scope.workspaceId &&
-              item.executionSnapshot.scope.projectId === scope.projectId);
+            const generation = listRecords<ChatGeneration>("chat:generations").find(matchesExecution);
             const read = generation && liveOpenCodeInventory(context.instanceId, generation.threadId, generation.id, context.cwd);
             if (!generation || !read) {
               yield* lease.assertCurrent;
@@ -415,8 +407,7 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
             const latest = readRecord<ChatGeneration>("chat:generations", generation.id);
             if (!latest || latest.status !== "running" || latest.providerInstanceRevision !== context.revision ||
                 liveOpenCodeInventory(context.instanceId, generation.threadId, generation.id, context.cwd) !== read ||
-                latest.executionSnapshot?.actorId !== actorId || latest.executionSnapshot.path !== context.cwd ||
-                latest.executionSnapshot.scope.workspaceId !== scope.workspaceId || latest.executionSnapshot.scope.projectId !== scope.projectId)
+                !matchesExecution(latest))
               return yield* Effect.fail(providerBoundaryError("Native Chat session changed during workspace discovery.", "session_mismatch", 409));
             if (scanned._tag === "Failure") {
               const current = getStoredInstance(context.instanceId);
@@ -427,12 +418,8 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
             return { ...base, pending: scanned.success.pending ?? false, skills: scanned.success.skills,
               commands: scanned.success.pending && previous ? previous.commands : scanned.success.commands };
           }
-          if (context.driver === "pi" && actorId) {
-            const generation = listRecords<ChatGeneration>("chat:generations").find(item =>
-              item.status === "running" && item.providerInstanceId === context.instanceId &&
-              item.providerInstanceRevision === context.revision && item.executionSnapshot?.path === context.cwd &&
-              item.executionSnapshot.actorId === actorId && item.executionSnapshot.scope.workspaceId === scope.workspaceId &&
-              item.executionSnapshot.scope.projectId === scope.projectId &&
+          if (context.driver === "pi") {
+            const generation = listRecords<ChatGeneration>("chat:generations").find(item => matchesExecution(item) &&
               livePiWorkspace(context.instanceId, item.threadId, item.id, context.cwd));
             const read = generation && livePiWorkspace(context.instanceId, generation.threadId, generation.id, context.cwd);
             if (generation && read) {
@@ -441,8 +428,7 @@ export function makePmProviderManagement(host: PmProviderHostService, options: {
               const latest = readRecord<ChatGeneration>("chat:generations", generation.id);
               if (!latest || latest.status !== "running" || latest.providerInstanceRevision !== context.revision ||
                   livePiWorkspace(context.instanceId, generation.threadId, generation.id, context.cwd) !== read ||
-                  latest.executionSnapshot?.actorId !== actorId || latest.executionSnapshot.path !== context.cwd ||
-                  latest.executionSnapshot.scope.workspaceId !== scope.workspaceId || latest.executionSnapshot.scope.projectId !== scope.projectId)
+                  !matchesExecution(latest))
                 return yield* Effect.fail(providerBoundaryError("Native Chat session changed during workspace discovery.", "session_mismatch", 409));
               if (scanned._tag === "Failure") {
                 const current = getStoredInstance(context.instanceId);

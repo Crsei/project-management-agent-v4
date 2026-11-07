@@ -34,7 +34,7 @@ test("native runtime forwards cumulative usage without interfering with text and
     };
     const events: NativeUsageUpdate[] = [];
     let text = "";
-    const result = await runNativeRuntime(runtime, { prompt: "fixture", onText: delta => { text += delta; }, onUsage: event => events.push(event) });
+    const result = await runNativeRuntime(runtime, { prompt: "fixture", cwd: directory, onText: delta => { text += delta; }, onUsage: event => events.push(event) });
     assert.equal(result.text, "native output");
     assert.equal(text, "native output");
     assert.deepEqual(events, [update, update, { limits: { windows: [session] } }, { limits: { windows: [weekly] } }]);
@@ -42,7 +42,7 @@ test("native runtime forwards cumulative usage without interfering with text and
     assert.deepEqual(windows?.find(window => window.id === "session"), session);
     assert.deepEqual(windows?.find(window => window.id === "weekly"), weekly);
     const failure = new Error("usage consumer failed");
-    await assert.rejects(runNativeRuntime(runtime, { prompt: "fixture", onUsage: () => { throw failure; } }), error => error === failure);
+    await assert.rejects(runNativeRuntime(runtime, { prompt: "fixture", cwd: directory, onUsage: () => { throw failure; } }), error => error === failure);
   } finally {
     Object.assign(codexAdapter, original);
     if (previousDirectory === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR;

@@ -126,6 +126,8 @@ describe('durable selected notifications through real core, SQL commands and rea
   assert.equal(await readFile(rawPath,'utf8'),raw);
   const facts=await f.pool.query('SELECT fact_id,after_revision FROM service_fact_events WHERE source_kind=\'core_http\' AND entity_id=$1',[entry.captured.fact.entityId]);assert.deepEqual(facts.rows,[{fact_id:entry.captured.fact.factId,after_revision:entry.captured.fact.afterRevision}]);
   assert.equal((await f.pool.query('SELECT 1 FROM service_fact_events WHERE source_kind=\'core_observation\' AND entity_id=$1',[entry.captured.fact.entityId])).rows.length,0);
+  const history=await f.pool.query<{change_id:string;before_snapshot:null;after_snapshot:{raw:string}}>('SELECT change_id,before_snapshot,after_snapshot FROM change_history_entries WHERE workspace_id=$1 AND change_id=$2',[f.workspaceId,entry.captured.fact.factId]);
+  assert.equal(history.rows.length,1);assert.equal(history.rows[0]!.before_snapshot,null);assert.equal(history.rows[0]!.after_snapshot.raw,raw);
  });
  it('imports only a real observed offline A-to-C difference, with unknown author/time and no mention expansion', { timeout: 180_000 }, async t=>{
   const f=await createDashboardFixture({ signal: t.signal });t.after(()=>f.close());const {task,project}=await setup(f),member=await f.member('Observation watcher');await grant(f,member.user.id,project.id);

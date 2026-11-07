@@ -8,7 +8,7 @@ import { relationFields } from '../pm-schema/relations.ts';
 import { applyView, groupChange } from '../pm-schema/query.ts';
 import type { GraphQuery } from '../pm-schema/graph.ts';
 import { KnowledgeGraph } from './KnowledgeGraph.tsx';
-import { RadixSelect } from './RadixSelect.tsx';
+import { CompactSelect as RadixSelect } from "@pm/ui/radix/compact-select";
 import { documentKindLabels } from './document-kind.ts';
 export { documentKindLabels };
 import type { GraphSource } from './KnowledgeGraph.tsx';
@@ -30,7 +30,7 @@ export type ArchiveFilter = 'exclude' | 'include' | 'only';
 export type ContextMenuAction = { id: string; label: string; disabled?: boolean; reason?: string; destructive?: boolean; separatorBefore?: boolean; onSelect: () => void };
 export type ContextMenuRenderer = (trigger: React.ReactElement, actions: ContextMenuAction[], file?: FileRecord) => React.ReactNode;
 export function matchesArchive(file: FileRecord, filter: ArchiveFilter = 'exclude') { return filter === 'include' || (filter === 'only' ? !!file.entity.archived : !file.entity.archived); }
-export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; renderContextMenu?: ContextMenuRenderer; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null; en?: boolean };
+export type ViewProps = { files: FileRecord[]; allFiles?: FileRecord[]; config: ViewConfig; configuration?: ProtocolConfiguration; archiveFilter?: ArchiveFilter; selectedId?: string; draftIds?: Set<string>; onSelect: (id: string) => void; onInspect?: (id: string) => void; onOpenPage?: (id: string) => void; onPatch: (id: string, changes: Record<string, unknown>) => Promise<void>; canEdit: (id: string, changes?: Record<string, unknown>) => boolean; canLifecycle?: (id: string) => boolean; onLifecycle?: (id: string, action: 'archive' | 'restore') => void; onRequestDelete?: (id: string) => void; onCreate?: (status: Status, origin: ViewConfig) => void; onMove?: (id: string, direction: -1 | 1) => void; renderContextMenu?: ContextMenuRenderer; renderItemAdornment?: (file: FileRecord) => React.ReactNode; embedded?: boolean; graphSource?: GraphSource; graphQuery?: GraphQuery; graphRefreshKey?: unknown; graphScopeTarget?: HTMLElement | null; graphToggleTarget?: HTMLElement | null; en?: boolean };
 
 export function filterFiles(files: FileRecord[], config: ViewConfig, search = '', archiveFilter: ArchiveFilter = 'exclude', configuration = defaultConfiguration) { return applyView(files, config, { search, archived: archiveFilter, configuration }); }
 export function unresolvedBlockers(file: FileRecord, files: FileRecord[], configuration = defaultConfiguration) { return file.entity.blocked_by.filter(id => { const entity = files.find(f => f.id === id)?.entity; const category = entity && statusCategory(entity, configuration); return category !== 'completed' && category !== 'canceled'; }); }
@@ -116,6 +116,7 @@ function TaskCard({ file, props, draggable, groupId, groups, onGroup, landed }: 
     <button className="card-title" title={file.entity.title} onClick={selectCard}>{file.entity.title}</button>
     <div className="card-bottom">
       <span className="card-id mono">{file.id}</span>
+      {props.renderItemAdornment?.(file)}
       {file.entity.entity === 'work_item' && <PriorityIcon priority={file.entity.priority} en={props.en} />}
       {file.entity.due && <span className="card-due" title={`${props.en === false ? '截止日期' : 'Due date'} ${file.entity.due}`}><CalendarDays size={12} aria-hidden="true" />{file.entity.due.length > 7 ? file.entity.due.slice(5) : file.entity.due}</span>}
       {blocked.length > 0 && <span className="blocked-badge" title={`Blocked by ${blocked.join(', ')}`}><LockKeyhole size={11} />{blocked.length}</span>}
@@ -180,7 +181,7 @@ function Table(props: ViewProps) {
     const configured = props.config.columns || ['status', 'priority', 'assignee', 'blocked_by', ...(props.configuration?.custom_fields.filter(field => !props.config.entity || field.entities.includes(props.config.entity)).map(field => field.name) || [])];
     const names = !props.config.project && !configured.includes('project') ? ['project', ...configured] : configured;
     return [
-      { id: 'item', header: props.config.entity === 'document' ? (props.en === false ? '文档名称' : 'Document') : 'Entity', cell: ({ row: { original: file } }) => <><button className="table-title" onClick={() => props.onSelect(file.id)}>{file.entity.entity === 'document' ? <><strong>{file.entity.title}</strong><span className="mono">{file.id}</span></> : <><span className="mono">{file.id}</span><strong>{file.entity.title}</strong></>}{props.draftIds?.has(file.id) && <span className="draft-pill">Draft</span>}</button><MoveControls file={file} props={props} /></> },
+      { id: 'item', header: props.config.entity === 'document' ? (props.en === false ? '文档名称' : 'Document') : 'Entity', cell: ({ row: { original: file } }) => <><button className="table-title" onClick={() => props.onSelect(file.id)}>{file.entity.entity === 'document' ? <><strong>{file.entity.title}</strong><span className="mono">{file.id}</span></> : <><span className="mono">{file.id}</span><strong>{file.entity.title}</strong></>}{props.draftIds?.has(file.id) && <span className="draft-pill">Draft</span>}</button>{props.renderItemAdornment?.(file)}<MoveControls file={file} props={props} /></> },
       ...names.filter(name => name !== 'title' && name !== 'id').map((name): ColumnDef<FileRecord> => ({ id: name, header: props.config.entity === 'document' && name === 'document_kind' ? (props.en === false ? '类型' : 'Type') : props.config.entity === 'document' && name === 'project' ? (props.en === false ? '项目' : 'Project') : props.configuration?.custom_fields.find(field => field.name === name)?.label || name.replaceAll('_', ' '), cell: ({ row: { original: file } }) => {
         if (name === 'document_kind') return <span className="muted">{documentKindLabels[String(file.entity.document_kind ?? 'note')]?.[props.en === false ? 'zh' : 'en'] ?? String(file.entity.document_kind ?? '—')}</span>;
         if (name === 'project' && file.entity.entity === 'document') {

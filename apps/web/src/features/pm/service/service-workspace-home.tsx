@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { ApiError as PmApiError, type ChangeNotification } from '@contracts';
+import { ApiError as PmApiError } from '@contracts';
 import { workflowFor, type FileRecord } from '@pm-schema';
 import { ArrowDown, ArrowRight, ArrowUpRight, CalendarDays, CheckCheck, CircleCheck, CircleDashed, Clock3, FolderKanban, FolderPlus, History, Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,9 @@ import { useWorkspaceStore } from '@/providers/app-providers';
 import { ApiError as CoreApiError } from '../markdown/api';
 import { CoreSessionProvider, useCoreSession, useSessionDrafts } from '../markdown/session';
 import { useTaskScopeClock } from '../markdown/task-scope-clock';
-import { usePersonalDashboard, usePmChanges, usePmService, usePrivateQuery } from './pm-service';
+import { actionLabels } from './activity-action-labels';
+import { useWorkspaceActivity } from './pm-activity-hooks';
+import { usePersonalDashboard, usePmService, usePrivateQuery } from './pm-service';
 import { allowed, ServiceGuard, useText } from './pm-ui';
 import { usePmNoticeCenter } from './pm-notice-center';
 import { teamTaskCreateProjectProblem } from './team-task-actions-model';
@@ -47,12 +49,14 @@ function WorkspaceHomeContent() {
     }
   });
   const personal = usePersonalDashboard();
-  const changes = usePmChanges();
+  // Same merged audit/change snapshot as the Activity page, bounded to the newest
+  // seven per project: enough to derive a correct workspace-wide top seven.
+  const activity = useWorkspaceActivity({ recentLimit: 7 });
   const profile = !personal.error && personal.data && personal.data.profile.userId === actor?.id ? personal.data.profile : undefined;
   const today = useTaskScopeClock(profile?.timeZone, personal.dataUpdatedAt);
   const model = useMemo(() => core.data && actor && workspace ? workspaceHomeModel(core.data, actor.id, workspace.projectIds, today) : null, [core.data, actor, workspace, today]);
   const filesById = useMemo(() => new Map(core.data?.files.map(file => [file.id, file])), [core.data]);
-  const recent = useMemo(() => [...(changes.data || [])].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt) || b.eventId.localeCompare(a.eventId)).slice(0, 7), [changes.data]);
+  const recent = activity.entries.slice(0, 7);
   const [tab, setTab] = useState<HomeTaskTab>('todo');
   const [allMine, setAllMine] = useState(false);
   const [allDeadlines, setAllDeadlines] = useState({ today: false, tomorrow: false, week: false });
@@ -149,11 +153,13 @@ function WorkspaceHomeContent() {
           </section>
           <section className={styles.panel} aria-labelledby="home-activity">
             <div className={styles.panelHeader}><h2 id="home-activity">{t('最近动态', 'Recent activity')}</h2><Link className={styles.panelLink} to={`${root}/notifications`}>{t('查看全部', 'View all')}<ArrowRight size={13} aria-hidden="true" /></Link></div>
-            <div className={styles.activityBody}><HomeReadNotice label={t('最近动态', 'Recent activity')} pending={changes.isPending} error={changes.error} stale={!!changes.data} retry={() => { void changes.refetch(); }} />{changes.data && (recent.length ? <ol data-pm-stagger className={styles.activityList}>{recent.map(event => {
-              const file = filesById.get(event.aggregateId);
-              const href = file?.entity.entity === 'project' ? `${root}/projects/${encodeURIComponent(file.id)}?${new URLSearchParams({ returnTo })}` : file?.entity.entity === 'work_item' && file.entity.project ? taskHref(file) : null;
-              return <li key={event.eventId}><span className={styles.activityIcon}><History size={13} aria-hidden="true" /></span><div className={styles.activityMain}><span className={styles.eventType}>{event.eventType}</span>{href ? <Link to={href} state={{ returnTo }}>{file?.entity.title || event.aggregateId}</Link> : <span>{event.aggregateKind} · {event.aggregateId}</span>}<ActivityTime event={event} timeZone={profile?.timeZone} locale={locale} /></div></li>;
-            })}</ol> : <div className={styles.empty}><History size={24} aria-hidden="true" /><strong>{t('暂无服务动态', 'No service activity')}</strong></div>)}</div>
+            <div className={styles.activityBody}><HomeReadNotice label={t('最近动态', 'Recent activity')} pending={activity.isPending} error={activity.error} stale={recent.length > 0} retry={activity.refetch} />{!activity.isPending && (recent.length ? <ol data-pm-stagger className={styles.activityList}>{recent.map(entry => {
+              const action = actionLabels[entry.action];
+              const verb = action ? t(action[0], action[1]) : entry.category === 'status' ? t('更改了状态，位于', 'changed the status of') : t('记录了动态，位于', 'recorded activity on');
+              const name = entry.actorId !== null && entry.actorId === actor.id ? t('你', 'You') : entry.actorName || t('未知操作者', 'Someone');
+              const title = entry.targetTitle || entry.targetId || t('未知对象', 'Unknown target');
+              return <li key={entry.id} data-activity-source={entry.source}><span className={styles.activityIcon}><History size={13} aria-hidden="true" /></span><div className={styles.activityMain}><span className={styles.eventType} title={entry.action}>{name} {verb}</span>{entry.href ? <Link to={entry.href} state={{ returnTo }}>{title}</Link> : <span>{title}</span>}<ActivityTime occurredAt={entry.occurredAt} timeZone={profile?.timeZone} locale={locale} /></div></li>;
+            })}</ol> : <div className={styles.empty}><History size={24} aria-hidden="true" /><strong>{t('暂无可见动态', 'No activity yet')}</strong></div>)}</div>
           </section>
         </div>
       </div>
@@ -175,8 +181,8 @@ function HomeReadNotice({ label, pending, error, stale, retry }: { label: string
   return null;
 }
 
-function ActivityTime({ event, timeZone, locale }: { event: ChangeNotification; timeZone: string | undefined; locale: string }) {
+function ActivityTime({ occurredAt, timeZone, locale }: { occurredAt: string; timeZone: string | undefined; locale: string }) {
   const t = useText();
   if (!timeZone) return <span className={styles.activityTime}>{t('正在等待个人时区', 'Waiting for your time zone')}</span>;
-  return <time className={styles.activityTime} dateTime={event.occurredAt}>{new Intl.DateTimeFormat(locale, { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(event.occurredAt))}</time>;
+  return <time className={styles.activityTime} dateTime={occurredAt}>{new Intl.DateTimeFormat(locale, { timeZone, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(occurredAt))}</time>;
 }

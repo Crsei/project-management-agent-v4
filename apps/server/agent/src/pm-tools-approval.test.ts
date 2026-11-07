@@ -13,6 +13,7 @@ import { ensureThread } from "./durable/threads.ts";
 import { openPmToolBridge, pmToolRoutes } from "./pm-tools.ts";
 
 const workspaceId = randomUUID();
+const actorId = randomUUID(), target = { workspaceId, projectId: null };
 const fileArea = { path: null, status: "unconfigured" as const, revision: 0, source: null, canManage: false };
 const headers = { cookie: "pm_v4_session=fixture" };
 
@@ -32,6 +33,12 @@ async function fixture(mode: () => "success" | "unknown") {
     }
     let text = ""; for await (const chunk of req) text += String(chunk);
     const body = JSON.parse(text) as PmCall & { messageId: string; generationId: string };
+    if (url.pathname === "/api/v1/agent-contexts/authorize") {
+      const scope = body as unknown as { workspaceId: string; projectId: string | null };
+      res.setHeader("content-type", "application/json");
+      if (scope.workspaceId !== workspaceId) { res.writeHead(403).end(JSON.stringify({ error: "forbidden" })); return; }
+      res.end(JSON.stringify({ actorId, scope })); return;
+    }
     assert.ok(url.pathname.endsWith("/agent-tools/call"));
     calls.push({ operationId: body.operationId, name: body.name, arguments: body.arguments, threadId: body.threadId });
     if (mode() === "unknown") { req.socket.destroy(); return; }
@@ -40,7 +47,7 @@ async function fixture(mode: () => "success" | "unknown") {
       operationId: body.operationId, name: body.name, status: "succeeded",
       result: { kind: "task", items: [], nextCursor: null, truncated: false, sources: [] },
       error: null, threadId: body.threadId, messageId: body.messageId, generationId: body.generationId,
-      workspaceId, createdAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
+      workspaceId, target, actorId, createdAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
     }));
   });
   const listening = Promise.withResolvers<void>();
@@ -66,18 +73,18 @@ test("destructive PM tools wait for approval and execute the original request on
   const { calls, close } = await fixture(() => "success");
   const generationId = randomUUID();
   initializeNativeOutput(generationId, "approval-thread", "running");
-  ensureThread("approval-thread", "Approval", { workspaceId, projectId: null });
-  ensureThread("other-thread", "Other", { workspaceId, projectId: null });
+  ensureThread("approval-thread", "Approval");
+  ensureThread("other-thread", "Other");
   let live = true;
   const authorizeExecution = async () => { if (!live) throw new Error("Native generation authorization is no longer live"); };
-  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId: "approval-thread", messageId: "approval-message", generationId, headers: new Headers(headers), authorizeExecution });
+  const bridge = await openPmToolBridge({ threadId: "approval-thread", messageId: "approval-message", generationId, headers: new Headers(headers), authorizeExecution });
   const send = async (input: unknown) => {
     const response = await fetch(`${bridge.url}/tools/call`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
     return { status: response.status, body: await response.json() as PmToolCallRecord };
   };
   try {
     const operationId = randomUUID();
-    const input = { operationId, name: "pm_archive_task", arguments: { id: "TASK-1", revision: "rev-1" } };
+    const input = { operationId, name: "pm_archive_task", target, arguments: { id: "TASK-1", revision: "rev-1" } };
     const pending = await send(input);
     assert.equal(pending.status, 200);
     assert.equal(pending.body.status, "pending_approval");
@@ -87,7 +94,7 @@ test("destructive PM tools wait for approval and execute the original request on
     live = false;
 
     const repeated = await send(input);
-    assert.deepEqual(repeated.body, pending.body);
+    assert.equal(repeated.status, 400, "a stopped generation cannot retrieve a pending PM operation");
     assert.equal(calls.length, 0);
 
     const conflict = await send({ ...input, arguments: { id: "TASK-1", revision: "rev-2" } });
@@ -103,17 +110,20 @@ test("destructive PM tools wait for approval and execute the original request on
     assert.deepEqual((await other.json() as { items: PmToolCallRecord[] }).items, []);
 
     const foreignWorkspaceId = randomUUID(), foreignId = randomUUID();
-    ensureThread("foreign-thread", "Foreign", { workspaceId: foreignWorkspaceId, projectId: null });
+    ensureThread("foreign-thread", "Foreign");
     writeRecord("pm-tool-calls", foreignId, {
       record: {
-        operationId: foreignId, name: "pm_archive_task", status: "pending_approval", result: null, error: null,
+        operationId: foreignId, name: "pm_archive_task", status: "unknown", result: null, error: { code: "outcome_unknown", message: "Historical interrupted write" },
         threadId: "foreign-thread", messageId: "m", generationId: "g", workspaceId: foreignWorkspaceId,
         createdAt: new Date().toISOString(), finishedAt: null,
       },
       request: { operationId: foreignId, name: "pm_archive_task", arguments: { id: "TASK-9", revision: "rev-1" }, scope: { kind: "workspace", projectIds: [] }, threadId: "foreign-thread", messageId: "m", generationId: "g" },
     });
-    assert.equal((await pmToolRoutes.request("http://localhost/pm-tools/threads/foreign-thread/calls", { headers })).status, 403);
-    assert.equal((await pmToolRoutes.request(`http://localhost/pm-tools/calls/${foreignId}/approve`, { method: "POST", headers })).status, 403);
+    assert.equal((await pmToolRoutes.request("http://localhost/pm-tools/threads/foreign-thread/calls", { headers })).status, 409);
+    assert.equal((await pmToolRoutes.request(`http://localhost/pm-tools/calls/${foreignId}/approve`, { method: "POST", headers })).status, 409);
+    assert.equal((await pmToolRoutes.request(`http://localhost/pm-tools/calls/${foreignId}/reconcile`, { method: "POST", headers })).status, 409,
+      "a historical unknown write without an explicit target must never be upgraded or replayed");
+    assert.equal((await send({ ...input, operationId: foreignId })).status, 400);
     assert.equal(calls.length, 0);
 
     const approved = await pmToolRoutes.request(`http://localhost/pm-tools/calls/${operationId}/approve`, { method: "POST", headers });
@@ -130,7 +140,7 @@ test("destructive PM tools wait for approval and execute the original request on
 
     live = true;
     const rejectedId = randomUUID();
-    const rejectedPending = await send({ operationId: rejectedId, name: "pm_delete_task", arguments: { id: "TASK-2", revision: "rev-1" } });
+    const rejectedPending = await send({ operationId: rejectedId, name: "pm_delete_task", target, arguments: { id: "TASK-2", revision: "rev-1" } });
     assert.equal(rejectedPending.body.status, "pending_approval");
     const rejected = await pmToolRoutes.request(`http://localhost/pm-tools/calls/${rejectedId}/reject`, { method: "POST", headers });
     assert.equal(rejected.status, 200);
@@ -143,7 +153,7 @@ test("destructive PM tools wait for approval and execute the original request on
     assert.equal(calls.length, 1);
 
     const directId = randomUUID();
-    const direct = await send({ operationId: directId, name: "pm_create_task", arguments: { projectId: "PRJ-1", title: "Direct" } });
+    const direct = await send({ operationId: directId, name: "pm_create_task", target, arguments: { projectId: "PRJ-1", title: "Direct" } });
     assert.equal(direct.body.status, "succeeded");
     assert.equal(calls.length, 2);
     assert.equal(calls[1]?.operationId, directId);
@@ -153,15 +163,41 @@ test("destructive PM tools wait for approval and execute the original request on
   }
 });
 
+test("auto-approve dispatches destructive PM tools without waiting for a human decision", async () => {
+  const previousMode = process.env.AGENT_APPROVAL_MODE;
+  process.env.AGENT_APPROVAL_MODE = "auto-approve";
+  const { calls, close } = await fixture(() => "success");
+  const generationId = randomUUID();
+  initializeNativeOutput(generationId, "auto-thread", "running");
+  ensureThread("auto-thread", "Auto");
+  const bridge = await openPmToolBridge({ threadId: "auto-thread", messageId: "auto-message", generationId, headers: new Headers(headers), authorizeExecution: async () => {} });
+  try {
+    const operationId = randomUUID();
+    const response = await fetch(`${bridge.url}/tools/call`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operationId, name: "pm_delete_task", target, arguments: { id: "TASK-4", revision: "rev-1" } }) });
+    assert.equal(response.status, 200);
+    const record = await response.json() as PmToolCallRecord;
+    assert.equal(record.status, "succeeded");
+    assert.equal(record.error, null);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0], { operationId, name: "pm_delete_task", arguments: { id: "TASK-4", revision: "rev-1" }, threadId: "auto-thread" });
+    const listed = await pmToolRoutes.request("http://localhost/pm-tools/threads/auto-thread/calls", { headers });
+    assert.deepEqual((await listed.json() as { items: PmToolCallRecord[] }).items.map((item) => [item.operationId, item.status]), [[operationId, "succeeded"]]);
+  } finally {
+    await bridge.close();
+    await close();
+    if (previousMode === undefined) delete process.env.AGENT_APPROVAL_MODE; else process.env.AGENT_APPROVAL_MODE = previousMode;
+  }
+});
+
 test("an unknown PM outcome after approval stays unknown and is never redispatched", async () => {
   const { calls, close } = await fixture(() => "unknown");
   const generationId = randomUUID();
   initializeNativeOutput(generationId, "unknown-thread", "running");
-  ensureThread("unknown-thread", "Unknown", { workspaceId, projectId: null });
-  const bridge = await openPmToolBridge({ scope: { workspaceId, projectId: null }, threadId: "unknown-thread", messageId: "unknown-message", generationId, headers: new Headers(headers), authorizeExecution: async () => {} });
+  ensureThread("unknown-thread", "Unknown");
+  const bridge = await openPmToolBridge({ threadId: "unknown-thread", messageId: "unknown-message", generationId, headers: new Headers(headers), authorizeExecution: async () => {} });
   try {
     const operationId = randomUUID();
-    const created = await fetch(`${bridge.url}/tools/call`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operationId, name: "pm_transition_task", arguments: { id: "TASK-3", revision: "rev-1", status: "done" } }) });
+    const created = await fetch(`${bridge.url}/tools/call`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ operationId, name: "pm_transition_task", target, arguments: { id: "TASK-3", revision: "rev-1", status: "done" } }) });
     assert.equal((await created.json() as PmToolCallRecord).status, "pending_approval");
     assert.equal(calls.length, 0);
 

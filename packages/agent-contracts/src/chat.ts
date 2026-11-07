@@ -3,6 +3,9 @@ import { responseStreamingModeSchema } from "./output.ts";
 import { pmReferenceInputSchema } from "./pm-references.ts";
 import type { PmReferenceResolution } from "./pm-references.ts";
 import type { ProviderOptionSelection } from "./provider.ts";
+export { agentWorkspaceSchema, executionSelectionSchema, executionEnvironmentSchema, chatOnlyExecutionSelection } from "./execution.ts";
+export type { AgentWorkspace, ExecutionSelection, ExecutionEnvironment } from "./execution.ts";
+import { executionSelectionSchema, type ExecutionSelection, type ExecutionEnvironment } from "./execution.ts";
 
 export const providerOptionSelectionSchema = z.object({
   id: z.string().trim().min(1).max(256),
@@ -10,23 +13,10 @@ export const providerOptionSelectionSchema = z.object({
 }).strict();
 export const interactionModeSchema = z.enum(["default", "plan"]);
 
-export const agentScopeSchema = z.object({
-  workspaceId: z.string().trim().min(1).max(256),
-  projectId: z.string().trim().min(1).max(256).nullable(),
-});
-export type AgentScope = z.infer<typeof agentScopeSchema>;
-/** A thread may be bound to one PM issue; both identifiers are IDs only, never bodies or credentials. */
-export const pmContextSchema = z
-  .strictObject({
-    taskId: z.string().trim().min(1).max(200).nullable().default(null),
-    entityId: z.string().trim().min(1).max(200).nullable().default(null),
-  });
-export type PmContext = z.infer<typeof pmContextSchema>;
 export const createThreadSchema = z.object({
   id: z.string().min(1).max(256),
-  scope: agentScopeSchema.optional(),
-  pmContext: pmContextSchema.nullable().optional(),
-});
+  executionSelection: executionSelectionSchema,
+}).strict();
 
 export const threadSettingsSchema = z.object({
   providerInstanceId: z.string().trim().min(1).max(256),
@@ -86,8 +76,8 @@ export const threadPatchSchema = z.object({
   custom: z.record(z.string(), z.unknown()).optional(),
   settings: threadSettingsSchema.optional(),
   revision: z.number().int().nonnegative().optional(),
-  pmContext: pmContextSchema.nullable().optional(),
-});
+  executionSelection: executionSelectionSchema.optional(),
+}).strict();
 export const threadSidebarActionSchema = z.object({
   action: z.enum(["pin", "unpin", "settle", "unsettle", "snooze", "wake", "auto-settle", "mark-unread", "visit"]),
   revision: z.number().int().nonnegative(),
@@ -114,28 +104,6 @@ export type ThreadSidebar = {
   canSnooze: boolean;
 };
 
-export const importBodySchema = z.object({
-  migrationId: z.string().min(1).max(256),
-  threads: z
-    .array(
-      z.object({
-        remoteId: z.string().min(1).max(256),
-        title: z.string().max(200).optional(),
-        status: z.enum(["regular", "archived"]).optional(),
-        custom: z.record(z.string(), z.unknown()).optional(),
-        settings: threadSettingsSchema.optional(),
-        histories: z
-          .array(
-            z.object({
-              format: z.string().max(128),
-              messages: z.array(storedMessageSchema).max(10000),
-            }),
-          )
-          .optional(),
-      }),
-    )
-    .max(2000),
-});
 export type RemoteSettings = {
   providerInstanceId: string;
   model: string;
@@ -146,8 +114,8 @@ export type RemoteSettings = {
 };
 export type RemoteThread = {
   remoteId: string;
-  scope?: AgentScope;
-  pmContext?: PmContext;
+  executionSelection?: ExecutionSelection;
+  executionEnvironment?: ExecutionEnvironment;
   status: "regular" | "archived";
   title?: string;
   custom?: Record<string, unknown>;

@@ -60,10 +60,6 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.markdown :where(a, pre):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
 .markdown :where(code, pre) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;

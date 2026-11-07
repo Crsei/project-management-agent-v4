@@ -11,6 +11,7 @@ import { createAgentChatTools, type AgentChatToolsOptions } from '../apps/server
 import { CoreWorkspacePool, authorizeCoreScope, nativeCommandId } from '../apps/server/pm/src/core-routes.ts';
 import { executeCoreCommand, isCoreCommand, isCoreEntityKind, listCoreEntities, readCoreEntity } from '../apps/server/pm/src/core-adapter.ts';
 import { CoreCommandJournal } from '../apps/server/pm/src/core-journal.ts';
+import { readCoreSnapshot } from '../packages/pm-core/change-snapshots.ts';
 import { accessCommands, getMembership } from '../packages/application/src/access.ts';
 import { runCommand, requestHash } from '../packages/application/src/kernel.ts';
 import { readExternalReceipt, recordExternalReceipt } from '../packages/application/src/core-bridge.ts';
@@ -71,14 +72,14 @@ async function fixture() {
       database: () => database, coreWorkspaces, localProjects: { enabled: false, defaultParent: null },
       async executeCommand(actor, workspaceId, command, checkAuthorization) {
         assert.equal(workspaceId, ws.id);
-        if (!isCoreCommand(command.commandType)) return runCommand(database, actor, workspaceId, command, taskCommentsCommands, await coreFor(actor), undefined, checkAuthorization);
+        if (!isCoreCommand(command.commandType)) return runCommand(database, actor, workspaceId, command, taskCommentsCommands, await coreFor(actor), undefined, checkAuthorization, { kind: 'agent', requesterId: actor.id });
         const hash = requestHash(command as unknown as Record<string, unknown>);
         const prior = await readExternalReceipt(database, actor, workspaceId, command.commandId, hash);
         if (prior) return prior;
         const scope = await authorizeCoreScope(database, actor, workspaceId, 'domain.read');
         const audit: ProjectAuditWrite[] = [], facts: CapturedServiceFact[] = [];
-        const receipt = await executeCoreCommand({ workspace, scope, principal: actor, command, pool: database, ...(checkAuthorization ? { checkAuthorization } : {}), captureAudit: entries => { audit.push(...entries); }, captureFacts: entries => { facts.push(...entries); } }, command.commandId);
-        await recordExternalReceipt(database, actor, workspaceId, command, receipt, [], audit, facts);
+        const receipt = await executeCoreCommand({ workspace, scope, principal: actor, command, pool: database, trustedSource: { kind: 'agent', requesterId: actor.id }, ...(checkAuthorization ? { checkAuthorization } : {}), captureAudit: entries => { audit.push(...entries); }, captureFacts: entries => { facts.push(...entries); } }, command.commandId);
+        await recordExternalReceipt(database, actor, workspaceId, command, receipt, [], audit, facts, key => readCoreSnapshot(workspace.root, key));
         return receipt;
       },
       readCommandReceipt(actor, workspaceId, command) { return readExternalReceipt(database, actor, workspaceId, command.commandId, requestHash(command as unknown as Record<string, unknown>)); },
@@ -137,7 +138,7 @@ describe('Agent tools use native PM services and real PostgreSQL authority', { s
     assert.equal(listed.statusCode, 200);
     assert.equal(listed.json().tools.length, 17);
     assert.ok(listed.json().tools.every((tool: { inputSchema: unknown }) => tool.inputSchema));
-    const input = { operationId: randomUUID(), name: 'pm_create_task', arguments: taskInput(f.first.id), scope: { kind: 'projects', projectIds: [f.first.id] }, threadId: 'chat-thread', messageId: 'chat-message', generationId: 'chat-generation' };
+    const input = { operationId: randomUUID(), name: 'pm_create_task', arguments: taskInput(f.first.id), target: { workspaceId: f.ws.id, projectId: f.first.id }, threadId: 'chat-thread', messageId: 'chat-message', generationId: 'chat-generation' };
     const created = await app.inject({ method: 'POST', url: `${base}/call`, payload: input });
     assert.equal(created.statusCode, 200);
     assert.equal(created.json().status, 'succeeded');
@@ -148,7 +149,7 @@ describe('Agent tools use native PM services and real PostgreSQL authority', { s
     assert.equal(f.workspace.items({ entity: 'work_item', q: input.arguments.title }).length, 1);
     const conflict = await app.inject({ method: 'POST', url: `${base}/call`, payload: { ...input, arguments: { ...input.arguments, title: 'Different' } } });
     assert.equal(conflict.statusCode, 409);
-    const forbidden = await app.inject({ method: 'POST', url: `${base}/call`, headers: { 'x-test-actor': 'limited' }, payload: { ...input, operationId: randomUUID(), scope: { kind: 'projects', projectIds: [f.second.id] } } });
+    const forbidden = await app.inject({ method: 'POST', url: `${base}/call`, headers: { 'x-test-actor': 'limited' }, payload: { ...input, operationId: randomUUID(), target: { workspaceId: f.ws.id, projectId: f.second.id } } });
     assert.equal(forbidden.statusCode, 404);
     const missing = await app.inject({ method: 'POST', url: `${base}/result`, payload: { ...input, operationId: randomUUID() } });
     assert.equal(missing.statusCode, 404);

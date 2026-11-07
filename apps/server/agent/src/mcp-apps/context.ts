@@ -1,10 +1,10 @@
 // Adapted from copied mcpApps/McpAppModelContext.ts, McpAppRequests.ts and
 // orchestration-v2/RunExecutionService.ts. Copyright (c) 2026 T3 Tools Inc. MIT.
-import type { AgentScope } from "@agent-workspace/contracts/chat";
+import type { ExecutionEnvironment } from "@agent-workspace/contracts/chat";
 import type { McpAppContextInput, McpAppMetadata } from "@agent-workspace/contracts/mcp-apps";
 import type { NativeSessionRef } from "@agent-workspace/contracts/provider";
 import type { ProviderDriverContext } from "../providers/driver-adapter.ts";
-import { sameAgentScope } from "../durable/agent-scope.ts";
+import { sameExecutionIdentity } from "../durable/agent-execution.ts";
 import { DurableError } from "../durable/errors.ts";
 import { deleteRecord, listRecords, readRecord, transaction, writeRecord } from "../durable/store.ts";
 import { loadMcpAppItem } from "./items.ts";
@@ -14,12 +14,12 @@ import { assertStoredThread, currentGrant, grantIdentity } from "../mcp/grants.t
 export const MCP_APP_MODEL_CONTEXT_MAX_BYTES = 16 * 1024;
 const CONTEXTS = "mcp-app-model-context-v1";
 type ContextRecord = {
-  key: string; app: McpAppMetadata; actorId: string; scope: AgentScope; cwd: string;
+  key: string; app: McpAppMetadata; actorId: string | null; executionEnvironment: ExecutionEnvironment; cwd: string;
   text: string; revision: number; updatedAt: string;
   originatingMcpGrant?: ProviderDriverContext["originatingMcpGrant"];
 };
 
-export function replaceMcpAppContext(app: McpAppMetadata, scope: AgentScope, cwd: string, input: McpAppContextInput,
+export function replaceMcpAppContext(app: McpAppMetadata, executionEnvironment: ExecutionEnvironment, cwd: string, input: McpAppContextInput,
   originatingMcpGrant?: ProviderDriverContext["originatingMcpGrant"]): number {
   const texts = (input.content ?? []).map(block => block.text);
   if (input.structuredContent !== undefined) texts.push(JSON.stringify(input.structuredContent));
@@ -27,12 +27,10 @@ export function replaceMcpAppContext(app: McpAppMetadata, scope: AgentScope, cwd
   if (Buffer.byteLength(text, "utf8") > MCP_APP_MODEL_CONTEXT_MAX_BYTES || Buffer.byteLength(JSON.stringify(input), "utf8") > MCP_APP_MODEL_CONTEXT_MAX_BYTES)
     throw new DurableError(413, "mcp_app_context_too_large", "App model context must not exceed 16 KiB.");
   return transaction(() => {
-    const generation = readRecord<{ executionSnapshot?: { actorId?: string } }>("chat:generations", app.producing.generationId);
-    const actorId = generation?.executionSnapshot?.actorId;
-    if (!actorId) throw new DurableError(412, "mcp_app_actor_required", "App context requires the producing PM actor identity.");
+    // Ordinary Apps inherit Agent browser authority, not a fabricated PM actor.
+    // Delegated Apps keep their immutable actor and grant ceiling separately.
+    const actorId = originatingMcpGrant?.actorId ?? null;
     if (originatingMcpGrant) {
-      if (originatingMcpGrant.actorId !== actorId || !sameAgentScope(originatingMcpGrant.scope, scope))
-        throw new DurableError(403, "mcp_app_grant_mismatch", "App context does not belong to its originating MCP grant.");
       assertStoredThread(grantIdentity(currentGrant(originatingMcpGrant)), app.producing.threadId);
     }
     const key = JSON.stringify([app.producing.threadId, app.producing.itemId]);
@@ -40,7 +38,8 @@ export function replaceMcpAppContext(app: McpAppMetadata, scope: AgentScope, cwd
     const revision = (previous?.revision ?? 0) + 1;
     if (!Number.isSafeInteger(revision)) throw new DurableError(409, "mcp_app_context_revision", "App context revision exhausted.");
     // A clear retains only its revision, so stale context cannot be appended or revived.
-    writeRecord<ContextRecord>(CONTEXTS, key, { key, app, actorId, scope: { ...scope }, cwd,
+    writeRecord<ContextRecord>(CONTEXTS, key, { key, app, actorId,
+      executionEnvironment: { ...executionEnvironment, worktree: executionEnvironment.worktree ? { ...executionEnvironment.worktree } : null }, cwd,
       text: text.trim() === "" ? "" : text, revision, updatedAt: new Date().toISOString(),
       ...(originatingMcpGrant ? { originatingMcpGrant: {
         grantId: originatingMcpGrant.grantId, actorId: originatingMcpGrant.actorId,
@@ -64,16 +63,14 @@ export function clearMcpAppContexts(threadId?: string, instanceId?: string, gran
 export async function mcpAppContextForTurn(context: ProviderDriverContext, source?: NativeSessionRef): Promise<{ key: string; text: string }[]> {
   if (!context.execution || !context.authorizeMcpApp || !context.authorizeExecution || context.pmAnalysis || !source) return [];
   await context.authorizeExecution("tool");
-  const generation = readRecord<{ executionSnapshot?: { actorId?: string } }>("chat:generations", context.execution.generationId);
-  const actorId = generation?.executionSnapshot?.actorId;
-  if (!actorId) return [];
+  const actorId = context.originatingMcpGrant?.actorId ?? null;
   const entries = listRecords<ContextRecord>(CONTEXTS).filter(entry => {
     const producing = entry.app.producing;
     return entry.text !== "" && entry.actorId === actorId && producing.threadId === context.execution!.threadId
       && producing.providerInstanceId === context.instanceId && producing.instanceRevision === context.revision
       && producing.nativeSessionId === source.sessionId && source.providerInstanceId === context.instanceId
       && source.instanceRevision === context.revision && source.cwd === context.cwd && entry.cwd === context.cwd
-      && sameAgentScope(entry.scope, context.execution!.scope);
+      && sameExecutionIdentity(entry.executionEnvironment, context.execution!.environment);
   }).sort((a, b) => a.updatedAt.localeCompare(b.updatedAt) || a.app.producing.itemId.localeCompare(b.app.producing.itemId));
   const result: { key: string; text: string }[] = [];
   for (const entry of entries) {
@@ -102,10 +99,13 @@ export function mcpAppContextForDispatch(context: ProviderDriverContext, source:
   selected: readonly { key: string; text: string }[]): { key: string; text: string }[] {
   if (!context.execution || !context.authorizeMcpApp || !context.authorizeExecution || context.pmAnalysis || !source
     || source.providerInstanceId !== context.instanceId || source.instanceRevision !== context.revision || source.cwd !== context.cwd) return [];
-  const actorId = readRecord<{ executionSnapshot?: { actorId?: string } }>("chat:generations", context.execution.generationId)?.executionSnapshot?.actorId;
-  if (!actorId) return [];
+  const actorId = context.originatingMcpGrant?.actorId ?? null;
+  if (context.originatingMcpGrant) {
+    try { assertStoredThread(grantIdentity(currentGrant(context.originatingMcpGrant)), context.execution.threadId); }
+    catch { return []; }
+  }
   const current = listRecords<ContextRecord>(CONTEXTS).filter(entry => entry.actorId === actorId && entry.cwd === context.cwd
-    && sameAgentScope(entry.scope, context.execution!.scope) && entry.app.producing.threadId === context.execution!.threadId
+    && sameExecutionIdentity(entry.executionEnvironment, context.execution!.environment) && entry.app.producing.threadId === context.execution!.threadId
     && entry.app.producing.providerInstanceId === context.instanceId && entry.app.producing.instanceRevision === context.revision
     && entry.app.producing.nativeSessionId === source.sessionId);
   return selected.filter(value => current.some(entry => {

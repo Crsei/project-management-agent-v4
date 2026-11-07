@@ -38,7 +38,7 @@ export async function assertMcpIdentity(identity: McpInvocationIdentity): Promis
   // PM authenticates signed delegation, introspects storage, then checks live actor and membership.
   const catalog = await pmRequest('/api/v1/agent-contexts', await mcpIdentityHeaders(identity)) as McpCatalog;
   const workspace = catalog.workspaces.find(item => item.id === identity.scope.workspaceId);
-  if (!workspace || identity.scope.projectId !== null && !workspace.projects.some(project => project.id === identity.scope.projectId)) deny('The granted PM scope is no longer available.');
+  if (!workspace || (identity.scope.projectId === null ? workspace.workspaceAllowed !== true : !workspace.projects.some(project => project.id === identity.scope.projectId))) deny('The granted PM target is no longer available.');
   currentGrant(identity);
 }
 export async function authenticateMcpRequest(request: Request): Promise<McpInvocationIdentity> {

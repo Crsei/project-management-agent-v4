@@ -19,9 +19,11 @@ type Member = { user_id: string; workspace_id: string; capabilities: Capability[
 
 /** Only the SQL owned by workspace authorization, audit and service facts is simulated; the Markdown core is real. */
 function fakeDatabase(member: () => Member): Pool {
+  let historyHead = 0;
   const query = async (text: string) => {
     if (/SELECT m\.\* FROM memberships/.test(text)) return { rows: [member()], rowCount: 1 };
     if (/UPDATE workspaces SET service_fact_head/.test(text)) return { rows: [{ sequence: '1' }], rowCount: 1 };
+    if (/UPDATE workspaces SET change_history_head/.test(text)) return { rows: [{ head: String(++historyHead) }], rowCount: 1 };
     return { rows: [], rowCount: 0 };
   };
   return { query, connect: async () => ({ query, release: () => undefined }) } as unknown as Pool;

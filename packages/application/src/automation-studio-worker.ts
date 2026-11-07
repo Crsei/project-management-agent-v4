@@ -1,15 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { studioExecutionResultSchema, studioRequiredProviderToolFeature, type StudioExecutionPort, type StudioExecutionResult } from '../../contracts/src/automation-studio.ts';
+import type { StudioWorkspaceExecutionPort } from '../../contracts/src/automation-studio.ts';
 import type { AutomationIntegrationConfig, AutomationIntegrationVerification } from '../../contracts/src/automation-integrations.ts';
 import { DomainError, type Actor } from '../../domain/src/core.ts';
 import { lockWorkspace } from '../../infrastructure/src/database.ts';
 import type { NotificationCorePort } from '../../pm-core/readonly.ts';
 import { nextStudioDue, studioMissed, studioTimezone } from './automation-studio-schedule.ts';
-import { appendStudioEvent, enqueueStudioExecution, studioAuthorize, studioClock, studioExecutionRequest, studioIntegrationSupportsAction, type StudioDefinitionRow, type StudioExecutionRow } from './automation-studio-store.ts';
+import { appendStudioEvent, enqueueStudioExecution, studioAuthorize, studioClock, studioDirectorySelection, studioExecutionRequest, studioIntegrationSupportsAction, type StudioDefinitionRow, type StudioExecutionRow } from './automation-studio-store.ts';
 
 /** Persist dispatch intent before transport; a lost reply can only be queried, never dispatched again. */
-export async function reconcileStudioExecution(pool: Pool, core: NotificationCorePort, runtime: StudioExecutionPort, id: string, allowDispatch = false): Promise<boolean> {
+export async function reconcileStudioExecution(pool: Pool, core: NotificationCorePort, runtime: StudioExecutionPort, id: string, allowDispatch = false, workspaceExecution?: StudioWorkspaceExecutionPort): Promise<boolean> {
   const candidate = (await pool.query<StudioExecutionRow>('SELECT * FROM automation_studio_executions WHERE id=$1 AND finished_at IS NULL', [id])).rows[0];
   if (!candidate) return false;
   let providerRejection: string | null = null;
@@ -21,6 +22,16 @@ export async function reconcileStudioExecution(pool: Pool, core: NotificationCor
       if (!capabilities.features?.some(feature => feature.id === requiredFeature && feature.available)) providerRejection = 'provider_tool_protocol_unavailable';
     } catch (error) { providerRejection = error instanceof DomainError ? error.code : 'provider_tool_capabilities_unavailable'; }
   }
+  if (!candidate.dispatched_at && allowDispatch && !providerRejection) {
+    try {
+      await studioAuthorize(pool, core, { id: candidate.actor_id, email: '', name: '' }, candidate.workspace_id, candidate.project_id, true);
+      const selection = studioDirectorySelection(candidate.config_snapshot);
+      if (selection) {
+        if (!workspaceExecution) throw new DomainError('agent_workspace_unavailable', 'Authenticated Agent folder preflight is not configured', 503);
+        await workspaceExecution.resolve(selection);
+      }
+    } catch (error) { providerRejection = error instanceof DomainError ? error.code : 'agent_workspace_unavailable'; }
+  }
   const sql = await pool.connect(); let claimed: StudioExecutionRow | undefined; let operation: 'dispatch' | 'query' | 'cancel' = 'query'; const lease = randomUUID();
   try {
     await sql.query('BEGIN'); await lockWorkspace(sql, candidate.workspace_id);
@@ -31,6 +42,7 @@ export async function reconcileStudioExecution(pool: Pool, core: NotificationCor
     try {
       await studioAuthorize(sql, core, actor, row.workspace_id, row.project_id, true, !row.dispatched_at);
       if (!row.dispatched_at) {
+        studioDirectorySelection(row.config_snapshot);
         const definition = (await sql.query<StudioDefinitionRow>('SELECT * FROM automation_studio_definitions WHERE id=$1 FOR UPDATE', [row.definition_id])).rows[0];
         if (!definition || definition.deleted_at || (row.trigger === 'scheduled' || row.trigger === 'event') && (definition.revision !== row.definition_revision || definition.status !== 'enabled')) rejection = 'definition_changed_or_inactive';
         for (const plugin of row.config_snapshot.action.plugins) {
@@ -81,7 +93,7 @@ export async function reconcileStudioExecution(pool: Pool, core: NotificationCor
   } catch (error) { await finish.query('ROLLBACK'); throw error; } finally { finish.release(); }
   return true;
 }
-export async function runAutomationStudioBatch(pool: Pool, core: NotificationCorePort, runtime: StudioExecutionPort, workerId: string, options: { limit?: number; now?: Date } = {}): Promise<{ scheduled: number; processed: number }> {
+export async function runAutomationStudioBatch(pool: Pool, core: NotificationCorePort, runtime: StudioExecutionPort, workerId: string, options: { limit?: number; now?: Date; workspaceExecution?: StudioWorkspaceExecutionPort } = {}): Promise<{ scheduled: number; processed: number }> {
   const limit = Math.min(100, Math.max(1, options.limit ?? 10)); let scheduled = 0, processed = 0;
   const due = (await pool.query<{ id: string; workspace_id: string }>("SELECT id,workspace_id FROM automation_studio_definitions WHERE status='enabled' AND deleted_at IS NULL AND next_due_at<=coalesce($2::timestamptz,clock_timestamp()) ORDER BY next_due_at,id LIMIT $1", [limit, options.now ?? null])).rows;
   for (const candidate of due) {
@@ -91,14 +103,14 @@ export async function runAutomationStudioBatch(pool: Pool, core: NotificationCor
       const row = (await sql.query<StudioDefinitionRow>("SELECT * FROM automation_studio_definitions WHERE id=$1 AND status='enabled' AND deleted_at IS NULL AND next_due_at<=$2 FOR UPDATE SKIP LOCKED", [candidate.id, now])).rows[0];
       if (row?.next_due_at) {
         const execution = await enqueueStudioExecution(sql, row, { requestId: randomUUID(), trigger: 'scheduled', sourceKey: 'scheduled:' + row.next_due_at.toISOString(), dueAt: row.next_due_at });
-        if (studioMissed(row.config, row.next_due_at, now)) { await appendStudioEvent(sql, execution.id, 'status', 'Elapsed local date coalesced into one skipped execution; no backlog dispatch'); await sql.query("UPDATE automation_studio_executions SET status='skipped',finished_at=$2,error='schedule_missed',summary='Missed schedule; no backlog dispatch' WHERE id=$1 AND finished_at IS NULL", [execution.id, now]); }
+        if (!execution.finishedAt && studioMissed(row.config, row.next_due_at, now)) { await appendStudioEvent(sql, execution.id, 'status', 'Elapsed local date coalesced into one skipped execution; no backlog dispatch'); await sql.query("UPDATE automation_studio_executions SET status='skipped',finished_at=$2,error='schedule_missed',summary='Missed schedule; no backlog dispatch' WHERE id=$1 AND finished_at IS NULL", [execution.id, now]); }
         await sql.query('UPDATE automation_studio_definitions SET next_due_at=$2 WHERE id=$1', [row.id, nextStudioDue(row.config, now)]); scheduled++;
       }
       await sql.query('COMMIT');
     } catch (error) { await sql.query('ROLLBACK'); throw error; } finally { sql.release(); }
   }
   const queue = (await pool.query<{ id: string }>('SELECT id FROM automation_studio_executions WHERE finished_at IS NULL AND next_query_at<=clock_timestamp() AND (lease_until IS NULL OR lease_until<clock_timestamp()) ORDER BY next_query_at,id LIMIT $1', [limit])).rows;
-  for (const row of queue) if (await reconcileStudioExecution(pool, core, runtime, row.id, true)) processed++;
+  for (const row of queue) if (await reconcileStudioExecution(pool, core, runtime, row.id, true, options.workspaceExecution)) processed++;
   await pool.query('INSERT INTO automation_studio_heartbeats(worker_id) VALUES($1) ON CONFLICT(worker_id) DO UPDATE SET heartbeat_at=clock_timestamp()', [workerId]);
   return { scheduled, processed };
 }

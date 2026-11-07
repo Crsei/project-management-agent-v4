@@ -1,7 +1,7 @@
 import { accessSync, constants, lstatSync, mkdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import type { AgentScope, AgentStorageSettings, AgentStorageSettingsUpdate } from '../../contracts/src/agent-file-areas.ts';
+import type { AgentStorageSettings, AgentStorageSettingsUpdate } from '../../contracts/src/agent-file-areas.ts';
 import { agentStorageSettingsUpdateSchema } from '../../contracts/src/agent-file-areas.ts';
 import type { LocalDirectory } from '../../contracts/src/local-projects.ts';
 import { DomainError, type Actor } from '../../domain/src/core.ts';
@@ -41,33 +41,6 @@ export function agentAllowedDirectory(config: AgentDirectoryConfiguration, candi
   deploymentRoot(config);
   inspect(normalized);
   return normalized;
-}
-/** Read-only preflight, or creation of only the configured leaf and its contained descendants. */
-export function defaultAgentDirectory(config: AgentDirectoryConfiguration, effectiveRoot: string, scope: AgentScope, create = false): string {
-  const root = samePath(effectiveRoot, config.chatSpaceRoot) ? deploymentRoot(config) : agentAllowedDirectory(config, effectiveRoot);
-  const candidate = path.join(root, 'workspaces', scope.workspaceId, ...(scope.projectId ? ['projects', scope.projectId] : ['workspace']));
-  if (!contains(root, candidate) || !/^[0-9a-f-]{36}$/.test(scope.workspaceId) || scope.projectId !== null && !/^PRJ-\d+$/.test(scope.projectId)) forbidden('Invalid Agent scope path');
-  let current = root, missing = false;
-  const components = [root, ...path.relative(root, candidate).split(path.sep)];
-  for (let index = 0; index < components.length; index++) {
-    if (index) current = path.join(current, components[index]!);
-    if (!missing) {
-      try { inspect(current); accessSync(current, constants.R_OK | constants.X_OK); }
-      catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-        accessSync(path.dirname(current), constants.W_OK | constants.X_OK);
-        missing = true;
-      }
-    }
-    if (missing && create) {
-      // Recheck the complete parent chain immediately before every single-level mkdir.
-      inspect(path.dirname(current));
-      try { mkdirSync(current, { mode: 0o700 }); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
-      inspect(current);
-    }
-  }
-  return candidate;
 }
 export function resolveAgentDirectory(config: AgentDirectoryConfiguration, directory: LocalDirectory): { root: string; mode: 'existing' | 'new' } {
   const candidate = directory.mode === 'existing' ? directory.path : directory.parentPath;
