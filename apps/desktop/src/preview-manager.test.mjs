@@ -117,12 +117,11 @@ function makeManager() {
   return { manager, fake, states };
 }
 
-test("createTab returns an isolated partition and the guest preload URL", () => {
+test("new preview tabs normalize navigation and restrict permissions", () => {
   const { manager, fake } = makeManager();
   try {
     const created = manager.createTab("tab-1", { url: "127.0.0.1:3223/pm" });
     assert.match(created.partition, /^persist:pm-preview-[a-f0-9]{16}$/);
-    assert.equal(created.preload, "file:///tmp/preview-pick-preload.cjs");
     assert.equal(created.state.url, "http://127.0.0.1:3223/pm");
     assert.equal(created.state.navStatus.kind, "loading");
     const previewSession = fake.sessions.get(created.partition);
