@@ -58,6 +58,8 @@
 
 源码路径保护不只检查叶文件或 `realpath` 是否还在仓库内：Git 与无 Git 入口都先核验真实根，沿用现有 `GuardedDirectory` 逐级拒绝 source 祖先的 symlink/junction/reparse，保留每级身份至复制结束。本发布边界仅以只读方式打开普通源文件，复用既有 Windows reparse 检查，并在平台支持时使用 `O_NOFOLLOW`；不沿用 PM 私有可写存储的“单硬链接”不变量，因为冻结安装可为合法 `file:` 源依赖建立 `nlink > 1` 的硬链接。多硬链接不会跳过检查：开前/开后与读后核对同一目录、叶路径、打开描述符身份及完整文件 stamp（包含 link count），构建后仍按已捕获的批准 SHA256/模式核对内容。只从已核验的同一描述符读取，不改写源 inode，也不把源硬链接带入副本；任何操作中的身份、stamp 或内容漂移都拒绝并移除该次未完成副本。这样既不能通过祖先改指仓库内部 `.local` 归档其私有字节，也不会仅因 pnpm 在稳定冻结安装后合法增加 link count 而误拒绝未改动源文件。Linux 使用已有描述符相对遍历；macOS/Windows 仍按现有平台实现做路径、reparse 和打开句柄的前后身份检查，不将其夸大为对恶意同用户进程的原生文件系统沙箱。共享 PM 存储 helper 的单链接安全语义保持不变。
 
+源码安全回归以消费者确实拒绝、私有源字节未被改写、目标副本和最终 source manifest 未生成等事实为断言，不绑定原生错误文案。动态“文件已打开后重命名祖先目录”的特定 race fixture 仅在 POSIX 执行；Windows 的打开句柄会拒绝这次 rename，无法据此声称 fixture 已制造 race 或由应用检测到替换，因此该 case 明确标为 Windows 未覆盖。Windows 仍独立执行捕获前已建立的 junction/reparse 拒绝、Git/gitless 路径边界和合法 hardlink 回归，不跳过这些保护，也不把特定 race 的 skip 计为通过。
+
 派生 legal 目录在 tar 之前再次按其**自身**根执行现有资源检查：即使原链接合法留在安装 resources 内，复制后越界、悬空或循环也拒绝归档，不因原闭包合法而原样接受。交付 verifier 还要求实际最终 ASAR 的 SHA256 与构建报告 `checks.application.sha256` 相同；仅保持应用名称/版本不够证明是同一成品。
 
 Git `dirty` 只针对所选公开源码，逐项将实际复制字节/路径/可表示的文件模式与固定 HEAD tree/blob 对象比较，不信任可能被 `assume-unchanged` 隐藏的 `git status` 或 filter 后 diff。Windows 的 POSIX 执行位按 Git 记录保存。构建后除复核旧文件的描述符内容/身份，还重新核对同一公开选集；新增或删除已审阅源码路径也使本次快照失效，不扫描用户私有或 ignored 数据来扩大检查范围。

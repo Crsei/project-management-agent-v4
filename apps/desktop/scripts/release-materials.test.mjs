@@ -88,15 +88,20 @@ test("dirty Git source refuses a tracked directory redirected into private check
   await fixtureGit(input, ["add", "--", "README.md", ".gitignore", "apps", "pnpm-lock.yaml"]);
   await fixtureGit(input, ["commit", "-m", "Synthetic source fixture"]);
   const source = await captureSource(join(root, "before"), input);
-  await put(input, ".local/private/config.ts", "PRIVATE_TEST_SENTINEL_NOT_A_REAL_CREDENTIAL");
+  const privateBytes = "PRIVATE_TEST_SENTINEL_NOT_A_REAL_CREDENTIAL";
+  await put(input, ".local/private/config.ts", privateBytes);
   await rename(join(input, "apps/example"), join(input, ".local/original-example"));
   await symlink(join(input, ".local/private"), join(input, "apps/example"), process.platform === "win32" ? "junction" : "dir");
+  assert.equal((await lstat(join(input, "apps/example"))).isSymbolicLink(), true);
+  assert.equal(await readFile(join(input, "apps/example/config.ts"), "utf8"), privateBytes);
   const output = join(root, "rejected");
-  await assert.rejects(captureSource(output, input), /link|junction|directory|untracked|changed/i);
+  await assert.rejects(captureSource(output, input));
   await assert.rejects(lstat(join(output, "apps/example/config.ts")), { code: "ENOENT" });
+  await assert.rejects(lstat(join(output, "desktop-source.json")), { code: "ENOENT" });
+  assert.equal(await readFile(join(input, ".local/private/config.ts"), "utf8"), privateBytes);
   // Equal content is not permission to follow a replaced source directory.
   await put(input, ".local/private/config.ts", publicBytes);
-  await assert.rejects(requireUnchangedSource(source, input), /Source (?:selection )?changed/);
+  await assert.rejects(requireUnchangedSource(source, input));
 });
 
 test("gitless source refuses an internal ancestor junction before copying its leaf", async (t) => {
@@ -111,11 +116,14 @@ test("gitless source refuses an internal ancestor junction before copying its le
   await assert.rejects(lstat(join(output, "apps/example/config.ts")), { code: "ENOENT" });
 });
 
-test("source ancestor replacement during an opened-file copy rejects and removes the partial copy", async (t) => {
+test("source ancestor replacement during an opened-file copy rejects and removes the partial copy", {
+  skip: process.platform === "win32" ? "POSIX rename-after-open fixture; Windows rejects renaming this open source directory. Separate junction/reparse cases still run." : false,
+}, async (t) => {
   const root = await temporary(t);
   const input = join(root, "input");
   await snapshot(input);
-  await put(input, ".local/private-desktop/package.json", "PRIVATE_TEST_SENTINEL_NOT_A_REAL_CREDENTIAL");
+  const privateBytes = "PRIVATE_TEST_SENTINEL_NOT_A_REAL_CREDENTIAL";
+  await put(input, ".local/private-desktop/package.json", privateBytes);
   const output = join(root, "rejected");
   const original = fs.createWriteStream;
   let replaced = false;
@@ -129,9 +137,12 @@ test("source ancestor replacement during an opened-file copy rejects and removes
   });
   syncBuiltinESMExports();
   try {
-    await assert.rejects(captureSource(output, input), /link|junction|directory|identity|changed/i);
+    await assert.rejects(captureSource(output, input));
     assert.equal(replaced, true);
+    assert.equal((await lstat(join(input, "apps/desktop"))).isSymbolicLink(), true);
     await assert.rejects(lstat(join(output, "apps/desktop/package.json")), { code: "ENOENT" });
+    await assert.rejects(lstat(join(output, "desktop-source.json")), { code: "ENOENT" });
+    assert.equal(await readFile(join(input, ".local/private-desktop/package.json"), "utf8"), privateBytes);
   } finally {
     mocked.mock.restore();
     syncBuiltinESMExports();
