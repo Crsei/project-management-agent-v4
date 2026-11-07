@@ -10,6 +10,7 @@ import { desktopRoot, inside, portable, requireNativeTarget, requirePinnedNode }
 import { collectNotices } from "./license-notices.mjs";
 import { verifyHost } from "../../server/agent/scripts/cc-switch.mjs";
 import { verifyWebDistribution } from "../../../vendor/openhands-extensions/scripts/web-build.mjs";
+import { enforceExternalAgentBoundary } from "../../server/agent/scripts/external-agent-packages.mjs";
 export const repository = resolve(desktopRoot, "../..");
 export function run(command, args, cwd = repository) {
   return new Promise((resolveRun, reject) => {
@@ -28,6 +29,7 @@ export async function buildWorkspace() {
   await run(process.execPath, [join(desktopRoot, "scripts/build.mjs")]);
 }
 export async function inspectDeployment(directory, boundary = directory) {
+  if (directory === boundary) await enforceExternalAgentBoundary(boundary);
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (/^\.env(?:\.|$)/i.test(entry.name) || [".npmrc", ".pnpmfile.cjs", ".git", ".local"].includes(entry.name))
       throw new Error(`Private or checkout-only resource must not be distributed: ${portable(relative(boundary, join(directory, entry.name)))}`);
@@ -87,6 +89,8 @@ export async function stageWorkspace(output, application, {
     await createIsolatedWorkspace(workspace);
     const rootManifest = JSON.parse(await readFile(join(repository, "package.json"), "utf8"));
     await pnpm(["--filter", rootManifest.name, "--config.hoist-workspace-packages=false", "--config.frozen-lockfile=true", "deploy", "--prod", "--legacy", output], workspace);
+    // pnpm deploy has an independent closure; it must not bypass Agent packaging.
+    await enforceExternalAgentBoundary(output, { prune: true });
     for (const name of await readdir(output))
       if (!["node_modules", "package.json"].includes(name)) await rm(join(output, name), { recursive: true, force: true });
     await run(process.execPath, [join(repository, "apps/server/agent/scripts/package.mjs"), "--build", agentBuild, "--output", agentArtifact]);
@@ -142,6 +146,7 @@ export async function stageWorkspace(output, application, {
       const applicationWorkspace = join(staging, "electron-workspace");
       await createIsolatedWorkspace(applicationWorkspace, true);
       await pnpm(["--filter", "@agent-workspace/desktop", "--config.hoist-workspace-packages=false", "--config.frozen-lockfile=true", "deploy", "--prod", "--legacy", application], applicationWorkspace);
+      await enforceExternalAgentBoundary(application, { prune: true });
       const manifest = JSON.parse(await readFile(join(desktopRoot, "package.json"), "utf8"));
       await writeFile(join(application, "package.json"), JSON.stringify({
         name: "pm-agent-v4-desktop", productName: "PM Agent v4", version: manifest.version,

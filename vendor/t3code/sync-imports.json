@@ -7993,7 +7993,7 @@
     {
       "source": "apps/web/src/features/agent/components/assistant-ui/elements/thread.aui.tsx",
       "line": 43,
-      "specifier": "@agent/src/chat/provider-skills-composer",
+      "specifier": "@agent/src/chat/composer-suggestions",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8178,6 +8178,159 @@
       "usage": "runtime",
       "disposition": "pm-host-boundary",
       "target": "apps/web/src/features/agent/src/settings/extensions-page.tsx"
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-command-menu.tsx",
+      "line": 2,
+      "specifier": "@agent-workspace/contracts/provider",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "pm-host-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-command-menu.tsx",
+      "line": 3,
+      "specifier": "@agent-workspace/client-runtime",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-command-menu.tsx",
+      "line": 7,
+      "specifier": "lucide-react",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-command-menu.tsx",
+      "line": 18,
+      "specifier": "react",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-command-menu.tsx",
+      "line": 20,
+      "specifier": "../i18n",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/web/src/features/agent/src/i18n.ts"
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 4,
+      "specifier": "react",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 5,
+      "specifier": "@assistant-ui/react",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 6,
+      "specifier": "@agent-workspace/contracts/inspector",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "pm-host-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 10,
+      "specifier": "@agent-workspace/contracts/provider",
+      "kind": "import",
+      "usage": "type-only",
+      "disposition": "pm-host-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 11,
+      "specifier": "@agent-workspace/client-runtime",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 22,
+      "specifier": "lucide-react",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 23,
+      "specifier": "../pm/state",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/web/src/features/agent/src/pm/state.ts"
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 24,
+      "specifier": "../network",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/web/src/features/agent/src/network.ts"
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 25,
+      "specifier": "../workspace/inspector/api",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/web/src/features/agent/src/workspace/inspector/api.ts"
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 26,
+      "specifier": "../i18n",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/web/src/features/agent/src/i18n.ts"
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 27,
+      "specifier": "./composer-command-menu",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "apps/web/src/features/agent/src/chat/composer-command-menu.tsx"
+    },
+    {
+      "source": "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+      "line": 32,
+      "specifier": "./composer-suggestions.css",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "vendored-source",
+      "target": "apps/web/src/features/agent/src/chat/composer-suggestions.css"
     },
     {
       "source": "apps/web/src/features/agent/src/chat/mcp-app-document-bridge.ts",
@@ -8468,78 +8621,6 @@
       "target": "apps/web/src/features/agent/src/chat/output-timeline.css"
     },
     {
-      "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 3,
-      "specifier": "react",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "external-package",
-      "target": null
-    },
-    {
-      "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 4,
-      "specifier": "@assistant-ui/react",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "external-package",
-      "target": null
-    },
-    {
-      "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 5,
-      "specifier": "@agent-workspace/contracts/provider",
-      "kind": "import",
-      "usage": "type-only",
-      "disposition": "pm-host-package",
-      "target": null
-    },
-    {
-      "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 6,
-      "specifier": "@agent-workspace/client-runtime",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "pm-host-package",
-      "target": null
-    },
-    {
-      "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 7,
-      "specifier": "../pm/state",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "pm-host-boundary",
-      "target": "apps/web/src/features/agent/src/pm/state.ts"
-    },
-    {
-      "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 8,
-      "specifier": "../network",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "pm-host-boundary",
-      "target": "apps/web/src/features/agent/src/network.ts"
-    },
-    {
-      "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 9,
-      "specifier": "../i18n",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "pm-host-boundary",
-      "target": "apps/web/src/features/agent/src/i18n.ts"
-    },
-    {
-      "source": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "line": 10,
-      "specifier": "./provider-skills.css",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "vendored-source",
-      "target": "apps/web/src/features/agent/src/chat/provider-skills.css"
-    },
-    {
       "source": "apps/web/src/features/agent/src/mcp/connect-agent.tsx",
       "line": 3,
       "specifier": "react",
@@ -8668,7 +8749,7 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 6,
-      "specifier": "@agent/components/ui/button",
+      "specifier": "@/components/ui/dropdown-menu",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8677,25 +8758,25 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 7,
-      "specifier": "@agent/components/ui/input",
+      "specifier": "@agent-workspace/client-runtime/providers",
       "kind": "import",
       "usage": "runtime",
-      "disposition": "external-package",
+      "disposition": "pm-host-package",
       "target": null
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 8,
-      "specifier": "@agent/components/ui/dialog",
+      "specifier": "@agent-workspace/contracts/provider",
       "kind": "import",
-      "usage": "runtime",
-      "disposition": "external-package",
+      "usage": "type-only",
+      "disposition": "pm-host-package",
       "target": null
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 9,
-      "specifier": "@agent/components/assistant-ui/elements/thread.aui",
+      "specifier": "@agent/src/settings/provider-card",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8704,7 +8785,7 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 10,
-      "specifier": "@agent/hooks/use-chat-settings",
+      "specifier": "@agent/components/ui/button",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8713,7 +8794,7 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 11,
-      "specifier": "@agent/hooks/use-mobile",
+      "specifier": "@agent/components/ui/input",
       "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
@@ -8722,6 +8803,42 @@
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
       "line": 12,
+      "specifier": "@agent/components/ui/dialog",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
+      "line": 13,
+      "specifier": "@agent/components/assistant-ui/elements/thread.aui",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
+      "line": 14,
+      "specifier": "@agent/hooks/use-chat-settings",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
+      "line": 15,
+      "specifier": "@agent/hooks/use-mobile",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
+      "line": 16,
       "specifier": "../chat/continuity",
       "kind": "import",
       "usage": "runtime",
@@ -8730,7 +8847,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 13,
+      "line": 17,
       "specifier": "../usage/navigation",
       "kind": "import",
       "usage": "runtime",
@@ -8739,7 +8856,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 14,
+      "line": 18,
       "specifier": "../chat/remote-adapter",
       "kind": "import",
       "usage": "runtime",
@@ -8748,7 +8865,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 15,
+      "line": 19,
       "specifier": "../chat/pm-tool-calls",
       "kind": "import",
       "usage": "runtime",
@@ -8757,7 +8874,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 16,
+      "line": 20,
       "specifier": "./right-panel",
       "kind": "import",
       "usage": "runtime",
@@ -8766,7 +8883,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 17,
+      "line": 21,
       "specifier": "./thread-details-panel",
       "kind": "import",
       "usage": "runtime",
@@ -8775,7 +8892,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 18,
+      "line": 22,
       "specifier": "./terminal-drawer",
       "kind": "import",
       "usage": "runtime",
@@ -8784,7 +8901,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 19,
+      "line": 23,
       "specifier": "./product-switcher",
       "kind": "import",
       "usage": "runtime",
@@ -8793,7 +8910,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 20,
+      "line": 24,
       "specifier": "./user-menu",
       "kind": "import",
       "usage": "runtime",
@@ -8802,7 +8919,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 21,
+      "line": 25,
       "specifier": "./drafts",
       "kind": "import",
       "usage": "runtime",
@@ -8811,7 +8928,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 22,
+      "line": 26,
       "specifier": "./session-menu",
       "kind": "import",
       "usage": "runtime",
@@ -8820,7 +8937,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 23,
+      "line": 27,
       "specifier": "./pm-issue-workspace",
       "kind": "import",
       "usage": "runtime",
@@ -8829,7 +8946,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 24,
+      "line": 28,
       "specifier": "./pm-issue-picker-host",
       "kind": "import",
       "usage": "runtime",
@@ -8838,7 +8955,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 25,
+      "line": 29,
       "specifier": "./pm-composer-references",
       "kind": "import",
       "usage": "runtime",
@@ -8847,7 +8964,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 26,
+      "line": 30,
       "specifier": "./sidebar-visit",
       "kind": "import",
       "usage": "runtime",
@@ -8856,7 +8973,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 27,
+      "line": 31,
       "specifier": "../network",
       "kind": "import",
       "usage": "runtime",
@@ -8865,7 +8982,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 28,
+      "line": 32,
       "specifier": "../i18n",
       "kind": "import",
       "usage": "runtime",
@@ -8874,16 +8991,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 29,
-      "specifier": "../i18n-text.ts",
-      "kind": "import",
-      "usage": "runtime",
-      "disposition": "pm-host-boundary",
-      "target": "apps/web/src/features/agent/src/i18n-text.ts"
-    },
-    {
-      "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 30,
+      "line": 33,
       "specifier": "@agent-workspace/contracts/chat",
       "kind": "import",
       "usage": "type-only",
@@ -8892,7 +9000,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 31,
+      "line": 34,
       "specifier": "@agent-workspace/contracts/pm-tools",
       "kind": "import",
       "usage": "type-only",
@@ -8901,7 +9009,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 32,
+      "line": 35,
       "specifier": "../settings/session-settings-dialog",
       "kind": "import",
       "usage": "runtime",
@@ -8910,7 +9018,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 33,
+      "line": 36,
       "specifier": "../settings/input-preferences",
       "kind": "import",
       "usage": "runtime",
@@ -8919,7 +9027,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 34,
+      "line": 37,
       "specifier": "../settings/browser-preferences",
       "kind": "import",
       "usage": "runtime",
@@ -8928,7 +9036,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 35,
+      "line": 38,
       "specifier": "./state",
       "kind": "import",
       "usage": "runtime",
@@ -8937,7 +9045,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 36,
+      "line": 39,
       "specifier": "./execution-workspace",
       "kind": "import",
       "usage": "runtime",
@@ -8946,7 +9054,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 37,
+      "line": 40,
       "specifier": "./execution-terminals",
       "kind": "import",
       "usage": "runtime",
@@ -8955,7 +9063,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 38,
+      "line": 41,
       "specifier": "./automation/studio-editor",
       "kind": "import",
       "usage": "type-only",
@@ -8964,7 +9072,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 39,
+      "line": 42,
       "specifier": "@/views/pm/dashboards-views.module.css",
       "kind": "import",
       "usage": "runtime",
@@ -8973,7 +9081,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 40,
+      "line": 43,
       "specifier": "../../styles/pm-chat.css",
       "kind": "import",
       "usage": "runtime",
@@ -8982,7 +9090,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/pm/chat-surface.tsx",
-      "line": 42,
+      "line": 45,
       "specifier": "./automation/page",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -9504,7 +9612,7 @@
     },
     {
       "source": "packages/agent-client-runtime/src/provider-skills.ts",
-      "line": 7,
+      "line": 11,
       "specifier": "@t3tools/shared/composerInlineTokens",
       "kind": "export",
       "usage": "runtime",

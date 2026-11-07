@@ -7,6 +7,7 @@ import { verifyHostBuildInputs } from "../../../../vendor/t3code/scripts/host-in
 import { verifyHost } from "./cc-switch.mjs";
 import { verifyOutputs as verifyOpenHandsOutputs } from "../../../../vendor/openhands-extensions/scripts/provenance.mjs";
 import { verifyWebDistribution } from "../../../../vendor/openhands-extensions/scripts/web-build.mjs";
+import { enforceExternalAgentBoundary, isExternalAgentCliPackage } from "./external-agent-packages.mjs";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const repository = path.resolve(packageRoot, "../../..");
@@ -80,12 +81,14 @@ async function locatePackage(name, from) {
 const packages = new Map();
 let effectRoot;
 async function collect(name, from, optional = false) {
+  if (isExternalAgentCliPackage(name)) throw new Error(`External Agent CLI package is not a production SDK resource: ${name}`);
   const located = await locatePackage(name, from);
   if (!located) {
     if (optional) return null;
     throw new Error(`Missing installed production dependency ${name} (from ${posix(path.relative(repository, from))})`);
   }
   const metadata = JSON.parse(await readFile(path.join(located, "package.json"), "utf8"));
+  if (isExternalAgentCliPackage(metadata.name)) throw new Error(`External Agent CLI package is not a production SDK resource: ${metadata.name}`);
   if (metadata.name?.startsWith("@t3tools/") || metadata.name?.startsWith("@agent-workspace/") || metadata.name === "@pm/t3code-provider-server") throw new Error(`Unbundled source workspace dependency: ${metadata.name}`);
   if (metadata.name === "effect") {
     if (metadata.version !== "4.0.5") throw new Error(`Duplicate/incompatible Effect singleton: ${metadata.version}`);
@@ -98,6 +101,9 @@ async function collect(name, from, optional = false) {
   const required = { ...metadata.peerDependencies, ...metadata.dependencies };
   const optionalDependencies = metadata.optionalDependencies ?? {};
   for (const dependency of Object.keys({ ...required, ...optionalDependencies }).sort()) {
+    // The SDK transports to the user's explicitly configured Claude executable.
+    // Its optional platform packages are a bundled CLI, not communication resources.
+    if (metadata.name === "@anthropic-ai/claude-agent-sdk" && dependency in optionalDependencies && isExternalAgentCliPackage(dependency)) continue;
     const optionalPeer = !metadata.dependencies?.[dependency] && metadata.peerDependenciesMeta?.[dependency]?.optional === true;
     const resolved = await collect(dependency, located, dependency in optionalDependencies || optionalPeer);
     if (resolved) record.dependencies.set(dependency, resolved);
@@ -216,9 +222,9 @@ for (const relative of ["LICENSE", "extensions/LICENSE", "extensions/source-pack
 for (const directory of ["integration-patches", "source-inputs", "scripts"]) {
   await inventoryTree(path.join(openHandsVendor, directory), `licenses/provenance/vendor/openhands-extensions/${directory}`);
 }
-{
-  const source = path.join(packageRoot, "scripts/verify-artifact.mjs");
-  const bytes = await readFile(source), target = "tools/verify-artifact.mjs";
+for (const name of ["verify-artifact.mjs", "external-agent-packages.mjs"]) {
+  const source = path.join(packageRoot, "scripts", name);
+  const bytes = await readFile(source), target = `tools/${name}`;
   transfers.push({ target, source, sha256: sha(bytes), mode: 0o644 });
   fileRecords.push({ path: target, sha256: sha(bytes), bytes: bytes.length, mode: 0o644 });
 }
@@ -256,4 +262,5 @@ await writeFile(path.join(outputRoot, "artifact-manifest.json"), JSON.stringify(
   packages: ordered.map((record) => ({ name: record.metadata.name, version: record.metadata.version, license: record.metadata.license ?? null, path: record.destination, dependencies: Object.fromEntries([...record.dependencies].map(([name, root]) => [name, packages.get(root).destination])) })),
   bundled, files: fileRecords.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0), links,
 }, null, 2) + "\n", { flag: "wx" });
+await enforceExternalAgentBoundary(outputRoot);
 console.log(JSON.stringify({ output: outputRoot, packages: ordered.length, files: fileRecords.length, links: links.length, host: "typescript" }));

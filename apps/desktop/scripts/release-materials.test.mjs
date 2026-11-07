@@ -1,0 +1,296 @@
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { promisify } from "node:util";
+import test from "node:test";
+import { asarTools, inspectPackagedApplication } from "./packaged-application.mjs";
+import { captureSource, checksumDelivery, collectLegal, contentDigest, fileRecord, publicSourcePath, refreshVerification, requireUnchangedSource } from "./release-materials.mjs";
+import { verifyDelivery, verifyDeliveryFiles } from "./verify-delivery.mjs";
+import { inspectDeployment } from "./stage-workspace.mjs";
+
+const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const execute = promisify(execFile);
+async function temporary(t) {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "pm-desktop-release-")));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  return root;
+}
+async function put(root, name, value) {
+  await mkdir(dirname(join(root, name)), { recursive: true });
+  await writeFile(join(root, name), value);
+}
+async function snapshot(root, extra = {}) {
+  const entries = {
+    "README.md": "public fixture source\n",
+    "apps/desktop/package.json": JSON.stringify({ name: "@agent-workspace/desktop", version: "0.1.0" }),
+    "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    ...extra,
+  };
+  const files = [];
+  for (const name of Object.keys(entries).sort()) {
+    await put(root, name, entries[name]);
+    files.push({ path: name, bytes: Buffer.byteLength(entries[name]), mode: 0o644, sha256: hash(entries[name]) });
+  }
+  const source = { schemaVersion: 1, commit: "a".repeat(40), dirty: true, files, sha256: contentDigest(files) };
+  await put(root, "desktop-source.json", JSON.stringify(source));
+  return source;
+}
+
+test("source selection excludes private, credential, generated and internal-history paths", () => {
+  for (const path of [".env", "apps/server/.env.agent", "apps/web/.envrc", "apps/desktop/credentials.json", "apps/desktop/token", "apps/desktop/signing.pfx", "apps/desktop/.cache/archive", "apps/desktop/.runtime/runtime", "apps/desktop/releases/installer.exe", "apps/web/node_modules/a/index.js", "vendor/x/target/binary", "docs/implementation/internal.md", ".git/config", ".local/evidence/report", "Home/credentials", "../README.md", "apps/../README.md", "apps\\server\\code.ts"]) {
+    assert.equal(publicSourcePath(path), false, path);
+  }
+  for (const path of ["LICENSE", "pnpm-lock.yaml", ".github/workflows/desktop.yml", "apps/desktop/scripts/package.mjs", "vendor/t3code/source-manifest.json", "docs/guides/desktop.md"]) assert.equal(publicSourcePath(path), true, path);
+});
+
+test("gitless reviewed snapshot preserves exact identity and never copies private siblings", async (t) => {
+  const root = await temporary(t);
+  const input = join(root, "input");
+  const source = await snapshot(input);
+  await put(input, ".env", "PRIVATE_SENTINEL_NOT_A_REAL_CREDENTIAL");
+  await put(input, ".local/token", "PRIVATE_SENTINEL_NOT_A_REAL_CREDENTIAL");
+  const output = join(root, "captured");
+  assert.deepEqual(await captureSource(output, input), source);
+  assert.deepEqual((await readdir(output)).sort(), ["README.md", "apps", "desktop-source.json", "pnpm-lock.yaml"]);
+  await assert.rejects(lstat(join(output, ".env")), { code: "ENOENT" });
+  await requireUnchangedSource(source, input);
+  await put(input, "README.md", "different source bytes\n");
+  await assert.rejects(requireUnchangedSource(source, input), /Source changed/);
+  await assert.rejects(captureSource(join(root, "changed"), input), /Snapshot source bytes differ/);
+});
+
+test("gitless snapshot refuses unrecorded public code instead of attributing it to HEAD", async (t) => {
+  const root = await temporary(t);
+  const input = join(root, "input");
+  await snapshot(input);
+  await put(input, "apps/desktop/unrecorded.mjs", "export const changed = true;\n");
+  await assert.rejects(captureSource(join(root, "captured"), input), /unrecorded public source/);
+});
+
+async function fixtureGit(root, args) {
+  const environment = Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
+  Object.assign(environment, { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: join(root, ".local/no-global-config"), HOME: join(root, ".local/home"), XDG_CONFIG_HOME: join(root, ".local/home") });
+  return execute("git", ["-c", "user.name=Source fixture", "-c", "user.email=source-fixture@example.invalid", "-c", "commit.gpgsign=false", "-c", `core.hooksPath=${join(root, ".local/empty-hooks")}`, ...args], { cwd: root, env: environment, windowsHide: true });
+}
+
+test("dirty Git source refuses a tracked directory redirected into private checkout data", async (t) => {
+  const root = await temporary(t);
+  const input = join(root, "input");
+  const publicBytes = "export const publicValue = true;\n";
+  await snapshot(input, { "apps/example/config.ts": publicBytes });
+  await put(input, ".gitignore", ".local/\n");
+  await fixtureGit(input, ["init"]);
+  await fixtureGit(input, ["add", "--", "README.md", ".gitignore", "apps", "pnpm-lock.yaml"]);
+  await fixtureGit(input, ["commit", "-m", "Synthetic source fixture"]);
+  const source = await captureSource(join(root, "before"), input);
+  await put(input, ".local/private/config.ts", "PRIVATE_TEST_SENTINEL_NOT_A_REAL_CREDENTIAL");
+  await rename(join(input, "apps/example"), join(input, ".local/original-example"));
+  await symlink(join(input, ".local/private"), join(input, "apps/example"), process.platform === "win32" ? "junction" : "dir");
+  const output = join(root, "rejected");
+  await assert.rejects(captureSource(output, input), /link|junction|directory|untracked|changed/i);
+  await assert.rejects(lstat(join(output, "apps/example/config.ts")), { code: "ENOENT" });
+  // Equal content is not permission to follow a replaced source directory.
+  await put(input, ".local/private/config.ts", publicBytes);
+  await assert.rejects(requireUnchangedSource(source, input), /Source (?:selection )?changed/);
+});
+
+test("gitless source refuses an internal ancestor junction before copying its leaf", async (t) => {
+  const root = await temporary(t);
+  const input = join(root, "input");
+  await snapshot(input, { "apps/example/config.ts": "public source bytes" });
+  await put(input, ".local/private/config.ts", "PRIVATE_TEST_SENTINEL_NOT_A_REAL_CREDENTIAL");
+  await rename(join(input, "apps/example"), join(input, ".local/original-example"));
+  await symlink(join(input, ".local/private"), join(input, "apps/example"), process.platform === "win32" ? "junction" : "dir");
+  const output = join(root, "rejected");
+  await assert.rejects(captureSource(output, input), /link|junction|directory/i);
+  await assert.rejects(lstat(join(output, "apps/example/config.ts")), { code: "ENOENT" });
+});
+
+test("source ancestor replacement during an opened-file copy rejects and removes the partial copy", async (t) => {
+  const root = await temporary(t);
+  const input = join(root, "input");
+  await snapshot(input);
+  await put(input, ".local/private-desktop/package.json", "PRIVATE_TEST_SENTINEL_NOT_A_REAL_CREDENTIAL");
+  const output = join(root, "rejected");
+  const original = fs.createWriteStream;
+  let replaced = false;
+  const mocked = t.mock.method(fs, "createWriteStream", (filename, options) => {
+    if (filename === join(output, "apps/desktop/package.json")) {
+      fs.renameSync(join(input, "apps/desktop"), join(input, ".local/original-desktop"));
+      fs.symlinkSync(join(input, ".local/private-desktop"), join(input, "apps/desktop"), process.platform === "win32" ? "junction" : "dir");
+      replaced = true;
+    }
+    return original(filename, options);
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(captureSource(output, input), /link|junction|directory|identity|changed/i);
+    assert.equal(replaced, true);
+    await assert.rejects(lstat(join(output, "apps/desktop/package.json")), { code: "ENOENT" });
+  } finally {
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
+
+test("source dirty identity compares actual bytes with HEAD even under assume-unchanged", async (t) => {
+  const root = await temporary(t);
+  const input = join(root, "input");
+  await snapshot(input);
+  await fixtureGit(input, ["init"]);
+  await fixtureGit(input, ["add", "--", "README.md", "apps", "pnpm-lock.yaml"]);
+  await fixtureGit(input, ["commit", "-m", "Synthetic source fixture"]);
+  assert.equal((await captureSource(join(root, "clean"), input)).dirty, false);
+  await fixtureGit(input, ["update-index", "--assume-unchanged", "--", "README.md"]);
+  await put(input, "README.md", "changed raw source bytes hidden from git status\n");
+  assert.equal((await fixtureGit(input, ["status", "--porcelain", "--", "README.md"])).stdout, "");
+  const changed = await captureSource(join(root, "changed"), input);
+  assert.equal(changed.dirty, true);
+  assert.equal(changed.files.find((file) => file.path === "README.md").sha256, hash("changed raw source bytes hidden from git status\n"));
+});
+
+for (const gitBacked of [false, true]) {
+  test(`${gitBacked ? "Git" : "gitless"} source recheck rejects approved-path additions and removals`, async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    await snapshot(input);
+    if (gitBacked) {
+      await fixtureGit(input, ["init"]);
+      await fixtureGit(input, ["add", "--", "README.md", "apps", "pnpm-lock.yaml"]);
+      await fixtureGit(input, ["commit", "-m", "Synthetic source fixture"]);
+    }
+    const source = await captureSource(join(root, "before"), input);
+    const addition = "apps/desktop/scripts/release-materials.test.mjs";
+    await put(input, addition, "new approved public source path\n");
+    await assert.rejects(requireUnchangedSource(source, input), /Source selection changed/);
+    if (gitBacked) {
+      const withAddition = await captureSource(join(root, "with-addition"), input);
+      await rm(join(input, addition));
+      await assert.rejects(requireUnchangedSource(withAddition, input), /Source selection changed/);
+    } else {
+      await rm(join(input, addition));
+      await rm(join(input, "README.md"));
+      await assert.rejects(requireUnchangedSource(source, input), /Source selection changed/);
+    }
+  });
+}
+
+async function archive(root, files) {
+  const application = join(root, "application");
+  const resources = join(root, "resources");
+  await put(application, "package.json", JSON.stringify({ name: "pm-agent-v4-desktop", version: "0.1.0", main: "dist/main.mjs" }));
+  await put(application, "dist/main.mjs", "export const desktop = true;\n");
+  for (const [name, bytes] of Object.entries(files)) await put(application, name, bytes);
+  await mkdir(resources);
+  await asarTools().createPackage(application, join(resources, "app.asar"));
+  return resources;
+}
+
+test("final ASAR inspection rejects Claude CLI metadata aliases inside the real archive", async (t) => {
+  const root = await temporary(t);
+  const resources = await archive(root, {
+    "node_modules/renamed-platform/package.json": JSON.stringify({ name: "@anthropic-ai/claude-agent-sdk-win32-x64" }),
+    "node_modules/renamed-platform/claude.exe": "unit fixture, not a real executable",
+  });
+  await assert.rejects(inspectPackagedApplication(resources, "0.1.0"), /External Agent CLI packages/);
+});
+
+test("final inspection includes orphaned unpacked package bytes and preserves unrelated names", async (t) => {
+  const root = await temporary(t);
+  const resources = await archive(root, {
+    "node_modules/@anthropic-ai/claude-agent-sdk/package.json": JSON.stringify({ name: "@anthropic-ai/claude-agent-sdk" }),
+    "node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs": "export const sdk = true;\n",
+    "node_modules/other/package.json": JSON.stringify({ name: "other" }),
+    "node_modules/other/claude.exe": "unrelated unit resource",
+  });
+  assert.equal((await inspectPackagedApplication(resources, "0.1.0")).status, "passed");
+  await assert.rejects(inspectPackagedApplication(resources, "0.2.0"), /identity\/version/);
+  await put(resources, "app.asar.unpacked/node_modules/alias/package.json", JSON.stringify({ name: "@anthropic-ai/claude-agent-sdk-linux-x64" }));
+  await assert.rejects(inspectPackagedApplication(resources, "0.1.0"), /External Agent CLI packages/);
+});
+
+async function delivery(root) {
+  const input = join(root, "input");
+  const source = await snapshot(input);
+  const output = join(root, "delivery");
+  await mkdir(output);
+  await put(output, "PM-Agent-v4-0.1.0-win-x64-unsigned.exe", "unit installer bytes; not a real installer");
+  await put(output, "desktop-source.json", JSON.stringify(source));
+  await put(output, "desktop-source.tar.gz", "unit source archive bytes");
+  await put(output, "desktop-legal.tar.gz", "unit legal archive bytes");
+  const manifest = {
+    schemaVersion: 2, version: "0.1.0", target: "win32-x64", signing: "unsigned",
+    source: { commit: source.commit, dirty: source.dirty, sha256: source.sha256 },
+    artifacts: [await fileRecord(output, "PM-Agent-v4-0.1.0-win-x64-unsigned.exe")],
+    materials: await Promise.all(["desktop-source.json", "desktop-source.tar.gz", "desktop-legal.tar.gz"].map((name) => fileRecord(output, name))),
+  };
+  await refreshVerification(output, manifest, { schemaVersion: 1, nativeSmoke: { status: "not-run" }, published: false });
+  return { output, manifest };
+}
+
+test("delivery checksums cover every material and manifest without self-reference", async (t) => {
+  const { output, manifest } = await delivery(await temporary(t));
+  const checked = await verifyDeliveryFiles(output);
+  assert.equal(checked.names.length, 7);
+  const checksums = await readFile(join(output, "SHA256SUMS"), "utf8");
+  assert.ok(checksums.includes("  desktop-package.json\n"));
+  assert.ok(!checksums.includes("  SHA256SUMS\n"));
+  await refreshVerification(output, manifest, { schemaVersion: 1, nativeSmoke: { status: "passed" }, published: false });
+  await verifyDeliveryFiles(output);
+  await put(output, manifest.artifacts[0].path, "tampered installer");
+  await assert.rejects(verifyDeliveryFiles(output), /hash\/size mismatch/);
+});
+
+test("delivery refuses partial uploads, updater metadata, unknown archives and path escapes", async (t) => {
+  const { output, manifest } = await delivery(await temporary(t));
+  await put(output, "latest.yml", "version: 0.1.0\n");
+  await assert.rejects(verifyDeliveryFiles(output), /update feed/);
+  await rm(join(output, "latest.yml"));
+  await put(output, "extra.zip", "unrecorded archive");
+  await assert.rejects(verifyDeliveryFiles(output), /Unrecorded release artifact/);
+  await rm(join(output, "extra.zip"));
+  manifest.materials = manifest.materials.filter((file) => file.path !== "desktop-legal.tar.gz");
+  await put(output, "desktop-package.json", JSON.stringify(manifest));
+  await checksumDelivery(output, manifest);
+  await assert.rejects(verifyDeliveryFiles(output), /missing required/);
+  await assert.rejects(fileRecord(output, "../outside.exe"), /safe flat filenames/);
+});
+
+test("delivery rejects changed ASAR bytes even when application identity and version are unchanged", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  const appRoot = join(output, "win-unpacked");
+  const resources = await archive(appRoot, {});
+  const application = await inspectPackagedApplication(resources, manifest.version);
+  manifest.applicationResources = "win-unpacked/resources";
+  await refreshVerification(output, manifest, { checks: { application }, nativeSmoke: { status: "not-run" }, published: false });
+  await put(join(appRoot, "application"), "dist/main.mjs", "export const desktop = 'different bytes, same identity';\n");
+  await asarTools().createPackage(join(appRoot, "application"), join(resources, "app.asar"));
+  await assert.rejects(verifyDelivery(output), /Final ASAR bytes differ from the recorded application verification report/);
+});
+
+test("legal derivation rejects a resource-internal relative link that escapes the copied legal root", {
+  skip: process.platform === "win32" ? "Relative file symlinks require optional Windows developer privileges; source junction regressions run without them." : false,
+}, async (t) => {
+  const root = await temporary(t);
+  const resources = join(root, "app/resources");
+  for (const [name, bytes] of Object.entries({
+    "workspace-runtime/licenses/LICENSE": "root license",
+    "workspace-runtime/apps/web/dist/licenses/LICENSE": "web license",
+    "workspace-runtime/apps/web/dist/fonts/Inter-LICENSE.txt": "font license",
+    "desktop-runtime/node/LICENSE": "node license",
+    "desktop-runtime/postgres/LICENSE": "postgres license",
+    "desktop-runtime/THIRD-PARTY-NOTICES.json": "{}",
+    "app.asar": "unit resource bytes, not an executable archive",
+  })) await put(resources, name, bytes);
+  await put(join(root, "app"), "LICENSE.electron.txt", "electron license");
+  await put(join(root, "app"), "LICENSES.chromium.html", "chromium license");
+  await symlink("../../../../../app.asar", join(resources, "workspace-runtime/apps/web/dist/licenses/cross"));
+  await inspectDeployment(resources);
+  await assert.rejects(collectLegal(resources, "win32", join(root, "legal")), /nonportable symlink|ENOENT|ELOOP/);
+});

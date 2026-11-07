@@ -8,6 +8,7 @@ const required = [
   "scripts/doctor.mjs",
   "apps/server/agent/scripts/build.mjs",
   "apps/server/agent/scripts/package.mjs",
+  "apps/server/agent/scripts/external-agent-packages.mjs",
   "apps/server/agent/scripts/verify-artifact.mjs",
   "vendor/t3code/scripts/host-inputs.mjs",
 ];

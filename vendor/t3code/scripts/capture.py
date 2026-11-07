@@ -8,6 +8,7 @@ import difflib
 import hashlib
 import json
 import re
+import stat
 from pathlib import Path, PurePosixPath
 import subprocess
 
@@ -47,13 +48,16 @@ parser.add_argument("--source", required=True)
 parser.add_argument("--review-actions", action="store_true", help="Explicitly authorize updating copy-verbatim/copy-then-patch dispositions only; immutable source metadata is never changed.")
 parser.add_argument("--allow-local", action="append", default=[], help="Explicit reviewed vendor metadata/local addition to enroll; never use for adapted upstream modules.")
 parser.add_argument("--allow-host-input", action="append", default=[], help="Explicit reviewed host build tool/configuration to enroll; hashes are calculated only during this authoring operation.")
+parser.add_argument("--accept-local", action="append", default=[], metavar="PATH=SHA256", help="Narrow authoring: bind only exact reviewed, already enrolled local assets; never regenerate source recipes or host fingerprints.")
 arguments = parser.parse_args()
 vendor = Path(__file__).resolve().parent.parent
 repository = vendor.parent.parent
 source = Path(arguments.source).resolve(strict=True)
 manifest_bytes = (vendor / "source-manifest.json").read_bytes()
 manifest = json.loads(manifest_bytes)
-inventory = json.loads((vendor / "sync-inventory.json").read_bytes())
+inventory_path = vendor / "sync-inventory.json"
+inventory_bytes = inventory_path.read_bytes()
+inventory = json.loads(inventory_bytes)
 commit = manifest["upstream"]["commit"]
 head = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
 if head != commit or inventory["upstreamCommit"] != commit:
@@ -65,6 +69,56 @@ for entry in manifest["files"]:
     if digest(data) != entry["sha256"] or blob != entry["git_blob_sha1"] or len(data) != entry["bytes"]:
         raise ValueError(f"Wrong immutable source hash/blob: {entry['source_path']}")
     originals[entry["source_path"]] = data
+
+if arguments.accept_local:
+    if arguments.review_actions or arguments.allow_local or arguments.allow_host_input:
+        raise ValueError("Narrow local authoring cannot enroll files or run full capture")
+    if inventory.get("sourceManifestSha256") != digest(manifest_bytes):
+        raise ValueError("Frozen source manifest differs from its baseline binding")
+    immutable_authorities = {
+        "vendor/t3code/source-manifest.json",
+        "vendor/t3code/mcp-skills-source.json",
+        "vendor/t3code/omp-source.json",
+    }
+    approved = {}
+    snapshots = {}
+    for request in arguments.accept_local:
+        relative, separator, sha256 = request.partition("=")
+        if not separator or not re.fullmatch(r"[a-f0-9]{64}", sha256) or relative in approved:
+            raise ValueError(f"Incomplete/duplicate local acceptance: {relative}")
+        if relative in immutable_authorities:
+            raise ValueError(f"Immutable source registry cannot be rebound by narrow authoring: {relative}")
+        matches = [entry for entry in inventory["files"] if entry["destination"] == relative]
+        if (len(matches) != 1 or matches[0].get("asset") != relative
+                or matches[0].get("provenance") != "local-addition"
+                or not relative.startswith("vendor/t3code/")
+                or relative.startswith("vendor/t3code/integration-patches/")):
+            raise ValueError(f"Not an existing local asset: {relative}")
+        target = safe_file(repository, relative)
+        info = target.stat()
+        mode = 0o755 if info.st_mode & 0o111 else 0o644
+        if not stat.S_ISREG(info.st_mode) or info.st_mode & 0o7000 or mode != matches[0]["mode"]:
+            raise ValueError(f"Unsafe/changed local asset mode: {relative}")
+        data = target.read_bytes()
+        if digest(data) != sha256:
+            raise ValueError(f"Wrong local acceptance hash: {relative}")
+        if matches[0]["sha256"] == sha256 and matches[0]["bytes"] == len(data):
+            raise ValueError(f"Stale/unnecessary local acceptance: {relative}")
+        approved[relative] = sha256
+        snapshots[relative] = (data, mode)
+        matches[0].update(sha256=sha256, bytes=len(data))
+    for relative, (data, mode) in snapshots.items():
+        target = safe_file(repository, relative)
+        info = target.stat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_mode & 0o7000
+                or (0o755 if info.st_mode & 0o111 else 0o644) != mode
+                or target.read_bytes() != data):
+            raise ValueError(f"Concurrent local asset edit: {relative}")
+    if inventory_path.read_bytes() != inventory_bytes or (vendor / "source-manifest.json").read_bytes() != manifest_bytes:
+        raise ValueError("Baseline/manifest changed during narrow authoring")
+    publish(inventory_path, encoded(inventory))
+    print(json.dumps({"operation": "reviewed-local-bindings-only", "commit": commit, "outputs": sorted(approved)}))
+    raise SystemExit(0)
 
 recipes = []
 patches = {}

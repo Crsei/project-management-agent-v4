@@ -47,6 +47,7 @@ def main():
     parser.add_argument("--accept-output", action="append", default=[], metavar="PATH=SHA256", help="Exact reviewed current hash for each changed, non-retired output.")
     parser.add_argument("--retire-output", action="append", default=[], metavar="PATH=OLD_SHA256", help="Explicit retirement of an absent output, preserving its complete old record.")
     parser.add_argument("--retirement-reason", action="append", default=[], metavar="PATH=REASON", help="Required explicit rationale for the matching retirement request.")
+    parser.add_argument("--add-output", action="append", default=[], metavar="REVIEW_JSON", help="Explicit review for one missing committed composer replacement; inputs must resolve from the bound frozen inventories and each output also needs --accept-output.")
     args = parser.parse_args()
     vendor = Path(__file__).resolve().parent.parent
     root = vendor.parent.parent
@@ -67,10 +68,71 @@ def main():
     reasons = requests(args.retirement_reason, root, "retirement rationale")
     if retired.keys() != reasons.keys() or retired.keys() & accepted.keys():
         raise ValueError("Every retirement requires exactly one rationale and cannot also accept live bytes")
-    outputs = {item["destination"]: item for item in ledger["outputs"]}
+    additions = []
+    if args.add_output:
+        allowed = {
+            "apps/web/src/features/agent/src/chat/composer-suggestions.tsx",
+            "apps/web/src/features/agent/src/chat/composer-command-menu.tsx",
+            "apps/web/src/features/agent/src/chat/composer-suggestions.css",
+        }
+        manifest_bytes = safe_file(root, "vendor/t3code/source-manifest.json").read_bytes()
+        snapshot_bytes = safe_file(root, ledger["sourceInventory"]).read_bytes()
+        snapshot = json.loads(snapshot_bytes)
+        snapshot_bindings = [item for item in inventory["files"] if item["destination"] == ledger["sourceInventory"]]
+        if (inventory.get("sourceManifestSha256") != digest(manifest_bytes) or len(snapshot_bindings) != 1
+                or snapshot_bindings[0].get("asset") != ledger["sourceInventory"]
+                or snapshot_bindings[0].get("sha256") != digest(snapshot_bytes)
+                or snapshot_bindings[0].get("bytes") != len(snapshot_bytes)):
+            raise ValueError("Frozen input registry differs from its baseline binding")
+        manifest = json.loads(manifest_bytes)
+        registered = {}
+        for item in manifest["files"]:
+            registered[(manifest["upstream"]["commit"], item["source_path"])] = {
+                "commit": manifest["upstream"]["commit"], "path": item["source_path"],
+                "sha256": item["sha256"], "bytes": item["bytes"],
+                "gitBlobSha1": item["git_blob_sha1"], "gitMode": item["git_mode"],
+            }
+        for item in snapshot["files"]:
+            if item.get("type") == "blob" and item["mode"] in ("100644", "100755"):
+                registered[(snapshot["upstream"]["commit"], item["path"])] = {
+                    "commit": snapshot["upstream"]["commit"], "path": item["path"],
+                    "sha256": item["sha256"], "bytes": item["bytes"],
+                    "gitBlobSha1": item["blob"], "gitMode": item["mode"],
+                }
+        existing = {item["destination"] for item in ledger["outputs"]} | {item["destination"] for item in inventory["files"]}
+        for review_file in args.add_output:
+            review = json.loads(Path(review_file).read_bytes())
+            if not isinstance(review, dict) or set(review) != {"destination", "inputs", "reason", "license"}:
+                raise ValueError("Output review requires only destination, inputs, reason and license")
+            target = review["destination"]
+            safe_file(root, target)
+            if target not in allowed or target in existing:
+                raise ValueError(f"Unknown/duplicate/existing replacement output: {target}")
+            if (not isinstance(review["inputs"], list)
+                    or any(not isinstance(review[key], str) or not review[key].strip() for key in ("reason", "license"))):
+                raise ValueError(f"Incomplete output review: {target}")
+            inputs = []
+            for item in review["inputs"]:
+                if not isinstance(item, dict) or set(item) != {"commit", "path"}:
+                    raise ValueError(f"Inputs must name registered commit/path only: {target}")
+                key = (item["commit"], item["path"])
+                if key not in registered or any((entry["commit"], entry["path"]) == key for entry in inputs):
+                    raise ValueError(f"Unknown/duplicate registered input: {target}")
+                inputs.append(copy.deepcopy(registered[key]))
+            if target.endswith(".tsx") != bool(inputs):
+                raise ValueError(f"Composer replacements must retain derived/local ownership: {target}")
+            if target not in accepted:
+                raise ValueError(f"New output needs an exact --accept-output: {target}")
+            additions.append({
+                **review, "inputs": inputs,
+                "provenance": "adapted-upstream" if inputs else "local-integration",
+                "sha256": "0" * 64, "bytes": 0, "mode": 0o644,
+            })
+            existing.add(target)
+    outputs = {item["destination"]: item for item in [*ledger["outputs"], *additions]}
     unknown = (accepted.keys() | retired.keys() | reasons.keys()) - outputs.keys()
-    if unknown:
-        raise ValueError(f"Unknown output requests: {sorted(unknown)}")
+    if unknown or retired.keys() & {item["destination"] for item in additions}:
+        raise ValueError(f"Unknown output requests or conflicting replacement retirement: {sorted(unknown)}")
 
     # Reconstruct and verify EVERY old recipe, source hash/blob/size/mode and MIT
     # identity before authoring anything. The replay helper never runs source code.
@@ -84,6 +146,7 @@ def main():
         str(root), str(source), str(vendor / "scripts/mcp-skills-adaptations.mjs"),
     ], check=True)
     updated = copy.deepcopy(ledger)
+    updated["outputs"].extend(additions)
     for output in updated["outputs"]:
         target = output["destination"]
         file = safe_file(root, target)
@@ -129,6 +192,18 @@ def main():
             ]}
         else:
             output["recipe"] = {"kind": "local-bytes", "base64": base64.b64encode(after).decode("ascii")}
+
+    if additions:
+        # Authenticate all newly mapped Git identities and the generated exact
+        # recipes before publishing; the review cannot inject original bytes.
+        subprocess.run([
+            "node", "--input-type=module", "-e",
+            'import {readFileSync} from "node:fs"; import {pathToFileURL} from "node:url"; '
+            'const [root,source,helper]=process.argv.slice(1); '
+            'const {replayMcpSkillsAdaptations}=await import(pathToFileURL(helper)); '
+            'await replayMcpSkillsAdaptations(root,source,JSON.parse(readFileSync(0,"utf8")));',
+            str(root), str(source), str(vendor / "scripts/mcp-skills-adaptations.mjs"),
+        ], input=json.dumps(updated).encode(), check=True)
 
     # The existing import authority checks current host consumers, including files
     # outside the adaptation allowlist. It reads the proposed ledger from stdin;

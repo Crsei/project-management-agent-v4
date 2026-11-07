@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readFile, readlink, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { enforceExternalAgentBoundary, isExternalAgentCliPackage } from "./external-agent-packages.mjs";
 
 if (process.argv[2] !== "--artifact" || !process.argv[3] || process.argv.length !== 4) throw new Error("Usage: node apps/server/agent/scripts/verify-artifact.mjs --artifact RELOCATED_ARTIFACT_ROOT");
 const artifact = await realpath(path.resolve(process.argv[3]));
@@ -11,6 +12,8 @@ const manifest = JSON.parse(await readFile(path.join(artifact, "artifact-manifes
 assert.equal(manifest.version, 1);
 assert.equal(manifest.platform, process.platform);
 assert.equal(manifest.arch, process.arch);
+await enforceExternalAgentBoundary(artifact);
+assert.ok(manifest.packages.every((entry) => !isExternalAgentCliPackage(entry.name)));
 const contained = (value) => value === artifact || value.startsWith(artifact + path.sep);
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 for (const entry of manifest.files) {
@@ -74,6 +77,32 @@ try {
       }
     }
     for(const name of ['@anthropic-ai/claude-agent-sdk','@cursor/sdk','@muse-code/sdk']) await import(pathToFileURL(req.resolve(name)).href);
+    const claude=await import(pathToFileURL(req.resolve('@anthropic-ai/claude-agent-sdk')).href);
+    const externalCli=path.join(process.cwd(),'external-claude.mjs');
+    fs.writeFileSync(externalCli,[
+      "import readline from 'node:readline';",
+      "readline.createInterface({input:process.stdin}).on('line',line=>{",
+      "const event=JSON.parse(line); if(event.type!=='control_request')return;",
+      "const response=event.request.subtype==='initialize'?{commands:[],agents:[],models:[],account:{email:'external-cli@example.invalid',tokenSource:'none'}}:{};",
+      "process.stdout.write(JSON.stringify({type:'control_response',response:{subtype:'success',request_id:event.request_id,response}})+String.fromCharCode(10));",
+      "});",
+    ].join(String.fromCharCode(10)));
+    async function initializeExternalClaude(executablePath){
+      const abort=new AbortController();
+      let operation;
+      try {
+        operation=claude.query({
+          prompt:(async function*(){await new Promise(resolve=>abort.signal.addEventListener('abort',resolve,{once:true}));})(),
+          options:{pathToClaudeCodeExecutable:executablePath,executable:'node',cwd:process.cwd(),
+            env:{...process.env,PATH:path.dirname(process.execPath)+path.delimiter+(process.env.PATH??'')},
+            abortController:abort,persistSession:false,tools:[],settingSources:[],settings:{disableAllHooks:true},strictMcpConfig:true,mcpServers:{}},
+        });
+        return await operation.initializationResult();
+      } finally { abort.abort(); operation?.close(); }
+    }
+    assert.equal((await initializeExternalClaude(externalCli)).account.email,'external-cli@example.invalid');
+    const missingCli=path.join(process.cwd(),'missing-external-claude');
+    await assert.rejects(initializeExternalClaude(missingCli),error=>error.message.includes(missingCli));
     req('@lydell/node-pty');
     const store=await req('@cursor/sdk/sqlite').SqliteLocalAgentStore.open({workspaceRef:process.cwd(),stateRoot:path.join(process.cwd(),'cursor-sdk-state')});
     await store.dispose();
@@ -122,7 +151,7 @@ try {
   assert.equal(response.status, 200);
   const access = await response.json();
   assert.equal(access.authorized, true);
-  console.log(JSON.stringify({ artifactHashesAndInternalLinks: true, diskSdkImports: true, nativePtyLoad: true, oneEffectSingleton: true, documentWorker: true, productionClaudeHistoryDispatch: true, apiOnlyProductionHttp: true, target: `${process.platform}-${process.arch}` }));
+  console.log(JSON.stringify({ artifactHashesAndInternalLinks: true, externalAgentCliPackagesAbsent: true, claudeExternalExecutableAndMissingPath: true, diskSdkImports: true, nativePtyLoad: true, oneEffectSingleton: true, documentWorker: true, productionClaudeHistoryDispatch: true, apiOnlyProductionHttp: true, target: `${process.platform}-${process.arch}` }));
 } finally {
   if (server && server.exitCode === null && server.signalCode === null) {
     await new Promise((resolve) => {

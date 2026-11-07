@@ -67,7 +67,11 @@ Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity�
 
 适配以 `t3code@30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c` 为配置与协议基准；MIT 归属见 [LICENSE.t3code](../../LICENSE.t3code)。Codex 通过“使用现有 CLI”与“继续使用 ChatGPT”进入对应流程，不再展示模式下拉框。existing 复用原生配置 / 外部认证，可使用 API Key 或第三方服务，不强制 ChatGPT 登录；managed 使用受管运行时、ChatGPT 多账号 OAuth / token broker，私有状态保留在本副本 `provider-homes`。Claude 的四种 idle compaction 模式接入实际宿主调度并重新核验执行身份；业务来源仍受原授权上限约束。Cursor 的 `CURSOR_API_KEY` 位于专属 Setup，填写密钥后隐藏浏览器登录，清除并保存后恢复该入口。Grok / FX / Muse / Pi / OMP 与 existing Codex / Claude / OpenCode 遵循来源的外部认证边界，不另造应用内登录 / 登出。
 
-安装、更新、取消与移除仅对实际支持的驱动开放；“继续使用 ChatGPT”先准备运行时，再发起登录，只读检查或发送消息不会自动下载。维护与认证 / 执行互斥。原生 Home 留空时继承宿主规则，显式 Home 和实例环境覆盖对应配置，不重写进程 HOME / XDG，也不清除宿主 Provider 凭据。应用自有状态与原生 Home 分离，重置、删除和备份不收集、创建或删除外部 Home。PM 作用域、审批与完成规则不变。
+**CLI 与 SDK 的交付边界：** Claude 使用服务机器／桌面用户已安装的 `claude`，也可在 Runtime binary 填写其实际路径；未安装、不可执行或路径错误时明确失败，不回退到 SDK 自带 CLI。安装包保留 Claude 通信 SDK、manifest 与许可证，但排除 `@anthropic-ai/claude-agent-sdk-*` 平台执行包。Muse 同样通过用户的 `muse serve` 通信。Cursor 当前使用本地 Agent SDK 引擎，并不是用户 Cursor CLI 的包装器；其 SDK、SQLite、搜索／sandbox／tree-sitter 等必要资源仍保留，旧 `binaryPath` / `apiEndpoint` 字段不控制当前执行，不能把它宣传为已完成外部 CLI 适配。
+
+这不移除现有明确选择的安装流程：Codex managed、Antigravity managed 和 ACP Registry 各有原生准备／安装语义。ACP 的 npx / uvx 状态探测还可能解析并准备 Registry 包，不能概括成所有 Provider 的检查都绝不下载；该行为与桌面安装包预捆绑外部 CLI 不同，本次未重做 ACP 安装流程。
+
+安装、更新、取消与移除仅对实际支持的驱动开放；“继续使用 ChatGPT”先准备运行时，再发起登录，Codex 的只读检查或发送消息不会自动下载。维护与认证 / 执行互斥。原生 Home 留空时继承宿主规则，显式 Home 和实例环境覆盖对应配置，不重写进程 HOME / XDG，也不清除宿主 Provider 凭据。应用自有状态与原生 Home 分离，重置、删除和备份不收集、创建或删除外部 Home。PM 作用域、审批与完成规则不变。
 
 当前配置流程、实际执行及发布记录见 [t3code Provider 原生流程切换](../reference/t3code-provider-config-diff-30eb7e7bb1.zh.md#v4-native-provider-flow)。原调查和前两轮实施保留为历史记录；旧的强制独立 Home 与配置文件教程已被替换。
 

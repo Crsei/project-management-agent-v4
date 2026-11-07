@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,7 +31,7 @@ const records = names.map((destination, index) => ({
     splices: [{ start: 0, before: original.toString("utf8").match(/[^\n]*\n|[^\n]+$/g) ?? [], after: [contents[index].toString()] }],
   },
 }));
-const initial = { version: 1, baselineCommit: authority.baselineCommit, sources: authority.sources, outputs: records };
+const initial = { version: 1, baselineCommit: authority.baselineCommit, sources: authority.sources, sourceInventory: authority.sourceInventory, baselineInventory: authority.baselineInventory, outputs: records };
 let serial = 0;
 async function put(root, name, bytes) {
   await mkdir(path.dirname(path.join(root, name)), { recursive: true });
@@ -159,6 +159,102 @@ try {
   await put(valid, names[0], contents[0]);
   await author(valid, [], 1, /Retired target exists/);
   await assert.rejects(planMcpSkillsAdaptations(valid, source), /Retired target exists/);
+  const replacementPath = "apps/web/src/features/agent/src/chat/composer-suggestions.tsx";
+  const replacementBytes = Buffer.from("export const replacement = true;\n");
+  const registryBytes = Buffer.from(encode({ upstream: { commit: input.commit }, files: [{ path: input.path, mode: input.gitMode, type: "blob", blob: input.gitBlobSha1, bytes: input.bytes, sha256: input.sha256 }] }));
+  const replacementFixture = async (mutate) => {
+    const root = await fixture(mutate);
+    await put(root, authority.sourceInventory, registryBytes);
+    const target = path.join(root, "vendor/t3code/sync-inventory.json");
+    const baseline = JSON.parse(await readFile(target, "utf8"));
+    baseline.sourceManifestSha256 = hash(originalManifest);
+    baseline.files.push({ destination: authority.sourceInventory, asset: authority.sourceInventory, sha256: hash(registryBytes), bytes: registryBytes.length, mode: 0o644 });
+    await writeFile(target, encode(baseline));
+    await put(root, replacementPath, replacementBytes);
+    return root;
+  };
+  const replacement = await replacementFixture();
+  const reviewName = path.join(replacement, "review.json");
+  const review = { destination: replacementPath, inputs: [{ commit: input.commit, path: input.path }], reason: "Reviewed synthetic composer replacement", license: "MIT; vendor/t3code/LICENSE" };
+  const replacementArgs = ["--add-output", reviewName, "--accept-output", `${replacementPath}=${hash(replacementBytes)}`];
+  await writeFile(reviewName, encode({ ...review, recipe: { kind: "local-bytes" } }));
+  await author(replacement, replacementArgs, 1, /requires only/);
+  await writeFile(reviewName, encode({ ...review, destination: "apps/web/src/unreviewed.tsx" }));
+  await author(replacement, replacementArgs, 1, /Unknown\/duplicate\/existing/);
+  await writeFile(reviewName, encode({ ...review, inputs: [{ commit: "a".repeat(40), path: input.path }] }));
+  await author(replacement, replacementArgs, 1, /Unknown\/duplicate registered input/);
+  await writeFile(reviewName, encode({ ...review, inputs: [review.inputs[0], review.inputs[0]] }));
+  await author(replacement, replacementArgs, 1, /Unknown\/duplicate registered input/);
+  await writeFile(reviewName, encode(review));
+  await author(replacement, ["--add-output", reviewName], 1, /exact --accept-output/);
+  await author(replacement, [...replacementArgs, "--add-output", reviewName], 1, /Unknown\/duplicate\/existing/);
+  await author(replacement, ["--add-output", reviewName, "--accept-output", `${replacementPath}=${"0".repeat(64)}`], 1, /Unapproved output drift/);
+  const replacementLedger = await author(replacement, replacementArgs);
+  const newRecord = replacementLedger.outputs.find((entry) => entry.destination === replacementPath);
+  assert.deepEqual(newRecord.inputs, [input], "Only registered full immutable identities may enter the new mapping");
+  assert.equal(newRecord.provenance, "adapted-upstream");
+  for (const entry of initial.outputs) assert.deepEqual(replacementLedger.outputs.find((candidate) => candidate.destination === entry.destination), entry);
+  const restored = await replacementFixture((ledger) => ledger.outputs.push({ ...structuredClone(records[1]), destination: replacementPath, retirement: { sha256: records[1].sha256, reason: "Already retired" } }));
+  await rm(path.join(restored, replacementPath));
+  const restoreReview = path.join(restored, "review.json");
+  await writeFile(restoreReview, encode(review));
+  await author(restored, ["--add-output", restoreReview, "--accept-output", `${replacementPath}=${hash(replacementBytes)}`], 1, /Unknown\/duplicate\/existing/);
+
+  const narrow = await fixture();
+  const asset = "vendor/t3code/SYNC.md", other = "vendor/t3code/sync-imports.json";
+  const oldAsset = Buffer.from("Reviewed local baseline\n"), newAsset = Buffer.from("Reviewed local baseline, amended\n");
+  await put(narrow, asset, oldAsset);
+  const baselinePath = path.join(narrow, "vendor/t3code/sync-inventory.json");
+  const baseline = JSON.parse(await readFile(baselinePath, "utf8"));
+  baseline.sourceManifestSha256 = hash(originalManifest);
+  for (const name of [asset, other]) {
+    const bytes = await readFile(path.join(narrow, name));
+    baseline.files.push({ destination: name, asset: name, sha256: hash(bytes), bytes: bytes.length, mode: 0o644, provenance: "local-addition" });
+  }
+  const actualInventory = JSON.parse(await readFile(path.join(repository, "vendor/t3code/sync-inventory.json"), "utf8"));
+  const frozenFixtures = new Map();
+  for (const name of ["vendor/t3code/source-manifest.json", "vendor/t3code/mcp-skills-source.json", "vendor/t3code/omp-source.json"]) {
+    const record = actualInventory.files.find((entry) => entry.destination === name);
+    assert.equal(record?.asset, name);
+    assert.equal(record?.provenance, "local-addition", "Exercise the real classification that previously admitted immutable registries");
+    const bytes = await readFile(path.join(repository, name));
+    baseline.files.push(structuredClone(record));
+    frozenFixtures.set(name, bytes);
+    await put(narrow, name, bytes);
+  }
+  baseline.runtimeResources = { hostBuildInputs: [{ path: "unrelated-host-tool", sha256: "a".repeat(64) }] };
+  await writeFile(baselinePath, encode(baseline));
+  await put(narrow, asset, newAsset);
+  await put(narrow, other, "Unapproved unrelated local bytes\n");
+  const bind = async (args, expected, message) => {
+    const before = await readFile(baselinePath);
+    const result = spawnSync("python3", [path.join(narrow, "vendor/t3code/scripts/capture.py"), "--source", source, ...args], { encoding: "utf8", env: environment });
+    if (result.error) throw result.error;
+    assert.equal(result.status, expected, result.stderr + result.stdout);
+    if (message) assert.match(result.stderr, message);
+    if (expected) assert.deepEqual(await readFile(baselinePath), before, "Rejected narrow binding must not publish metadata");
+  };
+  const acceptance = ["--accept-local", `${asset}=${hash(newAsset)}`];
+  await bind(["--accept-local", `${asset}=${"0".repeat(64)}`], 1, /Wrong local acceptance hash/);
+  await bind([...acceptance, ...acceptance], 1, /duplicate local acceptance/);
+  await bind([...acceptance, "--allow-host-input", "unknown"], 1, /cannot enroll/);
+  for (const [name, bytes] of frozenFixtures) {
+    const changed = name.endsWith("/source-manifest.json") ? bytes : Buffer.concat([bytes, Buffer.from("\n")]);
+    await put(narrow, name, changed);
+    await bind([...acceptance, "--accept-local", `${name}=${hash(changed)}`], 1, /Immutable source registry cannot be rebound/);
+    assert.deepEqual(await readFile(path.join(narrow, name)), changed, "Rejected binding must not rewrite registry bytes");
+    await put(narrow, name, bytes);
+  }
+  await chmod(path.join(narrow, asset), 0o755);
+  await bind(acceptance, 1, /changed local asset mode/);
+  await chmod(path.join(narrow, asset), 0o644);
+  await bind(acceptance, 0);
+  const bound = JSON.parse(await readFile(baselinePath, "utf8"));
+  const expectedBinding = structuredClone(baseline);
+  Object.assign(expectedBinding.files.find((entry) => entry.destination === asset), { sha256: hash(newAsset), bytes: newAsset.length });
+  assert.deepEqual(bound, expectedBinding, "Only the explicitly approved binding may change; no unrelated output/host refresh");
+  await bind(acceptance, 1, /Stale\/unnecessary/);
+  assert.deepEqual(await readFile(path.join(narrow, "vendor/t3code/source-manifest.json")), originalManifest);
   console.log(JSON.stringify({ unchangedDeterministic: true, malformedIdentityRefused: true, oldRecipePreserved: true, existingTargetRefused: true, exactRetirementHashRequired: true, duplicateUnknownRequestsRefused: true, liveRelativeAliasConsumersRefused: true, granularOutputAcceptanceRequired: true, rejectedWritesAbsent: true, adaptedAndLocalRetirementReplay: true }));
 } finally {
   await rm(temporary, { recursive: true, force: true });

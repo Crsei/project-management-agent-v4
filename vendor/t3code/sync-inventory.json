@@ -26,8 +26,8 @@
     {
       "destination": "vendor/t3code/SYNC.md",
       "asset": "vendor/t3code/SYNC.md",
-      "sha256": "9de1f5eda20f953bc5eaaeb954a91ff15bda3bcb82b937c2e2f29a5959d0eb98",
-      "bytes": 24254,
+      "sha256": "2379006b9fd4edf0d22f9f98f399932965c80156fd9130d6d01b78375825d87f",
+      "bytes": 32863,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -2343,8 +2343,8 @@
     {
       "destination": "vendor/t3code/integration-patches.json",
       "asset": "vendor/t3code/integration-patches.json",
-      "sha256": "52cb022b5257955311a8748b8c3859f405195f153e1804f288af30f7479751c0",
-      "bytes": 57557,
+      "sha256": "02f50b35fe61d80ecdb7495490519acdcad9faca30f48be1b296a28c8e19b102",
+      "bytes": 59733,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -3831,8 +3831,8 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "192a76759bf9698e2985739ec3c5089990635eb921ea1fc2232a5f9bcab8904b",
-      "bytes": 4818920
+      "sha256": "8b13595edc57c870a8fa81cb09900c4673d0a730f583a675d68daa18359a445e",
+      "bytes": 5137685
     },
     {
       "destination": "vendor/t3code/mcp-skills-source.json",
@@ -10580,14 +10580,14 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "5b110e6f887cb88d6020ec76ce16aee349acd889eec58dcf3f616467c35bbae3",
-      "bytes": 8189
+      "sha256": "72663d022f06f74272acb35d4b65a9d1e8cdca38bc5b2ea8f89d41d488c395b6",
+      "bytes": 13359
     },
     {
       "destination": "vendor/t3code/scripts/capture.py",
       "asset": "vendor/t3code/scripts/capture.py",
-      "sha256": "49dadcc6e804d3434505a3411125e16c0c4ebc6551a8a5b6d4fb7a95da02c78e",
-      "bytes": 10919,
+      "sha256": "9810abeff09ffefafd4a9a73e14da3fe8026390c915746a771a61f525f15d852",
+      "bytes": 14204,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10595,8 +10595,8 @@
     {
       "destination": "vendor/t3code/scripts/host-inputs.mjs",
       "asset": "vendor/t3code/scripts/host-inputs.mjs",
-      "sha256": "bbcfc55dd9b9b1f963279a05a181b2db64f8bc329f9769352d8eb5f01390958d",
-      "bytes": 1650,
+      "sha256": "60b07eee3a4a4861e9bf098971eb99454d30fa0e2194980194703126eca69f8f",
+      "bytes": 1709,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10643,8 +10643,8 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "0df37c6527c4e9290004520f5e3f82b1ca95d389d64734b7bd658cb48c99578c",
-      "bytes": 11667
+      "sha256": "bf5a9f51671cc5d5c6b006588229639b0fdb7df1e7e5d62a9902ffc942025772",
+      "bytes": 19254
     },
     {
       "destination": "vendor/t3code/scripts/verify-sync.mjs",
@@ -10676,8 +10676,8 @@
     {
       "destination": "vendor/t3code/sync-imports.json",
       "asset": "vendor/t3code/sync-imports.json",
-      "sha256": "e171ba7e30c6514104c6f5bfd246308ad53778d66c81f637452cb8f926d49c00",
-      "bytes": 2299059,
+      "sha256": "e4c3588410a258b478133ae0cc195772699908c219b2990ed49f9e441a7180fd",
+      "bytes": 2302395,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -11642,15 +11642,15 @@
       },
       {
         "path": "apps/server/agent/scripts/package.mjs",
-        "sha256": "1e4f6a9cb986d060c5fca31f6ecd19cd243049f8523ebcfb9bf07c5638a13076"
+        "sha256": "a824c707dbee9b78fb6488b1584bbc8958cf71215eb5323b534a56fc6d84f6f9"
       },
       {
         "path": "vendor/t3code/scripts/host-inputs.mjs",
-        "sha256": "bbcfc55dd9b9b1f963279a05a181b2db64f8bc329f9769352d8eb5f01390958d"
+        "sha256": "60b07eee3a4a4861e9bf098971eb99454d30fa0e2194980194703126eca69f8f"
       },
       {
         "path": "apps/server/agent/scripts/verify-artifact.mjs",
-        "sha256": "204bcd6afb88321389350fd5f306e2c58425fbce7b872b717314226d1c04a913"
+        "sha256": "24fbffca05785cc3aa6556a7cd2616d05aee33f71b9670f603c5597a3e8a0542"
       },
       {
         "path": ".node-version",
@@ -11663,6 +11663,10 @@
       {
         "path": "scripts/doctor.mjs",
         "sha256": "43e14b07642a04c0cee881686b271a466b4f8a72165a27c614c12b86a61e0d2b"
+      },
+      {
+        "path": "apps/server/agent/scripts/external-agent-packages.mjs",
+        "sha256": "9f4f27668866f580340db3218a31cb23bb9057f7dea0a0174ed8f7399c289702"
       }
     ],
     "acceptance": "Parent-only: relocated included tools/verify-artifact.mjs; no T18 execution.",

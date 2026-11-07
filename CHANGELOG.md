@@ -37,6 +37,9 @@
 - README 整理为公共入口，完整用法与限制移至 `docs/guides/`；内部计划和历史验收原件留在本地，公共安装/检查不依赖它们。
 - 当前架构/领域文档明确 Markdown、PostgreSQL、Agent SQLite 的不同权威，保留历史 ADR 和 INV/SC 追踪语义。
 - 提供贡献与安全政策、工具链 doctor 和隔离 CI 入口；文档检查不再绑定内部27步实施计划。
+- 修复 Claude 外部 CLI 交付边界：保留通信 SDK 与完整资源，但按包身份排除 SDK 的平台 CLI 执行包，并覆盖 Agent、自有桌面打包及独立 `pnpm deploy`／容器闭包；缺失或无效的用户 Claude 路径明确失败，不改用内置 CLI。保留 Cursor SDK 引擎／原生工具、SQLite、PTY，以及 Codex / Antigravity managed 和 ACP 原生安装语义；不宣称所有 Provider 都已切换为外部 CLI。
+- 按只读 t3code 发布工作流与近期实际 stable/nightly assets 补齐本项目桌面交付设计；默认只构建 Windows x64 unsigned，不移植上游 CLI、便携版、自动更新/nightly、relay/mobile 或发布账号。最终 app.asar、unpacked 与受管 runtime 复用外部 Claude CLI 包身份检查；发行集增加准确源码/版本身份、对应源码与最终许可材料、非自引用 SHA256SUMS 和分层验证报告，Actions 只上传精确校验的完整材料。材料收集/测试包不代表签名、GUI、真实安装或正式分发授权通过，见[发布设计](docs/reference/desktop-release-alignment-2026-11-08.zh.md)与[Windows 操作手册](docs/reference/windows-build-runbook.zh.md)。
+- 加固发行材料的派生边界：源码根及全部祖先复用现有安全目录/文件句柄检查，拒绝内部 symlink/junction、身份漂移和构建期间公开选集变化；dirty 由实际字节/模式与固定 HEAD 对象比较，不能被 assume-unchanged 隐藏。legal 目录复制后按自身根重新检查链接，成品 ASAR 摘要必须匹配原验证报告，不能用同名称/版本的另一份归档替换。
 - 原生安装包工作流支持只运行 Windows x64，不启动 macOS Job；修复 MSVC 链接器帮助返回 1100 时被构建预检误报为缺失，仍拒绝缺失工具、真正链接错误和无效帮助输出。
 - 桌面预览回归移除把预加载文件 URL 写死为 POSIX 路径的断言，保留导航归一化、分区与权限行为检查，避免 Windows 正确的驱动器路径被误判。
 - Windows 原生辅助程序清单按实际平台记录规范文件模式，不再要求不存在的 POSIX 执行位；文件哈希、大小、模式、目标平台与资源闭包校验保持启用。

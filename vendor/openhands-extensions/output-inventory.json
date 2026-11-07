@@ -3,7 +3,7 @@
   "upstreamCommit": "b4a3f45a28f6b6c387a8deb3dc7c18b4393c59c1",
   "sourceManifestSha256": "38e687390e239aa6b41628928ef0f35149d618e15504e79aa7a52eb8cb0e9bed",
   "supplementalSha256": "9bcf6d052c337b028ff86bd80790f4f5a4f23914946a64bd7b1e112b2aed728c",
-  "policySha256": "bd1f52028d21573699af13bf34fc2fc9546ed2785fe34c8d40c51badbe8f5652",
+  "policySha256": "1974b1c7545fb43b65e27511d5527e97eb22227c2fe734f81af20d3877c9742e",
   "closureSha256": "b812d5037b432b7cb3ff2c01cb3fa85b4cb61d2f2c215b97f6f383bab4aaaa32",
   "modePolicy": "Canonical 0644/0755 executable class, regular nonlinked files; original modes fixed. Exact pre/postimage and exclusive nonoverwriting replay.",
   "hostBuildInputs": [
@@ -51,14 +51,20 @@
     },
     {
       "path": "apps/server/agent/scripts/package.mjs",
-      "sha256": "1e4f6a9cb986d060c5fca31f6ecd19cd243049f8523ebcfb9bf07c5638a13076",
-      "bytes": 17038,
+      "sha256": "a824c707dbee9b78fb6488b1584bbc8958cf71215eb5323b534a56fc6d84f6f9",
+      "bytes": 17830,
+      "mode": 420
+    },
+    {
+      "path": "apps/server/agent/scripts/external-agent-packages.mjs",
+      "sha256": "9f4f27668866f580340db3218a31cb23bb9057f7dea0a0174ed8f7399c289702",
+      "bytes": 4376,
       "mode": 420
     },
     {
       "path": "apps/desktop/scripts/stage-workspace.mjs",
-      "sha256": "e21cda7a3c88a3ccbc5ec35bb4b007f25d328b0d942070eb6303c08867d99c6c",
-      "bytes": 12172,
+      "sha256": "0d086da506d320d98827a258585635b8716c8ddc82023cf36e4335b7b08f5d03",
+      "bytes": 12571,
       "mode": 420
     }
   ],
@@ -1133,14 +1139,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/fork-policy.json",
-      "sha256": "bd1f52028d21573699af13bf34fc2fc9546ed2785fe34c8d40c51badbe8f5652",
-      "bytes": 5148,
+      "sha256": "1974b1c7545fb43b65e27511d5527e97eb22227c2fe734f81af20d3877c9742e",
+      "bytes": 5209,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Reviewed Claude external CLI package-identity exclusion across Agent and independent deploy closures; retain SDK and native resources",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/fork-policy.json.json",
-        "sha256": "5646f8c0e7fd56192e00b4131da880611f6ae0e3c291aff70a6af3dc797a4b01"
+        "sha256": "e041f371a008752fdca75acb44173eaa5431d83d517d0baa2def44d49b4bd0c4"
       }
     },
     {
@@ -1218,14 +1224,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/scripts/capture.mjs",
-      "sha256": "27d404118c81be1bb1fd7b13013a8324447b366239ef33bd88f0346b1f2a82ad",
-      "bytes": 10835,
+      "sha256": "c79b7ff9e12d161221300c51b796e2e71d2b41de165f37e1b2a9901f2f09273f",
+      "bytes": 16096,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed actual OpenHands Marketplace/Skills source adaptation, scoped host composition, and independent Agent configuration boundaries",
+      "reason": "Independent boundary review hardening: ordinary authoring requires each output approval for recipe presence/path/hash transitions including removal; add real ordinary-authoring refusal/no-write and approved-removal fixture with explicitly supplied read-only pinned source; public design first, no production inputs/pin/enrollment changes.",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/scripts/capture.mjs.json",
-        "sha256": "7e10dac06261c93b7f039755ebfd91e97311fc8528dabedd6c2ffc3f789b2d32"
+        "sha256": "442ff4e59971fcfa4996c95fcde632a3745831dfe7240468598b02362ab04b7c"
       }
     },
     {
@@ -1242,14 +1248,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/scripts/provenance.test.mjs",
-      "sha256": "f050213e3532c1b4556facc5929d3192bf79445f487893c6d4a8563a7b422cfd",
-      "bytes": 7856,
+      "sha256": "2e77e22f4784f57f5f7a1f3b99d79a01aca33833b8b9f3db8022735bca8c4fe7",
+      "bytes": 18572,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed existing CC public-entry consumption and internal-source bypass rejection; unchanged OpenHands inputs and runtime implementations.",
+      "reason": "Independent boundary review hardening: ordinary authoring requires each output approval for recipe presence/path/hash transitions including removal; add real ordinary-authoring refusal/no-write and approved-removal fixture with explicitly supplied read-only pinned source; public design first, no production inputs/pin/enrollment changes.",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/scripts/provenance.test.mjs.json",
-        "sha256": "a846c2c6c2635f67da5ac7185d522b9f5a2cfe24ba38be55fd646df669710634"
+        "sha256": "035e4abcb6a710c5bda8a3c8073107d95474a6a46337bf189d67c8706be4733b"
       }
     },
     {
@@ -1282,10 +1288,10 @@
       "bytes": 10908,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Normalize Vite module IDs and native root separators before tracing OpenHands runtime dependencies on Windows; preserve complete real dependency notice collection and fail-closed license verification. No source pins or runtime modules changed.",
+      "reason": "Reviewed same-pin Windows-build repair: committed host 575c11bdca253e731b4121a1507159931a601af9 removed obsolete CC Rust ledger coupling; record exact existing web-build bytes and narrowly scoped authoring tools/design/regression fixtures only; no production UI, pin, host input or unrelated recipe changes; authoring is not verification.",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/scripts/web-build.mjs.json",
-        "sha256": "a7e847bf1b1c4b479b73a85ede7c08d152992f6cd4c84175420bbf9594e10556"
+        "sha256": "a88c2b4400a8c7398b67a67256cf2111f94a6550cc84078be7d7fb25fe05e85f"
       }
     },
     {
@@ -3978,14 +3984,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/SYNC.md",
-      "sha256": "919a5e5a6eb0879b4c8cbe1e9aedcdea5b7f700e7aaa3c487239de9d7cdd2b34",
-      "bytes": 15248,
+      "sha256": "caa53f7b2d91d4e61cb58f37e80031006b44af7e53981cdf2faacf17319ff450",
+      "bytes": 19060,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Direct registered Agent configuration without a context consent ceremony; Provider setup-only presentation and truthful target capabilities",
+      "reason": "Independent boundary review hardening: ordinary authoring requires each output approval for recipe presence/path/hash transitions including removal; add real ordinary-authoring refusal/no-write and approved-removal fixture with explicitly supplied read-only pinned source; public design first, no production inputs/pin/enrollment changes.",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/SYNC.md.json",
-        "sha256": "901f980c0ef44b58827ff6730a8669ed7fc37f2d487b608dcc7d959d801efb41"
+        "sha256": "6049758be56c259d24b5c08272d200adf0f4ac662153ddf64b28d50f8f8aca3a"
       }
     }
   ],
@@ -3998,8 +4004,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/fork-policy.json.json",
-      "sha256": "5646f8c0e7fd56192e00b4131da880611f6ae0e3c291aff70a6af3dc797a4b01",
-      "bytes": 7048,
+      "sha256": "e041f371a008752fdca75acb44173eaa5431d83d517d0baa2def44d49b4bd0c4",
+      "bytes": 7168,
       "mode": 420
     },
     {
@@ -4016,8 +4022,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/scripts/capture.mjs.json",
-      "sha256": "7e10dac06261c93b7f039755ebfd91e97311fc8528dabedd6c2ffc3f789b2d32",
-      "bytes": 14671,
+      "sha256": "442ff4e59971fcfa4996c95fcde632a3745831dfe7240468598b02362ab04b7c",
+      "bytes": 21687,
       "mode": 420
     },
     {
@@ -4028,8 +4034,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/scripts/provenance.test.mjs.json",
-      "sha256": "a846c2c6c2635f67da5ac7185d522b9f5a2cfe24ba38be55fd646df669710634",
-      "bytes": 10707,
+      "sha256": "035e4abcb6a710c5bda8a3c8073107d95474a6a46337bf189d67c8706be4733b",
+      "bytes": 24995,
       "mode": 420
     },
     {
@@ -4046,8 +4052,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/scripts/web-build.mjs.json",
-      "sha256": "a7e847bf1b1c4b479b73a85ede7c08d152992f6cd4c84175420bbf9594e10556",
-      "bytes": 15633,
+      "sha256": "a88c2b4400a8c7398b67a67256cf2111f94a6550cc84078be7d7fb25fe05e85f",
+      "bytes": 14769,
       "mode": 420
     },
     {
@@ -4214,8 +4220,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/SYNC.md.json",
-      "sha256": "901f980c0ef44b58827ff6730a8669ed7fc37f2d487b608dcc7d959d801efb41",
-      "bytes": 20543,
+      "sha256": "6049758be56c259d24b5c08272d200adf0f4ac662153ddf64b28d50f8f8aca3a",
+      "bytes": 25627,
       "mode": 420
     },
     {

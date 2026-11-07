@@ -17,10 +17,12 @@ RUN node -e "const fs=require('node:fs');if(['.env','.env.agent','.local','.git'
     && node --input-type=module -e "import {collectNotices} from './apps/desktop/scripts/license-notices.mjs'; await collectNotices(['/app/apps/web'],'/app/apps/web/dist/licenses/dependencies')"
 
 FROM build AS agent-deps
-RUN pnpm --filter @agent-workspace/server --config.hoist-workspace-packages=false deploy --prod --legacy /agent-runtime
+RUN pnpm --filter @agent-workspace/server --config.hoist-workspace-packages=false deploy --prod --legacy /agent-runtime \
+    && node apps/server/agent/scripts/external-agent-packages.mjs --prune-deployment /agent-runtime
 
 FROM build AS production-deps
-RUN pnpm --filter project-management-agent-v4 --config.hoist-workspace-packages=false deploy --prod --legacy /backend-runtime
+RUN pnpm --filter project-management-agent-v4 --config.hoist-workspace-packages=false deploy --prod --legacy /backend-runtime \
+    && node apps/server/agent/scripts/external-agent-packages.mjs --prune-deployment /backend-runtime
 
 FROM ${NODE_IMAGE} AS backend
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=4194 BLOB_ROOT=/var/lib/pm/blobs CORE_WORKSPACE_ROOT=/var/lib/pm/core

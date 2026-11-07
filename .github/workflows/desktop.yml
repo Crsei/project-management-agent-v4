@@ -13,7 +13,7 @@ on:
       windows_only:
         description: Build Windows x64 only, without starting macOS jobs
         type: boolean
-        default: false
+        default: true
         required: true
 
 permissions:
@@ -27,6 +27,7 @@ env:
   # The complete Web type graph exceeds the 2 GiB default on hosted macOS.
   NODE_OPTIONS: --max-old-space-size=4096
   DESKTOP_ARTIFACT_DIR: ${{ github.workspace }}/apps/desktop/releases/ci-${{ github.run_id }}-${{ github.run_attempt }}
+  DESKTOP_DELIVERY_DIR: ${{ github.workspace }}/apps/desktop/releases/delivery-${{ github.run_id }}-${{ github.run_attempt }}
   PM_DESKTOP_TEST_POSTGRES_ROOT: ${{ github.workspace }}/apps/desktop/.runtime/desktop-runtime/postgres
 
 jobs:
@@ -98,30 +99,16 @@ jobs:
       - name: Build explicitly unsigned native installers
         run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$DESKTOP_ARTIFACT_DIR"
         if: runner.os == 'macOS'
-      - name: Real packaged managed instance login, shutdown and reconnect
+      - name: Verify complete final delivery and execute packaged native smoke
         shell: bash
-        run: |
-          node --input-type=module -e '
-            import fs from "node:fs";
-            import path from "node:path";
-            import {spawnSync} from "node:child_process";
-            const output=process.env.DESKTOP_ARTIFACT_DIR;
-            const manifest=JSON.parse(fs.readFileSync(path.join(output,"desktop-package.json"),"utf8"));
-            const resources=path.resolve(output,manifest.applicationResources);
-            const result=spawnSync(process.execPath,["apps/desktop/scripts/smoke-managed.mjs","--server-root",path.join(resources,"workspace-runtime"),"--runtime-root",path.join(resources,"desktop-runtime")],{stdio:"inherit"});
-            process.exitCode=result.status??1;
-          '
+        run: node apps/desktop/scripts/verify-delivery.mjs --output "$DESKTOP_ARTIFACT_DIR" --native-smoke --stage "$DESKTOP_DELIVERY_DIR"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-unsigned-${{ matrix.platform }}-${{ matrix.arch }}
           if-no-files-found: error
           retention-days: 14
-          path: |
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.exe
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.dmg
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.zip
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.blockmap
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/desktop-package.json
+          compression-level: 0
+          path: ${{ env.DESKTOP_DELIVERY_DIR }}/
 
   signed:
     if: inputs.distribution == 'signed'
@@ -203,27 +190,13 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
         run: pnpm --filter @agent-workspace/desktop package:signed --platform darwin --arch ${{ matrix.arch }} --output "$DESKTOP_ARTIFACT_DIR"
-      - name: Real signed packaged managed instance login, shutdown and reconnect
+      - name: Verify complete signed delivery and execute packaged native smoke
         shell: bash
-        run: |
-          node --input-type=module -e '
-            import fs from "node:fs";
-            import path from "node:path";
-            import {spawnSync} from "node:child_process";
-            const output=process.env.DESKTOP_ARTIFACT_DIR;
-            const manifest=JSON.parse(fs.readFileSync(path.join(output,"desktop-package.json"),"utf8"));
-            const resources=path.resolve(output,manifest.applicationResources);
-            const result=spawnSync(process.execPath,["apps/desktop/scripts/smoke-managed.mjs","--server-root",path.join(resources,"workspace-runtime"),"--runtime-root",path.join(resources,"desktop-runtime")],{stdio:"inherit"});
-            process.exitCode=result.status??1;
-          '
+        run: node apps/desktop/scripts/verify-delivery.mjs --output "$DESKTOP_ARTIFACT_DIR" --native-smoke --stage "$DESKTOP_DELIVERY_DIR"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-signed-${{ matrix.platform }}-${{ matrix.arch }}
           if-no-files-found: error
           retention-days: 14
-          path: |
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.exe
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.dmg
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.zip
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/*.blockmap
-            ${{ env.DESKTOP_ARTIFACT_DIR }}/desktop-package.json
+          compression-level: 0
+          path: ${{ env.DESKTOP_DELIVERY_DIR }}/

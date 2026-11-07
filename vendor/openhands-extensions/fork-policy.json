@@ -30,6 +30,7 @@
     "apps/web/tsconfig.json",
     "tsconfig.check.json",
     "apps/server/agent/scripts/package.mjs",
+    "apps/server/agent/scripts/external-agent-packages.mjs",
     "apps/desktop/scripts/stage-workspace.mjs"
   ],
   "reviewedAdaptations": [

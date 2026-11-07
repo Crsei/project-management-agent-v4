@@ -180,6 +180,106 @@ Intentional exclusions from the supplemental host reconstruction allowlist:
 - Unrelated PM document-source, graph, notice-center and shared Web styling work remains host-owned and is not enrolled merely because it is dirty. In particular, `chat/output-timeline.css` contains unrelated link styling; MCP App styling is separately mapped in `chat/mcp-app-frame.css`.
 - Root documentation, acceptance evidence and temporary browser/HTTP fixtures are not executable adaptation outputs. The immutable source snapshot inventory remains a point-in-time record; current hashes belong to the baseline and supplemental output ledgers.
 
+### 2026-11-08 Windows delivery provenance repair
+
+This is a same-pin metadata repair, not an upstream update or permission to
+recapture a dirty tree. The host base is
+`575c11bdca253e731b4121a1507159931a601af9`. Read-only Git objects show that
+`thread.aui.tsx`'s embedded local bytes are exactly that commit's parent version:
+39,481 bytes / `c965bde33ab696ffc0ebe4c0d8049ceb572f1686390270d500c9ddec51906875`.
+The committed/current output is 39,560 bytes /
+`8b69fdcd2d7c1ba3052af852efdfc6ac5c25bce32ed7ade4f0aa501d16105321`.
+The complete difference is the already committed switch from
+`useProviderSkillsComposer` / `nativeSkills` to `useComposerSuggestions` /
+`suggestions`, and the bilingual placeholder describing `@` files, `$` skills
+and `/` commands. Form submission, direct steer, history blocking, usage command,
+IME, keyboard and disabled-state wiring retain their respective guard positions.
+This approves only recording those exact existing host bytes; it neither changes
+Web behavior nor certifies the replacement hook's runtime/security acceptance.
+
+The same host commit also changed these existing outputs; their old embedded
+bytes equal the host parent exactly. Separate local review now permits recording
+each listed current hash, not regenerating all dirty outputs:
+
+| Output | Old bytes / SHA256 | Current bytes / SHA256 | Actual existing behavior |
+| --- | --- | --- | --- |
+| `apps/web/src/features/agent/src/pm/chat-surface.tsx` | 63,618 / `d9c9e78d39ea7b20e80ae42aa69fbd185582af42a98b870bfa5f3019391a33b1` | 73,104 / `378584b599fc16b405c686bdcf12e0239f0efebfcee5d789979da12834a30bd6` | Collapsible folder/session groups, compact times, folder filtering/new-session target selection, Provider/model labels and existing shared session actions; terminal receives only its controller. No PM authorization, execution resolution or persistence implementation changes are authored here. |
+| `packages/agent-client-runtime/src/provider-skills.ts` | 5,616 / `221e413b277f1c1fffe809a24eaee3f3d1d95fef1cad8853d40f64993e47d813` | 5,650 / `ffd65fe1908b7f6edbc25c9eb62666af6cfe60d237d323273676cc08cf1c5549` | Adds the existing `serializeComposerFileLink` re-export; original trigger/token/ranking ownership remains in the shared source module. |
+
+The same commit deleted `chat/provider-skills-composer.tsx` (15,524 bytes /
+`ff5b4e46e63ac6bb78f48932994739e334e6cba0d0d10d74a5eb21e5c2fcccf0`)
+and `chat/provider-skills.css` (1,359 bytes /
+`5366635e19cf8843b64a5c4339763dabb0ddd0782d0cc09e4e38161b0059d00c`).
+Their exact existing records are retired with the granular protocol: preserve
+all old inputs/recipes/modes/rationale and require absent targets/no consumers,
+not deletion of history or restoration of dead code.
+
+Replacement modules in that commit have actual upstream derivation, not merely
+a host directory location. `chat/composer-suggestions.tsx` (24,661 bytes /
+`1347dc75018e5730c4dc351260184a2c8850b8ff1cc554516324866c855114bb`)
+retains the old composer's five supplemental inputs and names two additional
+already inventoried references: `packages/shared/src/composerTrigger.ts` and
+`apps/web/src/components/chat/ComposerCommandMenu.tsx`, both at the unchanged
+`d53873b6a4799e87afd63c8d288ef0089f5a3748` snapshot. Its native catalog TTL,
+instance/revision/cwd binding, stale-selection send guards and IME lifecycle
+remain around the PM transport; its added file menu uses session-scoped
+inspector search and existing shared file-link serialization.
+`chat/composer-command-menu.tsx` (5,728 bytes /
+`1a17916d97d449b9e16dbce9a3dd62927482140af53da9e9b3b555e3a743f70a`)
+derives its trigger labels, Skill-source icon/label tables, item presentation,
+selection/hover/mousedown and scrolling semantics from that original menu
+(8,979 bytes / `7103a425dc0af46931e230ce3cbc488e4ce69e61727f57248d9ee51c57bc7967`).
+Neither copies the upstream router, command backend, PR/thread menu or account
+state. `chat/composer-suggestions.css` (2,625 bytes /
+`d040eb2ce464e3b2640cb40053b95fa3698f5de9ad6d10d99b31f874373084a5`)
+is local host-token layout/presentation, not a separately copied upstream CSS
+file; record it as zero-input local integration. No production file is changed.
+
+Necessary mapping authoring uses one `capture-mcp-skills.py --add-output
+REVIEW_JSON` per new output, together with that output's exact `--accept-output`.
+Each review contains only `destination`, explicit `inputs: [{commit,path}]`,
+`reason` and `license`. The tool resolves full input identities from the already
+bound frozen inventories, authenticates Git blobs and replays the proposed
+recipes before publication. Unknown identities, duplicate/existing destinations,
+implicit outputs and missing/stale hash approvals fail. Review JSON is transient
+input, not a second source/version database; authoritative recipes remain in the
+existing supplemental ledger. Import generation follows the reviewed cutover.
+
+The repair design adds a narrow baseline binding operation:
+`capture.py --source "$SOURCE" --accept-local PATH=CURRENT_SHA256` (repeat for
+each reviewed **existing** local asset). It rejects unknown/duplicate/stale
+approvals, source/patch outputs, mode changes and enrollment/full-capture flags.
+It authenticates the frozen source inputs and changes only those exact existing
+inventory hash/byte bindings; unrelated outputs, recipes, host fingerprints and
+the immutable manifest remain untouched. The supplemental ledger must first be
+authored with its own exact output/retirement approvals. This operation is not a
+way to edit that ledger by hand or bless unreviewed content.
+
+Independent boundary review identified that `local-addition` is a storage
+classification, not permission to re-author an immutable source authority.
+The existing `vendor/t3code/source-manifest.json`,
+`vendor/t3code/mcp-skills-source.json` and `vendor/t3code/omp-source.json`
+are explicitly forbidden `--accept-local` targets, even when the real baseline
+registers them as local assets. Otherwise rebinding the supplemental registry
+could expand the inputs later admitted by `--add-output` without a source review.
+The narrow operation must reject these exact authority paths before changing
+any inventory binding. Its consumer fixture copies the actual inventory
+classification, attempts an exact-hash registry mutation alongside a valid
+mutable approval, and requires refusal with no inventory publication.
+This hardening does not authorize changing any registry, input selection or pin.
+
+The approved baseline bindings are the resulting reviewed supplemental/import
+ledgers, this public design record and the narrowly changed authoring tools and
+their parent-only regression fixtures.
+Host fingerprints remain the final enrolled tool bytes shared with OpenHands;
+desktop release-only tools outside the enrolled set do not expand it implicitly.
+The prior external-Claude-CLI exclusion, full communication SDK/native resources,
+PM authorization/revisions/approvals/receipts, native Provider Home/environment
+and current Chat persistence remain unchanged. Parent-only source/import/replay,
+build, artifact and native Windows checks are still required after integration;
+authoring is not verification, and session/persistence design remains open.
+
+
 
 ## Independently runnable Agent artifact
 
@@ -197,9 +297,11 @@ node apps/server/agent/scripts/package.mjs --build "$BUILD" --output "$ARTIFACT_
 # To include an already built, ISOLATED Web output, add: --web-dist "$WEB_DIST"
 ```
 
-`package.mjs` refuses an existing output directory and source drift after the recorded build. It copies complete production dependency packages, SDK webpack chunks/native/CLI/resources and actual installed optional native dependencies; no SDK resource subset is guessed. Original importer ownership resolves externals, including opaque Cursor SDK/SQLite and `@napi-rs/keyring` edges, before artifact-root links are created. Dependencies use artifact-relative internal links, with one canonical `effect@4.0.5` package; incompatible Effect versions or bundled Effect/unbundled PM/t3 source packages are rejected. Package output retains `apps/server/agent/dist` so `paths.ts` resolves `workspaceRoot` **inside the artifact**, independent of caller cwd. No source checkout, repository node_modules symlink or absolute dependency path is required. The graph is platform/architecture-specific; build/package separately on every supported native target.
+`package.mjs` refuses an existing output directory and source drift after the recorded build. It copies complete production dependency packages, SDK chunks/manifests/resources and actual installed optional native dependencies, except the `@anthropic-ai/claude-agent-sdk-*` package family: those packages contain the external Claude CLI, not SDK transport resources. The reviewed `external-agent-packages.mjs` boundary excludes that family from SDK dependency collection, refuses other attempts to include it, and checks final artifact package identities; it never deletes an arbitrary file named `claude` or `claude.exe`. The SDK itself and all its resources remain intact. Desktop's independent root/Electron `pnpm deploy` closures and container deploy closures use the same identity-based pruning, including physical pnpm store packages and their aliases. Cursor SDK's native tools/SQLite, keyring and PTY resources remain unchanged. Original importer ownership resolves externals, including opaque Cursor SDK/SQLite and `@napi-rs/keyring` edges, before artifact-root links are created. Dependencies use artifact-relative internal links, with one canonical `effect@4.0.5` package; incompatible Effect versions or bundled Effect/unbundled PM/t3 source packages are rejected. Package output retains `apps/server/agent/dist` so `paths.ts` resolves `workspaceRoot` **inside the artifact**, independent of caller cwd. No source checkout, repository node_modules symlink or absolute dependency path is required. The graph is platform/architecture-specific; build/package separately on every supported native target.
 
 `artifact-manifest.json` records all copied file hashes/modes, internal links, package versions/dependency edges, bundled ownership/license metadata and the canonical Effect location. Complete copied SDK packages retain their own notices; bundled dependency notices, the current lockfile, source/family ledgers, exact adaptation recipes and SPDX notices are under `licenses/`. This does not redistribute or install independently managed Provider CLIs/accounts. `tools/verify-artifact.mjs` is shipped with the artifact and uses only Node built-ins.
+
+Development installations may still contain Claude's optional platform packages from the frozen lockfile; development dependency presence is not permission to ship them. Claude production execution and capability/usage probes already pass the configured external executable explicitly. Native Home/environment, PM authorization, revisions, approvals and receipts, Codex/Antigravity managed installation, ACP Registry installation semantics and current Chat persistence are unchanged. Cursor remains a local Agent SDK engine, not an external Cursor CLI wrapper.
 
 Move the entire `agent` directory to another temporary directory or machine with the same Node/native target and **without the PM repository/source checkout**. From an unrelated cwd, the parent may then run the emitted entry using an isolated data root and loopback ephemeral port:
 
@@ -210,6 +312,8 @@ ARTIFACT="$RELOCATED_PARENT/agent"
 # Parent-only acceptance: verifies hashes/links, SDK imports, actual Cursor disk SQLite,
 # native PTY loading, one Effect identity, document worker, Claude history dispatch,
 # and production HTTP /api/access. Uses disposable HOME/data and starts/stops only its own server.
+# Also checks external Claude initialization/missing-path failure with a controlled
+# temporary CLI and no model prompt, plus absence of Claude platform CLI packages.
 node "$ARTIFACT/tools/verify-artifact.mjs" --artifact "$ARTIFACT"
 DATA=$(mktemp -d /tmp/pm-agent-data-XXXXXX)
 # Preserve the actual authorized native environment only when explicitly validating a Provider.

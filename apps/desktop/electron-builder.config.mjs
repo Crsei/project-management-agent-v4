@@ -1,7 +1,8 @@
-import { chmod, cp, lstat, mkdir, readdir } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { inspectDeployment } from "./scripts/stage-workspace.mjs";
 import { verifyRuntime } from "./scripts/runtime-manifest.mjs";
+import { inspectPackagedApplication } from "./scripts/packaged-application.mjs";
 
 // Installation resources are public code, not private workspace data. cp keeps
 // checkout permissions, which may otherwise make a shared /Applications install
@@ -52,6 +53,8 @@ export function desktopBuilderConfig({ application, workspaceRuntime, desktopRun
       // be traversable and non-group-writable after installation by another user.
       await normalizeInstallationModes(join(resources, "desktop-runtime"), true);
       await verifyRuntime(join(resources, "desktop-runtime"));
+      const metadata = JSON.parse(await readFile(join(application, "package.json"), "utf8"));
+      await inspectPackagedApplication(resources, metadata.version);
     },
     win: { target: [{ target: "nsis", arch: ["x64"] }], signAndEditExecutable: signed },
     nsis: {

@@ -4,6 +4,8 @@
 
 桌面复用现有 Web，通过独立 Node **24.21.0** 启动 PM、Worker、Agent 和同源网关，并管理私有 PostgreSQL **16.15**。安装后的本地模式不依赖用户预装 Docker、Node 或 PostgreSQL；Git、Provider CLI、账号和外部集成仍按对应能力显式配置。远程模式连接已有 HTTPS 服务，HTTP 仅允许显式回环地址。
 
+Claude CLI 由用户在服务所在机器安装并在 Provider 的 Runtime binary 配置（默认 `claude`）；缺失或路径错误不会改用内置 Claude。Agent、桌面 workspace runtime、Electron 应用的独立部署闭包与容器交付均排除 Claude SDK 平台 CLI 包，保留通信 SDK 全部资源。SDK 不等于 CLI：Cursor 当前仍使用本地 Agent SDK 引擎及其必要原生工具，SQLite / PTY 等依赖也不因本次修复被删除。Codex / Antigravity managed 与 ACP Registry 的原生安装流程保持既有语义，详见 [Provider 指南](agent-chat.md#配置并使用-provider)。
+
 | 构建目标 | 产物 | 边界 |
 | --- | --- | --- |
 | Windows x64 | NSIS `.exe` | 不提供 Windows ARM64 或跨平台构建 |
@@ -38,9 +40,13 @@ pnpm --filter @agent-workspace/desktop package
 
 运行时下载固定版本并校验归档及文件清单，保留完整 PostgreSQL 客户端、库、share 与许可证；不在应用启动时下载。代理环境需要为 Node 设置 `NODE_USE_ENV_PROXY=1`。开发调试另需 `pnpm --filter @agent-workspace/desktop runtime:install`，再执行 `pnpm build:v4 && pnpm build:desktop` 和 `pnpm --filter @agent-workspace/desktop start`；Electron 安装脚本不会在依赖安装时自动执行。
 
-`package` 明确生成 unsigned 测试包；macOS ad-hoc 不等于 Developer ID 签名或公证。正式构建用 `package:signed`，需显式提供证书及 macOS 公证材料，缺失时失败而不降级。默认输出 `apps/desktop/releases/<version>/<platform>-<arch>/<unsigned|signed>/`，`desktop-package.json` 记录产物 SHA256 与资源位置。没有自动更新源，也不自动发布 GitHub Release。
+`package` 明确生成 unsigned 测试包；macOS ad-hoc 不等于 Developer ID 签名或公证。`package:signed` 是独立显式模式，需提供证书及 macOS 公证材料，缺失时失败而不降级；本轮没有选择或配置签名。默认输出 `apps/desktop/releases/<version>/<platform>-<arch>/<unsigned|signed>/`，`desktop-package.json` 记录完整 Git commit、公开源码内容摘要/dirty 身份、实际版本、runtime 来源、产物与材料 SHA256/bytes。源码、许可材料存在不表示正式发布获准；没有自动更新源，也不自动发布 GitHub Release。
 
-[原生 CI](../../.github/workflows/desktop.yml) 仅手动触发，默认分别运行 Windows x64、macOS x64/arm64；勾选 `windows_only` 可只构建 Windows x64，不启动 macOS Job。执行真实 PG 回归和打包资源的初始化、登录、停止与重连冒烟；signed 模式使用受保护的 `desktop-signing` 环境。工作流配置和历史通过不代表最新工作树、原生GUI或真实Provider执行已验收。
+每组交付包含安装器、`desktop-package.json`、`desktop-verification.json`、`SHA256SUMS`、`desktop-source.tar.gz`、`desktop-source.json`、`desktop-legal.tar.gz`，以及 manifest 明确列出的辅助产物。对应源码保留已审阅本地改动与构建脚本，不含 `.env*`、`.local`、Home/凭据、内部历史计划、依赖缓存或旧产物。legal 材料来自最终成品，包括 runtime/Electron/Chromium 的原始许可；它是材料收集而不是第三方分发授权。具体上游 stable/nightly 实际 assets、采用/不采用理由、授权及回滚边界见 [发布设计](../reference/desktop-release-alignment-2026-11-08.zh.md)。
+
+打包报告先记录实际静态 ASAR/版本/runtime 检查，`nativeSmoke` 保持 `not-run`。在匹配的原生 runner 执行 `node apps/desktop/scripts/verify-delivery.mjs --output ABS_PACKAGE_DIR --native-smoke --stage ABS_NEW_UPLOAD_DIR` 后，才记录该次 packaged runtime/登录/停止/重连结果并更新 checksums。它不运行安装器或 GUI，不验收真实 Provider 账号。下载材料可用同一工具加 `--files-only` 核对精确文件清单/hash，不把传输校验冒充再次执行 native 检查。路径须换成本次拥有的真实绝对目录。
+
+[原生 CI](../../.github/workflows/desktop.yml) 仅手动触发，默认 `distribution=unsigned`、`windows_only=true`，只运行 Windows x64；明确取消 Windows-only 才运行现有 macOS x64/arm64 目标。执行真实 PG 回归及最终成品验证后，只上传从完整 manifest 校验并精确暂存的发行材料，不通配上传 unpacked tree 或临时日志；signed 模式仍使用受保护的 `desktop-signing` 环境。操作与失败恢复见 [Windows 构建手册](../reference/windows-build-runbook.zh.md)。本轮已明确授权在冻结/门禁满足后由唯一执行者直接 main commit/push 和手动 unsigned 构建/下载；配置本身不会执行这些动作，正式 Release/tag/签名配置未执行。公开仓库 push 与 unsigned 验证 artifact 上传也不表示第三方发布阻塞已关闭。工作流配置和历史通过不代表最新工作树、原生 GUI 或真实 Provider 已验收。
 
 CI 在桌面类型检查前依次构建 `@agent-workspace/contracts` 与 `@agent-workspace/client-runtime`，生成包导出的类型声明；全新检出不能依赖开发机已有的 `dist` 缓存。[`.gitattributes`](../../.gitattributes) 固定文本检出的 LF 行尾，避免 Windows `core.autocrlf` 改变受固定哈希保护的构建输入；不放宽或重写完整性校验。完整 Web 类型检查超出托管 macOS 默认堆上限，工作流显式设置 `NODE_OPTIONS=--max-old-space-size=4096`，保留全部类型检查。
 

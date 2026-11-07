@@ -1,10 +1,12 @@
-import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { desktopBuilderConfig } from "../electron-builder.config.mjs";
 import { buildWorkspace, inspectDeployment, run, stageWorkspace } from "./stage-workspace.mjs";
+import { inspectPackagedApplication } from "./packaged-application.mjs";
+import { captureSource, fileRecord, requireUnchangedSource, writeReleaseMaterials } from "./release-materials.mjs";
 import {
-  defaultRuntimeRoot, desktopRoot, hashFile, portable, requireNativeTarget,
+  defaultRuntimeRoot, desktopRoot, inside, portable, requireNativeTarget,
   requirePinnedNode, verifyRuntime,
 } from "./runtime-manifest.mjs";
 
@@ -49,6 +51,8 @@ for (let current = output; ; current = dirname(current)) {
 }
 const staging = await realpath(await mkdtemp(join(tmpdir(), "pm-agent-v4-desktop-")));
 try {
+  const sourceRoot = join(staging, "source");
+  const source = await captureSource(sourceRoot);
   await buildWorkspace();
   const application = join(staging, "application");
   const workspaceRuntime = join(staging, "workspace-runtime");
@@ -86,16 +90,22 @@ try {
     ? join(output, "win-unpacked", "resources")
     : join(output, process.arch === "arm64" ? "mac-arm64" : "mac", "PM Agent v4.app", "Contents", "Resources");
   await inspectDeployment(join(resources, "workspace-runtime"));
+  const applicationVerification = await inspectPackagedApplication(resources, manifest.version);
   // afterPack verifies runtime bytes before native signing changes executable
   // hashes. Retain that source inventory as provenance; verify the signed bundle
   // and hash the final distributables below instead of rejecting upstream npm files.
   if (mode === "signed" && process.platform === "darwin")
     await run("codesign", ["--verify", "--deep", "--strict", join(resources, "../..")]);
   const records = [];
+  const delivered = new Set();
   for (const path of artifacts) {
-    if (!isAbsolute(path)) throw new Error("Builder returned an unexpected relative artifact path.");
-    records.push({ path: portable(relative(output, path)), sha256: await hashFile(path) });
+    if (!isAbsolute(path) || !inside(output, path) || dirname(path) !== output || !/\.(?:exe|dmg|zip|blockmap)$/.test(path))
+      throw new Error("Builder returned an unexpected artifact path or unconfigured update metadata.");
+    delivered.add(basename(path));
   }
+  // Some builder targets report their installer but not its generated blockmap.
+  for (const name of await readdir(output)) if (name.endsWith(".blockmap")) delivered.add(name);
+  for (const name of [...delivered].sort()) records.push(await fileRecord(output, name));
   const expected = process.platform === "win32" ? [".exe"] : [".dmg", ".zip"];
   if (expected.some((suffix) => !records.some((record) => record.path.endsWith(suffix))))
     throw new Error("Builder did not produce every required native installer/archive target.");
@@ -109,15 +119,31 @@ try {
     }
   }
   await mkdir(output, { recursive: true });
-  await writeFile(join(output, "desktop-package.json"), JSON.stringify({
-    version: manifest.version, target, signing: mode,
-    signingDetail: mode === "unsigned" && process.platform === "darwin" ? "ad-hoc only; not Developer ID signed or notarized" : mode,
-    runtimeSources: runtimeManifest.sources,
-    applicationResources: portable(relative(output, resources)),
-    artifacts: records,
-    updates: "Manual installer replacement only; managed data is outside installation and is preserved. No update feed or publishing is configured.",
-  }, null, 2) + "\n");
-  console.log(JSON.stringify({ output, manifest: join(output, "desktop-package.json"), target, signing: mode, published: false, artifacts: records }));
+  await requireUnchangedSource(source);
+  const delivery = await writeReleaseMaterials({
+    output, resources, platform: process.platform, sourceRoot, source, legalRoot: join(staging, "legal"),
+    manifest: {
+      version: manifest.version, target, signing: mode,
+      signingDetail: mode === "unsigned" && process.platform === "darwin" ? "ad-hoc only; not Developer ID signed or notarized" : mode,
+      runtimeSources: runtimeManifest.sources,
+      applicationResources: portable(relative(output, resources)),
+      artifacts: records,
+      updates: "Manual installer replacement only; managed data is outside installation and is preserved. No update feed or publishing is configured.",
+    },
+    verification: {
+      schemaVersion: 1, generatedAt: new Date().toISOString(), target, signing: mode,
+      checks: {
+        application: applicationVerification,
+        runtime: { status: "passed", scope: "Pinned source runtime inventory verified before signing by afterPack; final native executable smoke is separate." },
+        signing: { status: mode === "signed" ? "passed" : "not-applicable", scope: mode === "signed" ? "Final platform signature verification; macOS notarization required by builder." : "Explicit unsigned test build; macOS ad-hoc is not Developer ID." },
+        legalMaterials: { status: "collected-not-authorized", scope: "Final shipped legal copies collected; no legal compatibility or distribution approval is implied." },
+      },
+      nativeSmoke: { status: "not-run" },
+      notCovered: ["Real installer install/upgrade/uninstall", "Electron GUI", "Real Provider account/model/native CLI Home", "Public distribution authorization", "Cross-store backup/restore acceptance"],
+      published: false,
+    },
+  });
+  console.log(JSON.stringify({ output, manifest: join(output, "desktop-package.json"), target, signing: mode, published: false, artifacts: delivery.artifacts, materials: delivery.materials, checksums: "SHA256SUMS" }));
 } finally {
   await rm(staging, { recursive: true, force: true });
 }
