@@ -52,6 +52,7 @@
 - unsigned Windows 测试包不具有本项目发布者 Authenticode 身份，可能触发 SmartScreen；不指导用户关闭系统保护。macOS ad-hoc 不是 Developer ID/公证。signed 仅在显式选择、证书/公证前提具备且最终验签成功后标记；不读取现有凭据或配置签名密钥。
 - 校验清单在最终签名之后生成，覆盖安装器与实际交付材料，防止传输损坏；来源信任仍需操作者核对可信 run、精确 commit/source digest 和已授权交付渠道。
 - 保留根 AGPL、自有修改、各 vendor 原始许可和精确来源记录、实际 SDK/native/notices、Node/PostgreSQL/Electron/Chromium legal 文件。生成对应源码和 legal archive 是技术材料闭包，不自动满足法律审阅或源码公开入口义务。
+- 成品按职责分开验证：解包的 `app.asar`、孤立的 `app.asar.unpacked` 和 `workspace-runtime` 继续执行原有严格私有配置/checkout 规则；`desktop-runtime` 保留固定官方 Node（含 npm 工具链）与完整 PostgreSQL，使用既有固定来源和逐文件完整字节清单验证，而不是把它泛当 workspace 源码根。官方固定 Node 归档自带的公开 `.npmrc` 不等于用户 Home/checkout 的私有配置；不单独放行该文件名、不删除它或 npm 子树、不修改 pin 或刷新既有 runtime manifest。`afterPack` 仍在复制后完整 `verifyRuntime`，unsigned 发行 verifier 再次核对最终 runtime；签名模式仍遵守签前 inventory 与签后签名验证边界。所有 loose resources 及 ASAR 解包内容继续独立按包身份检查外部 Claude 平台 CLI，因此官方 runtime 归属不豁免 CLI 包规则。对应 Node/PostgreSQL/Electron legal 材料保持原样。
 - [第三方发布门禁](../../THIRD_PARTY_NOTICES.md#release-blockers) 的 `MISANS-GRANT`、`ASSET-ORIGINS`、`ARTIFACT-NOTICES`、`AGPL-SOURCE` 仍 OPEN。测试材料可以记录这些阻塞，但不能宣称可公开分发。公开正式发布必须另跑 release authorization、审阅最终 notices/空 license 项、提供可访问且与成品相配的对应源码及适用法律入口；本次不替维护者关闭这些项。
 
 本项目 origin 当前为公开仓库；本轮 main push 会公开源码，Actions 上传的仍是 **unsigned 验证 artifact**，不能以构建/上传代替四个 OPEN 项的审阅或正式发布批准。构建环境继续只有只读 checkout token，不获得用于 push/dispatch 的操作者凭据。对应源码生成仅选择公开根中的 tracked 文件及逐条登记的已审阅新增文件，排除 `.env*`、`.local`、`.git`/config/hooks、凭据/证书、Home、内部历史文档和生成目录/缓存；不会归档所有 untracked 文件。清单不包含运行数据或数据库备份。

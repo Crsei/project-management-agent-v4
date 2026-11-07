@@ -12,6 +12,7 @@ import { asarTools, inspectPackagedApplication } from "./packaged-application.mj
 import { captureSource, checksumDelivery, collectLegal, contentDigest, fileRecord, publicSourcePath, refreshVerification, requireUnchangedSource } from "./release-materials.mjs";
 import { verifyDelivery, verifyDeliveryFiles } from "./verify-delivery.mjs";
 import { inspectDeployment } from "./stage-workspace.mjs";
+import { inventoryTree, runtimeSources, verifyRuntime } from "./runtime-manifest.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const execute = promisify(execFile);
@@ -276,6 +277,74 @@ async function delivery(root) {
   await refreshVerification(output, manifest, { schemaVersion: 1, nativeSmoke: { status: "not-run" }, published: false });
   return { output, manifest };
 }
+
+// Static inventory fixture only: these are not executable Node/PG binaries or
+// evidence for an official archive download. Native Actions exercises those.
+async function preparedRuntimeFixture(resources, { cliAlias = false } = {}) {
+  const runtime = join(resources, "desktop-runtime");
+  const files = {
+    "node/node.exe": "static Node executable fixture",
+    "node/LICENSE": "Node legal fixture",
+    "node/npm.cmd": "static npm launcher fixture",
+    "node/npx.cmd": "static npx launcher fixture",
+    "node/node_modules/npm/package.json": JSON.stringify({ name: "npm", version: "unit-fixture" }),
+    "node/node_modules/npm/.npmrc": "",
+    "node/node_modules/npm/bin/npm-cli.js": "// static npm fixture\n",
+    "postgres/LICENSE": "PostgreSQL legal fixture",
+    "THIRD-PARTY-NOTICES.json": "{}",
+  };
+  for (const tool of ["postgres", "initdb", "pg_ctl", "pg_dump", "pg_restore", "psql"])
+    files[`postgres/bin/${tool}.exe`] = `static ${tool} executable fixture`;
+  if (cliAlias) files["node/node_modules/renamed-cli/package.json"] = JSON.stringify({ name: "@anthropic-ai/claude-agent-sdk-win32-x64" });
+  for (const [name, bytes] of Object.entries(files)) await put(runtime, name, bytes);
+  const manifest = { version: 1, target: "win32-x64", sources: runtimeSources("win32-x64"), files: await inventoryTree(runtime) };
+  await put(runtime, "runtime-manifest.json", JSON.stringify(manifest));
+  return { runtime, manifest };
+}
+
+test("delivery keeps manifest-pinned runtime npm config but rejects changed runtime bytes", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  const resources = await archive(join(output, "win-unpacked"), {});
+  const prepared = await preparedRuntimeFixture(resources);
+  await verifyRuntime(prepared.runtime, manifest.target);
+  const application = await inspectPackagedApplication(resources, manifest.version);
+  manifest.applicationResources = "win-unpacked/resources";
+  await refreshVerification(output, manifest, { checks: { application }, nativeSmoke: { status: "not-run" }, published: false });
+  assert.equal((await verifyDelivery(output)).target, manifest.target);
+  assert.ok(prepared.manifest.files.some((file) => file.path === "node/node_modules/npm/.npmrc" && file.bytes === 0));
+  assert.equal(await readFile(join(prepared.runtime, "node/node_modules/npm/.npmrc"), "utf8"), "");
+  const originalInventory = await readFile(join(prepared.runtime, "runtime-manifest.json"));
+  await put(prepared.runtime, "node/node_modules/npm/.npmrc", "# changed runtime fixture bytes\n");
+  await assert.rejects(verifyDelivery(output));
+  assert.deepEqual(await readFile(join(prepared.runtime, "runtime-manifest.json")), originalInventory);
+});
+
+for (const location of ["app.asar", "app.asar.unpacked", "workspace-runtime"]) {
+  test(`private configuration remains forbidden in ${location} beside a valid runtime`, async (t) => {
+    const root = await temporary(t);
+    const resources = await archive(root, {});
+    const prepared = await preparedRuntimeFixture(resources);
+    await verifyRuntime(prepared.runtime, "win32-x64");
+    assert.equal((await inspectPackagedApplication(resources, "0.1.0")).status, "passed");
+    const privateBytes = "private configuration fixture, not real credentials";
+    if (location === "app.asar") {
+      await put(join(root, "application"), ".npmrc", privateBytes);
+      await asarTools().createPackage(join(root, "application"), join(resources, "app.asar"));
+    } else await put(resources, `${location}/.npmrc`, privateBytes);
+    await assert.rejects(inspectPackagedApplication(resources, "0.1.0"));
+    assert.equal(await readFile(location === "app.asar" ? join(root, "application/.npmrc") : join(resources, location, ".npmrc"), "utf8"), privateBytes);
+    assert.equal(await readFile(join(prepared.runtime, "node/node_modules/npm/.npmrc"), "utf8"), "");
+  });
+}
+
+test("external Claude CLI identity is rejected in runtime even when its file inventory matches", async (t) => {
+  const root = await temporary(t);
+  const resources = await archive(root, {});
+  const prepared = await preparedRuntimeFixture(resources, { cliAlias: true });
+  await verifyRuntime(prepared.runtime, "win32-x64");
+  await assert.rejects(inspectPackagedApplication(resources, "0.1.0"));
+});
 
 test("delivery checksums cover every material and manifest without self-reference", async (t) => {
   const { output, manifest } = await delivery(await temporary(t));
