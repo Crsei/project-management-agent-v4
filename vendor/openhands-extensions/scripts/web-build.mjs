@@ -25,7 +25,8 @@ export function openHandsProvenancePlugin() {
       const ids = [...this.getModuleIds()], sourceFiles = new Set(), packageRoots = new Map();
       // Follow the presentation's actual runtime imports, including CC Switch
       // reuse, without claiming unrelated PM/Provider modules as fork inputs.
-      const reachable = new Set(), pending = ids.filter(id => id.startsWith(path.resolve(repository, prefix) + path.sep));
+      const sourceRoot = path.resolve(repository, prefix).split(path.sep).join("/") + "/";
+      const reachable = new Set(), pending = ids.filter(id => id.split(path.sep).join("/").startsWith(sourceRoot));
       while (pending.length) {
         const id = pending.pop();
         if (reachable.has(id)) continue;

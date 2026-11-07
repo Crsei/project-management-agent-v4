@@ -1290,14 +1290,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/scripts/web-build.mjs",
-      "sha256": "dd6f5a0e6e1b006404d6f8ef7087cbd433c5d74921411cc01983d97e3b64bd8d",
-      "bytes": 11471,
+      "sha256": "ce072ed76201fa940c20978ed06d48384941c05b26cf9f9836938f6c98bd3333",
+      "bytes": 11555,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed actual OpenHands Marketplace/Skills source adaptation, scoped host composition, and independent Agent configuration boundaries",
+      "reason": "Normalize Vite module IDs and native root separators before tracing OpenHands runtime dependencies on Windows; preserve complete real dependency notice collection and fail-closed license verification. No source pins or runtime modules changed.",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/scripts/web-build.mjs.json",
-        "sha256": "58b26e6348af21c0d55d5277869f6b7628024224b2dc9b549a88a6578179794e"
+        "sha256": "a7e847bf1b1c4b479b73a85ede7c08d152992f6cd4c84175420bbf9594e10556"
       }
     },
     {
@@ -4058,8 +4058,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/scripts/web-build.mjs.json",
-      "sha256": "58b26e6348af21c0d55d5277869f6b7628024224b2dc9b549a88a6578179794e",
-      "bytes": 15521,
+      "sha256": "a7e847bf1b1c4b479b73a85ede7c08d152992f6cd4c84175420bbf9594e10556",
+      "bytes": 15633,
       "mode": 420
     },
     {
