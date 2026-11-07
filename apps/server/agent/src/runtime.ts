@@ -1,3 +1,4 @@
+import { startProductCanvases, stopProductCanvases } from "./product-canvas/index.ts";
 import { startTaskWorkflows, stopTaskWorkflows } from "./task-workflows/runner.ts";
 import { startExecution, stopExecution } from "./durable/engine.ts";
 import { startChatRuntime, stopChatRuntime } from "./durable/chat-runtime.ts";
@@ -27,9 +28,10 @@ export function startRuntime(): Promise<void> {
       await startExecution();
       if (stopping) return;
       await startAutomation();
-      if (!stopping) startTaskWorkflows();
+      if (!stopping) { startTaskWorkflows(); startProductCanvases(); }
     } catch (error) {
       const maintenance = Promise.allSettled([stopPmProviderMaintenance()]);
+      await stopProductCanvases();
       await stopTaskWorkflows();
       const workers = await Promise.allSettled([stopAutomation(), stopExecution(), stopChatRuntime()]);
       const drained = await maintenance;
@@ -51,6 +53,7 @@ export function stopRuntime(): Promise<void> {
   stopping = (async () => {
     if (starting) await starting.catch(() => undefined);
     try {
+      await stopProductCanvases();
       await stopTaskWorkflows();
       const automation = await Promise.allSettled([stopAutomation()]);
       const workers = await Promise.allSettled([stopExecution(), stopChatRuntime()]);

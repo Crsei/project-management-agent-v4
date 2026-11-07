@@ -1,3 +1,4 @@
+import { canvasDevelopmentContext } from './canvas-context.ts';
 import { checkRoadmapBase, inspectRoadmapDelivery } from './roadmap.ts';
 import { roadmapDeliveryScopeSchema } from '../../../../../packages/contracts/src/product-roadmap.ts';
 import { appPreviews } from './app-preview.ts';
@@ -45,12 +46,13 @@ export function deliveryService(headers: Headers) {
     busy: v => !!getActiveChat(v.threadId),
     generation: v => { const generation = listChatGenerations(v.threadId).find(g => g.request.idempotencyKey === v.generationKey); return generation ? { id: generation.id, status: generation.status } : null; },
     develop: async (v, providerInstanceId, model) => {
+      const canvasContext = await canvasDevelopmentContext(v, headers);
       ensureThread(v.threadId, `${v.taskId} · ${v.title}`, { workspaceId: v.workspaceId, projectId: v.projectId }, { taskId: v.taskId, entityId: null });
       const thread = getThread(v.threadId)!;
       const next = updateThread(v.threadId, { revision: thread.revision, settings: { ...thread.settings, providerInstanceId, model, modelOptions: [] } });
       const request = await submitChat({ id: v.threadId, idempotencyKey: v.generationKey!, trigger: 'submit-message', messages: [
         ...getThreadBranch(v.threadId).map(entry => ({ id: entry.id, ...entry.content }) as UIMessage),
-        { id: crypto.randomUUID(), role: 'user', parts: [{ type: 'text', text: `${v.developmentPurpose === 'analysis' ? '只读分析以下任务与代码，输出实现建议、风险、验收标准草稿；不要修改文件或运行有写入副作用的命令。' : '在本次独立工作目录中开发并验证下面任务。'}遵守仓库 AGENTS.md。不要提交、推送、创建 PR、合并、部署或修改 PM 任务状态；这些步骤由用户在任务交付入口分别确认。不要读取或输出凭据。先检查工作目录与现有改动，不覆盖他人内容。完成后说明代码变更、实际运行的验证、失败和未验证项。\n\n任务 ${v.taskId}（版本 ${v.taskRevision}）\n${v.title}\n\n${v.description}\n\n本次节点要求：${v.developmentInstruction ?? ''}` }] },
+        { id: crypto.randomUUID(), role: 'user', parts: [{ type: 'text', text: `${v.developmentPurpose === 'analysis' ? '只读分析以下任务与代码，输出实现建议、风险、验收标准草稿；不要修改文件或运行有写入副作用的命令。' : '在本次独立工作目录中开发并验证下面任务。'}遵守仓库 AGENTS.md。不要提交、推送、创建 PR、合并、部署或修改 PM 任务状态；这些步骤由用户在任务交付入口分别确认。不要读取或输出凭据。先检查工作目录与现有改动，不覆盖他人内容。完成后说明代码变更、实际运行的验证、失败和未验证项。\n\n任务 ${v.taskId}（版本 ${v.taskRevision}）\n${v.title}\n\n${v.description}\n\n本次节点要求：${v.developmentInstruction ?? ''}${canvasContext}` }] },
       ], config: { providerInstanceId, modelName: model, threadSettingsRevision: next.revision } }, undefined, headers);
       return request.id;
     },

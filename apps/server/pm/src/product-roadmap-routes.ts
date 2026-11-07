@@ -5,10 +5,15 @@ import { isDeepStrictEqual } from 'node:util';
 import { ROADMAP_FIELD, roadmapActionSchema } from '../../../../packages/contracts/src/product-roadmap.ts';
 import { publishRoadmap, readRoadmap, roadmapRead, saveRoadmapDraft, taskInput } from '../../../../packages/application/src/product-roadmap.ts';
 import { requestHash } from '../../../../packages/application/src/kernel.ts';
+import { resolveProductDesign } from '../../../../packages/application/src/product-design.ts';
+import { downloadArtifactVersion } from '../../../../packages/application/src/delivery.ts';
+import { readEntity } from '../../../../packages/application/src/queries.ts';
+import type { BlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
+import type { ProductDesign } from '../../../../packages/contracts/src/product-design.ts';
 import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
 import { authorizeCoreScope, executeAuditedCoreMutation, nativeCommandId, recoverAuditedCoreMutation, type CoreWorkspacePool } from './core-routes.ts';
 
-type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; coreWorkspaces: CoreWorkspacePool | undefined };
+type Options = { database: () => Pool; actor: (request: FastifyRequest) => Promise<Actor>; coreWorkspaces: CoreWorkspacePool | undefined; blobs?: BlobStore };
 export function registerProductRoadmapRoutes(app: FastifyInstance, options: Options) {
   const path = '/api/v1/workspaces/:workspaceId/projects/:projectId/product-roadmap';
   async function context(request: FastifyRequest, write: boolean) {
@@ -21,6 +26,18 @@ export function registerProductRoadmapRoutes(app: FastifyInstance, options: Opti
     if (write && project.entity.archived) throw new DomainError('roadmap_archived', '项目已归档，不可修改产品规划。', 409);
     return { workspaceId, projectId, principal, scope, workspace, project };
   }
+  async function design(c:Awaited<ReturnType<typeof context>>,versionId:string,expected?:ProductDesign) {
+    if(!options.blobs)throw new DomainError('design_unavailable','设计文件存储未就绪。',503);
+    return resolveProductDesign({versionId,projectId:c.projectId,...(expected?{expected}:{})},{
+      version:id=>readEntity(options.database(),c.principal,c.workspaceId,id),
+      content:id=>downloadArtifactVersion(options.database(),c.principal,c.workspaceId,id,options.blobs!),
+    });
+  }
+  app.get(`${path}/design/:versionId`, async (request,reply)=>{
+    reply.header('Cache-Control','private, no-store');
+    const c=await context(request,false),{versionId}=z.object({versionId:z.uuid()}).parse(request.params);
+    return design(c,versionId);
+  });
   app.get(path, async (request, reply) => {
     reply.header('Cache-Control', 'private, no-store');
     const c = await context(request, false);
@@ -31,6 +48,8 @@ export function registerProductRoadmapRoutes(app: FastifyInstance, options: Opti
     const input = roadmapActionSchema.parse(request.body), c = await context(request, true);
     const { workspace, project, principal, scope, workspaceId, projectId } = c;
     const store = readRoadmap(project);
+    const selectedDesign=input.action==='save'?input.plan.design:input.action==='publish'?store.draft.design:store.releases.find(r=>r.id===input.releaseId)?.plan.design;
+    if(selectedDesign)await design(c,selectedDesign.versionId,selectedDesign);
     if (input.action === 'materialize') {
       const release = store.releases.find(r => r.id === input.releaseId);
       if (!release) throw new DomainError('roadmap_missing', '请先发布并核对当前计划版本。', 409);

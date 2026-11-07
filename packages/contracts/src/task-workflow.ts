@@ -117,3 +117,9 @@ const explicitCiGraph = structuredClone(deliveryTemplate.draft);
 explicitCiGraph.nodes.find(n => n.kind === 'ci')!.config.requiredChecks = ['test'];
 deliveryTemplate.draft = explicitCiGraph; deliveryTemplate.revision = 3;
 deliveryTemplate.versions.push({ version: 3, graph: explicitCiGraph, publishedAt: '2026-11-01T15:00:00.000Z' });
+
+// Dedicated canvas preset: authorization includes phase transitions, never business completion.
+const canvasGraph = structuredClone(workflowTemplates.find(d => d.id === 'builtin-deliver')!.versions.at(-1)!.graph);
+canvasGraph.name = '画布节点交付';
+for (const node of canvasGraph.nodes) if (node.config.taskTransition) node.config.taskTransition.mode = 'auto';
+workflowTemplates.push({ id: 'builtin-canvas-deliver', workspaceId: '', projectId: '', revision: 1, draft: canvasGraph, versions: [{ version: 1, graph: canvasGraph, publishedAt: '2026-11-04T00:00:00.000Z' }] });

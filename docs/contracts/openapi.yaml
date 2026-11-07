@@ -7807,6 +7807,29 @@ paths:
                                 - x
                                 - y
                               additionalProperties: false
+                          design:
+                            type: object
+                            properties:
+                              versionId:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              sha256:
+                                type: string
+                                pattern: ^[a-f0-9]{64}$
+                              title:
+                                type: string
+                                minLength: 1
+                                maxLength: 200
+                              notes:
+                                type: string
+                                maxLength: 6000
+                            required:
+                              - versionId
+                              - sha256
+                              - title
+                              - notes
+                            additionalProperties: false
                         required:
                           - brief
                           - nodes
@@ -7912,6 +7935,29 @@ paths:
                                       - x
                                       - y
                                     additionalProperties: false
+                                design:
+                                  type: object
+                                  properties:
+                                    versionId:
+                                      type: string
+                                      format: uuid
+                                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                    sha256:
+                                      type: string
+                                      pattern: ^[a-f0-9]{64}$
+                                    title:
+                                      type: string
+                                      minLength: 1
+                                      maxLength: 200
+                                    notes:
+                                      type: string
+                                      maxLength: 6000
+                                  required:
+                                    - versionId
+                                    - sha256
+                                    - title
+                                    - notes
+                                  additionalProperties: false
                               required:
                                 - brief
                                 - nodes
@@ -8104,6 +8150,29 @@ paths:
                                 - x
                                 - y
                               additionalProperties: false
+                          design:
+                            type: object
+                            properties:
+                              versionId:
+                                type: string
+                                format: uuid
+                                pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                              sha256:
+                                type: string
+                                pattern: ^[a-f0-9]{64}$
+                              title:
+                                type: string
+                                minLength: 1
+                                maxLength: 200
+                              notes:
+                                type: string
+                                maxLength: 6000
+                            required:
+                              - versionId
+                              - sha256
+                              - title
+                              - notes
+                            additionalProperties: false
                         required:
                           - brief
                           - nodes
@@ -8209,6 +8278,29 @@ paths:
                                       - x
                                       - y
                                     additionalProperties: false
+                                design:
+                                  type: object
+                                  properties:
+                                    versionId:
+                                      type: string
+                                      format: uuid
+                                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                                    sha256:
+                                      type: string
+                                      pattern: ^[a-f0-9]{64}$
+                                    title:
+                                      type: string
+                                      minLength: 1
+                                      maxLength: 200
+                                    notes:
+                                      type: string
+                                      maxLength: 6000
+                                  required:
+                                    - versionId
+                                    - sha256
+                                    - title
+                                    - notes
+                                  additionalProperties: false
                               required:
                                 - brief
                                 - nodes
@@ -8376,6 +8468,29 @@ paths:
                               - x
                               - y
                             additionalProperties: false
+                        design:
+                          type: object
+                          properties:
+                            versionId:
+                              type: string
+                              format: uuid
+                              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                            sha256:
+                              type: string
+                              pattern: ^[a-f0-9]{64}$
+                            title:
+                              type: string
+                              minLength: 1
+                              maxLength: 200
+                            notes:
+                              type: string
+                              maxLength: 6000
+                          required:
+                            - versionId
+                            - sha256
+                            - title
+                            - notes
+                          additionalProperties: false
                       required:
                         - brief
                         - nodes
@@ -8434,6 +8549,93 @@ paths:
                     - nodeId
                     - confirm
                   additionalProperties: false
+  /api/v1/workspaces/{workspaceId}/projects/{projectId}/product-roadmap/design/{versionId}:
+    get:
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Verified design asset index and bounded base64 content.
+          content:
+            application/json:
+              schema:
+                $schema: https://json-schema.org/draft/2020-12/schema
+                type: object
+                properties:
+                  versionId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  sha256:
+                    type: string
+                    pattern: ^[a-f0-9]{64}$
+                  fileName:
+                    type: string
+                  assets:
+                    maxItems: 64
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        mediaType:
+                          type: string
+                        base64:
+                          type: string
+                      required:
+                        - name
+                        - mediaType
+                        - base64
+                      additionalProperties: false
+                  unsupported:
+                    maxItems: 256
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - versionId
+                  - sha256
+                  - fileName
+                  - assets
+                  - unsupported
+                additionalProperties: false
+        "400":
+          description: Authorization, validation, conflict or unknown outcome
+        "401":
+          description: Authorization, validation, conflict or unknown outcome
+        "403":
+          description: Authorization, validation, conflict or unknown outcome
+        "404":
+          description: Authorization, validation, conflict or unknown outcome
+        "409":
+          description: Authorization, validation, conflict or unknown outcome
+        "422":
+          description: Unsafe, corrupt or oversized design archive.
+        "503":
+          description: Authorization, validation, conflict or unknown outcome
+      operationId: readProductDesign
+      description: Read an authorized immutable design artifact belonging to this project. Bounded in-memory ZIP inspection,
+        never execution. Private/no-store; unsupported contents are listed, not run.
   /health/live:
     get:
       operationId: getLiveness

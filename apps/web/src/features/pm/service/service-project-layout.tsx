@@ -21,12 +21,14 @@ const projectViews = [
   { key: "calendar", path: "/issues?view=calendar", zh: "日历", en: "Calendar", icon: CalendarDays },
   { key: "gantt", path: "/issues?view=gantt", zh: "时间线", en: "Timeline", icon: ChartGantt },
   { key: "tree", path: "/issues?view=tree", zh: "树形图", en: "Tree", icon: GitBranch },
+  { key: "graph", path: "?tab=graph", zh: "关系图", en: "Dependencies", icon: GitBranch },
+  { key: "comments", path: "?view=detail2&tab=comments", zh: "讨论", en: "Discussion", icon: Activity },
   { key: "files", path: "?tab=files", zh: "文件", en: "Files", icon: Paperclip },
   { key: "activity", path: "?tab=activity", zh: "活动", en: "Activity", icon: Activity },
 ] as const
 
 const sidebarViews = [
-  ...projectViews.filter(view => ["kanban", "list", "gantt", "files"].includes(view.key)),
+  ...projectViews.filter(view => ["roadmap", "kanban", "list", "gantt", "files"].includes(view.key)),
 ]
 const issueViewKeys: Readonly<Record<string, string>> = {
   board: "kanban", kanban: "kanban", board1: "kanban", board2: "kanban", board3: "kanban", "dnd-board": "kanban",
@@ -73,7 +75,7 @@ function useActiveProjectView(base: string) {
   return pathname === `${base}/events` ? "calendar" : ""
 }
 
-function ProjectViewNavigation({ base }: { base: string }) {
+export function ProjectViewNavigation({ base }: { base: string }) {
   const active = useActiveProjectView(base)
   const t = useText()
   return <nav aria-label={t("项目视图", "Project views")} className={`${styles.projectViews} flex min-w-0 gap-1 overflow-x-auto`}>

@@ -1,5 +1,5 @@
 import type { NotificationInboxItem } from "../../../../../../packages/domain/src/notifications.ts"
-import type { FilterCondition } from "@/components/blocks/filter-card"
+import type { FilterCondition } from "../../../components/blocks/filter-card.types.ts"
 
 export type NotificationInboxFilters = {
   query: string; folder: "inbox" | "archive"; unreadOnly: boolean; ordering: "newest" | "oldest"; unreadFirst: boolean

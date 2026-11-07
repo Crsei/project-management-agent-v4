@@ -3,8 +3,8 @@ import { ChevronDown, Plus, Trash2 } from "lucide-react"
 import { useI18n } from "@/lib/i18n-provider"
 import styles from "./filter-card.module.css"
 
-export type FilterOperator = "is" | "isNot"
-export type FilterCondition = { field: string; operator: FilterOperator; values: string[] }
+import type { FilterOperator, FilterCondition } from "./filter-card.types.ts"
+export type { FilterOperator, FilterCondition } from "./filter-card.types.ts"
 export type FilterOption = { value: string; label: string }
 export type FilterField = {
   id: string

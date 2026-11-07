@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { productDesignSchema } from './product-design.ts';
 
 const text = z.string().max(6000);
 export const productBriefSchema = z.strictObject({
@@ -10,7 +11,7 @@ export const roadmapNodeSchema = z.strictObject({
   nonGoals: text, stage: z.string().max(80), dependsOn: z.array(z.uuid()).max(24),
   x: z.number().int().min(0).max(6000), y: z.number().int().min(0).max(6000),
 });
-export const roadmapPlanSchema = z.strictObject({ brief: productBriefSchema, nodes: z.array(roadmapNodeSchema).max(24) });
+export const roadmapPlanSchema = z.strictObject({ brief: productBriefSchema, nodes: z.array(roadmapNodeSchema).max(24), design: productDesignSchema.optional() });
 export const roadmapReleaseSchema = z.strictObject({ id: z.uuid(), plan: roadmapPlanSchema, publishedAt: z.iso.datetime(), publishedBy: z.string() });
 export const roadmapStoreSchema = z.strictObject({ schema: z.literal('pm/product-roadmap/v1'), draft: roadmapPlanSchema, releases: z.array(roadmapReleaseSchema).max(20) });
 export const roadmapActionSchema = z.discriminatedUnion('action', [

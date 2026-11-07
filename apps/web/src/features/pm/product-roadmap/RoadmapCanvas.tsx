@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { RoadmapNode, RoadmapPlan, RoadmapTask } from '../../../../../../packages/contracts/src/product-roadmap';
-export function RoadmapCanvas({ plan, selected, onSelect, onMove, tasks }: { plan: RoadmapPlan; selected: string | null; onSelect: (id: string) => void; onMove?: (id: string, x: number, y: number) => void; tasks?: RoadmapTask[] }) {
+export function RoadmapCanvas({ plan, selected, onSelect, onMove, tasks, statuses }: { plan: RoadmapPlan; selected: string | null; onSelect: (id: string) => void; onMove?: (id: string, x: number, y: number) => void; tasks?: RoadmapTask[]; statuses?: Record<string,string> }) {
   const [zoom, setZoom] = useState(1);
   const viewport = useRef<HTMLDivElement>(null), drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
   const width = Math.max(960, ...plan.nodes.map(n => n.x + 290)), height = Math.max(330, ...plan.nodes.map(n => n.y + 180));
@@ -14,11 +14,11 @@ export function RoadmapCanvas({ plan, selected, onSelect, onMove, tasks }: { pla
     <div style={{ width: width * zoom, height: height * zoom, position: 'relative' }}><div className="roadmap-plane" style={{ width, height, position: 'absolute', transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
       <svg width={width} height={height} aria-hidden="true"><defs><marker id="roadmap-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="currentColor" /></marker></defs>{plan.nodes.flatMap(n => n.dependsOn.map(id => { const from = plan.nodes.find(p => p.id === id); if (!from) return null; const x = from.x + 260, y = from.y + 75; return <path key={`${id}:${n.id}`} d={`M${x},${y} C${x + 45},${y} ${n.x - 45},${n.y + 75} ${n.x - 8},${n.y + 75}`} fill="none" stroke="currentColor" strokeWidth="2" markerEnd="url(#roadmap-arrow)" />; }))}</svg>
       {plan.nodes.map((n, index) => { const matches = (tasks ?? []).filter(t => t.nodeId === n.id), task = matches.length === 1 ? matches[0] : undefined; return <article key={n.id} className="roadmap-node" data-selected={selected === n.id} style={{ left: n.x, top: n.y }}>
-        <div className="roadmap-node-grip" draggable={!!onMove} onDragStart={e => { const rect = e.currentTarget.parentElement!.getBoundingClientRect(); drag.current = { id: n.id, dx: (e.clientX - rect.left) / zoom, dy: (e.clientY - rect.top) / zoom }; e.dataTransfer.setData('text/plain', n.id); }} onDragEnd={() => { drag.current = null; }}><span>{n.stage || '未分阶段'}</span><span>{onMove ? '⠿' : `#${index + 1}`}</span></div>
-        <button type="button" className="roadmap-node-select" aria-label={`选择任务：${n.title || '未命名'}`} onClick={() => onSelect(n.id)}><strong>{n.title || '未命名任务'}</strong><span>{n.outcome || '请明确要交付的成果'}</span></button>
-        <footer>{matches.length > 1 ? '关联冲突' : task ? `${task.taskId} · ${task.archived ? '已归档' : task.status}${task.drifted ? ' · 需求已变更' : ''}` : tasks ? '候选 · 未创建' : '规划草稿'}<span>{n.dependsOn.length ? `${n.dependsOn.length} 个前置` : '起点'}</span></footer>
+        <div className="roadmap-node-grip" draggable={!!onMove} onDragStart={e => { const rect = e.currentTarget.parentElement!.getBoundingClientRect(); drag.current = { id: n.id, dx: (e.clientX - rect.left) / zoom, dy: (e.clientY - rect.top) / zoom }; e.dataTransfer.setData('text/plain', n.id); }} onDragEnd={() => { drag.current = null; }}><span>{`功能 ${String(index + 1).padStart(2, '0')}`}</span><span>{onMove ? '⠿' : `#${index + 1}`}</span></div>
+        <button type="button" className="roadmap-node-select" aria-label={`选择功能：${n.title || '未命名'}`} onClick={() => onSelect(n.id)}><strong>{n.title || '未命名功能'}</strong><span>{n.outcome || '描述用户能做什么'}</span></button>
+        <footer>{statuses?.[n.id] ? statuses[n.id] : matches.length > 1 ? '关联冲突' : task ? `${task.taskId} · ${task.archived ? '已归档' : task.status}${task.drifted ? ' · 需求已变更' : ''}` : tasks ? '候选 · 未创建' : '功能草稿'}<span>{n.dependsOn.length ? `${n.dependsOn.length} 个前置` : '起点'}</span></footer>
       </article>; })}
-      {!plan.nodes.length && <p className="roadmap-canvas-empty">先描述用户流程，再生成候选任务。画布连接的是产品成果，不是开发步骤。</p>}
+      {!plan.nodes.length && <p className="roadmap-canvas-empty">先描述用户流程，再生成产品功能。连线表示功能之间的前置关系。</p>}
     </div></div>
   </div></>;
 }

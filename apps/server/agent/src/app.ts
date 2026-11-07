@@ -1,3 +1,4 @@
+import { productCanvasRoutes } from "./product-canvas/index.ts";
 import { taskWorkflowRoutes } from "./task-workflows/index.ts";
 import { taskDeliveryRoutes } from "./task-delivery/index.ts";
 import { Hono } from "hono";
@@ -21,6 +22,7 @@ export const app = new Hono()
   .route("/api", chatRoutes)
   .route("/api", taskDeliveryRoutes)
   .route("/api", taskWorkflowRoutes)
+  .route("/api", productCanvasRoutes)
   .route("/api", pmToolRoutes)
   .route("/api", pmCoreChangesRoutes)
   .route("/api", pmCapabilityRoutes)

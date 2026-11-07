@@ -24,6 +24,7 @@ for (const held of ["chat", "execution", "automation"] as const) {
       replace("durable/chat-runtime.ts", { startChatRuntime: () => start("chat"), stopChatRuntime: async () => {} });
       replace("durable/engine.ts", { startExecution: () => start("execution"), stopExecution: async () => {} });
       replace("automation/index.ts", { startAutomation: () => start("automation"), stopAutomation: async () => {} });
+      replace("product-canvas/index.ts", { startProductCanvases: () => start("canvases"), stopProductCanvases: async () => {} });
       replace("task-workflows/runner.ts", { startTaskWorkflows: () => start("workflows"), stopTaskWorkflows: async () => {} });
       replace("durable/store.ts", { getDatabase: () => ({}), closeStore: () => {} });
       replace("providers/instances.ts", { migrateProviderStartupState: async () => {} });

@@ -19,7 +19,7 @@
 | S3 当前配置与真实证据 | [Provider 差异与实施记录](../reference/t3code-provider-config-diff-30eb7e7bb1.zh.md)，特别是第15—18节；历史通过不算迁移后验收 |
 | S4 当前 Chat / PM 边界 | [统一 Chat 计划](agent-chat-pm-unification-plan.zh.md)、[PM 接口计划](agent-pm-interface-plan.zh.md)、[交互矩阵](agent-pm-interaction-matrix.zh.md)；以当前源码及较新实施记录为准，不恢复历史未启用方案 |
 | S5 输出与用量参考 | [输出适配记录](v3-provider-output-plan.zh.md)、[v4 Usage 计划](v4-usage-page-replica-plan.zh.md)；复用当前功能与行为验收，不继承旧版本 Home 隔离等已废弃选择 |
-| S6 本机代理配置 | [codex-sol 预设](../../.omp/agents/codex-sol.md) 已声明 `model: gpt-6.1-sol`、`thinking-level: xhigh`；当前说明偏 Composer，其他切片派发前须使用职责匹配且相同模型/推理档位的预设 |
+| S6 本机代理配置 | 历史本机预设 `.omp/agents/codex-sol.md`（未随仓库分发）曾声明 `model: gpt-6.1-sol`、`thinking-level: xhigh`；该历史说明偏 Composer；当前派发以会话和仓库的有效约定为准 |
 
 已观察：S1 的 `provider-core/src/server/snapshotProbe.ts` 原始版本解析函数能把本机 `opencode v2.1.2` 解析为 `2.1.2`。当前本仓 OpenCode 已通过真实 Chat 调用，但仍使用本地移植实现；不能据此勾选本计划任何迁移验收项。
 

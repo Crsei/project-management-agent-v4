@@ -382,7 +382,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   registerAgentIssueSearchRoutes(app, { database, actor, coreWorkspaces });
   registerAgentPreviewRoutes(app, { database, actor, coreWorkspaces });
   registerWorkflowTaskTransitionRoutes(app, { database, actor, coreWorkspaces });
-  registerProductRoadmapRoutes(app, { database, actor, coreWorkspaces });
+  registerProductRoadmapRoutes(app, { database, actor, coreWorkspaces, blobs });
   registerNotificationRoutes(app, { database, actor, core: notificationCore });
   registerWebhookRoutes(app, { database, actor, ...(options.webhooks ? { config: options.webhooks } : {}) });
   app.get('/api/v1/workspaces/:workspaceId/dashboard/personal', async request => dashboard(request, readPersonalDashboard));

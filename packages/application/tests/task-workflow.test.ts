@@ -47,7 +47,7 @@ function fixture(template = 'builtin-deliver') {
   return { service, p, dp, input, calls, runs, definitions, deliveries, stepUntil, set: { deny: () => { allow = false; }, revision: () => { taskRevision = 'external-edit'; }, status: (v: string) => { taskStatus = v; taskRevision = 'external-state'; }, repo: () => { repo = 'owner/other'; }, generation: (v: string) => { generation = v; }, test: (v: number) => { testExit = v; }, ci: (v: typeof ci) => { ci = v; }, ciHead: () => { ciHead = 'other'; }, advance: (ms: number) => { clock += ms; } } };
 }
 
-test('three templates parse and validate; strict schemas reject unsupported inputs and reserved node IDs', () => {
+test('task and canvas templates parse and validate; strict schemas reject unsupported inputs and reserved node IDs', () => {
   for (const def of workflowTemplates) { workflowGraphSchema.parse(def.draft); assert.deepEqual(workflowProblems(def.draft), []); }
   const graph = structuredClone(workflowTemplates[0]!.draft); graph.nodes[0]!.id = 'constructor'; assert.equal(workflowGraphSchema.safeParse(graph).success, false);
   assert.equal(workflowStartSchema.safeParse({ ...fixture().input, credential: 'not allowed' }).success, false);
@@ -147,7 +147,7 @@ test('pause is not cancellation and concurrent ticks cannot duplicate side effec
 test('templates remain editable without Git readiness and catalogue identifies manual delivery', async () => {
   const f = fixture(); f.p.repository = async () => { throw new Error('no origin'); };
   const catalog = await f.service.catalog(scope);
-  assert.equal(catalog.repository, null); assert.equal(catalog.definitions.length, 3); assert.equal(catalog.hasManualDelivery, false);
+  assert.equal(catalog.repository, null); assert.equal(catalog.definitions.length, 4); assert.equal(catalog.hasManualDelivery, false);
   await f.p.delivery.prepare({ ...scope, id, taskRevision: 'r1', baseBranch: 'main' });
   assert.equal((await f.service.catalog(scope)).hasManualDelivery, true);
 });
@@ -266,4 +266,18 @@ test('required CI never silently succeeds when a check is missing until timeout'
   f.set.advance(16 * 60_000);
   assert.equal((await f.service.tick(id)).status, 'failed'); assert.ok(!f.calls.includes('state-review'));
   assert.equal(workflowTemplates[2]!.versions[1]!.graph.nodes.find(n => n.kind === 'ci')!.config.requiredChecks, undefined);
+});
+
+test('canvas preset advances start and review with scoped consent, not business completion', async () => {
+  const f = fixture('builtin-canvas-deliver');
+  await f.service.start(f.input);
+  const result = await f.stepUntil(r => r.status === 'completed');
+  assert.equal(result.status, 'completed');
+  assert.equal(f.calls.filter(c => c === 'state-start').length, 1);
+  assert.equal(f.calls.filter(c => c === 'state-review').length, 1);
+  assert.ok(!f.calls.some(c => c === 'state-done'));
+  const g = fixture('builtin-canvas-deliver');
+  g.set.ci('failure'); await g.service.start(g.input);
+  await g.stepUntil(r => r.status === 'failed');
+  assert.ok(!g.calls.includes('state-review'));
 });
