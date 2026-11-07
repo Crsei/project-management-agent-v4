@@ -1,10 +1,10 @@
 {
   "version": 1,
   "upstreamCommit": "30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c",
-  "sourceManifestSha256": "989f2c04b8eb0a65d2e511067185ef4965d910e8f29412e94985441d54ff889f",
+  "sourceManifestSha256": "95073aea81e90fe663dba4070a9b9732f4ca93d9a70c6648ab022464e92ae704",
   "scope": "Exact current selected upstream + explicit existing local adaptations/resources. No runtime, PM host persistence or source repository is copied wholesale.",
   "patchFormat": "integration-patches/*.json exact original-line splices with whole-file SHA256 preconditions and postconditions",
-  "verification": "Static inventory authoring only; no check/build/test/install/smoke/service executed by T18. Parent M6 gate remains open.",
+  "verification": "New-generation exact recipe authoring only; integrated provenance/build/resource/behavior verification remains required.",
   "summary": {
     "upstreamInputs": 959,
     "upstreamSelected": 861,
@@ -3831,8 +3831,8 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "0a90a0329aa86558f95994f274d6c10fdd160441974145e823aec366e62b13ce",
-      "bytes": 4811857
+      "sha256": "192a76759bf9698e2985739ec3c5089990635eb921ea1fc2232a5f9bcab8904b",
+      "bytes": 4818920
     },
     {
       "destination": "vendor/t3code/mcp-skills-source.json",
@@ -10604,8 +10604,8 @@
     {
       "destination": "vendor/t3code/scripts/imports.mjs",
       "asset": "vendor/t3code/scripts/imports.mjs",
-      "sha256": "63fd2a7b63673af521d48d1313374ee1bcee96e34bbd1aa1e042412dbc652209",
-      "bytes": 12611,
+      "sha256": "7d80ed41c031f7ce6eba26b081fd67da5ed8ec952fcbe1984aab5d177f392979",
+      "bytes": 10451,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10616,8 +10616,8 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "ac76d6db8e19063ee975be18374cc47065add0fce279e50778f8cb7e6106874a",
-      "bytes": 10198
+      "sha256": "6d8df1e22df3d1f05c2b3bd2b3ee433cbaca73eb12dd1309074e6b20842736da",
+      "bytes": 13420
     },
     {
       "destination": "vendor/t3code/scripts/mcp-skills-source.mjs",
@@ -10667,8 +10667,8 @@
     {
       "destination": "vendor/t3code/source-manifest.json",
       "asset": "vendor/t3code/source-manifest.json",
-      "sha256": "989f2c04b8eb0a65d2e511067185ef4965d910e8f29412e94985441d54ff889f",
-      "bytes": 3517496,
+      "sha256": "95073aea81e90fe663dba4070a9b9732f4ca93d9a70c6648ab022464e92ae704",
+      "bytes": 3502104,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"
@@ -10676,8 +10676,8 @@
     {
       "destination": "vendor/t3code/sync-imports.json",
       "asset": "vendor/t3code/sync-imports.json",
-      "sha256": "fce842b5f7130a1341ac0f1e3cffc5702df58e1778be1a531dda12d426a0a925",
-      "bytes": 2298167,
+      "sha256": "e171ba7e30c6514104c6f5bfd246308ad53778d66c81f637452cb8f926d49c00",
+      "bytes": 2299059,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"

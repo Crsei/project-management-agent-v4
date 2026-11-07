@@ -39,6 +39,42 @@
   ],
   "externalHostOutputs": [
     {
+      "path": "apps/server/agent/src/app.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/server/agent/src/maintenance/agent-backup.test.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/server/agent/src/maintenance/agent-backup.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/server/agent/src/providers/skills.test.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/server/pm/src/app.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/web/src/features/agent/src/app.tsx",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/web/src/features/agent/src/settings/settings-layout.tsx",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "packages/agent-contracts/package.json",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
       "path": "apps/server/agent/src/providers/t3code/management.ts",
       "owner": "vendor/t3code/mcp-skills-adaptations.json"
     },

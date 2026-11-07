@@ -4,7 +4,7 @@
   "sourceManifestSha256": "38e687390e239aa6b41628928ef0f35149d618e15504e79aa7a52eb8cb0e9bed",
   "supplementalSha256": "9bcf6d052c337b028ff86bd80790f4f5a4f23914946a64bd7b1e112b2aed728c",
   "policySha256": "6ff65d8a230febf52e85ba1c477e3f4fd53c67e41d4734b4fc9fc87fb12cfce3",
-  "closureSha256": "958c5365f425858c88ae5eff6934d32ddc129cc150dc24efaf69daf06277f844",
+  "closureSha256": "b812d5037b432b7cb3ff2c01cb3fa85b4cb61d2f2c215b97f6f383bab4aaaa32",
   "modePolicy": "Canonical 0644/0755 executable class, regular nonlinked files; original modes fixed. Exact pre/postimage and exclusive nonoverwriting replay.",
   "hostBuildInputs": [
     {
@@ -63,8 +63,8 @@
     },
     {
       "path": "vendor/cc-switch/scripts/provenance.mjs",
-      "sha256": "d86c6a9b7de0ab288fe2744aa60ca34d6f808162cd9b6f7e038d4904780f58c0",
-      "bytes": 19796,
+      "sha256": "6f9c4b6bdb9ea5fe670299c725c5d1cc9625cde5ddb256ddfbd319a51cc4f8b2",
+      "bytes": 26645,
       "mode": 420
     },
     {
@@ -1469,11 +1469,11 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/components/features/mcp-page/marketplace-section.tsx",
-      "sha256": "6f8e56246cb0a7a9b2813f170a47cff3ae6c5601fcd53e705ed22c8a3b2990c7",
-      "bytes": 2104,
+      "sha256": "03ac24cb7b7baccaed84775de75ba440f08ba05960965cb8093d225e00886f92",
+      "bytes": 2138,
       "mode": 420,
       "provenance": "adapted-original",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Reviewed installed-Skills presentation and marketplace transport filtering, plus independently authenticated CC provenance helper ownership transition; pinned inputs unchanged.",
       "source": "src/components/features/mcp-page/marketplace-section.tsx",
       "sourcePath": "src/components/features/mcp-page/marketplace-section.tsx",
       "origin": "agent-canvas-git",
@@ -1481,7 +1481,7 @@
       "blob": "35e8ec1180949ed87ecf51cdee0ac74313985203",
       "patch": {
         "path": "vendor/openhands-extensions/integration-patches/original/src/components/features/mcp-page/marketplace-section.tsx.json",
-        "sha256": "39deac3a829eb98529f145df632fbd321ace11a40558e10a0214cd61df83b71e"
+        "sha256": "7449a2c85818e901f56bc40a7d11716d7286b4ea7f04f44569db74babc35b373"
       }
     },
     {
@@ -3894,14 +3894,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
-      "sha256": "d03f3167c45e1e94ff8833423ac2d01299526ab16ef425cecb392a754a13acb0",
-      "bytes": 7618,
+      "sha256": "a750d11ff508296c15df266b274f2931241ccb27a5aaac831995944cbbba3032",
+      "bytes": 7623,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed source-aligned MCP/Skills presentation with shared agent chrome and removed explanatory copy",
+      "reason": "Reviewed installed-Skills presentation and marketplace transport filtering, plus independently authenticated CC provenance helper ownership transition; pinned inputs unchanged.",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/installed-skills.tsx.json",
-        "sha256": "a7bc3b1dd110f03bc56f366b6d7d59f90613fa8c7008794e6e3e83408b21f7ad"
+        "sha256": "4fe271ae5203eccf712e5d5b85ad6ffa8a6b6f50a9f5402210b8f61b8a968519"
       }
     },
     {
@@ -3930,14 +3930,14 @@
     },
     {
       "destination": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
-      "sha256": "12642cb7c6d7cf8f2684f6d0262de2436175d99c43d15465c26d7405b0288d6f",
-      "bytes": 5991,
+      "sha256": "ba8e3d6fe94fa269dde19fac4d99a66842f3c0d7001425704baf88ef0b1aa77d",
+      "bytes": 6397,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Reviewed localized MCP status labels and bound-only Skills matrix targets",
+      "reason": "Reviewed installed-Skills presentation and marketplace transport filtering, plus independently authenticated CC provenance helper ownership transition; pinned inputs unchanged.",
       "asset": {
         "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/skill-agent-matrix.tsx.json",
-        "sha256": "defd66f1a8c4ea18de8d9a1d8cede2d5128f70231e45378e68a22c54cc48b4b4"
+        "sha256": "08af714957ed2e7ed6d70f70c3bf40a541f7a4c27e38ae4778d9edf2cebf3600"
       }
     },
     {
@@ -4178,8 +4178,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/installed-skills.tsx.json",
-      "sha256": "a7bc3b1dd110f03bc56f366b6d7d59f90613fa8c7008794e6e3e83408b21f7ad",
-      "bytes": 10399,
+      "sha256": "4fe271ae5203eccf712e5d5b85ad6ffa8a6b6f50a9f5402210b8f61b8a968519",
+      "bytes": 10403,
       "mode": 420
     },
     {
@@ -4196,8 +4196,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/local/src/web/skills/skill-agent-matrix.tsx.json",
-      "sha256": "defd66f1a8c4ea18de8d9a1d8cede2d5128f70231e45378e68a22c54cc48b4b4",
-      "bytes": 8229,
+      "sha256": "08af714957ed2e7ed6d70f70c3bf40a541f7a4c27e38ae4778d9edf2cebf3600",
+      "bytes": 8773,
       "mode": 420
     },
     {
@@ -4274,8 +4274,8 @@
     },
     {
       "path": "vendor/openhands-extensions/integration-patches/original/src/components/features/mcp-page/marketplace-section.tsx.json",
-      "sha256": "39deac3a829eb98529f145df632fbd321ace11a40558e10a0214cd61df83b71e",
-      "bytes": 6008,
+      "sha256": "7449a2c85818e901f56bc40a7d11716d7286b4ea7f04f44569db74babc35b373",
+      "bytes": 6056,
       "mode": 420
     },
     {

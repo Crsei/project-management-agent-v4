@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   EMPTY_RIGHT_PANEL_STATE,
   pmRightPanelReducer,
-  pmRightPanelSurfaceTitle,
   type PmRightPanelAction,
   type PmRightPanelState,
 } from "./right-panel-state.ts";
@@ -103,27 +102,6 @@ test("unknown ids do not mutate the state", () => {
   assert.equal(pmRightPanelReducer(opened, { type: "activate", id: "missing" }), opened);
   assert.equal(pmRightPanelReducer(opened, { type: "close", id: "missing" }), opened);
   assert.equal(pmRightPanelReducer(opened, { type: "move", id: "missing", toIndex: 0 }), opened);
-});
-
-test("titles use the active locale and surface ordinal", () => {
-  const zh = (value: string) => value;
-  const en = (_zh: string, value: string) => value;
-  assert.equal(
-    pmRightPanelSurfaceTitle({ id: "files", kind: "files" }, zh),
-    "文件",
-  );
-  assert.equal(
-    pmRightPanelSurfaceTitle({ id: "terminal", kind: "terminal" }, zh),
-    "终端",
-  );
-  assert.equal(
-    pmRightPanelSurfaceTitle({ id: "browser:1", kind: "browser", ordinal: 1 }, en),
-    "Browser 1",
-  );
-  assert.equal(
-    pmRightPanelSurfaceTitle({ id: "browser:1", kind: "browser", ordinal: 1, title: "EasyuseUI · 项目管理" }, en),
-    "EasyuseUI · 项目管理",
-  );
 });
 
 test("browser title updates are idempotent", () => {

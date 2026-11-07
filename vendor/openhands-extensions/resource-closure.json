@@ -567,8 +567,8 @@
     },
     {
       "path": "vendor/openhands-extensions/src/components/features/mcp-page/marketplace-section.tsx",
-      "sha256": "6f8e56246cb0a7a9b2813f170a47cff3ae6c5601fcd53e705ed22c8a3b2990c7",
-      "bytes": 2104,
+      "sha256": "03ac24cb7b7baccaed84775de75ba440f08ba05960965cb8093d225e00886f92",
+      "bytes": 2138,
       "ownership": "fork-output"
     },
     {
@@ -843,8 +843,8 @@
     },
     {
       "path": "vendor/openhands-extensions/src/web/skills/installed-skills.tsx",
-      "sha256": "d03f3167c45e1e94ff8833423ac2d01299526ab16ef425cecb392a754a13acb0",
-      "bytes": 7618,
+      "sha256": "a750d11ff508296c15df266b274f2931241ccb27a5aaac831995944cbbba3032",
+      "bytes": 7623,
       "ownership": "fork-output"
     },
     {
@@ -861,8 +861,8 @@
     },
     {
       "path": "vendor/openhands-extensions/src/web/skills/skill-agent-matrix.tsx",
-      "sha256": "12642cb7c6d7cf8f2684f6d0262de2436175d99c43d15465c26d7405b0288d6f",
-      "bytes": 5991,
+      "sha256": "ba8e3d6fe94fa269dde19fac4d99a66842f3c0d7001425704baf88ef0b1aa77d",
+      "bytes": 6397,
       "ownership": "fork-output"
     },
     {

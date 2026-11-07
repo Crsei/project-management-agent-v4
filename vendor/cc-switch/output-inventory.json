@@ -2,8 +2,8 @@
   "version": 1,
   "upstreamCommit": "7afceec14b977ecc2f4373e8ffb40e7223b435ac",
   "sourceManifestSha256": "1624a696b1354d5ce3a18fb2a7c274984403d9fd54a87845c449734551f2a593",
-  "policySha256": "bf6c5c532d0f3078e5ec447584139513ef077b17d2f99ea3e606f38e28ea5c48",
-  "closureSha256": "62bac1796c28677fefdaa124d048cdcb0759c23d48a6cbdc53e2b5caef3d298e",
+  "policySha256": "5e6e84e5181a97af3de0ce877fa9d6c1d4a41f04c8d241685f7bf04fabdcd9f7",
+  "closureSha256": "62752c5e6f152b2e334d23cb22cc6c43d912156d2c2bcee7ba1cb49fafb90743",
   "upstreamTreeSha256": "edf3067a499f3fcf06fcc5b687c7383a984cbf363001f4469142009d221d6aed",
   "hostBuildInputs": [
     {
@@ -104,6 +104,42 @@
   ],
   "externalHostOutputs": [
     {
+      "path": "apps/server/agent/src/app.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/server/agent/src/maintenance/agent-backup.test.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/server/agent/src/maintenance/agent-backup.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/server/agent/src/providers/skills.test.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/server/pm/src/app.ts",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/web/src/features/agent/src/app.tsx",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "apps/web/src/features/agent/src/settings/settings-layout.tsx",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
+      "path": "packages/agent-contracts/package.json",
+      "owner": "vendor/t3code/mcp-skills-adaptations.json"
+    },
+    {
       "path": "apps/server/agent/src/providers/t3code/management.ts",
       "owner": "vendor/t3code/mcp-skills-adaptations.json"
     },
@@ -184,18 +220,6 @@
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/scripts/package.mjs.json",
         "sha256": "1e7421dfbdbe9589a2a83384298c66ee311886c2538426b2eb9066a66fcb416a"
-      }
-    },
-    {
-      "destination": "apps/server/agent/src/app.ts",
-      "sha256": "5afdf4d525ebbbd231b87e5b9aae4241dc1afef1a33ff7c208207f2490c1253e",
-      "bytes": 2070,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/app.ts.json",
-        "sha256": "c27bad497e33513c02c52ccf7af7d7411799c2f9240ef88458e3b25b98f10b9e"
       }
     },
     {
@@ -283,15 +307,27 @@
       }
     },
     {
-      "destination": "apps/server/agent/src/extensions/pm.ts",
-      "sha256": "dbe55bad855b376feab1086c9f55b67fc74214afce670b756ac3d564206d5c8d",
-      "bytes": 3532,
+      "destination": "apps/server/agent/src/extensions/pm.test.ts",
+      "sha256": "76603aea3cbc5215ca916799f327b6844b9256586c4d7cd482766424ef6e669d",
+      "bytes": 3111,
       "mode": 420,
       "provenance": "host-owned-integration",
-      "reason": "Apply optimized Agent Chat execution trace and headerless compact CodeBlock; settle current host outputs",
+      "reason": "Reviewed independent AgentWorkspace structural cutover: exact T3 ownership transfers, authenticated provenance helpers, explicit PM-target callback, and its isolated regression. No upstream pin change.",
+      "asset": {
+        "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/pm.test.ts.json",
+        "sha256": "5f3f8f656efd15fe38d4a68a33da27ae6a5a84b2a677922f279c59f25e7a8a96"
+      }
+    },
+    {
+      "destination": "apps/server/agent/src/extensions/pm.ts",
+      "sha256": "397509ee2af7f2963a9a0e832b5c972ae5d9e85c9f3ed0cb149c553664d40997",
+      "bytes": 3412,
+      "mode": 420,
+      "provenance": "host-owned-integration",
+      "reason": "Reviewed independent AgentWorkspace structural cutover: exact T3 ownership transfers, authenticated provenance helpers, explicit PM-target callback, and its isolated regression. No upstream pin change.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/pm.ts.json",
-        "sha256": "e4e41ee1a65252689a487685dbfb508ec8769a9b5f93fa7b0d99609ad641f366"
+        "sha256": "a549db718c18b2492e05856cc16367cf454afc18d17f9b974f19a4c6089c43a0"
       }
     },
     {
@@ -439,51 +475,15 @@
       }
     },
     {
-      "destination": "apps/server/agent/src/maintenance/agent-backup.test.ts",
-      "sha256": "d7dd501695f0c8c31d091a9bcaed41c0761b680daf950f566637b8ec7effe7b5",
-      "bytes": 39257,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/maintenance/agent-backup.test.ts.json",
-        "sha256": "189fe8c6c09ec3fe6fc7b6b8c97bcdc7de6aab802a684fe6431310083f741207"
-      }
-    },
-    {
-      "destination": "apps/server/agent/src/maintenance/agent-backup.ts",
-      "sha256": "c49f1e1260035be41f02fe18af0c54001e01ca7d4ca93deb1517b9ec6ae877af",
-      "bytes": 43105,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/maintenance/agent-backup.ts.json",
-        "sha256": "18e5b3fe52f1cd6c1f80b9b6af6c54498280568255ddc4ddd164cb8a2330cbc1"
-      }
-    },
-    {
       "destination": "apps/server/agent/src/providers/instances.ts",
-      "sha256": "3076cc3ade9f1c6e8a0b477c3feadf1129edf34753c11d5e9dd4e97295f24414",
-      "bytes": 37671,
+      "sha256": "3e133a58dddc0b327fec7a0b5fb889a207ab515f4a6f347b1f2e8d102ae421d7",
+      "bytes": 37111,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/providers/instances.ts.json",
-        "sha256": "b6258d3c2036133e9ab88eda821fd7d2a3595affa4cd48fbb7c7b15c184acff7"
-      }
-    },
-    {
-      "destination": "apps/server/agent/src/providers/skills.test.ts",
-      "sha256": "d94b74d726241badd2d9c47082d75271d4349b90d42def55b53f68ac25714b8f",
-      "bytes": 6356,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/providers/skills.test.ts.json",
-        "sha256": "2c9e7c0468266fba779e7ffb17ec438a8c79064ccec440bf64d12f95f6f9154e"
+        "sha256": "06094ae7da3802b2c5cc505e3ff1463658ea2f180b792c67ad8155eee5b9a45a"
       }
     },
     {
@@ -679,18 +679,6 @@
       }
     },
     {
-      "destination": "apps/server/pm/src/app.ts",
-      "sha256": "e72a60ec453c3461fcae2cd2169630e3b9231c19b3ce1135f160db36967c3da3",
-      "bytes": 53123,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/server/pm/src/app.ts.json",
-        "sha256": "e20846c72b2e16607bc1d3d04cac4b9133ff91aa6ae103417c460cfd25014b0b"
-      }
-    },
-    {
       "destination": "apps/server/pm/src/automation-events-routes.ts",
       "sha256": "ad9dd048da79304caa538e0af2b2c7b895a321ff6391d9450a785ce794071798",
       "bytes": 13289,
@@ -700,30 +688,6 @@
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/server/pm/src/automation-events-routes.ts.json",
         "sha256": "339051d155482bbb09dbe5527141f19e71a215bbc61dedf2e7327c23429b1c2f"
-      }
-    },
-    {
-      "destination": "apps/web/src/features/agent/src/app.tsx",
-      "sha256": "e2fff322ac6bf498631246b177bb1be8db0773e5fe7c295bc4fe58c0a9b59ace",
-      "bytes": 5488,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Hide Agent Chat local service settings pages and routes; include settled preview page registration",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/app.tsx.json",
-        "sha256": "7d87d8aad9ff1e1ffcfe883f6ede4605b5a9fba68535ca807cc7320ab6031270"
-      }
-    },
-    {
-      "destination": "apps/web/src/features/agent/src/chat/provider-skills-composer.tsx",
-      "sha256": "0183464821f74db07e02f18a1419d3ffe34549b1f0d810487a34fb209e0ba558",
-      "bytes": 15704,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Apply optimized Agent Chat execution trace and headerless compact CodeBlock; settle current host outputs",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/chat/provider-skills-composer.tsx.json",
-        "sha256": "50ac0a9c41c0107cd785e3e03f38cbb689b3ad66c2deeba278f4a69633f4375d"
       }
     },
     {
@@ -752,26 +716,26 @@
     },
     {
       "destination": "apps/web/src/features/agent/src/pm/automation/studio-setup.test.ts",
-      "sha256": "b3480629d9e3967e9aa3cbe4664af4d02031d03eac48fede535f1f3d067c784a",
-      "bytes": 18392,
+      "sha256": "ea8fdfc7db6a3ff834b0e18bdf283118bf3b9e8f9ec2cbc5d6f83c5916b65f01",
+      "bytes": 23070,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-setup.test.ts.json",
-        "sha256": "5423022cbcfdea7ce1bc04a99e10c3bd179baabee404dc4d6caeb5809a3542de"
+        "sha256": "583eab71baf7307fd554876e9ce121b339d703bd643a5330fe7eb6716944d06a"
       }
     },
     {
       "destination": "apps/web/src/features/agent/src/pm/automation/studio-setup.ts",
-      "sha256": "01989383461b9825607072d30c2699d6686f5209a63da42a3ce6a4ca1225e906",
-      "bytes": 18014,
+      "sha256": "433266b8b6609151de7840a62bc85a4c476fa8d9366095a6a8bbb6b9c6cc8704",
+      "bytes": 18222,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-setup.ts.json",
-        "sha256": "df58286e81cdc30937cbf873ec580852eb80cbeec3b0e669813053ba03a0028b"
+        "sha256": "a710c13bc04273828ca2897cbc0667261fe4353959477365d508740dfc41e610"
       }
     },
     {
@@ -788,26 +752,14 @@
     },
     {
       "destination": "apps/web/src/features/agent/src/settings/extensions-page.tsx",
-      "sha256": "91eba35c796ec6c1c6b60ef1f4e39c443e3f27e4ae283f8459e6aa9b7d7a4d2f",
-      "bytes": 15991,
+      "sha256": "4ef411cf99cd76d06d651a0096bb94db7d0e16af2b1a43c8403f4b4df649c8f9",
+      "bytes": 15962,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/extensions-page.tsx.json",
-        "sha256": "1f6c667d3e869e2aa83c00331c991d448ae48e51c64abaeb070b7105584a6ed1"
-      }
-    },
-    {
-      "destination": "apps/web/src/features/agent/src/settings/settings-layout.tsx",
-      "sha256": "7dc4d39c30b2919275f9d58633dbdaabe81e93bad8d1f234c86ff65ec47e7c07",
-      "bytes": 14247,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Apply optimized Agent Chat execution trace and headerless compact CodeBlock; settle current host outputs",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/settings-layout.tsx.json",
-        "sha256": "3e280a0b15b012e15b67ca7c48d61f0fa6d01566e46f95bd70416a38bc38c43e"
+        "sha256": "811a06f1cac59352a7b83caabab814f46bb433a20328fb67903fb6860da8a6f4"
       }
     },
     {
@@ -820,18 +772,6 @@
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/apps/web/vite.config.ts.json",
         "sha256": "f831117e8daf6564562a1a45a1d6e626ce750de10b749b928187e5274d90f188"
-      }
-    },
-    {
-      "destination": "packages/agent-contracts/package.json",
-      "sha256": "535fe14cf8a3e5ec6b787e1d2c26a86ec22527243eaeb55b087f7d85f864c0b8",
-      "bytes": 3522,
-      "mode": 420,
-      "provenance": "host-owned-integration",
-      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
-      "asset": {
-        "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/package.json.json",
-        "sha256": "57491283822bf35680fb5d20613faadf77b07ed6f8a12126561d7c1f7d066914"
       }
     },
     {
@@ -896,26 +836,26 @@
     },
     {
       "destination": "packages/application/src/automation-studio-store.ts",
-      "sha256": "b7504576012b462287e5520005dbcb72ba08663a4d026d66745d2260894c4ca7",
-      "bytes": 10146,
+      "sha256": "dc7151d0308b8accbde810acf73b63cbb8edf68c09dcf23b0560dbd43126d4e8",
+      "bytes": 11477,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-studio-store.ts.json",
-        "sha256": "9f3a034a2d7762f6a48dba51cce4b6be4798aa825e45d09ee4b897792ef18e78"
+        "sha256": "0f1c3c7eb70ce259e0e609f41731ea975e04df1807fce6eba4cf1539a5e8b0f6"
       }
     },
     {
       "destination": "packages/application/src/automation-studio.ts",
-      "sha256": "5632944266d92dc2135f82ba362e988dae882fb48792959ff2c45ae30af67864",
-      "bytes": 27701,
+      "sha256": "42670550ca44837483aa599ebd270e25d70f15217536b9912e5afc6e02639d31",
+      "bytes": 27678,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-studio.ts.json",
-        "sha256": "c5345e4dcee1af3572417546cca79b2dce60d0bba1aaf82365c737c08c53cc71"
+        "sha256": "fca9d243e5a8ea5ddeea574ce85017dd1d8e0931cc9b634c7bd8c8a66da5eb30"
       }
     },
     {
@@ -980,14 +920,14 @@
     },
     {
       "destination": "packages/contracts/src/client.ts",
-      "sha256": "1147226f7415ecf59585ac2d2cddd8b35e3a9d55e2b76bc810551efd21e282e1",
-      "bytes": 43417,
+      "sha256": "49be21cee0b188f7943d75a4c4b928946690bfc1c8a5dcfa79d9f7c910382dbd",
+      "bytes": 43419,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/client.ts.json",
-        "sha256": "3564bced01e77338e9990d58961f0355a077be3cad360dceb92474f636fbf791"
+        "sha256": "cbaf08173ec66e11d20a8b7dd2c0bab29da39f3e1eb870f41f005e3c97682243"
       }
     },
     {
@@ -1064,14 +1004,14 @@
     },
     {
       "destination": "packages/infrastructure/src/schema.ts",
-      "sha256": "714c10ea9c773c9091402d21fcc9c36fb25defb0fa98a3488fa3f2aaf564d612",
-      "bytes": 13548,
+      "sha256": "a669e3473cc7d67e20967b3974d1a2cccf2e00120dfa2d52d7d0928a89018636",
+      "bytes": 13509,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/src/schema.ts.json",
-        "sha256": "6161a66b36a9564b32d3a087da1ac13875bf60a11aab65cce780e253f8da7eac"
+        "sha256": "c349f4a5f5ee370400f1f5a9759b23dc812a0c0411a8ca6a6b5fa74e763fd9a9"
       }
     },
     {
@@ -1148,14 +1088,14 @@
     },
     {
       "destination": "tests/automation-studio.integration.test.ts",
-      "sha256": "95d756175a2da747d7729338b46a52e13244af3e40fbbcdac9e416e52aab44e8",
-      "bytes": 53996,
+      "sha256": "5c711a17051626cb9ed387f09bf32e40ec2d0b2f23e53195a4c6f38051244bc8",
+      "bytes": 54589,
       "mode": 420,
       "provenance": "host-owned-integration",
       "reason": "Individually reviewed Agent execution-root cutover and PM change-history coexistence; Studio scheduling isolation and authority preflight repaired and exercised with real isolated Postgres and HTTP. Preserve pinned originals and unrelated output identities.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/tests/automation-studio.integration.test.ts.json",
-        "sha256": "169db715092a4cd667b19fadd95448632e7afba1ef3f50a709d985c8f5e3219c"
+        "sha256": "15c482ce8915315544b02fba7814716a63acb0f55a22104eb17a207d73456d45"
       }
     },
     {
@@ -1182,14 +1122,14 @@
     },
     {
       "destination": "vendor/cc-switch/SYNC.md",
-      "sha256": "68caad0ebed96cf1a809e162dee338cc235342e99ad96314e241c5dd92a19fd0",
-      "bytes": 17328,
+      "sha256": "af5316a7bccb19f77d0b4560d0bedf5eeacdefced90b0c7ab7837004f316fe0a",
+      "bytes": 18945,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
+      "reason": "Reviewed independent AgentWorkspace structural cutover: exact T3 ownership transfers, authenticated provenance helpers, explicit PM-target callback, and its isolated regression. No upstream pin change.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/SYNC.md.json",
-        "sha256": "171e6136c478bd367c528615ede40d9f40cd4a90abd3e0f5f23e6795113b0493"
+        "sha256": "22bd8a5d80e855e4925e8566746c078a0c71ae8763d180952bd569af923b4928"
       }
     },
     {
@@ -1304,14 +1244,14 @@
     },
     {
       "destination": "vendor/cc-switch/fork-policy.json",
-      "sha256": "bf6c5c532d0f3078e5ec447584139513ef077b17d2f99ea3e606f38e28ea5c48",
-      "bytes": 3022,
+      "sha256": "5e6e84e5181a97af3de0ce877fa9d6c1d4a41f04c8d241685f7bf04fabdcd9f7",
+      "bytes": 4235,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
+      "reason": "Reviewed independent AgentWorkspace structural cutover: exact T3 ownership transfers, authenticated provenance helpers, explicit PM-target callback, and its isolated regression. No upstream pin change.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/fork-policy.json.json",
-        "sha256": "060dc5af934c86086bb1b67c94de55242bd704839ec82fbdc5c1cc6e4cbc56ba"
+        "sha256": "39ec5a671afccd080601a27046cbd0de8cc8969830bacf4c98c74eaabe25c62a"
       }
     },
     {
@@ -1384,26 +1324,26 @@
     },
     {
       "destination": "vendor/cc-switch/scripts/provenance.mjs",
-      "sha256": "d86c6a9b7de0ab288fe2744aa60ca34d6f808162cd9b6f7e038d4904780f58c0",
-      "bytes": 19796,
+      "sha256": "6f9c4b6bdb9ea5fe670299c725c5d1cc9625cde5ddb256ddfbd319a51cc4f8b2",
+      "bytes": 26645,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
+      "reason": "Reviewed independent AgentWorkspace structural cutover: exact T3 ownership transfers, authenticated provenance helpers, explicit PM-target callback, and its isolated regression. No upstream pin change.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/provenance.mjs.json",
-        "sha256": "e525f6f717c9f6914e990a153e41d9657c41dadf393bd1238f509f7aab1d4262"
+        "sha256": "0ccc63b19b4a9081b2d053b111a3bcc1567249cc0d5b22d44302fffa8d984677"
       }
     },
     {
       "destination": "vendor/cc-switch/scripts/provenance.test.mjs",
-      "sha256": "faf2c014574da22e56f2fb75a01e3892686384f27b8e064cc11ce127cc3de7ff",
-      "bytes": 25626,
+      "sha256": "786c9b014298d09e9a7e5511bc50d5c4ccc375a9ab48d6686f4656462f046aca",
+      "bytes": 47115,
       "mode": 420,
       "provenance": "local-fork-integration",
-      "reason": "Deploy Agent Chat design system page; reviewed current host outputs after all source writers settled",
+      "reason": "Reviewed independent AgentWorkspace structural cutover: exact T3 ownership transfers, authenticated provenance helpers, explicit PM-target callback, and its isolated regression. No upstream pin change.",
       "asset": {
         "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/provenance.test.mjs.json",
-        "sha256": "84cf0987a640f296e38860e12f8038ae38a143b6f0ea931278af5b6167f6a396"
+        "sha256": "031b67cd9612e9c1b033c9ba6bbc8626d93143c80291170f24b61809ff254ba2"
       }
     },
     {
@@ -8034,8 +7974,8 @@
     },
     {
       "destination": "vendor/cc-switch/src/components/skills/UnifiedSkillsPanel.tsx",
-      "sha256": "526a42237974131a697d1eaec04e088064d4df99cc85ebc652f8817fc7b9f36b",
-      "bytes": 81390,
+      "sha256": "adc5b3794cc1cf281ebaa137a5d9a54beed823a2de8466bdc3700cb8b772cafd",
+      "bytes": 81503,
       "mode": 420,
       "provenance": "patched-upstream",
       "reason": "Reviewed MCP/Skills presentation seam, catalog tabs, header actions and shortened save notices",
@@ -8043,7 +7983,7 @@
       "upstreamSha256": "066396c0d939d26bb2e09e537cbc8c8918a5d6cce317a0327bb755dafc18f089",
       "patch": {
         "path": "vendor/cc-switch/integration-patches/src/components/skills/UnifiedSkillsPanel.tsx.json",
-        "sha256": "10b5cd509bebae1b7bd8ca7e3de5e2124384c9207e21a501ab72b0749315750d"
+        "sha256": "7163b13e560f67423eb517849bca732d6f27f9a9ff7a3c837e34b66c042139d9"
       }
     },
     {
@@ -13620,13 +13560,17 @@
     },
     {
       "destination": "vendor/cc-switch/tests/components/UnifiedSkillsPanel.test.tsx",
-      "sha256": "6be1f8401685d74aba11754b4f569cbaf6a23133acf20542c708198a8c914b12",
-      "bytes": 31963,
+      "sha256": "e78fb94a1274a61be6977d071e4243633b5351fa29608b011b00655b1ddfc2c9",
+      "bytes": 33661,
       "mode": 420,
-      "provenance": "pristine-upstream",
+      "provenance": "patched-upstream",
       "reason": "Source-faithful headless Rust and browser management integration; explicit context, encrypted secret, PM policy, native binding and packaging boundaries reviewed against isolated native/browser evidence.",
       "source": "tests/components/UnifiedSkillsPanel.test.tsx",
-      "upstreamSha256": "6be1f8401685d74aba11754b4f569cbaf6a23133acf20542c708198a8c914b12"
+      "upstreamSha256": "6be1f8401685d74aba11754b4f569cbaf6a23133acf20542c708198a8c914b12",
+      "patch": {
+        "path": "vendor/cc-switch/integration-patches/tests/components/UnifiedSkillsPanel.test.tsx.json",
+        "sha256": "de5bb883f833cff7685c81ce98e7502ed3163fa88c7c83c11abd6d07a0f1cc47"
+      }
     },
     {
       "destination": "vendor/cc-switch/tests/components/UsageDashboard.smoke.test.tsx",
@@ -15273,10 +15217,6 @@
       "sha256": "1e7421dfbdbe9589a2a83384298c66ee311886c2538426b2eb9066a66fcb416a"
     },
     {
-      "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/app.ts.json",
-      "sha256": "c27bad497e33513c02c52ccf7af7d7411799c2f9240ef88458e3b25b98f10b9e"
-    },
-    {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/README.md.json",
       "sha256": "3589b3395c4261ba01ee9979ab737aa38496c40b64e7afdb6ad5ac98e3485efe"
     },
@@ -15305,8 +15245,12 @@
       "sha256": "30db5062ad9565b782e4e86e493ba2792d49cda36b614b05200dff77334dd40b"
     },
     {
+      "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/pm.test.ts.json",
+      "sha256": "5f3f8f656efd15fe38d4a68a33da27ae6a5a84b2a677922f279c59f25e7a8a96"
+    },
+    {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/pm.ts.json",
-      "sha256": "e4e41ee1a65252689a487685dbfb508ec8769a9b5f93fa7b0d99609ad641f366"
+      "sha256": "a549db718c18b2492e05856cc16367cf454afc18d17f9b974f19a4c6089c43a0"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/extensions/provider-bindings.test.ts.json",
@@ -15357,20 +15301,8 @@
       "sha256": "591f88f25d266d8c1017b9573bdc544f2c2a58e8c9c9612ce4d8c190d593752c"
     },
     {
-      "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/maintenance/agent-backup.test.ts.json",
-      "sha256": "189fe8c6c09ec3fe6fc7b6b8c97bcdc7de6aab802a684fe6431310083f741207"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/maintenance/agent-backup.ts.json",
-      "sha256": "18e5b3fe52f1cd6c1f80b9b6af6c54498280568255ddc4ddd164cb8a2330cbc1"
-    },
-    {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/providers/instances.ts.json",
-      "sha256": "b6258d3c2036133e9ab88eda821fd7d2a3595affa4cd48fbb7c7b15c184acff7"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/providers/skills.test.ts.json",
-      "sha256": "2c9e7c0468266fba779e7ffb17ec438a8c79064ccec440bf64d12f95f6f9154e"
+      "sha256": "06094ae7da3802b2c5cc505e3ff1463658ea2f180b792c67ad8155eee5b9a45a"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/agent/src/server.ts.json",
@@ -15437,20 +15369,8 @@
       "sha256": "f1c9de1bd40c6e0ee213a05379c3de54c911129a6244638f034ec623847a5a84"
     },
     {
-      "path": "vendor/cc-switch/integration-patches/local/apps/server/pm/src/app.ts.json",
-      "sha256": "e20846c72b2e16607bc1d3d04cac4b9133ff91aa6ae103417c460cfd25014b0b"
-    },
-    {
       "path": "vendor/cc-switch/integration-patches/local/apps/server/pm/src/automation-events-routes.ts.json",
       "sha256": "339051d155482bbb09dbe5527141f19e71a215bbc61dedf2e7327c23429b1c2f"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/app.tsx.json",
-      "sha256": "7d87d8aad9ff1e1ffcfe883f6ede4605b5a9fba68535ca807cc7320ab6031270"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/chat/provider-skills-composer.tsx.json",
-      "sha256": "50ac0a9c41c0107cd785e3e03f38cbb689b3ad66c2deeba278f4a69633f4375d"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-integrations.tsx.json",
@@ -15462,11 +15382,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-setup.test.ts.json",
-      "sha256": "5423022cbcfdea7ce1bc04a99e10c3bd179baabee404dc4d6caeb5809a3542de"
+      "sha256": "583eab71baf7307fd554876e9ce121b339d703bd643a5330fe7eb6716944d06a"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/pm/automation/studio-setup.ts.json",
-      "sha256": "df58286e81cdc30937cbf873ec580852eb80cbeec3b0e669813053ba03a0028b"
+      "sha256": "a710c13bc04273828ca2897cbc0667261fe4353959477365d508740dfc41e610"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/extensions-api.ts.json",
@@ -15474,19 +15394,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/extensions-page.tsx.json",
-      "sha256": "1f6c667d3e869e2aa83c00331c991d448ae48e51c64abaeb070b7105584a6ed1"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/apps/web/src/features/agent/src/settings/settings-layout.tsx.json",
-      "sha256": "3e280a0b15b012e15b67ca7c48d61f0fa6d01566e46f95bd70416a38bc38c43e"
+      "sha256": "811a06f1cac59352a7b83caabab814f46bb433a20328fb67903fb6860da8a6f4"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/apps/web/vite.config.ts.json",
       "sha256": "f831117e8daf6564562a1a45a1d6e626ce750de10b749b928187e5274d90f188"
-    },
-    {
-      "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/package.json.json",
-      "sha256": "57491283822bf35680fb5d20613faadf77b07ed6f8a12126561d7c1f7d066914"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/agent-contracts/src/extensions.ts.json",
@@ -15510,11 +15422,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-studio-store.ts.json",
-      "sha256": "9f3a034a2d7762f6a48dba51cce4b6be4798aa825e45d09ee4b897792ef18e78"
+      "sha256": "0f1c3c7eb70ce259e0e609f41731ea975e04df1807fce6eba4cf1539a5e8b0f6"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/application/src/automation-studio.ts.json",
-      "sha256": "c5345e4dcee1af3572417546cca79b2dce60d0bba1aaf82365c737c08c53cc71"
+      "sha256": "fca9d243e5a8ea5ddeea574ce85017dd1d8e0931cc9b634c7bd8c8a66da5eb30"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/application/tests/automation-integrations-definitions.test.ts.json",
@@ -15538,7 +15450,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/client.ts.json",
-      "sha256": "3564bced01e77338e9990d58961f0355a077be3cad360dceb92474f636fbf791"
+      "sha256": "cbaf08173ec66e11d20a8b7dd2c0bab29da39f3e1eb870f41f005e3c97682243"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/contracts/src/openapi.ts.json",
@@ -15566,7 +15478,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/packages/infrastructure/src/schema.ts.json",
-      "sha256": "6161a66b36a9564b32d3a087da1ac13875bf60a11aab65cce780e253f8da7eac"
+      "sha256": "c349f4a5f5ee370400f1f5a9759b23dc812a0c0411a8ca6a6b5fa74e763fd9a9"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/scripts/agent-backup.ts.json",
@@ -15594,7 +15506,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/tests/automation-studio.integration.test.ts.json",
-      "sha256": "169db715092a4cd667b19fadd95448632e7afba1ef3f50a709d985c8f5e3219c"
+      "sha256": "15c482ce8915315544b02fba7814716a63acb0f55a22104eb17a207d73456d45"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/LICENSING.md.json",
@@ -15602,11 +15514,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/SYNC.md.json",
-      "sha256": "171e6136c478bd367c528615ede40d9f40cd4a90abd3e0f5f23e6795113b0493"
+      "sha256": "22bd8a5d80e855e4925e8566746c078a0c71ae8763d180952bd569af923b4928"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/fork-policy.json.json",
-      "sha256": "060dc5af934c86086bb1b67c94de55242bd704839ec82fbdc5c1cc6e4cbc56ba"
+      "sha256": "39ec5a671afccd080601a27046cbd0de8cc8969830bacf4c98c74eaabe25c62a"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/capture.mjs.json",
@@ -15618,11 +15530,11 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/provenance.mjs.json",
-      "sha256": "e525f6f717c9f6914e990a153e41d9657c41dadf393bd1238f509f7aab1d4262"
+      "sha256": "0ccc63b19b4a9081b2d053b111a3bcc1567249cc0d5b22d44302fffa8d984677"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/provenance.test.mjs.json",
-      "sha256": "84cf0987a640f296e38860e12f8038ae38a143b6f0ea931278af5b6167f6a396"
+      "sha256": "031b67cd9612e9c1b033c9ba6bbc8626d93143c80291170f24b61809ff254ba2"
     },
     {
       "path": "vendor/cc-switch/integration-patches/local/vendor/cc-switch/scripts/retire-local.mjs.json",
@@ -15846,7 +15758,7 @@
     },
     {
       "path": "vendor/cc-switch/integration-patches/src/components/skills/UnifiedSkillsPanel.tsx.json",
-      "sha256": "10b5cd509bebae1b7bd8ca7e3de5e2124384c9207e21a501ab72b0749315750d"
+      "sha256": "7163b13e560f67423eb517849bca732d6f27f9a9ff7a3c837e34b66c042139d9"
     },
     {
       "path": "vendor/cc-switch/integration-patches/src/components/skills/repoFailures.ts.json",
@@ -15989,15 +15901,19 @@
       "sha256": "df3379c17c3f8dda6fc221c357ddf0536f885adc5badf41d0d6c7775ade087b5"
     },
     {
+      "path": "vendor/cc-switch/integration-patches/tests/components/UnifiedSkillsPanel.test.tsx.json",
+      "sha256": "de5bb883f833cff7685c81ce98e7502ed3163fa88c7c83c11abd6d07a0f1cc47"
+    },
+    {
       "path": "vendor/cc-switch/integration-patches/tests/hooks/useMcpBulkToggle.test.tsx.json",
       "sha256": "d3d681265c0e30650cc92e8409b989d85d0e49d1ef3696e03afde567735df1c1"
     }
   ],
   "summary": {
     "originalInputs": 1353,
-    "pristine": 1272,
-    "adapted": 81,
+    "pristine": 1271,
+    "adapted": 82,
     "extracted": 1,
-    "local": 105
+    "local": 97
   }
 }
