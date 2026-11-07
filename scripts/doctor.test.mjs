@@ -73,3 +73,23 @@ test("inexact toolchain declarations fail without running any command", async (t
   await assert.rejects(assertBuildPrerequisites({ ...settings, root, run }), /exact Node, pnpm and Rust/);
   assert.equal(calls.length, 0);
 });
+
+test("Windows preflight accepts MSVC help status but rejects failed or unrelated linkers", async (t) => {
+  const root = await fixture(t);
+  const help = "Microsoft (R) Incremental Linker Version 14.51.36260.0\n usage: LINK [options] [files]\n /OUT:filename\n";
+  const scenarios = [
+    { name: "zero help status", result: { status: 0, stdout: help }, expected: true },
+    { name: "MSVC help status", result: { status: 1100, stdout: help }, expected: true },
+    { name: "link failure", result: { status: 1104, stdout: help, stderr: "LINK : fatal error LNK1104: cannot open file" }, expected: false },
+    { name: "help followed by error", result: { status: 1100, stdout: help, stderr: "LINK : fatal error LNK1100: invalid command line" }, expected: false },
+    { name: "unrelated executable", result: { status: 1100, stdout: "link (GNU coreutils)" }, expected: false },
+    { name: "empty failure", result: { status: 1100, stdout: "" }, expected: false },
+    { name: "missing executable", result: { status: null, error: new Error("ENOENT") }, expected: false },
+    { name: "incomplete help query", result: { status: 1100, stdout: help, error: new Error("ENOBUFS") }, expected: false },
+  ];
+  for (const scenario of scenarios) {
+    const { run } = tools({ "link.exe": scenario.result });
+    const checks = await inspectBuildPrerequisites({ ...settings, platform: "win32", root, run });
+    assert.equal(checks.find((check) => check.name === "MSVC linker").ok, scenario.expected, scenario.name);
+  }
+});

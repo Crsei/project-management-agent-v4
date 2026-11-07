@@ -76,10 +76,6 @@ jobs:
           arch: x64
       - name: Preflight pinned build tools without installation or service access
         run: node scripts/doctor.mjs
-      - name: Diagnose failed Windows linker preflight
-        if: failure() && runner.os == 'Windows'
-        run: >-
-          node --input-type=module -e "import { spawnSync } from 'node:child_process'; for (const [command,args] of [['where.exe',['link.exe']],['link.exe',['/?']]]) { const result=spawnSync(command,args,{cwd:'apps/server/cc-switch-host',encoding:'utf8',timeout:15000}); console.log(JSON.stringify({command,status:result.status,error:result.error?.message,stdout:result.stdout,stderr:result.stderr})); }"
       - name: Install locked native runner dependencies
         run: pnpm install --frozen-lockfile
       - name: Restore integrity-pinned runtime download archives

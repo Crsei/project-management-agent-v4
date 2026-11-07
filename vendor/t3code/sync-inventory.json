@@ -11666,7 +11666,7 @@
       },
       {
         "path": "scripts/doctor.mjs",
-        "sha256": "fd71adcb361869ff71429b0cf56f6547934b91b8bc156fe58a8eaa7d2d00e0f4"
+        "sha256": "1852742ece2ce81b1d9faf70d153241a8563dbd18a976c6238fce326c8f185f5"
       }
     ],
     "acceptance": "Parent-only: relocated included tools/verify-artifact.mjs; no T18 execution.",

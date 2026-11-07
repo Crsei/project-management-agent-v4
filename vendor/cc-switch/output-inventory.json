@@ -18,8 +18,8 @@
     },
     {
       "path": "scripts/doctor.mjs",
-      "sha256": "fd71adcb361869ff71429b0cf56f6547934b91b8bc156fe58a8eaa7d2d00e0f4",
-      "bytes": 5556
+      "sha256": "1852742ece2ce81b1d9faf70d153241a8563dbd18a976c6238fce326c8f185f5",
+      "bytes": 6152
     },
     {
       "path": "package.json",

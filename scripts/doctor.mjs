@@ -48,6 +48,7 @@ export async function inspectBuildPrerequisites({
     });
     return {
       ok: !result.error && result.status === 0,
+      status: result.error ? null : result.status,
       text: `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim(),
     };
   };
@@ -75,7 +76,14 @@ export async function inspectBuildPrerequisites({
   };
   if (platform === "win32") {
     tool("MSVC C/C++ compiler", "cl.exe", ["/?"]);
-    tool("MSVC linker", "link.exe", ["/?"]);
+    const linker = query("link.exe", ["/?"]);
+    // MSVC returns 1100 for successful help queries. Require recognizable help,
+    // without linker diagnostics, rather than accepting arbitrary nonzero exits.
+    const linkerHelp = linker.status === 1100
+      && /^Microsoft \(R\) Incremental Linker Version /m.test(linker.text)
+      && /^\s*\/OUT:filename\s*$/m.test(linker.text)
+      && !/\bLNK\d{4}\b/.test(linker.text);
+    checks.push({ name: "MSVC linker", ok: linker.ok || linkerHelp, detail: linker.ok || linkerHelp ? "available" : "required command link.exe is unavailable" });
     tool("Windows SDK resource compiler", "rc.exe", ["/?"]);
   } else if (platform === "darwin") {
     tool("Xcode C compiler", "xcrun", ["--find", "clang"]);
