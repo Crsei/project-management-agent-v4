@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { chmod, copyFile, lstat, mkdir, open, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname, join, posix, relative, resolve } from "node:path";
+import { dirname, join, posix, relative } from "node:path";
 import { hashFile, inside, portable } from "./runtime-manifest.mjs";
 
 export const dependencyLayoutFile = "desktop-dependency-layout.json";
@@ -262,6 +262,9 @@ async function copyCommandShims(graph, context, prepared) {
 // The caller owns a new staging tree. All source reading/copying completes before
 // replacing that tree's original dependency directories; no checkout is changed.
 export async function materializeDependencyLayout(graph, context, destinationRoot, scratch) {
+  // Match realpath-resolved dependency candidates against the same physical
+  // root, including Windows short-name/junction and macOS temp ancestor aliases.
+  destinationRoot = await realpath(destinationRoot);
   const prepared = join(scratch, context.id);
   await mkdir(prepared, { recursive: false });
   await mkdir(join(prepared, context.root, "node_modules"), { recursive: true });
@@ -279,12 +282,12 @@ export async function materializeDependencyLayout(graph, context, destinationRoo
   for (const owner of [context, ...context.instances]) {
     const from = join(destinationRoot, owner.path ?? context.root);
     for (const [name, id] of Object.entries(owner.dependencies)) {
-      const located = await locateDependency(from, name, resolve(destinationRoot));
+      const located = await locateDependency(from, name, destinationRoot);
       if (located !== await realpath(join(destinationRoot, instances.get(id).path)))
         throw new Error(`Physical Node lookup changed dependency identity: ${owner.path ?? context.id} -> ${name}`);
     }
     for (const name of owner.absentDependencies)
-      if (await locateDependency(from, name, resolve(destinationRoot))) throw new Error(`Physical layout activated an absent optional dependency: ${name}`);
+      if (await locateDependency(from, name, destinationRoot)) throw new Error(`Physical layout activated an absent optional dependency: ${name}`);
   }
   return context;
 }

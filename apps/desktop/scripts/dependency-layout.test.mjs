@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
-import { materializeDependencyLayout, planDependencyLayout, readDependencyGraph, writeDependencyLayout } from "./dependency-layout.mjs";
+import { locateDependency, materializeDependencyLayout, planDependencyLayout, readDependencyGraph, writeDependencyLayout } from "./dependency-layout.mjs";
 const execute = promisify(execFile);
 
 async function fixture(t, roots, definitions) {
@@ -259,4 +259,34 @@ test("deployed command targets cannot escape their canonical package", async (t)
   await writeFile(join(f.source, "node_modules/.bin/yaml"), "source package-manager shim");
   const graph = await readDependencyGraph(f.source), context = planDependencyLayout(graph, { id: "pm" });
   await assert.rejects(materializeDependencyLayout(graph, context, f.output, f.scratch), /Nonportable deployed command target/);
+});
+
+test("materialization canonicalizes an aliased destination without admitting outside dependencies or self-references", async (t) => {
+  const f = await fixture(t, { consumer: "consumer" }, {
+    consumer: { dependencies: { shared: "shared" }, files: { "index.cjs": "module.exports=require('shared');" } },
+    shared: {},
+  });
+  const physicalRoot = await realpath(f.output);
+  const alias = join(dirname(f.output), "ancestor alias");
+  await symlink(await realpath(dirname(f.output)), alias, process.platform === "win32" ? "junction" : "dir");
+  const aliasedRoot = join(alias, "output");
+  assert.notEqual(aliasedRoot, physicalRoot);
+  assert.equal(await realpath(aliasedRoot), physicalRoot);
+  const graph = await readDependencyGraph(f.source), context = planDependencyLayout(graph, { id: "pm" });
+  await materializeDependencyLayout(graph, context, aliasedRoot, f.scratch);
+  const require = createRequire(join(aliasedRoot, "entry.cjs"));
+  assert.equal(require("consumer"), require("shared"));
+  assert.equal(await locateDependency(aliasedRoot, "consumer", physicalRoot), await realpath(join(f.output, context.dependencies.consumer)));
+  await physicalFiles(f.output);
+
+  const outside = join(dirname(f.output), "outside-package");
+  await mkdir(outside);
+  const metadata = JSON.stringify({ name: "outside", version: "1.0.0", exports: "./index.cjs" });
+  await writeFile(join(outside, "package.json"), metadata);
+  await writeFile(join(outside, "index.cjs"), "module.exports={outside:true};");
+  await symlink(await realpath(outside), join(f.output, "node_modules/outside"), process.platform === "win32" ? "junction" : "dir");
+  await assert.rejects(locateDependency(aliasedRoot, "outside", physicalRoot), /Dependency escapes its production closure/);
+  await assert.rejects(locateDependency(outside, "outside", physicalRoot), /Package self-reference escapes its production closure/);
+  assert.equal(await readFile(join(outside, "package.json"), "utf8"), metadata);
+  assert.equal(await readFile(join(outside, "index.cjs"), "utf8"), "module.exports={outside:true};");
 });

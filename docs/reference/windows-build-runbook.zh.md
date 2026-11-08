@@ -2,7 +2,7 @@
 
 本手册记录环境、操作、权限与失败恢复。范围仅为本项目 **Windows x64 unsigned NSIS 测试安装包**；不是公开 Release、签名、自动更新、便携版、CLI、WSL 或其他平台交付授权。实现与材料设计见[桌面发布对照](desktop-release-alignment-2026-11-08.zh.md)，使用和数据边界见[桌面指南](../guides/desktop.md)。命令是具备对应权限及原生环境后才能执行的操作说明，不是已经运行的结果。
 
-**当前依赖去重批次的权限与环境：** 2026-11-08 操作者已重新明确授权本项目本次依赖去重改动的精确 commit、公开 push 到 `main`、`windows_only=true` / `distribution=unsigned` 的 GitHub Actions 构建及该轮 artifact 下载。仅发布经父级审阅和必要门禁通过的隔离冻结候选；无关并行改动、凭据和运行数据不进入提交或构建。唯一交付 owner 在父级放行后执行远端写入，构建/检查进程不获得发布凭据；授权本身不表示操作已执行、权限足够或构建成功。没有新增本地/SSH Windows 主机或交互桌面，本轮仍未授权 macOS 构建、签名、tag/PR/Release/merge、真实安装器/GUI 执行或接管既有服务。Linux 上真实依赖闭包物化/重打包实验保留为该实验的证据，不升级为新 Windows 安装器或原生 GUI 结果。
+**当前依赖去重批次的权限与环境：** 2026-11-08 操作者最新指示将完成目标限定为 **GitHub Actions Windows 构建实际 `success`**：仍授权本次依赖去重改动的精确 commit、公开 push 到 `main`、`windows_only=true` / `distribution=unsigned` 的 Actions 构建，**不下载安装器或发行材料到本地；本批次此前的下载授权已被覆盖**。仅发布经父级审阅和必要门禁通过的隔离冻结候选；无关并行改动、凭据和运行数据不进入提交或构建。唯一交付 owner 在父级放行后执行远端写入并核对同一 SHA 的真实 run/attempt/job 结论，构建/检查进程不获得发布凭据；授权本身不表示操作已执行、权限足够或构建成功。没有新增本地/SSH Windows 主机或交互桌面，本轮仍未授权 macOS 构建、签名、tag/PR/Release/merge、真实安装器/GUI 执行或接管既有服务。Linux 上真实依赖闭包物化/重打包实验保留为该实验的证据，不升级为新 Windows 安装器或原生 GUI 结果。
 
 ## 历史预检结论与可执行路线
 
@@ -33,7 +33,7 @@
 
    本机没有 GitHub CLI 时可由唯一交付 owner 使用 GitHub HTTPS API，不为此安装依赖或引入新的发布脚本。指定凭据只在该进程内读取/trim，并限定发送到 GitHub HTTPS/API；不放入 argv、URL、Git 配置、日志、源码包或构建环境，不打印请求 headers/原始异常。dispatch 需要 repository Actions 写权限；发布源码/工作流需要 Contents 写权限及工作流更新所需的 Workflows 写权限，只读 GET 成功不能保证写入成功。禁止向 unsigned 构建环境注入 publisher token、签名密钥或 Provider 账号。
 4. 记录实际 run ID、attempt、workflow 路径、repository/head-repository、branch 和完整 `head_sha`，核对它等于批准的提交。工作树仍 dirty 时，Actions 默认 checkout 不会包含这些本地字节；不能只重新运行当前 `main` 来交付本轮。
-5. 下载该 run 的精确 Windows artifact，核对 API artifact digest、下载归档 SHA256、内层交付清单/源码身份和全部文件 SHA256。artifact 名称、绿色结论或下载时间不能替代这些核对。
+5. 本批次核对同一批准 SHA 的 Windows 构建实际 `success` 及准确 run/attempt/job 证据后结束，不下载安装器或发行材料。若未来重新明确授权下载，通用流程为下载该 run 的精确 Windows artifact，核对 API artifact digest、下载归档 SHA256、内层交付清单/源码身份和全部文件 SHA256；artifact 名称、绿色结论或下载时间不能替代这些核对。该未来下载流程不是本批次动作许可。
 
 现有工作流为手动触发，checkout `persist-credentials: false`、`contents: read`，使用 `windows-2025` x64 和已加载的 MSVC 环境。unsigned/signed 分支保持显式隔离；本任务不选择 `signed` 或进入 `desktop-signing` 环境。若仓库策略需要人工批准或 Actions 配额不足，保留实际 pending/拒绝结果，不改权限、建立新发布渠道或换仓库绕过。
 
@@ -81,7 +81,7 @@
 
 ## 集成冻结后唯一执行批次
 
-本批次已授权上方限定的 Windows-only unsigned 远端交付；下面是集成冻结、必要门禁和父级放行后的唯一执行批次，**不是当前已执行结果**。唯一交付执行者依次执行，不让多个 owner 同时测试或写构建目录。原生构建必须使用独立 checkout/冻结源码快照：`package` 会重建 Agent、Web、desktop，不能在服务正在使用的检出中覆盖其输出；构建和检查环境不携带发布凭据。
+本批次已授权上方限定的 Windows-only unsigned Actions 构建，以同一批准 SHA 的 Windows 构建实际 `success` 为完成目标，**不下载安装器或发行材料到本地**。下面保留集成冻结、必要门禁及原生构建/材料核对的通用机制，不表示当前已执行或授予本次本机构建/下载权限；未来下载说明须另获明确授权。唯一执行者依次操作，不让多个 owner 同时测试或写构建目录。原生构建必须使用独立 checkout/冻结源码快照：`package` 会重建 Agent、Web、desktop，不能在服务正在使用的检出中覆盖其输出；构建和检查环境不携带发布凭据。
 
 ### 1. 绑定当前源码
 
@@ -168,7 +168,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Supplied installed resources failed current-pa
 - 对应源码和 legal 材料与本次成品一致，记录其 SHA256；根 AGPL 和第三方 notices 完整性不等于所有分发权利已获准。
 - 下载/私有传输后再次核对全部 SHA256；若 artifact 外层 archive 有 GitHub digest，分别记录它与内层 installer digest，不混用。
 
-下载到 Linux/其他接收端的 artifact 通常只有发行材料，不含原始构建 unpacked tree 或 checkout-built controller；此时使用准确冻结工具的传输完整性模式：
+未来另获明确下载授权时，下载到 Linux/其他接收端的 artifact 通常只有发行材料，不含原始构建 unpacked tree 或 checkout-built controller；此时可使用准确冻结工具的传输完整性模式。本批次不执行该下载或接收端核对，以下仅保留通用操作：
 
 ```sh
 node apps/desktop/scripts/verify-delivery.mjs --output /ABS/DOWNLOADED_DELIVERY --files-only
@@ -225,7 +225,7 @@ node apps/desktop/scripts/verify-delivery.mjs --output /ABS/DOWNLOADED_DELIVERY 
 
 本节保留**上一轮手册编写阶段**的未执行范围：当时仅进行文档/源码/元数据/工具路径/磁盘/限定服务归属的只读调查及编写本手册，没有运行 build、lint、tests、formatters、dependency install、runtime smoke、GUI、真实账号调用、打包、3224 部署、commit、push、workflow dispatch、公开 Release 或签名配置。它不是对随后其他批次实际执行情况的改写。
 
-历史交接曾记录 **main commit + 公开 push + unsigned Windows-only dispatch/下载获准但当时未执行**；该历史权限不自动沿用，当前依赖去重已有上方记录的新明确授权。新的交付报告必须独立给出授权阶段、完整源码身份/摘要、准确命令与退出码、真实原生范围、installer 及全部材料 SHA256、未执行安装/GUI/账号范围和来源/环境/分发阻塞。本批次获准使用 GitHub 托管 Windows 构建机制，但没有新增已登记 Windows/macOS host 或交互桌面，也未授权现有机器上的真实安装器/GUI 执行；不能用公共仓库可读、权限预检、历史 CI 或旧 artifact 补成当前 installer 已生成。桌面打包脚本/文档不生成 Linux 3224 运行产物，无运行时源码变化时保持既有服务、不重建或重启；实际入口归属/健康由协调验证 owner 只读记录。
+历史交接曾记录 **main commit + 公开 push + unsigned Windows-only dispatch/下载获准但当时未执行**；该历史权限不自动沿用。当前最新指示仅要求 GitHub Actions Windows 构建实际 `success`，保留精确 commit/公开 push/Windows-only unsigned 构建授权，但不下载安装器或发行材料到本地，覆盖本批次此前的下载授权。新的报告必须给出完整源码身份、准确 commit/ref、可信 run URL/ID/attempt、确切 `head_sha`、实际 Windows job/step 结论和未执行范围；不以未下载的 installer/材料 hash 作为本批次完成前提，也不编造这些值。本批次没有新增已登记 Windows/macOS host 或交互桌面，也未授权现有机器上的真实安装器/GUI 执行；不能用公共仓库可读、权限预检、历史 CI 或旧 artifact 补成当前构建成功。桌面打包脚本/文档不生成 Linux 3224 运行产物，无运行时源码变化时保持既有服务、不重建或重启；实际入口归属/健康由协调验证 owner 只读记录。
 
 ### 旧安装器基线与仍需测量的证据
 
