@@ -241,11 +241,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-    env:
-      INSTALL_E2E_CURRENT: ${{ runner.temp }}/desktop-e2e-current-${{ github.run_id }}-${{ github.run_attempt }}
-      INSTALL_E2E_BASELINE: ${{ runner.temp }}/desktop-e2e-baseline-${{ github.run_id }}-${{ github.run_attempt }}
-      INSTALL_E2E_EXPORT: ${{ runner.temp }}/desktop-e2e-evidence-${{ github.run_id }}-${{ github.run_attempt }}
-      INSTALL_E2E_BOUND_DELIVERY: ${{ runner.temp }}/desktop-e2e-bound-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -270,18 +265,21 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: desktop-${{ inputs.distribution }}-win32-x64
-          path: ${{ env.INSTALL_E2E_CURRENT }}
+          path: ${{ runner.temp }}/desktop-e2e-current-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Download supplied exact baseline delivery without dispatching a workflow
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.baseline_artifact_name }}
           run-id: ${{ inputs.baseline_run_id }}
           github-token: ${{ github.token }}
-          path: ${{ env.INSTALL_E2E_BASELINE }}
+          path: ${{ runner.temp }}/desktop-e2e-baseline-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Install locked verifier dependencies (no installer lifecycle)
         run: pnpm install --frozen-lockfile
       - name: Verify both complete delivery material sets before execution
         shell: pwsh
+        env:
+          INSTALL_E2E_CURRENT: ${{ runner.temp }}/desktop-e2e-current-${{ github.run_id }}-${{ github.run_attempt }}
+          INSTALL_E2E_BASELINE: ${{ runner.temp }}/desktop-e2e-baseline-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           node apps/desktop/scripts/verify-delivery.mjs --output "$env:INSTALL_E2E_CURRENT" --files-only
           if ($LASTEXITCODE -ne 0) { throw 'Candidate material verification failed' }
@@ -293,6 +291,9 @@ jobs:
           BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
           BASELINE_ATTEMPT: ${{ inputs.baseline_run_attempt }}
           BASELINE_SHA256: ${{ inputs.baseline_installer_sha256 }}
+          INSTALL_E2E_CURRENT: ${{ runner.temp }}/desktop-e2e-current-${{ github.run_id }}-${{ github.run_attempt }}
+          INSTALL_E2E_BASELINE: ${{ runner.temp }}/desktop-e2e-baseline-${{ github.run_id }}-${{ github.run_attempt }}
+          INSTALL_E2E_EXPORT: ${{ runner.temp }}/desktop-e2e-evidence-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           & apps/desktop/scripts/install-e2e/provision-windows.ps1 -ExecuteInstallerLifecycle `
             -Delivery "$env:INSTALL_E2E_CURRENT" -Baseline "$env:INSTALL_E2E_BASELINE" `
@@ -300,6 +301,10 @@ jobs:
             -BaselineRunAttempt "$env:BASELINE_ATTEMPT" -ExportParent "$env:INSTALL_E2E_EXPORT"
       - name: Bind verified receipt and exact evidence hashes to candidate delivery
         shell: pwsh
+        env:
+          INSTALL_E2E_CURRENT: ${{ runner.temp }}/desktop-e2e-current-${{ github.run_id }}-${{ github.run_attempt }}
+          INSTALL_E2E_EXPORT: ${{ runner.temp }}/desktop-e2e-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          INSTALL_E2E_BOUND_DELIVERY: ${{ runner.temp }}/desktop-e2e-bound-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           node apps/desktop/scripts/verify-delivery.mjs --output "$env:INSTALL_E2E_CURRENT" `
             --install-e2e-receipt "$env:INSTALL_E2E_EXPORT/diagnostics/install-e2e-receipt.json" `
@@ -313,7 +318,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
           compression-level: 6
-          path: ${{ env.INSTALL_E2E_EXPORT }}/
+          path: ${{ runner.temp }}/desktop-e2e-evidence-${{ github.run_id }}-${{ github.run_attempt }}/
       - name: Upload delivery with independently verified native receipt
         uses: actions/upload-artifact@v4
         with:
@@ -321,4 +326,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
-          path: ${{ env.INSTALL_E2E_BOUND_DELIVERY }}/
+          path: ${{ runner.temp }}/desktop-e2e-bound-${{ github.run_id }}-${{ github.run_attempt }}/
