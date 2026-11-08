@@ -1,78 +1,166 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'" />
-    <title>Workspace connection — PM Agent v4</title>
+    <title>连接工作台 — Dovspace</title>
     <link rel="stylesheet" href="./connection.css" />
     <script type="module" src="./connection.mjs"></script>
   </head>
-  <body>
-    <header><span class="brand-mark" aria-hidden="true">pm</span><span>PM Agent v4</span><span class="desktop-label">Desktop</span></header>
-    <main>
-      <h1>Your workspace, on your terms</h1>
-      <p class="intro">Start a private workspace on this computer, or connect to a Server you trust.</p>
-      <form id="connection-form">
-        <fieldset class="mode-picker">
-          <legend>Connection mode</legend>
-          <label><input type="radio" name="mode" value="local" checked /><span><strong>Local computer</strong><small>Managed PostgreSQL · local projects</small></span></label>
-          <label><input type="radio" name="mode" value="remote" /><span><strong>Remote Server</strong><small>Your self-hosted workspace</small></span></label>
-        </fieldset>
-        <section id="local-fields" aria-label="Local workspace settings">
-          <p class="notice">Node and PostgreSQL are included. No separate installation, Docker, environment files or manual database setup is needed. Data stays in the managed workspace folder.</p>
-          <fieldset class="setup-fields">
-            <legend>First local account</legend>
-            <label class="check-row"><input type="checkbox" id="create-account" name="createAccount" /><span>Set up a new local workspace</span></label>
-            <small>Enable this only for the first connection to a new empty workspace folder. Existing accounts are never reset. Leave it off to reconnect, then sign in inside PM.</small>
-            <div id="account-fields" hidden>
-              <div class="field"><label for="account-email">Email</label><input id="account-email" name="email" type="email" maxlength="254" autocomplete="off" autocapitalize="none" spellcheck="false" /></div>
-              <div class="field"><label for="account-name">Your name</label><input id="account-name" name="name" maxlength="120" autocomplete="off" /></div>
-              <div class="field"><label for="account-password">Password <span class="muted">at least 12 characters</span></label><input id="account-password" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" /><small>Used only to create the account; never saved in desktop connection settings. You will sign in with this password in PM.</small></div>
-              <div class="field"><label for="workspace-name">Workspace name</label><input id="workspace-name" name="workspaceName" maxlength="120" autocomplete="off" /></div>
-            </div>
-          </fieldset>
-          <div class="field">
-            <label for="data-dir">Managed workspace data folder</label>
-            <div class="input-row"><input id="data-dir" name="dataDir" required spellcheck="false" /><button type="button" data-directory="dataDir">Browse…</button></div>
-            <small>Choose a new empty folder, or an existing desktop-managed workspace. Unknown or damaged data is refused, never replaced. This includes the database, Agent state and workspace storage.</small>
+  <body data-view="onboarding" data-step="mode">
+    <header class="app-header">
+      <div class="brand" aria-label="Dovspace">
+        <svg class="brand-mark" width="32" height="32" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="18" fill="#000" /><path fill="#fff" fill-rule="evenodd" d="M17 14h13c14 0 22 6.5 22 18s-8 18-22 18H17V14Zm10 9v18h3c8 0 12-3 12-9s-4-9-12-9h-3Z" /></svg>
+        <span class="wordmark">Dovspace</span>
+      </div>
+      <span class="desktop-label"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg>桌面工作台</span>
+    </header>
+
+    <main class="app-main">
+      <section id="onboarding-view" class="onboarding-layout" aria-labelledby="onboarding-title">
+        <aside class="welcome-panel">
+          <div class="welcome-copy">
+            <p class="eyebrow">为专注的工作，留一个空间</p>
+            <h1 id="onboarding-title">你的下一步，<span>从这里开始。</span></h1>
+            <p id="onboarding-description" class="intro">把项目、文档与 Agent 放在同一个工作台。选择适合你的连接方式，继续手头的工作。</p>
           </div>
-          <div class="field">
-            <label for="project-root">Project root <span class="muted">optional</span></label>
-            <div class="input-row"><input id="project-root" name="projectRoot" spellcheck="false" placeholder="Default: projects inside the managed workspace folder" /><button type="button" data-directory="projectRoot">Browse…</button></div>
-            <small>Leave empty to use the workspace’s projects folder. An explicitly selected existing project folder becomes an allowed local root; no repository folder is implicitly shared.</small>
+          <div class="workspace-diagram" aria-hidden="true">
+            <div class="diagram-node"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="m8 14 3 3 5-6" /></svg><span>项目</span></div>
+            <span class="diagram-connector"></span>
+            <div class="diagram-node"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" /><path d="M14 3v6h6M8 13h8m-8 4h5" /></svg><span>文档</span></div>
+            <span class="diagram-connector"></span>
+            <div class="diagram-node"><svg viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z" /></svg><span>Agent</span></div>
           </div>
-          <details id="development-runtime" hidden>
-            <summary>Development runtime override</summary>
-            <div class="field"><label for="node-path">Explicit Node 24 executable <span class="muted">optional</span></label><div class="input-row"><input id="node-path" name="nodePath" spellcheck="false" placeholder="Use the prepared bundled Node runtime" /><button type="button" id="choose-node">Browse…</button></div><small>Development only. Packaged apps always use their included Node runtime. Native dependencies do not run inside Electron.</small></div>
-          </details>
-        </section>
-        <section id="remote-fields" aria-label="Remote Server settings" hidden>
-          <div class="field"><label for="remote-url">Workspace Server URL</label><input id="remote-url" name="remoteUrl" type="url" placeholder="https://workspace.example.com" spellcheck="false" autocomplete="url" /><small>Use the public origin or /pm. HTTPS is required outside loopback. Never put an access token or credentials in a URL. An explicit /agent/workspace URL is also supported.</small></div>
-          <p class="notice">Sign in on the remote Server’s own PM login page. Its cookies and browser storage are isolated from every managed local workspace. Trust that Server before entering credentials. Agent can be opened using the existing product switch.</p>
-        </section>
-        <div class="actions"><button class="primary" type="submit" id="connect">Connect workspace</button><button type="button" id="open" hidden>Open workspace</button><button type="button" id="disconnect" hidden>Disconnect</button></div>
-      </form>
-      <section class="status-panel" aria-labelledby="status-title">
-        <h2 id="status-title">Connection</h2>
-        <progress id="progress" aria-label="Workspace operation in progress" hidden></progress>
-        <p id="status" role="status" aria-live="polite">Preparing desktop connection…</p>
-        <p id="processes" class="muted" hidden></p>
-        <p id="address" class="mono" hidden></p>
-        <p id="error" role="alert" hidden></p>
-        <details id="diagnostics" hidden><summary>Safe diagnostics / operation result</summary><pre id="details"></pre></details>
+          <p class="welcome-note">一个工作台，连接上下文与行动。</p>
+        </aside>
+
+        <div class="connection-panel">
+          <ol id="step-indicator" class="step-indicator" aria-label="连接步骤">
+            <li data-step="mode" aria-current="step"><span class="step-number" aria-hidden="true">1</span><span class="step-label">选择方式</span></li>
+            <li data-step="configure"><span class="step-number" aria-hidden="true">2</span><span class="step-label">设置连接</span></li>
+            <li data-step="ready"><span class="step-number" aria-hidden="true">3</span><span class="step-label">进入工作台</span></li>
+          </ol>
+
+          <form id="connection-form" novalidate>
+            <section id="step-mode" class="step-content" aria-labelledby="mode-title">
+              <div class="section-heading">
+                <h2 id="mode-title" tabindex="-1">选择工作台的打开方式</h2>
+                <p>在这台电脑上开始，或连接你信任的服务。</p>
+              </div>
+              <fieldset class="mode-picker">
+                <legend class="sr-only">连接方式</legend>
+                <label class="mode-card">
+                  <input type="radio" name="mode" value="local" checked aria-describedby="local-mode-description" />
+                  <span class="mode-content">
+                    <span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg></span>
+                    <strong>本地工作台</strong>
+                    <span id="local-mode-description" class="mode-description">在本机运行服务与保存数据，由桌面端统一管理。</span>
+                    <span class="mode-meta">内置运行环境 · 无需 Docker</span>
+                  </span>
+                </label>
+                <label class="mode-card">
+                  <input type="radio" name="mode" value="remote" aria-describedby="remote-mode-description" />
+                  <span class="mode-content">
+                    <span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="7" rx="2" /><rect x="3" y="14" width="18" height="7" rx="2" /><path d="M7 6.5h.01M7 17.5h.01m4-11h6m-6 11h6" /></svg></span>
+                    <strong>远程服务</strong>
+                    <span id="remote-mode-description" class="mode-description">连接已有的自托管服务，使用该服务的账号登录。</span>
+                    <span class="mode-meta">受信任的服务 · HTTPS 连接</span>
+                  </span>
+                </label>
+              </fieldset>
+              <p class="trust-note"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z" /><path d="m9 12 2 2 4-4" /></svg><span>仅用于可信本机、单操作者的自托管环境。Agent 与终端使用服务所在机器的权限；目录不是文件系统沙箱。</span></p>
+              <div class="actions step-actions">
+                <p class="action-hint">下一步，确认账号或服务地址。</p>
+                <button class="primary" type="button" id="continue">继续<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14m-6-6 6 6-6 6" /></svg></button>
+              </div>
+            </section>
+
+            <section id="step-configure" class="step-content" aria-labelledby="configure-title" hidden>
+              <div class="section-heading">
+                <h2 id="configure-title" tabindex="-1">设置你的工作台连接</h2>
+                <p>确认必要信息后，即可启动或连接工作台。</p>
+              </div>
+              <section id="local-fields" aria-label="本地工作台设置">
+                <p class="notice">已内置 Node 与 PostgreSQL，无需另外安装、准备 Docker、环境文件或手动设置数据库。数据保存在受管的工作台目录中。</p>
+                <fieldset class="setup-fields">
+                  <legend>本地账号与工作区</legend>
+                  <label class="check-row"><input type="checkbox" id="create-account" name="createAccount" aria-describedby="setup-help" aria-controls="account-fields" /><span>创建首次账号与工作区</span></label>
+                  <small id="setup-help">仅用于首次连接全新的空工作台目录；已有账号不会被重置。连接已有工作台时请勿勾选，打开后在 PM 中登录。</small>
+                  <div id="account-fields" hidden>
+                    <div class="account-grid">
+                      <div class="field"><label for="account-name">你的姓名</label><input id="account-name" name="name" maxlength="120" autocomplete="off" placeholder="如何称呼你" /></div>
+                      <div class="field"><label for="workspace-name">工作区名称</label><input id="workspace-name" name="workspaceName" maxlength="120" autocomplete="off" placeholder="为工作区取个名字" /></div>
+                      <div class="field"><label for="account-email">邮箱</label><input id="account-email" name="email" type="email" maxlength="254" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="you@example.com" /></div>
+                      <div class="field"><label for="account-password">密码 <span class="muted">至少 12 个字符</span></label><input id="account-password" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" aria-describedby="password-help" placeholder="设置登录密码" /></div>
+                    </div>
+                    <small id="password-help">密码仅用于创建账号，不会保存在桌面连接设置中。之后请使用此密码在 PM 中登录。</small>
+                  </div>
+                </fieldset>
+
+                <details id="advanced-settings" class="advanced-settings">
+                  <summary><span>高级设置</span><span class="summary-hint">数据目录与运行环境</span></summary>
+                  <div class="disclosure-content">
+                    <div class="field">
+                      <label for="data-dir">工作台数据目录</label>
+                      <div class="input-row"><input id="data-dir" name="dataDir" required spellcheck="false" aria-describedby="data-dir-help" /><button type="button" data-directory="dataDir">浏览…</button></div>
+                      <small id="data-dir-help">选择新的空目录，或已有的桌面受管工作台。无法识别或损坏的数据会被拒绝，不会被替换。此目录包含数据库、Agent 状态和工作台存储。</small>
+                    </div>
+                    <div class="field">
+                      <label for="project-root">项目父目录 <span class="muted">可选</span></label>
+                      <div class="input-row"><input id="project-root" name="projectRoot" spellcheck="false" placeholder="默认使用工作台数据目录中的 projects 文件夹" aria-describedby="project-root-help" /><button type="button" data-directory="projectRoot">浏览…</button></div>
+                      <small id="project-root-help">留空使用默认项目目录。自定义目录必须已存在，并将成为允许访问的本地根目录；不会隐式共享任何仓库目录。</small>
+                    </div>
+                    <details id="development-runtime" class="development-runtime" hidden>
+                      <summary>开发运行环境</summary>
+                      <div class="field"><label for="node-path">指定 Node 24 可执行文件 <span class="muted">可选</span></label><div class="input-row"><input id="node-path" name="nodePath" spellcheck="false" placeholder="使用准备好的内置 Node 运行环境" aria-describedby="node-path-help" /><button type="button" id="choose-node">浏览…</button></div><small id="node-path-help">仅限开发使用。打包应用始终使用内置 Node 运行环境，原生依赖不在 Electron 中执行。</small></div>
+                    </details>
+                  </div>
+                </details>
+              </section>
+
+              <section id="remote-fields" aria-label="远程服务设置" hidden>
+                <div class="field remote-url-field"><label for="remote-url">服务地址</label><input id="remote-url" name="remoteUrl" type="url" placeholder="https://workspace.example.com" spellcheck="false" autocomplete="url" autocapitalize="none" aria-describedby="remote-url-help" /><small id="remote-url-help">输入公开服务源地址或 /pm 地址，也支持明确的 /agent/workspace 地址。回环地址之外必须使用 HTTPS；请勿在 URL 中放入访问令牌或账号凭据。</small></div>
+                <div class="notice remote-notice"><strong>在服务自己的登录页登录</strong><p>远程服务的 Cookie 与浏览器存储，与每一个本地工作台相互隔离。输入凭据前，请确认你信任该服务。连接后可通过现有的产品切换入口打开 Agent。</p></div>
+              </section>
+              <div class="actions step-actions configure-actions"><button type="button" id="back"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6" /></svg>上一步</button><button class="primary" type="submit" id="connect">启动本地工作台</button></div>
+            </section>
+          </form>
+
+          <section id="step-ready" class="step-content ready-content" aria-labelledby="ready-title" hidden>
+            <div class="ready-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18m-9 0v11m4-7 2 2-2 2" /></svg></div>
+            <div class="section-heading"><h2 id="ready-title" tabindex="-1">工作台与连接操作</h2><p id="ready-summary">连接状态与可用操作将在此显示。</p></div>
+            <div class="actions ready-actions"><button class="primary" type="button" id="open" hidden>打开工作台</button><button type="button" id="disconnect" hidden>断开连接</button><button class="quiet" type="button" id="change-connection">更改连接</button></div>
+          </section>
+
+          <section class="status-panel" aria-labelledby="status-title">
+            <h2 id="status-title"><span class="status-glyph" aria-hidden="true"></span>连接状态</h2>
+            <progress id="progress" aria-label="工作台操作进行中" hidden></progress>
+            <p id="status" role="status" aria-live="polite">正在读取桌面连接设置…</p>
+            <p id="processes" class="muted" hidden></p>
+            <p id="address" class="mono" hidden></p>
+            <p id="error" class="error-message" role="alert" hidden></p>
+            <details id="diagnostics" class="diagnostics" hidden><summary>查看诊断与操作结果</summary><pre id="details"></pre></details>
+            <button class="quiet" type="button" id="return-connected" hidden>返回当前连接</button>
+          </section>
+        </div>
       </section>
-      <section class="maintenance-panel" aria-labelledby="maintenance-title">
-        <h2 id="maintenance-title">Local workspace data</h2>
-        <p class="small-note">Backup and restore require a disconnected workspace with all managed services stopped. Backups include private data, saved credentials and conversations; external/global CLI credential homes are excluded. Backups are not encrypted. Restore always uses a new empty folder, never overwrites an existing workspace, and does not connect automatically.</p>
-        <p class="mono" id="maintenance-root"></p>
-        <div class="actions"><button type="button" id="backup">Back up workspace…</button><button type="button" id="restore">Restore to new folder…</button></div>
-        <div class="actions folder-actions"><button type="button" data-reveal="dataDir">Reveal saved data folder</button><button type="button" data-reveal="projectRoot">Reveal saved project root</button></div>
+
+      <section id="maintenance-view" class="maintenance-view" aria-labelledby="maintenance-title" hidden>
+        <button class="quiet maintenance-back" type="button" id="maintenance-back"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M19 12H5m6-6-6 6 6 6" /></svg>返回连接</button>
+        <div class="maintenance-heading"><p class="eyebrow">本地数据管理</p><h1 id="maintenance-title" tabindex="-1">为重要的工作，留一份备份。</h1><p class="intro">备份、恢复与查看本地文件。所有受管服务停止后，才可进行备份或恢复。</p></div>
+        <div class="privacy-notice"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2" /></svg><div><strong>备份包含私密数据，请妥善保管</strong><p>备份包含私密数据、已保存的凭据与会话，不包含外部或全局 CLI 凭据目录。备份不加密，请仅保存到安全的位置。</p></div></div>
+        <div class="maintenance-grid">
+          <section class="operation-card" aria-labelledby="backup-title"><span class="operation-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 15V3m-4 4 4-4 4 4M5 12H3v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2" /></svg></span><h2 id="backup-title">备份当前工作台</h2><p>将已保存工作台的数据导出为备份。请先断开连接，并确认本地受管服务已停止。</p><button type="button" id="backup" disabled>选择位置并备份…</button></section>
+          <section class="operation-card" aria-labelledby="restore-title"><span class="operation-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M5 12H3v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2" /></svg></span><h2 id="restore-title">从备份恢复</h2><p>仅恢复到新的空目录，不覆盖已有工作台，不自动连接。目前仅接受相同操作系统的备份。</p><button type="button" id="restore" disabled>选择备份并恢复…</button></section>
+        </div>
+        <section class="saved-folders" aria-labelledby="saved-folders-title"><div><h2 id="saved-folders-title">已保存的本地目录</h2><p class="mono" id="maintenance-root">正在读取工作台目录…</p></div><div class="actions folder-actions"><button type="button" data-reveal="dataDir">打开数据目录</button><button type="button" data-reveal="projectRoot">打开项目父目录</button></div></section>
+        <section class="maintenance-feedback" aria-label="数据管理状态"><p id="maintenance-status" role="status" aria-live="polite">正在读取本地工作台状态，备份与恢复暂不可用。</p><p id="maintenance-error" class="error-message" role="alert" hidden></p><details id="maintenance-diagnostics" class="diagnostics" hidden><summary>查看诊断与操作结果</summary><pre id="maintenance-details"></pre></details></section>
       </section>
-      <footer>
-        <p><strong>Close the workspace window</strong> to keep local tasks running. This connection window remains available. Reconnecting preserves pending-command journals; it does not replay uncertain actions.</p>
-        <p><strong>Quit</strong> to stop local services, PostgreSQL and workers. Local schedules do not run after quitting. Remote Servers are managed separately.</p>
-        <button type="button" id="quit">Quit PM Agent v4…</button>
+
+      <footer class="app-footer">
+        <div class="lifecycle-notes"><p><strong>关闭工作台窗口</strong>不会停止本地任务；连接窗口会保留。重新连接会保留待确认的命令记录，不会重放结果不明的操作。</p><p><strong>退出应用</strong>将停止本地服务、PostgreSQL 与 Worker，本地定时任务也会停止；远程服务不受影响。</p></div>
+        <div class="actions footer-actions"><button type="button" id="manage-workspace">管理本地数据</button><button class="quiet" type="button" id="quit">退出应用…</button></div>
       </footer>
     </main>
   </body>

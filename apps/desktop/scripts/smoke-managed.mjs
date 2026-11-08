@@ -32,6 +32,7 @@ async function verifyNativeClosure(projectRoot) {
   const source = `
     import {createRequire} from "node:module";
     import {pathToFileURL} from "node:url";
+    import {readFile} from "node:fs/promises";
     import path from "node:path";
     const root=process.argv[1], work=process.argv[2];
     const require=createRequire(path.join(root,"apps/server/agent/dist/index.mjs"));
@@ -40,9 +41,27 @@ async function verifyNativeClosure(projectRoot) {
       await import(pathToFileURL(require.resolve(name)).href);
     const store=await require("@cursor/sdk/sqlite").SqliteLocalAgentStore.open({workspaceRef:work,stateRoot:path.join(work,"native-store")});
     await store.dispose();
+    const layout=JSON.parse(await readFile(path.join(root,"desktop-dependency-layout.json"),"utf8"));
+    const agent=layout.contexts.find(context=>context.id==="agent");
+    if(!agent || typeof agent.effectSingleton!=="string") throw new Error("Missing Agent Effect singleton identity.");
+    let canonicalEsm,canonicalCjs,consumers=0;
+    for(const owner of [agent,...agent.instances]) {
+      if(!owner.dependencies.effect) continue;
+      if(owner.dependencies.effect!==agent.effectSingleton) throw new Error("Agent Effect graph has split identities.");
+      const parent=pathToFileURL(path.join(root,owner.path??owner.root,"__desktop_effect_identity__.mjs")).href;
+      const namespace=await import(import.meta.resolve("effect",parent));
+      const required=createRequire(parent)("effect");
+      canonicalEsm??=namespace;
+      canonicalCjs??=required;
+      if(namespace!==canonicalEsm || required!==canonicalCjs || namespace.Effect!==required.Effect)
+        throw new Error("Agent Effect runtime module object differs between consumers.");
+      if(namespace.Effect.runSync(namespace.Effect.succeed(42))!==42) throw new Error("Agent Effect runtime failed.");
+      consumers++;
+    }
+    if(!consumers) throw new Error("Agent Effect singleton has no exercised consumers.");
   `;
   const node = join(runtimeRoot, "node", process.platform === "win32" ? "node.exe" : "bin/node");
-  const child = spawnOwned(node, ["--input-type=module", "--eval", source, serverRoot, projectRoot], { cwd: temporary, env: environment });
+  const child = spawnOwned(node, ["--experimental-import-meta-resolve", "--input-type=module", "--eval", source, serverRoot, projectRoot], { cwd: temporary, env: environment });
   child.stdin.end();
   child.stdout.resume();
   child.stderr.resume();
@@ -146,4 +165,4 @@ if (failure) {
   // exception whose library context could contain a connection string.
   console.log(JSON.stringify({ ok: false, target, stage, error: "managed_desktop_smoke_failed" }));
   process.exitCode = 1;
-} else console.log(JSON.stringify({ ok: true, target, providerAndPtyNativeClosure: true, managedPostgres: true, migrationsAndStorageBootstrap: true, pmPasswordLogin: true, authorizedWorkspace: true, agentAccess: true, bundledWeb: true, sameInstanceAndWorkspaceAfterRestart: true, ownedProcessCleanup: true, ambientPathUsed: false }));
+} else console.log(JSON.stringify({ ok: true, target, providerAndPtyNativeClosure: true, effectSingletonRuntimeIdentity: true, managedPostgres: true, migrationsAndStorageBootstrap: true, pmPasswordLogin: true, authorizedWorkspace: true, agentAccess: true, bundledWeb: true, sameInstanceAndWorkspaceAfterRestart: true, ownedProcessCleanup: true, ambientPathUsed: false }));

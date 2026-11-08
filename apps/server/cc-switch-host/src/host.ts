@@ -175,6 +175,8 @@ export class Host {
         return true;
       case "scan_unmanaged_skills":
         return this.#skills.scanUnmanaged();
+      case "scan_native_skills":
+        return this.#skills.scanNative();
       case "import_skills_from_apps":
         return this.#skills.importFromApps(Array.isArray(args.imports) ? args.imports as never[] : []);
       case "discover_available_skills":

@@ -4,6 +4,7 @@ import {
   isValidElement,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -111,10 +112,16 @@ export function SelectContent({
   className?: string
 }) {
   const container = useThemePortalContainer()
+  const trigger = useContext(SelectTriggerElement)
+  const [nativeDialog, setNativeDialog] = useState<HTMLDialogElement | null>(null)
+  useLayoutEffect(() => {
+    // Body portals are inert behind showModal(); keep the list in its trigger's top layer.
+    setNativeDialog(trigger?.current?.closest<HTMLDialogElement>("dialog") ?? null)
+  }, [trigger])
   return (
     <OverlayLayer>
       {(layerStyle) => (
-        <SelectPrimitive.Portal container={container?.current ?? undefined}>
+        <SelectPrimitive.Portal container={nativeDialog ?? container?.current ?? undefined}>
           <SelectPrimitive.Content
             position="popper"
             side={side}

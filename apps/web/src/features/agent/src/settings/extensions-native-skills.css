@@ -1,0 +1,9 @@
+.settings-native-skills { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.settings-native-skills-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.settings-native-skills h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.settings-native-skills p { margin: 8px 0; font-size: 12px; line-height: 1.6; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.settings-native-skills ul { margin: 12px 0 0; padding: 0; list-style: none; max-height: 280px; overflow-y: auto; }
+.settings-native-skills li { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+.settings-native-skills li > div { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+.settings-native-skills code { margin-left: 10px; font-size: 11px; }
+.settings-native-skills li span { font-size: 12px; color: var(--muted-foreground); }

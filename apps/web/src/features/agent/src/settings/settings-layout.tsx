@@ -1,4 +1,4 @@
-import { Component, Suspense, createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, Suspense, createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useBeforeUnload, useBlocker, useLocation } from "react-router-dom";
 import { ArrowLeft, ChartNoAxesCombined, ChevronDown, ChevronRight, Database, FolderOpen, History, Info, Loader2, MessageSquare, Moon, Palette, Plug, RefreshCw, Server, Settings2, ShieldAlert, Sun } from "lucide-react";
 import { Button } from "@agent/components/ui/button";
@@ -22,8 +22,15 @@ export function useSettingsGuard() {
   const register = useContext(SettingsGuardContext);
   if (!register) throw new Error("useSettingsGuard requires SettingsLayout.");
   const [id] = useState(() => Symbol("settings-draft"));
-  const setGuard = useCallback((state: SettingsGuardState) => register(id, state), [id, register]);
-  useEffect(() => () => register(id, "clean"), [id, register]);
+  const mounted = useRef(true);
+  const setGuard = useCallback((state: SettingsGuardState) => { if (mounted.current) register(id, state); }, [id, register]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      register(id, "clean");
+    };
+  }, [id, register]);
   return useMemo(() => ({ setGuard }), [setGuard]);
 }
 
@@ -119,6 +126,7 @@ export function SettingsLayout() {
   const activeGuard = useRef<SettingsGuardState>("clean");
   const [guardState, setGuardState] = useState<SettingsGuardState>("clean");
   const heading = useRef<HTMLHeadingElement>(null);
+  const main = useRef<HTMLElement>(null);
   const navigation = useRef<HTMLElement>(null);
   const navigationId = useId();
   const mobileNavigationTrigger = useRef<HTMLButtonElement>(null);
@@ -156,6 +164,10 @@ export function SettingsLayout() {
   const fullBleed = page?.id === "usage";
   const extensionPage = page?.id === "mcp-servers" || page?.id === "skills";
 
+
+  useLayoutEffect(() => {
+    if (main.current) main.current.scrollTop = 0;
+  }, [location.pathname]);
   useEffect(() => {
     const previousTitle = document.title;
     document.title = `${pageTitle} · ${t("Agent 设置", "Agent settings")}`;
@@ -186,16 +198,16 @@ export function SettingsLayout() {
           <Button size="icon-sm" variant="ghost" onClick={toggle} aria-label={theme === "dark" ? t("切换浅色主题", "Switch to light theme") : t("切换深色主题", "Switch to dark theme")}>{theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</Button>
         </div>
       </aside>
-      <main className="settings-main" id="settings-content" tabIndex={-1}>
+      <main ref={main} className="settings-main" id="settings-content" tabIndex={-1}>
         {fullBleed ? <SettingsContentBoundary key={location.pathname}>
-          <Suspense fallback={<p role="status" className="p-8">{t("正在加载用量…", "Loading usage…")}</p>}><Outlet /></Suspense>
+          <Suspense key={location.pathname} fallback={<p role="status" className="p-8">{t("正在加载用量…", "Loading usage…")}</p>}><Outlet /></Suspense>
         </SettingsContentBoundary> : <>
           <header className="settings-breadcrumb"><span>{t("设置", "Settings")}</span><ChevronRight aria-hidden="true" /><h1 ref={heading} tabIndex={-1}>{extensionPage ? t("自定义", "Customize") : pageTitle}</h1>
             <span className="settings-draft-status" role="status">{guardState === "busy" ? t("操作进行中", "Working") : guardState === "dirty" ? t("有未保存的修改", "Unsaved changes") : ""}</span>
           </header>
           <div className="settings-content">
             <SettingsContentBoundary key={location.pathname}>
-              <Suspense fallback={<SettingsNotice kind="loading">{t("正在加载设置页面…", "Loading settings…")}</SettingsNotice>}><Outlet /></Suspense>
+              <Suspense key={location.pathname} fallback={<SettingsNotice kind="loading">{t("正在加载设置页面…", "Loading settings…")}</SettingsNotice>}><Outlet /></Suspense>
             </SettingsContentBoundary>
           </div>
         </>}

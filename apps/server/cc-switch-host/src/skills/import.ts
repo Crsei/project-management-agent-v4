@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { Database } from "../database/index.ts";
 import { AppError } from "../errors.ts";
-import { homeDir } from "../host-context.ts";
+import { homeDir, isBound } from "../host-context.ts";
 import { getSkillStorageLocation } from "../settings.ts";
 import {
   APP_IDS,
@@ -25,7 +25,7 @@ import {
   skillExistsInApp,
   syncToAppDir,
 } from "./deploy.ts";
-import { copyDirRecursive, isSymlink } from "./fs.ts";
+import { inspectSkillImportTree, isSymlink, pathEntryExists } from "./fs.ts";
 import { computeDirHash, computePiDeploymentHash } from "./hash.ts";
 import {
   agentsSkillsDir,
@@ -244,6 +244,7 @@ function parseSelections(imports: readonly ImportSkillSelection[]): ImportSkillS
 function searchSources(ssot: string): Array<{ base: string; label: string }> {
   const sources: Array<{ base: string; label: string }> = [];
   for (const app of APP_IDS) {
+    if (!isBound(app)) continue;
     try {
       sources.push({ base: appSkillsDir(app), label: app });
     } catch {
@@ -276,9 +277,6 @@ export function importFromApps(db: Database, imports: ImportSkillSelection[]): I
   const skippedManaged: string[] = [];
   const notEnabled: string[] = [];
 
-  const directories = selections.map((selection) => selection.directory);
-  saveReposFromLock(db, agentsLock, directories);
-
   const sources = searchSources(ssot);
 
   selectionLoop: for (const selection of selections) {
@@ -297,10 +295,16 @@ export function importFromApps(db: Database, imports: ImportSkillSelection[]): I
     if (sourcePath === undefined) continue;
     if (!existsSync(path.join(sourcePath, "SKILL.md"))) continue;
 
+    // An import grants browser-visible managed bytes, not permission to follow
+    // arbitrary native descendants. Validate even when an orphaned SSOT exists.
+    const sourceTree = inspectSkillImportTree(sourcePath);
     const dest = path.join(ssot, directory);
-    if (!existsSync(dest)) copyDirRecursive(sourcePath, dest);
-
-    const { name, description } = readSkillNameDesc(path.join(dest, "SKILL.md"), directory);
+    if (!pathEntryExists(dest)) sourceTree.copyTo(dest);
+    const managedTree = inspectSkillImportTree(dest, ssot);
+    sourceTree.assertUnchanged();
+    managedTree.assertUnchanged();
+    const { name, description } = readSkillNameDesc(path.join(managedTree.root, "SKILL.md"), directory);
+    managedTree.assertUnchanged();
 
     const apps = { ...selection.apps };
     for (const app of ["pi", "omp"] as const) apps[app] = skillExistsInApp(directory, app);
@@ -367,6 +371,8 @@ export function importFromApps(db: Database, imports: ImportSkillSelection[]): I
       updatedAt: 0,
     };
 
+    managedTree.assertUnchanged();
+    saveReposFromLock(db, agentsLock, [directory]);
     db.skills.save(skill);
     imported.push(skill);
   }

@@ -158,3 +158,12 @@ export function trustedConnectionFrame(event, contents, connectionUrl) {
     return false; // Electron can invalidate a frame while its IPC request is queued.
   }
 }
+
+export function trustedWorkspaceFrame(event, contents, workspaceUrl) {
+  try {
+    return Boolean(contents && !contents.isDestroyed() && event.sender === contents &&
+      event.senderFrame === contents.mainFrame && sameService(event.senderFrame?.url, new URL(workspaceUrl).origin));
+  } catch {
+    return false;
+  }
+}

@@ -1,6 +1,8 @@
 .settings-shell {
   display: flex;
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--surface);
   color: var(--foreground);
   font: 14px/20px var(--font-sans);
@@ -19,10 +21,10 @@
 .settings-skip-link { position: fixed; top: 8px; left: 8px; z-index: 60; padding: 8px 12px; border: 1px solid var(--ring); border-radius: 6px; color: var(--foreground); background: var(--background); transform: translateY(-160%); }
 .settings-skip-link:focus { transform: translateY(0); }
 .settings-sidebar {
-  position: sticky;
-  top: 0;
+  position: relative;
   width: 236px;
-  height: 100dvh;
+  height: 100%;
+  min-height: 0;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -33,7 +35,7 @@
 .settings-product { display: flex; align-items: center; gap: 10px; min-height: var(--workspace-header-height); padding: 0 10px; font-weight: 600; flex-shrink: 0; }
 .settings-nav-caption { margin: 28px 10px 14px; color: var(--muted-foreground); font-size: 12px; }
 .settings-mobile-navigation-toggle { display: none; }
-.settings-navigation { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.settings-navigation { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .settings-nav-group { margin-bottom: 20px; }
 .settings-nav-group > p { margin: 0 10px 6px; color: var(--text-muted); font-size: 12px; line-height: 16px; }
 .settings-navigation a { display: flex; align-items: center; gap: 9px; min-height: 30px; margin: 2px 0; padding: 0 10px; border-radius: var(--control-radius); color: var(--text-secondary); font-size: 13px; line-height: 20px; }
@@ -42,7 +44,8 @@
 .settings-sidebar-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding: 16px 8px; flex-shrink: 0; }
 .settings-sidebar-footer > a { display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--muted-foreground); font-size: 13px; }
 .settings-sidebar-footer > a:hover { color: var(--foreground); }
-.settings-main { flex: 1; min-width: 0; }
+.settings-main { flex: 1; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.settings-main > .usage-page { min-height: 100%; }
 .settings-main:focus, .settings-breadcrumb h1:focus { outline: none; }
 .settings-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: var(--workspace-header-height); padding: 6px 28px; border-bottom: 1px solid var(--border); background: var(--surface); font-size: 13px; line-height: 20px; }
 .settings-breadcrumb > span:first-child, .settings-breadcrumb > svg { color: var(--text-muted); }
@@ -111,8 +114,8 @@ html[data-pm-sidebar-density="comfortable"] .settings-navigation a { min-height:
   .settings-content { padding: 20px 24px 32px; }
 }
 @media (max-width: 767px) {
-  .settings-shell { display: block; }
-  .settings-sidebar { position: static; width: 100%; height: auto; display: grid; grid-template-columns: minmax(0, 1fr) auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 14px; }
+  .settings-shell { flex-direction: column; }
+  .settings-sidebar { position: relative; width: 100%; height: auto; max-height: 60%; overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr) auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 0 14px; }
   .settings-product { min-height: var(--workspace-header-height); padding: 0; font-size: 13px; }
   .settings-nav-caption { display: none; }
   .settings-sidebar-footer { grid-column: 2; grid-row: 1; margin: 0; padding: 0; gap: 10px; }
@@ -121,7 +124,7 @@ html[data-pm-sidebar-density="comfortable"] .settings-navigation a { min-height:
   .settings-mobile-navigation-toggle > span { color: var(--muted-foreground); }
   .settings-mobile-navigation-toggle > strong { flex: 1; font-weight: 500; }
   .settings-mobile-navigation-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
-  .settings-navigation { grid-column: 1 / -1; grid-row: 3; display: none; overflow-x: hidden; overflow-y: auto; max-height: 55dvh; max-width: 100%; margin-bottom: 10px; padding: 4px; border: 1px solid var(--border); border-radius: 8px; scroll-padding-block: 8px; }
+  .settings-navigation { grid-column: 1 / -1; grid-row: 3; display: none; overflow-x: hidden; overflow-y: auto; max-height: 40dvh; max-width: 100%; margin-bottom: 10px; padding: 4px; border: 1px solid var(--border); border-radius: 8px; scroll-padding-block: 8px; }
   .settings-navigation[data-mobile-open] { display: block; }
   .settings-nav-group { margin-bottom: 12px; }
   .settings-nav-group:last-child { margin-bottom: 0; }

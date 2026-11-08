@@ -7390,6 +7390,15 @@
     {
       "source": "apps/server/pm/src/app.ts",
       "line": 44,
+      "specifier": "./workspace-creation-routes.ts",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "pm-host-boundary",
+      "target": "apps/server/pm/src/workspace-creation-routes.ts"
+    },
+    {
+      "source": "apps/server/pm/src/app.ts",
+      "line": 45,
       "specifier": "../../../../packages/application/src/team-directory.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7398,7 +7407,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 45,
+      "line": 46,
       "specifier": "../../../../packages/application/src/team-workload.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7407,7 +7416,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 46,
+      "line": 47,
       "specifier": "./workspace-identity-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7416,7 +7425,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 47,
+      "line": 48,
       "specifier": "./account-security-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7425,7 +7434,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 48,
+      "line": 49,
       "specifier": "../../../../packages/application/src/task-comments.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7434,7 +7443,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 49,
+      "line": 50,
       "specifier": "../../../../packages/domain/src/task-comments.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7443,7 +7452,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 50,
+      "line": 51,
       "specifier": "../../../../packages/infrastructure/src/account-recovery-mail.ts",
       "kind": "import",
       "usage": "type-only",
@@ -7452,7 +7461,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 51,
+      "line": 52,
       "specifier": "../../../../packages/infrastructure/src/webhook-config.ts",
       "kind": "import",
       "usage": "type-only",
@@ -7461,7 +7470,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 52,
+      "line": 53,
       "specifier": "../../../../packages/application/src/service-facts.ts",
       "kind": "import",
       "usage": "type-only",
@@ -7470,7 +7479,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 53,
+      "line": 54,
       "specifier": "../../../../packages/pm-core/readonly.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7479,7 +7488,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 54,
+      "line": 55,
       "specifier": "./core-fact-importer.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7488,7 +7497,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 55,
+      "line": 56,
       "specifier": "./notification-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7497,7 +7506,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 56,
+      "line": 57,
       "specifier": "./account-recovery-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7506,7 +7515,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 57,
+      "line": 58,
       "specifier": "./webhook-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7515,7 +7524,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 58,
+      "line": 59,
       "specifier": "./artifact-files-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7524,7 +7533,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 59,
+      "line": 60,
       "specifier": "./agent-tool-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7533,7 +7542,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 60,
+      "line": 61,
       "specifier": "./agent-core-files-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7542,7 +7551,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 61,
+      "line": 62,
       "specifier": "./agent-reference-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7551,7 +7560,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 62,
+      "line": 63,
       "specifier": "./agent-capability-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7560,7 +7569,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 63,
+      "line": 64,
       "specifier": "./agent-issue-search-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7569,7 +7578,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 64,
+      "line": 65,
       "specifier": "./agent-preview-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7578,7 +7587,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 65,
+      "line": 66,
       "specifier": "./automation-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7587,7 +7596,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 66,
+      "line": 67,
       "specifier": "./automation-studio-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7596,7 +7605,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 67,
+      "line": 68,
       "specifier": "./automation-git-sync-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7605,7 +7614,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 68,
+      "line": 69,
       "specifier": "./automation-events-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7614,7 +7623,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 69,
+      "line": 70,
       "specifier": "./automation-pm-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7623,7 +7632,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 70,
+      "line": 71,
       "specifier": "./automation-pm-mutations.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7632,7 +7641,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 71,
+      "line": 72,
       "specifier": "../../../../packages/application/src/automation-studio.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7641,7 +7650,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 72,
+      "line": 73,
       "specifier": "../../../../packages/application/src/automation-studio-auth.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7650,7 +7659,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 73,
+      "line": 74,
       "specifier": "../../../../packages/infrastructure/src/automation-execution-client.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7659,7 +7668,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 74,
+      "line": 75,
       "specifier": "../../../../packages/infrastructure/src/automation-integrations-definitions.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7668,7 +7677,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 75,
+      "line": 76,
       "specifier": "../../../../packages/contracts/src/automation-studio.ts",
       "kind": "import",
       "usage": "type-only",
@@ -7677,7 +7686,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 76,
+      "line": 77,
       "specifier": "./agent-file-area-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7686,7 +7695,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 77,
+      "line": 78,
       "specifier": "./document-source-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7695,7 +7704,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 78,
+      "line": 79,
       "specifier": "./workflow-task-transition-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7704,7 +7713,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 79,
+      "line": 80,
       "specifier": "./change-history-routes.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7713,7 +7722,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 80,
+      "line": 81,
       "specifier": "../../../../packages/application/src/change-history.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7722,7 +7731,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 81,
+      "line": 82,
       "specifier": "../../../../packages/pm-core/change-snapshots.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7731,7 +7740,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 82,
+      "line": 83,
       "specifier": "../../../../packages/application/src/automation-pm-signals.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7740,7 +7749,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 83,
+      "line": 84,
       "specifier": "./agent-chat-tools.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7749,7 +7758,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 84,
+      "line": 85,
       "specifier": "../../../../packages/contracts/src/artifact-files.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7758,7 +7767,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 85,
+      "line": 86,
       "specifier": "../../../../packages/infrastructure/src/project-blobs.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7767,7 +7776,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 86,
+      "line": 87,
       "specifier": "../../../../packages/pm-core/project-locations.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7776,7 +7785,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 87,
+      "line": 88,
       "specifier": "../../../../packages/application/src/local-projects.ts",
       "kind": "import",
       "usage": "runtime",
@@ -7785,7 +7794,7 @@
     },
     {
       "source": "apps/server/pm/src/app.ts",
-      "line": 88,
+      "line": 89,
       "specifier": "../../../../packages/infrastructure/src/local-project-storage-maintenance.ts",
       "kind": "import",
       "usage": "runtime",
@@ -8109,7 +8118,16 @@
     },
     {
       "source": "apps/web/src/features/agent/src/app.tsx",
-      "line": 10,
+      "line": 9,
+      "specifier": "@/components/blocks/route-feedback",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/features/agent/src/app.tsx",
+      "line": 11,
       "specifier": "./settings/general-page",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -8118,7 +8136,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/app.tsx",
-      "line": 11,
+      "line": 12,
       "specifier": "./settings/providers-page",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -8127,7 +8145,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/app.tsx",
-      "line": 12,
+      "line": 13,
       "specifier": "./settings/appearance-page",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -8136,7 +8154,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/app.tsx",
-      "line": 13,
+      "line": 14,
       "specifier": "./settings/history-page",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -8145,7 +8163,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/app.tsx",
-      "line": 14,
+      "line": 15,
       "specifier": "./usage/UsagePage",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -8154,7 +8172,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/app.tsx",
-      "line": 15,
+      "line": 16,
       "specifier": "./usage/UsageSettings",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -8163,7 +8181,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/app.tsx",
-      "line": 16,
+      "line": 17,
       "specifier": "./settings/extensions-page",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -8172,7 +8190,7 @@
     },
     {
       "source": "apps/web/src/features/agent/src/app.tsx",
-      "line": 17,
+      "line": 18,
       "specifier": "./settings/extensions-page",
       "kind": "dynamic-import",
       "usage": "runtime",
@@ -9478,8 +9496,8 @@
     {
       "source": "apps/web/src/routes.tsx",
       "line": 31,
-      "specifier": "@/features/agent/src/app",
-      "kind": "dynamic-import",
+      "specifier": "@/lib/agent-app-module",
+      "kind": "import",
       "usage": "runtime",
       "disposition": "external-package",
       "target": null
@@ -9487,6 +9505,15 @@
     {
       "source": "apps/web/src/routes.tsx",
       "line": 32,
+      "specifier": "@/components/blocks/route-feedback",
+      "kind": "import",
+      "usage": "runtime",
+      "disposition": "external-package",
+      "target": null
+    },
+    {
+      "source": "apps/web/src/routes.tsx",
+      "line": 34,
       "specifier": "@/features/agent/src/mcp/connect-agent",
       "kind": "dynamic-import",
       "usage": "runtime",

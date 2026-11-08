@@ -26,6 +26,7 @@ import { makePmProviderContinuationRequests, pmExecutionError, type PmProviderPr
 import type { PmProviderCapabilitiesProjector, PmProviderInstallationMethods } from "../management.ts";
 import { pmAdapterBoundaryError } from "../events.ts";
 import type { PmProviderLease } from "../contract.ts";
+import { confirmsProviderNativeHome } from "../native-paths.ts";
 
 export const codexDriver = CodexDriver;
 
@@ -62,9 +63,10 @@ export const codexProtocolResolver: PmProviderProtocolResolver = ({ context, lea
     return yield* Effect.fail(pmExecutionError(409, "session_mismatch", "The original Codex operation has no native protocol evidence."));
   }
   const evidence = yield* probe.pipe(Effect.catchCause(cause => Effect.fail(pmAdapterBoundaryError(Cause.squash(cause), "session_mismatch", 409))));
-  if (!path.isAbsolute(evidence.homeDirectory) || path.resolve(evidence.homeDirectory) !== lease.nativeHome) {
+  if (!(yield* Effect.promise(() => confirmsProviderNativeHome(evidence.homeDirectory, lease.nativeHome)))) {
     return yield* Effect.fail(pmExecutionError(409, "session_mismatch", "The original Codex operation did not confirm this native Home."));
   }
+  yield* lease.assertCurrent;
   return {
     protocol: evidence.protocol,
     adoptLegacy: ({ source, ensure }) => lease.assertCurrent.pipe(

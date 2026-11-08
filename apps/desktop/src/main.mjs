@@ -10,7 +10,7 @@ import { backupDesktop, restoreDesktop } from "./maintenance.mjs";
 import { captureWindowState, restoredWindowBounds } from "./window-state.mjs";
 import {
   absolutePath, initialSetup, publicConfiguration, readLaunchArguments, remoteAddress,
-  safeDesktopMessage, sameService, serviceRequestAllowed, trustedConnectionFrame, workspacePartition,
+  safeDesktopMessage, sameService, serviceRequestAllowed, trustedConnectionFrame, trustedWorkspaceFrame, workspacePartition,
 } from "./policy.mjs";
 
 app.setName("PM Agent v4");
@@ -39,6 +39,7 @@ let maintenancePromise;
 let changingConnection = false;
 let externalPrompt = false;
 let configuration;
+let workspaceDirectoryPending = false;
 let settingsFile;
 let windowStateFile;
 let windowStates = {};
@@ -115,8 +116,8 @@ function showConnection() {
     return connectionWindow;
   }
   connectionWindow = new BrowserWindow({
-    ...restoredWindowBounds(windowStates.connection, { width: 780, height: 900, minWidth: 620, minHeight: 660 }, screen.getAllDisplays()),
-    title: "Workspace connection — PM Agent v4", backgroundColor: "#fafaf9", autoHideMenuBar: false,
+    ...restoredWindowBounds(windowStates.connection, { width: 1080, height: 800, minWidth: 620, minHeight: 660 }, screen.getAllDisplays()),
+    title: "工作区连接 — Dovspace", backgroundColor: "#fafaf9", autoHideMenuBar: false,
     webPreferences: securePreferences("desktop-connection", join(here, "preload.cjs")),
   });
   const window = connectionWindow;
@@ -475,13 +476,27 @@ function trustedConnection(event) {
 }
 
 function trustedWorkspace(event) {
-  if (!workspaceWindow || workspaceWindow.isDestroyed() || !workspaceUrl) return false;
-  if (event.sender !== workspaceWindow.webContents) return false;
-  if (!event.senderFrame || event.senderFrame !== workspaceWindow.webContents.mainFrame) return false;
+  return Boolean(workspaceWindow && !workspaceWindow.isDestroyed() &&
+    trustedWorkspaceFrame(event, workspaceWindow.webContents, workspaceUrl));
+}
+
+async function chooseWorkspaceDirectory(event) {
+  if (workspaceMode !== "local" || !trustedWorkspace(event)) throw new Error("Folder selection is available only in the trusted local workspace.");
+  if (workspaceDirectoryPending || changingConnection || maintenancePromise || quitting) throw new Error("Wait for the current desktop operation.");
+  const window = workspaceWindow;
+  workspaceDirectoryPending = true;
   try {
-    return sameService(event.senderFrame.url, new URL(workspaceUrl).origin);
-  } catch {
-    return false;
+    const result = await dialog.showOpenDialog(window, {
+      title: "Choose an existing Agent workspace folder",
+      defaultPath: configuration.projectRoot,
+      properties: ["openDirectory"],
+      dontAddToRecent: true,
+    });
+    if (workspaceWindow !== window || workspaceMode !== "local" || !trustedWorkspace(event) || changingConnection || quitting) throw new Error("The local workspace changed while choosing a folder.");
+    // The Agent must still canonicalize and validate the chosen path against its allowed roots.
+    return result.canceled || !result.filePaths[0] ? null : absolutePath(result.filePaths[0], "Agent workspace folder");
+  } finally {
+    workspaceDirectoryPending = false;
   }
 }
 
@@ -583,15 +598,15 @@ async function reveal(field) {
 
 function installMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: "Workspace", submenu: [
-      { label: "Open Workspace", accelerator: "CmdOrCtrl+Shift+O", click: () => void reopenWorkspace() },
-      { label: "Connection Settings…", accelerator: "CmdOrCtrl+,", click: showConnection },
+    { label: "工作区", submenu: [
+      { label: "打开工作区", accelerator: "CmdOrCtrl+Shift+O", click: () => void reopenWorkspace() },
+      { label: "连接设置…", accelerator: "CmdOrCtrl+,", click: showConnection },
       { type: "separator" },
-      { label: "Quit PM Agent v4…", accelerator: "CmdOrCtrl+Q", click: () => void requestQuit() },
+      { label: "退出 Dovspace…", accelerator: "CmdOrCtrl+Q", click: () => void requestQuit() },
     ] },
-    { label: "Edit", submenu: [{ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }] },
-    { label: "View", submenu: [{ role: "reload" }, { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" }, { type: "separator" }, { role: "togglefullscreen" }] },
-    { label: "Window", submenu: [{ role: "minimize" }, { role: "zoom" }, { role: "close" }] },
+    { label: "编辑", submenu: [{ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }] },
+    { label: "视图", submenu: [{ role: "reload" }, { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" }, { type: "separator" }, { role: "togglefullscreen" }] },
+    { label: "窗口", submenu: [{ role: "minimize" }, { role: "zoom" }, { role: "close" }] },
   ]));
 }
 
@@ -687,6 +702,7 @@ else {
       },
     });
     ipcMain.handle("desktop:preview", previewAction);
+    ipcMain.handle("desktop:choose-workspace-directory", chooseWorkspaceDirectory);
     ipcMain.handle("desktop:action", desktopAction);
     showConnection();
     if (configError) publish({ status: "error", error: configError });

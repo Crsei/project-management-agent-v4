@@ -15,13 +15,23 @@
 .task-creation.project-creation :where(input:not([type=radio]), textarea, [data-slot="select-trigger"]) { min-height: 36px; padding: 7px 10px; border-radius: 7px; background: var(--surface); font-size: 13px; }
 .task-creation.project-creation textarea { min-height: 68px; font-family: inherit; line-height: 1.5; }
 .task-creation.project-creation label, .task-creation.project-creation legend { font-size: 12.5px; font-weight: 500; }
+.task-creation.project-creation .project-creation-label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; }
+.task-creation.project-creation .project-creation-requirement { display: inline-flex; align-items: center; gap: 2px; color: var(--muted-foreground); font-size: 10px; font-weight: 400; }
+.task-creation.project-creation .project-creation-requirement[data-required] { color: var(--foreground); }
+.task-creation.project-creation .project-creation-date { display: flex; align-items: stretch; min-width: 0; }
+.task-creation.project-creation .project-creation-date > input { flex: 1; border-start-end-radius: 0; border-end-end-radius: 0; }
+.task-creation.project-creation .project-creation-date > input::-webkit-calendar-picker-indicator { display: none; }
+.task-creation.project-creation .project-creation-date-button { display: inline-flex; flex: 0 0 36px; align-items: center; justify-content: center; min-height: 36px; padding: 0; border: 1px solid var(--border); border-inline-start: 0; border-start-end-radius: 7px; border-end-end-radius: 7px; color: var(--foreground); background: var(--surface); }
+.task-creation.project-creation .project-creation-date-button:hover:not(:disabled) { background: var(--surface-hover); }
 .task-creation.project-creation .project-creation-identity { display: grid; grid-template-columns: minmax(0, 1fr) 116px; gap: 20px; align-items: start; }
 .task-creation.project-creation .project-creation-choice-group { min-width: 0; margin: 0; padding: 0; border: 0; }
 .task-creation.project-creation .project-creation-choice-group legend { margin-bottom: 7px; padding: 0; }
-.task-creation.project-creation .project-creation-icon-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+.task-creation.project-creation .project-creation-icon-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; }
 .task-creation.project-creation .project-creation-icon-option, .task-creation.project-creation .project-creation-color-option, .task-creation.project-creation .project-creation-template-option { position: relative; display: block; cursor: pointer; }
 .task-creation.project-creation .project-creation-radio { position: absolute; width: 1px; height: 1px; min-height: 0; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.task-creation.project-creation .project-creation-icon-option > span { display: flex; align-items: center; justify-content: center; min-height: 32px; border: 1px solid transparent; border-radius: 6px; color: var(--muted-foreground); }
+.task-creation.project-creation .project-creation-icon-option > span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 44px; padding: 4px 2px; border: 1px solid transparent; border-radius: 6px; color: var(--muted-foreground); }
+.task-creation.project-creation .project-creation-icon-option small { max-width: 100%; font-size: 10px; line-height: 1.2; font-weight: 400; overflow-wrap: anywhere; text-align: center; }
+.task-creation.project-creation .project-creation-icon-option svg, .task-creation.project-creation .project-creation-requirement svg { display: block; flex-shrink: 0; }
 .task-creation.project-creation .project-creation-icon-option:hover > span { background: var(--surface-hover); color: var(--foreground); }
 .task-creation.project-creation .project-creation-icon-option > input:checked + span { border-color: var(--foreground); background: var(--selection); color: var(--foreground); }
 .task-creation.project-creation .project-creation-radio:focus-visible + span { outline: 2px solid var(--focus, var(--ring)); outline-offset: 3px; }

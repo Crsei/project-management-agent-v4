@@ -2,17 +2,20 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import { link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
+import { extract as extractTar } from "tar";
 import { asarTools, inspectPackagedApplication } from "./packaged-application.mjs";
 import { captureSource, checksumDelivery, collectLegal, contentDigest, fileRecord, publicSourcePath, refreshVerification, requireUnchangedSource } from "./release-materials.mjs";
 import { verifyDelivery, verifyDeliveryFiles } from "./verify-delivery.mjs";
 import { inspectDeployment } from "./stage-workspace.mjs";
 import { inventoryTree, runtimeSources, verifyRuntime } from "./runtime-manifest.mjs";
+import { archiveMemberPath, inspectFinalArtifacts, verifyInstalledApplication } from "./final-artifact.mjs";
+import { dependencyLayoutManifest } from "./dependency-layout-verifier.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const execute = promisify(execFile);
@@ -46,7 +49,7 @@ test("source selection excludes private, credential, generated and internal-hist
   for (const path of [".env", "apps/server/.env.agent", "apps/web/.envrc", "apps/desktop/credentials.json", "apps/desktop/token", "apps/desktop/signing.pfx", "apps/desktop/.cache/archive", "apps/desktop/.runtime/runtime", "apps/desktop/releases/installer.exe", "apps/web/node_modules/a/index.js", "vendor/x/target/binary", "docs/implementation/internal.md", ".git/config", ".local/evidence/report", "Home/credentials", "../README.md", "apps/../README.md", "apps\\server\\code.ts"]) {
     assert.equal(publicSourcePath(path), false, path);
   }
-  for (const path of ["LICENSE", "pnpm-lock.yaml", ".github/workflows/desktop.yml", "apps/desktop/scripts/package.mjs", "vendor/t3code/source-manifest.json", "docs/guides/desktop.md"]) assert.equal(publicSourcePath(path), true, path);
+  for (const path of ["LICENSE", "pnpm-lock.yaml", "turbo.json", ".github/workflows/desktop.yml", "apps/desktop/scripts/package.mjs", "vendor/t3code/source-manifest.json", "docs/guides/desktop.md"]) assert.equal(publicSourcePath(path), true, path);
 });
 
 test("gitless reviewed snapshot preserves exact identity and never copies private siblings", async (t) => {
@@ -77,6 +80,66 @@ async function fixtureGit(root, args) {
   const environment = Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
   Object.assign(environment, { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: join(root, ".local/no-global-config"), HOME: join(root, ".local/home"), XDG_CONFIG_HOME: join(root, ".local/home") });
   return execute("git", ["-c", "user.name=Source fixture", "-c", "user.email=source-fixture@example.invalid", "-c", "commit.gpgsign=false", "-c", `core.hooksPath=${join(root, ".local/empty-hooks")}`, ...args], { cwd: root, env: environment, windowsHide: true });
+}
+
+for (const gitBacked of [false, true]) {
+  test(`${gitBacked ? "Git" : "gitless"} source captures and archives exact Turbo configuration and rejects its mutation or removal`, async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    const turboBytes = '{\n  "tasks": { "build": { "outputs": ["dist/**"] } }\n}\n';
+    await snapshot(input, { "turbo.json": turboBytes });
+    if (gitBacked) {
+      await fixtureGit(input, ["init"]);
+      await fixtureGit(input, ["add", "--", "README.md", "apps", "pnpm-lock.yaml", "turbo.json"]);
+      await fixtureGit(input, ["commit", "-m", "Synthetic Turbo source fixture"]);
+    }
+    await put(input, ".env", "PRIVATE_SYNTHETIC_SENTINEL");
+    await put(input, ".local/token", "PRIVATE_SYNTHETIC_SENTINEL");
+    await put(input, "node_modules/generated.js", "GENERATED_SYNTHETIC_SENTINEL");
+    const captured = join(root, "captured");
+    const source = await captureSource(captured, input);
+    assert.deepEqual(source.files.find((file) => file.path === "turbo.json"), {
+      path: "turbo.json", bytes: Buffer.byteLength(turboBytes), mode: 0o644, sha256: hash(turboBytes),
+    });
+    assert.equal(await readFile(join(captured, "turbo.json"), "utf8"), turboBytes);
+    for (const path of [".env", ".local/token", "node_modules/generated.js"])
+      await assert.rejects(lstat(join(captured, path)), { code: "ENOENT" });
+
+    const resources = join(root, "app/resources");
+    for (const path of [
+      "workspace-runtime/licenses/LICENSE", "workspace-runtime/apps/web/dist/licenses/LICENSE",
+      "desktop-runtime/node/LICENSE", "desktop-runtime/postgres/LICENSE", "desktop-runtime/THIRD-PARTY-NOTICES.json",
+    ]) await put(resources, path, "synthetic legal fixture\n");
+    await mkdir(join(resources, "workspace-runtime/apps/web/dist/fonts"), { recursive: true });
+    await put(join(root, "app"), "LICENSE.electron.txt", "synthetic Electron legal fixture\n");
+    await put(join(root, "app"), "LICENSES.chromium.html", "synthetic Chromium legal fixture\n");
+    const output = join(root, "materials");
+    const environment = Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
+    // Exercise the real archive writer without inheriting the hosted run's SHA.
+    await execute(process.execPath, ["--input-type=module", "--eval",
+      `import { writeReleaseMaterials } from ${JSON.stringify(new URL("./release-materials.mjs", import.meta.url).href)}; await writeReleaseMaterials(JSON.parse(process.argv[1]));`,
+      JSON.stringify({
+        output, resources, platform: "win32", sourceRoot: captured, source, legalRoot: join(root, "legal"),
+        manifest: { version: "0.1.0", target: "win32-x64", artifacts: [] },
+        verification: { schemaVersion: 1, nativeSmoke: { status: "not-run" }, published: false },
+      }),
+    ], { cwd: root, env: environment, windowsHide: true });
+    const expanded = join(root, "expanded");
+    await mkdir(expanded);
+    await extractTar({ file: join(output, "desktop-source.tar.gz"), cwd: expanded });
+    assert.equal(await readFile(join(expanded, "turbo.json"), "utf8"), turboBytes);
+    assert.deepEqual(JSON.parse(await readFile(join(expanded, "desktop-source.json"), "utf8")).files, source.files);
+
+    await requireUnchangedSource(source, input);
+    await put(input, "turbo.json", '{"tasks":{"different":{}}}\n');
+    await assert.rejects(requireUnchangedSource(source, input), /Source changed.*turbo\.json/);
+    await put(input, "turbo.json", turboBytes);
+    await requireUnchangedSource(source, input);
+    await rm(join(input, "turbo.json"));
+    await assert.rejects(requireUnchangedSource(source, input), /Source (?:selection )?changed/);
+    assert.equal(await readFile(join(captured, "turbo.json"), "utf8"), turboBytes);
+    assert.equal(await readFile(join(expanded, "turbo.json"), "utf8"), turboBytes);
+  });
 }
 
 test("dirty Git source refuses a tracked directory redirected into private checkout data", async (t) => {
@@ -225,14 +288,182 @@ for (const gitBacked of [false, true]) {
   });
 }
 
+// Native-only registration keeps the backend runner's no-skips contract. These
+// cases must run on Windows; Linux results do not exercise the attribute helper.
+if (process.platform === "win32") {
+  test("Windows many-file capture batches native checks while preserving every source byte", async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    const entries = Object.fromEntries(Array.from({ length: 96 }, (_, index) => [
+      `apps/example/group-${index % 4}/file-${index.toString().padStart(3, "0")}.ts`,
+      `export const source${index} = ${JSON.stringify(`public fixture ${index}\n`)};\n`,
+    ]));
+    const expected = await snapshot(input, entries);
+    const reports = [];
+    const output = join(root, "captured");
+    const actual = await captureSource(output, input, { onMetrics: (metrics) => reports.push(metrics) });
+    assert.deepEqual(actual, expected);
+    for (const file of expected.files) {
+      const bytes = await readFile(join(output, file.path));
+      assert.equal(bytes.length, file.bytes, file.path);
+      assert.equal(hash(bytes), file.sha256, file.path);
+    }
+    assert.deepEqual(JSON.parse(await readFile(join(output, "desktop-source.json"), "utf8")), expected);
+    const captured = reports.find((metrics) => metrics.status === "end");
+    assert.ok(captured, "capture must expose completed native work without changing the source manifest");
+    assert.equal(captured.files, expected.files.length);
+    assert.equal(captured.bytes, expected.files.reduce((total, file) => total + file.bytes, 0));
+    assert.ok(captured.nativeCalls > 0, "the real Windows helper must execute");
+    assert.ok(captured.nativeCalls < expected.files.length, "stable files must not cause one helper launch per file");
+    assert.ok(captured.cacheHits >= expected.files.length);
+    const rechecks = [];
+    await requireUnchangedSource(expected, input, { onMetrics: (metrics) => rechecks.push(metrics) });
+    assert.equal(rechecks.find((metrics) => metrics.status === "end")?.files, expected.files.length);
+  });
+
+  for (const mutation of ["replace", "content", "junction"]) {
+    test(`Windows capture rejects ${mutation} mutation after batch prewarm without publishing a source manifest`, async (t) => {
+      const root = await temporary(t);
+      const input = join(root, "input");
+      const filename = "apps/example/config.ts";
+      const publicBytes = "export const approved = true;\n";
+      await snapshot(input, { [filename]: publicBytes });
+      await put(input, ".local/private/config.ts", mutation === "junction" ? publicBytes : "PRIVATE_TEST_SENTINEL_NOT_A_REAL_CREDENTIAL");
+      const output = join(root, "rejected");
+      const reports = [];
+      const original = fs.createWriteStream;
+      let changed = false;
+      const mocked = t.mock.method(fs, "createWriteStream", (name, options) => {
+        // README is sorted before the future leaf; capture has already prewarmed
+        // its selected paths, but has not opened the leaf/ancestor being changed.
+        if (!changed && name === join(output, "README.md")) {
+          changed = true;
+          if (mutation === "junction") {
+            fs.renameSync(join(input, "apps/example"), join(input, ".local/original-example"));
+            fs.symlinkSync(join(input, ".local/private"), join(input, "apps/example"), "junction");
+          } else if (mutation === "replace") {
+            fs.renameSync(join(input, filename), join(input, ".local/original-config.ts"));
+            fs.writeFileSync(join(input, filename), "export const approved = null;\n");
+          } else {
+            fs.writeFileSync(join(input, filename), "export const approved = null;\n");
+          }
+        }
+        return original(name, options);
+      });
+      syncBuiltinESMExports();
+      try {
+        await assert.rejects(captureSource(output, input, { onMetrics: (metrics) => reports.push(metrics) }));
+        assert.equal(reports.length, 1);
+        assert.equal(reports[0].status, "failure");
+        assert.ok(reports[0].nativeCalls > 0);
+        assert.equal(changed, true);
+        await assert.rejects(lstat(join(output, "desktop-source.json")), { code: "ENOENT" });
+        if (mutation === "junction") {
+          await assert.rejects(lstat(join(output, filename)), { code: "ENOENT" });
+          assert.equal(await readFile(join(input, ".local/private/config.ts"), "utf8"), publicBytes);
+        }
+      } finally {
+        mocked.mock.restore();
+        syncBuiltinESMExports();
+      }
+    });
+  }
+
+  test("Windows source prewarm rejects UNC roots before any path or native helper query", async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    const source = await snapshot(input);
+    const unc = "\\\\unreachable.invalid\\share\\source";
+    const original = fs.lstatSync;
+    let touched = false;
+    const mocked = t.mock.method(fs, "lstatSync", (filename, ...options) => {
+      if (String(filename).startsWith("\\\\")) {
+        touched = true;
+        throw new Error("UNC metadata I/O must never be attempted by this fixture");
+      }
+      return original(filename, ...options);
+    });
+    syncBuiltinESMExports();
+    try {
+      const reports = [];
+      await assert.rejects(captureSource(join(root, "rejected"), unc, { onMetrics: (metrics) => reports.push(metrics) }), /canonical local absolute/);
+      await assert.rejects(requireUnchangedSource(source, unc, { onMetrics: (metrics) => reports.push(metrics) }), /canonical local absolute/);
+      assert.equal(touched, false);
+      assert.equal(reports.length, 2);
+      for (const report of reports) {
+        assert.equal(report.status, "failure");
+        assert.equal(report.nativeCalls, 0);
+      }
+    } finally {
+      mocked.mock.restore();
+      syncBuiltinESMExports();
+    }
+  });
+
+  test("Windows selected device and trailing-dot aliases are rejected before attribute metadata I/O", async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    const initial = await snapshot(input);
+    await fixtureGit(input, ["init"]);
+    await fixtureGit(input, ["add", "--", "README.md", "apps", "pnpm-lock.yaml"]);
+    await fixtureGit(input, ["commit", "-m", "Synthetic safe source"]);
+    const blob = (await fixtureGit(input, ["rev-parse", "HEAD:README.md"])).stdout.trim();
+    const aliases = ["apps/CON.md", "apps/trailing."];
+    // Add adversarial index entries only; do not commit/refresh them against
+    // the worktree. This fixture setting never changes the capture guards.
+    for (const path of aliases)
+      await fixtureGit(input, ["-c", "core.protectNTFS=false", "update-index", "--add", "--cacheinfo", `100644,${blob},${path}`]);
+    const records = new Map(initial.files.map((file) => [file.path, file]));
+    for (const path of aliases) records.set(path, { ...records.get("README.md"), path });
+    const files = [...records.keys()].sort().map((path) => records.get(path));
+    const source = { ...initial, commit: (await fixtureGit(input, ["rev-parse", "HEAD"])).stdout.trim(), dirty: true, files, sha256: contentDigest(files) };
+    const original = fs.lstatSync;
+    let touched = false;
+    const mocked = t.mock.method(fs, "lstatSync", (filename, ...options) => {
+      if (aliases.some((path) => String(filename).toLowerCase() === join(input, path).toLowerCase())) {
+        touched = true;
+        throw new Error("Unsafe alias metadata I/O must never be attempted by this fixture");
+      }
+      return original(filename, ...options);
+    });
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(captureSource(join(root, "rejected"), input), /Unsafe source path component/);
+      await assert.rejects(requireUnchangedSource(source, input), /Unsafe source path component/);
+      assert.equal(touched, false);
+      await assert.rejects(lstat(join(root, "rejected/desktop-source.json")), { code: "ENOENT" });
+    } finally {
+      mocked.mock.restore();
+      syncBuiltinESMExports();
+    }
+  });
+}
+
 async function archive(root, files) {
   const application = join(root, "application");
   const resources = join(root, "resources");
   await put(application, "package.json", JSON.stringify({ name: "pm-agent-v4-desktop", version: "0.1.0", main: "dist/main.mjs" }));
   await put(application, "dist/main.mjs", "export const desktop = true;\n");
-  for (const [name, bytes] of Object.entries(files)) await put(application, name, bytes);
+  const instances = [];
+  const dependencies = {};
+  for (const [name, bytes] of Object.entries(files)) {
+    if (name.startsWith("node_modules/") && name.endsWith("/package.json")) {
+      const metadata = { version: "1.0.0", ...JSON.parse(bytes) };
+      await put(application, name, JSON.stringify(metadata));
+      const path = name.slice(0, -"/package.json".length);
+      dependencies[path.slice("node_modules/".length)] = path;
+      instances.push({ id: path, path, sourceId: `original/${path}`, name: metadata.name, version: metadata.version, dependencies: {}, absentDependencies: [], files: [] });
+    } else await put(application, name, bytes);
+  }
+  for (const instance of instances) instance.files = await inventoryTree(join(application, instance.path));
+  await put(application, dependencyLayoutManifest, JSON.stringify({ schemaVersion: 1, contexts: [{ id: "electron", root: ".", dependencies, instances, absentDependencies: [], effectSingleton: null }] }));
   await mkdir(resources);
   await asarTools().createPackage(application, join(resources, "app.asar"));
+  await put(resources, `workspace-runtime/${dependencyLayoutManifest}`, JSON.stringify({ schemaVersion: 1, contexts: [
+    { id: "pm", root: ".", dependencies: {}, instances: [], absentDependencies: [], effectSingleton: null },
+    { id: "agent", root: "apps/server/agent", dependencies: {}, instances: [], absentDependencies: [], effectSingleton: null },
+  ] }));
+  await put(resources, "workspace-runtime/desktop-runtime-native.json", JSON.stringify({ schemaVersion: 1, files: [] }));
   return resources;
 }
 
@@ -302,7 +533,22 @@ async function preparedRuntimeFixture(resources, { cliAlias = false } = {}) {
   return { runtime, manifest };
 }
 
-test("delivery keeps manifest-pinned runtime npm config but rejects changed runtime bytes", async (t) => {
+// A real two-level 7z container fixture exercises member listing/extraction. It
+// is deliberately NOT an executable NSIS installer or native execution evidence.
+async function sealPayload(output, manifest, payloadRoot = join(output, "win-unpacked")) {
+  const scratch = join(dirname(output), "archive-fixture");
+  await mkdir(join(scratch, "$PLUGINSDIR"), { recursive: true });
+  const payload = join(scratch, "$PLUGINSDIR", "app-64.7z");
+  await rm(payload, { force: true });
+  await execute("7z", ["a", "-t7z", payload, "resources"], { cwd: payloadRoot });
+  const artifact = manifest.artifacts[0].path;
+  await rm(join(output, artifact));
+  await execute("7z", ["a", "-t7z", join(output, artifact), "$PLUGINSDIR"], { cwd: scratch });
+  manifest.artifacts = [await fileRecord(output, artifact)];
+  return inspectFinalArtifacts(output, manifest.artifacts, manifest);
+}
+
+test("final delivery is authoritative even when old unpacked staging bytes change", async (t) => {
   const root = await temporary(t);
   const { output, manifest } = await delivery(root);
   const resources = await archive(join(output, "win-unpacked"), {});
@@ -310,13 +556,17 @@ test("delivery keeps manifest-pinned runtime npm config but rejects changed runt
   await verifyRuntime(prepared.runtime, manifest.target);
   const application = await inspectPackagedApplication(resources, manifest.version);
   manifest.applicationResources = "win-unpacked/resources";
-  await refreshVerification(output, manifest, { checks: { application }, nativeSmoke: { status: "not-run" }, published: false });
+  const finalArtifacts = await sealPayload(output, manifest);
+  await refreshVerification(output, manifest, { checks: { application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
   assert.equal((await verifyDelivery(output)).target, manifest.target);
   assert.ok(prepared.manifest.files.some((file) => file.path === "node/node_modules/npm/.npmrc" && file.bytes === 0));
   assert.equal(await readFile(join(prepared.runtime, "node/node_modules/npm/.npmrc"), "utf8"), "");
   const originalInventory = await readFile(join(prepared.runtime, "runtime-manifest.json"));
   await put(prepared.runtime, "node/node_modules/npm/.npmrc", "# changed runtime fixture bytes\n");
-  await assert.rejects(verifyDelivery(output));
+  // Staging bytes are no longer authority for a downloaded installer. The final
+  // archive still contains the unchanged pinned runtime and remains verifiable.
+  assert.equal((await verifyDelivery(output)).target, manifest.target);
+  await assert.rejects(verifyRuntime(prepared.runtime, manifest.target));
   assert.deepEqual(await readFile(join(prepared.runtime, "runtime-manifest.json")), originalInventory);
 });
 
@@ -379,12 +629,21 @@ test("delivery rejects changed ASAR bytes even when application identity and ver
   const { output, manifest } = await delivery(root);
   const appRoot = join(output, "win-unpacked");
   const resources = await archive(appRoot, {});
+  await preparedRuntimeFixture(resources);
   const application = await inspectPackagedApplication(resources, manifest.version);
   manifest.applicationResources = "win-unpacked/resources";
-  await refreshVerification(output, manifest, { checks: { application }, nativeSmoke: { status: "not-run" }, published: false });
+  const finalArtifacts = await sealPayload(output, manifest);
+  await refreshVerification(output, manifest, { checks: { application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
   await put(join(appRoot, "application"), "dist/main.mjs", "export const desktop = 'different bytes, same identity';\n");
   await asarTools().createPackage(join(appRoot, "application"), join(resources, "app.asar"));
-  await assert.rejects(verifyDelivery(output), /Final ASAR bytes differ from the recorded application verification report/);
+  const scratch = join(dirname(output), "archive-fixture");
+  await rm(join(scratch, "$PLUGINSDIR/app-64.7z"));
+  await execute("7z", ["a", "-t7z", join(scratch, "$PLUGINSDIR/app-64.7z"), "resources"], { cwd: appRoot });
+  await rm(join(output, manifest.artifacts[0].path));
+  await execute("7z", ["a", "-t7z", join(output, manifest.artifacts[0].path), "$PLUGINSDIR"], { cwd: scratch });
+  manifest.artifacts = [await fileRecord(output, manifest.artifacts[0].path)];
+  await refreshVerification(output, manifest, { checks: { application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
+  await assert.rejects(verifyDelivery(output), /Final distributable payload differs/);
 });
 
 test("legal derivation rejects a resource-internal relative link that escapes the copied legal root", {
@@ -406,4 +665,70 @@ test("legal derivation rejects a resource-internal relative link that escapes th
   await symlink("../../../../../app.asar", join(resources, "workspace-runtime/apps/web/dist/licenses/cross"));
   await inspectDeployment(resources);
   await assert.rejects(collectLegal(resources, "win32", join(root, "legal")), /nonportable symlink|ENOENT|ELOOP/);
+});
+
+test("archive member safety rejects traversal, absolute paths and alternate data streams", () => {
+  for (const path of ["../outside", "/absolute", "C:\\outside", "resources/../outside", "resources/file:stream", "resources//file", "resources/./file"])
+    assert.throws(() => archiveMemberPath(path), /Unsafe final archive/);
+  assert.equal(archiveMemberPath("$PLUGINSDIR\\app-64.7z"), "$PLUGINSDIR/app-64.7z");
+});
+
+test("actual final archive expansion is rejected while the independent staging layout remains correct", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  const resources = await archive(join(output, "win-unpacked"), {});
+  await preparedRuntimeFixture(resources);
+  const workspace = join(resources, "workspace-runtime");
+  await put(workspace, "node_modules/one/package.json", JSON.stringify({ name: "one", version: "1.0.0" }));
+  await put(workspace, "node_modules/one/index.js", "module.exports = { retained: true };");
+  const instance = { id: "node_modules/one", path: "node_modules/one", sourceId: "original/one", name: "one", version: "1.0.0",
+    dependencies: {}, absentDependencies: [], files: await inventoryTree(join(workspace, "node_modules/one")) };
+  await put(workspace, dependencyLayoutManifest, JSON.stringify({ schemaVersion: 1, contexts: [
+    { id: "pm", root: ".", dependencies: { one: instance.id }, instances: [instance], absentDependencies: [], effectSingleton: null },
+    { id: "agent", root: "apps/server/agent", dependencies: {}, instances: [], absentDependencies: [], effectSingleton: null },
+  ] }));
+  assert.equal((await inspectPackagedApplication(resources, manifest.version)).status, "passed");
+  const correct = await sealPayload(output, manifest);
+  assert.equal(correct.status, "passed");
+  assert.equal(correct.artifacts[0].sha256, manifest.artifacts[0].sha256);
+  assert.ok(correct.artifacts[0].tree.files > 0 && correct.artifacts[0].tree.logicalBytes > 0);
+  const expanded = join(root, "expanded-payload");
+  await cp(resources, join(expanded, "resources"), { recursive: true });
+  const packageRoot = join(expanded, "resources/workspace-runtime/node_modules/one");
+  await cp(join(workspace, "node_modules/one"), join(packageRoot, "node_modules/one"), { recursive: true });
+  await assert.rejects(sealPayload(output, manifest, expanded), /Undeclared or recursively expanded dependency/);
+  assert.equal((await inspectPackagedApplication(resources, manifest.version)).status, "passed");
+});
+
+test("supplied installed resources bind all bytes to the current final artifact, not their self-declared layout", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  const resources = await archive(join(output, "win-unpacked"), {});
+  await preparedRuntimeFixture(resources);
+  await put(resources, "workspace-runtime/apps/server/pm/src/source.js", "original packaged application bytes");
+  const report = await sealPayload(output, manifest);
+  const payload = report.artifacts[0];
+  const installed = join(root, "supplied-installed-tree/resources");
+  await cp(resources, installed, { recursive: true });
+  const checked = await verifyInstalledApplication(installed, payload, manifest);
+  assert.equal(checked.sourceArtifact.sha256, manifest.artifacts[0].sha256);
+  assert.equal(checked.installationExecutedByThisCommand, false);
+  await put(installed, "workspace-runtime/apps/server/pm/src/source.js", "modified bytes outside dependency own-file inventory");
+  await assert.rejects(verifyInstalledApplication(installed, payload, manifest), /differs from the current final distributable/);
+  await assert.rejects(verifyInstalledApplication(installed, null, manifest), /current inspected final artifact digest/);
+});
+
+test("files-only transport remains valid for historical deliveries but cannot promote old win-unpacked smoke", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  await refreshVerification(output, manifest, { checks: {}, nativeSmoke: { status: "passed" }, published: false });
+  assert.equal((await verifyDelivery(output, { filesOnly: true })).target, manifest.target);
+  await assert.rejects(verifyDelivery(output), /actual final distributable payloads/);
+  await assert.rejects(verifyDelivery(output, { filesOnly: true, stage: join(root, "staged") }), /bound to this final distributable payload/);
+});
+
+test("unreferenced loose ASAR dependency copies cannot hide outside the archive inventory", async (t) => {
+  const resources = await archive(await temporary(t), {});
+  await put(resources, "app.asar.unpacked/node_modules/orphan/package.json", JSON.stringify({ name: "orphan", version: "1.0.0" }));
+  await assert.rejects(inspectPackagedApplication(resources, "0.1.0"), /Unrecorded or linked ASAR unpacked resource/);
 });

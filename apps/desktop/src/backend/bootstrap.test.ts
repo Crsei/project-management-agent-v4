@@ -9,6 +9,7 @@ import { login } from '../../../../packages/infrastructure/src/auth.ts';
 import { ManagedPostgres } from '../managed-postgres.mjs';
 import { readPrivateJson, writePrivateJson } from '../private-state.mjs';
 import { bootstrapDesktop, validateBootstrapState } from './bootstrap.ts';
+import { readCurrentCore } from '../../../../packages/pm-core/readonly.ts';
 
 const binariesDir = process.env.PM_DESKTOP_TEST_POSTGRES_ROOT;
 const setup = { email: 'desktop-smoke@example.invalid', password: `desktop-test-${randomUUID()}`, name: 'Desktop Test', workspaceName: 'Desktop Workspace' };
@@ -31,6 +32,8 @@ test('real desktop bootstrap recovers every durable account/workspace boundary w
   let result = await bootstrapDesktop({ databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup });
   assert.equal(result.initialized, true);
   const first = { ...result };
+  const sample = readCurrentCore(join(dataDir, 'pm-workspaces', first.workspaceId)).files.map(file => ({ id: file.id, raw: file.raw }));
+  assert.equal(sample.length, 27);
   const pool = createPool(started.databaseUrl, 3);
   let poolOpen = true;
   try {
@@ -50,6 +53,7 @@ test('real desktop bootstrap recovers every durable account/workspace boundary w
     assert.equal((await pool.query('SELECT count(*)::integer AS count FROM users')).rows[0].count, 1);
     assert.equal((await pool.query('SELECT count(*)::integer AS count FROM workspaces')).rows[0].count, 1);
     assert.equal((await pool.query('SELECT password_hash FROM users WHERE id=$1', [first.userId])).rows[0].password_hash, initial);
+    assert.deepEqual(readCurrentCore(join(dataDir, 'pm-workspaces', first.workspaceId)).files.map(file => ({ id: file.id, raw: file.raw })), sample);
     await pool.end();
     poolOpen = false;
     await pg.stop();

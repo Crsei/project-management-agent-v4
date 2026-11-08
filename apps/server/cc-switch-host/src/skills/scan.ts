@@ -4,7 +4,8 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { AppError } from "../errors.ts";
 import { APP_IDS, type DiscoverableSkill, type SkillMetadata, type SkillRepo } from "../types.ts";
-import { agentsSkillsDir, appSkillsDir, ssotDir } from "./paths.ts";
+import { isBound } from "../host-context.ts";
+import { agentsSkillsDir, appSkillsDir, skillStorageDir } from "./paths.ts";
 import { validateRepoRef } from "./network.ts";
 
 export interface UnmanagedSkill {
@@ -13,6 +14,11 @@ export interface UnmanagedSkill {
   description?: string;
   foundIn: string[];
   path: string;
+}
+
+export interface NativeSkillObservation extends UnmanagedSkill {
+  /** Library bookkeeping only, never a runtime-loaded or enabled observation. */
+  managed: boolean;
 }
 
 export interface SkillEntry {
@@ -223,6 +229,7 @@ export function scanUnmanaged(managedDirectories: Iterable<string>): UnmanagedSk
   const sources: Array<{ dir: string; label: string }> = [];
 
   for (const app of APP_IDS) {
+    if (!isBound(app)) continue;
     try {
       sources.push({ dir: appSkillsDir(app), label: app });
     } catch {
@@ -232,7 +239,7 @@ export function scanUnmanaged(managedDirectories: Iterable<string>): UnmanagedSk
   const agents = agentsSkillsDir();
   if (agents !== undefined) sources.push({ dir: agents, label: "agents" });
   try {
-    sources.push({ dir: ssotDir(), label: "cc-switch" });
+    sources.push({ dir: skillStorageDir(), label: "cc-switch" });
   } catch {
     // A missing SSOT root contributes nothing to the scan.
   }

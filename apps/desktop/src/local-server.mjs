@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { access, mkdir, readdir, stat } from "node:fs/promises";
 import { createServer } from "node:net";
+import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { absolutePath } from "./policy.mjs";
@@ -290,6 +291,7 @@ export class LocalServer {
           ...Object.fromEntries(["HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]])),
           HOST: "127.0.0.1", PORT: String(ports.agent),
           AGENT_WORKSPACE_API_ONLY: "1", AGENT_WORKSPACE_DATA_DIR: join(dataDir, "agent-data"),
+          AGENT_WORKSPACE_ALLOWED_ROOTS: JSON.stringify([...new Set([homedir(), join(dataDir, "projects"), projectRoot])]),
           CC_SWITCH_HOST_ENTRY: ccSwitchEntry,
           AGENT_WORKSPACE_PROJECT_ROOT: projectRoot, AGENT_WORKSPACE_WEB_DIST: this.webRoot, AGENT_WORKSPACE_ACCESS_TOKEN: this.token,
           PM_CHAT_SPACE_ROOT: join(dataDir, "chat-spaces"),

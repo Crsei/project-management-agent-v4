@@ -52,7 +52,7 @@ test("scoped subscription retains a change published before the stream starts", 
 }));
 
 test("a new instance can launch its first native status process from the private state directory", async () => isolated(async () => {
-  const context = providerContext(getStoredInstance("claude")!, process.cwd());
+  const context = providerContext(updateProviderInstance("claude", { enabled: true }), process.cwd());
   const launched = await Effect.runPromise(Effect.gen(function* () {
     const config = yield* ServerConfig;
     const child = yield* Effect.tryPromise(() => promisify(execFile)(process.execPath,
@@ -63,7 +63,7 @@ test("a new instance can launch its first native status process from the private
 }));
 
 test("host paths and environment retain native HOME and reject unknown or escaping attachments", async () => isolated(async () => {
-  const context = providerContext(getStoredInstance("codex")!, process.cwd());
+  const context = providerContext(updateProviderInstance("codex", { enabled: true }), process.cwd());
   const before = { HOME: context.env.HOME, XDG_CONFIG_HOME: context.env.XDG_CONFIG_HOME };
   const services = makePmProviderHostServices(context, makePmProviderRuntimeHost());
   const root = providerAttachmentsDirectory();
@@ -145,7 +145,7 @@ test("a failed current settings read preserves the valid seed and never publishe
 }));
 
 test("a status-first retained host admits only the currently bound generation's revocable compaction authority", async () => isolated(async () => {
-  const context = providerContext(getStoredInstance("codex")!, process.cwd());
+  const context = providerContext(updateProviderInstance("codex", { enabled: true }), process.cwd());
   assert.equal(context.execution, undefined);
   const runtimeHost = makePmProviderRuntimeHost();
   const services = makePmProviderHostServices(context, runtimeHost);
@@ -177,7 +177,7 @@ test("a status-first retained host admits only the currently bound generation's 
 }));
 
 test("background admission cannot borrow a replacement generation while its original authorization is pending", async () => isolated(async () => {
-  const context = providerContext(getStoredInstance("codex")!, process.cwd());
+  const context = providerContext(updateProviderInstance("codex", { enabled: true }), process.cwd());
   const runtimeHost = makePmProviderRuntimeHost();
   const services = makePmProviderHostServices(context, runtimeHost);
   const threadId = ThreadId.make("background-owner");

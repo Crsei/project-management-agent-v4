@@ -196,10 +196,17 @@ describe('LP-ACCEPT: isolated disk / PostgreSQL / HTTP / real Worker boundaries'
   it('LP-A04/A09: original key survives duplicate/mismatched submissions and every native/command entry requires a local directory', { timeout: localProjectCaseTimeout }, async t => {
     const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
     const prefix = `/api/v1/workspaces/${f.workspaceId}`;
-    const input: LocalProjectInitialization = { input: { entity: 'project', title: 'Exactly once' }, directory: { mode: 'new', parentPath: f.parents[0], folderName: 'once' } };
+    const input: LocalProjectInitialization = { input: { entity: 'project', title: 'Exactly once', body: 'Real project description', owner: f.owner.id, due: '2028-02-29', 'x-pm-icon': 'rocket', 'x-pm-color': '#23918A' }, directory: { mode: 'new', parentPath: f.parents[0], folderName: 'once' } };
     const key = randomUUID();
     const first = await f.request<LocalProjectAttempt>(`${prefix}/local-projects/initializations`, { method: 'POST', headers: { 'Idempotency-Key': key }, body: input });
     assert.equal(first.status, 200); assert.equal(first.body.status, 'ready');
+    assert.ok(first.body.status === 'ready');
+    assert.equal(first.body.record.entity.owner, f.owner.id);
+    assert.equal(first.body.record.entity.due, input.input.due);
+    assert.equal(first.body.record.entity['x-pm-icon'], input.input['x-pm-icon']);
+    assert.equal(first.body.record.entity['x-pm-color'], input.input['x-pm-color']);
+    assert.ok(first.body.record.raw.includes(input.input.body!));
+    assert.equal(await readFile(join(f.parents[0], 'once/.pm/core/projects', `${first.body.record.id}.md`), 'utf8'), first.body.record.raw);
     const again = await f.request<LocalProjectAttempt>(`${prefix}/local-projects/initializations`, { method: 'POST', headers: { 'Idempotency-Key': key }, body: input });
     assert.equal(again.status, 200); assert.deepEqual(again.body, first.body);
     const mismatch = await f.request(`${prefix}/local-projects/initializations`, { method: 'POST', headers: { 'Idempotency-Key': key }, body: { ...input, input: { ...input.input, title: 'Different immutable request' } } });

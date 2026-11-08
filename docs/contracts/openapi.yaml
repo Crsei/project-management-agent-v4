@@ -57851,9 +57851,12 @@ paths:
       summary: Consume the deployment token to create the first account and workspace
       security: []
       description: Strict POST JSON, no query, at most 4096 bytes. Requires a 32-byte base64url deployment token; only its
-        digest is stored. Account, workspace, explicit owner membership and completion commit atomically under a
-        singleton lock. No automatic retries or secret persistence. After any unknown result query setupStatus, then use
-        normal password login if initialized; a session failure does not reopen setup.
+        digest is stored. Account, workspace, explicit owner membership, frozen Nova sample intent and completion commit
+        atomically under a singleton lock. Real independent Markdown sample initialization finishes before success. On
+        failure identities stay committed and normal authenticated workspace listing resumes only that original pending
+        intent. No credential replay or reinitialization of existing workspaces. After an unknown result query
+        setupStatus, then use normal password login if initialized; initialization/session failure does not reopen
+        setup.
       requestBody:
         required: true
         content:
@@ -58469,7 +58472,8 @@ paths:
               $ref: "#/components/schemas/RecoverAccountSecurityAction"
   /api/v1/workspaces:
     get:
-      summary: List current memberships and workspace stream cursors
+      summary: List usable current memberships and explicit pending Nova initializations; unavailable new storage never hides
+        unrelated ready workspaces
       security:
         - sessionCookie: []
         - bearerAuth: []
@@ -58486,8 +58490,29 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Workspace"
+                  pendingInitializations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        workspaceId:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        key:
+                          anyOf:
+                            - type: string
+                              format: uuid
+                            - type: "null"
+                      required:
+                        - workspaceId
+                        - name
+                        - key
+                      additionalProperties: false
                 required:
                   - items
+                  - pendingInitializations
                 additionalProperties: false
         "400":
           description: Request rejected before a successful response. See error.code; authorization is checked against current
@@ -58532,6 +58557,215 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
       operationId: listWorkspaces
+    post:
+      summary: Create an independently owned workspace with the real editable Nova sample
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceCreationResult"
+        "400":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      operationId: createWorkspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceCreationRequest"
+      description: The required expectedActorId must match the authenticated request actor before any creation or recovery
+        side effect; a changed account returns 409 session_changed and retains the original key. Only grants that actor
+        explicit owner capabilities in this new workspace. Frozen actor/key/name/template and native creation keys
+        prevent duplicates after an unknown response. Sample files are real Markdown; no source users, ACL, credentials
+        or history are copied. An incomplete initialization returns an error, never empty success. Existing workspaces
+        and deleted ready samples are never reseeded.
+  /api/v1/workspace-creations/{key}:
+    get:
+      summary: Read the current actor’s original workspace creation without replaying it
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceCreationResult"
+        "400":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      operationId: getWorkspaceCreation
+  /api/v1/workspace-creations/{key}/recover:
+    post:
+      summary: Explicitly resume the original frozen Nova initialization; never create a replacement workspace
+      security:
+        - sessionCookie: []
+        - bearerAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceCreationResult"
+        "400":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Request rejected before a successful response. See error.code; authorization is checked against current
+            membership.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+      operationId: recoverWorkspaceCreation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceCreationRecoveryRequest"
+      description: The required expectedActorId must match the authenticated request actor before looking up or resuming the
+        original initialization. A changed account returns 409 session_changed without side effects; the original key is
+        retained.
   /api/v1/workspaces/{workspaceId}/identity:
     get:
       summary: Read presentation identity for a current authorized workspace; its version is independent of membership versions
@@ -63429,6 +63663,81 @@ components:
         - workspaceId
         - expiresAt
       additionalProperties: false
+    WorkspaceCreationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        expectedActorId:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      required:
+        - name
+        - expectedActorId
+      additionalProperties: false
+    WorkspaceCreationRecoveryRequest:
+      type: object
+      properties:
+        expectedActorId:
+          type: string
+          format: uuid
+          pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      required:
+        - expectedActorId
+      additionalProperties: false
+    WorkspaceCreationResult:
+      oneOf:
+        - type: object
+          properties:
+            status:
+              type: string
+              const: not_found
+          required:
+            - status
+          additionalProperties: false
+        - type: object
+          properties:
+            status:
+              type: string
+              const: pending
+            key:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            workspaceId:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required:
+            - status
+            - key
+            - workspaceId
+          additionalProperties: false
+        - type: object
+          properties:
+            status:
+              type: string
+              const: ready
+            key:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            workspaceId:
+              type: string
+              format: uuid
+              pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            sampleProjectId:
+              type: string
+              pattern: ^PRJ-\d+$
+          required:
+            - status
+            - key
+            - workspaceId
+            - sampleProjectId
+          additionalProperties: false
     ArtifactCopyOriginResponse:
       type: object
       properties:

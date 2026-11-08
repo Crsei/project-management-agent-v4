@@ -11,7 +11,7 @@ import { closeStore, readRecord, writeRecord } from "./durable/store.ts";
 let directory: string;
 let allowed: string;
 let repository: string;
-const keys = ["AGENT_WORKSPACE_DATA_DIR", "AGENT_WORKSPACE_ALLOWED_ROOTS", "PM_API_URL"] as const;
+const keys = ["AGENT_WORKSPACE_DATA_DIR", "AGENT_WORKSPACE_ALLOWED_ROOTS", "AGENT_WORKSPACE_PROJECT_ROOT", "HOME", "USERPROFILE", "PM_API_URL"] as const;
 let previous: Record<string, string | undefined>;
 let originalFetch: typeof fetch;
 
@@ -127,6 +127,29 @@ test("allowed-root policy is canonical and rechecked for previously registered e
   assert.equal(getAgentWorkspace(opened.id)!.status, "unavailable");
   process.env.AGENT_WORKSPACE_ALLOWED_ROOTS = "not-json";
   rejectsCode(() => browseAgentDirectories(), "workspace_roots_invalid");
+});
+
+test("explicit project-parent roots work outside Home without trusting a legacy project-root hint", async () => {
+  const home = path.join(directory, "home");
+  const outside = path.join(directory, "allowed-other");
+  await mkdir(home);
+  await mkdir(outside);
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  process.env.AGENT_WORKSPACE_PROJECT_ROOT = allowed;
+  delete process.env.AGENT_WORKSPACE_ALLOWED_ROOTS;
+  assert.deepEqual(browseAgentDirectories().roots, [home]);
+  rejectsCode(() => openAgentWorkspace({ path: repository }), "directory_not_allowed");
+  process.env.AGENT_WORKSPACE_ALLOWED_ROOTS = JSON.stringify([home, allowed]);
+  const opened = openAgentWorkspace({ path: repository });
+  assert.equal(opened.status, "available");
+  assert.equal(resolveAgentWorkspaceExecution(selection(opened)).path, repository);
+  assert.equal(browseAgentDirectories(allowed).parentPath, null);
+  rejectsCode(() => openAgentWorkspace({ path: outside }), "directory_not_allowed");
+  const escape = path.join(allowed, "outside-link");
+  await symlink(outside, escape, process.platform === "win32" ? "junction" : "dir");
+  rejectsCode(() => openAgentWorkspace({ path: escape }), "directory_not_allowed");
+  assert.equal(browseAgentDirectories(allowed).directories.some(entry => entry.name === "outside-link"), false);
 });
 
 test("server browsing returns only canonical allowed directories and never climbs above an allowed root", async () => {

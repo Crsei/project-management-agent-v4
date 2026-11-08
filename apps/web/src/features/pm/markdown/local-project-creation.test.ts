@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defaultConfiguration, entityKinds, type FileRecord } from '../../../../../../packages/pm-schema/index.ts';
-import { applyLocalProjectResult, creationComplete, creationRequest, decodeCreationDrafts, editCreationDraft, newCreationDraft, prepareCreationAttempt } from './creation-model.ts';
+import { applyLocalProjectResult, creationComplete, creationFieldIssues, creationRequest, decodeCreationDrafts, editCreationDraft, newCreationDraft, prepareCreationAttempt } from './creation-model.ts';
 import { createCreationStore } from './creation-store.ts';
 
 const record: FileRecord = { id: 'PRJ-001', path: 'project-roots/PRJ-001/core/projects/PRJ-001.md', revision: 'revision-1', raw: '# Real project\n', entity: { schema: 'pm/v1', entity: 'project', id: 'PRJ-001', title: 'Real project', body: '', blocked_by: [], related_to: [], labels: [], links: [], checklist: [], views: [] } };
@@ -16,6 +16,9 @@ test('refresh preserves the exact project directory, input and key and never rel
   assert.deepEqual(restored.attempt!.request, request);
   assert.equal(restored.attempt!.request['x-pm-icon'], 'rocket');
   assert.equal(restored.attempt!.request['x-pm-color'], '#23918A');
+  assert.equal(restored.attempt!.request.owner, 'owner');
+  assert.equal(restored.attempt!.request.due, '2026-11-01');
+  assert.equal(restored.attempt!.request.body, 'Original description');
   assert.deepEqual(restored.attempt!.localDirectory, draft.localDirectory);
   for (const result of [{ status: 'not_found' as const }, { status: 'pending' as const, key: 'original-key', operation: 'initialize' as const, reason: 'storage_pending' as const }]) {
     const reconciled = applyLocalProjectResult(restored.attempt!, result);
@@ -24,6 +27,7 @@ test('refresh preserves the exact project directory, input and key and never rel
     assert.deepEqual(reconciled.request, request);
     assert.deepEqual(reconciled.localDirectory, draft.localDirectory);
     assert.throws(() => editCreationDraft({ ...restored, attempt: reconciled }, { body: 'replacement' }), /frozen/);
+    assert.throws(() => editCreationDraft({ ...restored, attempt: reconciled }, { localDirectory: { mode: 'existing', path: 'C:\\different-project' } }), /frozen/);
   }
 });
 
@@ -60,4 +64,32 @@ test('all nine entity kinds keep native field mapping and project folder inputs 
     assert.equal(request.body, 'Markdown body');
     assert.equal(request.localDirectory, undefined);
   }
+});
+
+test('project lead and target date remain in the native input for both supported Windows save modes', () => {
+  const draft = newCreationDraft('windows-project', defaultConfiguration, { entity: 'project' });
+  const values = { ...draft.values, title: 'Windows project', owner: 'authorized-lead', due: '2028-02-29', 'x-pm-icon': 'target', 'x-pm-color': '#3B82C4' };
+  assert.deepEqual(creationFieldIssues('project', values, defaultConfiguration), []);
+  for (const directory of [{ mode: 'new' as const, parentPath: 'C:\\Projects', folderName: '计划' }, { mode: 'existing' as const, path: 'D:\\Existing project' }]) {
+    const request = creationRequest('project', values, 'Actual Markdown description', defaultConfiguration);
+    const attempt = { ...prepareCreationAttempt(request, `windows-${directory.mode}`), phase: 'sending' as const, localDirectory: directory };
+    const restored = decodeCreationDrafts(JSON.stringify({ [draft.draftId]: { ...draft, values, body: request.body, localDirectory: directory, attempt } }))[draft.draftId]!;
+    assert.equal(restored.attempt!.request.owner, values.owner);
+    assert.equal(restored.attempt!.request.due, values.due);
+    assert.equal(restored.attempt!.request['x-pm-icon'], values['x-pm-icon']);
+    assert.equal(restored.attempt!.request['x-pm-color'], values['x-pm-color']);
+    assert.deepEqual(restored.attempt!.localDirectory, directory);
+    assert.equal(restored.attempt!.request.localDirectory, undefined);
+    assert.equal(restored.attempt!.phase, 'unknown');
+  }
+});
+
+test('project optional fields may be cleared without invented lead, date, icon or color', () => {
+  const draft = newCreationDraft('blank-project', defaultConfiguration, { entity: 'project' });
+  const values = { ...draft.values, title: 'Only a name', owner: null, due: null, 'x-pm-icon': null, 'x-pm-color': null };
+  assert.deepEqual(creationFieldIssues('project', values, defaultConfiguration), []);
+  const request = creationRequest('project', values, '', defaultConfiguration);
+  for (const field of ['owner', 'due', 'x-pm-icon', 'x-pm-color']) assert.equal(Object.hasOwn(request, field), false);
+  assert.ok(creationFieldIssues('project', { ...values, due: '2027-02-29' }, defaultConfiguration).some(issue => issue.field === 'due'));
+  assert.ok(creationFieldIssues('project', { ...values, title: '' }, defaultConfiguration).some(issue => issue.field === 'title'));
 });

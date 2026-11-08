@@ -6,6 +6,14 @@
 
 ### 产品与架构
 
+- 修复桌面／Web 新建项目原生模态框中的下拉菜单失效：负责人和保存模式菜单留在模态框内；目标日期提供选择入口，字段区分必填／可选，目录草稿不会被延迟回读覆盖。
+- 新 Codex／Claude 配置入口默认未启用、不自动选择模型；Codex 原生 Home 证明接受经文件系统核验的同目录别名，保留不同 Home 拒绝与重启续接校验。
+- Agent 设置限制正文滚动范围；PM → Agent 显示加载、取消与失败重试。桌面本地工作区提供原生目录选择，允许根与服务器核验保持一致。
+- MCP／Skills 刷新新增的已启用 Provider，独立上下文可切换；已保存配置只核验原选定归属，最新目标列表单独读取，无关外部宿主登记不再阻止进入，也不自动扩张或重绑其权限，所选失效与真实冲突仍拒绝。本机原生 Skills 单独只读列出并可明确纳入管理，不自动分配或执行。远程／自定义 OpenCode 无法绑定本机目录时显示原因。
+- 原生 Skill 纳入管理固定原选目录与文件身份，保留安全的根／内部别名，拒绝越界链接、循环和无法核验的 Windows reparse；私有暂存及复核后再发布副本和登记来源，不改原生部署复制语义或新增权限。
+- 首次建号与明确新建工作区初始化独立、可编辑的 Nova 示例模板；27 个真实 Markdown 对象重映射 ID 与关系，不复制来源用户、权限、凭据或历史。迁移 `0052_workspace_samples.sql` 保存原初始化意图，增量 `0053_workspace_sample_storage.sql` 保存目录身份与初始化阶段：已证明的同目录 `prestate` 可续接，未知且没有合法 state 的目录、身份替换、已建立 state 丢失及尚未提交所有权的建目录中断均拒绝自动接管／重种；已有工作区不补种，未完成的新工作区不阻断其他可用工作区，readiness 不遗漏禁用本地项目目录时的既有核心权威。
+- 工作区创建／恢复在服务端强制核对必填 `expectedActorId` 与实际认证主体，不匹配在副作用前返回 `409 session_changed`；前端保留原键、先查原结果，并在卸载、已观察到的会话变化或最新账号核验不匹配后停止跟进。不是新增权限或会话／持久化统一设计收口。
+
 - 统一 PM 与 Agent Chat 入口、Provider、会话和运行时；Markdown 核心拥有项目/任务/正式关系，PostgreSQL 保存 PM 附加事实，Agent SQLite 保存聊天及运行附属记录。
 - Agent Chat 改为独立“文件夹 → Sessions”：打开服务器已有绝对路径，一个 Agent Workspace 对应一个目录，不再绑定 PM 工作区／项目。移除 Code Workspace 多根组合、登记页及 PM API；目录身份归 Agent SQLite，元数据重命名／关闭／重开不改绑 Sessions。Files、Git、Skills、Provider 与终端共用执行目录核验，禁止 PM 文档及父 Git 仓库回退。
 - 终端改为服务内稳定 PTY：Workspace 与 Session 两种范围、统一右侧／底部停靠、重附着、有界回放、创建与输入去重及目录身份复核；服务重启后不恢复进程或重放命令。终端复用 Provider 原生环境过滤规则，不继承服务端 PM／Agent 凭据。
@@ -27,6 +35,7 @@
 - Agent Chat 的 Browser surface 改为 t3code 单行浏览器工具栏（后退/前进/刷新、地址栏、元素选择/截图/浮层/菜单）和“最近使用”入口；地址栏 Enter 打开 URL，非 URL 文本在新标签页搜索。修复 iframe 沙箱缺少 `allow-same-origin` 导致跨域 SPA 的模块脚本和样式被 CORS 拦截而白屏的问题；同源地址明确阻止预览并引导新标签页。最近记录仅保存在浏览器 localStorage，可删除或清空；跨域页面不提供元素选择、截图和浮层。
 - 桌面版新增受控 Electron `<webview>` Browser runtime：工作区 preload 仅暴露预览 IPC，主进程管理独立 preview partition、导航/标题/favicon、截图、元素选择与只读 PiP 帧流；元素选择和截图作为图片附件加入 Composer，Browser 标签标题跟随页面标题。工作区窗口启用受 `will-attach-webview` 校验的 `webviewTag`，连接窗口、guest 的 Node 能力和工作区 session 隔离保持不变；原生预览仅本地工作区启用，远程工作区继续 iframe fallback。
 - 桌面 Browser 元素选择在主框架导航时立即取消，子框架导航不误取消；关闭其他 Browser 标签不会关闭当前标签的 PiP。
+- 桌面连接入口改为 Dovspace 中文三步引导：选择本地/远程、设置账号或服务地址、进入工作台；统一暖灰/陶土视觉、深浅主题和窄屏布局。目录配置收进高级设置，备份恢复移入独立数据管理页；保留连接中的操作锁、密码清理、失败后断开和原始诊断，不改变 IPC、账号创建、目录校验或持久化格式。桌面页面属于随包资源，不是公共 Web 路由。
 - Agent Chat 设置移除“本机服务”分组及诊断、数据与存储两个页面与路由；服务端诊断/存储读取接口保留，Agent 数据目录改由 `AGENT_WORKSPACE_DATA_DIR` 配置读取。
 - Agent Chat 与 PM 共用同一表层规格：暖中性侧栏配白色正文与顶栏、12/16 元数据与 13/20 控件文字、30/36 导航密度、48px 顶栏、6px 控件圆角与实心危险按钮、暖陶土选中态，以及 PM 的信息蓝 / Agent 紫和低饱和图表序列；聊天阅读轴、双行会话与 Composer 结构保持独立。
 - 错误页的状态图标与 HTTP 状态码改为纵向分离布局，避免图标徽标与数字重叠；紧凑模式按比例收紧间距。
@@ -40,7 +49,10 @@
 - 修复 Claude 外部 CLI 交付边界：保留通信 SDK 与完整资源，但按包身份排除 SDK 的平台 CLI 执行包，并覆盖 Agent、自有桌面打包及独立 `pnpm deploy`／容器闭包；缺失或无效的用户 Claude 路径明确失败，不改用内置 CLI。保留 Cursor SDK 引擎／原生工具、SQLite、PTY，以及 Codex / Antigravity managed 和 ACP 原生安装语义；不宣称所有 Provider 都已切换为外部 CLI。
 - 按只读 t3code 发布工作流与近期实际 stable/nightly assets 补齐本项目桌面交付设计；默认只构建 Windows x64 unsigned，不移植上游 CLI、便携版、自动更新/nightly、relay/mobile 或发布账号。最终 app.asar、unpacked 与受管 runtime 复用外部 Claude CLI 包身份检查；发行集增加准确源码/版本身份、对应源码与最终许可材料、非自引用 SHA256SUMS 和分层验证报告，Actions 只上传精确校验的完整材料。材料收集/测试包不代表签名、GUI、真实安装或正式分发授权通过，见[发布设计](docs/reference/desktop-release-alignment-2026-11-08.zh.md)与[Windows 操作手册](docs/reference/windows-build-runbook.zh.md)。
 - 加固发行材料的派生边界：源码根及全部祖先复用现有安全目录/文件句柄检查，拒绝内部 symlink/junction、身份漂移和构建期间公开选集变化；dirty 由实际字节/模式与固定 HEAD 对象比较，不能被 assume-unchanged 隐藏。legal 目录复制后按自身根重新检查链接，成品 ASAR 摘要必须匹配原验证报告，不能用同名称/版本的另一份归档替换。
-- 桌面依赖改为 PM、Agent、Electron 各自独立的物理生产 `node_modules`，保留版本/peer 上下文、完整包资源和 Agent Effect 4.0.5 单实例，不跨闭包按 hash 删包。成品门禁需全功能 7-Zip，检查实际 NSIS 内层 payload 与 macOS DMG/ZIP 的依赖图、资源摘要及文件数/逻辑字节；`--native-smoke` 改用最终提取资源，`--installed-resources` 可将所供资源树精确绑定当前发行文件。控制器仍来自构建检出，均不代替安装/升级/卸载或 Electron GUI；当前没有获准原生主机/远端任务，不宣称新安装器体积或原生验收结果，详见[桌面指南](docs/guides/desktop.md)。
+- Windows 桌面源码捕获/复核增加祖先及选集的有界原生属性预热（每批至多 256 路径 / 128 KiB），保留逐文件身份/时间戳、reparse、TOCTOU、SHA256、Git dirty 身份及最终发行门禁；UNC/不规范根及设备名/尾点组件在预热 I/O 前拒绝。打包新增独立于 manifest 的阶段 start/end/failure、真实属性进程次数/耗时、文件/字节及缓存命中率记录；显式 benchmark 使用精确冻结旧模块、相同 helper/依赖及同输入新进程比较，不在每次原生 CI 中重复慢旧路径。新增 Windows 真实 helper 回归覆盖预热后替换/正文/junction、批次边界和安全多文件捕获；本轮 Linux 最终受影响 32 项、此前未受影响 blobs 10 项通过与 12 文件等价 smoke 均不是 Windows 提速或原生验收，后端隔离编译仍有既有错误，尚无新的原生执行/Actions 结果，详见[计时与证据边界](docs/guides/desktop.md#源码捕获计时与-windows-回归)。
+- 对应源码补齐根 `turbo.json`：Git 与 gitless 选集、内容清单、实际源码归档和构建后复核统一保留该构建配置，修改或移除仍拒绝交付；私有路径与生成物排除规则不变。
+- 桌面依赖改为 PM、Agent、Electron 各自独立的物理生产 `node_modules`，保留版本/peer 上下文、完整包资源和 Agent Effect 4.0.5 单实例，不跨闭包按 hash 删包。成品门禁需全功能 7-Zip，检查实际 NSIS 内层 payload 与 macOS DMG/ZIP 的依赖图、资源摘要及文件数/逻辑字节；`--native-smoke` 改用最终提取资源，`--installed-resources` 可将所供资源树精确绑定当前发行文件。控制器仍来自构建检出，均不代替安装/升级/卸载或 Electron GUI；本轮最新授权覆盖所有当前可公开源码更新，以主分支既有修复和性能优化为准，先集成审阅增量并在主分支源码上测试，有实际问题先修复并复验；门禁通过并冻结后精确提交、公开推送并只手动触发一次 Windows-only unsigned 构建，不下载安装器或发行材料。授权不是成功证据，不宣称尚未实测的新安装器体积或原生验收结果，详见[桌面指南](docs/guides/desktop.md)。
+  随包 `jp` / `yaml` 的 PowerShell 命令桥接在 Windows 显式查找 `node.exe`，启动失败返回非零并保留实际 Node 退出码，不再把未启动命令误报为成功。
 - 原生安装包工作流支持只运行 Windows x64，不启动 macOS Job；修复 MSVC 链接器帮助返回 1100 时被构建预检误报为缺失，仍拒绝缺失工具、真正链接错误和无效帮助输出。
 - 桌面预览回归移除把预加载文件 URL 写死为 POSIX 路径的断言，保留导航归一化、分区与权限行为检查，避免 Windows 正确的驱动器路径被误判。
 - Windows 原生辅助程序清单按实际平台记录规范文件模式，不再要求不存在的 POSIX 执行位；文件哈希、大小、模式、目标平台与资源闭包校验保持启用。

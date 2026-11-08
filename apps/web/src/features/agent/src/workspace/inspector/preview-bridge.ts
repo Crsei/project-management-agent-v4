@@ -36,6 +36,8 @@ export type PreviewPickedElement = {
 
 export type PreviewOpenLink = { tabId: string; url: string };
 
+export type DesktopDirectoryBridge = { choose: () => Promise<string | null> };
+
 export type DesktopPreviewBridge = {
   state: (tabId: string) => Promise<PreviewState | null>;
   createTab: (tabId: string, options?: { url?: string }) => Promise<{ partition: string; preload: string; state: PreviewState }>;
@@ -70,10 +72,15 @@ declare global {
   interface Window {
     desktopWorkspace?: {
       preview?: DesktopPreviewBridge;
+      directories?: DesktopDirectoryBridge;
     };
   }
 }
 
 export function desktopPreviewBridge(): DesktopPreviewBridge | null {
   return typeof window === "undefined" ? null : window.desktopWorkspace?.preview ?? null;
+}
+
+export function desktopDirectoryBridge(): DesktopDirectoryBridge | null {
+  return typeof window === "undefined" ? null : window.desktopWorkspace?.directories ?? null;
 }

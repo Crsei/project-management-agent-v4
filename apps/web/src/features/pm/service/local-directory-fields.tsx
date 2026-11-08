@@ -15,12 +15,18 @@ export function LocalDirectoryFields({ value, defaultParent, disabled, existingO
   const initialDirectory = (): LocalDirectory => value ?? (existingOnly ? { mode: 'existing', path: defaultParent ?? '' } : { mode: 'new', parentPath: defaultParent ?? '', folderName: '' });
   const [directory, setDirectory] = useState<LocalDirectory>(initialDirectory);
   const editing = useRef(false);
+  const pending = useRef<string | null>(null);
   useEffect(() => {
-    // Creation drafts persist under an asynchronous cross-tab lock. Do not let
-    // delayed acknowledgements reset the native input between keystrokes.
-    if (!editing.current || disabled) setDirectory(value ?? (existingOnly ? { mode: 'existing', path: defaultParent ?? '' } : { mode: 'new', parentPath: defaultParent ?? '', folderName: '' }));
+    // Ignore delayed draft acknowledgements for earlier keystrokes or mode
+    // selections; a frozen request always replaces the editable local value.
+    const next = value ?? (existingOnly ? { mode: 'existing' as const, path: defaultParent ?? '' } : { mode: 'new' as const, parentPath: defaultParent ?? '', folderName: '' });
+    if (!disabled && pending.current !== null && JSON.stringify(next) !== pending.current) return;
+    pending.current = null;
+    if (!editing.current || disabled) setDirectory(next);
   }, [value, defaultParent, existingOnly, disabled]);
   function change(directory: LocalDirectory) {
+    if (disabled) return;
+    pending.current = JSON.stringify(directory);
     setDirectory(directory);
     onChange(directory);
   }
@@ -35,15 +41,15 @@ export function LocalDirectoryFields({ value, defaultParent, disabled, existingO
   }
   return <fieldset className="local-directory-fields" disabled={disabled}>
     <legend>{t('服务器上的项目文件夹', 'Project folder on the server')}</legend>
-    {!existingOnly && <label>{t('保存模式', 'Save mode')}<RadixSelect aria-label={t('保存模式', 'Save mode')} value={directory.mode} onChange={event => change(event.target.value === 'existing' ? { mode: 'existing', path } : { mode: 'new', parentPath: path, folderName: '' })}>
+    {!existingOnly && <label>{t('保存模式（必填）', 'Save mode (required)')}<RadixSelect name="local-project-save-mode" data-testid="local-project-save-mode" aria-label={t('保存模式', 'Save mode')} value={directory.mode} disabled={disabled} required onChange={event => change(event.target.value === 'existing' ? { mode: 'existing', path } : { mode: 'new', parentPath: path, folderName: '' })}>
       <option value="new">{t('在父目录下新建文件夹', 'New subfolder in a parent directory')}</option>
       <option value="existing">{t('使用已有目录（保留原文件）', 'Use an existing directory (preserve files)')}</option>
     </RadixSelect></label>}
-    <label>{directory.mode === 'existing' ? t('已有目录绝对路径', 'Existing directory absolute path') : t('父目录绝对路径', 'Parent directory absolute path')}
-      <input aria-label={directory.mode === 'existing' ? t('已有目录绝对路径', 'Existing directory absolute path') : t('父目录绝对路径', 'Parent directory absolute path')} value={path} maxLength={4096} autoComplete="off" spellCheck={false} onFocus={() => { editing.current = true; }} onBlur={() => { editing.current = false; }} onChange={event => change(directory.mode === 'existing' ? { mode: 'existing', path: event.target.value } : { ...directory, parentPath: event.target.value })} />
+    <label>{directory.mode === 'existing' ? t('已有目录绝对路径（必填）', 'Existing directory absolute path (required)') : t('父目录绝对路径（必填）', 'Parent directory absolute path (required)')}
+      <input aria-label={directory.mode === 'existing' ? t('已有目录绝对路径', 'Existing directory absolute path') : t('父目录绝对路径', 'Parent directory absolute path')} value={path} required disabled={disabled} maxLength={4096} autoComplete="off" spellCheck={false} onFocus={() => { editing.current = true; }} onBlur={() => { editing.current = false; }} onChange={event => change(directory.mode === 'existing' ? { mode: 'existing', path: event.target.value } : { ...directory, parentPath: event.target.value })} />
     </label>
-    {directory.mode === 'new' && <label>{t('新文件夹名称', 'New folder name')}<input aria-label={t('新文件夹名称', 'New folder name')} value={directory.folderName} maxLength={255} autoComplete="off" onFocus={() => { editing.current = true; }} onBlur={() => { editing.current = false; }} onChange={event => change({ ...directory, folderName: event.target.value })} /></label>}
-    <button type="button" className="secondary-button local-button" onClick={() => { setBrowsePath(undefined); setBrowsing(true); }}>{t('浏览已授权文件夹', 'Browse authorized folders')}</button>
+    {directory.mode === 'new' && <label>{t('新文件夹名称（必填）', 'New folder name (required)')}<input aria-label={t('新文件夹名称', 'New folder name')} value={directory.folderName} required disabled={disabled} maxLength={255} autoComplete="off" onFocus={() => { editing.current = true; }} onBlur={() => { editing.current = false; }} onChange={event => change({ ...directory, folderName: event.target.value })} /></label>}
+    <button type="button" className="secondary-button local-button" disabled={disabled} onClick={() => { setBrowsePath(undefined); setBrowsing(true); }}>{t('浏览已授权文件夹', 'Browse authorized folders')}</button>
     <p className="local-hint">{t('这是运行本地服务的主机路径，不是浏览器上传文件夹。输入路径不会扩大服务端授权根范围；符号链接和路径逃逸由服务端拒绝。', 'This is a path on the local service host, not a browser folder upload. Typing a path never expands server-authorized roots; the server rejects symlinks and escapes.')}</p>
     {browsing && <section className="local-directory-browser" aria-label={t('受限主机目录浏览器', 'Restricted host directory browser')}>
       <div className="local-actions"><strong>{t('文件夹', 'Folders')}</strong><button type="button" className="secondary-button local-button" onClick={() => setBrowsing(false)}>{t('关闭浏览', 'Close browser')}</button></div>

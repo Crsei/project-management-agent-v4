@@ -3,18 +3,19 @@ import { createHash } from "node:crypto";
 import { closeSync, constants, createReadStream, createWriteStream, fstatSync, lstatSync, openSync, readFileSync } from "node:fs";
 import { chmod, copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
+import { performance } from "node:perf_hooks";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { create as createTar } from "tar";
 import { desktopRoot, hashFile } from "./runtime-manifest.mjs";
-import { fileStamp, GuardedDirectory, sameFileIdentity } from "../../../packages/pm-core/platform.ts";
-import { assertNoWindowsReparsePath } from "../../../packages/pm-core/windows-reparse.ts";
+import { assertCanonicalAbsolute, fileStamp, GuardedDirectory, safeRelativePath, sameFileIdentity } from "../../../packages/pm-core/platform.ts";
+import { assertNoWindowsReparsePath, cacheWindowsPathAttributes, getWindowsPathAttributeMetrics } from "../../../packages/pm-core/windows-reparse.ts";
 import { inspectDeployment } from "./stage-workspace.mjs";
 
 const execute = promisify(execFile);
 export const repository = resolve(desktopRoot, "../..");
 const publicRoots = ["apps", "packages", "vendor", "scripts", "tests", "patches", "deploy", "docs", ".github", ".agents"];
-const publicFiles = ["README.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md", "LICENSE", "LICENSE.t3code", "THIRD_PARTY_NOTICES.md", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".node-version", ".gitattributes", ".gitignore", ".dockerignore", "eslint.config.mjs", "tsconfig.base.json", "tsconfig.backend.json", "tsconfig.check.json", "tsconfig.agent.json"];
+const publicFiles = ["README.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md", "LICENSE", "LICENSE.t3code", "THIRD_PARTY_NOTICES.md", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "turbo.json", ".node-version", ".gitattributes", ".gitignore", ".dockerignore", "eslint.config.mjs", "tsconfig.base.json", "tsconfig.backend.json", "tsconfig.check.json", "tsconfig.agent.json"];
 // Explicitly reviewed new public files, not an archive of every untracked file.
 const additions = [
   "apps/server/agent/scripts/external-agent-packages.mjs",
@@ -22,6 +23,7 @@ const additions = [
   "apps/desktop/scripts/packaged-application.mjs",
   "apps/desktop/scripts/release-materials.mjs",
   "apps/desktop/scripts/release-materials.test.mjs",
+  "apps/desktop/scripts/source-capture-benchmark.mjs",
   "apps/desktop/scripts/verify-delivery.mjs",
   "docs/reference/desktop-release-alignment-2026-11-08.zh.md",
   "docs/reference/windows-build-runbook.zh.md",
@@ -39,6 +41,28 @@ const json = (value) => JSON.stringify(value, null, 2) + "\n";
 const exists = async (path) => lstat(path).catch((error) => { if (error.code === "ENOENT") return null; throw error; });
 async function git(root, args) {
   return (await execute("git", args, { cwd: root, encoding: "utf8", windowsHide: true, maxBuffer: 32 * 1024 * 1024 })).stdout;
+}
+// Structured, path-free phase records are independent of release manifests:
+// timing is diagnostic evidence, never a substitute for an integrity check.
+export async function observePackagingPhase(phase, action, { onMetrics, counts } = {}) {
+  const before = getWindowsPathAttributeMetrics();
+  const started = performance.now();
+  const context = { scope: "desktop-package", phase, platform: process.platform, arch: process.arch };
+  console.log(JSON.stringify({ ...context, status: "start" }));
+  let status = "failure";
+  try {
+    const result = await action();
+    status = "end";
+    return result;
+  } finally {
+    const after = getWindowsPathAttributeMetrics();
+    const native = Object.fromEntries(Object.keys(before).map((key) => [key, after[key] - before[key]]));
+    // Repeated guard checks count as lookups; the denominator is not unique files.
+    const lookups = native.cacheHits + native.cacheMisses;
+    const result = { ...context, status, elapsedMs: performance.now() - started, ...counts, nativeCallScope: "windows-path-attributes", ...native, cacheHitRate: lookups ? native.cacheHits / lookups : null };
+    console.log(JSON.stringify(result));
+    onMetrics?.(result);
+  }
 }
 
 export function validateSource(source) {
@@ -75,6 +99,33 @@ async function headSourceFiles(root, commit) {
 }
 
 const sourceMode = (info, recorded) => process.platform === "win32" && recorded !== undefined ? recorded : info.mode & 0o111n ? 0o755 : 0o644;
+// Prewarming is only a cache hint. Every guarded traversal and per-file before/
+// after check still runs, and a changed identity/stamp still forces a native query.
+function prewarmSourcePaths(root, paths = []) {
+  if (process.platform !== "win32") return;
+  // Apply the same platform gates as guarded traversal before even metadata I/O.
+  assertCanonicalAbsolute(root);
+  if (paths.some((path) => !safeRelativePath(path))) throw new Error("Unsafe source path component.");
+  const directories = new Set();
+  const ancestors = (location) => {
+    for (let current = location; ; current = dirname(current)) {
+      if (directories.has(current)) break;
+      directories.add(current);
+      if (dirname(current) === current) break;
+    }
+  };
+  ancestors(root);
+  const filenames = paths.map((path) => join(root, path));
+  for (const filename of filenames) ancestors(dirname(filename));
+  const ordered = [...directories].sort((left, right) => left.length - right.length || left.localeCompare(right));
+  cacheWindowsPathAttributes(ordered);
+  for (const directory of ordered) {
+    const info = lstatSync(directory, { bigint: true });
+    assertNoWindowsReparsePath(directory, info);
+    if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Source ancestor must be a real directory without a symlink or junction.");
+  }
+  cacheWindowsPathAttributes(filenames);
+}
 
 async function withSourceFile(root, path, consume) {
   const directories = [root];
@@ -117,10 +168,11 @@ async function withSourceFile(root, path, consume) {
 async function snapshotFiles(directory, prefix = "") {
   const result = [];
   directory.assertCurrent();
-  for (const name of (await readdir(directory.path())).sort()) {
+  const names = (await readdir(directory.path())).sort().filter((name) => publicSourcePath(prefix ? `${prefix}/${name}` : name));
+  if (process.platform === "win32") cacheWindowsPathAttributes(names.map((name) => directory.path(name)));
+  for (const name of names) {
     const path = prefix ? `${prefix}/${name}` : name;
-    if (!publicSourcePath(path)) continue;
-    const info = lstatSync(directory.path(name));
+    const info = lstatSync(directory.path(name), { bigint: true });
     if (info.isSymbolicLink()) throw new Error("Source directory contains a symlink or junction.");
     if (info.isDirectory()) {
       const child = new GuardedDirectory(directory.path(name));
@@ -134,8 +186,16 @@ async function snapshotFiles(directory, prefix = "") {
   return result;
 }
 
-export async function captureSource(destination, root = repository) {
-  root = resolve(root);
+export async function captureSource(destination, root = repository, { onMetrics } = {}) {
+  const counts = { files: 0, bytes: 0 };
+  return observePackagingPhase("captureSource", async () => {
+    root = resolve(root);
+    prewarmSourcePaths(root);
+    return captureSourceFiles(destination, root, counts);
+  }, { onMetrics, counts });
+}
+
+async function captureSourceFiles(destination, root, counts) {
   const directory = new GuardedDirectory(root);
   try {
     const hasGit = await exists(join(root, ".git"));
@@ -159,6 +219,7 @@ export async function captureSource(destination, root = repository) {
         throw new Error("Snapshot contains missing or unrecorded public source files; refusing an ambiguous build identity.");
     }
     directory.assertCurrent();
+    prewarmSourcePaths(root, paths);
     await mkdir(destination, { recursive: true });
     const files = [];
     for (const path of paths) {
@@ -181,6 +242,8 @@ export async function captureSource(destination, root = repository) {
           return { record: { path, bytes: Number(info.size), mode, sha256: sha256.digest("hex") }, blob: gitBlob?.digest("hex") };
         });
         files.push(record);
+        counts.files++;
+        counts.bytes += record.bytes;
         if (hasGit && (head.get(path)?.blob !== blob || head.get(path)?.mode !== (record.mode === 0o755 ? "100755" : "100644")))
           source.dirty = true;
       } catch (cause) {
@@ -198,9 +261,17 @@ export async function captureSource(destination, root = repository) {
   } finally { directory.close(); }
 }
 
-export async function requireUnchangedSource(source, root = repository) {
-  validateSource(source);
-  root = resolve(root);
+export async function requireUnchangedSource(source, root = repository, { onMetrics } = {}) {
+  const counts = { files: 0, bytes: 0 };
+  return observePackagingPhase("requireUnchangedSource", async () => {
+    validateSource(source);
+    root = resolve(root);
+    prewarmSourcePaths(root);
+    return checkUnchangedSource(source, root, counts);
+  }, { onMetrics, counts });
+}
+
+async function checkUnchangedSource(source, root, counts) {
   const directory = new GuardedDirectory(root);
   try {
     const hasGit = await exists(join(root, ".git"));
@@ -218,6 +289,7 @@ export async function requireUnchangedSource(source, root = repository) {
       return modes;
     };
     const modes = await checkSelection();
+    prewarmSourcePaths(root, source.files.map((file) => file.path));
     for (const file of source.files) {
       try {
         await withSourceFile(directory, file.path, async (fd, info) => {
@@ -226,6 +298,8 @@ export async function requireUnchangedSource(source, root = repository) {
           if (Number(info.size) !== file.bytes || sourceMode(info, hasGit ? modes.get(file.path) : file.mode) !== file.mode || hash.digest("hex") !== file.sha256)
             throw new Error("Source content changed.");
         });
+        counts.files++;
+        counts.bytes += file.bytes;
       } catch (cause) { throw new Error(`Source changed while packaging: ${file.path}`, { cause }); }
     }
     await checkSelection();
@@ -287,15 +361,15 @@ export async function refreshVerification(output, manifest, verification) {
   manifest.materials.push(await fileRecord(output, "desktop-verification.json"));
   manifest.materials.sort((left, right) => left.path.localeCompare(right.path, "en"));
   await writeFile(join(output, "desktop-package.json"), json(manifest));
-  await checksumDelivery(output, manifest);
+  await observePackagingPhase("checksumDelivery", () => checksumDelivery(output, manifest));
 }
 
 export async function writeReleaseMaterials({ output, resources, platform, sourceRoot, source, legalRoot, manifest, verification }) {
   await mkdir(output, { recursive: true });
-  await createTar({ cwd: sourceRoot, gzip: true, portable: true, file: join(output, "desktop-source.tar.gz") }, [...source.files.map((file) => file.path), "desktop-source.json"]);
+  await observePackagingPhase("archiveSource", () => createTar({ cwd: sourceRoot, gzip: true, portable: true, file: join(output, "desktop-source.tar.gz") }, [...source.files.map((file) => file.path), "desktop-source.json"]));
   await writeFile(join(output, "desktop-source.json"), json(source));
-  await collectLegal(resources, platform, legalRoot);
-  await createTar({ cwd: legalRoot, gzip: true, portable: true, file: join(output, "desktop-legal.tar.gz") }, ["."]);
+  await observePackagingPhase("collectLegal", () => collectLegal(resources, platform, legalRoot));
+  await observePackagingPhase("archiveLegal", () => createTar({ cwd: legalRoot, gzip: true, portable: true, file: join(output, "desktop-legal.tar.gz") }, ["."]));
   const notices = await readFile(join(repository, "THIRD_PARTY_NOTICES.md"), "utf8");
   const openBlockers = [...notices.matchAll(/^\| ([A-Z][A-Z-]+) \| OPEN \|/gm)].map((match) => match[1]);
   const result = {
@@ -314,7 +388,7 @@ export async function writeReleaseMaterials({ output, resources, platform, sourc
       imageOS: process.env.ImageOS ?? null, imageVersion: process.env.ImageVersion ?? null,
     } : null,
     releaseAuthorization: { status: "not-authorized", openBlockers, published: false, note: "Test delivery only. Checksums and source/legal materials do not grant public distribution or close third-party license/source obligations." },
-    materials: await Promise.all(["desktop-source.tar.gz", "desktop-source.json", "desktop-legal.tar.gz"].map((name) => fileRecord(output, name))),
+    materials: await observePackagingPhase("recordReleaseMaterials", () => Promise.all(["desktop-source.tar.gz", "desktop-source.json", "desktop-legal.tar.gz"].map((name) => fileRecord(output, name)))),
   };
   if (result.ci && result.ci.commit !== source.commit) throw new Error("Actions checkout identity does not match the packaged source commit.");
   await refreshVerification(output, result, verification);

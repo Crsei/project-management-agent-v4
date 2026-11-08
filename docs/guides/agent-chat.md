@@ -4,6 +4,8 @@
 
 左上产品切换进入 `/agent/workspace`，PM 仍为默认产品入口。Agent 侧栏按“文件夹 → Sessions”组织：点击“打开文件夹”，浏览或输入 Agent 服务器上已有目录的绝对路径，再点击该文件夹下的“会话”。一个 Agent Workspace 对应一个规范化目录，不绑定 PM 工作区或项目；同名目录以完整路径区分。也可新建“仅对话”会话。首次执行受理后目录绑定冻结，改换执行环境须新建 Session。顶部显示当前 Session 的文件夹、Local、实际执行路径及收据证明的 Worktree；点击目录标签可展开来源路径与执行路径。
 
+PM 产品切换先显示 Agent 模块加载状态，支持取消、失败重试和重新加载；保留整页导航与未保存草稿确认，不自动重发消息。Agent 设置页限制在视口内，导航与正文分别滚动，切换设置页回到正文顶部。
+
 Provider 在 `/agent/settings/providers` 配置，原生 Home 留空时沿用服务端 CLI 环境和账号；受管 ChatGPT 使用应用私有账号状态。旧 Provider 选择不会自动替换模型；离页保留草稿保护，不自动取消后台生成。主题直接复用 PM 偏好存储，首次切换、刷新和双产品导航保持一致。目录不是权限或文件系统沙箱。
 
 文件夹支持重命名显示名称、关闭和重新打开；关闭只隐藏列表，不删除代码或 Sessions，也不改变已绑定目录身份。会话行支持右键或省略号菜单：Pin、Settle、Snooze、重命名、隔离生成标题、未读、文件夹筛选、Auto-settle、复制、选择文件夹、Archive 与 Delete。各文件夹内按“置顶 / 活跃 / 稍后提醒 / 已归置”组织，每行显示目录、时间、标题及 Provider；侧栏导航不改绑当前会话。归置不是归档，更不代表 PM 工作完成。状态由服务端持久化并用独立 revision 防止覆盖；自动归置为默认 3 天无活动，不在运行成功时立即执行。归档可从 `/agent/settings/history` 恢复，运行中不能归档；删除沿用现有停止生成后再明确确认的流程，且不可恢复。标题重生成仅对具备隔离无工具调用能力的 Codex / Claude 开放，不修改原消息或原生会话游标。
@@ -30,6 +32,7 @@ PM 中“Agent 助手”是文字与向下箭头合并的圆角下拉按钮：�
 
 - **PM 文档**继续由 PM 管理。Agent 通过带明确工作区／项目目标的工具和引用读取 PM 资料；不把 PM 文档存储自动挂载为代码区。一个 Git 只管理一个独立文件夹，Git 面板不会借用父目录仓库。
 - **打开文件夹**只登记服务器上的已有目录，不上传浏览器文件、不创建目录、不复制仓库。允许范围由 Agent 角色的 `AGENT_WORKSPACE_ALLOWED_ROOTS` 配置为绝对路径 JSON 数组，未设置时使用服务用户 Home。目录记录保存在 Agent SQLite，规范路径与设备/inode 身份不可改写；缺失、替换、越界或符号链接改指时拒绝，不自动重建或回退。原 Code Workspace 登记页及其 PM API 已退役。
+- **选择文件夹：** 本地桌面工作区提供原生“选择文件夹”按钮；Web／远程工作区浏览的是服务器目录，并显示当前允许根。桌面 Agent 显式允许当前用户 Home、应用受管项目目录及配置的项目父目录；更改桌面配置后需重新连接。选择器不绕过服务端规范路径和目录身份核验，其他目录仍须由操作者明确配置允许根。
 - **Session 环境**使用 v2 `agentWorkspaceId + agentWorkspaceRevision`，不再保存 PM 归属、代码组合或 `rootIds`。重命名、关闭、重新打开只增加元数据 revision，不使原 Session 改绑或失效；未来版本仍拒绝。Files / Git 按 Session 与相对路径读取同一实际执行目录；受控交付指向收据拥有的 Worktree，原生仓库模板显示实际仓库副本路径而不冒充 Worktree。
 - **多个仓库**分别打开为不同的 Agent Workspaces，各自创建 Sessions；不存在把多个根拼成一个 Code Workspace 的运行层。普通代码会话、文件检查、Git、终端和原生 Skills 目录解析不依赖 PM 登录或 PM 服务可用。
 - **纯对话**不要求代码仓库。服务端在 Agent 私有数据目录的 `chat-scratch` 下按 Session 分配 scratch 并保存目录身份；Files / Git / Terminal 不把它展示为代码环境。已登记 scratch 丢失或身份改变时拒绝重建；PM 文件区域与保存根配置不是执行回退。
@@ -50,7 +53,7 @@ Inspector 请求携带当前 Session，不接受浏览器任意 cwd 或旧 `root
 
 统一入口为 `/agent/settings/general`；设置页共用导航和未保存 / 保存中离页保护。服务配置适用于本机 Agent 的全部目录与 Sessions，不是新增的 PM 权限或项目级 Provider 覆盖。
 
-设置布局参考 t3code 的“全宽外壳与独立正文宽度”分层：PM 设置导航贴齐主工作区左侧内边距，不再与正文一起限制在 1440px 居中容器；Agent 设置侧栏保持贴左，正文紧随侧栏左对齐。两者正文最大宽度为 1160px，避免超宽表单；窄屏保留 PM 页面选择器与 Agent 横向导航，不按 2560×1440 固定比例缩放。布局调整不改变保存、权限或会话持久化。
+设置布局参考 t3code 的“全宽外壳与独立正文宽度”分层：PM 设置导航贴齐主工作区左侧内边距，不再与正文一起限制在 1440px 居中容器；Agent 设置侧栏保持贴左，正文紧随侧栏左对齐。两者正文最大宽度为 1160px，避免超宽表单；窄屏保留 PM 页面选择器，Agent 导航可展开收起，不按 2560×1440 固定比例缩放。布局调整不改变保存、权限或会话持久化。
 
 | 页面 / 入口 | 实际配置与边界 |
 | --- | --- |
@@ -65,6 +68,8 @@ Inspector 请求携带当前 Session，不接受浏览器任意 cwd 或旧 `root
 
 Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity、Muse Code、Pi、OMP（Oh My Pi）、ACP Registry。初始化仍只持久创建 Codex / Claude；其他默认位仅在已配置、有效启用或定向访问时显示，浏览页面不创建实例。FX 位于“显示更多”，ACP Registry 为独立搜索 / 准备入口；Registry 先显式准备，再填写身份并按协议认证，local 命令走较短路径。实例 ID 固定、字母开头、最多64字符，显示名称可清空回退驱动名；默认实例可重置，额外实例可删除。普通字段失焦或 Enter 保存，环境变量和模型显式保存。非敏感环境变量可回显编辑，敏感值遮蔽且空值回传保留；旧环境变量默认按敏感值迁移。模型段统一管理隐藏、排序、收藏、自定义能力选项；Antigravity 不开放自定义模型。独立 OpenAI / Anthropic / DeepSeek API 卡片及新执行入口不恢复，原始历史和私有凭据不删除。
 
+新安装的 Codex／Claude 是**未启用的配置入口**，不是已经连接的账号；查看卡片也不选择会话模型。需显式启用、检查并选择模型，已有实例的启用状态与模型偏好不会被重置。显式重置默认实例也恢复为未启用。
+
 适配以 `t3code@30eb7e7bb1ef103fdd6f54081b6a4acf66b3ee4c` 为配置与协议基准；MIT 归属见 [LICENSE.t3code](../../LICENSE.t3code)。Codex 通过“使用现有 CLI”与“继续使用 ChatGPT”进入对应流程，不再展示模式下拉框。existing 复用原生配置 / 外部认证，可使用 API Key 或第三方服务，不强制 ChatGPT 登录；managed 使用受管运行时、ChatGPT 多账号 OAuth / token broker，私有状态保留在本副本 `provider-homes`。Claude 的四种 idle compaction 模式接入实际宿主调度并重新核验执行身份；业务来源仍受原授权上限约束。Cursor 的 `CURSOR_API_KEY` 位于专属 Setup，填写密钥后隐藏浏览器登录，清除并保存后恢复该入口。Grok / FX / Muse / Pi / OMP 与 existing Codex / Claude / OpenCode 遵循来源的外部认证边界，不另造应用内登录 / 登出。
 
 **CLI 与 SDK 的交付边界：** Claude 使用服务机器／桌面用户已安装的 `claude`，也可在 Runtime binary 填写其实际路径；未安装、不可执行或路径错误时明确失败，不回退到 SDK 自带 CLI。安装包保留 Claude 通信 SDK、manifest 与许可证，但排除 `@anthropic-ai/claude-agent-sdk-*` 平台执行包。Muse 同样通过用户的 `muse serve` 通信。Cursor 当前使用本地 Agent SDK 引擎，并不是用户 Cursor CLI 的包装器；其 SDK、SQLite、搜索／sandbox／tree-sitter 等必要资源仍保留，旧 `binaryPath` / `apiEndpoint` 字段不控制当前执行，不能把它宣传为已完成外部 CLI 适配。
@@ -72,6 +77,8 @@ Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity�
 这不移除现有明确选择的安装流程：Codex managed、Antigravity managed 和 ACP Registry 各有原生准备／安装语义。ACP 的 npx / uvx 状态探测还可能解析并准备 Registry 包，不能概括成所有 Provider 的检查都绝不下载；该行为与桌面安装包预捆绑外部 CLI 不同，本次未重做 ACP 安装流程。
 
 安装、更新、取消与移除仅对实际支持的驱动开放；“继续使用 ChatGPT”先准备运行时，再发起登录，Codex 的只读检查或发送消息不会自动下载。维护与认证 / 执行互斥。原生 Home 留空时继承宿主规则，显式 Home 和实例环境覆盖对应配置，不重写进程 HOME / XDG，也不清除宿主 Provider 凭据。应用自有状态与原生 Home 分离，重置、删除和备份不收集、创建或删除外部 Home。PM 作用域、审批与完成规则不变。
+
+Codex 执行仍要求本次原生操作确认同一个 Home。Windows 路径命名空间、分隔符或真实目录别名不再仅因字符串不同被拒绝，但必须由当前文件系统的规范路径／目录身份证明一致；不同、缺失或无法核验的 Home 仍拒绝执行，重连不会跳过证明。
 
 当前配置流程、实际执行及发布记录见 [t3code Provider 原生流程切换](../reference/t3code-provider-config-diff-30eb7e7bb1.zh.md#v4-native-provider-flow)。原调查和前两轮实施保留为历史记录；旧的强制独立 Home 与配置文件教程已被替换。
 
@@ -103,7 +110,9 @@ MCP、Skills 与交互 Apps 的源码能力须与实例部署、实际账号及�
 
 - **MCP 管理：** `/agent/settings/mcp-servers` 只显示已启用并绑定的 Agent / Provider 实例；同一用户 Home 下路径兼容且尚未启动管理服务的 Provider（如 Codex / Pi / OpenCode）可共用一个管理上下文，MCP / Skills 矩阵同时显示这些 Agent 列。不同 Home、同类实例的不同原生根及不兼容的 Claude 路径拼写分别管理；停用的 Provider 实例不会进入目标列表。已有独立配置库不自动合并。页面使用“已安装 / 探索 / 配置”管理连接；后端从 Provider 的真实配置解析目标；同类实例显示独立名称与实例 ID，不按“Codex”等类型名称混写。原生导入先只读预览，再逐项应用；保存、文件同步和显式连接探测分别展示，不把“已保存”当成“已连接”。
 - **Skills 管理：** `/agent/settings/skills` 与 MCP 共用已启用 Provider 的管理上下文，提供“目录 / 发现 / 配置”、筛选、Agent 覆盖、分配矩阵和详情抽屉，以及真实发现、ZIP 安装、原生导入、更新与备份。MCP 与 Skills 页面间保留同一管理上下文；有草稿或操作进行中不能切换。安装不等于运行时已加载；Pi / OMP 的目录观测也不是安全隔离或可调用证明。
+- **本机已安装 Skills：** 页面单独只读扫描当前绑定 Provider 的原生目录及受支持的共享 `.agents/skills`。扫描不自动加入配置库、分配、同步或启动 Skill；“纳入管理”是明确导入动作，之后仍需显式分配。导入固定所选 Skill 根及目录／文件身份，保留经核验的根和内部路径别名，拒绝越界目标、循环或无法核验的 Windows reparse；文件描述符身份／时间戳复核和私有暂存完成后才发布管理副本，不把别名当作扩大授权。远程机器的 Skills 不会被当成本机目录读取。
 - **目标与保存位置：** 后端内部保留配置记录，不再作为用户绑定流程。兼容且尚未启动的上下文可以扩展绑定；已启动的管理服务不因新增目标被关闭，新目标使用独立上下文。实例 revision 更新且原生根未变时原位重新核验，保留定义、事件订阅和待重新加载状态。跨 Home 的物理根重叠、已登记根的符号链接改指等冲突明确拒绝，不自动搬迁或导出旧配置，也不删除已有定义和 Skills。共享目录的影响显示在目标详情。没有支持扩展管理的 Provider 时，MCP 仍可浏览公开目录，Skills 明确显示尚未读取，入口引导至 Provider 设置，而不是要求额外授权。
+- **新增 Provider 与已保存配置：** 保留 `context` 的页面只重新核验所选上下文的原生归属，同时单独读取全部已启用实例，Provider 选择器仍可显式切换到新 OpenCode 的独立上下文。无关的已登记外部宿主上下文不会阻止访问，也不会被自动扩张或重新绑定；所选上下文失效、目录变化或真实归属冲突仍拒绝，不静默改选其他配置。不为合并列表重启活跃管理服务。远程／自定义 OpenCode 无法可靠映射本机扩展目录时显示不可管理原因，不静默消失，也不凭 loopback 地址假定拥有本机 Home。
 - **保留的边界：** 仅已有 Provider 的正常管理使用上述直接流程；宿主登记的外部 CLI 仍使用其明确登记/绑定流程，不开放浏览器任意路径。旧的明确配置链接仍访问原数据；项目私有配置仍受 PM 身份与范围检查，不导出到原生 Home。MCP 自身的 API Key / OAuth 和项目工具审批不因配置页面简化而取消。事件流断开时暂停新写入，重连只重读状态，不重放操作；结果不明确时先刷新核对，配置变更不会自动重启活跃原生会话。
 - **外部连接：** MCP 设置的“外部访问”（`/agent/settings/mcp-servers?section=external`）提供连接地址与已授权客户端撤销。部署未配置或元数据读取失败时明确显示外部访问尚未就绪，下方仍保留 PM 登录及已有授权的查看／撤销；不把读取失败当作没有授权。外部 HTTP MCP 客户端经 `/connect-agent` 完成 PM 登录主体同意、授权码与 S256 交换，再访问 `/mcp`。默认只读，明确选择 PM 工作区／项目上限及纯对话线程；目录型 Session 不接受外部委托，线程中的 PM 引用和工具历史也须在授权上限内。full 不绕过既有审批；外部 token 不可登录普通 PM／Agent API，也不能枚举同项目的全部历史。
 - **原生工具：** 工具注册在本机读取真实 schema，不为启动普通代码会话访问 PM。`pm_list_workspaces` 只发现当前授权的业务 ID／名称，不选择目录或 Session 所有者；其他 PM 工具每次明确携带 `target: { workspaceId, projectId }`，可在同一 Session 内访问多个已授权目标。PM 不可用时工具明确失败，普通代码环境仍可用。当前成员能力、审批、revision、幂等与原结果核对不变；Chat 成功不会完成 WorkItem。OpenCode 的单 transport、Pi 的 generation-owned 扩展、OMP 的单 `pm_tools` Host Tools 桥仍有各自限制。

@@ -1,9 +1,9 @@
 import { copyFile, lstat, mkdir, readFile, readdir, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { inspectPackagedApplication } from "./packaged-application.mjs";
+import { inspectFinalArtifacts, verifyInstalledApplication } from "./final-artifact.mjs";
 import { fileRecord, refreshVerification, validateSource } from "./release-materials.mjs";
-import { inside, requireNativeTarget, requirePinnedNode, verifyRuntime } from "./runtime-manifest.mjs";
+import { inside, requireNativeTarget, requirePinnedNode } from "./runtime-manifest.mjs";
 import { run } from "./stage-workspace.mjs";
 
 const deliveryMaterials = ["desktop-source.tar.gz", "desktop-source.json", "desktop-legal.tar.gz", "desktop-verification.json"];
@@ -59,35 +59,33 @@ async function stageDelivery(output, destination, names) {
     throw new Error("Upload staging is not the exact verified delivery file set.");
 }
 
-export async function verifyDelivery(output, { nativeSmoke = false, filesOnly = false, stage } = {}) {
+export async function verifyDelivery(output, { nativeSmoke = false, filesOnly = false, installedResources, stage } = {}) {
   requirePinnedNode();
   output = await realpath(output);
   const { manifest, names } = await verifyDeliveryFiles(output);
-  if (filesOnly && nativeSmoke) throw new Error("--files-only cannot run native smoke.");
+  if (filesOnly && (nativeSmoke || installedResources)) throw new Error("--files-only cannot execute or inspect application resources.");
+  if (installedResources && !nativeSmoke) throw new Error("--installed-resources requires --native-smoke and an explicitly supplied installed application tree.");
+  let finalArtifacts;
   if (!filesOnly) {
-    const resources = resolve(output, manifest.applicationResources);
-    if (!inside(output, resources) || resources === output || await realpath(resources) !== resources)
-      throw new Error("Packaged application resources must be real paths within this output.");
     const report = JSON.parse(await readFile(join(output, "desktop-verification.json"), "utf8"));
-    const application = await inspectPackagedApplication(resources, manifest.version);
-    if (report.checks?.application?.status !== "passed" || report.checks.application.version !== application.version
-      || report.checks.application.sha256 !== application.sha256)
-      throw new Error("Final ASAR bytes differ from the recorded application verification report.");
-    // Native signing may change bundled executable bytes. afterPack checked the
-    // pinned originals; the packager separately verifies final platform signatures.
-    if (manifest.signing === "unsigned")
-      await verifyRuntime(join(resources, "desktop-runtime"), manifest.target);
-    if (nativeSmoke) {
-      requireNativeTarget(...manifest.target.split("-"), true);
+    const expected = report.checks?.finalArtifacts;
+    if (expected?.status !== "passed" || !Array.isArray(expected.artifacts))
+      throw new Error("Delivery lacks verification of its actual final distributable payloads; win-unpacked is not installation evidence.");
+    if (nativeSmoke) requireNativeTarget(...manifest.target.split("-"), true);
+    let smokeExecuted = false;
+    const smoke = async (resources, artifact, checked, scope) => {
       report.nativeSmoke = {
         status: "running", target: manifest.target, startedAt: new Date().toISOString(), commands: [],
-        runtimeInventory: manifest.signing === "unsigned" ? "Final unsigned bytes checked against pinned inventory." : "Packager checked pinned source bytes before signing. Pre-sign tool-version smoke is a separate workflow prerequisite; this command exercises the final signed managed runtime without comparing modified signature bytes to the pre-sign inventory.",
+        scope, artifact: { path: artifact.path, sha256: artifact.sha256, bytes: artifact.bytes },
+        installationExecuted: false, electronGuiExecuted: false,
+        controllerScope: "Checkout-built desktop service controller; packaged backend/runtime resources. This does not execute installed Electron app.asar controller or GUI.",
+        runtimeInventory: checked.runtime,
       };
       try {
         for (const [script, args] of [
           ["smoke-runtime.mjs", ["--runtime-root", join(resources, "desktop-runtime")]],
           ["smoke-managed.mjs", ["--server-root", join(resources, "workspace-runtime"), "--runtime-root", join(resources, "desktop-runtime")]],
-        ].filter(([script]) => manifest.signing === "unsigned" || script !== "smoke-runtime.mjs")) {
+        ].filter(([script]) => (manifest.signing === "unsigned" && manifest.target === "win32-x64") || script !== "smoke-runtime.mjs")) {
           const entry = { script: `apps/desktop/scripts/${script}`, status: "running" };
           report.nativeSmoke.commands.push(entry);
           try {
@@ -99,6 +97,7 @@ export async function verifyDelivery(output, { nativeSmoke = false, filesOnly = 
           }
         }
         report.nativeSmoke.status = "passed";
+        smokeExecuted = true;
       } catch (cause) {
         report.nativeSmoke.status = "failed";
         throw cause;
@@ -106,15 +105,41 @@ export async function verifyDelivery(output, { nativeSmoke = false, filesOnly = 
         report.nativeSmoke.finishedAt = new Date().toISOString();
         await refreshVerification(output, manifest, report);
       }
+    };
+    finalArtifacts = await inspectFinalArtifacts(output, manifest.artifacts, manifest, async (resources, artifact, checked) => {
+      const recorded = expected.artifacts.find((entry) => entry.path === artifact.path);
+      if (JSON.stringify(recorded) !== JSON.stringify(checked))
+        throw new Error(`Final distributable payload differs from its recorded verification: ${artifact.path}`);
+      if (report.checks?.application?.status !== "passed" || report.checks.application.sha256 !== checked.application.sha256
+        || report.checks.application.version !== checked.application.version)
+        throw new Error("Final ASAR bytes differ from the recorded application verification report.");
+      if (nativeSmoke && !installedResources && !smokeExecuted)
+        await smoke(resources, artifact, checked, "final-distributable-payload");
+    });
+    if (JSON.stringify(expected) !== JSON.stringify(finalArtifacts))
+      throw new Error("Final distributable verification does not match the complete recorded payload report.");
+    if (installedResources) {
+      const final = finalArtifacts.artifacts[0];
+      const checked = await verifyInstalledApplication(installedResources, final, manifest);
+      report.installedTree = checked;
+      await smoke(resolve(installedResources), final, checked, "supplied-installed-tree");
     }
   }
   const verified = nativeSmoke ? await verifyDeliveryFiles(output) : { names };
   if (stage) {
     const report = JSON.parse(await readFile(join(output, "desktop-verification.json"), "utf8"));
-    if (report.nativeSmoke?.status !== "passed") throw new Error("Actions delivery staging requires successful packaged native smoke.");
+    const smoke = report.nativeSmoke;
+    if (smoke?.status !== "passed" || !["final-distributable-payload", "supplied-installed-tree"].includes(smoke.scope)
+      || report.checks?.finalArtifacts?.status !== "passed"
+      || manifest.artifacts.filter((entry) => /\.(?:exe|dmg|zip)$/.test(entry.path)).some((entry) => !report.checks.finalArtifacts.artifacts?.some((checked) => checked.path === entry.path && checked.sha256 === entry.sha256 && checked.bytes === entry.bytes))
+      || !manifest.artifacts.some((entry) => entry.path === smoke.artifact?.path && entry.sha256 === smoke.artifact.sha256 && entry.bytes === smoke.artifact.bytes))
+      throw new Error("Actions delivery staging requires successful native smoke bound to this final distributable payload, not win-unpacked staging.");
     await stageDelivery(output, resolve(stage), verified.names);
   }
-  return { output, target: manifest.target, files: verified.names, checks: filesOnly ? "file hashes and complete delivery only" : "file hashes, final ASAR/unpacked/runtime boundary and application version", nativeSmoke: nativeSmoke ? "passed" : "not-executed-by-this-command", published: false };
+  return { output, target: manifest.target, files: verified.names,
+    checks: filesOnly ? "file hashes and complete delivery only" : "file hashes, actual final distributable expansion, exact dependency resources/graph and application version",
+    ...(finalArtifacts ? { finalArtifacts } : {}), installedTree: installedResources ? "supplied tree inspected; installer execution not performed" : "not-inspected",
+    nativeSmoke: nativeSmoke ? "passed" : "not-executed-by-this-command", installationExecuted: false, electronGuiExecuted: false, published: false };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
@@ -124,12 +149,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const arg = process.argv[index];
     if (arg === "--native-smoke") options.nativeSmoke = true;
     else if (arg === "--files-only") options.filesOnly = true;
-    else if (["--output", "--stage"].includes(arg) && process.argv[index + 1] && isAbsolute(process.argv[index + 1])) {
+    else if (["--output", "--stage", "--installed-resources"].includes(arg) && process.argv[index + 1] && isAbsolute(process.argv[index + 1])) {
       const value = process.argv[++index];
       if (arg === "--output" && !output) output = value;
       else if (arg === "--stage" && !options.stage) options.stage = value;
+      else if (arg === "--installed-resources" && !options.installedResources) options.installedResources = value;
       else throw new Error("Duplicate delivery argument.");
-    } else throw new Error("Usage: verify-delivery.mjs --output ABS_DIRECTORY [--native-smoke | --files-only] [--stage NEW_ABS_DIRECTORY]");
+    } else throw new Error("Usage: verify-delivery.mjs --output ABS_DIRECTORY [--native-smoke [--installed-resources ABS_RESOURCES] | --files-only] [--stage NEW_ABS_DIRECTORY]");
   }
   if (!output) throw new Error("An explicit absolute package output is required.");
   console.log(JSON.stringify(await verifyDelivery(output, options)));

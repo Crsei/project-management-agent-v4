@@ -1,7 +1,11 @@
-import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { lstat, mkdtemp, readFile, readdir, realpath, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
+import { promisify } from "node:util";
+import { verifyDependencyLayout } from "./dependency-layout-verifier.mjs";
+import { verifyFinalRuntime } from "./runtime-inventory-verifier.mjs";
 import { inspectDeployment } from "./stage-workspace.mjs";
 import { hashFile } from "./runtime-manifest.mjs";
 import { enforceExternalAgentBoundary } from "../../server/agent/scripts/external-agent-packages.mjs";
@@ -13,7 +17,7 @@ export function asarTools() {
   return createRequire(builder.resolve("app-builder-lib"))("@electron/asar");
 }
 
-function inspectHeader(directory, prefix = "") {
+function inspectHeader(directory, prefix = "", unpacked = false, loose = new Set()) {
   if (!directory || typeof directory.files !== "object" || directory.files === null)
     throw new Error("Invalid packaged ASAR directory.");
   for (const [name, entry] of Object.entries(directory.files)) {
@@ -24,11 +28,17 @@ function inspectHeader(directory, prefix = "") {
       if (typeof entry.link !== "string" || /[\\:\0]/.test(entry.link) || posix.isAbsolute(entry.link)
         || posix.normalize(entry.link) === ".." || posix.normalize(entry.link).startsWith("../"))
         throw new Error(`Unsafe packaged ASAR link: ${member}`);
-    } else if ("files" in entry) inspectHeader(entry, member);
+    } else if ("files" in entry) inspectHeader(entry, member, unpacked || entry.unpacked === true, loose);
+    else if (unpacked || entry.unpacked === true) loose.add(member);
   }
+  return loose;
 }
 
-export async function inspectPackagedApplication(resources, expectedVersion) {
+export async function inspectPackagedApplication(resources, expectedVersion, { signedMachO = false, target } = {}) {
+  if (signedMachO) {
+    if (process.platform !== "darwin") throw new Error("Final Mach-O signature verification requires native macOS.");
+    await promisify(execFile)("/usr/bin/codesign", ["--verify", "--deep", "--strict", join(resources, "../..")]);
+  }
   // CLI package identity applies to every loose resource, including the pinned
   // runtime. Private checkout rules belong only to application/workspace trees:
   // the complete official Node distribution legitimately contains npm config.
@@ -48,7 +58,19 @@ export async function inspectPackagedApplication(resources, expectedVersion) {
   if (!info.isFile() || info.isSymbolicLink()) throw new Error("Final app.asar must be a real file.");
   const asar = asarTools();
   asar.uncache(archive);
-  inspectHeader(asar.getRawHeader(archive).header);
+  const loose = inspectHeader(asar.getRawHeader(archive).header);
+  async function inspectLoose(directory, prefix = "") {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const member = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await inspectLoose(path, member);
+      else if (!entry.isFile() || !loose.delete(member))
+        throw new Error(`Unrecorded or linked ASAR unpacked resource: ${member}`);
+    }
+  }
+  const looseRoot = join(resources, "app.asar.unpacked");
+  if (await lstat(looseRoot).catch((error) => { if (error.code === "ENOENT") return null; throw error; })) await inspectLoose(looseRoot);
+  if (loose.size) throw new Error("Final ASAR is missing unpacked resources.");
   const extracted = await realpath(await mkdtemp(join(tmpdir(), "pm-desktop-asar-")));
   try {
     asar.extractAll(archive, extracted);
@@ -57,9 +79,19 @@ export async function inspectPackagedApplication(resources, expectedVersion) {
     if (metadata.version !== expectedVersion || metadata.name !== "pm-agent-v4-desktop" || metadata.main !== "dist/main.mjs")
       throw new Error("Final Electron application identity/version differs from the desktop release.");
     await lstat(join(extracted, metadata.main));
+    const dependencyLayouts = {
+      electron: await verifyDependencyLayout(extracted, { signedMachO }),
+      workspace: await verifyDependencyLayout(join(resources, "workspace-runtime"), { signedMachO }),
+    };
+    const runtimeRoot = join(resources, "desktop-runtime");
+    const runtimeInfo = await lstat(runtimeRoot).catch((error) => { if (error.code === "ENOENT") return null; throw error; });
+    const runtimeInventory = runtimeInfo ? await verifyFinalRuntime(resources,
+      target ?? JSON.parse(await readFile(join(runtimeRoot, "runtime-manifest.json"), "utf8")).target, { signedMachO }) : null;
     return {
       status: "passed", version: metadata.version, archive: "app.asar", sha256: await hashFile(archive),
       scope: ["app.asar extracted content", "app.asar.unpacked including orphaned files", "workspace-runtime", "desktop-runtime"],
+      dependencyLayouts,
+      runtimeInventory,
       privateFileScope: ["app.asar extracted content", "app.asar.unpacked including orphaned files", "workspace-runtime"],
       externalClaudePlatformCli: "absent by package identity; communication SDK and other native engines are not pruned",
     };

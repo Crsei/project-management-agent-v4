@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { FileRepository, RepositoryConflict, revisionOf } from '../repository.ts';
 import { directoryIdentity, pathContains, safePathComponent, safeRelativePath, samePath } from '../platform.ts';
 import { assertPrivatePath, makePrivatePath } from '../private-path.ts';
-import { assertNoWindowsReparsePath, cacheWindowsPathAttributes } from '../windows-reparse.ts';
+import { assertNoWindowsReparsePath, cacheWindowsPathAttributes, getWindowsPathAttributeMetrics } from '../windows-reparse.ts';
 
 test('native protection boundaries handle volume roots, case and separator aliases', () => {
   assert.equal(pathContains('C:\\', 'c:/Users/owner/projects', 'win32'), true);
@@ -96,3 +96,61 @@ if (process.platform === 'win32') test('Windows directory membership changes pre
     assert.throws(() => assertNoWindowsReparsePath(directory, before), /changed/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+// These cases deliberately use the real PowerShell/native-handle helper. They are
+// not registered off Windows because the backend runner rejects skipped tests.
+if (process.platform === 'win32') {
+  test('Windows batch-prewarmed files reject stale snapshots after replacement and content mutation', () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'pm-native-file-cache-')));
+    try {
+      const replaced = path.join(root, 'replaced.md'), mutated = path.join(root, 'mutated.md');
+      writeFileSync(replaced, 'original'); writeFileSync(mutated, 'original');
+      cacheWindowsPathAttributes([replaced, mutated]);
+      const replacedBefore = lstatSync(replaced, { bigint: true }), mutatedBefore = lstatSync(mutated, { bigint: true });
+      assertNoWindowsReparsePath(replaced, replacedBefore);
+      assertNoWindowsReparsePath(mutated, mutatedBefore);
+      renameSync(replaced, path.join(root, 'old.md'));
+      writeFileSync(replaced, 'original');
+      assert.notEqual(lstatSync(replaced, { bigint: true }).ino, replacedBefore.ino);
+      assert.throws(() => assertNoWindowsReparsePath(replaced, replacedBefore), /changed/);
+      assertNoWindowsReparsePath(replaced, lstatSync(replaced, { bigint: true }));
+      writeFileSync(mutated, 'mutation'); // Same length: size alone cannot invalidate this entry.
+      assert.throws(() => assertNoWindowsReparsePath(mutated, mutatedBefore), /changed/);
+      assertNoWindowsReparsePath(mutated, lstatSync(mutated, { bigint: true }));
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  test('Windows batch-prewarmed descendants cannot certify a replaced junction ancestor', () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'pm-native-ancestor-cache-')));
+    try {
+      const directory = path.join(root, 'directory'), outside = path.join(root, 'outside');
+      mkdirSync(directory); mkdirSync(outside);
+      const leaf = path.join(directory, 'leaf.md');
+      writeFileSync(leaf, 'same public bytes');
+      writeFileSync(path.join(outside, 'leaf.md'), 'same public bytes');
+      cacheWindowsPathAttributes([root, directory, leaf, outside, path.join(outside, 'leaf.md')]);
+      const before = lstatSync(directory, { bigint: true });
+      directoryIdentity(directory);
+      renameSync(directory, path.join(root, 'old')); symlinkSync(outside, directory, 'junction');
+      assert.throws(() => assertNoWindowsReparsePath(directory, before), /changed|reparse/);
+      assert.throws(() => directoryIdentity(path.dirname(leaf)), /reparse|link|changed/);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  test('Windows native attribute prewarm bounds batches and serves unchanged files without new helpers', () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'pm-native-many-cache-')));
+    try {
+      const filenames = Array.from({ length: 513 }, (_, index) => path.join(root, `file-${index.toString().padStart(4, '0')}.md`));
+      for (const filename of filenames) writeFileSync(filename, 'public native batch fixture\n');
+      const before = getWindowsPathAttributeMetrics();
+      cacheWindowsPathAttributes(filenames);
+      const warmed = getWindowsPathAttributeMetrics();
+      assert.equal(warmed.nativeCalls - before.nativeCalls, 3, '513 short paths require three bounded native batches');
+      assert.equal(warmed.nativePaths - before.nativePaths, filenames.length);
+      for (const filename of filenames) assertNoWindowsReparsePath(filename, lstatSync(filename, { bigint: true }));
+      const checked = getWindowsPathAttributeMetrics();
+      assert.equal(checked.nativeCalls, warmed.nativeCalls, 'unchanged cache hits must not launch PowerShell');
+      assert.ok(checked.cacheHits - warmed.cacheHits >= filenames.length);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}

@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useEffect, useRef, useState, type MouseEvent } from "react"
 import { useParams } from "react-router"
-import { Bot, Check, ChevronDown, ChevronsUpDown, Ellipsis, FolderKanban, LayoutGrid, LoaderCircle, RefreshCw, Settings, Users } from "lucide-react"
+import { Bot, Check, ChevronDown, ChevronsUpDown, Ellipsis, FolderKanban, LayoutGrid, LoaderCircle, Plus, RefreshCw, Settings, Users } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useI18n } from "@/lib/i18n-provider"
 import { useWorkspaceStore } from "@/providers/app-providers"
+import { loadAgentApp } from "@/lib/agent-app-module"
 import { pmErrorMessage, usePmService } from "./pm-service"
 import { allowed } from "./pm-ui"
 import styles from "./service-project-layout.module.css"
@@ -25,7 +26,12 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
   const startPage = useWorkspaceStore(state => state.startPage)
   const [refreshing, setRefreshing] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [switcherOpen, setSwitcherOpen] = useState(false)
   const [refreshError, setRefreshError] = useState<Error | null>(null)
+  const [openingAgent, setOpeningAgent] = useState<string | null>(null)
+  const [agentLoadError, setAgentLoadError] = useState<{ href: string; message: string } | null>(null)
+  const agentRequest = useRef<symbol | null>(null)
+  useEffect(() => () => { agentRequest.current = null }, [])
   const pending = loading || refreshing
   const visibleError = error ?? refreshError
   const name = workspace?.name ?? (en ? "Choose workspace" : "选择工作区")
@@ -42,7 +48,7 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
       id: "agent-workspace" as const,
       title: "Agent Chat",
       description: en ? "Sessions and conversations" : "会话和对话",
-      href: workspace ? `/agent/workspace?${new URLSearchParams({ workspace: workspace.id, returnTo: `${base}/${startPage}` })}` : "",
+      href: workspace ? `/agent/workspace?${new URLSearchParams({ workspace: workspace.id, returnTo: `${base}/${startPage}` })}` : "/agent/workspace",
       icon: Bot,
     },
   ]
@@ -64,13 +70,45 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
     }
   }
 
+  const openAgent = async (href: string) => {
+    if (agentRequest.current) return
+    const request = Symbol("agent-navigation")
+    agentRequest.current = request
+    setOpeningAgent(href)
+    setAgentLoadError(null)
+    try {
+      await loadAgentApp()
+      if (agentRequest.current !== request) return
+      // Keep document navigation: PM editors also protect drafts via beforeunload.
+      // A cancelled native confirmation returns here without leaving a pending lock.
+      window.location.assign(href)
+    } catch (cause) {
+      if (agentRequest.current === request) setAgentLoadError({ href, message: cause instanceof Error ? cause.message : String(cause) })
+    } finally {
+      if (agentRequest.current === request) {
+        agentRequest.current = null
+        setOpeningAgent(null)
+      }
+    }
+  }
+  const startAgentNavigation = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    setSwitcherOpen(false)
+    void openAgent(href)
+  }
+  const cancelAgentNavigation = () => {
+    agentRequest.current = null
+    setOpeningAgent(null)
+  }
+
   return <div className="mb-3 shrink-0">
-    <DropdownMenu onOpenChange={open => { if (!open) setMoreOpen(false) }}>
+    <DropdownMenu open={switcherOpen} onOpenChange={open => { setSwitcherOpen(open); if (!open) setMoreOpen(false) }}>
       <DropdownMenuTrigger
         aria-label={en
           ? `Switch app. Current app: ${currentProduct.title}. Workspace: ${name}`
           : `切换应用。当前应用：${currentProduct.title}。工作区：${name}`}
-        aria-busy={pending}
+        aria-busy={pending || !!openingAgent}
         title={collapsed ? currentProduct.title : undefined}
         className={`${styles.workspaceTrigger} ${collapsed ? styles.collapsedTrigger : ""}`}
       >
@@ -79,10 +117,9 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
           <span className="block truncate text-[13px] font-medium" title={currentProduct.title}>{currentProduct.title}</span>
           <span className="block truncate text-[11px] font-normal text-muted-foreground">{currentProduct.description}</span>
         </span>}
-        {collapsed ? null : pending ? <LoaderCircle className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+        {collapsed ? null : pending || openingAgent ? <LoaderCircle className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-[var(--radix-dropdown-menu-content-available-height)] w-80 max-w-[calc(100vw-1rem)] overflow-y-auto">
-        {workspace && !visibleError && <>
           <DropdownMenuLabel className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground">{en ? "Switch app" : "切换应用"}</DropdownMenuLabel>
           <DropdownMenuGroup aria-label={en ? "Applications" : "应用"}>
             {products.map(product => {
@@ -91,10 +128,10 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
               return <DropdownMenuItem
                 key={product.id}
                 textValue={product.title}
-                disabled={current || !product.href}
+                disabled={current || !product.href || !!openingAgent}
                 aria-current={current ? "location" : undefined}
                 className={`min-h-11 gap-2.5 py-1.5 ${current ? "bg-selection data-disabled:opacity-100" : ""}`}
-                render={current || !product.href ? undefined : <a href={product.href} data-navigation-close />}
+                render={current || !product.href ? undefined : <a href={product.href} onClick={event => startAgentNavigation(event, product.href)} />}
               >
                 <span className={`inline-flex size-8 shrink-0 items-center justify-center rounded-control ${product.id === "agent-workspace" ? "bg-agent text-primary-foreground" : "bg-primary text-primary-foreground"}`} aria-hidden="true">
                   <Icon className="size-4" strokeWidth={1.75} />
@@ -108,7 +145,6 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
             })}
           </DropdownMenuGroup>
           <DropdownMenuSeparator className="my-1 h-px bg-border" />
-        </>}
         <DropdownMenuGroup aria-label={en ? "Manage" : "管理"}>
           <DropdownMenuLabel className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground">{en ? "Manage" : "管理"} · <span title={name}>{name}</span></DropdownMenuLabel>
           {workspace && !pending && !visibleError && <>
@@ -122,6 +158,10 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
           <DropdownMenuItem render={<a href="/pm" data-navigation-close />}>
             <LayoutGrid className="size-4 shrink-0" aria-hidden="true" />
             {en ? "All workspaces" : "全部工作区"}
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<a href="/pm#create-workspace" data-navigation-close />}>
+            <Plus className="size-4 shrink-0" aria-hidden="true" />
+            {en ? "Create workspace with Nova" : "新建工作区与 Nova 示例"}
           </DropdownMenuItem>
         </DropdownMenuGroup>
         {(pending || visibleError || workspaces.some(candidate => candidate.id !== workspace?.id)) && <>
@@ -163,5 +203,16 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
     </DropdownMenu>
     {!collapsed && pending && <p role="status" className="px-3 text-xs text-muted-foreground">{refreshing ? en ? "Refreshing workspaces…" : "正在刷新工作区…" : en ? "Loading workspaces…" : "正在加载工作区…"}</p>}
     {!collapsed && visibleError && <p role="alert" className="px-3 text-xs leading-5 text-destructive [overflow-wrap:anywhere]">{pmErrorMessage(visibleError, en ? "en" : "zh")}</p>}
+    {openingAgent && <div role="status" className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+      <LoaderCircle className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+      <span>{en ? "Loading Agent Chat…" : "正在加载 Agent Chat…"}</span>
+      <button type="button" className="underline underline-offset-2" onClick={cancelAgentNavigation}>{en ? "Cancel switch" : "取消切换"}</button>
+    </div>}
+    {agentLoadError && <div role="alert" className="space-y-2 px-3 py-2 text-xs leading-5 text-destructive [overflow-wrap:anywhere]">
+      <p>{en ? "Agent Chat could not be loaded. Your current page and drafts are unchanged." : "无法加载 Agent Chat；当前页面与草稿未改变。"}</p>
+      <p>{agentLoadError.message}</p>
+      <button type="button" className="underline underline-offset-2" onClick={() => void openAgent(agentLoadError.href)}>{en ? "Retry loading Agent Chat" : "重试加载 Agent Chat"}</button>
+      <button type="button" className="ml-3 underline underline-offset-2" onClick={() => window.location.reload()}>{en ? "Reload current page" : "重新加载当前页"}</button>
+    </div>}
   </div>
 }

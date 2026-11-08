@@ -66,6 +66,7 @@ test("Skills resolve registered directories without PM and isolate native invent
   });
   const call = (name: string, fresh = false) => request({ executionSelection: selections.get(name), fresh });
   try {
+    updateProviderInstance("codex", { enabled: true });
     const first = await call("one");
     assert.equal(first.status, 200);
     const a: ProviderSkillsSnapshot = await first.json();

@@ -81,6 +81,24 @@
   display: none;
 }
 
+.route-feedback {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 32px;
+  background: var(--background);
+  color: var(--foreground);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.route-feedback > p { display: flex; align-items: center; justify-content: center; gap: 10px; max-width: 560px; }
+.route-feedback svg { width: 20px; height: 20px; flex-shrink: 0; }
+.route-feedback > :is(a, button) { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--control-radius); }
+.route-feedback > :is(a, button):hover { background: var(--surface-hover); }
+
 /* 路由离场：导航时克隆旧页面覆盖层，仅淡出并轻微上移，不阻塞新页面渲染。 */
 @keyframes pm-page-exit {
   from {

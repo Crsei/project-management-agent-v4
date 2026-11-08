@@ -99,7 +99,7 @@ jobs:
       - name: Build explicitly unsigned native installers
         run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$DESKTOP_ARTIFACT_DIR"
         if: runner.os == 'macOS'
-      - name: Verify complete final delivery and execute packaged native smoke
+      - name: Verify final archive payloads and execute native runtime smoke (not installer or GUI)
         shell: bash
         run: node apps/desktop/scripts/verify-delivery.mjs --output "$DESKTOP_ARTIFACT_DIR" --native-smoke --stage "$DESKTOP_DELIVERY_DIR"
       - uses: actions/upload-artifact@v4
@@ -190,7 +190,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
         run: pnpm --filter @agent-workspace/desktop package:signed --platform darwin --arch ${{ matrix.arch }} --output "$DESKTOP_ARTIFACT_DIR"
-      - name: Verify complete signed delivery and execute packaged native smoke
+      - name: Verify signed final archive payloads and execute native runtime smoke (not installer or GUI)
         shell: bash
         run: node apps/desktop/scripts/verify-delivery.mjs --output "$DESKTOP_ARTIFACT_DIR" --native-smoke --stage "$DESKTOP_DELIVERY_DIR"
       - uses: actions/upload-artifact@v4

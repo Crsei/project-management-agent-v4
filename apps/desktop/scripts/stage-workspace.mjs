@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { access, cp, lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -11,6 +11,7 @@ import { collectNotices } from "./license-notices.mjs";
 import { verifyHost } from "../../server/agent/scripts/cc-switch.mjs";
 import { verifyWebDistribution } from "../../../vendor/openhands-extensions/scripts/web-build.mjs";
 import { enforceExternalAgentBoundary } from "../../server/agent/scripts/external-agent-packages.mjs";
+import { materializeDependencyLayout, planDependencyLayout, readDependencyGraph, writeDependencyLayout } from "./dependency-layout.mjs";
 export const repository = resolve(desktopRoot, "../..");
 export function run(command, args, cwd = repository) {
   return new Promise((resolveRun, reject) => {
@@ -68,10 +69,10 @@ async function createIsolatedWorkspace(directory, desktop = false) {
   if (desktop) await cp(join(desktopRoot, "dist"), join(directory, "dist"), { recursive: true });
 }
 
-// The reviewed Agent packager remains the sole owner of its emitted-import,
-// disk SDK/native dependency and one-Effect closure. Desktop only relocates its
-// root dependency links next to the Agent entrypoint so PM can retain its own
-// production root dependencies without version collisions.
+// Keep the Agent packager's reviewed import/resource closure, but turn each
+// independent desktop closure into real node_modules directories. Windows NSIS
+// deliberately dereferences dependency links and otherwise recursively expands
+// the Agent's canonical .packages graph once per incoming edge.
 export async function stageWorkspace(output, application, {
   agentBuild = join(repository, "apps/server/agent/dist"),
   webDist = join(repository, "apps/web/dist"),
@@ -93,28 +94,33 @@ export async function stageWorkspace(output, application, {
     await enforceExternalAgentBoundary(output, { prune: true });
     for (const name of await readdir(output))
       if (!["node_modules", "package.json"].includes(name)) await rm(join(output, name), { recursive: true, force: true });
+    const dependencyScratch = join(staging, "physical-dependencies");
+    await mkdir(dependencyScratch);
+    const pmGraph = await readDependencyGraph(output);
+    const pmLayout = planDependencyLayout(pmGraph, { id: "pm" });
+    await materializeDependencyLayout(pmGraph, pmLayout, output, dependencyScratch);
     await run(process.execPath, [join(repository, "apps/server/agent/scripts/package.mjs"), "--build", agentBuild, "--output", agentArtifact]);
+    const originalAgent = JSON.parse(await readFile(join(agentArtifact, "artifact-manifest.json"), "utf8"));
+    const agentRoots = originalAgent.links.filter((link) => link.path.startsWith("node_modules/")).map((link) => link.path.slice("node_modules/".length)).sort();
+    const agentGraph = await readDependencyGraph(agentArtifact, { roots: agentRoots });
+    // Do not silently broaden or narrow the reviewed Agent production graph.
+    if (agentGraph.packages.size !== originalAgent.packages.length)
+      throw new Error("Desktop Agent closure differs from the reviewed artifact graph.");
+    for (const record of originalAgent.packages) {
+      const actual = agentGraph.packages.get(record.path);
+      const dependencies = actual && Object.fromEntries([...actual.dependencies].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0));
+      if (!actual || actual.metadata.name !== record.name || actual.metadata.version !== record.version
+        || JSON.stringify(dependencies) !== JSON.stringify(Object.fromEntries(Object.entries(record.dependencies).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0))))
+        throw new Error(`Desktop Agent dependency graph changed: ${record.path}`);
+    }
+    const agentLayout = planDependencyLayout(agentGraph, { id: "agent", root: "apps/server/agent", effectSingleton: true });
     for (const name of await readdir(agentArtifact)) {
-      if (["node_modules", "package.json", "tools"].includes(name)) continue;
+      if ([".packages", "node_modules", "package.json", "tools"].includes(name)) continue;
       await cp(join(agentArtifact, name), join(output, name), { recursive: true, verbatimSymlinks: true });
     }
-    const agentModules = join(output, "apps/server/agent/node_modules");
-    const linkRoot = join(agentArtifact, "node_modules");
-    async function relocateLinks(directory) {
-      for (const entry of await readdir(directory, { withFileTypes: true })) {
-        const source = join(directory, entry.name);
-        if (entry.isDirectory()) { await relocateLinks(source); continue; }
-        if (!entry.isSymbolicLink()) throw new Error("Unexpected Agent artifact root dependency resource.");
-        const destination = join(agentModules, relative(linkRoot, source));
-        const originalTarget = resolve(dirname(source), await readlink(source));
-        if (!inside(agentArtifact, originalTarget)) throw new Error("Agent artifact dependency escapes its production closure.");
-        const targetPath = join(output, relative(agentArtifact, originalTarget));
-        await mkdir(dirname(destination), { recursive: true });
-        await symlink(relative(dirname(destination), targetPath), destination, "dir");
-      }
-    }
-    await relocateLinks(linkRoot);
-    await renameAgentManifest(output, target);
+    await materializeDependencyLayout(agentGraph, agentLayout, output, dependencyScratch);
+    await writeDependencyLayout(output, [pmLayout, agentLayout]);
+    await renameAgentManifest(output, target, agentLayout);
     await verifyHost(join(output, "apps/server/agent/dist"));
     for (const name of ["apps/server/pm/src", "apps/server/worker/src", "packages", "apps/desktop/src", "vendor/openhands-automations"])
       await cp(join(repository, name), join(output, name), { recursive: true, filter: sourceFilter });
@@ -153,20 +159,28 @@ export async function stageWorkspace(output, application, {
         type: "module", main: "dist/main.mjs", description: manifest.description, private: true,
         dependencies: manifest.dependencies,
       }, null, 2) + "\n");
+      const electronGraph = await readDependencyGraph(application);
+      const electronLayout = planDependencyLayout(electronGraph, { id: "electron" });
+      await materializeDependencyLayout(electronGraph, electronLayout, application, dependencyScratch);
+      await writeDependencyLayout(application, [electronLayout]);
       await inspectDeployment(application);
     }
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
 }
-async function renameAgentManifest(output, target) {
+async function renameAgentManifest(output, target, layout) {
   const original = JSON.parse(await readFile(join(output, "artifact-manifest.json"), "utf8"));
   await writeFile(join(output, "agent-artifact-manifest.json"), JSON.stringify({
     ...original, desktopDependencyRoot: "apps/server/agent/node_modules",
     desktopTarget: target,
-    // Agent's original hash inventory is retained as provenance. Root-link paths
-    // have intentionally moved; the original Agent verifier is not advertised
-    // as a verifier for the composed desktop runtime.
+    desktopLayoutManifest: "desktop-dependency-layout.json",
+    desktopEffectSingleton: layout.effectSingleton,
+    desktopInventoryScope: "Original files/links are source Agent artifact provenance only; desktopLayoutManifest inventories the emitted dependency paths and bytes.",
+    desktopPackagePaths: Object.fromEntries(original.packages.map((record) => [record.path,
+      layout.instances.filter((instance) => instance.sourceId === record.path).map((instance) => instance.path)])),
+    // Original files/links describe the source Agent artifact, not final desktop
+    // paths or bytes. The desktop layout manifest owns the emitted inventory.
   }, null, 2) + "\n");
   await rm(join(output, "artifact-manifest.json"));
 }

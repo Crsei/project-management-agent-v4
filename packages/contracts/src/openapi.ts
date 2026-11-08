@@ -25,6 +25,7 @@ import { automationPmPaths } from './automation-pm-openapi.ts';
 import { workflowTaskTransitionPaths } from './workflow-task-transition-openapi.ts';
 import { agentChatToolResultSchema } from '../../agent-contracts/src/pm-tool-result.ts';
 import { instanceSetupSchemas } from './instance-setup.ts';
+import { workspaceCreationRequestSchema, workspaceCreationRecoveryRequestSchema, workspaceCreationResultSchema } from './workspace-creation.ts';
 
 // Payload validators remain owned by application commands. This module only
 // describes their wire input and the HTTP adapter's public response envelopes.
@@ -93,6 +94,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     ...accountSecuritySchemas,
     ...accountRecoverySchemas, ...webhookResponseSchemas,
     ...instanceSetupSchemas,
+    WorkspaceCreationRequest: workspaceCreationRequestSchema, WorkspaceCreationRecoveryRequest: workspaceCreationRecoveryRequestSchema, WorkspaceCreationResult: workspaceCreationResultSchema,
     ArtifactCopyOriginResponse: artifactCopyOriginResponseSchema,
     TaskComment: taskCommentSchema, TaskCommentRevision: taskCommentRevisionSchema,
     TaskCommentsPage: taskCommentsPageSchema, TaskCommentHistoryPage: taskCommentHistoryPageSchema,
@@ -291,7 +293,7 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
     } },
     '/api/v1/setup': { post: {
       operationId: 'setup', summary: 'Consume the deployment token to create the first account and workspace', security: [],
-      description: 'Strict POST JSON, no query, at most 4096 bytes. Requires a 32-byte base64url deployment token; only its digest is stored. Account, workspace, explicit owner membership and completion commit atomically under a singleton lock. No automatic retries or secret persistence. After any unknown result query setupStatus, then use normal password login if initialized; a session failure does not reopen setup.',
+      description: 'Strict POST JSON, no query, at most 4096 bytes. Requires a 32-byte base64url deployment token; only its digest is stored. Account, workspace, explicit owner membership, frozen Nova sample intent and completion commit atomically under a singleton lock. Real independent Markdown sample initialization finishes before success. On failure identities stay committed and normal authenticated workspace listing resumes only that original pending intent. No credential replay or reinitialization of existing workspaces. After an unknown result query setupStatus, then use normal password login if initialized; initialization/session failure does not reopen setup.',
       requestBody: { required: true, content: json(ref('SetupRequest')) },
       responses: {
         200: { ...response('Session actor, new workspace and expiry. No token or password in JSON.', ref('SetupResponse')), headers: { 'Set-Cookie': { description: 'Existing pm_v4_session; HttpOnly; SameSite=Strict; Path=/; Expires; Secure when configured.', schema: { type: 'string' } } } },
@@ -322,7 +324,12 @@ export function buildOpenApi(registry: CommandRegistry): OpenApiDocument {
       operationId: 'recoverAccountSecurityAction', requestBody: { required: true, content: json(ref('RecoverAccountSecurityAction')) },
       responses: { 200: response('Existing action or immutable cancellation fence; no credentials replayed.', ref('AccountSecurityActionLookup')), ...errors(400, 401, 403, 404, 409, 429, 503) },
     } },
-    '/api/v1/workspaces': { get: { ...secured('List current memberships and workspace stream cursors', object({ items: array(ref('Workspace')) })), operationId: 'listWorkspaces' } },
+    '/api/v1/workspaces': {
+      get: { ...secured('List usable current memberships and explicit pending Nova initializations; unavailable new storage never hides unrelated ready workspaces', object({ items: array(ref('Workspace')), pendingInitializations: array(object({ workspaceId: uuid, name: text, key: nullable(uuid) })) })), operationId: 'listWorkspaces' },
+      post: { ...secured('Create an independently owned workspace with the real editable Nova sample', ref('WorkspaceCreationResult'), [param('Idempotency-Key', 'header', uuid, true)]), operationId: 'createWorkspace', requestBody: { required: true, content: json(ref('WorkspaceCreationRequest')) }, description: 'The required expectedActorId must match the authenticated request actor before any creation or recovery side effect; a changed account returns 409 session_changed and retains the original key. Only grants that actor explicit owner capabilities in this new workspace. Frozen actor/key/name/template and native creation keys prevent duplicates after an unknown response. Sample files are real Markdown; no source users, ACL, credentials or history are copied. An incomplete initialization returns an error, never empty success. Existing workspaces and deleted ready samples are never reseeded.' },
+    },
+    '/api/v1/workspace-creations/{key}': { get: { ...secured('Read the current actor’s original workspace creation without replaying it', ref('WorkspaceCreationResult'), [param('key', 'path', uuid)]), operationId: 'getWorkspaceCreation' } },
+    '/api/v1/workspace-creations/{key}/recover': { post: { ...secured('Explicitly resume the original frozen Nova initialization; never create a replacement workspace', ref('WorkspaceCreationResult'), [param('key', 'path', uuid)]), operationId: 'recoverWorkspaceCreation', requestBody: { required: true, content: json(ref('WorkspaceCreationRecoveryRequest')) }, description: 'The required expectedActorId must match the authenticated request actor before looking up or resuming the original initialization. A changed account returns 409 session_changed without side effects; the original key is retained.' } },
     '/api/v1/workspaces/{workspaceId}/identity': { get: { ...secured('Read presentation identity for a current authorized workspace; its version is independent of membership versions', ref('WorkspaceIdentity'), [workspace]), operationId: 'getWorkspaceIdentity' } },
     '/api/v1/workspaces/{workspaceId}/members': { get: { ...secured('List members, including revoked memberships; requires workspace access.manage', array(ref('Member')), [workspace]), operationId: 'listMembers' } },
     '/api/v1/workspaces/{workspaceId}/members/directory': { get: { ...secured('Read the current scoped and redacted member directory; directory.read or workspace access.manage required', ref('MemberDirectory'), [workspace]), operationId: 'getMemberDirectory', description: 'Other members contact and authorization fields are redacted for non-managers. Team membership grants no permission. Presence is derived from authoritative heartbeats and TTL; twoFactorEnabled remains null while no trusted MFA source exists.' } },

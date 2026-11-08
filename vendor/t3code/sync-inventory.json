@@ -3831,8 +3831,8 @@
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json",
-      "sha256": "8b13595edc57c870a8fa81cb09900c4673d0a730f583a675d68daa18359a445e",
-      "bytes": 5137685
+      "sha256": "e54f8d05b4c437e450a479b4b39e4477ea768de46adb6ec572b371969c8e11a5",
+      "bytes": 5139051
     },
     {
       "destination": "vendor/t3code/mcp-skills-source.json",
@@ -10676,8 +10676,8 @@
     {
       "destination": "vendor/t3code/sync-imports.json",
       "asset": "vendor/t3code/sync-imports.json",
-      "sha256": "e4c3588410a258b478133ae0cc195772699908c219b2990ed49f9e441a7180fd",
-      "bytes": 2302395,
+      "sha256": "7f9b66b751755f438b13def1e9b21ee30a6e2ec1e5e94850feab00e6acb580c2",
+      "bytes": 2303172,
       "mode": 420,
       "provenance": "local-addition",
       "rationaleLedger": "vendor/t3code/integration-patches.json"

@@ -15,7 +15,10 @@ test('original creation revision survives modification, deletion and workspace r
   await workspace.init();
   const input = { entity: 'work_item', title: 'Original request' };
   const original = await workspace.createEntity(input, 'original-key');
+  assert.equal(workspace.originalCreationRevision('original-key'), original.revision);
+  assert.equal(workspace.originalCreationRevision('missing-key'), undefined);
   const changed = await workspace.patch(original.id, { title: 'Later edit' }, original.revision);
+  assert.equal(workspace.originalCreationRevision('original-key'), original.revision);
   const fact = Workspace.inspectCreation(root, 'original-key');
   assert.equal(fact.request?.id, original.id);
   assert.equal(fact.request?.revision, original.revision);
@@ -25,6 +28,7 @@ test('original creation revision survives modification, deletion and workspace r
   await workspace.close();
   workspace = new Workspace(root);
   await workspace.init();
+  assert.equal(workspace.originalCreationRevision('original-key'), original.revision);
   const deleted = Workspace.inspectCreation(root, 'original-key');
   assert.equal(deleted.request?.revision, original.revision);
   assert.equal(deleted.deleted, true);

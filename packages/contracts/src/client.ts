@@ -23,6 +23,8 @@ import { createLocalProjectClient } from './local-project-client.ts';
 import { createAgentContextClient } from './agent-file-area-client.ts';
 import { createChangeHistoryClient } from './change-history-client.ts';
 import type { InstanceSetupStatus, SetupRequest, SetupResponse } from './instance-setup.ts';
+import { workspaceCreationResultSchema, type WorkspaceCreationRequest, type WorkspaceCreationRecoveryRequest, type WorkspaceCreationResult, type WorkspaceInitialization } from './workspace-creation.ts';
+export type { WorkspaceCreationRequest, WorkspaceCreationRecoveryRequest, WorkspaceCreationResult, WorkspaceInitialization } from './workspace-creation.ts';
 export type { InstanceSetupStatus, SetupRequest, SetupResponse } from './instance-setup.ts';
 export type { DashboardRecord } from '../../domain/src/dashboard.ts';
 export type { PersonalDashboard, SelfProfile, PrivateNote, PrivateNoteData, TaskWatch, TaskWatchData, ProjectMeeting, ProjectMeetingData, MeetingParticipant } from '../../domain/src/dashboard-personal.ts';
@@ -305,7 +307,15 @@ export class ProjectManagementClient {
   getWebhooks(workspaceId: string, options?: RequestOptions): Promise<WebhookOverview> { return this.#json<WebhookOverview>('GET', `/api/v1/workspaces/${segment(workspaceId)}/webhooks`, options); }
   getWebhookDeliveries(workspaceId: string, endpointId: string, query: { cursor?: string; limit?: number } = {}, options?: RequestOptions): Promise<WebhookDeliveryPage> { return this.#json<WebhookDeliveryPage>('GET', `/api/v1/workspaces/${segment(workspaceId)}/webhooks/${segment(endpointId)}/deliveries`, options, undefined, query); }
   getWebhookDelivery(workspaceId: string, deliveryId: string, options?: RequestOptions): Promise<WebhookDeliveryDetail> { return this.#json<WebhookDeliveryDetail>('GET', `/api/v1/workspaces/${segment(workspaceId)}/webhook-deliveries/${segment(deliveryId)}`, options); }
-  listWorkspaces(options?: RequestOptions) { return this.#json<{ items: Workspace[] }>('GET', '/api/v1/workspaces', options); }
+  listWorkspaces(options?: RequestOptions) { return this.#json<{ items: Workspace[]; pendingInitializations: WorkspaceInitialization[] }>('GET', '/api/v1/workspaces', options); }
+  async createWorkspace(input: WorkspaceCreationRequest, key: string, options?: RequestOptions): Promise<WorkspaceCreationResult> {
+    const response = await this.#send('POST', '/api/v1/workspaces', options, input, undefined, { 'Idempotency-Key': key });
+    const result: unknown = await response.json();
+    if (!response.ok) throw new ApiError(response.status, result);
+    return workspaceCreationResultSchema.parse(result);
+  }
+  async getWorkspaceCreation(key: string, options?: RequestOptions): Promise<WorkspaceCreationResult> { return workspaceCreationResultSchema.parse(await this.#json<unknown>('GET', `/api/v1/workspace-creations/${segment(key)}`, options)); }
+  async recoverWorkspaceCreation(key: string, input: WorkspaceCreationRecoveryRequest, options?: RequestOptions): Promise<WorkspaceCreationResult> { return workspaceCreationResultSchema.parse(await this.#json<unknown>('POST', `/api/v1/workspace-creations/${segment(key)}/recover`, options, input)); }
   getWorkspaceIdentity(workspaceId: string, options?: RequestOptions): Promise<WorkspaceIdentity> { return this.#json<WorkspaceIdentity>('GET', `/api/v1/workspaces/${segment(workspaceId)}/identity`, options); }
   listMembers(workspaceId: string, options?: RequestOptions) { return this.#json<Member[]>('GET', `/api/v1/workspaces/${segment(workspaceId)}/members`, options); }
   getMemberDirectory(workspaceId: string, options?: RequestOptions): Promise<MemberDirectory> { return this.#json<MemberDirectory>('GET', `/api/v1/workspaces/${segment(workspaceId)}/members/directory`, options); }

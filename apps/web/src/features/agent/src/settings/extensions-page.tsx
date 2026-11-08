@@ -6,13 +6,16 @@ import { PmServiceProvider, usePmService } from "@/features/pm/service/pm-servic
 import { PmLoginPage } from "@/features/pm/service/pm-auth-page";
 import { useAgentText } from "../i18n";
 import { useI18n } from "@/lib/i18n-provider";
-import { ExtensionManagementError, extensionJson, readExtensionEvents, uploadExtensionZip } from "./extensions-api";
+import { extensionJson, readExtensionEvents, uploadExtensionZip } from "./extensions-api";
+import { ExtensionNativeSkills } from "./extensions-native-skills";
 import { SettingsNotice, useSettingsGuard } from "./settings-layout";
 import McpExternalAccess from "./mcp-external-access";
 
 type RemoteTarget = { providerInstanceId?: string; driver?: string; label: string; app: string; sharedProviderInstanceIds?: string[]; warnings?: string[] };
+type UnavailableTarget = { providerInstanceId: string; label: string; unavailableReason: "remote-server" | "custom-config-file" };
+type TargetResponse = { targets: RemoteTarget[]; unavailableTargets?: UnavailableTarget[] };
 
-type LoadedSelection = { scope: string; targets: RemoteTarget[]; providerId?: string; context?: ManagementContext; contexts?: ManagementContext[] };
+type LoadedSelection = { scope: string; targets: RemoteTarget[]; unavailableTargets?: UnavailableTarget[]; providerId?: string; context?: ManagementContext; contexts?: ManagementContext[] };
 
 function Management({ view }: { view: "mcp" | "skills" }) {
   const t = useAgentText();
@@ -33,6 +36,7 @@ function Management({ view }: { view: "mcp" | "skills" }) {
   const loadSequence = useRef(0);
   const [transportBusy, setTransportBusy] = useState(0);
   const [panelBusy, setPanelBusy] = useState(false);
+  const [nativeBusy, setNativeBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [streamVersion, setStreamVersion] = useState(0);
   const [streamError, setStreamError] = useState<string>();
@@ -47,22 +51,13 @@ function Management({ view }: { view: "mcp" | "skills" }) {
   const loading = loadingScope === scopeKey || (!current && !error);
   const context = !loading && !error ? current?.context : undefined;
   const id = context?.id;
-  const locked = transportBusy > 0 || panelBusy || dirty;
-  useEffect(() => { setGuard(transportBusy > 0 || panelBusy ? "busy" : dirty ? "dirty" : "clean"); }, [transportBusy, panelBusy, dirty, setGuard]);
+  const locked = transportBusy > 0 || panelBusy || nativeBusy || dirty;
+  useEffect(() => { setGuard(transportBusy > 0 || panelBusy || nativeBusy ? "busy" : dirty ? "dirty" : "clean"); }, [transportBusy, panelBusy, nativeBusy, dirty, setGuard]);
   useEffect(() => { live.current = true; return () => { live.current = false; ++loadSequence.current; }; }, []);
 
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     setLoadingScope(scopeKey); setErrorState(undefined);
-    const resolveLegacyTarget = async (): Promise<LoadedSelection> => {
-      const response = await extensionJson<{ targets: RemoteTarget[] }>("/targets");
-      const targets = response.targets.filter(target => !!target.providerInstanceId);
-      const target = requestedProvider !== null ? targets.find(item => item.providerInstanceId === requestedProvider) : targets[0];
-      if (requestedProvider !== null && !target) throw new Error(t("请求的 Agent 不存在或不支持扩展管理；未选择其他 Agent。", "The requested Agent is unavailable or does not support extension management; no other Agent was selected."));
-      const providerId = target?.providerInstanceId;
-      const resolved = providerId ? await extensionJson<{ context: ManagementContext }>(`/providers/${encodeURIComponent(providerId)}/context`, { method: "POST", body: JSON.stringify({}) }) : undefined;
-      return { scope: scopeKey, targets, providerId, context: resolved?.context };
-    };
     try {
       let result: LoadedSelection;
       if (requestedContext !== null || (projectScope && requestedProvider === null)) {
@@ -70,23 +65,41 @@ function Management({ view }: { view: "mcp" | "skills" }) {
           requestedContext !== null ? extensionJson<{ contexts: ManagementContext[] }>("/contexts") : Promise.resolve({ contexts: [] as ManagementContext[] }),
           projectScope ? extensionJson<{ contexts: ManagementContext[] }>(`/contexts?workspaceId=${encodeURIComponent(workspaceId)}&projectId=${encodeURIComponent(projectId)}`) : Promise.resolve({ contexts: [] as ManagementContext[] }),
         ]);
-        const selected = requestedContext !== null
+        let selected = requestedContext !== null
           ? [...native.contexts, ...project.contexts].find(item => item.id === requestedContext)
           : project.contexts.find(item => item.kind === "project");
         if (requestedContext !== null && !selected) throw new Error(t("请求的配置不可访问；未切换到其他目标。", "The requested configuration is inaccessible; no other target was selected."));
-        if (requestedProvider !== null && (!selected || !selected.providerInstanceIds.includes(requestedProvider))) throw new Error(t("请求的 Agent 与指定配置不匹配。", "The requested Agent does not match the specified configuration."));
-        result = { scope: scopeKey, targets: [], providerId: requestedProvider ?? undefined, context: selected, contexts: [...native.contexts, ...project.contexts] };
-      } else if (requestedProvider === null) {
-        try {
-          const enabled = await extensionJson<{ contexts: ManagementContext[] }>("/contexts/resolve-enabled", { method: "POST", body: JSON.stringify({}) });
-          const selected = [...enabled.contexts].sort((left, right) => right.apps.length - left.apps.length)[0];
-          result = { scope: scopeKey, targets: [], contexts: enabled.contexts, context: selected };
-        } catch (cause) {
-          if (!(cause instanceof ExtensionManagementError && (cause.status === 404 || cause.status === 405))) throw cause;
-          result = await resolveLegacyTarget();
+        let contexts = [...native.contexts, ...project.contexts];
+        let targets: RemoteTarget[] = [];
+        let unavailableTargets: UnavailableTarget[] = [];
+        if (selected?.kind === "native" && !selected.externalTargetIds.length) {
+          // Refresh the saved owner's authority only; unrelated owners cannot block it.
+          // The metadata inventory still exposes newly enabled Providers for explicit selection.
+          const [enabled, response] = await Promise.all([
+            extensionJson<{ contexts: ManagementContext[] }>("/contexts/resolve-enabled", { method: "POST", body: JSON.stringify({ contextId: selected.id }) }),
+            extensionJson<TargetResponse>("/targets"),
+          ]);
+          contexts = [...enabled.contexts, ...project.contexts];
+          selected = contexts.find(item => item.id === requestedContext);
+          targets = response.targets.filter(target => !!target.providerInstanceId);
+          unavailableTargets = response.unavailableTargets ?? [];
+          if (!selected) throw new Error(t("请求的配置已无启用的原生目标；未切换到其他配置。", "The requested configuration no longer has enabled native targets; no other configuration was selected."));
         }
+        if (requestedProvider !== null && (!selected || !selected.providerInstanceIds.includes(requestedProvider))) throw new Error(t("请求的 Agent 与指定配置不匹配。", "The requested Agent does not match the specified configuration."));
+        result = { scope: scopeKey, targets, unavailableTargets, providerId: requestedProvider ?? undefined, context: selected, contexts };
+      } else if (requestedProvider !== null) {
+        const response = await extensionJson<TargetResponse>("/targets");
+        if (!response.targets.some(target => target.providerInstanceId === requestedProvider)) throw new Error(t("请求的 Agent 没有可管理的本机原生目标；未选择其他 Agent。", "The requested Agent has no manageable local native target; no other Agent was selected."));
+        const resolved = await extensionJson<{ context: ManagementContext }>(`/providers/${encodeURIComponent(requestedProvider)}/context`, { method: "POST", body: JSON.stringify({}) });
+        result = { scope: scopeKey, targets: response.targets.filter(target => !!target.providerInstanceId), unavailableTargets: response.unavailableTargets ?? [], providerId: requestedProvider, context: resolved.context };
       } else {
-        result = await resolveLegacyTarget();
+        const [enabled, response] = await Promise.all([
+          extensionJson<{ contexts: ManagementContext[] }>("/contexts/resolve-enabled", { method: "POST", body: JSON.stringify({}) }),
+          extensionJson<TargetResponse>("/targets"),
+        ]);
+        const targets = response.targets.filter(target => !!target.providerInstanceId);
+        const selected = [...enabled.contexts].sort((left, right) => right.apps.length - left.apps.length)[0];
+        result = { scope: scopeKey, targets, unavailableTargets: response.unavailableTargets ?? [], contexts: enabled.contexts, context: selected };
       }
       if (live.current && sequence === loadSequence.current) setSelection(result);
     } catch (cause) {
@@ -163,12 +176,18 @@ function Management({ view }: { view: "mcp" | "skills" }) {
   if (projectScope && !service.actor) return <PmLoginPage />;
   return <div className="settings-extensions-page">
     <section className="settings-extension-context" aria-label={t("扩展配置目标", "Extension configuration target")}>
-      {(!projectScope || requestedProvider !== null) && current && current.contexts && current.contexts.length > 1 && <div className="settings-extension-context-controls">
-        <label htmlFor={selectId}><span>{t("配置目标", "Configuration target")}</span><select id={selectId} value={context?.id ?? ""} disabled={locked || loading} onChange={event => selectContext(event.target.value)}>{current.contexts.map(item => <option key={item.id} value={item.id}>{item.label} · {item.apps.length} {t("个目标", "targets")}</option>)}</select></label>
+      {(!projectScope || requestedProvider !== null) && current && current.contexts && current.contexts.length > 1 && current.targets.length === 0 && <div className="settings-extension-context-controls">
+        <label htmlFor={selectId}><span>{t("配置目标", "Configuration target")}</span><select id={selectId} value={context?.id ?? ""} disabled={locked || loading} onChange={event => selectContext(event.target.value)}>{current.contexts.map(item => <option key={item.id} value={item.id}>{item.label} · {item.apps.join(" / ")}</option>)}</select></label>
       </div>}
-      {requestedContext === null && (!projectScope || requestedProvider !== null) && current && !current.contexts && current.targets.length > 1 && <div className="settings-extension-context-controls">
-        <label htmlFor={selectId}><span>{t("配置目标", "Configuration target")}</span><select id={selectId} value={current.providerId ?? ""} disabled={locked || loading} onChange={event => selectProvider(event.target.value)}>{current.targets.map(item => <option key={item.providerInstanceId} value={item.providerInstanceId}>{item.label} · {item.driver ?? item.app} · {item.providerInstanceId}</option>)}</select></label>
+      {(!projectScope || requestedProvider !== null) && current && current.targets.length > 0 && <div className="settings-extension-context-controls">
+        <label htmlFor={selectId}><span>{t("配置目标", "Configuration target")}</span><select id={selectId} value={current.providerId ?? context?.providerInstanceIds[0] ?? ""} disabled={locked || loading} onChange={event => selectProvider(event.target.value)}>
+          {!context?.providerInstanceIds.length && <option value="" disabled>{t("请选择 Agent。", "Choose an Agent.")}</option>}
+          {current.targets.map(item => <option key={item.providerInstanceId} value={item.providerInstanceId}>{item.label} · {item.driver ?? item.app} · {item.providerInstanceId}</option>)}
+          {current.unavailableTargets?.map(item => <option key={item.providerInstanceId} disabled>{item.label} · OpenCode · {t("无本机配置权限", "no local configuration authority")}</option>)}
+        </select></label>
       </div>}
+      {current?.unavailableTargets?.map(item => <p className="settings-extension-scope-note" key={item.providerInstanceId}>{item.label} · OpenCode: {item.unavailableReason === "remote-server" ? t("使用外部 OpenCode 服务；其文件系统不归当前 Agent 服务授权，不能写入本机配置。即使地址是 loopback，也不推定拥有该服务。", "Uses an external OpenCode server; its filesystem is not authorized by this Agent service, so local configuration cannot be managed. A loopback address does not establish server ownership.") : t("自定义 OPENCODE_CONFIG 文件不属于受支持的 opencode.json/jsonc 根；未改写或回退到其他目录。", "The custom OPENCODE_CONFIG file is outside the supported opencode.json/jsonc root; no other directory was substituted or modified.")}</p>)}
+      {!projectScope && <p className="settings-extension-scope-note">{t("本机目标均指 Agent 服务所在机器，不是浏览器电脑；桌面远程模式管理的是远端主机。新增目标可能使用独立配置库，不会重启正在运行的管理服务。", "Local targets refer to the Agent service machine, not the browser computer; desktop remote mode manages the remote host. New targets may use a separate library without restarting active management services.")} <button type="button" disabled={locked || loading} onClick={() => void load()}>{t("刷新目标", "Refresh targets")}</button></p>}
       {locked && <p className="settings-extension-scope-note" role="status">{dirty ? t("请先保存或取消当前草稿，再切换 Agent。", "Save or cancel the current draft before switching Agents.") : t("请等待当前操作完成后再切换 Agent。", "Wait for the current operation before switching Agents.")}</p>}
       {loading && <SettingsNotice kind="loading">{t("正在读取配置…", "Loading configuration…")}</SettingsNotice>}
       {error && <SettingsNotice kind="error" onRetry={() => void load()}>{error}</SettingsNotice>}
@@ -176,8 +195,9 @@ function Management({ view }: { view: "mcp" | "skills" }) {
     </section>
     {!loading && !error && requestedContext === null && requestedProvider === null && !projectScope && current && !current.context && current.targets.length === 0 && <OpenHandsProviderSetupSurface view={view} locale={locale} onConfigureProvider={() => navigate("/agent/settings/providers")} />}
     {context && streamError && <SettingsNotice kind="error" onRetry={() => setStreamVersion(version => version + 1)}>{streamError}</SettingsNotice>}
-    {context && <CcSwitchManagement key={`${scopeKey}:${id}`} context={context} contexts={[context]} locale={locale} invoke={invoke} upload={upload} subscribe={subscribe} onDirtyChange={setDirty}>
-      <OpenHandsExtensionSurface view={view} onInteractionBlockedChange={setPanelBusy} />
+    {context?.kind === "native" && view === "skills" && <ExtensionNativeSkills key={`native-skills:${scopeKey}:${id}`} invoke={invoke} subscribe={subscribe} disabled={locked || !!streamError} onBusyChange={setNativeBusy} />}
+    {context && <CcSwitchManagement key={`management:${scopeKey}:${id}`} context={context} contexts={[context]} locale={locale} invoke={invoke} upload={upload} subscribe={subscribe} onDirtyChange={setDirty}>
+      <div inert={nativeBusy || undefined}><OpenHandsExtensionSurface view={view} onInteractionBlockedChange={setPanelBusy} /></div>
     </CcSwitchManagement>}
   </div>;
 }

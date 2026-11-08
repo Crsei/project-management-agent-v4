@@ -8,6 +8,7 @@ import { createUser, createWorkspace } from '../../../../packages/infrastructure
 import { LocalBlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
 import { bindStorage } from '../../../../packages/infrastructure/src/blob-storage-maintenance.ts';
 import { assertStorageMarker, readStorageBinding, readStorageMarker } from '../../../../packages/infrastructure/src/blob-storage-binding.ts';
+import { initializeNovaWorkspaceSample, queueNovaWorkspaceSample, type WorkspaceSampleOptions } from '../../../../packages/application/src/workspace-samples.ts';
 import { readManagedPostgresState } from '../managed-postgres.mjs';
 import { ensurePrivateDirectory, readPrivateJson, writePrivateJson } from '../private-state.mjs';
 
@@ -60,6 +61,7 @@ async function assertManagedServer(sql: PoolClient, dataDir: string): Promise<vo
 /** All authority and password hashing remain in the existing infrastructure APIs. */
 export async function bootstrapDesktop(input: BootstrapInput): Promise<{ instanceId: string; userId: string; workspaceId: string; initialized: boolean }> {
   const dataDir = resolve(input.dataDir);
+  const sample: WorkspaceSampleOptions = { coreRoot: join(dataDir, 'pm-workspaces'), localProjects: { enabled: true, dataRoot: dataDir, defaultParent: resolve(input.projectRoot), allowedRoots: [resolve(input.projectRoot)], backupRoot: join(dataDir, 'backups'), coreRoot: join(dataDir, 'pm-workspaces') } };
   const ownership = await readManagedPostgresState(dataDir);
   if (ownership.phase !== 'ready') throw new Error('Managed PostgreSQL is not initialized');
   assertManagedDatabaseUrl(input.databaseUrl, ownership);
@@ -123,7 +125,7 @@ export async function bootstrapDesktop(input: BootstrapInput): Promise<{ instanc
     let workspaceId = anchor.workspace_id ?? state.workspaceId ?? workspaces.rows[0]?.id;
     if (workspaceId) {
       if (workspaces.rows[0]?.id !== workspaceId || (state.workspaceId && state.workspaceId !== workspaceId) || (anchor.workspace_id && anchor.workspace_id !== workspaceId)) mismatch();
-    } else workspaceId = (await createWorkspace(pool, userId, state.workspaceName)).id;
+    } else workspaceId = (await createWorkspace(pool, userId, state.workspaceName, { prepare: (client, workspace) => queueNovaWorkspaceSample(client, workspace.id, workspace.ownerId, workspace.name, sample) })).id;
     if ((await sql.query('SELECT 1 FROM memberships WHERE workspace_id=$1 AND user_id=$2', [workspaceId, userId])).rowCount !== 1) mismatch();
     await sql.query('UPDATE desktop_bootstrap SET workspace_id=$1 WHERE singleton=true', [workspaceId]);
     state = { ...state, workspaceId };
@@ -137,6 +139,7 @@ export async function bootstrapDesktop(input: BootstrapInput): Promise<{ instanc
       await bindStorage({ pool, provider, locator: { provider: 'local', root: provider.root }, mode: 'new', stopped: true, storeId: state.storeId, operationId: state.operationId });
     }
     await assertBoundStorage(pool, dataDir, state.storeId);
+    await initializeNovaWorkspaceSample(pool, workspaceId, sample);
     state = { ...state, phase: 'ready' };
     await writePrivateJson(filename, state);
     return { instanceId: state.instanceId, userId, workspaceId, initialized };

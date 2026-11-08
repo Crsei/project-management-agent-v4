@@ -38,7 +38,10 @@ extensionRoutes.get("/extensions/contexts", async c => {
   return c.json(await getExtensionHost().list(c.req.raw.headers, query.workspaceId && query.projectId ? { workspaceId: query.workspaceId, projectId: query.projectId } : undefined));
 });
 extensionRoutes.post("/extensions/contexts", async c => c.json(await getExtensionHost().bind(extensionBindSchema.parse(await c.req.json())), 201));
-extensionRoutes.post("/extensions/contexts/resolve-enabled", async c => c.json(await getExtensionHost().resolveEnabledProviderContexts()));
+extensionRoutes.post("/extensions/contexts/resolve-enabled", bodyLimit({ maxSize: 32 * 1024 }), async c => {
+  const { contextId } = z.strictObject({ contextId: z.string().min(1).max(100).optional() }).parse(await c.req.json());
+  return c.json(await getExtensionHost().resolveEnabledProviderContexts(contextId));
+});
 extensionRoutes.delete("/extensions/contexts/:contextId", async c => {
   const body = z.strictObject({ confirmed: z.literal(true) }).parse(await c.req.json());
   if (body.confirmed) await getExtensionHost().unbind(c.req.param("contextId"));

@@ -6,7 +6,7 @@ import test from "node:test";
 import { createProviderInstance, getStoredInstance, updateProviderInstance } from "../providers/instances.ts";
 import {
   assertExtensionProviderBindingCurrent, canonicalExtensionProviderPath,
-  extensionProviderPathsOverlap, invalidateExtensionProviderBindings, listExtensionProviderTargets,
+  extensionProviderPathsOverlap, invalidateExtensionProviderBindings, listExtensionProviderTargets, listUnavailableExtensionProviderTargets,
   resolveExtensionProviderBinding,
 } from "./provider-bindings.ts";
 
@@ -77,6 +77,9 @@ test("native bindings preserve upstream app IDs, explicit homes, sharing, confir
     createProviderInstance({ instanceId: "native-agy", driver: "antigravity", environment: environment(one) });
     createProviderInstance({ instanceId: "native-opencode", driver: "opencode", environment: [...environment(one), { name: "XDG_CONFIG_HOME", value: path.join(one, "xdg"), sensitive: false }] });
     createProviderInstance({ instanceId: "remote-opencode", driver: "opencode", config: { serverUrl: "http://127.0.0.1:4101" }, environment: environment(one) });
+    createProviderInstance({ instanceId: "disabled-remote-opencode", driver: "opencode", enabled: false, config: { serverUrl: "https://remote.example.invalid" }, environment: environment(one) });
+    createProviderInstance({ instanceId: "custom-file-opencode", driver: "opencode", environment: [...environment(two), { name: "OPENCODE_CONFIG", value: path.join(two, "custom.json"), sensitive: false }] });
+    createProviderInstance({ instanceId: "supported-file-opencode", driver: "opencode", environment: [...environment(two), { name: "OPENCODE_CONFIG", value: path.join(two, ".config", "opencode", "opencode.jsonc"), sensitive: false }] });
     for (const driver of ["cursor", "muse", "fx", "acpRegistry"] as const)
       createProviderInstance({ instanceId: `not-upstream-${driver}`, driver, environment: environment(one) });
     const targets = listExtensionProviderTargets();
@@ -120,6 +123,12 @@ test("native bindings preserve upstream app IDs, explicit homes, sharing, confir
     assert.equal(targets.find(target => target.providerInstanceId === "native-agy")!.nativeMcp, "execution-scoped");
     assert.equal(targets.find(target => target.providerInstanceId === "native-opencode")!.appDir, path.join(one, "xdg", "opencode"));
     assert.equal(targets.some(target => target.providerInstanceId === "remote-opencode" || target.providerInstanceId.startsWith("not-upstream-")), false);
+    assert.equal(targets.some(target => target.providerInstanceId === "supported-file-opencode"), true);
+    assert.equal(targets.some(target => target.providerInstanceId === "custom-file-opencode"), false);
+    assert.deepEqual(listUnavailableExtensionProviderTargets().map(({ providerInstanceId, unavailableReason }) => ({ providerInstanceId, unavailableReason })), [
+      { providerInstanceId: "remote-opencode", unavailableReason: "remote-server" },
+      { providerInstanceId: "custom-file-opencode", unavailableReason: "custom-config-file" },
+    ]);
     const oldShared = resolveExtensionProviderBinding({ providerInstanceIds: ["codex-shared"], confirmed: true });
     await rm(alias);
     await symlink(path.join(two, ".codex"), alias, process.platform === "win32" ? "junction" : "dir");

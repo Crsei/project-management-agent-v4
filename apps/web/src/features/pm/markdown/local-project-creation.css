@@ -38,6 +38,14 @@
   color: var(--muted-foreground);
   font-size: 11px;
 }
+.local-project-creation .local-project-creation-required {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 400;
+}
+
 
 .local-project-creation .local-directory-fields {
   display: grid;

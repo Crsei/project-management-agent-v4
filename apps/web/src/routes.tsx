@@ -28,7 +28,9 @@ import { AgentChatPage } from "@/features/pm/agent/agent-chat-page"
 import { useWorkspaceStore } from "@/providers/app-providers"
 import { PmServiceProvider, usePmService } from "@/features/pm/service/pm-service"
 import { ServiceGuard } from "@/features/pm/service/pm-ui"
-const AgentApp = lazy(() => import("@/features/agent/src/app").then(module => ({ default: module.App })))
+import { loadAgentApp } from "@/lib/agent-app-module"
+import { RouteErrorBoundary, RouteLoading } from "@/components/blocks/route-feedback"
+const AgentApp = lazy(loadAgentApp)
 const ConnectAgentPage = lazy(() => import("@/features/agent/src/mcp/connect-agent"))
 
 
@@ -49,11 +51,12 @@ function WorkspaceStartRoute() {
 
 /** Real service routes and explicitly isolated component demonstrations. */
 export function AppRoutes() {
+  const location = useLocation()
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/pm" replace />} />
-      <Route path="/agent/*" element={<Suspense fallback={<div role="status">正在加载工作区…</div>}><AgentApp /></Suspense>} />
-      <Route path="/connect-agent" element={<Suspense fallback={<div role="status">正在核对连接请求…</div>}><ConnectAgentPage /></Suspense>} />
+      <Route path="/agent/*" element={<RouteErrorBoundary resetKey={location.pathname}><Suspense fallback={<RouteLoading />}><AgentApp /></Suspense></RouteErrorBoundary>} />
+      <Route path="/connect-agent" element={<RouteErrorBoundary resetKey={location.pathname}><Suspense fallback={<RouteLoading message="正在核对连接请求…" />}><ConnectAgentPage /></Suspense></RouteErrorBoundary>} />
       <Route path="/pm/invitations/accept" element={<PmInvitationAcceptPage />} />
       <Route path="/pm/account" element={<PmServiceProvider><Outlet /></PmServiceProvider>}>
         <Route index element={<Navigate to="security" replace />} />

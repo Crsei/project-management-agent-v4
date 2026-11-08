@@ -19,7 +19,7 @@ test("runtime preserves trusted Chat identity and rejects PM bridge without it b
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
   try {
     codexAdapter.check = async () => ({ installation: { status: "installed" }, authentication: "authenticated", nativeSessionReady: true, models: [], methods: [], canLogout: false });
-    updateProviderInstance("codex", { customModels: [{ id: "fixture", label: "Fixture" }] }, getStoredInstance("codex")!.revision);
+    updateProviderInstance("codex", { enabled: true, customModels: [{ id: "fixture", label: "Fixture" }] }, getStoredInstance("codex")!.revision);
     const runtime = await resolveProviderRuntime({ providerInstanceId: "codex", modelName: "fixture" });
     const execution = { threadId: "trusted-thread", generationId: "trusted-generation", messageId: "trusted-message", environment: agentWorkspaceEnvironment(directory, true) };
     let calls = 0;

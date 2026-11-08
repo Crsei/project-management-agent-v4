@@ -10,6 +10,15 @@ const args = process.argv.slice(2);
 const home = process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), ".codex");
 const eventLog = process.env.EVENT_LOG;
 const scopeLog = process.env.SCOPE_LOG;
+const reportedHome = () => {
+  if (process.env.REPORTED_HOME) return process.env.REPORTED_HOME;
+  if (!process.env.REPORTED_HOME_STYLE) return home;
+  const canonical = fs.realpathSync.native(home);
+  if (process.env.REPORTED_HOME_STYLE === "windows-extended") return path.toNamespacedPath(canonical);
+  if (process.env.REPORTED_HOME_STYLE === "windows-forward") return canonical.replaceAll("\\", "/");
+  if (process.env.REPORTED_HOME_STYLE === "windows-case") return canonical.toUpperCase();
+  return canonical;
+};
 const record = event => { if (eventLog) fs.appendFileSync(eventLog, JSON.stringify(event) + "\n"); };
 const scopeRecord = event => { if (scopeLog) fs.appendFileSync(scopeLog, JSON.stringify(event) + "\n"); };
 record({ args, cwd: process.cwd(), home, processHome: process.env.HOME, key: process.env.FIXTURE_NATIVE_KEY });
@@ -75,7 +84,7 @@ if (args.includes("--version")) {
       }
       continue;
     }
-    if (method === "initialize") respond({ userAgent: "codex/0.156.1", codexHome: process.env.REPORTED_HOME || home, platformFamily: "unix", platformOs: "linux" });
+    if (method === "initialize") respond({ userAgent: "codex/0.156.1", codexHome: reportedHome(), platformFamily: process.platform === "win32" ? "windows" : "unix", platformOs: process.platform });
     else if (method === "initialized") continue;
     else if (method === "account/read") {
       if (process.env.ACCOUNT_REPORT === "rpc-error") reject("Native credential configuration failed");

@@ -5,7 +5,7 @@ import path from "node:path";
 import { z } from "zod";
 import { extensionAppIds, extensionProjectScopeSchema, type ExtensionAppId, type ExtensionContext, type ExtensionDirectory, type ExtensionEvent, type ExtensionFailure, type ExtensionMcpDefinition, type ExtensionMcpManagement, type ExtensionProjectScope, type ExtensionDefinitionReference, type ResolvedExtensionDefinition } from "@agent-workspace/contracts/extensions";
 import { validateAutomationMcpEndpoint, validateAutomationPrivateHeaders } from "../../../../../packages/infrastructure/src/automation-integrations.ts";
-import { canonicalExtensionProviderPath, invalidateExtensionProviderBindings, listExtensionProviderTargets, resolveRegisteredExtensionProviders, type ExtensionProviderBinding, type ExtensionProviderInvalidation } from "./provider-bindings.ts";
+import { canonicalExtensionProviderPath, invalidateExtensionProviderBindings, listExtensionProviderTargets, listUnavailableExtensionProviderTargets, resolveRegisteredExtensionProviders, type ExtensionProviderBinding, type ExtensionProviderInvalidation, type ExtensionUnavailableProviderTarget } from "./provider-bindings.ts";
 import { isExtensionMutationCommand, parseExtensionCommand, type ExtensionCommand } from "./commands.ts";
 import { ExtensionError, ExtensionSidecar } from "./rpc.ts";
 import { contextDataDirectory, contextSecretKey, privateDirectory, projectExtensionContextId, readExtensionContexts, saveExtensionContexts, type StoredExtensionContext } from "./storage.ts";
@@ -161,14 +161,14 @@ export class ExtensionHost {
     }
     return { contexts: [...(await this.load()).values()].filter(item => item.stored.kind === "native").map(item => this.describe(item)) };
   }
-  targets(): { targets: Array<Record<string, unknown>> } {
+  targets(): { targets: Array<Record<string, unknown>>; unavailableTargets: ExtensionUnavailableProviderTarget[] } {
     const providerTargets = listExtensionProviderTargets();
     const targets: Array<Record<string, unknown>> = providerTargets.map(({ providerInstanceId, providerRevision, driver, label, app, sharedProviderInstanceIds, bindingFingerprint, nativeMcp, warnings }) => ({ providerInstanceId, providerRevision, driver, label, app, sharedProviderInstanceIds, bindingFingerprint, nativeMcp, warnings }));
     targets.push(...listExternalExtensionTargets().map(target => {
       const sharedProviderInstanceIds = providerTargets.filter(provider => provider.physicalRoots.some(root => target.physicalRoots.some(owned => overlaps(root, owned) || overlaps(owned, root)))).map(provider => provider.providerInstanceId);
       return { externalTargetId: target.id, label: target.label, app: target.app, sharedProviderInstanceIds, bindingFingerprint: target.fingerprint, nativeMcp: "native-config", warnings: ["External CLI target only; this does not add PM Chat Provider support.", ...(sharedProviderInstanceIds.length ? [`Native configuration or Unified Home overlaps Provider instances: ${sharedProviderInstanceIds.join(", ")}.`] : [])] };
     }));
-    return { targets };
+    return { targets, unavailableTargets: listUnavailableExtensionProviderTargets() };
   }
   /** Prepare metadata for a saved Provider; native configuration and the cc-switch database are untouched. */
   async resolveProviderContext(providerInstanceId: string): Promise<{ context: ExtensionContext }> {
@@ -218,11 +218,24 @@ export class ExtensionHost {
     this.registryQueue = next.then(() => undefined, () => undefined);
     return next;
   }
-  /** Combine compatible unopened targets, preserving saved libraries and live runtimes. */
-  async resolveEnabledProviderContexts(): Promise<{ contexts: ExtensionContext[] }> {
+  /** Discover enabled owners, or refresh only a saved native owner's existing authority. */
+  async resolveEnabledProviderContexts(contextId?: string): Promise<{ contexts: ExtensionContext[] }> {
     const next = this.registryQueue.then(async () => {
       const contexts = await this.load();
-      const targets = listExtensionProviderTargets();
+      const selected = contextId === undefined ? undefined : contexts.get(contextId);
+      if (contextId !== undefined && (!selected || selected.stored.kind !== "native"))
+        throw new ExtensionError(404, "native_context_not_found", "Unknown native management context.");
+      if (selected?.stored.externalTargets?.length) {
+        assertExtensionHostBindingCurrent({ binding: selected.stored.binding!, providerBinding: selected.stored.providerBinding, externalTargets: selected.stored.externalTargets });
+        return { contexts: [this.describe(selected)] };
+      }
+      const selectedRoots = selected ? writableRoots(selected.stored.binding!, selected.stored.unifiedSkillsOwned) : undefined;
+      const targets = listExtensionProviderTargets().filter(target => !selectedRoots ||
+        target.physicalRoots.filter(root => root !== target.unifiedSkillsRoot || root === canonicalExtensionProviderPath(target.appDir)).some(root =>
+          selectedRoots.some(owned => overlaps(root, owned) || overlaps(owned, root))));
+      if (selected && !targets.length)
+        throw new ExtensionError(409, "native_owner_stale", "The selected context no longer has enabled native targets. Reconcile its existing authority without selecting another context.");
+      const externalOwners = new Set<RuntimeContext>();
       const groups: { owner?: RuntimeContext; ids: string[]; binding: ExtensionProviderBinding }[] = [];
       const unowned: typeof targets = [];
       for (const target of targets) {
@@ -233,8 +246,12 @@ export class ExtensionHost {
           throw new ExtensionError(409, "native_root_owned", "The Provider overlaps an incompatible management context. Reconcile native root ownership before continuing.");
         const owner = owners[0];
         if (!owner) { unowned.push(target); continue; }
-        if (owner.stored.externalTargets?.length)
-          throw new ExtensionError(409, "native_context_external_targets", "Use the explicitly enrolled context to manage its external targets.");
+        if (owner.stored.externalTargets?.length) {
+          // Discovery does not refresh or expand explicitly enrolled external authority.
+          // Unassociated Providers remain selectable through their own explicit resolver.
+          if (owner.stored.binding!.providerInstanceIds.includes(target.providerInstanceId)) externalOwners.add(owner);
+          continue;
+        }
         const existing = owner.stored.binding!;
         // Validate the pinned old physical identities before considering any expansion.
         // Disabled aliases no longer confer authority, but an enabled same-root
@@ -310,7 +327,7 @@ export class ExtensionHost {
         contexts.set(stored.id, runtime);
         return this.describe(runtime);
       });
-      return { contexts: results };
+      return { contexts: [...results, ...[...externalOwners].map(owner => this.describe(owner))] };
     });
     this.registryQueue = next.then(() => undefined, () => undefined);
     return next;
@@ -562,6 +579,7 @@ export class ExtensionHost {
         const importResult = command === "apply_mcp_import" ? parseMcpImportResult(result) : undefined;
         if ((command === "save_mcp_definition" || command === "set_mcp_agent_configuration") && result !== null) throw new ExtensionError(502, "sidecar_protocol_invalid", "The configuration service did not confirm the expected MCP mutation result.");
         if (command === "scan_unmanaged_skills") return z.array(z.object({ directory: z.string(), name: z.string(), description: z.string().optional(), foundIn: z.array(z.enum([...extensionAppIds, "agents", "cc-switch"])) })).parse(result);
+        if (command === "scan_native_skills") return z.array(z.object({ directory: z.string(), name: z.string(), description: z.string().optional(), foundIn: z.array(z.enum([...extensionAppIds, "agents"])), managed: z.boolean() })).parse(result);
         if (command === "get_mcp_servers") return redactMcpServers(serverMapSchema.parse(result), await contextSecretKey(runtime.stored), id);
         if (command === "get_mcp_management") {
           const value = parseMcpManagement(result);

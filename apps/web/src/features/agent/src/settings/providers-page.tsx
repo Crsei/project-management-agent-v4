@@ -73,7 +73,7 @@ export default function ProvidersPage() {
     for (const provider of matching) if (provider !== defaultProvider) rows.push({ id: provider.instanceId, definition, provider });
   }
   for (const provider of allProviders) if (!drivers.some((definition) => definition.driver === provider.driver)) rows.push({ id: provider.instanceId, provider });
-  const selected = rows.find((row) => row.id === selectedId) ?? rows[0];
+  const selected = rows.find((row) => row.id === selectedId);
   const selectedProvider = selected?.provider;
   const authProvider = authFor ? allProviders.find((item) => item.instanceId === authFor.instanceId) ?? authFor : null;
   if (selected && editorSlot.current?.id !== selected.id) editorSlot.current = { id: selected.id, slot: !selected.provider };
@@ -140,7 +140,7 @@ export default function ProvidersPage() {
     }
   }
   async function resetDefault(provider: ProviderInstance) {
-    if (!protectDraft() || provider.revision === undefined || !window.confirm(t("重置此默认实例的所有设置？此操作不会退出原生账号。", "Reset all settings for this default instance? This does not sign out of the native account."))) return;
+    if (!protectDraft() || provider.revision === undefined || !window.confirm(t("重置此默认实例的所有设置并停用？此操作不会退出原生账号。", "Reset all settings and disable this default instance? This does not sign out of the native account."))) return;
     setToggleId(provider.instanceId); toggling.current = true; setActionError(null);
     try {
       const next = await resetInstance(provider.instanceId, provider.revision);
@@ -157,9 +157,16 @@ export default function ProvidersPage() {
     finally { toggling.current = false; setToggleId(null); }
   }
 
+  const codexOnboarding = selected?.definition?.driver === "codex" ? <section className="provider-settings-section provider-settings-group provider-codex-onboarding" aria-label={t("连接 Codex", "Connect Codex")}>
+    <div><strong>Codex</strong></div>
+    <Button type="button" size="sm" onClick={() => void startCodex("managed")}>{t("继续使用 ChatGPT", "Continue with ChatGPT")}</Button>
+    <Button type="button" size="sm" variant="outline" onClick={() => void startCodex("existing")}>{t("使用现有 CLI", "Use existing CLI")}</Button>
+  </section> : null;
+
   return <>
     <div className="provider-page-heading"><h2>{t("提供商", "Providers")}</h2><Button variant="ghost" size="sm" disabled={loading || toggleId !== null} onClick={() => { if (protectDraft()) void refresh(); }}><RefreshCw aria-hidden="true" className={loading ? "animate-spin" : undefined} />{t("刷新状态", "Refresh status")}</Button></div>
     <ProviderHealthSetting />
+    <p>{t("此处显示可配置的提供商。启用、原生就绪和账号认证分别核验；查看设置不会选择会话模型，请在会话中明确选择。", "These are available provider configurations. Enabling, native readiness, and account authentication are checked separately; viewing settings does not select a conversation model. Choose the model explicitly in your conversation.")}</p>
     {error && <div role="alert" className="provider-feedback provider-feedback-error"><span>{error}</span><Button variant="outline" size="sm" disabled={loading || toggleId !== null} onClick={() => { if (protectDraft()) void refresh(); }}>{t("重试", "Retry")}</Button></div>}
     {actionError && <div role="alert" className="provider-feedback provider-feedback-error"><span>{actionError}</span><Button variant="outline" size="sm" disabled={loading || toggleId !== null} onClick={() => { if (protectDraft()) void refresh(); }}>{t("刷新状态", "Refresh status")}</Button></div>}
     {loading && drivers.length === 0 && providers.length === 0 ? <div role="status" aria-label={t("正在加载提供商", "Loading providers")} className="provider-loading"><Skeleton className="h-full w-64" /><Skeleton className="h-full flex-1" /></div> : <div className="provider-master-detail">
@@ -181,6 +188,7 @@ export default function ProvidersPage() {
         {selected && selectedProvider && !editorSlot.current?.slot ? (
           <ProviderCard key={selected.id} provider={selectedProvider} definition={selected.definition} onAuth={openAuth} onTest={test} onLogout={(provider) => logout(provider.instanceId)} onBeforeAction={protectDraft} onBusyChange={onCardBusyChange}>
             {(setup) => <>
+              {!selectedProvider.enabled && selectedProvider.config.setupMode !== "managed" && codexOnboarding}
               <ProviderInstanceForm
                 key={`${selected.id}:${draftEpoch}`}
                 provider={selectedProvider}
@@ -200,20 +208,16 @@ export default function ProvidersPage() {
                 onDeleted={() => { setPendingProviders((current) => { const next = { ...current }; delete next[selected.id]; return next; }); setSelectedId(null); }}
               />
               {selectedProvider.driver !== "codex" && <ProviderMaintenance provider={selectedProvider} definition={selected.definition} onBeforeAction={protectDraft} onBusyChange={onMaintenanceBusyChange} onRefresh={refresh} />}
-              {selected.definition?.defaultInstance && selected.id === selected.definition.driver && <section className="provider-danger-zone"><div><span className="provider-setting-label">{t("重置默认实例", "Reset default instance")}</span><p>{t("此操作不会退出原生账号。", "This action does not sign out of the native account.")}</p></div><Button type="button" size="sm" variant="outline" disabled={selectedProvider.revision === undefined} onClick={() => void resetDefault(selectedProvider)}>{t("重置", "Reset")}</Button></section>}
+              {selected.definition?.defaultInstance && selected.id === selected.definition.driver && <section className="provider-danger-zone"><div><span className="provider-setting-label">{t("重置默认实例", "Reset default instance")}</span><p>{t("重置后需明确重新启用，不会退出原生账号。", "Explicitly enable again after resetting. The native account stays signed in.")}</p></div><Button type="button" size="sm" variant="outline" disabled={selectedProvider.revision === undefined} onClick={() => void resetDefault(selectedProvider)}>{t("重置", "Reset")}</Button></section>}
             </>}
           </ProviderCard>
         ) : selected?.definition ? (
           <article className="provider-detail">
             <header className="provider-detail-heading"><ProviderGlyph driver={selected.definition.driver} /><h2>{selected.definition.label}</h2></header>
-            {selected.definition.driver === "codex" && <section className="provider-settings-section provider-settings-group provider-codex-onboarding" aria-label={t("连接 Codex", "Connect Codex")}>
-              <div><strong>Codex</strong></div>
-              <Button type="button" size="sm" onClick={() => void startCodex("managed")}>{t("继续使用 ChatGPT", "Continue with ChatGPT")}</Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => void startCodex("existing")}>{t("使用现有 CLI", "Use existing CLI")}</Button>
-            </section>}
+            {codexOnboarding}
             <ProviderInstanceForm key={`${selected.id}:${draftEpoch}`} provider={null} defaultDriver={selected.definition} defaultInstanceId={selected.id} drivers={drivers} {...operations} identityStatus={selectedProvider ? <ProviderStatus provider={selectedProvider} /> : <span className="provider-status" data-status="disabled">{t("已停用", "Disabled")}</span>} onEditingChange={onEditingChange} onSaved={rememberProvider} />
           </article>
-        ) : <div className="provider-list-empty">{t("暂无可用的提供商驱动。", "No provider drivers available.")}</div>}
+        ) : <div className="provider-list-empty">{rows.length ? t("选择提供商以查看或配置。新安装的默认实例尚未启用。", "Choose a provider to view or configure it. Default instances on new installations start disabled.") : t("暂无可用的提供商驱动。", "No provider drivers available.")}</div>}
       </div>
     </div>}
     <ProviderInstanceDialog open={instanceOpen} onOpenChange={setInstanceOpen} drivers={drivers} providers={allProviders} {...operations} onCreated={(provider) => {

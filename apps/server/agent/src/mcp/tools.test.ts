@@ -11,7 +11,7 @@ import { pmToolRoutes } from "../pm-tools.ts";
 import { invokeMcpTool, listMcpTools } from "./tools.ts";
 import { grantIdentity, MCP_GRANTS, putGrant, type Grant } from "./grants.ts";
 import { verifyMcpServiceBearer } from "../../../../../packages/infrastructure/src/mcp-service-auth.ts";
-import { listStoredInstances, recordProviderObservations } from "../providers/instances.ts";
+import { createProviderInstance, recordProviderObservations } from "../providers/instances.ts";
 import { chatOnlyExecutionSelection } from "@agent-workspace/contracts/chat";
 
 // Real service/SQLite/HTTP boundaries, without a paid model or production PM database.
@@ -67,7 +67,11 @@ test("MCP scope, readonly, atomic creation, receipt identity and revoked delayed
     await assert.rejects(invokeMcpTool(identity, "t3_thread_launch", { clientRequestId: "create-once", title: "Changed" }), /different arguments/);
     await assert.rejects(invokeMcpTool(identity, "t3_thread_launch", { clientRequestId: "forged-directory", title: "Denied",
       executionSelection: { version: 2, agentWorkspaceId: "directory-id", agentWorkspaceRevision: 1 } }), /no Agent directory access/);
-    const provider = listStoredInstances().find(instance => instance.driver === "codex")!;
+    const provider = createProviderInstance({
+      instanceId: "mcp-authority-fixture", driver: "codex", label: "MCP authority fixture", enabled: true,
+      config: { binaryPath: join(directory, "unavailable-native-cli"), homePath: join(directory, "native-home") },
+      environment: [{ name: "HOME", value: directory, sensitive: false }, { name: "USERPROFILE", value: directory, sensitive: false }],
+    });
     assert.ok(provider);
     recordProviderObservations(provider.instanceId, provider.revision, { discoveredModels: [{ id: "fixture-native-model", label: "Fixture native model", temperature: false }] });
     const selected = await invokeMcpTool(identity, "t3_thread_launch", { clientRequestId: "selected-thread", title: "Ready for send", providerInstanceId: provider.instanceId, modelId: "fixture-native-model" }) as { thread: { remoteId: string } };

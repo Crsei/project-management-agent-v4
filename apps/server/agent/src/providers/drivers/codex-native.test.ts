@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { copyFile, chmod, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { NativeOutputEvent } from "@agent-workspace/contracts/output";
 import type { NativeUsageUpdate } from "@agent-workspace/contracts/usage";
 import { codexAdapter } from "./codex.ts";
-import { createProviderInstance, providerContext } from "../instances.ts";
+import { createProviderInstance, getStoredInstance, providerContext } from "../instances.ts";
 import { closeStore, deleteRecord } from "../../durable/store.ts";
 import { PM_CONTINUATIONS, continuationKey } from "../t3code/continuation.ts";
 import { startPmProviderApplication, stopPmProviderApplication } from "../t3code/application.ts";
@@ -15,7 +15,7 @@ import { getPmProviderApplication } from "../t3code/application-access.ts";
 import { codexDriver, makeCodexDriverLayer, codexProtocolResolver, codexCapabilities, codexInstallationMethods } from "../t3code/families/codex.ts";
 import { makePmProviderFamily } from "../t3code/registration.ts";
 
-async function fixture(environment: Record<string, string> = {}) {
+async function fixture(environment: Record<string, string> = {}, options: { homeAlias?: boolean } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "codex-original-protocol-"));
   const previousData = process.env.AGENT_WORKSPACE_DATA_DIR;
   process.env.AGENT_WORKSPACE_DATA_DIR = path.join(directory, "data");
@@ -23,14 +23,23 @@ async function fixture(environment: Record<string, string> = {}) {
   await copyFile(fileURLToPath(new URL("./codex-protocol-fixture.mjs", import.meta.url)), executable);
   await chmod(executable, 0o700);
   const home = path.join(directory, "native-home"); await mkdir(home);
+  const configuredHome = options.homeAlias ? path.join(directory, "native-home-alias") : home;
+  if (options.homeAlias) await symlink(home, configuredHome, process.platform === "win32" ? "junction" : "dir");
+  let binaryPath = executable;
+  if (process.platform === "win32") {
+    binaryPath = path.join(directory, "codex.cmd");
+    await writeFile(binaryPath, `@echo off\r\n"${process.execPath}" "${executable}" %*\r\n`);
+  }
   const eventLog = path.join(directory, "events.jsonl");
-  const instance = createProviderInstance({ instanceId: "controlled-codex", driver: "codex", config: { binaryPath: executable, homePath: home },
+  const instance = createProviderInstance({ instanceId: "controlled-codex", driver: "codex", config: { binaryPath, homePath: configuredHome },
     environment: Object.entries({ EVENT_LOG: eventLog, ...environment }).map(([name, value]) => ({ name, value, sensitive: false })) });
-  await startPmProviderApplication({ families: new Map([[codexDriver.driverKind, makePmProviderFamily(codexDriver, makeCodexDriverLayer)]]),
-    protocols: new Map([["codex", codexProtocolResolver]]),
-    capabilities: new Map([["codex", codexCapabilities]]), installations: new Map([["codex", codexInstallationMethods]]) });
+  const applicationOptions = { families: new Map([[codexDriver.driverKind, makePmProviderFamily(codexDriver, makeCodexDriverLayer)]]),
+    protocols: new Map([["codex" as const, codexProtocolResolver]]),
+    capabilities: new Map([["codex" as const, codexCapabilities]]), installations: new Map([["codex" as const, codexInstallationMethods]]) };
+  await startPmProviderApplication(applicationOptions);
   return { directory, instance, context: providerContext(instance, directory),
     events: async () => (await readFile(eventLog, "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line)),
+    restart: async () => { await stopPmProviderApplication(); closeStore(); await startPmProviderApplication(applicationOptions); },
     close: async () => { await stopPmProviderApplication(); closeStore();
       if (previousData === undefined) delete process.env.AGENT_WORKSPACE_DATA_DIR; else process.env.AGENT_WORKSPACE_DATA_DIR = previousData;
       await rm(directory, { recursive: true, force: true }); },
@@ -156,9 +165,35 @@ test("source Codex keeps command output, native tool results and final assistant
 });
 
 test("operation-native handshake evidence rejects a different native Home before a thread or prompt is created", async () => {
-  const f = await fixture({ REPORTED_HOME: path.join(os.tmpdir(), "foreign-controlled-codex-home") });
+  const foreign = await mkdtemp(path.join(os.tmpdir(), "foreign-controlled-codex-home-"));
+  const f = await fixture({ REPORTED_HOME: foreign });
   try {
+    await f.restart();
     await assert.rejects(codexAdapter.run(f.context, { model: "native-codex-1", prompt: "must not dispatch" }), { status: 409, code: "session_mismatch" });
     assert.ok((await f.events()).every(event => !["thread/start", "turn/start"].includes(event.rpc?.method)));
-  } finally { await f.close(); }
+  } finally { await f.close(); await rm(foreign, { recursive: true, force: true }); }
 });
+
+for (const reportedStyle of ["canonical", "windows-extended", "windows-forward", "windows-case"]) {
+  if (reportedStyle.startsWith("windows-") && process.platform !== "win32") continue;
+  test(`Codex ${reportedStyle} native Home evidence resumes the same session after host and SQLite restart`, async () => {
+    const f = await fixture({ REPORTED_HOME_STYLE: reportedStyle }, { homeAlias: true });
+    try {
+      const first = await codexAdapter.run(f.context, { model: "native-codex-1", prompt: "first explicit turn" });
+      assert.ok(first.nativeSession?.turnId);
+      await f.restart();
+      const reloaded = getStoredInstance(f.instance.instanceId)!;
+      assert.equal(reloaded.revision, f.instance.revision);
+      assert.equal(reloaded.homeDirectory, f.instance.homeDirectory);
+      const second = await codexAdapter.run(providerContext(reloaded, f.directory), {
+        model: "native-codex-1", prompt: "only the new turn", resume: first.nativeSession,
+      });
+      assert.equal(second.nativeSession?.sessionId, first.nativeSession.sessionId);
+      assert.notEqual(second.nativeSession?.turnId, first.nativeSession.turnId);
+      const requests = (await f.events()).flatMap(event => event.rpc ? [event.rpc] : []);
+      assert.equal(requests.filter(request => request.method === "thread/start").length, 1);
+      assert.equal(requests.filter(request => request.method === "turn/start").length, 2);
+      assert.ok(requests.some(request => request.method === "thread/resume" && request.params.threadId === first.nativeSession!.sessionId));
+    } finally { await f.close(); }
+  });
+}
