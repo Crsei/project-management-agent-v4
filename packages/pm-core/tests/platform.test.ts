@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { linkSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { test } from 'node:test';
 import { FileRepository, RepositoryConflict, revisionOf } from '../repository.ts';
 import { directoryIdentity, pathContains, safePathComponent, safeRelativePath, samePath } from '../platform.ts';
@@ -97,7 +98,7 @@ if (process.platform === 'win32') test('Windows directory membership changes pre
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-// These cases deliberately use the real PowerShell/native-handle helper. They are
+// These cases deliberately use the real compiled native-handle helper. They are
 // not registered off Windows because the backend runner rejects skipped tests.
 if (process.platform === 'win32') {
   test('Windows batch-prewarmed files reject stale snapshots after replacement and content mutation', () => {
@@ -149,8 +150,38 @@ if (process.platform === 'win32') {
       assert.equal(warmed.nativePaths - before.nativePaths, filenames.length);
       for (const filename of filenames) assertNoWindowsReparsePath(filename, lstatSync(filename, { bigint: true }));
       const checked = getWindowsPathAttributeMetrics();
-      assert.equal(checked.nativeCalls, warmed.nativeCalls, 'unchanged cache hits must not launch PowerShell');
+      assert.equal(checked.nativeCalls, warmed.nativeCalls, 'unchanged cache hits must not launch a native helper');
       assert.ok(checked.cacheHits - warmed.cacheHits >= filenames.length);
     } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
+  test('Windows sequential repository writes retain exact bytes and fresh native checks with one helper compilation', t => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'pm-native-sequential-writes-')));
+    const before = getWindowsPathAttributeMetrics(), started = performance.now();
+    try {
+      const repository = new FileRepository(root, false); repository.init();
+      for (let index = 0; index < 6; index++) {
+        const relative = `public ' 文件-${index}.md`, filename = path.join(root, relative);
+        const original = `original public bytes ${index}\n`, changed = `changed public bytes ${index}\n`;
+        const fresh = getWindowsPathAttributeMetrics();
+        repository.write(relative, original);
+        assert.equal(repository.read(relative), original);
+        assert.ok(getWindowsPathAttributeMetrics().nativeCalls > fresh.nativeCalls, 'each uncached exclusive creation must perform native verification');
+        const prior = lstatSync(filename, { bigint: true });
+        const replace = getWindowsPathAttributeMetrics();
+        repository.write(relative, changed, revisionOf(original));
+        assert.equal(repository.read(relative), changed);
+        assert.ok(getWindowsPathAttributeMetrics().nativeCalls > replace.nativeCalls, 'each new replacement temporary must perform native verification');
+        assert.throws(() => assertNoWindowsReparsePath(filename, prior));
+      }
+      const after = getWindowsPathAttributeMetrics();
+      assert.equal(after.helperCompilations, 1, 'all sequential native checks in this process reuse one compiled helper');
+      assert.ok(after.nativeCalls - before.nativeCalls >= 12);
+    } finally {
+      const after = getWindowsPathAttributeMetrics();
+      const delta = Object.fromEntries(Object.entries(after).map(([key, value]) => [key, value - before[key as keyof typeof before]]));
+      t.diagnostic(JSON.stringify({ scope: 'windows-native-sequential-writes', elapsedMs: performance.now() - started, ...delta }));
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 }

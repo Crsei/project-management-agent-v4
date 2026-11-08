@@ -3,17 +3,34 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, realpath, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import test from 'node:test';
+import { performance } from 'node:perf_hooks';
+import test, { type TestContext } from 'node:test';
 import { createPool } from '../../../../packages/infrastructure/src/database.ts';
 import { login } from '../../../../packages/infrastructure/src/auth.ts';
 import { ManagedPostgres } from '../managed-postgres.mjs';
 import { readPrivateJson, writePrivateJson } from '../private-state.mjs';
 import { bootstrapDesktop, validateBootstrapState } from './bootstrap.ts';
 import { readCurrentCore } from '../../../../packages/pm-core/readonly.ts';
+import { getWindowsPathAttributeMetrics } from '../../../../packages/pm-core/windows-reparse.ts';
 
 const binariesDir = process.env.PM_DESKTOP_TEST_POSTGRES_ROOT;
 const setup = { email: 'desktop-smoke@example.invalid', password: `desktop-test-${randomUUID()}`, name: 'Desktop Test', workspaceName: 'Desktop Workspace' };
 const fixture = () => ({ formatVersion: 1, instanceId: randomUUID(), phase: 'ready', storeId: randomUUID(), operationId: randomUUID(), email: setup.email, name: setup.name, workspaceName: setup.workspaceName, userId: randomUUID(), workspaceId: randomUUID() });
+
+async function observedBootstrap(t: TestContext, phase: string, options: Parameters<typeof bootstrapDesktop>[0]) {
+  const before = getWindowsPathAttributeMetrics(), started = performance.now();
+  let completed = false;
+  t.diagnostic(JSON.stringify({ scope: 'desktop-bootstrap', phase, status: 'start' }));
+  try {
+    const result = await bootstrapDesktop(options);
+    completed = true;
+    return result;
+  } finally {
+    const after = getWindowsPathAttributeMetrics();
+    const delta = Object.fromEntries(Object.entries(after).map(([key, value]) => [key, value - before[key as keyof typeof before]]));
+    t.diagnostic(JSON.stringify({ scope: 'desktop-bootstrap', phase, status: completed ? 'end' : 'error', elapsedMs: performance.now() - started, ...delta }));
+  }
+}
 
 test('bootstrap metadata is strict, complete and never persists the initial password', () => {
   const state = fixture();
@@ -29,7 +46,7 @@ test('real desktop bootstrap recovers every durable account/workspace boundary w
   const pg = new ManagedPostgres({ dataDir, binariesDir: binariesDir! });
   t.after(async () => { await pg.stop(); await rm(root, { recursive: true, force: true }); });
   const started = await pg.start();
-  let result = await bootstrapDesktop({ databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup });
+  let result = await observedBootstrap(t, 'fresh', { databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup });
   assert.equal(result.initialized, true);
   const first = { ...result };
   const sample = readCurrentCore(join(dataDir, 'pm-workspaces', first.workspaceId)).files.map(file => ({ id: file.id, raw: file.raw }));
@@ -47,7 +64,7 @@ test('real desktop bootstrap recovers every durable account/workspace boundary w
     // but before their subsequent metadata write. No production fault hook is needed.
     await pool.query('UPDATE desktop_bootstrap SET user_id=NULL,workspace_id=NULL WHERE singleton=true');
     await writePrivateJson(join(dataDir, 'bootstrap.json'), { ...ready, phase: 'pending', userId: null, workspaceId: null });
-    result = await bootstrapDesktop({ databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects') });
+    result = await observedBootstrap(t, 'recover-account-workspace', { databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects') });
     assert.equal(result.userId, first.userId);
     assert.equal(result.workspaceId, first.workspaceId);
     assert.equal((await pool.query('SELECT count(*)::integer AS count FROM users')).rows[0].count, 1);
@@ -58,7 +75,7 @@ test('real desktop bootstrap recovers every durable account/workspace boundary w
     poolOpen = false;
     await pg.stop();
     const restarted = await pg.start();
-    result = await bootstrapDesktop({ databaseUrl: restarted.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects') });
+    result = await observedBootstrap(t, 'restart', { databaseUrl: restarted.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects') });
     assert.equal(result.initialized, false);
     assert.equal(result.userId, first.userId);
     assert.equal(result.workspaceId, first.workspaceId);
@@ -71,14 +88,14 @@ test('real desktop bootstrap rejects missing blob markers and missing restore re
   const pg = new ManagedPostgres({ dataDir, binariesDir: binariesDir! });
   t.after(async () => { await pg.stop(); await rm(root, { recursive: true, force: true }); });
   const started = await pg.start();
-  await bootstrapDesktop({ databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup });
+  await observedBootstrap(t, 'fresh-marker-refusal-fixture', { databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup });
   const pool = createPool(started.databaseUrl, 2);
   try {
     await unlink(join(dataDir, 'blobs', '.pm-store.json'));
-    await assert.rejects(bootstrapDesktop({ databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup }), /binding|marker/i);
+    await assert.rejects(observedBootstrap(t, 'reject-missing-blob-marker', { databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup }));
     await assert.rejects(readFile(join(dataDir, 'blobs', '.pm-store.json')), { code: 'ENOENT' });
     await unlink(join(dataDir, 'bootstrap.json'));
-    await assert.rejects(bootstrapDesktop({ databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup }), /refusing account recreation/);
+    await assert.rejects(observedBootstrap(t, 'reject-missing-registration', { databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup }));
     assert.equal((await pool.query('SELECT count(*)::integer AS count FROM users')).rows[0].count, 1);
     assert.equal((await pool.query('SELECT count(*)::integer AS count FROM workspaces')).rows[0].count, 1);
   } finally { await pool.end(); }

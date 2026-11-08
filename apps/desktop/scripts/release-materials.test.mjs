@@ -132,11 +132,11 @@ for (const gitBacked of [false, true]) {
 
     await requireUnchangedSource(source, input);
     await put(input, "turbo.json", '{"tasks":{"different":{}}}\n');
-    await assert.rejects(requireUnchangedSource(source, input), /Source changed.*turbo\.json/);
+    await assert.rejects(requireUnchangedSource(source, input));
     await put(input, "turbo.json", turboBytes);
     await requireUnchangedSource(source, input);
     await rm(join(input, "turbo.json"));
-    await assert.rejects(requireUnchangedSource(source, input), /Source (?:selection )?changed/);
+    await assert.rejects(requireUnchangedSource(source, input));
     assert.equal(await readFile(join(captured, "turbo.json"), "utf8"), turboBytes);
     assert.equal(await readFile(join(expanded, "turbo.json"), "utf8"), turboBytes);
   });

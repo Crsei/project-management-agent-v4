@@ -5,21 +5,23 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { makePrivatePath } from './private-path.ts';
 
+const maxBatchPaths = 256;
+const maxBatchBytes = 128 * 1024;
 // Node exposes junction/symlink mode, but not arbitrary Windows reparse tags.
-// Read attributes and their timestamps from a non-following handle, bound to its file ID.
-const attributeScript = String.raw`
-$ErrorActionPreference = 'Stop'
-$PSModuleAutoLoadingPreference = 'None'
-Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1')
-Add-Type -TypeDefinition @'
+// Compile once; each one-shot query still reads a non-following handle and its file ID.
+const attributeProgram = String.raw`
 using System;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
 using Microsoft.Win32.SafeHandles;
+[DataContract]
 public class PmNativePathAttributes {
-  public string dev, ino, mtimeNs, ctimeNs;
-  public bool reparse;
+  [DataMember] public string dev, ino, mtimeNs, ctimeNs;
+  [DataMember] public bool reparse;
   [StructLayout(LayoutKind.Sequential)]
   struct FileInformation {
     public uint Attributes;
@@ -58,14 +60,42 @@ public class PmNativePathAttributes {
       };
     }
   }
+  public static int Main() {
+    try {
+      var input = new byte[${maxBatchBytes + 1}];
+      int length = 0;
+      using (var stream = Console.OpenStandardInput()) {
+        while (length < input.Length) {
+          int count = stream.Read(input, length, input.Length - length);
+          if (count == 0) break;
+          length += count;
+        }
+      }
+      if (length > ${maxBatchBytes}) throw new InvalidDataException();
+      string[] paths;
+      using (var stream = new MemoryStream(input, 0, length)) {
+        paths = (string[])new DataContractJsonSerializer(typeof(string[])).ReadObject(stream);
+      }
+      if (paths == null || paths.Length > ${maxBatchPaths}) throw new InvalidDataException();
+      var result = new PmNativePathAttributes[paths.Length];
+      for (int index = 0; index < paths.Length; index++) result[index] = Read(paths[index]);
+      new DataContractJsonSerializer(typeof(PmNativePathAttributes[])).WriteObject(Console.OpenStandardOutput(), result);
+      return 0;
+    } catch {
+      Console.Error.Write("Windows storage path attributes could not be verified");
+      return 1;
+    }
+  }
 }
+`;
+const attributeCompiler = String.raw`
+$ErrorActionPreference = 'Stop'
+$PSModuleAutoLoadingPreference = 'None'
+Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1')
+$program = @'
+${attributeProgram}
 '@
-[Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
-$paths = ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd())
-$result = foreach ($item in $paths) {
-  [PmNativePathAttributes]::Read([string]$item)
-}
-[Console]::Out.Write((ConvertTo-Json -InputObject @($result) -Compress))
+Add-Type -TypeDefinition $program -ReferencedAssemblies @('System.dll','System.Runtime.Serialization.dll','System.Xml.dll') -OutputAssembly $env:PM_NATIVE_ATTRIBUTE_HELPER -OutputType ConsoleApplication
 `;
 type NativeAttribute = { dev: string; ino: string; mtimeNs: string; ctimeNs: string; reparse: boolean };
 type Attribute = { stamp: string; identity: string; reparse: boolean };
@@ -74,11 +104,9 @@ const nativeAttributeKeys = ['dev', 'ino', 'mtimeNs', 'ctimeNs'] as const;
 const integerText = /^-?\d+$/;
 const identity = (stat: BigIntStats): string => `${stat.dev}:${stat.ino}:${stat.mode}:${stat.birthtimeNs}`;
 const stamp = (stat: BigIntStats, times?: NativeAttribute): string => `${stat.dev}:${stat.ino}:${stat.mode}:${stat.nlink}:${stat.size}:${times?.mtimeNs ?? stat.mtimeNs}:${times?.ctimeNs ?? stat.ctimeNs}`;
-const maxBatchPaths = 256;
-const maxBatchBytes = 128 * 1024;
-const metrics = { nativeCalls: 0, nativePaths: 0, nativeElapsedMs: 0, cacheHits: 0, cacheMisses: 0, cacheInvalidations: 0 };
+const metrics = { helperCompilations: 0, helperCompileElapsedMs: 0, nativeCalls: 0, nativePaths: 0, nativeElapsedMs: 0, cacheHits: 0, cacheMisses: 0, cacheInvalidations: 0 };
 
-/** Process-local counters for attribute queries only, not private-path ACL setup.
+/** Process-local counters for helper compilation and attribute queries, not private-path ACL setup.
  * Reading metrics never clears or relaxes the identity/stamp cache. */
 export function getWindowsPathAttributeMetrics(): Readonly<typeof metrics> { return { ...metrics }; }
 function isNativeAttribute(value: unknown): value is NativeAttribute {
@@ -88,6 +116,7 @@ function isNativeAttribute(value: unknown): value is NativeAttribute {
 }
 
 let helperScratch: string | undefined;
+let helper: { filename: string; stamp: string; identity: string } | undefined;
 function helperEnvironment(): NodeJS.ProcessEnv {
   if (!helperScratch) {
     const scratch = mkdtempSync(path.join(tmpdir(), 'pm-native-attributes-'));
@@ -104,8 +133,44 @@ function helperEnvironment(): NodeJS.ProcessEnv {
   return { ...process.env, TEMP: helperScratch, TMP: helperScratch };
 }
 
-/** Batch a directory listing so a Markdown scan never starts one PowerShell per
- * file. Cache entries remain valid only for that exact filesystem identity/stamp.
+function helperProgram(): { filename: string; env: NodeJS.ProcessEnv } {
+  const env = helperEnvironment();
+  if (!helper) {
+    const systemRoot = process.env.SystemRoot;
+    if (!systemRoot || !path.win32.isAbsolute(systemRoot)) throw new Error('Windows storage path verification requires SystemRoot');
+    const filename = path.join(helperScratch!, 'pm-native-attributes.exe');
+    try {
+      lstatSync(filename);
+      throw new Error('Unexpected Windows storage path attribute helper output');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    const started = performance.now();
+    metrics.helperCompilations++;
+    try {
+      execFileSync(path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+        ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', attributeCompiler], {
+          cwd: helperScratch, env: { ...env, PM_NATIVE_ATTRIBUTE_HELPER: filename }, windowsHide: true,
+          stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000, maxBuffer: 1024 * 1024,
+        });
+      const stat = lstatSync(filename, { bigint: true });
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1n) throw new Error('Unsafe Windows attribute helper');
+      helper = { filename, stamp: stamp(stat), identity: identity(stat) };
+    } catch { throw new Error('Windows storage path attribute helper could not be compiled'); }
+    finally { metrics.helperCompileElapsedMs += performance.now() - started; }
+  }
+  assertHelperUnchanged();
+  return { filename: helper.filename, env };
+}
+
+function assertHelperUnchanged(): void {
+  const stat = lstatSync(helper!.filename, { bigint: true });
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1n || stamp(stat) !== helper!.stamp || identity(stat) !== helper!.identity)
+    throw new Error('Windows storage path attribute helper changed');
+}
+
+/** Batch a directory listing so a Markdown scan never starts one helper per file.
+ * Cache entries remain valid only for that exact filesystem identity/stamp.
  * Bound both request bytes and handles queried per process, including for callers
  * that pass a complete source inventory rather than one directory listing. */
 export function cacheWindowsPathAttributes(filenames: readonly string[]): void {
@@ -114,20 +179,18 @@ export function cacheWindowsPathAttributes(filenames: readonly string[]): void {
   let requestBytes = 2;
   const flush = (): void => {
     if (!pending.size) return;
-    const systemRoot = process.env.SystemRoot;
-    if (!systemRoot || !path.win32.isAbsolute(systemRoot)) throw new Error('Windows storage path verification requires SystemRoot');
     const paths = [...pending.values()];
-    const env = helperEnvironment();
+    const program = helperProgram();
     let output: string;
     const started = performance.now();
     metrics.nativeCalls++;
     metrics.nativePaths += paths.length;
     try {
-      output = execFileSync(path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-        ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', attributeScript], {
-          input: JSON.stringify(paths.map(item => item.filename)), encoding: 'utf8', windowsHide: true,
-          env, stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000, maxBuffer: 64 * 1024 * 1024,
-        });
+      output = execFileSync(program.filename, [], {
+        input: JSON.stringify(paths.map(item => item.filename)), encoding: 'utf8', windowsHide: true,
+        env: program.env, stdio: ['pipe', 'pipe', 'pipe'], timeout: 30_000, maxBuffer: 64 * 1024 * 1024,
+      });
+      assertHelperUnchanged();
     } catch { throw new Error('Windows storage path attributes could not be verified'); }
     finally { metrics.nativeElapsedMs += performance.now() - started; }
     let result: unknown;

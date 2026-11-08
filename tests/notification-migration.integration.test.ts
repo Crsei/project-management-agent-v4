@@ -13,8 +13,8 @@ describe('0026 forward migration preserves real personal history independent of 
   await admin.query(`CREATE SCHEMA ${schema}`);const url=new URL(dashboardDatabaseUrl!);url.searchParams.set('options',`-c search_path=${schema},public`);const pool=createPool(url.toString());
   try {
    const directory=new URL('../packages/infrastructure/migrations/',import.meta.url);
-   const migrations=(await readdir(directory)).filter(name=>/^\d{4}_.*\.sql$/.test(name)&&name<'0025_').sort();
-   for(const name of migrations)await pool.query(await readFile(new URL(name,directory),'utf8'));
+   const migrations=(await readdir(directory)).filter(name=>/^\d{4}_.*\.sql$/.test(name)).sort();
+   for(const name of migrations.filter(name=>name<'0025_'))await pool.query(await readFile(new URL(name,directory),'utf8'));
    const a=await createUser(pool,{email:`${randomUUID()}@example.test`,name:'History A',password:'isolated-notification-password'}),b=await createUser(pool,{email:`${randomUUID()}@example.test`,name:'History B',password:'isolated-notification-password'});
    const workspace=(await createWorkspace(pool,a.id,'Legacy history')).id;
    await pool.query("INSERT INTO memberships(workspace_id,user_id,capabilities,project_ids) VALUES($1,$2,ARRAY['domain.read'],'{PRJ-001}')",[workspace,b.id]);
@@ -28,11 +28,16 @@ describe('0026 forward migration preserves real personal history independent of 
    await pool.query("UPDATE activity_states SET version=3,read_at=NULL,archived_at='2026-01-05T00:00:00Z' WHERE actor_id=$1 AND event_id=$2",[a.id,shared]);
    await pool.query('UPDATE activity_states SET version=4,archived_at=NULL WHERE actor_id=$1 AND event_id=$2',[a.id,shared]);
    const before=await pool.query('SELECT workspace_id,event_id,actor_id,version,read_at,archived_at FROM activity_states ORDER BY event_id,actor_id');
-   const migration=await readFile(new URL('0026_service_facts_notifications.sql',directory),'utf8');
-   await pool.query('BEGIN');await pool.query(migration);await pool.query('COMMIT');
+   await pool.query('BEGIN');
+   for(const name of migrations.filter(name=>name>='0025_'&&name<'0027_'))await pool.query(await readFile(new URL(name,directory),'utf8'));
+   await pool.query('COMMIT');
    const after=await pool.query('SELECT workspace_id,fact_id AS event_id,recipient_id AS actor_id,state_version AS version,read_at,archived_at FROM notification_recipients ORDER BY fact_id,recipient_id');assert.deepEqual(after.rows,before.rows);
    assert.equal((await pool.query("SELECT to_regclass('activity_states')::text AS old")).rows[0].old,null);
    assert.equal((await pool.query('SELECT 1 FROM service_fact_events WHERE fact_id=$1',[untouched])).rows.length,0);
+   // Preserve the immediate 0026 checkpoint before upgrading for current application readers.
+   await pool.query('BEGIN');
+   for(const name of migrations.filter(name=>name>='0027_'))await pool.query(await readFile(new URL(name,directory),'utf8'));
+   await pool.query('COMMIT');
    const noCore={read:async()=>{throw new Error('Legacy non-task history must not initialize or query a task core');}};
    const page=await readNotificationInbox(pool,a,workspace,noCore,{origin:'legacy_activity'});assert.equal(page.items.length,2);assert.equal(page.items.every(item=>item.target===null),true);assert.equal(page.items.find(item=>item.event.eventId===shared)?.state.version,4);
    assert.equal((await readNotificationInbox(pool,b,workspace,noCore,{origin:'legacy_activity'})).items.length,1);
