@@ -273,35 +273,6 @@ for (const shell of ["posix", "cmd", "powershell"]) {
         });
       }
     }
-    if (shell === "powershell") {
-      // Temporary same-host discrimination; keep the baseline outcome as
-      // evidence, not an expected failure. Actual shim assertions remain above.
-      const nativeScript = join(f.source, "host-native-pair.ps1");
-      const nativeTarget = join(f.source, "host-native-pair.cjs");
-      await writeFile(nativeTarget, 'require("node:fs").writeFileSync(process.argv[2],JSON.stringify({execPath:process.execPath,argv:process.argv.slice(2),pid:process.pid}));process.stdout.write("host-native-stdout",()=>process.exit(29));\n');
-      await writeFile(nativeScript, 'param([string]$NodePath,[string]$ScriptPath,[string]$HostReceipt,[string]$NativeReceipt)\n$ErrorActionPreference="Stop"\n$PSNativeCommandUseErrorActionPreference=$false\n[System.IO.File]::WriteAllLines($HostReceipt,[string[]]@("PSVersion=$($PSVersionTable.PSVersion)","PSEdition=$($PSVersionTable.PSEdition)","PATHEXT=$env:PATHEXT"))\n& $NodePath $ScriptPath $NativeReceipt\nexit $LASTEXITCODE\n');
-      await t.test("diagnostic same-host stripped vs explicit .EXE native launch", async (t) => {
-        const results = [];
-        for (const [scenario, childEnv] of [["stripped", baseEnv], ["explicit-exe", env]]) {
-          const hostReceipt = join(f.source, `${scenario}-host.txt`);
-          const nativeReceipt = join(f.source, `${scenario}-native.json`);
-          const result = await outcome(() => invokePowerShell(nativeScript, [process.execPath, nativeTarget, hostReceipt, nativeReceipt], childEnv));
-          const host = await readFile(hostReceipt, "utf8").catch((error) => error.code === "ENOENT" ? null : { readError: error.message });
-          const receipt = await readFile(nativeReceipt, "utf8").then(JSON.parse).catch((error) => error.code === "ENOENT" ? null : { readError: error.message });
-          results.push({ scenario, requestedPathext: childEnv.PATHEXT ?? null, ...result, host, receipt, nativeReceipt });
-        }
-        const diagnostic = JSON.stringify({ scenario: "same-host-pathext-pair", results });
-        t.diagnostic(diagnostic);
-        const corrected = results[1];
-        assert.equal(corrected.exitCode, 29, diagnostic);
-        assert.equal(corrected.stdout.trimEnd(), "host-native-stdout", diagnostic);
-        assert.equal(corrected.stderr, "", diagnostic);
-        assert.match(corrected.host ?? "", /^PSVersion=\S+/m, diagnostic);
-        assert.ok(corrected.receipt?.execPath, diagnostic);
-        assert.equal(await realpath(corrected.receipt.execPath), await realpath(process.execPath), diagnostic);
-        assert.deepEqual(corrected.receipt.argv, [corrected.nativeReceipt], diagnostic);
-      });
-    }
     for (const file of context.binFiles) {
       const contents = await readFile(join(f.output, file.path), "utf8");
       assert.equal(contents.includes("NODE_PATH"), false);
