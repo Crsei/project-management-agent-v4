@@ -32,6 +32,13 @@ export type ExtensionProviderTarget = {
   nativeMcp: "native-config" | "execution-scoped";
   warnings: string[];
 };
+export type ExtensionUnavailableProviderTarget = {
+  providerInstanceId: string;
+  driver: "opencode";
+  label: string;
+  app: "opencode";
+  unavailableReason: "remote-server" | "custom-config-file";
+};
 export type ExtensionProviderBinding = {
   label: string;
   homeDir: string;
@@ -178,6 +185,18 @@ export function listExtensionProviderTargets(): ExtensionProviderTarget[] {
       target.warnings.push("Other Provider instances share this native root or Unified skills Home; their configuration/discovery can also be affected.");
   }
   return targets;
+}
+
+/** Keep enabled OpenCode instances visible without inventing local authority for remote/custom targets. */
+export function listUnavailableExtensionProviderTargets(): ExtensionUnavailableProviderTarget[] {
+  return listStoredInstances().flatMap(instance => {
+    if (!instance.enabled || instance.driver !== "opencode" || targetForInstance(instance)) return [];
+    return [{
+      providerInstanceId: instance.instanceId, driver: "opencode" as const,
+      label: instance.label || instance.instanceId, app: "opencode" as const,
+      unavailableReason: String(instance.config.serverUrl ?? "").trim() ? "remote-server" as const : "custom-config-file" as const,
+    }];
+  });
 }
 
 /** Browser input selects IDs only. The host must separately enforce physical-root single ownership. */

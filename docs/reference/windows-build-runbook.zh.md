@@ -2,7 +2,7 @@
 
 本手册记录环境、操作、权限与失败恢复。范围仅为本项目 **Windows x64 unsigned NSIS 测试安装包**；不是公开 Release、签名、自动更新、便携版、CLI、WSL 或其他平台交付授权。实现与材料设计见[桌面发布对照](desktop-release-alignment-2026-11-08.zh.md)，使用和数据边界见[桌面指南](../guides/desktop.md)。命令是具备对应权限及原生环境后才能执行的操作说明，不是已经运行的结果。
 
-**当前依赖去重批次的权限与环境：** 2026-11-08 操作者最新指示将完成目标限定为 **GitHub Actions Windows 构建实际 `success`**：仍授权本次依赖去重改动的精确 commit、公开 push 到 `main`、`windows_only=true` / `distribution=unsigned` 的 Actions 构建，**不下载安装器或发行材料到本地；本批次此前的下载授权已被覆盖**。仅发布经父级审阅和必要门禁通过的隔离冻结候选；无关并行改动、凭据和运行数据不进入提交或构建。唯一交付 owner 在父级放行后执行远端写入并核对同一 SHA 的真实 run/attempt/job 结论，构建/检查进程不获得发布凭据；授权本身不表示操作已执行、权限足够或构建成功。没有新增本地/SSH Windows 主机或交互桌面，本轮仍未授权 macOS 构建、签名、tag/PR/Release/merge、真实安装器/GUI 执行或接管既有服务。Linux 上真实依赖闭包物化/重打包实验保留为该实验的证据，不升级为新 Windows 安装器或原生 GUI 结果。
+**当前所有更新批次的权限与环境：** 2026-11-08 操作者在要求“推送所有更新并再运行一次 actions”后，进一步明确以当前主分支为准：保留主分支既有修复与性能优化，将已审阅增量集成到本地主分支，并在该主分支源码上测试；有实际问题先修复并复验，没有问题后再提交、公开推送并运行 Actions。范围覆盖所有当前可公开的桌面、PM／Agent／Web、Turbo、根 manifest／lock 及来源维护更新，不以旧候选覆盖主目录。测试输出与既有运行产物隔离，必要门禁通过后冻结精确源码，随后只手动触发一次 `windows_only=true` / `distribution=unsigned` 的 Actions 构建，以同一 SHA 的 **Windows 实际 `success`** 为完成目标。**不下载安装器或发行材料到本地；此前下载授权仍已被覆盖**。凭据、运行数据、依赖缓存和旧产物不进入提交或构建。唯一交付 owner 在父级放行后执行远端写入并核对同一 SHA 的真实 run/attempt/job 结论，构建/检查进程不获得发布凭据；授权本身不表示操作已执行、权限足够或构建成功。没有新增本地/SSH Windows 主机或交互桌面，本轮仍未授权 macOS 构建、签名、tag/PR/Release、远端合并操作、真实安装器/GUI 执行或接管既有服务。Linux 上真实依赖闭包物化/重打包实验保留为该实验的证据，不升级为新 Windows 安装器或原生 GUI 结果。
 
 ## 历史预检结论与可执行路线
 
@@ -22,8 +22,8 @@
 
 ### 路线 A：main / GitHub Actions 机制（本批次已重新授权）
 
-1. 父级完成实现/来源审阅并冻结完整源码，列出该轮及保留修改，生成精确内容身份；先确认没有秘密、运行数据或无关修改进入交付集。
-2. 本批次已明确授权 **直接在 main 提交并推送本次去重候选的精确改动**，不是再次提交上一轮 16 路径，也不包含并行 turbo、根 package/lock 或其他来源维护改动；不建独立分支、不 force、不创建 tag/PR/Release/merge。唯一交付 owner 先核对实际 remote main 和本地对象，基于准确远端祖先创建独立候选并记录逐文件内容；保留主检出、既有历史、index 及无关 dirty/untracked 内容。发现远端漂移或未知候选变动立即停止，不覆盖。commit、公开 push 和 Actions 写入按各自已明确授权的范围执行，不能扩大到其他改动。
+1. 父级先完成待集成增量的实现/来源审阅，列出该轮增量与当前主分支既有修改，记录集成前的精确内容身份；先确认没有秘密、运行数据或无关修改进入交付集。
+2. 本批次已明确授权 **以当前本地 main 的既有修复与性能优化为准，先集成审阅增量并在该主分支源码上测试，通过后提交并推送所有当前可公开更新**，包括 Turbo、根 package/lock 和经审阅的来源维护改动；不遗漏本轮 dirty/untracked 源码，也不把旧候选整树覆盖到主检出或重放成已发布修复的删除、回退。集成前核对实际 HEAD、index、逐文件字节/模式及并行变化，只应用明确增量；检查从主目录读取源码，但隔离输出，不覆盖既有服务产物。发现实际检查问题先修复并复验，再冻结准确内容；唯一交付 owner 随后核对实际 remote main 和本地对象，通过正常本地 Git 整合保留双方已提交历史，记录精确 tree、父提交及逐文件内容。未经本轮明确授权不改写既有 index、引用或其他工作；不 reset、clean、stash、force，不创建 tag/PR/Release 或执行远端合并操作。发现源码或远端漂移立即保留差异并停止，不覆盖。commit、公开 push 和一次手动 Actions 写入只在最终冻结范围、主分支必要门禁及父级放行后执行。
 3. 必要门禁通过、父级放行且准确内容已提交/推送后，才可通过仓库 Actions 页面手动运行 [desktop.yml](../../.github/workflows/desktop.yml)：选择获准 `main`，`distribution=unsigned`、`windows_only=true`，绑定确切 SHA。这不创建 tag、PR 或 GitHub Release。下例是本批次授权路线的操作说明，且要求已配置工具；不是已经 dispatch 的证据：
 
    ```sh
@@ -225,7 +225,7 @@ node apps/desktop/scripts/verify-delivery.mjs --output /ABS/DOWNLOADED_DELIVERY 
 
 本节保留**上一轮手册编写阶段**的未执行范围：当时仅进行文档/源码/元数据/工具路径/磁盘/限定服务归属的只读调查及编写本手册，没有运行 build、lint、tests、formatters、dependency install、runtime smoke、GUI、真实账号调用、打包、3224 部署、commit、push、workflow dispatch、公开 Release 或签名配置。它不是对随后其他批次实际执行情况的改写。
 
-历史交接曾记录 **main commit + 公开 push + unsigned Windows-only dispatch/下载获准但当时未执行**；该历史权限不自动沿用。当前最新指示仅要求 GitHub Actions Windows 构建实际 `success`，保留精确 commit/公开 push/Windows-only unsigned 构建授权，但不下载安装器或发行材料到本地，覆盖本批次此前的下载授权。新的报告必须给出完整源码身份、准确 commit/ref、可信 run URL/ID/attempt、确切 `head_sha`、实际 Windows job/step 结论和未执行范围；不以未下载的 installer/材料 hash 作为本批次完成前提，也不编造这些值。本批次没有新增已登记 Windows/macOS host 或交互桌面，也未授权现有机器上的真实安装器/GUI 执行；不能用公共仓库可读、权限预检、历史 CI 或旧 artifact 补成当前构建成功。桌面打包脚本/文档不生成 Linux 3224 运行产物，无运行时源码变化时保持既有服务、不重建或重启；实际入口归属/健康由协调验证 owner 只读记录。
+历史交接曾记录 **main commit + 公开 push + unsigned Windows-only dispatch/下载获准但当时未执行**；该历史权限不自动沿用。当前最新指示为“推送所有更新并再运行一次 actions”：完整审阅所有当前可公开源码更新后精确 commit、公开 push，并只手动触发一次 Windows-only unsigned 构建，以该 SHA 的实际 `success` 为目标；不下载安装器或发行材料到本地，覆盖此前下载授权。新的报告必须给出完整源码身份、准确 commit/ref、可信 run URL/ID/attempt、确切 `head_sha`、实际 Windows job/step 结论和未执行范围；不以未下载的 installer/材料 hash 作为本批次完成前提，也不编造这些值。本批次没有新增已登记 Windows/macOS host 或交互桌面，也未授权现有机器上的真实安装器/GUI 执行；不能用公共仓库可读、权限预检、历史 CI 或旧 artifact 补成当前构建成功。桌面安装器不是 Linux 3224 的部署产物；本轮纳入的 PM／Agent／Web 源码若影响运行产物，另按仓库部署约定核对归属、前提与实际范围，不因发布安装包而自动重建或接管既有服务。
 
 ### 旧安装器基线与仍需测量的证据
 

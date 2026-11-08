@@ -6,7 +6,11 @@
 
 ## 启动与配置
 
-在项目根目录使用Node 24.21.0、pnpm 11.9.0、Rust 1.95.0和[原生编译工具](../docs/guides/development.md#工具链与隔离聚合入口)：
+在项目根目录使用 Node 24.21.0、pnpm 11.9.0 和[原生编译工具](../docs/guides/development.md#工具链与隔离聚合入口)；当前 TypeScript MCP/Skills host 不需要 Rust/Cargo：
+
+工程验证与部署构建分开：`pnpm check:ci` 仍持有完整门禁、真实夹具、回归和清理，仅将明确的 lint/build/host-build 工程叶交由共享调度；本轮覆盖六 lint、声明/完整类型及 PM/Agent/host/Web/marketing 公共产物缓存。`pnpm check:turbo --stage build` 关闭 dotenv 读取，可恢复声明的隔离检查产物，**不是**本节按部署环境生成产物的替代命令，也不证明来源/许可或生产验收通过。已有实例直接托管 checkout 产物时，检查/缓存恢复必须使用新的独立 worktree，不覆盖 live dist；配置/工具修改不自动要求重启业务服务。source 前提、fresh 门禁及未执行的 hosted 范围见[开发与验证](../docs/guides/development.md#turbo-显式任务调度与本地-lint-缓存)。
+
+本轮全 16 叶缓存/8 roots 恢复与独立 Agent 回归的实际通过仅发生在新的自有 worktree；没有用这些隔离产物替换现有公共服务。Main 对 3224 的真实登录页（0 pageerror）、四个 ready/access/PM/Agent Web HTTP 200、原 Worker/API/Agent/gateway cwd/出生身份及 built mode 作了部署前置/现有健康核验；**不是已部署本轮新产物**。primary 的 24 项对照中 23 字节未变，CHANGELOG 的外部并行变化原样保留，没有覆盖 parallel primary/live 输出，也不声称原树全部 unchanged。默认 all 仍因 MinIO Docker FROM 镜像域名 DNS 失败而没有 backend 用例；hosted、真实 Provider/平台/生产与四项发行许可 blocker 不由此关闭，见[本轮证据](../docs/reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)。
 
 ```bash
 node scripts/doctor.mjs
@@ -25,6 +29,15 @@ pnpm services:status
 `setup:local` 创建 0600 的 `.env`、`.env.worker`、`.env.agent` 并随机生成新 v4 数据库密码，已有文件不覆盖，不自动复制账号或 Provider 凭据。独立应用数据在本仓 `.local/`；Agent 默认 `.local/agent-data`，不复用 `~/.agent-workspace`。本机服务与桌面启动器继承宿主原生 CLI 环境，实例设置覆盖同名变量；空 Home 不创建独立原生账号目录。容器仅能继承容器服务进程实际可见的配置，不会自动挂载宿主 Home。新安装显式选择 Local，仍须停写绑定；`blob-target.json` 的绝对 BLOB_ROOT 必须与 API 配置一致。已有成果使用 `bind --adopt` 全量核验，不能用 `--new` 冒充空库。数据库 Compose project 为 `project-management-agent-v4-backend`，宿主默认55444。
 
 `pnpm bootstrap` 仅为**空库**准备一次性 Web 设置：将随机令牌持久化到 `.local/setup-token`（0600），数据库仅保存摘要；终端只显示文件路径，不生成账号或明文密码。启动后打开本实例 `/pm`，从私有文件安全取用令牌，输入姓名、邮箱、密码和工作区名称完成设置。默认仅邀请注册；有账号或工作区的旧库直接 no-op，不读取、改写或删除既有凭据，不重置密码。数据库/schema 错误不会当作空库。正式业务命令仍需真实登录会话、当前成员能力和版本；新成员使用工作区邀请，现有受控 `account:create` 入口仍须管理员显式授权。
+
+### 工作区示例初始化升级与恢复
+
+首次设置及明确新建工作区的 Nova 初始化需要 `0052_workspace_samples.sql` 和增量 `0053_workspace_sample_storage.sql`，并同步更新 PM API、Web 与桌面后端；仅到 `0051` 的既有部署不能按 Web-only 更新。升级前核对本项目进程、工作目录、服务模式和数据库身份，按现有停写／一致备份流程执行迁移，不在业务库运行验证夹具。`0052` 原迁移不改写，`0053` 不推断或回填旧目录所有权，已有行初始为 `unclaimed`。旧 `ready` 记录保持原样；旧 `pending` 只有在合法原 state 已存在并通过既有校验后，才可登记其目录身份为 `established`，不由缺失的 state 猜测原所有权。
+
+- 新目录必须独占创建，随后将准确设备／inode 身份及 `prestate` 提交到原初始化记录，才允许写首份核心 state；state 持久后先提交 `established`，再写任何示例内容。每个阶段重新取得原工作区锁并核对当前创建者／成员能力。
+- 原请求仅能续接已有持久所有权证明、身份未变的 `prestate`。替换或丢失的原目录、未知已有但没有 state 的目录、`established` 后缺失的 state 均拒绝自动接管或重种。独占建目录后、所有权提交前中断尚无证明，也保持拒绝，不自动删除目录。
+- readiness 将全部示例初始化记录与既有审计／收据／项目操作一并作为核心权威证据；即使未启用本地项目目录，缺失或不安全的 state 也不能视作空实例就绪。健康检查不代替数据库迁移、真实恢复或业务验收。
+- 创建和显式恢复请求必须提供原发起主体的 `expectedActorId`；服务端先以实际认证主体核对，不匹配返回 `409 session_changed` 且不执行创建／初始化。客户端仍保留原键、先查询结果和离页／会话变化保护。该前置条件不增加权限，不统一 Chat／PM 会话或跨存储事务。
 
 ### 首次设置令牌与恢复
 

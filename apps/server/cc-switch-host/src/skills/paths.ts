@@ -1,19 +1,23 @@
 /** Translated from vendor/cc-switch/src-tauri/src/services/skill.rs ("路径管理"). */
 import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import path from "node:path";
-import { appDir, dataDir, homeDir } from "../host-context.ts";
+import { appDir, dataDir, hasNativeTargets, homeDir } from "../host-context.ts";
 import { AppError } from "../errors.ts";
 import { getSkillStorageLocation, getSkillSyncMethod } from "../settings.ts";
 import { APP_IDS, type AppId, type SyncMethod } from "../types.ts";
 
 const STORAGE_DIR_MODE = 0o700;
 
-/** SSOT skill root: `dataDir/skills` or `homeDir/.agents/skills`, created on demand. */
-export function ssotDir(): string {
-  const location = getSkillStorageLocation();
-  const dir = location === "unified"
+/** Resolve the configured SSOT without creating it during read-only discovery. */
+export function skillStorageDir(): string {
+  return getSkillStorageLocation() === "unified"
     ? path.join(homeDir(), ".agents", "skills")
     : path.join(dataDir(), "skills");
+}
+
+/** SSOT skill root, created only for operations that need managed storage. */
+export function ssotDir(): string {
+  const dir = skillStorageDir();
   mkdirSync(dir, { recursive: true, mode: STORAGE_DIR_MODE });
   return dir;
 }
@@ -41,11 +45,11 @@ export function appSkillsDir(app: AppId): string {
 }
 
 /**
- * `~/.agents/skills` when the unified storage location is active and the directory
- * exists; headless hosts never scan the shared agents tree for the cc-switch location.
+ * Existing native shared skills are observable/importable regardless of where
+ * managed copies are stored. This never selects Unified storage or grants writes.
  */
 export function agentsSkillsDir(): string | undefined {
-  if (getSkillStorageLocation() !== "unified") return undefined;
+  if (!hasNativeTargets()) return undefined;
   const dir = path.join(homeDir(), ".agents", "skills");
   return existsSync(dir) ? dir : undefined;
 }

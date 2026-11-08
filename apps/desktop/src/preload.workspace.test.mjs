@@ -41,7 +41,7 @@ test("workspace preload stays absent for remote workspaces", () => {
   assert.equal(exposed, null);
 });
 
-test("workspace preload exposes only the preview allowlist", async () => {
+test("workspace preload exposes only the preview and directory allowlists", async () => {
   const { exposed, calls } = loadPreload(join(here, "preload.workspace.cjs"), "desktopWorkspace");
   assert.ok(exposed?.preview);
   assert.equal(typeof exposed.preview.createTab, "function");
@@ -57,6 +57,15 @@ test("workspace preload exposes only the preview allowlist", async () => {
     channel: "desktop:preview",
     input: { action: "open-external", url: "http://127.0.0.1:3223/pm" },
   });
+});
+
+test("local folder chooser exposes no renderer-selected path or general desktop action", async () => {
+  const { exposed, calls } = loadPreload(join(here, "preload.workspace.cjs"), "desktopWorkspace");
+  assert.deepEqual(Object.keys(exposed).sort(), ["directories", "preview"]);
+  assert.deepEqual(Object.keys(exposed.directories), ["choose"]);
+  assert.equal(Object.isFrozen(exposed.directories), true);
+  await exposed.directories.choose({ path: "C:\\untrusted", action: "connect" });
+  assert.deepEqual(calls, [{ channel: "desktop:choose-workspace-directory", input: undefined }]);
 });
 
 test("workspace preload rejects unknown actions before IPC", async () => {

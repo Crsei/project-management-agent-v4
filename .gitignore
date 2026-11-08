@@ -6,6 +6,7 @@
 node_modules/
 dist/
 .local/
+.turbo/
 .env
 .env.*
 !.env.example

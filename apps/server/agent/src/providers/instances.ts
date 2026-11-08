@@ -202,7 +202,7 @@ function readInstances(): InstanceFile {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     const instances = nativeProviderAdapters.filter((adapter) => adapter.definition.driver === "codex" || adapter.definition.driver === "claude").map((adapter) => {
       const config = adapter.validateConfig({});
-      const instance: StoredProviderInstance = { instanceId: adapter.definition.driver, driver: adapter.definition.driver, label: adapter.definition.label, enabled: true, config, env: {}, revision: 1, homeDirectory: nativeHome(adapter.definition.driver, adapter.definition.driver, config, {}), stateDirectory: stateDirectory(adapter.definition.driver) };
+      const instance: StoredProviderInstance = { instanceId: adapter.definition.driver, driver: adapter.definition.driver, label: adapter.definition.label, enabled: false, config, env: {}, revision: 1, homeDirectory: nativeHome(adapter.definition.driver, adapter.definition.driver, config, {}), stateDirectory: stateDirectory(adapter.definition.driver) };
       mkdirSync(instance.stateDirectory, { recursive: true, mode: 0o700 });
       return encode(instance);
     });
@@ -340,7 +340,7 @@ export function resetProviderInstance(instanceId: string, expectedRevision: numb
     persist(store);
     return null;
   }
-  const instance = validate({ instanceId, driver: old.driver, enabled: true }, old);
+  const instance = validate({ instanceId, driver: old.driver, enabled: false }, old);
   instance.config = adapter.validateConfig({});
   instance.env = {}; instance.envSensitivity = {}; instance.customModels = [];
   instance.modelPreferences = { hidden: [], order: [], favorites: [], options: {} };

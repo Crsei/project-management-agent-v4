@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import test from "node:test";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -178,6 +179,10 @@ test("OMP status uses its independent startup deadline, propagates cancellation 
     yield* Effect.addFinalizer(() => Effect.sync(closeStore));
     yield* Effect.promise(async () => {
       const codex = getNativeProviderAdapter("codex")!;
+      const codexInstance = createProviderInstance({ instanceId: "codex-status-timeout", driver: "codex", enabled: true,
+        config: { binaryPath: join(pm.root, "unavailable-codex"), homePath: join(pm.context.homeDirectory, ".codex") },
+        environment: [{ name: "HOME", value: pm.context.homeDirectory, sensitive: false },
+          { name: "USERPROFILE", value: pm.context.homeDirectory, sensitive: false }] });
       const originalTimeout = AbortSignal.timeout, originalOmpCheck = ompAdapter.check, originalCodexCheck = codex.check;
       const controller = new AbortController(), deadlines: number[] = [];
       const failure = new DOMException("The OMP status deadline expired.", "TimeoutError");
@@ -205,7 +210,7 @@ test("OMP status uses its independent startup deadline, propagates cancellation 
         assert.ok(results.every(result => result.status === "rejected" && result.reason === failure));
         codex.check = async () => ({ installation: { status: "unknown" }, authentication: "unknown",
           nativeSessionReady: false, models: [], methods: [], canLogout: false });
-        await readNativeProviderStatus("codex");
+        await readNativeProviderStatus(codexInstance.instanceId);
         assert.deepEqual(deadlines, [OMP_STATUS_TIMEOUT_MS, 30_000]);
       } finally {
         controller.abort(failure);

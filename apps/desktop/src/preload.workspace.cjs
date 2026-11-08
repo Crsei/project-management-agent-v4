@@ -26,6 +26,9 @@ const subscribe = (channel, listener) => {
 
 const enabled = typeof process !== "undefined" && Array.isArray(process.argv) && process.argv.includes("--pm-native-preview");
 if (enabled) contextBridge.exposeInMainWorld("desktopWorkspace", Object.freeze({
+  directories: Object.freeze({
+    choose: () => ipcRenderer.invoke("desktop:choose-workspace-directory"),
+  }),
   preview: Object.freeze({
     state: (tabId) => invoke("state", { tabId }),
     createTab: (tabId, options = {}) => invoke("create-tab", { tabId, options }),

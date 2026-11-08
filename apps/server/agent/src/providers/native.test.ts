@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bindPmProviderExecutionService, forkNativeSession } from "./native.ts";
-import { getStoredInstance } from "./instances.ts";
+import { updateProviderInstance } from "./instances.ts";
 import { closeStore } from "../durable/store.ts";
 import { agentWorkspaceEnvironment } from "../durable/execution.testkit.ts";
 
@@ -14,7 +14,7 @@ test("fork delegates once to the assembled V2 service with trusted target identi
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
   let release: (() => void) | undefined;
   try {
-    const instance = getStoredInstance("codex")!;
+    const instance = updateProviderInstance("codex", { enabled: true });
     const source = { providerInstanceId: instance.instanceId, driver: "codex" as const, sessionId: "source", turnId: "native-turn",
       modelId: "explicit", cwd: directory, instanceRevision: instance.revision };
     const execution = { threadId: "branch", generationId: "fork-generation", messageId: "fork-message", environment: agentWorkspaceEnvironment(directory, true) };

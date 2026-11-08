@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
+import { extract as extractTar } from "tar";
 import { asarTools, inspectPackagedApplication } from "./packaged-application.mjs";
 import { captureSource, checksumDelivery, collectLegal, contentDigest, fileRecord, publicSourcePath, refreshVerification, requireUnchangedSource } from "./release-materials.mjs";
 import { verifyDelivery, verifyDeliveryFiles } from "./verify-delivery.mjs";
@@ -48,7 +49,7 @@ test("source selection excludes private, credential, generated and internal-hist
   for (const path of [".env", "apps/server/.env.agent", "apps/web/.envrc", "apps/desktop/credentials.json", "apps/desktop/token", "apps/desktop/signing.pfx", "apps/desktop/.cache/archive", "apps/desktop/.runtime/runtime", "apps/desktop/releases/installer.exe", "apps/web/node_modules/a/index.js", "vendor/x/target/binary", "docs/implementation/internal.md", ".git/config", ".local/evidence/report", "Home/credentials", "../README.md", "apps/../README.md", "apps\\server\\code.ts"]) {
     assert.equal(publicSourcePath(path), false, path);
   }
-  for (const path of ["LICENSE", "pnpm-lock.yaml", ".github/workflows/desktop.yml", "apps/desktop/scripts/package.mjs", "vendor/t3code/source-manifest.json", "docs/guides/desktop.md"]) assert.equal(publicSourcePath(path), true, path);
+  for (const path of ["LICENSE", "pnpm-lock.yaml", "turbo.json", ".github/workflows/desktop.yml", "apps/desktop/scripts/package.mjs", "vendor/t3code/source-manifest.json", "docs/guides/desktop.md"]) assert.equal(publicSourcePath(path), true, path);
 });
 
 test("gitless reviewed snapshot preserves exact identity and never copies private siblings", async (t) => {
@@ -79,6 +80,66 @@ async function fixtureGit(root, args) {
   const environment = Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
   Object.assign(environment, { GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: join(root, ".local/no-global-config"), HOME: join(root, ".local/home"), XDG_CONFIG_HOME: join(root, ".local/home") });
   return execute("git", ["-c", "user.name=Source fixture", "-c", "user.email=source-fixture@example.invalid", "-c", "commit.gpgsign=false", "-c", `core.hooksPath=${join(root, ".local/empty-hooks")}`, ...args], { cwd: root, env: environment, windowsHide: true });
+}
+
+for (const gitBacked of [false, true]) {
+  test(`${gitBacked ? "Git" : "gitless"} source captures and archives exact Turbo configuration and rejects its mutation or removal`, async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    const turboBytes = '{\n  "tasks": { "build": { "outputs": ["dist/**"] } }\n}\n';
+    await snapshot(input, { "turbo.json": turboBytes });
+    if (gitBacked) {
+      await fixtureGit(input, ["init"]);
+      await fixtureGit(input, ["add", "--", "README.md", "apps", "pnpm-lock.yaml", "turbo.json"]);
+      await fixtureGit(input, ["commit", "-m", "Synthetic Turbo source fixture"]);
+    }
+    await put(input, ".env", "PRIVATE_SYNTHETIC_SENTINEL");
+    await put(input, ".local/token", "PRIVATE_SYNTHETIC_SENTINEL");
+    await put(input, "node_modules/generated.js", "GENERATED_SYNTHETIC_SENTINEL");
+    const captured = join(root, "captured");
+    const source = await captureSource(captured, input);
+    assert.deepEqual(source.files.find((file) => file.path === "turbo.json"), {
+      path: "turbo.json", bytes: Buffer.byteLength(turboBytes), mode: 0o644, sha256: hash(turboBytes),
+    });
+    assert.equal(await readFile(join(captured, "turbo.json"), "utf8"), turboBytes);
+    for (const path of [".env", ".local/token", "node_modules/generated.js"])
+      await assert.rejects(lstat(join(captured, path)), { code: "ENOENT" });
+
+    const resources = join(root, "app/resources");
+    for (const path of [
+      "workspace-runtime/licenses/LICENSE", "workspace-runtime/apps/web/dist/licenses/LICENSE",
+      "desktop-runtime/node/LICENSE", "desktop-runtime/postgres/LICENSE", "desktop-runtime/THIRD-PARTY-NOTICES.json",
+    ]) await put(resources, path, "synthetic legal fixture\n");
+    await mkdir(join(resources, "workspace-runtime/apps/web/dist/fonts"), { recursive: true });
+    await put(join(root, "app"), "LICENSE.electron.txt", "synthetic Electron legal fixture\n");
+    await put(join(root, "app"), "LICENSES.chromium.html", "synthetic Chromium legal fixture\n");
+    const output = join(root, "materials");
+    const environment = Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
+    // Exercise the real archive writer without inheriting the hosted run's SHA.
+    await execute(process.execPath, ["--input-type=module", "--eval",
+      `import { writeReleaseMaterials } from ${JSON.stringify(new URL("./release-materials.mjs", import.meta.url).href)}; await writeReleaseMaterials(JSON.parse(process.argv[1]));`,
+      JSON.stringify({
+        output, resources, platform: "win32", sourceRoot: captured, source, legalRoot: join(root, "legal"),
+        manifest: { version: "0.1.0", target: "win32-x64", artifacts: [] },
+        verification: { schemaVersion: 1, nativeSmoke: { status: "not-run" }, published: false },
+      }),
+    ], { cwd: root, env: environment, windowsHide: true });
+    const expanded = join(root, "expanded");
+    await mkdir(expanded);
+    await extractTar({ file: join(output, "desktop-source.tar.gz"), cwd: expanded });
+    assert.equal(await readFile(join(expanded, "turbo.json"), "utf8"), turboBytes);
+    assert.deepEqual(JSON.parse(await readFile(join(expanded, "desktop-source.json"), "utf8")).files, source.files);
+
+    await requireUnchangedSource(source, input);
+    await put(input, "turbo.json", '{"tasks":{"different":{}}}\n');
+    await assert.rejects(requireUnchangedSource(source, input), /Source changed.*turbo\.json/);
+    await put(input, "turbo.json", turboBytes);
+    await requireUnchangedSource(source, input);
+    await rm(join(input, "turbo.json"));
+    await assert.rejects(requireUnchangedSource(source, input), /Source (?:selection )?changed/);
+    assert.equal(await readFile(join(captured, "turbo.json"), "utf8"), turboBytes);
+    assert.equal(await readFile(join(expanded, "turbo.json"), "utf8"), turboBytes);
+  });
 }
 
 test("dirty Git source refuses a tracked directory redirected into private checkout data", async (t) => {
@@ -223,6 +284,157 @@ for (const gitBacked of [false, true]) {
       await rm(join(input, addition));
       await rm(join(input, "README.md"));
       await assert.rejects(requireUnchangedSource(source, input), /Source selection changed/);
+    }
+  });
+}
+
+// Native-only registration keeps the backend runner's no-skips contract. These
+// cases must run on Windows; Linux results do not exercise the attribute helper.
+if (process.platform === "win32") {
+  test("Windows many-file capture batches native checks while preserving every source byte", async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    const entries = Object.fromEntries(Array.from({ length: 96 }, (_, index) => [
+      `apps/example/group-${index % 4}/file-${index.toString().padStart(3, "0")}.ts`,
+      `export const source${index} = ${JSON.stringify(`public fixture ${index}\n`)};\n`,
+    ]));
+    const expected = await snapshot(input, entries);
+    const reports = [];
+    const output = join(root, "captured");
+    const actual = await captureSource(output, input, { onMetrics: (metrics) => reports.push(metrics) });
+    assert.deepEqual(actual, expected);
+    for (const file of expected.files) {
+      const bytes = await readFile(join(output, file.path));
+      assert.equal(bytes.length, file.bytes, file.path);
+      assert.equal(hash(bytes), file.sha256, file.path);
+    }
+    assert.deepEqual(JSON.parse(await readFile(join(output, "desktop-source.json"), "utf8")), expected);
+    const captured = reports.find((metrics) => metrics.status === "end");
+    assert.ok(captured, "capture must expose completed native work without changing the source manifest");
+    assert.equal(captured.files, expected.files.length);
+    assert.equal(captured.bytes, expected.files.reduce((total, file) => total + file.bytes, 0));
+    assert.ok(captured.nativeCalls > 0, "the real Windows helper must execute");
+    assert.ok(captured.nativeCalls < expected.files.length, "stable files must not cause one helper launch per file");
+    assert.ok(captured.cacheHits >= expected.files.length);
+    const rechecks = [];
+    await requireUnchangedSource(expected, input, { onMetrics: (metrics) => rechecks.push(metrics) });
+    assert.equal(rechecks.find((metrics) => metrics.status === "end")?.files, expected.files.length);
+  });
+
+  for (const mutation of ["replace", "content", "junction"]) {
+    test(`Windows capture rejects ${mutation} mutation after batch prewarm without publishing a source manifest`, async (t) => {
+      const root = await temporary(t);
+      const input = join(root, "input");
+      const filename = "apps/example/config.ts";
+      const publicBytes = "export const approved = true;\n";
+      await snapshot(input, { [filename]: publicBytes });
+      await put(input, ".local/private/config.ts", mutation === "junction" ? publicBytes : "PRIVATE_TEST_SENTINEL_NOT_A_REAL_CREDENTIAL");
+      const output = join(root, "rejected");
+      const reports = [];
+      const original = fs.createWriteStream;
+      let changed = false;
+      const mocked = t.mock.method(fs, "createWriteStream", (name, options) => {
+        // README is sorted before the future leaf; capture has already prewarmed
+        // its selected paths, but has not opened the leaf/ancestor being changed.
+        if (!changed && name === join(output, "README.md")) {
+          changed = true;
+          if (mutation === "junction") {
+            fs.renameSync(join(input, "apps/example"), join(input, ".local/original-example"));
+            fs.symlinkSync(join(input, ".local/private"), join(input, "apps/example"), "junction");
+          } else if (mutation === "replace") {
+            fs.renameSync(join(input, filename), join(input, ".local/original-config.ts"));
+            fs.writeFileSync(join(input, filename), "export const approved = null;\n");
+          } else {
+            fs.writeFileSync(join(input, filename), "export const approved = null;\n");
+          }
+        }
+        return original(name, options);
+      });
+      syncBuiltinESMExports();
+      try {
+        await assert.rejects(captureSource(output, input, { onMetrics: (metrics) => reports.push(metrics) }));
+        assert.equal(reports.length, 1);
+        assert.equal(reports[0].status, "failure");
+        assert.ok(reports[0].nativeCalls > 0);
+        assert.equal(changed, true);
+        await assert.rejects(lstat(join(output, "desktop-source.json")), { code: "ENOENT" });
+        if (mutation === "junction") {
+          await assert.rejects(lstat(join(output, filename)), { code: "ENOENT" });
+          assert.equal(await readFile(join(input, ".local/private/config.ts"), "utf8"), publicBytes);
+        }
+      } finally {
+        mocked.mock.restore();
+        syncBuiltinESMExports();
+      }
+    });
+  }
+
+  test("Windows source prewarm rejects UNC roots before any path or native helper query", async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    const source = await snapshot(input);
+    const unc = "\\\\unreachable.invalid\\share\\source";
+    const original = fs.lstatSync;
+    let touched = false;
+    const mocked = t.mock.method(fs, "lstatSync", (filename, ...options) => {
+      if (String(filename).startsWith("\\\\")) {
+        touched = true;
+        throw new Error("UNC metadata I/O must never be attempted by this fixture");
+      }
+      return original(filename, ...options);
+    });
+    syncBuiltinESMExports();
+    try {
+      const reports = [];
+      await assert.rejects(captureSource(join(root, "rejected"), unc, { onMetrics: (metrics) => reports.push(metrics) }), /canonical local absolute/);
+      await assert.rejects(requireUnchangedSource(source, unc, { onMetrics: (metrics) => reports.push(metrics) }), /canonical local absolute/);
+      assert.equal(touched, false);
+      assert.equal(reports.length, 2);
+      for (const report of reports) {
+        assert.equal(report.status, "failure");
+        assert.equal(report.nativeCalls, 0);
+      }
+    } finally {
+      mocked.mock.restore();
+      syncBuiltinESMExports();
+    }
+  });
+
+  test("Windows selected device and trailing-dot aliases are rejected before attribute metadata I/O", async (t) => {
+    const root = await temporary(t);
+    const input = join(root, "input");
+    const initial = await snapshot(input);
+    await fixtureGit(input, ["init"]);
+    await fixtureGit(input, ["add", "--", "README.md", "apps", "pnpm-lock.yaml"]);
+    await fixtureGit(input, ["commit", "-m", "Synthetic safe source"]);
+    const blob = (await fixtureGit(input, ["rev-parse", "HEAD:README.md"])).stdout.trim();
+    const aliases = ["apps/CON.md", "apps/trailing."];
+    // Add adversarial index entries only; do not commit/refresh them against
+    // the worktree. This fixture setting never changes the capture guards.
+    for (const path of aliases)
+      await fixtureGit(input, ["-c", "core.protectNTFS=false", "update-index", "--add", "--cacheinfo", `100644,${blob},${path}`]);
+    const records = new Map(initial.files.map((file) => [file.path, file]));
+    for (const path of aliases) records.set(path, { ...records.get("README.md"), path });
+    const files = [...records.keys()].sort().map((path) => records.get(path));
+    const source = { ...initial, commit: (await fixtureGit(input, ["rev-parse", "HEAD"])).stdout.trim(), dirty: true, files, sha256: contentDigest(files) };
+    const original = fs.lstatSync;
+    let touched = false;
+    const mocked = t.mock.method(fs, "lstatSync", (filename, ...options) => {
+      if (aliases.some((path) => String(filename).toLowerCase() === join(input, path).toLowerCase())) {
+        touched = true;
+        throw new Error("Unsafe alias metadata I/O must never be attempted by this fixture");
+      }
+      return original(filename, ...options);
+    });
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(captureSource(join(root, "rejected"), input), /Unsafe source path component/);
+      await assert.rejects(requireUnchangedSource(source, input), /Unsafe source path component/);
+      assert.equal(touched, false);
+      await assert.rejects(lstat(join(root, "rejected/desktop-source.json")), { code: "ENOENT" });
+    } finally {
+      mocked.mock.restore();
+      syncBuiltinESMExports();
     }
   });
 }

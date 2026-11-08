@@ -10,6 +10,7 @@ import {
   serviceRequestAllowed,
   safeDesktopMessage,
   trustedConnectionFrame,
+  trustedWorkspaceFrame,
   workspacePartition,
 } from "./policy.mjs";
 
@@ -131,4 +132,26 @@ test("native controls accept only the exact bundled top-level frame", () => {
   frame.url = "https://remote.example/pm";
   assert.equal(trustedConnectionFrame({ sender: contents, senderFrame: frame }, contents, url), false);
   assert.equal(trustedConnectionFrame({ get sender() { throw new Error("disposed"); } }, contents, url), false);
+});
+
+test("workspace native controls reject subframes, guests, changed origins and invalidated frames", () => {
+  const url = "http://127.0.0.1:45913/agent/workspace";
+  const frame = { url };
+  const contents = { isDestroyed: () => false, mainFrame: frame };
+  const event = { sender: contents, senderFrame: frame };
+  assert.equal(trustedWorkspaceFrame(event, contents, url), true);
+  assert.equal(trustedWorkspaceFrame({ sender: contents, senderFrame: { url } }, contents, url), false);
+  assert.equal(trustedWorkspaceFrame({ sender: {}, senderFrame: frame }, contents, url), false);
+  assert.equal(trustedWorkspaceFrame({ sender: contents, senderFrame: null }, contents, url), false);
+  for (const destination of [
+    "https://remote.example/agent/workspace", "http://127.0.0.1:45914/agent/workspace",
+    "http://localhost:45913/agent/workspace", "file:///desktop/connection.html", "about:blank",
+  ]) {
+    frame.url = destination;
+    assert.equal(trustedWorkspaceFrame(event, contents, url), false, destination);
+  }
+  frame.url = url;
+  assert.equal(trustedWorkspaceFrame(event, { ...contents, isDestroyed: () => true }, url), false);
+  assert.equal(trustedWorkspaceFrame({ get sender() { throw new Error("disposed"); } }, contents, url), false);
+  assert.equal(trustedWorkspaceFrame(event, contents, null), false);
 });

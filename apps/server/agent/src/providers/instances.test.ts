@@ -43,6 +43,8 @@ test("fresh native defaults inherit host homes without importing or owning their
     const first = listStoredInstances();
     assert.deepEqual(first.map((instance) => instance.driver).sort(), ["claude", "codex"]);
     for (const instance of first) {
+      assert.equal(instance.enabled, false, "seed cards are not an opt-in to native credentials or execution");
+      assert.throws(() => providerContext(instance), /disabled/);
       assert.equal(instance.stateDirectory, path.join(directory, "provider-homes", instance.instanceId));
       assert.equal(instance.homeDirectory, instance.driver === "codex" ? process.env.CODEX_HOME : process.env.CLAUDE_CONFIG_DIR);
       assert.equal(providerEnvironment(instance).HOME, process.env.HOME);
@@ -58,10 +60,59 @@ test("fresh native defaults inherit host homes without importing or owning their
   });
 });
 
+test("fresh seed cards never probe, authenticate, expose usable models or select a runtime until explicitly enabled", async () => {
+  await isolated(async () => {
+    const originals = nativeProviderAdapters.map(adapter => ({ adapter, check: adapter.check }));
+    let nativeChecks = 0;
+    try {
+      for (const { adapter } of originals) adapter.check = async () => {
+        nativeChecks++;
+        return assert.fail("Listing disabled seeds must not inspect a native account");
+      };
+      const providers = await listProviderInstances();
+      assert.deepEqual(providers.map(provider => provider.instanceId).sort(), ["claude", "codex"]);
+      for (const provider of providers) {
+        assert.equal(provider.enabled, false);
+        assert.equal(provider.configured, false);
+        assert.equal(provider.authStatus, "unknown");
+        assert.equal(provider.nativeSessionReady, false);
+        assert.equal(provider.credentialSource, null);
+        assert.deepEqual(provider.models, []);
+        assert.equal(provider.canLogin, false);
+        await assert.rejects(resolveProviderRuntime({ providerInstanceId: provider.instanceId, modelName: "unselected" }), { code: "provider_disabled" });
+      }
+      assert.equal(nativeChecks, 0);
+    } finally {
+      for (const { adapter, check } of originals) adapter.check = check;
+    }
+  });
+});
+
+test("explicit enabled configurations, model preferences and revisions survive store rereads without reseeding", async () => {
+  await isolated(async directory => {
+    const seed = getStoredInstance("codex")!;
+    const selected = updateProviderInstance(seed.instanceId, {
+      enabled: true, config: { binaryPath: "/explicit/codex" },
+      customModels: [{ id: "chosen-model", label: "Chosen model" }],
+      modelPreferences: { hidden: [], order: ["chosen-model"], favorites: ["chosen-model"], options: {} },
+    }, seed.revision);
+    const before = await readFile(path.join(directory, "provider-instances.json"), "utf8");
+    const reloaded = getStoredInstance("codex")!;
+    assert.equal(reloaded.enabled, true);
+    assert.equal(reloaded.revision, selected.revision);
+    assert.deepEqual(reloaded.config, selected.config);
+    assert.deepEqual(reloaded.modelPreferences, selected.modelPreferences);
+    assert.deepEqual(reloaded.customModels, selected.customModels);
+    assert.equal(getStoredInstance("claude")!.enabled, false);
+    assert.equal(await readFile(path.join(directory, "provider-instances.json"), "utf8"), before);
+  });
+});
+
 test("blank native home fields leave CLI defaults and native environment paths intact", async () => {
   await isolated(async () => {
     delete process.env.CODEX_HOME; delete process.env.CLAUDE_CONFIG_DIR;
-    const codex = getStoredInstance("codex")!; const claude = getStoredInstance("claude")!;
+    const codex = updateProviderInstance("codex", { enabled: true });
+    const claude = updateProviderInstance("claude", { enabled: true });
     assert.equal(codex.homeDirectory, path.join(process.env.HOME!, ".codex"));
     assert.equal(claude.homeDirectory, path.join(process.env.HOME!, ".claude"));
     assert.equal(providerContext(codex).env.CODEX_HOME, undefined);
@@ -98,7 +149,7 @@ test("reset restores built-in defaults and removes optional overrides without de
     assert.throws(() => resetProviderInstance("codex", original.revision), { status: 409 });
     const restored = resetProviderInstance("codex", changed.revision)!;
     assert.equal(publicInstanceConfig(restored).label, "Codex");
-    assert.equal(restored.enabled, true);
+    assert.equal(restored.enabled, false);
     assert.equal(restored.config.binaryPath, "codex");
     assert.equal(restored.accentColor, undefined);
     assert.deepEqual(restored.env, {});
@@ -164,6 +215,7 @@ test("native config secrets/environment values are write-only and updates invali
 test("historical instance IDs and opaque metadata survive validated updates without reviving stale observations", async () => {
   await isolated(async directory => {
     const configured = updateProviderInstance("codex", {
+      enabled: true,
       environment: [{ name: "CUSTOM_SECRET", value: "private-fixture", sensitive: true }],
       modelPreferences: { hidden: ["retired-model"], order: ["retired-model"], favorites: ["retired-model"],
         options: { "retired-model": [{ id: "retired-option", value: "retained" }] } },
@@ -224,7 +276,7 @@ test("shared native home lifecycle preserves contents and permissions; inherited
     await chmod(shared, 0o755);
     const marker = path.join(shared, "native-owned-state");
     await writeFile(marker, "host-owned-by-native-program");
-    const original = getStoredInstance("codex")!;
+    const original = updateProviderInstance("codex", { enabled: true });
     recordProviderObservations(original.instanceId, original.revision, { lastConnectionTest: { ok: true, latencyMs: 0, kind: "agent-status" }, discoveredModels: [{ id: "old-account-model", label: "Old account", temperature: false }] });
     const changed = updateProviderInstance("codex", { config: { homePath: shared } }, original.revision);
     const second = createProviderInstance({ instanceId: "shared-codex", driver: "codex", config: { homePath: shared } });
@@ -232,7 +284,7 @@ test("shared native home lifecycle preserves contents and permissions; inherited
     deleteProviderInstance(second.instanceId);
     assert.equal(await readFile(marker, "utf8"), "host-owned-by-native-program");
     assert.equal((await stat(shared)).mode & 0o777, 0o755);
-    const before = getStoredInstance("codex")!;
+    const before = updateProviderInstance("codex", { enabled: true });
     recordProviderObservations(before.instanceId, before.revision, { discoveredModels: [{ id: "old-account-model", label: "Old account", temperature: false }] });
     process.env.CLAUDE_AGENT_SDK_VERSION = "fixture-sdk-version";
     assert.equal(getStoredInstance("codex")!.revision, before.revision);

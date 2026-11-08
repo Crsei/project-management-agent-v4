@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData, type QueryKey, type RefetchOptions } from "@tanstack/react-query"
 import { useParams } from "react-router"
-import { ApiError, ProjectManagementClient, type Actor, type ArtifactVisibility, type Capabilities, type ChangeNotification, type Command, type CommandReceipt, type EntityKind, type ProjectAuditPage, type Workspace } from "@contracts"
+import { ApiError, ProjectManagementClient, type Actor, type ArtifactVisibility, type Capabilities, type ChangeNotification, type Command, type CommandReceipt, type EntityKind, type ProjectAuditPage, type Workspace, type WorkspaceInitialization } from "@contracts"
 import { PmCommandStore } from "./pm-command-store"
 import { pmKeys, readAllChanges, readAllEntities, refreshPmSnapshots } from "./pm-data"
 import { asPmError, isAccessError, PmCommandError, PmServiceError } from "./pm-errors"
@@ -17,6 +17,7 @@ export type PmService = {
   actor: Actor | null
   actorEpoch: number
   workspaces: Workspace[]
+  workspaceInitializations?: WorkspaceInitialization[]
   workspace: Workspace | null
   capabilities: Capabilities | undefined
   loading: boolean
@@ -115,14 +116,15 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
   })
   const workspacesQuery = useQuery({
     queryKey: pmKeys.workspaces(instance, actor?.id ?? "anonymous"),
-    queryFn: ({ signal }) => client.listWorkspaces({ signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) }).then((result) => result.items),
+    queryFn: ({ signal }) => client.listWorkspaces({ signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) }),
     enabled: actor !== null,
     retry: false,
     refetchOnWindowFocus: true,
     // Project-scoped streams do not reveal workspace-wide membership events.
     refetchInterval: actor ? 30_000 : false,
   })
-  const workspaces = actor ? workspacesQuery.data ?? [] : []
+  const workspaces = actor ? workspacesQuery.data?.items ?? [] : []
+  const workspaceInitializations = actor ? workspacesQuery.data?.pendingInitializations ?? [] : []
   const selectedWorkspace = workspaces.find((candidate) => candidate.id === workspaceSlug?.toLowerCase()) ?? null
   const workspace = selectedWorkspace && !(blockedWorkspace?.id === selectedWorkspace.id && blockedWorkspace.version === selectedWorkspace.version) ? selectedWorkspace : null
   const workspaceRef = useRef(workspace)
@@ -175,7 +177,7 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!workspacesQuery.data || !actor) return
     for (const previous of previousMemberships.current?.actorId === actor.id ? previousMemberships.current.items : []) {
-      const current = workspacesQuery.data.find((candidate) => candidate.id === previous.id)
+      const current = workspacesQuery.data.items.find((candidate) => candidate.id === previous.id)
       if (!current || current.version !== previous.version) {
         const key = pmKeys.workspace(instance, actor.id, previous.id)
         const filter = { queryKey: key, predicate: (query: { queryKey: QueryKey }) => !current || query.queryKey.at(-2) === previous.version }
@@ -185,7 +187,7 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
         if (!current || !previous.capabilities.every((capability) => current.capabilities.includes(capability)) || (current.projectIds !== null && (previous.projectIds === null || previous.projectIds.some((id) => !current.projectIds?.includes(id))))) commands.clear(previous.id)
       }
     }
-    previousMemberships.current = { actorId: actor.id, items: workspacesQuery.data }
+    previousMemberships.current = { actorId: actor.id, items: workspacesQuery.data.items }
   }, [actor, commands, instance, queryClient, workspacesQuery.data])
 
   const login = useCallback(async (email: string, password: string) => {
@@ -206,7 +208,7 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
       actorRef.current = result.actor
       setActor(result.actor)
       authChannel.current?.postMessage({ type: "changed" })
-      await queryClient.fetchQuery({ queryKey: pmKeys.workspaces(instance, result.actor.id), queryFn: ({ signal }) => client.listWorkspaces({ signal }).then((response) => response.items), staleTime: 0, retry: false })
+      await queryClient.fetchQuery({ queryKey: pmKeys.workspaces(instance, result.actor.id), queryFn: ({ signal }) => client.listWorkspaces({ signal }), staleTime: 0, retry: false })
     } catch (cause) {
       const error = asPmError(cause)
       if (sequence === authSequence.current) setSessionError(error)
@@ -279,7 +281,7 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
       ])
       controller.signal.throwIfAborted()
       await Promise.all([
-        queryClient.fetchQuery({ queryKey: workspaceKey, queryFn: ({ signal }) => client.listWorkspaces({ signal: AbortSignal.any([signal, controller.signal]) }).then((result) => result.items), staleTime: 0, retry: false }),
+        queryClient.fetchQuery({ queryKey: workspaceKey, queryFn: ({ signal }) => client.listWorkspaces({ signal: AbortSignal.any([signal, controller.signal]) }), staleTime: 0, retry: false }),
         queryClient.fetchQuery({ queryKey: capabilitiesKey, queryFn: ({ signal }) => client.getCapabilities({ signal: AbortSignal.any([signal, controller.signal]) }), staleTime: 0, retry: false }),
       ])
       controller.signal.throwIfAborted()
@@ -442,16 +444,17 @@ export function PmServiceProvider({ children }: { children: ReactNode }) {
         // Publish the new cursor only after all required authoritative reads.
         await refreshPmSnapshots(queryClient, key, true)
         controller.signal.throwIfAborted()
-        queryClient.setQueryData(pmKeys.workspaces(instance, currentActorId), latest.items)
+        queryClient.setQueryData(pmKeys.workspaces(instance, currentActorId), latest)
         return authorized.cursor
       },
     })
     return () => { controller.abort(); clearTimeout(invalidationTimer); streamOpened.current = null }
   }, [pageVisible, actor?.id, actorEpoch, workspace?.id, workspace?.version, blockedWorkspace, capabilitiesQuery.data?.realtime.enabled, client, commands, endSession, instance, queryClient])
 
-  const routeError = actor && workspaceSlug && !workspacesQuery.isPending && !selectedWorkspace && !workspacesQuery.error ? new ApiError(404, { error: { code: "not_found_or_forbidden" } }) : null
+  const initializationPending = workspaceInitializations.some(item => item.workspaceId === workspaceSlug?.toLowerCase())
+  const routeError = actor && workspaceSlug && !workspacesQuery.isPending && !selectedWorkspace && !workspacesQuery.error ? new ApiError(initializationPending ? 503 : 404, { error: { code: initializationPending ? "workspace_initialization_pending" : "not_found_or_forbidden" } }) : null
   const value: ServiceContext = {
-    client, instance, actor, actorEpoch, commands, workspaces, workspace,
+    client, instance, actor, actorEpoch, commands, workspaces, workspace, workspaceInitializations,
     capabilities: capabilitiesQuery.error ? undefined : capabilitiesQuery.data,
     coreEvents: pageVisible && coreStream?.key === coreStreamKey ? coreStream.events : null,
     loading: sessionLoading || capabilitiesQuery.isPending || (!!actor && workspacesQuery.isPending),

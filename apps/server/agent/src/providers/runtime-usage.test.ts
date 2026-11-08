@@ -16,7 +16,7 @@ test("native runtime forwards cumulative usage without interfering with text and
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
   try {
     codexAdapter.check = async () => ({ installation: { status: "installed" }, authentication: "authenticated", nativeSessionReady: true, models: [], canLogout: false, methods: [] });
-    updateProviderInstance("codex", { customModels: [{ id: "fixture-native", label: "Fixture" }] }, getStoredInstance("codex")!.revision);
+    updateProviderInstance("codex", { enabled: true, customModels: [{ id: "fixture-native", label: "Fixture" }] }, getStoredInstance("codex")!.revision);
     const runtime = await resolveProviderRuntime({ providerInstanceId: "codex", modelName: "fixture-native" });
     const update: NativeUsageUpdate = {
       turn: { totals: { uncachedInputTokens: 7, cachedInputTokens: 3, cacheCreationTokens: 0, outputTokens: 4, reasoningTokens: 2 } },

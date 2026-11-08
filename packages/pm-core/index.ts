@@ -1,5 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
 import chokidar, { type FSWatcher } from 'chokidar';
 import { parseDocument, stringify } from 'yaml';
 import { createMarkdown, inspectMarkdown, parseMarkdown, patchMarkdown } from '../pm-markdown/index.ts';
@@ -16,6 +18,7 @@ import { SprintHistory, type SprintHistorySnapshot } from './sprint-history.ts';
 import { ServiceFactObservations, type CoreFactSummary } from './service-facts.ts';
 import { ProjectLocations, type ProjectDirectory, type ProjectDirectoryCheck, type ProjectLocation, type ProjectMount } from './project-locations.ts';
 import { projectCopyRecords, type ProjectCopyInput, type ProjectCopyResult } from './project-copy.ts';
+import { directoryIdentity, samePath, syncDirectory } from './platform.ts';
 
 export { revisionOf } from './repository.ts';
 export type { ItemQuery } from './projection.ts';
@@ -29,6 +32,7 @@ export type WorkspaceMutationCapture = {
   committed(before: FileRecord | undefined, after: FileRecord | undefined): string | void;
 };
 export type CoreCreationFact = { request?: { key: string; hash: string; id: string; revision?: string }; pending: boolean; deleted: boolean; current?: FileRecord; unavailable: boolean };
+export type WorkspaceStorageIdentity = { device: string; inode: string };
 
 export class WorkspaceError extends Error {
   readonly status: 400 | 404 | 409 | 422;
@@ -82,6 +86,46 @@ export class Workspace {
     this.events.setMaxListeners(0);
   }
 
+  static storageIdentity(root: string): WorkspaceStorageIdentity {
+    const stat = directoryIdentity(path.resolve(root));
+    return { device: String(stat.dev), inode: String(stat.ino) };
+  }
+
+  /** Claim only an absent root. The caller must durably record this identity before initializing it. */
+  static claimStorage(root: string): WorkspaceStorageIdentity {
+    root = path.resolve(root);
+    const parent = path.dirname(root);
+    const first = mkdirSync(parent, { recursive: true });
+    directoryIdentity(parent);
+    if (first !== undefined) {
+      const stop = path.toNamespacedPath(path.dirname(first));
+      for (let current = parent;; current = path.dirname(current)) {
+        syncDirectory(current);
+        if (samePath(path.toNamespacedPath(current), stop)) break;
+      }
+    }
+    mkdirSync(root, { mode: 0o700 });
+    syncDirectory(parent);
+    return Workspace.storageIdentity(root);
+  }
+
+  /** Only a durable pre-state claim permits the first state write; established state is never recreated. */
+  static initializeStorage(root: string, identity: WorkspaceStorageIdentity, prestate: boolean): void {
+    const assertIdentity = () => {
+      const current = Workspace.storageIdentity(root);
+      if (current.device !== identity.device || current.inode !== identity.inode) throw new Error('Workspace initialization directory was replaced');
+    };
+    assertIdentity();
+    const repository = new FileRepository(root, true, assertIdentity);
+    try { repository.read('.pm/state/state.json'); }
+    catch (error) {
+      if (!prestate || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      repository.init();
+    }
+    new DurableState(repository, !prestate);
+    assertIdentity();
+  }
+
   static mutationProofs(root: string): ReadonlySet<string> {
     return new DurableState(new FileRepository(root), true).mutationProofs();
   }
@@ -92,6 +136,11 @@ export class Workspace {
 
   acceptCommittedFact(factId: string, before: CoreFactSummary | null, after: CoreFactSummary | null): void {
     this.factHistory.acceptCommitted(factId, before, after);
+  }
+
+  /** Immutable creation proof from this live workspace's native journal, never the current file revision. */
+  originalCreationRevision(key: string): string | undefined {
+    return this.state.request(key)?.revision;
   }
 
   /** Read durable creation identity and current source without initializing, recovering, or publishing anything. */

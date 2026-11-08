@@ -88,7 +88,7 @@ function allowedRoots(): string[] {
 }
 
 function requireAllowed(directory: string, roots = allowedRoots()): void {
-  if (!roots.some(root => contains(root, directory))) throw new DurableError(403, "directory_not_allowed", "The directory is outside the configured Agent workspace roots.");
+  if (!roots.some(root => contains(root, directory))) throw new DurableError(403, "directory_not_allowed", "The directory is outside the configured Agent workspace roots. Choose an allowed root or have the service operator configure AGENT_WORKSPACE_ALLOWED_ROOTS; choosing a folder does not grant access.");
 }
 
 function verifiedWorkspace(record: WorkspaceRecord): string {

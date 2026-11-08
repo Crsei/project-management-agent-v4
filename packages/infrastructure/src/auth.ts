@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { CAPABILITIES, DomainError } from '../../domain/src/core.ts';
 import type { Actor } from '../../domain/src/core.ts';
@@ -53,7 +53,7 @@ export async function createUser(pool: Pool, input: { email: string; password: s
   }
 }
 
-export async function createWorkspace(pool: Pool, ownerId: string, name: string): Promise<{ id: string; name: string; ownerId: string }> {
+export async function createWorkspace(pool: Pool, ownerId: string, name: string, options: { prepare?: (sql: PoolClient, workspace: { id: string; name: string; ownerId: string }) => Promise<void> } = {}): Promise<{ id: string; name: string; ownerId: string }> {
   parse(z.uuid(), ownerId);
   const cleanName = parse(z.string().trim().min(1).max(200), name);
   const id = randomUUID();
@@ -66,6 +66,7 @@ export async function createWorkspace(pool: Pool, ownerId: string, name: string)
     await client.query('INSERT INTO workspaces(id,name,owner_id) VALUES($1,$2,$3)', [id, cleanName, ownerId]);
     // Bootstrap authority is explicit, rather than inferred from workspace ownership.
     await client.query('INSERT INTO memberships(workspace_id,user_id,capabilities,project_ids) VALUES($1,$2,$3,NULL)', [id, ownerId, [...CAPABILITIES]]);
+    await options.prepare?.(client, { id, name: cleanName, ownerId });
     await client.query('COMMIT');
     return { id, name: cleanName, ownerId };
   } catch (error) { await client.query('ROLLBACK'); throw error; }

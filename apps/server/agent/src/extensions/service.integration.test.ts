@@ -117,6 +117,82 @@ test("enabled resolution preserves a live sidecar, subscribers and reload state 
   }
 });
 
+test("saved Provider resolution is scoped while discovery preserves independent external owners", async () => {
+  const previous = { ...process.env };
+  const root = await mkdtemp(path.join(os.tmpdir(), "cc-switch-saved-mixed-owners-"));
+  const host = new ExtensionHost();
+  try {
+    process.env.AGENT_WORKSPACE_DATA_DIR = path.join(root, "data");
+    process.env.HOME = path.join(root, "home"); process.env.USERPROFILE = process.env.HOME;
+    for (const key of ["CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME"]) delete process.env[key];
+    const registry = path.join(root, "external-targets.json");
+    process.env.CC_SWITCH_EXTERNAL_TARGETS_FILE = registry;
+    await mkdir(process.env.HOME, { recursive: true });
+    const externalTarget = { id: "external-b", label: "External B", app: "codex", homeDir: process.env.HOME, appDir: path.join(root, "codex-b") };
+    await writeFile(registry, JSON.stringify([externalTarget]), { mode: 0o600 });
+    makePrivatePath(registry);
+    for (const instance of listStoredInstances()) updateProviderInstance(instance.instanceId, { enabled: false }, instance.revision);
+    const environment = [{ name: "HOME", value: process.env.HOME, sensitive: false }, { name: "USERPROFILE", value: process.env.HOME, sensitive: false }];
+    const providerA = createProviderInstance({ instanceId: "saved-a", driver: "codex", config: { homePath: path.join(root, "codex-a") }, environment });
+    createProviderInstance({ instanceId: "external-b", driver: "codex", config: { homePath: externalTarget.appDir }, environment });
+    const a = (await host.resolveProviderContext(providerA.instanceId)).context;
+    const b = (await host.bind({ providerInstanceIds: [], externalTargetIds: [externalTarget.id], confirmed: true })).context;
+    await host.invoke(a.id, "upsert_mcp_server", { server: { id: "saved-a-definition", name: "Saved A", server: { type: "http", url: "https://saved-a.example.invalid/mcp" }, apps: { codex: false } } });
+    const events: ExtensionEvent[] = [];
+    const unsubscribe = await host.subscribe(a.id, event => events.push(event));
+    try {
+      const externalBeforeAssociation = (await readExtensionContexts()).find(context => context.id === b.id)!;
+      createProviderInstance({ instanceId: "new-pi", driver: "pi", environment });
+      const unassociated = await host.resolveEnabledProviderContexts();
+      assert.equal(unassociated.contexts.some(context => context.id === b.id), false);
+      assert.ok(unassociated.contexts.some(context => context.providerInstanceIds.includes("new-pi")));
+      assert.deepEqual((await readExtensionContexts()).find(context => context.id === b.id), externalBeforeAssociation);
+      assert.equal((await host.resolveProviderContext("external-b")).context.id, b.id);
+      const externalBeforeRefresh = (await readExtensionContexts()).find(context => context.id === b.id)!;
+      updateProviderInstance(providerA.instanceId, { label: "Renamed A" }, providerA.revision);
+      createProviderInstance({ instanceId: "latest-opencode", driver: "opencode", environment });
+      events.length = 0;
+      const scoped = await host.resolveEnabledProviderContexts(a.id);
+      assert.deepEqual(scoped.contexts.map(context => context.id), [a.id]);
+      assert.deepEqual(scoped.contexts[0]!.apps, ["codex"]);
+      assert.equal(scoped.contexts[0]!.status, "ready");
+      assert.equal(scoped.contexts[0]!.reloadRequired, true);
+      assert.equal(events.some(event => event.event === "status"), false);
+      assert.ok(host.targets().targets.some(target => target.providerInstanceId === "latest-opencode"));
+      assert.equal((await readExtensionContexts()).some(context => context.binding?.providerInstanceIds.includes("latest-opencode")), false);
+      assert.deepEqual((await readExtensionContexts()).find(context => context.id === b.id), externalBeforeRefresh);
+      assert.ok(Object.hasOwn(await host.invoke(a.id, "get_mcp_servers", {}) as object, "saved-a-definition"));
+      await host.invoke(a.id, "upsert_mcp_server", { server: { id: "after-refresh", name: "After", server: { type: "http", url: "https://saved-a.example.invalid/mcp" }, apps: { codex: false } } });
+      assert.ok(events.some(event => event.event === "changed"));
+      const discovered = await host.resolveEnabledProviderContexts();
+      assert.ok(discovered.contexts.some(context => context.id === a.id));
+      assert.ok(discovered.contexts.some(context => context.id === b.id));
+      assert.ok(discovered.contexts.some(context => context.providerInstanceIds.includes("latest-opencode")));
+      assert.deepEqual((await readExtensionContexts()).find(context => context.id === b.id), externalBeforeRefresh);
+      assert.deepEqual(await host.invoke(b.id, "get_mcp_servers", {}), {});
+      createProviderInstance({ instanceId: "saved-a-alias", driver: "codex", config: { homePath: path.join(root, "codex-a") }, environment });
+      const currentA = getStoredInstance(providerA.instanceId)!;
+      updateProviderInstance(currentA.instanceId, { enabled: false }, currentA.revision);
+      const aliased = (await host.resolveEnabledProviderContexts(a.id)).contexts[0]!;
+      assert.equal(aliased.id, a.id);
+      assert.deepEqual(aliased.providerInstanceIds, ["saved-a-alias"]);
+      assert.equal(aliased.status, "ready");
+      assert.ok(Object.hasOwn(await host.invoke(a.id, "get_mcp_servers", {}) as object, "saved-a-definition"));
+      // An unrelated stale enrollment cannot block A, but remains an error for B.
+      await writeFile(registry, JSON.stringify([{ ...externalTarget, appDir: path.join(root, "external-b-moved") }]), { mode: 0o600 });
+      assert.deepEqual((await host.resolveEnabledProviderContexts(a.id)).contexts.map(context => context.id), [a.id]);
+      await assert.rejects(host.resolveEnabledProviderContexts(b.id), { code: "external_binding_changed" });
+      await assert.rejects(host.browserContext(b.id, new Headers()), { code: "external_binding_changed" });
+      assert.deepEqual((await readExtensionContexts()).find(context => context.id === b.id), externalBeforeRefresh);
+    } finally { unsubscribe(); }
+  } finally {
+    await host.close();
+    for (const name of Object.keys(process.env)) if (!(name in previous)) delete process.env[name];
+    Object.assign(process.env, previous);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("default Claude authority through a different Home alias stays usable in either ID order", async () => {
   for (const [codexId, claudeId] of [["aaa-codex", "zzz-claude"], ["zzz-codex", "aaa-claude"]]) {
     const previous = { ...process.env };
@@ -479,6 +555,97 @@ test("real multi-Agent definitions, protected overrides and reviewed imports ret
     assert.equal(importEvent.data.nativeFilesWritten, false);
     assert.equal((await host.browserContext(context.id, new Headers())).reloadRequired, true);
     unsubscribe();
+  } finally {
+    await host.close();
+    for (const name of Object.keys(process.env)) if (!(name in previous)) delete process.env[name];
+    Object.assign(process.env, previous);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("new enabled OpenCode remains selectable beside a live owner and native Skills discovery never adopts", async () => {
+  const previous = { ...process.env };
+  const root = await mkdtemp(path.join(os.tmpdir(), "cc-switch-native-skill-observation-"));
+  const host = new ExtensionHost();
+  try {
+    process.env.AGENT_WORKSPACE_DATA_DIR = path.join(root, "data");
+    process.env.HOME = path.join(root, "home"); process.env.USERPROFILE = process.env.HOME;
+    for (const key of ["CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "XDG_CONFIG_HOME", "CC_SWITCH_EXTERNAL_TARGETS_FILE"]) delete process.env[key];
+    await mkdir(process.env.HOME, { recursive: true });
+    for (const instance of listStoredInstances()) updateProviderInstance(instance.instanceId, { enabled: false }, instance.revision);
+    const environment = [{ name: "HOME", value: process.env.HOME, sensitive: false }, { name: "USERPROFILE", value: process.env.HOME, sensitive: false }];
+    createProviderInstance({ instanceId: "existing-codex", driver: "codex", environment });
+    const original = (await host.resolveEnabledProviderContexts()).contexts[0]!;
+    await host.invoke(original.id, "get_mcp_servers", {});
+    const existingEvents: ExtensionEvent[] = [];
+    const unsubscribeExisting = await host.subscribe(original.id, event => existingEvents.push(event));
+    existingEvents.length = 0;
+
+    const opencode = createProviderInstance({ instanceId: "late-opencode", driver: "opencode", environment });
+    createProviderInstance({ instanceId: "disabled-opencode", driver: "opencode", enabled: false, environment });
+    createProviderInstance({ instanceId: "borrowed-opencode", driver: "opencode", config: { serverUrl: "http://127.0.0.1:4096" }, environment });
+    const targetMetadata = host.targets();
+    assert.ok(targetMetadata.targets.some(target => target.providerInstanceId === opencode.instanceId && target.app === "opencode"));
+    assert.equal(targetMetadata.targets.some(target => target.providerInstanceId === "disabled-opencode"), false);
+    assert.deepEqual(targetMetadata.unavailableTargets.map(target => target.providerInstanceId), ["borrowed-opencode"]);
+    assert.equal(JSON.stringify(targetMetadata).includes(root), false);
+    const resolved = await host.resolveEnabledProviderContexts();
+    const native = resolved.contexts.find(context => context.providerInstanceIds.includes(opencode.instanceId))!;
+    assert.ok(native);
+    assert.notEqual(native.id, original.id);
+    assert.deepEqual(native.apps, ["opencode"]);
+    assert.equal(resolved.contexts.find(context => context.id === original.id)!.status, "ready");
+    assert.deepEqual(existingEvents, []);
+    const management = await host.invoke(native.id, "get_mcp_management", {}) as ExtensionMcpManagement;
+    assert.deepEqual(management.boundApps, ["opencode"]);
+
+    const nativeSkill = path.join(process.env.HOME, ".config", "opencode", "skills", "preinstalled");
+    const sharedSkill = path.join(process.env.HOME, ".agents", "skills", "shared-native");
+    const unrelatedSkill = path.join(process.env.HOME, ".claude", "skills", "unbound-native");
+    const document = "---\nname: Native fixture\ndescription: Preinstalled without application adoption\n---\n# Synthetic fixture\n";
+    for (const directory of [nativeSkill, sharedSkill, unrelatedSkill]) {
+      await mkdir(directory, { recursive: true });
+      await writeFile(path.join(directory, "SKILL.md"), document);
+    }
+    const nativeEvents: ExtensionEvent[] = [];
+    const unsubscribeNative = await host.subscribe(native.id, event => nativeEvents.push(event));
+    nativeEvents.length = 0;
+    type Scanned = { directory: string; foundIn: string[] };
+    const observed = await host.invoke(native.id, "scan_unmanaged_skills", {}) as Scanned[];
+    assert.deepEqual(observed.map(skill => ({ directory: skill.directory, foundIn: skill.foundIn })).sort((a, b) => a.directory.localeCompare(b.directory)), [
+      { directory: "preinstalled", foundIn: ["opencode"] },
+      { directory: "shared-native", foundIn: ["agents"] },
+    ]);
+    assert.equal(JSON.stringify(observed).includes(root), false);
+    const nativeInventory = await host.invoke(native.id, "scan_native_skills", {}) as Array<Scanned & { managed: boolean }>;
+    assert.deepEqual(nativeInventory.map(({ directory, managed }) => ({ directory, managed })).sort((a, b) => a.directory.localeCompare(b.directory)), [
+      { directory: "preinstalled", managed: false }, { directory: "shared-native", managed: false },
+    ]);
+    assert.equal(JSON.stringify(nativeInventory).includes(root), false);
+    assert.deepEqual(await host.invoke(native.id, "get_installed_skills", {}), []);
+    assert.equal((await host.invoke(native.id, "get_settings", {}) as { skillStorageLocation: string }).skillStorageLocation, "cc_switch");
+    await assert.rejects(readdir(path.join(contextDataDirectory(native.id), "skills")), { code: "ENOENT" });
+    assert.equal((await host.browserContext(native.id, new Headers())).unifiedStorageOwned, false);
+    assert.equal((await host.browserContext(native.id, new Headers())).reloadRequired, false);
+    assert.deepEqual(nativeEvents, []);
+    assert.equal(getStoredInstance(opencode.instanceId)!.revision, opencode.revision);
+    for (const directory of [nativeSkill, sharedSkill, unrelatedSkill]) assert.equal(await readFile(path.join(directory, "SKILL.md"), "utf8"), document);
+
+    // Explicit adoption copies an existing shared native skill to cc-switch storage;
+    // it does not opt into Unified writes or deploy it to OpenCode.
+    const imported = await host.invoke(native.id, "import_skills_from_apps", { imports: [{ directory: "shared-native", apps: {} }] }) as Array<{ id: string; apps: Record<string, boolean> }>;
+    assert.equal(imported.length, 1);
+    assert.equal(imported[0]!.apps.opencode, false);
+    assert.equal(await readFile(path.join(contextDataDirectory(native.id), "skills", "shared-native", "SKILL.md"), "utf8"), document);
+    await assert.rejects(readdir(path.join(process.env.HOME, ".config", "opencode", "skills", "shared-native")), { code: "ENOENT" });
+    assert.equal(await readFile(path.join(sharedSkill, "SKILL.md"), "utf8"), document);
+    assert.deepEqual((await host.invoke(native.id, "scan_unmanaged_skills", {}) as Scanned[]).map(skill => skill.directory), ["preinstalled"]);
+    const adoptedObservation = (await host.invoke(native.id, "scan_native_skills", {}) as Array<Scanned & { managed: boolean }>).find(skill => skill.directory === "shared-native");
+    assert.equal(adoptedObservation?.managed, true);
+    assert.deepEqual(adoptedObservation?.foundIn, ["agents"]);
+    assert.equal((await host.browserContext(native.id, new Headers())).unifiedStorageOwned, false);
+    assert.equal((await host.browserContext(original.id, new Headers())).status, "ready");
+    unsubscribeNative(); unsubscribeExisting();
   } finally {
     await host.close();
     for (const name of Object.keys(process.env)) if (!(name in previous)) delete process.env[name];

@@ -43,6 +43,7 @@ export const extensionCommandSchemas = {
   get_installed_skills: empty,
   get_skill_backups: empty,
   scan_unmanaged_skills: empty,
+  scan_native_skills: empty,
   get_skill_repos: empty,
   get_settings: empty,
   delete_skill_backup: z.strictObject({ backupId: id }),

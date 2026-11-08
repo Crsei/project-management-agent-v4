@@ -640,7 +640,7 @@ export async function recordGeneration({ root, source, targetCommit, plan, readB
   adaptations.baselineCommit = targetCommit;
   adaptations.policy.sourceManifest = "This generation records verified immutable originals at baselineCommit; prior generation contents remain in Git history. The independent MCP/Skills snapshot is unchanged.";
   adaptations.policy.replay = "Use trusted scripts/upstream-sync/t3code.mjs verifyGeneration for this generation. Legacy same-pin capture/sync commit guards are intentionally unchanged.";
-  for (const entry of [...adaptations.sources]) if (entry.commit === oldCommit) {
+  for (const entry of adaptations.sources.filter(entry => entry.commit === oldCommit)) {
     const nextLicense = (await objects.get(targetCommit, entry.license.path)).identity;
     const next = { ...entry, commit: targetCommit, role: "production baseline for this generation; independent supplemental pin retained", license: { ...entry.license, sha256: nextLicense.sha256, bytes: nextLicense.bytes, gitBlobSha1: nextLicense.blob, gitMode: nextLicense.gitMode } };
     if (targetCommit !== oldCommit && adaptations.outputs.some(output => Object.hasOwn(output, "retirement") && output.inputs.some(input => input.commit === oldCommit))) {

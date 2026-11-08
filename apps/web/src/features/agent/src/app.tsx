@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useLayoutEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { TooltipProvider } from "@agent/components/ui/tooltip";
 import { Assistant } from "./assistant";
@@ -6,6 +6,7 @@ import { AccessGate } from "./access-gate";
 import { SettingsLayout, SettingsNotFound } from "./settings/settings-layout";
 import { agentText } from "./i18n-text.ts";
 import { USAGE_PATH } from "./usage/navigation";
+import { RouteErrorBoundary, RouteLoading } from "@/components/blocks/route-feedback";
 
 const GeneralPage = lazy(() => import("./settings/general-page"));
 const ProvidersPage = lazy(() => import("./settings/providers-page"));
@@ -39,7 +40,7 @@ function ApplicationFrame() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [navigate, location]);
   return <AccessGate>
-    <Suspense fallback={<div role="status" className="p-8">{agentText("正在加载工作区…", "Loading workspace…")}</div>}>
+    <Suspense fallback={<RouteLoading message={agentText("正在加载工作区…", "Loading workspace…")} />}>
       <Outlet />
     </Suspense>
   </AccessGate>;
@@ -50,26 +51,14 @@ function SettingsIndex() {
   return <Navigate to={{ pathname: "/agent/settings/general", search: location.search }} replace state={location.state} />;
 }
 
-class RouteBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
-  render() {
-    if (!this.state.failed) return this.props.children;
-    return <main className="p-8">
-      <h1>{agentText("页面暂时不可用", "Page unavailable")}</h1>
-      <p role="alert">{agentText("无法显示当前页面，请重新加载后再试。", "This page could not be displayed. Reload and try again.")}</p>
-      <button type="button" onClick={() => window.location.reload()}>{agentText("重新加载页面", "Reload page")}</button>
-      <p><Link to="/agent/workspace">{agentText("返回 AI 对话", "Back to AI chat")}</Link></p>
-    </main>;
-  }
-}
 
 export function App() {
+  const location = useLocation();
   useLayoutEffect(() => {
     document.documentElement.dataset.product = "agent";
     return () => { delete document.documentElement.dataset.product; };
   }, []);
-  return <TooltipProvider><RouteBoundary><Routes>
+  return <TooltipProvider><RouteErrorBoundary resetKey={location.pathname}><Routes>
   <Route element={<ApplicationFrame />}>
     <Route index element={<Assistant />} />
     <Route path="workspace" element={<Assistant />} />
@@ -92,5 +81,5 @@ export function App() {
       <Link to="/agent/workspace">{agentText("返回 AI 对话", "Back to AI chat")}</Link>
     </main>} />
   </Route>
-  </Routes></RouteBoundary></TooltipProvider>;
+  </Routes></RouteErrorBoundary></TooltipProvider>;
 }

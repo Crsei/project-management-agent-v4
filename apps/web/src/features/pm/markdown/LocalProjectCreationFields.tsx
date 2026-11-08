@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router';
+import { Asterisk } from 'lucide-react';
 import type { LocalProjectCreationState } from './creation-controller';
 import { LocalDirectoryFields } from '../service/local-directory-fields';
 import { usePmService } from '../service/pm-service';
@@ -20,10 +21,11 @@ export function LocalProjectCreationFields({ controller: c }: { controller: Loca
   const editable = !c.busy && c.canWrite && (!draft.attempt || draft.attempt.phase === 'prepared' && !draft.attempt.localDirectory);
   return <section className="local-project-creation" aria-label={t('项目保存位置', 'Project save location')}>
     <header className="local-project-creation-heading">
-      <h3>{t('保存位置', 'Save location')}</h3>
+      <h3>{t('保存位置', 'Save location')} <span className="local-project-creation-required"><Asterisk size={11} aria-hidden="true" />{t('必填', 'Required')}</span></h3>
       {workspace?.name && <span>{t('工作区', 'Workspace')}: {workspace.name}</span>}
     </header>
     <LocalDirectoryFields key={`${actor?.id}:${workspace?.id}:${workspace?.version}:${actorEpoch}`} value={draft.attempt?.localDirectory ?? draft.localDirectory} defaultParent={settings.defaultParent} disabled={!editable} onChange={c.changeDirectory} />
+    {draft.attempt && !editable && <p className="local-hint" role="status">{t('原请求的保存模式与路径已冻结。请使用下方原请求核对／恢复操作；不会改换目录或重新建项。', 'The original request’s save mode and path are frozen. Check or recover that request below; its directory is never replaced and no duplicate project is created.')}</p>}
     <div className="local-actions"><button type="button" className="secondary-button local-button" disabled={!editable} onClick={() => { void c.previewDirectory(); }}>{t('预检并确认最终路径', 'Preview and confirm final path')}</button><Link to={`${root}/settings?section=local-storage`}>{t('本地存储设置', 'Local storage settings')}</Link></div>
     {c.localPreview ? <div className="local-project-creation-preview" role="status">
       <strong>{t('最终绝对路径', 'Final absolute path')}</strong>

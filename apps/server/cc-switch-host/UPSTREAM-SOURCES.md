@@ -79,3 +79,27 @@ native helpers) are outside the translation.
    upstream update.
 5. The previous Rust crate is retained only as a review/reference artifact until
    the cutover evidence is complete; it is not a runtime dependency.
+
+## Host-native discovery adaptation (same upstream pin)
+
+`src/skills/paths.ts`, `scan.ts`, `import.ts`, and `service.ts` retain the copied
+cc-switch scanner/importer. Host binding filters exclude unbound fallback roots;
+read-only scanning resolves SSOT paths without creating them and observes the
+bound native Home's existing `.agents/skills` independently of managed storage.
+The host-only `scan_native_skills` command (`src/host.ts`) projects the same scan
+into native-only entries with a library-index `managed` flag. It does not imply
+runtime loading, import, native deployment, or Unified write ownership. The
+existing `scan_unmanaged_skills` import-candidate command remains distinct.
+
+The same-pin host import boundary in `src/skills/import.ts` uses the local
+`inspectSkillImportTree` adaptation in `src/skills/fs.ts`; it does not change the
+legacy upstream deployment-copy helper or public command shapes. The adaptation
+pins the selected root, materializes verified internal aliases, and rejects
+escaping/cyclic descendants and unrecognized Windows reparse points before
+adoption. Regular-file descriptor identity/stamps are checked while copying into
+private staging and the source is rechecked before publication. Existing managed
+destinations are independently checked against SSOT before source-repository
+bookkeeping is saved. The host reuses the existing local
+`packages/pm-core/windows-reparse.ts` and `private-path.ts` helpers; no upstream
+source pin, npm dependency, native Home ownership, or Unified write authority is
+added by this safety adaptation.

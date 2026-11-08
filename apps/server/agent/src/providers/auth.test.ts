@@ -23,6 +23,7 @@ async function isolated(run: (state: { authenticated: boolean }) => Promise<void
     models: [], canLogout: state.authenticated,
     methods: [{ id: "native-key", name: "Native account", type: "credentials", fields: [{ name: "token", label: "Token", secret: true }] }],
   });
+  updateProviderInstance("codex", { enabled: true }, getStoredInstance("codex")!.revision);
   try { await run(state); }
   finally {
     const auth = await getAuthState("codex");

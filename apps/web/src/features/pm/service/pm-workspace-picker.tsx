@@ -7,9 +7,10 @@ import { useWorkspaceStore } from "@/providers/app-providers"
 import { pmErrorMessage, usePmService } from "./pm-service"
 import { useText } from "./pm-ui"
 import { WorkspaceIdentityBadge } from "./pm-workspace-identity-badge"
+import { PmWorkspaceCreate } from "./pm-workspace-create"
 
 export function PmWorkspacePicker() {
-  const { actor, workspaces, loading, error, refresh } = usePmService()
+  const { actor, workspaces, workspaceInitializations = [], loading, error, refresh } = usePmService()
   const { locale } = useI18n()
   const t = useText()
   const startPage = useWorkspaceStore(state => state.startPage)
@@ -82,12 +83,20 @@ export function PmWorkspacePicker() {
         </ul>
       ) : (
         <div role="status" className="space-y-2 rounded-lg border bg-surface p-5 text-center text-sm">
-          <p className="font-medium">{t("尚未获准访问任何工作区", "No workspace access yet")}</p>
+          <p className="font-medium">{workspaceInitializations.length ? t("Nova 初始化尚未完成", "Nova initialization is incomplete") : t("尚未获准访问任何工作区", "No workspace access yet")}</p>
           <p className="leading-6 text-muted-foreground">
-            {t("请联系管理员为此账号授予工作区访问权限，然后刷新列表。", "Ask an administrator to grant this account workspace access, then refresh the list.")}
+            {workspaceInitializations.length ? t("工作区身份已建立，但不能把尚未完成的示例初始化显示为空白成功。请恢复原初始化。", "Workspace identity exists, but an unfinished sample initialization is not an empty successful workspace. Resume its original initialization.") : t("请联系管理员为此账号授予工作区访问权限，然后刷新列表。", "Ask an administrator to grant this account workspace access, then refresh the list.")}
           </p>
         </div>
       )}
+
+      {!pending && !visibleError && workspaceInitializations.length > 0 && <section className="space-y-3 rounded-lg border bg-surface p-4" aria-label={t("待恢复的工作区初始化", "Workspace initializations to resume")}>
+        <h2 className="text-sm font-medium">{t("Nova 示例初始化待恢复", "Nova sample initialization needs recovery")}</h2>
+        <ul className="space-y-2 text-sm">{workspaceInitializations.map(item => <li key={item.workspaceId}><strong>{item.name}</strong><p className="text-xs leading-5 text-muted-foreground">{t("尚不可进入；原工作区和初始化记录已保留，不会新建替代项。其他已就绪工作区仍可使用。", "Not ready to open. Its original workspace and initialization record are retained without a replacement; other ready workspaces remain available.")}</p></li>)}</ul>
+        <Button variant="outline" disabled={pending} onClick={() => { void refreshWorkspaces() }}>{t("恢复原初始化并刷新", "Resume original initialization and refresh")}</Button>
+      </section>}
+
+      <PmWorkspaceCreate key={actor.id} />
 
       <div className="flex justify-center">
         <Button variant="outline" disabled={pending} loading={refreshing} onClick={() => { void refreshWorkspaces() }}>

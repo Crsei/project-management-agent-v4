@@ -42,7 +42,7 @@ import {
   requireValidDirectory,
   ssotDir,
 } from "./paths.ts";
-import { scanUnmanaged as scanUnmanagedSkills, type UnmanagedSkill } from "./scan.ts";
+import { scanUnmanaged as scanUnmanagedSkills, type NativeSkillObservation, type UnmanagedSkill } from "./scan.ts";
 
 /** Applications whose native directory always has to match the managed SSOT copy. */
 const VERIFIED_NATIVE_APPS: readonly AppId[] = ["mcode", "agy", "kimi", "dsh"];
@@ -284,6 +284,15 @@ export class SkillManager {
   scanUnmanaged(): UnmanagedSkill[] {
     const managed = [...this.#db.skills.getAllInstalled().values()].map((skill) => skill.directory);
     return scanUnmanagedSkills(managed);
+  }
+
+  /** Observe actual native entries even when their directory is already indexed. */
+  scanNative(): NativeSkillObservation[] {
+    const managed = new Set([...this.#db.skills.getAllInstalled().values()].map(skill => skill.directory));
+    return scanUnmanagedSkills([]).flatMap(skill => {
+      const foundIn = skill.foundIn.filter(source => source !== "cc-switch");
+      return foundIn.length ? [{ ...skill, foundIn, managed: managed.has(skill.directory) }] : [];
+    });
   }
 
   /** Import unmanaged Skills from application directories into the SSOT. */

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { buildApp } from '../apps/server/pm/src/app.ts';
 import { CAPABILITIES } from '../packages/domain/src/core.ts';
@@ -10,6 +10,8 @@ import { ProjectManagementClient } from '../packages/contracts/src/client.ts';
 import type { SetupRequest, SetupResponse } from '../packages/contracts/src/instance-setup.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
 import { getInstanceSetupStatus, prepareInstanceSetup } from '../packages/infrastructure/src/instance-setup.ts';
+import { readCurrentCore } from '../packages/pm-core/readonly.ts';
+import { FileRepository } from '../packages/pm-core/repository.ts';
 import { acquireMailFixtureDatabase, createMailFixtureDatabase, mailTestDatabaseUrl, type MailFixtureDatabase } from './mail-fixture-database.ts';
 import { closeMailApp, MailFixtureScope, mailFixtureCaseTimeout, mailFixtureCleanupTimeout, mailSchemaInitTimeout } from './mail-fixture-lifecycle.ts';
 
@@ -37,7 +39,7 @@ async function fixture(database: MailFixtureDatabase, signal: AbortSignal) {
       return (await pool.query(`SELECT (SELECT count(*)::int FROM users) AS users,
         (SELECT count(*)::int FROM workspaces) AS workspaces,(SELECT count(*)::int FROM memberships) AS memberships`)).rows[0];
     }
-    return { pool, app, origin, startApp, request, counts, close: scope.close };
+    return { pool, app, origin, root, startApp, request, counts, close: scope.close };
   });
 }
 
@@ -88,6 +90,9 @@ describe('first-use setup: real PostgreSQL and HTTP', { skip: !mailTestDatabaseU
     const workspaces = await f.request('/api/v1/workspaces', undefined, { cookie });
     assert.equal(workspaces.status, 200); assert.equal(workspaces.body.items.length, 1);
     assert.equal(workspaces.body.items[0].id, response.body.workspaceId);
+    const core = await f.request(`/api/v1/workspaces/${response.body.workspaceId}/core/workspace`, undefined, { cookie });
+    assert.equal(core.status, 200); assert.equal(core.body.files.length, 27);
+    assert.equal(core.body.files.filter((file: { entity: { entity: string } }) => file.entity.entity === 'work_item').length, 8);
     const membership = (await f.pool.query('SELECT * FROM memberships')).rows[0];
     assert.equal(membership.user_id, response.body.actor.id); assert.equal(membership.workspace_id, response.body.workspaceId);
     assert.deepEqual([...membership.capabilities].sort(), [...CAPABILITIES].sort()); assert.equal(membership.project_ids, null);
@@ -210,6 +215,155 @@ describe('first-use setup: real PostgreSQL and HTTP', { skip: !mailTestDatabaseU
     }
     assert.equal((await f.request('/api/v1/auth/login', { email: body.email, password })).status, 200);
     assert.equal((await f.pool.query('SELECT count(*)::int AS n FROM sessions')).rows[0].n, 1);
+  });
+
+  it('retains interrupted Nova content, rejects an external edit and resumes original initialization through ordinary login', { timeout: mailFixtureCaseTimeout }, async t => {
+    const f = await fixture(database, t.signal); t.after(() => f.close());
+    const candidate = token(), body = input(candidate); await prepareInstanceSetup(f.pool, candidate);
+    await f.pool.query("CREATE FUNCTION fail_nova_completion() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Injected sample completion failure'; END $$");
+    await f.pool.query("CREATE TRIGGER fail_nova_completion BEFORE UPDATE ON workspace_sample_initializations FOR EACH ROW WHEN (NEW.status='ready') EXECUTE FUNCTION fail_nova_completion()");
+    let workspaceId = '';
+    let original: { id: string; raw: string }[] = [];
+    let pendingFile: { path: string; raw: string } | undefined;
+    try {
+      const failed = await f.request('/api/v1/setup', body);
+      assert.equal(failed.status, 503); assert.equal(failed.headers.has('set-cookie'), false);
+      assert.deepEqual(await f.counts(), { users: 1, workspaces: 1, memberships: 1 });
+      assert.deepEqual((await f.request('/api/v1/setup/status')).body, state(true, false));
+      workspaceId = (await f.pool.query('SELECT workspace_id FROM workspace_sample_initializations')).rows[0].workspace_id;
+      const pendingSources = readCurrentCore(join(f.root, workspaceId)).files;
+      original = pendingSources.map(file => ({ id: file.id, raw: file.raw })).sort((a, b) => a.id.localeCompare(b.id));
+      const task = pendingSources.find(file => file.entity.entity === 'work_item');
+      assert.ok(task);
+      pendingFile = { path: join(f.root, workspaceId, task.path), raw: task.raw };
+      assert.equal(original.length, 27);
+      assert.equal((await f.request('/api/v1/setup', body)).status, 409);
+    } finally {
+      await f.pool.query('DROP TRIGGER fail_nova_completion ON workspace_sample_initializations');
+      await f.pool.query('DROP FUNCTION fail_nova_completion()');
+    }
+    assert.ok(pendingFile);
+    const external = `${pendingFile.raw}\nAn actual external edit while initialization is pending.\n`;
+    await writeFile(pendingFile.path, external);
+    const loggedIn = await f.request('/api/v1/auth/login', { email: body.email, password });
+    assert.equal(loggedIn.status, 200);
+    const cookie = loggedIn.headers.get('set-cookie')!.split(';')[0]!;
+    const conflicted = await f.request('/api/v1/workspaces', undefined, { cookie });
+    assert.equal(conflicted.status, 200);
+    assert.deepEqual(conflicted.body.items, []);
+    assert.deepEqual(conflicted.body.pendingInitializations, [{ workspaceId, name: body.workspaceName, key: null }]);
+    assert.equal(await readFile(pendingFile.path, 'utf8'), external, 'Recovery must not overwrite an externally changed pending object');
+    assert.equal((await f.pool.query('SELECT status FROM workspace_sample_initializations')).rows[0].status, 'pending');
+    // Only this owned fixture restores the original intended bytes. The product
+    // rejects the conflict above and never performs this external edit rollback.
+    await writeFile(pendingFile.path, pendingFile.raw);
+    assert.equal((await f.request('/api/v1/workspaces', undefined, { cookie })).status, 200);
+    const recovered = readCurrentCore(join(f.root, workspaceId)).files.map(file => ({ id: file.id, raw: file.raw })).sort((a, b) => a.id.localeCompare(b.id));
+    assert.deepEqual(recovered, original);
+    assert.equal((await f.pool.query('SELECT status FROM workspace_sample_initializations')).rows[0].status, 'ready');
+    assert.deepEqual(await f.counts(), { users: 1, workspaces: 1, memberships: 1 });
+  });
+
+  it('recovers the original workspace key after interruption before first state, but rejects a replaced claimed root', { timeout: mailFixtureCaseTimeout }, async t => {
+    const f = await fixture(database, t.signal); t.after(() => f.close());
+    const user = await createUser(f.pool, { email: 'prestate-owner@example.test', name: 'Owner', password });
+    const login = await f.request('/api/v1/auth/login', { email: user.email, password });
+    const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+    const key = randomUUID(), name = 'Original interrupted workspace';
+    const write = FileRepository.prototype.write;
+    let interruptions = 0;
+    const fault = t.mock.method(FileRepository.prototype, 'write', function (this: FileRepository, relative: string, raw: string, revision?: string) {
+      if (this.root.startsWith(`${f.root}${sep}`) && relative === '.pm/state/state.json') {
+        interruptions++;
+        throw new Error('Injected interruption before first state persistence');
+      }
+      return write.call(this, relative, raw, revision);
+    });
+    try {
+      const failed = await f.request('/api/v1/workspaces', { name, expectedActorId: user.id }, { cookie, 'Idempotency-Key': key });
+      assert.equal(failed.status, 503);
+      assert.equal(failed.body.error.code, 'workspace_initialization_pending');
+    } finally { fault.mock.restore(); }
+    assert.equal(interruptions, 1);
+    const row = (await f.pool.query('SELECT * FROM workspace_sample_initializations')).rows[0];
+    assert.equal(row.core_initialization_phase, 'prestate');
+    assert.equal(row.status, 'pending'); assert.equal(row.project_id, null);
+    const root = join(f.root, row.workspace_id), originalRoot = `${root}-owned`;
+    await assert.rejects(readFile(join(root, '.pm/state/state.json')), { code: 'ENOENT' });
+    assert.deepEqual((await f.request(`/api/v1/workspace-creations/${key}`, undefined, { cookie })).body, { status: 'pending', key, workspaceId: row.workspace_id });
+    assert.equal((await f.request(`/api/v1/workspaces/${row.workspace_id}/core/workspace`, undefined, { cookie })).status, 503);
+    assert.deepEqual((await f.request('/api/v1/setup/status')).body, state(true, false));
+    await rename(root, originalRoot);
+    await mkdir(root);
+    try {
+      assert.equal((await f.request(`/api/v1/workspace-creations/${key}/recover`, { expectedActorId: user.id }, { cookie })).status, 503);
+      assert.deepEqual(await readdir(root), [], 'Recovery must not initialize or remove the replacement empty root');
+      assert.deepEqual((await f.pool.query('SELECT core_root_identity FROM workspace_sample_initializations')).rows[0].core_root_identity, row.core_root_identity);
+    } finally { await rm(root, { recursive: true }); await rename(originalRoot, root); }
+    const recovered = await f.request(`/api/v1/workspace-creations/${key}/recover`, { expectedActorId: user.id }, { cookie });
+    assert.equal(recovered.status, 200); assert.equal(recovered.body.status, 'ready');
+    assert.equal(recovered.body.workspaceId, row.workspace_id);
+    const snapshot = await f.request(`/api/v1/workspaces/${row.workspace_id}/core/workspace`, undefined, { cookie });
+    assert.equal(snapshot.status, 200); assert.equal(snapshot.body.files.length, 27);
+    assert.equal(new Set(snapshot.body.files.map((file: { id: string }) => file.id)).size, 27);
+    assert.deepEqual((await f.request('/api/v1/workspaces', { name, expectedActorId: user.id }, { cookie, 'Idempotency-Key': key })).body, recovered.body);
+    assert.deepEqual((await f.pool.query('SELECT status,core_initialization_phase FROM workspace_sample_initializations')).rows, [{ status: 'ready', core_initialization_phase: 'established' }]);
+    assert.deepEqual(await f.counts(), { users: 1, workspaces: 1, memberships: 1 });
+  });
+
+  it('never adopts an empty unproven root after the ownership transaction fails', { timeout: mailFixtureCaseTimeout }, async t => {
+    const f = await fixture(database, t.signal); t.after(() => f.close());
+    const candidate = token(); await prepareInstanceSetup(f.pool, candidate);
+    await f.pool.query("CREATE FUNCTION fail_nova_claim() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Injected ownership persistence failure'; END $$");
+    await f.pool.query("CREATE TRIGGER fail_nova_claim BEFORE UPDATE ON workspace_sample_initializations FOR EACH ROW WHEN (NEW.core_initialization_phase='prestate') EXECUTE FUNCTION fail_nova_claim()");
+    try {
+      assert.equal((await f.request('/api/v1/setup', input(candidate, 'unproven-owner@example.test'))).status, 503);
+    } finally {
+      await f.pool.query('DROP TRIGGER fail_nova_claim ON workspace_sample_initializations');
+      await f.pool.query('DROP FUNCTION fail_nova_claim()');
+    }
+    const row = (await f.pool.query('SELECT * FROM workspace_sample_initializations')).rows[0];
+    assert.equal(row.core_initialization_phase, 'unclaimed'); assert.equal(row.core_root_identity, null);
+    const root = join(f.root, row.workspace_id);
+    assert.deepEqual(await readdir(root), []);
+    const loggedIn = await f.request('/api/v1/auth/login', { email: 'unproven-owner@example.test', password });
+    const cookie = loggedIn.headers.get('set-cookie')!.split(';')[0]!;
+    const listing = await f.request('/api/v1/workspaces', undefined, { cookie });
+    assert.equal(listing.status, 200); assert.deepEqual(listing.body.items, []);
+    assert.deepEqual(listing.body.pendingInitializations, [{ workspaceId: row.workspace_id, name: 'First workspace', key: null }]);
+    assert.deepEqual(await readdir(root), [], 'An unproven root must neither be adopted nor deleted');
+    await rename(root, `${root}-unproven-owned`);
+    await mkdir(root); // A different, unrelated empty directory now occupies the same name.
+    assert.deepEqual((await f.request('/api/v1/workspaces', undefined, { cookie })).body, listing.body);
+    assert.deepEqual(await readdir(root), [], 'An unrelated empty root must not be initialized or replaced');
+    assert.equal((await f.pool.query('SELECT status FROM workspace_sample_initializations')).rows[0].status, 'pending');
+    assert.deepEqual((await f.request('/api/v1/setup/status')).body, state(true, false));
+  });
+
+  it('never recreates established sample authority when state disappears before SQL completion', { timeout: mailFixtureCaseTimeout }, async t => {
+    const f = await fixture(database, t.signal); t.after(() => f.close());
+    const candidate = token(); await prepareInstanceSetup(f.pool, candidate);
+    await f.pool.query("CREATE FUNCTION fail_nova_ready() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Injected ready persistence failure'; END $$");
+    await f.pool.query("CREATE TRIGGER fail_nova_ready BEFORE UPDATE ON workspace_sample_initializations FOR EACH ROW WHEN (NEW.status='ready') EXECUTE FUNCTION fail_nova_ready()");
+    try {
+      assert.equal((await f.request('/api/v1/setup', input(candidate, 'established-owner@example.test'))).status, 503);
+    } finally {
+      await f.pool.query('DROP TRIGGER fail_nova_ready ON workspace_sample_initializations');
+      await f.pool.query('DROP FUNCTION fail_nova_ready()');
+    }
+    const row = (await f.pool.query('SELECT * FROM workspace_sample_initializations')).rows[0];
+    assert.equal(row.core_initialization_phase, 'established'); assert.equal(row.status, 'pending');
+    const root = join(f.root, row.workspace_id);
+    const before = readCurrentCore(root).files.map(file => ({ id: file.id, raw: file.raw }));
+    assert.equal(before.length, 27);
+    await rm(join(root, '.pm/state/state.json'));
+    const loggedIn = await f.request('/api/v1/auth/login', { email: 'established-owner@example.test', password });
+    const cookie = loggedIn.headers.get('set-cookie')!.split(';')[0]!;
+    const listing = await f.request('/api/v1/workspaces', undefined, { cookie });
+    assert.equal(listing.status, 200); assert.deepEqual(listing.body.items, []);
+    await assert.rejects(readFile(join(root, '.pm/state/state.json')), { code: 'ENOENT' });
+    assert.deepEqual(readCurrentCore(root).files.map(file => ({ id: file.id, raw: file.raw })), before);
+    assert.deepEqual((await f.pool.query('SELECT status,core_initialization_phase FROM workspace_sample_initializations')).rows, [{ status: 'pending', core_initialization_phase: 'established' }]);
   });
 
   it('reconciles a lost committed HTTP response without resubmitting or creating another account', { timeout: mailFixtureCaseTimeout }, async t => {

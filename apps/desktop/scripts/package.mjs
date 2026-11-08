@@ -6,7 +6,7 @@ import { prepackApplication } from "./application-asar.mjs";
 import { buildWorkspace, inspectDeployment, run, stageWorkspace } from "./stage-workspace.mjs";
 import { inspectPackagedApplication } from "./packaged-application.mjs";
 import { inspectFinalArtifacts } from "./final-artifact.mjs";
-import { captureSource, fileRecord, requireUnchangedSource, writeReleaseMaterials } from "./release-materials.mjs";
+import { captureSource, fileRecord, observePackagingPhase, requireUnchangedSource, writeReleaseMaterials } from "./release-materials.mjs";
 import {
   defaultRuntimeRoot, desktopRoot, hashFile, inside, portable, requireNativeTarget,
   requirePinnedNode, verifyRuntime,
@@ -27,7 +27,7 @@ if (!mode) throw new Error("Signing is explicit: use package (unsigned) or packa
 requirePinnedNode();
 const target = requireNativeTarget(options.get("--platform"), options.get("--arch"), true);
 const runtimeRoot = resolve(options.get("--runtime-root") ?? process.env.PM_DESKTOP_RUNTIME_ROOT ?? defaultRuntimeRoot);
-const runtimeManifest = await verifyRuntime(runtimeRoot, target).catch((cause) => {
+const runtimeManifest = await observePackagingPhase("verifyRuntime", () => verifyRuntime(runtimeRoot, target)).catch((cause) => {
   throw new Error(`A complete verified desktop runtime is required. Run pnpm --filter @agent-workspace/desktop runtime:prepare on this runner first. ${cause.message}`);
 });
 if (mode === "unsigned") {
@@ -55,11 +55,11 @@ const staging = await realpath(await mkdtemp(join(tmpdir(), "pm-agent-v4-desktop
 try {
   const sourceRoot = join(staging, "source");
   const source = await captureSource(sourceRoot);
-  await buildWorkspace();
+  await observePackagingPhase("buildWorkspace", () => buildWorkspace());
   const application = join(staging, "application");
   const workspaceRuntime = join(staging, "workspace-runtime");
-  await stageWorkspace(workspaceRuntime, application);
-  const prepackedApplication = await prepackApplication(application, join(staging, "prepacked-application"));
+  await observePackagingPhase("stageWorkspace", () => stageWorkspace(workspaceRuntime, application));
+  const prepackedApplication = await observePackagingPhase("prepackApplication", () => prepackApplication(application, join(staging, "prepacked-application")));
   const nativeBinaries = [];
   const nativeRuntimeFiles = [];
   if (process.platform === "darwin") {
@@ -82,30 +82,32 @@ try {
         }
       }
     }
-    await collectBinaries(runtimeRoot, "desktop-runtime");
-    await collectBinaries(workspaceRuntime, "workspace-runtime");
+    await observePackagingPhase("collectNativeBinaries", async () => {
+      await collectBinaries(runtimeRoot, "desktop-runtime");
+      await collectBinaries(workspaceRuntime, "workspace-runtime");
+    });
   }
   await writeFile(join(workspaceRuntime, "desktop-runtime-native.json"),
     JSON.stringify({ schemaVersion: 1, files: nativeRuntimeFiles }, null, 2) + "\n", { flag: "wx" });
   const { Arch, Platform, build } = await import("electron-builder");
   const platform = process.platform === "win32" ? Platform.WINDOWS : Platform.MAC;
   const arch = process.arch === "arm64" ? Arch.arm64 : Arch.x64;
-  const artifacts = await build({
+  const artifacts = await observePackagingPhase("buildInstallers", () => build({
     projectDir: prepackedApplication.directory,
     targets: platform.createTarget(process.platform === "win32" ? ["nsis"] : ["dmg", "zip"], arch),
     publish: "never",
     config: desktopBuilderConfig({ application, prepackedApplication, workspaceRuntime, desktopRuntime: runtimeRoot, output, electronVersion: manifest.devDependencies.electron, mode, platform: process.platform, nativeBinaries }),
-  });
+  }));
   const resources = process.platform === "win32"
     ? join(output, "win-unpacked", "resources")
     : join(output, process.arch === "arm64" ? "mac-arm64" : "mac", "PM Agent v4.app", "Contents", "Resources");
-  await inspectDeployment(join(resources, "workspace-runtime"));
-  const applicationVerification = await inspectPackagedApplication(resources, manifest.version, { signedMachO: process.platform === "darwin" });
+  await observePackagingPhase("inspectDeployment", () => inspectDeployment(join(resources, "workspace-runtime")));
+  const applicationVerification = await observePackagingPhase("inspectPackagedApplication", () => inspectPackagedApplication(resources, manifest.version, { signedMachO: process.platform === "darwin" }));
   // afterPack verifies runtime bytes before native signing changes executable
   // hashes. Retain that source inventory as provenance; verify the signed bundle
   // and hash the final distributables below instead of rejecting upstream npm files.
   if (mode === "signed" && process.platform === "darwin")
-    await run("codesign", ["--verify", "--deep", "--strict", join(resources, "../..")]);
+    await observePackagingPhase("verifyMacSignature", () => run("codesign", ["--verify", "--deep", "--strict", join(resources, "../..")]));
   const records = [];
   const delivered = new Set();
   for (const path of artifacts) {
@@ -115,23 +117,27 @@ try {
   }
   // Some builder targets report their installer but not its generated blockmap.
   for (const name of await readdir(output)) if (name.endsWith(".blockmap")) delivered.add(name);
-  for (const name of [...delivered].sort()) records.push(await fileRecord(output, name));
+  await observePackagingPhase("recordArtifacts", async () => {
+    for (const name of [...delivered].sort()) records.push(await fileRecord(output, name));
+  });
   const expected = process.platform === "win32" ? [".exe"] : [".dmg", ".zip"];
   if (expected.some((suffix) => !records.some((record) => record.path.endsWith(suffix))))
     throw new Error("Builder did not produce every required native installer/archive target.");
   if (mode === "signed" && process.platform === "win32") {
     const powershell = join(process.env.SystemRoot || process.env.WINDIR || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-    for (const path of [join(output, "win-unpacked", "PM Agent v4.exe"), ...artifacts.filter((file) => file.endsWith(".exe"))]) {
-      process.env.PM_DESKTOP_VERIFY_SIGNATURE_PATH = path;
-      try {
-        await run(powershell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; $signature=Get-AuthenticodeSignature -LiteralPath $env:PM_DESKTOP_VERIFY_SIGNATURE_PATH; if ($signature.Status -ne 'Valid') { throw 'Desktop Authenticode verification failed' }"]);
-      } finally { delete process.env.PM_DESKTOP_VERIFY_SIGNATURE_PATH; }
-    }
+    await observePackagingPhase("verifyWindowsSignatures", async () => {
+      for (const path of [join(output, "win-unpacked", "PM Agent v4.exe"), ...artifacts.filter((file) => file.endsWith(".exe"))]) {
+        process.env.PM_DESKTOP_VERIFY_SIGNATURE_PATH = path;
+        try {
+          await run(powershell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop'; $signature=Get-AuthenticodeSignature -LiteralPath $env:PM_DESKTOP_VERIFY_SIGNATURE_PATH; if ($signature.Status -ne 'Valid') { throw 'Desktop Authenticode verification failed' }"]);
+        } finally { delete process.env.PM_DESKTOP_VERIFY_SIGNATURE_PATH; }
+      }
+    });
   }
-  const finalArtifactVerification = await inspectFinalArtifacts(output, records, { target, version: manifest.version, signing: mode });
+  const finalArtifactVerification = await observePackagingPhase("inspectFinalArtifacts", () => inspectFinalArtifacts(output, records, { target, version: manifest.version, signing: mode }));
   await mkdir(output, { recursive: true });
   await requireUnchangedSource(source);
-  const delivery = await writeReleaseMaterials({
+  const delivery = await observePackagingPhase("writeReleaseMaterials", () => writeReleaseMaterials({
     output, resources, platform: process.platform, sourceRoot, source, legalRoot: join(staging, "legal"),
     manifest: {
       version: manifest.version, target, signing: mode,
@@ -154,8 +160,8 @@ try {
       notCovered: ["Real installer install/upgrade/uninstall", "Electron GUI", "Real Provider account/model/native CLI Home", "Public distribution authorization", "Cross-store backup/restore acceptance"],
       published: false,
     },
-  });
+  }));
   console.log(JSON.stringify({ output, manifest: join(output, "desktop-package.json"), target, signing: mode, published: false, artifacts: delivery.artifacts, materials: delivery.materials, checksums: "SHA256SUMS" }));
 } finally {
-  await rm(staging, { recursive: true, force: true });
+  await observePackagingPhase("cleanStaging", () => rm(staging, { recursive: true, force: true }));
 }

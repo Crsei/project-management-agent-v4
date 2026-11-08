@@ -16,7 +16,7 @@ import { login, authenticate, logout } from '../../../../packages/infrastructure
 import { authorizeMcpService, mcpRequestIdentity } from '../../../../packages/application/src/mcp-service-auth.ts';
 import { createRegistry } from '../../../../packages/application/src/registry.ts';
 import { runCommand, getCommandReceipt } from '../../../../packages/application/src/kernel.ts';
-import { listEntities, listWorkspaces, readEntity } from '../../../../packages/application/src/queries.ts';
+import { listEntities, readEntity } from '../../../../packages/application/src/queries.ts';
 import { getMembership, listMembers, requireCapability } from '../../../../packages/application/src/access.ts';
 import { downloadArtifactVersion } from '../../../../packages/application/src/delivery.ts';
 import { readChanges } from '../../../../packages/application/src/changes.ts';
@@ -41,6 +41,7 @@ import { readMemberDirectory } from '../../../../packages/application/src/member
 import type { InvitationMailConfig } from '../../../../packages/infrastructure/src/invitation-mail.ts';
 import { registerInvitationRoutes } from './invitation-routes.ts';
 import { registerInstanceSetupRoutes } from './instance-setup-routes.ts';
+import { registerWorkspaceCreationRoutes } from './workspace-creation-routes.ts';
 import { readTeamDirectory } from '../../../../packages/application/src/team-directory.ts';
 import { readTeamWorkload } from '../../../../packages/application/src/team-workload.ts';
 import { registerWorkspaceIdentityRoutes } from './workspace-identity-routes.ts';
@@ -360,7 +361,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
       const status = await pool.query<{ live: boolean; failures: string }>("SELECT EXISTS(SELECT 1 FROM service_heartbeats WHERE role='worker' AND heartbeat_at>now()-interval '20 seconds') AS live,(SELECT count(*)::text FROM outbox WHERE published_at IS NULL AND attempts>=10) AS failures");
       workerReady = status.rows[0]?.live ?? false;
       failedOutbox = Number(status.rows[0]?.failures ?? 0);
-      const authorities = await pool.query<{ workspace_id: string }>(`SELECT workspace_id FROM project_audit UNION SELECT workspace_id FROM local_project_operations UNION SELECT workspace_id FROM command_receipts WHERE command_type IN ('CreateProject','CreateWorkItem','CreateWorkItemFromIntent','CreateMilestone') AND receipt->>'status'='committed'`);
+      const authorities = await pool.query<{ workspace_id: string }>(`SELECT workspace_id FROM project_audit UNION SELECT workspace_id FROM local_project_operations UNION SELECT workspace_id FROM workspace_sample_initializations UNION SELECT workspace_id FROM command_receipts WHERE command_type IN ('CreateProject','CreateWorkItem','CreateWorkItemFromIntent','CreateMilestone') AND receipt->>'status'='committed'`);
       for (const authority of authorities.rows) {
         const state = lstatSync(path.join(coreRoot, authority.workspace_id, '.pm/state/state.json'));
         if (!state.isFile() || state.isSymbolicLink() || state.nlink !== 1) throw new Error('Authoritative core state is missing or unsafe');
@@ -381,7 +382,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   });
   app.get('/api/v1/capabilities', async () => ({ stage: pool ? 'backend' : 'bootstrap', business: { enabled: Boolean(pool) }, database: { enabled: Boolean(pool) }, storage: { enabled: Boolean(pool && options.blobStorageLocator) }, markdownCore: { enabled: Boolean(pool) }, localProjects: { enabled: Boolean(pool && localProjects.enabled) }, worker: { enabled: Boolean(pool) }, realtime: { enabled: Boolean(pool) }, execution: { enabled: false }, accountRecovery: { request: { enabled: Boolean(pool && options.accountRecoveryMail) }, verification: { enabled: Boolean(pool && options.accountRecoveryMail) } } }));
   app.get('/openapi.json', async () => buildOpenApi(registry));
-  registerInstanceSetupRoutes(app, { database, cookieOptions });
+  registerInstanceSetupRoutes(app, { database, cookieOptions, sample: { coreRoot, localProjects } });
   app.post('/api/v1/auth/login', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const body = z.strictObject({ email: z.string().max(254), password: z.string().max(256) }).parse(request.body);
@@ -393,7 +394,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   app.get('/api/v1/auth/me', async (request, reply) => { reply.header('Cache-Control', 'no-store'); return { actor: await actor(request) }; });
   registerAccountSecurityRoutes(app, { database, token });
   registerAccountRecoveryRoutes(app, { database, token, ...(options.accountRecoveryMail ? { mailConfig: options.accountRecoveryMail } : {}) });
-  app.get('/api/v1/workspaces', async (request) => ({ items: await listWorkspaces(database(), await actor(request)) }));
+  registerWorkspaceCreationRoutes(app, { database, actor, sample: { coreRoot, localProjects } });
   app.get('/api/v1/workspaces/:workspaceId/members', async (request) => listMembers(database(), await actor(request), params(request).workspaceId));
   app.get('/api/v1/workspaces/:workspaceId/members/directory', async request => {
     z.strictObject({}).parse(request.query);
