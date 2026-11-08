@@ -194,7 +194,7 @@ test("Agent refuses two physical Effect identities even when versions are identi
 
 for (const shell of ["posix", "cmd", "powershell"]) {
   test(`deployed jp/yaml ${shell} command shims preserve arguments, exit status and paths with spaces`, { skip: shell === "posix" ? process.platform === "win32" : process.platform !== "win32" }, async (t) => {
-    const files = { "commands/cli with spaces.cjs": "#!/usr/bin/env node\nif(process.argv[2]==='--exit')process.exit(19);\nprocess.stdout.write(JSON.stringify(process.argv.slice(2)));\n" };
+    const files = { "commands/cli with spaces.cjs": "#!/usr/bin/env node\nrequire('node:fs').writeFileSync(process.env.PM_SHIM_RECEIPT,JSON.stringify({execPath:process.execPath,argv:process.argv.slice(2),filename:__filename,pid:process.pid}));\nif(process.argv[2]==='--exit')process.exit(19);\nprocess.stdout.write(JSON.stringify(process.argv.slice(2)));\n" };
     const f = await fixture(t, { yaml: "yaml", "@jmespath-community/jmespath": "jp" }, {
       yaml: { metadata: { bin: "./commands/cli with spaces.cjs" }, files },
       jp: { name: "@jmespath-community/jmespath", metadata: { bin: { jp: "./commands/cli with spaces.cjs" } }, files },
@@ -207,6 +207,10 @@ for (const shell of ["posix", "cmd", "powershell"]) {
     assert.equal(context.binFiles.length, 6);
     const env = { PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) };
     const args = ["argument with spaces", "literal$quote"];
+    async function invokePowerShell(script, args, childEnv = env) {
+      return execute(join(process.env.SystemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"),
+        ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, ...args], { env: childEnv });
+    }
     async function invoke(commandName, args, childEnv = env) {
       const shim = join(f.output, "node_modules/.bin", shell === "posix" ? commandName : shell === "cmd" ? `${commandName}.CMD` : `${commandName}.ps1`);
       if (shell === "posix") return execute(shim, args, { env: childEnv });
@@ -214,21 +218,81 @@ for (const shell of ["posix", "cmd", "powershell"]) {
         const command = `""${shim}" ${args.map((arg) => `"${arg}"`).join(" ")}"`;
         return execute(join(process.env.SystemRoot, "System32/cmd.exe"), ["/d", "/s", "/c", command], { env: childEnv, windowsVerbatimArguments: true });
       }
-      return execute(join(process.env.SystemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"),
-        ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", shim, ...args], { env: childEnv });
+      return invokePowerShell(shim, args, childEnv);
     }
+    async function outcome(action) {
+      try {
+        return { exitCode: 0, signal: null, ...await action() };
+      } catch (error) {
+        return { exitCode: error.code, signal: error.signal ?? null, stdout: error.stdout ?? "", stderr: error.stderr ?? "", error: error.message };
+      }
+    }
+    async function runCase(commandName, scenario, arguments_, childEnv = env) {
+      const receiptPath = join(f.source, "receipts", `${commandName}-${scenario}.json`);
+      await mkdir(dirname(receiptPath), { recursive: true });
+      const result = await outcome(() => invoke(commandName, arguments_, { ...childEnv, PM_SHIM_RECEIPT: receiptPath }));
+      const receipt = await readFile(receiptPath, "utf8").then(JSON.parse).catch((error) => {
+        if (error.code === "ENOENT") return null;
+        return { readError: error.message };
+      });
+      return { ...result, receipt, diagnostic: JSON.stringify({ shell, command: commandName, scenario, receiptPath, ...result, receipt }) };
+    }
+    async function checkReceipt(result, arguments_) {
+      assert.ok(result.receipt?.execPath, result.diagnostic);
+      assert.equal(await realpath(result.receipt.execPath), await realpath(process.execPath), result.diagnostic);
+      assert.deepEqual(result.receipt.argv, arguments_, result.diagnostic);
+    }
+    const emptyPath = join(f.source, "empty-path");
+    await mkdir(emptyPath);
     for (const command of ["jp", "yaml"]) {
-      const result = await invoke(command, args);
-      assert.equal(result.stderr, "", result.stderr);
-      assert.deepEqual(JSON.parse(result.stdout), args);
-      await assert.rejects(invoke(command, ["--exit"]), (error) => error.code === 19);
+      await t.test(`${command}: stdout and literal arguments`, async () => {
+        const result = await runCase(command, "stdout", args);
+        assert.equal(result.exitCode, 0, result.diagnostic);
+        assert.equal(result.stderr, "", result.diagnostic);
+        await checkReceipt(result, args);
+        assert.ok(result.stdout.length > 0, result.diagnostic);
+        let parsed;
+        try { parsed = JSON.parse(result.stdout); } catch (error) { assert.fail(`${result.diagnostic}; JSON: ${error.message}`); }
+        assert.deepEqual(parsed, args, result.diagnostic);
+      });
+      await t.test(`${command}: exact native exit 19`, async () => {
+        const result = await runCase(command, "exit19", ["--exit"]);
+        assert.equal(result.exitCode, 19, result.diagnostic);
+        assert.equal(result.stdout, "", result.diagnostic);
+        await checkReceipt(result, ["--exit"]);
+      });
+      if (shell === "powershell") {
+        await t.test(`${command}: missing Node fails without executing the target`, async () => {
+          const result = await runCase(command, "missing-node", args, { ...env, PATH: emptyPath });
+          assert.ok(Number.isInteger(result.exitCode) && result.exitCode !== 0, result.diagnostic);
+          assert.equal(result.stdout, "", result.diagnostic);
+          assert.equal(result.receipt, null, result.diagnostic);
+        });
+      }
     }
     if (shell === "powershell") {
-      const emptyPath = join(f.source, "empty-path");
-      await mkdir(emptyPath);
-      for (const command of ["jp", "yaml"])
-        await assert.rejects(invoke(command, args, { ...env, PATH: emptyPath }),
-          (error) => Number.isInteger(error.code) && error.code !== 0 && error.stdout === "");
+      // Temporary native diagnosis: distinguish PS5.1 host capture from emitted
+      // shim/Node execution. These probes do not replace any consumer assertions.
+      const direct = join(f.source, "host-direct.ps1");
+      await writeFile(direct, '[Console]::Out.Write("host-direct-stdout")\nexit 23\n');
+      await t.test("diagnostic PS5.1 direct host stdout and nonzero exit", async () => {
+        const result = await outcome(() => invokePowerShell(direct, []));
+        const diagnostic = JSON.stringify({ scenario: "direct-host", ...result });
+        assert.equal(result.exitCode, 23, diagnostic);
+        assert.equal(result.stdout, "host-direct-stdout", diagnostic);
+        assert.equal(result.stderr, "", diagnostic);
+      });
+      const nativeScript = join(f.source, "host-native.ps1");
+      const nativeTarget = join(f.source, "host-native.cjs");
+      await writeFile(nativeTarget, 'process.stdout.write("host-native-stdout",()=>process.exit(29));\n');
+      await writeFile(nativeScript, 'param([string]$NodePath,[string]$ScriptPath)\n$ErrorActionPreference="Stop"\n$PSNativeCommandUseErrorActionPreference=$false\n& $NodePath $ScriptPath\nexit $LASTEXITCODE\n');
+      await t.test("diagnostic PS5.1 native no-newline stdout and nonzero exit", async () => {
+        const result = await outcome(() => invokePowerShell(nativeScript, [process.execPath, nativeTarget]));
+        const diagnostic = JSON.stringify({ scenario: "native-host", ...result });
+        assert.equal(result.exitCode, 29, diagnostic);
+        assert.equal(result.stdout.trimEnd(), "host-native-stdout", diagnostic);
+        assert.equal(result.stderr, "", diagnostic);
+      });
     }
     for (const file of context.binFiles) {
       const contents = await readFile(join(f.output, file.path), "utf8");
