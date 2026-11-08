@@ -11,6 +11,8 @@
   "scripts": {
     "doctor": "node scripts/doctor.mjs",
     "check:ci": "node scripts/check-ci.mjs",
+    "check:affected": "node scripts/check-affected.mjs",
+    "check:turbo": "node scripts/check-turbo.mjs",
     "check:boundaries": "node scripts/check-import-boundaries.mjs",
     "check:licenses": "node scripts/check-third-party-notices.mjs --integrity",
     "check:no-easyuse": "node scripts/check-no-easyuse.mjs",
@@ -22,6 +24,9 @@
     "typecheck:agent": "pnpm --filter @agent-workspace/contracts typecheck && pnpm --filter @agent-workspace/client-runtime typecheck && pnpm --filter @agent-workspace/server typecheck",
     "test:agent": "pnpm --filter @agent-workspace/cc-switch-host test && node --test apps/server/gateway.test.ts && pnpm --filter @agent-workspace/client-runtime test && pnpm --filter @agent-workspace/server test && pnpm --filter @agent-workspace/desktop test",
     "lint:agent": "oxlint apps/server/agent apps/server/cc-switch-host apps/web/src/features/agent apps/desktop apps/marketing packages/agent-contracts packages/agent-client-runtime",
+    "lint:gateway": "eslint apps/server/gateway.ts apps/server/gateway.test.ts --max-warnings=0",
+    "lint:ci": "oxlint --deny-warnings scripts/check-ci.mjs scripts/check-ci-process.mjs scripts/check-ci-process.test.mjs scripts/check-sources.mjs scripts/check-affected.mjs scripts/check-affected.test.mjs scripts/check-task-graph.mjs scripts/check-turbo.mjs scripts/check-turbo.test.mjs",
+    "lint:upstream": "oxlint --deny-warnings scripts/upstream-sync.mjs scripts/upstream-sync scripts/upstream-publish.mjs scripts/upstream-publish.test.mjs",
     "build:desktop": "pnpm --filter @agent-workspace/desktop build",
     "package:desktop": "pnpm --filter @agent-workspace/desktop package",
     "dev:marketing": "pnpm --filter @agent-workspace/marketing dev",
@@ -81,6 +86,7 @@
     "github-slugger": "2.0.0",
     "mdast-util-to-string": "4.0.0",
     "oxlint": "^1.87.0",
+    "turbo": "2.11.10",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.2"
   },

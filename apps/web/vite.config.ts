@@ -7,7 +7,8 @@ import { openHandsProvenancePlugin } from "../../vendor/openhands-extensions/scr
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url))
 
 export default defineConfig(({ command, mode, isPreview }) => {
-  const env = { ...loadEnv(mode, workspaceRoot, ""), ...process.env }
+  const isolatedChecks = process.env.DOVSPACE_ISOLATED_CHECKS === "1"
+  const env = { ...(isolatedChecks ? {} : loadEnv(mode, workspaceRoot, "")), ...process.env }
   const port = Number(env.PM_WEB_PORT ?? 4326)
   const setting = env.PM_ENABLE_LAB
   if (setting !== undefined && setting !== "true" && setting !== "false") {
@@ -48,7 +49,7 @@ export default defineConfig(({ command, mode, isPreview }) => {
   const proxy = { "^/agent/api(?:/|\\?|$)": agentProxy, "/api": pmProxy, "/health": pmProxy, "/openapi.json": pmProxy }
   const hmrPort = env.VITE_HMR_CLIENT_PORT ? Number(env.VITE_HMR_CLIENT_PORT) : undefined
   return {
-    envDir: workspaceRoot,
+    envDir: isolatedChecks ? false : workspaceRoot,
     define: { "import.meta.env.PM_LAB_ENABLED": JSON.stringify(labEnabled) },
     plugins: [react(), tailwindcss(), ...(isStorybook ? [] : [openHandsProvenancePlugin()])],
     resolve: {
@@ -80,7 +81,7 @@ export default defineConfig(({ command, mode, isPreview }) => {
     optimizeDeps: { include: ["remark-gfm"] },
     server: { host: "127.0.0.1", port, strictPort: true, proxy, hmr: hmrPort ? { clientPort: hmrPort } : undefined, watch: { usePolling: env.CHOKIDAR_USEPOLLING === "true" } },
     preview: { host: "127.0.0.1", port, strictPort: true, proxy },
-    // Open tabs can still lazy-load their existing hashed chunks after a deployment.
-    build: { outDir: "dist", emptyOutDir: false },
+    // Isolated cached builds own one clean generation; live deployments retain old chunks.
+    build: { outDir: "dist", emptyOutDir: isolatedChecks },
   }
 })

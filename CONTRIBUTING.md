@@ -4,7 +4,7 @@
 
 ## 准备环境
 
-工具链固定为 Node 24.21.0、pnpm 11.9.0、Rust 1.95.0。Linux 需要 C/C++ 编译器、链接器、make、pkg-config；macOS 需要 Xcode Command Line Tools 与 pkg-config；Windows 需要 Visual Studio 2022 C++ x64/x86 Build Tools、Windows SDK 和已加载的开发者环境。不要以临时跳过原生模块或替换依赖绕过缺少工具的问题。
+工具链固定为 Node 24.21.0、pnpm 11.9.0；当前 MCP/Skills host 为 TypeScript，不要求 Rust/Cargo。Linux 需要 C/C++ 编译器、链接器、make、pkg-config；macOS 需要 Xcode Command Line Tools 与 pkg-config；Windows 需要 Visual Studio 2022 C++ x64/x86 Build Tools、Windows SDK 和已加载的开发者环境。不要以临时跳过原生模块或替换依赖绕过缺少工具的问题。
 
 ```sh
 node scripts/doctor.mjs
@@ -32,11 +32,17 @@ pnpm install --frozen-lockfile
 | `pnpm typecheck:agent` / `pnpm lint:agent` / `pnpm test:agent` | Agent 合同、客户端与服务、桌面及对应受影响范围；各入口不能互相代替 |
 | `pnpm test:backend` | 真实 PostgreSQL/文件/HTTP/Worker/SSE/恢复；要求隔离配置，跳过不算通过 |
 | `pnpm build:v4` | PM、Agent 依赖与服务、统一 Web；不等于桌面打包或平台验收 |
-| `pnpm check:ci` / `node scripts/check-ci.mjs` | 默认 `all`：static → build → rust → backend → agent；Linux、Docker、Bubblewrap，后端阶段自建 PostgreSQL/真实 MinIO，使用临时 HOME，不加载本机 `.env`；失败/非豁免跳过返回非零 |
+| `pnpm check:ci` / `node scripts/check-ci.mjs` | 默认 `all`：static → build → host → backend → agent；Linux、Docker、Bubblewrap，真实本轮 PostgreSQL/MinIO、临时 HOME，不读 `.env`；工程叶可用本地缓存，门禁/协议/完整测试/清理始终新鲜；互斥 `--baseline` / `--cache-name NAME` 不改变覆盖，失败/非豁免 skip 返回非零 |
+| `pnpm check:affected` | 开发者本地变更选择器；`--dry-run` 展示原因/命令，重复 `--file` 显式替代 Git 发现；未知输入保守全量，但无论选择结果都不替代默认 CI |
+| `pnpm check:turbo` | 显式叶调度，默认六 lint；`--stage lint\|build\|host-build` 或重复 `--task ID`，`--dry` / `--baseline` 互斥；九 build/typecheck 与独立 host 纳入完整公共输入/输出缓存，不缓存真实测试/业务状态。不是完整 CI 或生产配置构建替代入口，见[开发指南](docs/guides/development.md#turbo-显式任务调度与本地-lint-缓存)及[完整计划](docs/reference/turbo-rollout-plan.zh.md) |
+
+Turbo 完整禁止隐式安装的入口为 `node scripts/check-turbo.mjs ...`，或 `pnpm_config_verify_deps_before_run=error pnpm check:turbo ...`。runner 在其 pnpm 调用边界固定依赖状态 `error` 策略，并在 HIT 前新鲜预检；不承诺 pnpm 内部后代环境值永不变化。未带环境变量的外层 pnpm 在 Node 启动前仍遵循自身策略，不能宣称被 runner 拦截。冻结安装是单独前提，不改变 workspace 全局策略。
 
 聚合入口与后端资源/期限约束见[测试说明](tests/README.md)。同一机器不要重叠运行回归；不要在真实业务实例运行会写入的 smoke。真实 Provider 账号、付费推理、额度、签名、公证、Windows/macOS GUI、生产部署与恢复须分别提供真实证据，不能由 fixture 或初始化健康检查替代。
 
-聚合入口接受 `--stage static`、`build`、`rust`、`backend`、`agent` 或 `all`，只运行所选范围；单阶段成功不能写成完整聚合通过。独立 backend/agent 阶段要求先在同一检出完成 build。默认 `all` 的 Rust 范围仅显式排除依赖外部 GitHub 的 Skill 冒烟；该项必须另行运行 `node scripts/check-ci.mjs --stage rust-network`，不把本机离线范围通过记为外部网络验收。`check:licenses` 的完整性通过也不能关闭第三方授权/对应源码发布阻塞。
+聚合入口接受原 `--stage static|build|host|backend|agent|all`，默认 `all`；新增 `--baseline` 或 `--cache-name NAME` 只控制工程缓存，同一完整范围不减。单阶段成功不是完整聚合通过，独立 backend/agent 要先在同一检出完成 build。完整 agent/all 须显式 `PM_OPENHANDS_AUTHORING_SOURCE` 指向仓库外已认证的固定公开 OpenHands checkout；只放行这一路径，原 provenance 用例验真，缺失时失败而非 skip 通过。`host` 保留真实协议与扩展集成；旧 `rust` / `rust-network` 不可用。Actions 只允许默认分支受信 push/manual restore/save，共享缓存对所有 PR 隔离；未触发真实 hosted 作业，不宣称 hosted 成功。真实 Skill 网络和第三方发布履约仍单列，见[测试说明](tests/README.md)。
+
+本轮实际采纳本地全 16 工程叶缓存：每组 n=3 的 baseline/MISS/HIT 中位 178.507/182.319/13.388 秒，恢复产物上完整 Agent 1434/1434、最终行为 76/76，独立 static/build/host 的 MISS/HIT 均真实重跑 fresh gates。默认 `all` 仍在 MinIO Docker FROM 镜像域名 DNS 处失败，backend 0 用例、该轮 Agent 未执行；不能拼接独立阶段宣称完整 CI。实际 Actions 未触发，本机真实 cache transport 后 16/16 HIT 不等于 hosted 成功；[完整证据与限制](docs/reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)保留无效 bypass 轮次、原失败及真实账号/平台/生产/发行许可缺口。
 
 文档变更要更新公开链接与适用性；历史 ADR 保留原决策语义，当前实现另列差异。不依赖开发机已有 dist、外部参考源码目录或被忽略的内部记录。报告运行命令、环境、通过/失败/跳过及未覆盖范围，不沿用修改前的通过结论。
 

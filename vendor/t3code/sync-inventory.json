@@ -11658,7 +11658,7 @@
       },
       {
         "path": "package.json",
-        "sha256": "b417709b897117cfa11fa645e203ace0ba15de445b553c241e65f9991c3cfeab"
+        "sha256": "3ba954b087a41c339b67e9e481fa77172d52c1ab3f68ebc1c394106b215f64c1"
       },
       {
         "path": "scripts/doctor.mjs",

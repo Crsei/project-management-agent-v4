@@ -38,18 +38,69 @@ jobs:
           echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
           echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
       - name: Restore exact dependency content store
-        uses: actions/cache@v4
+        id: pnpm-restore
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/cache/restore@v4
         with:
           path: ${{ steps.pnpm-cache.outputs.path }}
           # No prefix fallback, node_modules, build outputs, homes or credentials.
-          # The hosted image also scopes any approved native install side effects.
-          key: checks-pnpm-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
+          # PRs neither restore nor save this trusted default-branch namespace.
+          key: checks-pnpm-v2-trusted-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}
       - name: Install native compiler and real Linux namespace prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install --yes build-essential pkg-config bubblewrap util-linux
       - name: Install locked workspace dependencies
         run: pnpm install --frozen-lockfile
+      - name: Prepare private local task-cache directories
+        shell: bash
+        run: |
+          # Run for PRs too: their cache stays local and is never restored/saved.
+          # Precreate every parent before Actions extracts under its default umask.
+          node --input-type=module <<'NODE'
+          import { lstat, mkdir, realpath } from 'node:fs/promises';
+          import path from 'node:path';
+          let directory = await realpath('.');
+          for (const segment of ['.local', 'check-turbo', 'actions-trusted']) {
+            directory = path.join(directory, segment);
+            try { await mkdir(directory, { mode: 0o700 }); }
+            catch (error) { if (error.code !== 'EEXIST') throw error; }
+            const entry = await lstat(directory);
+            if (!entry.isDirectory() || entry.isSymbolicLink() || entry.uid !== process.getuid() || (entry.mode & 0o7777) !== 0o700 || await realpath(directory) !== directory) throw new Error('Task-cache directories must already be owned, private and nonlinked; refusing restore');
+          }
+          NODE
+      - name: Restore trusted local Turbo task cache
+        id: turbo-restore
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/cache/restore@v4
+        with:
+          # Exact task-cache directory only: no .local parent, HOME, fixtures,
+          # .turbo summaries, raw logs, credentials or application state.
+          path: .local/check-turbo/actions-trusted
+          key: checks-turbo-full-v1-trusted-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'turbo.json', 'scripts/check-task-graph.mjs', 'scripts/check-turbo.mjs', 'scripts/check-ci.mjs', 'scripts/check-ci-process.mjs', '.github/workflows/ci.yml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}-${{ github.sha }}
+          # Reuse only this exact trusted platform/toolchain/policy scope;
+          # native Turbo task hashes still authenticate each source input.
+          restore-keys: |
+            checks-turbo-full-v1-trusted-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm-cache.outputs.image }}-${{ hashFiles('.node-version', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'turbo.json', 'scripts/check-task-graph.mjs', 'scripts/check-turbo.mjs', 'scripts/check-ci.mjs', 'scripts/check-ci-process.mjs', '.github/workflows/ci.yml', 'patches/*.patch', 'vendor/t3code/patches/*.patch') }}-
+      - name: Prepare authenticated pinned public OpenHands source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE="$(mktemp -d "$RUNNER_TEMP/openhands-public-source-XXXXXX")"
+          PRIVATE_HOME="$(mktemp -d "$RUNNER_TEMP/openhands-fetch-home-XXXXXX")"
+          trap 'rm -rf "$PRIVATE_HOME"' EXIT
+          # No checkout credentials, user Git config, hooks, source scripts,
+          # floating ref, submodules or private upstream checkout.
+          env -i PATH="$PATH" HOME="$PRIVATE_HOME" TMPDIR="$RUNNER_TEMP" \
+            GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 \
+            bash --noprofile --norc -euo pipefail -c '
+              git -c core.hooksPath=/dev/null init "$1"
+              git -C "$1" -c core.hooksPath=/dev/null fetch --no-tags --depth=1 \
+                https://github.com/OpenHands/OpenHands b4a3f45a28f6b6c387a8deb3dc7c18b4393c59c1
+              git -C "$1" -c core.hooksPath=/dev/null checkout --detach FETCH_HEAD
+              test "$(git -C "$1" rev-parse HEAD)" = b4a3f45a28f6b6c387a8deb3dc7c18b4393c59c1
+            ' bash "$SOURCE"
+          echo "PM_OPENHANDS_AUTHORING_SOURCE=$SOURCE" >> "$GITHUB_ENV"
       - name: Check upstream maintenance protocols without publication credentials
         shell: bash
         run: |
@@ -58,12 +109,43 @@ jobs:
           env -i PATH="$PATH" HOME="$PRIVATE_HOME" TMPDIR="$RUNNER_TEMP" \
             GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null CI=true \
             node --test scripts/upstream-sync/*.test.mjs scripts/upstream-publish.test.mjs
-          node_modules/.bin/oxlint --deny-warnings scripts/upstream-sync.mjs scripts/upstream-sync scripts/upstream-publish.mjs scripts/upstream-publish.test.mjs
       - name: Run complete isolated repository checks
         # Creates its own loopback-random PG16/MinIO containers and synthetic
         # credentials; never loads .env, reuses a service or counts skips as passes.
         # Native installers/signing and real Provider/network Skill acceptance are separate.
-        run: node scripts/check-ci.mjs
+        run: node scripts/check-ci.mjs --cache-name actions-trusted
+      - name: Validate exact task-cache upload boundary
+        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { lstat, readdir, realpath } from 'node:fs/promises';
+          import path from 'node:path';
+          const root = await realpath('.');
+          let directory = root;
+          for (const segment of ['.local', 'check-turbo', 'actions-trusted']) {
+            directory = path.join(directory, segment);
+            const entry = await lstat(directory);
+            if (!entry.isDirectory() || entry.isSymbolicLink() || await realpath(directory) !== directory) throw new Error('Unsafe task-cache directory; refusing upload');
+          }
+          for (const name of await readdir(directory)) {
+            if (!/^[a-f0-9]{16}(?:\.tar\.zst|-meta\.json|-manifest\.json)$/.test(name)) throw new Error('Unexpected task-cache entry; refusing upload');
+            const entry = await lstat(path.join(directory, name));
+            if (!entry.isFile() || entry.isSymbolicLink() || entry.nlink !== 1 || entry.uid !== process.getuid()) throw new Error('Unsafe task-cache entry; refusing upload');
+          }
+          NODE
+      - name: Save trusted local Turbo task cache
+        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && steps.turbo-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .local/check-turbo/actions-trusted
+          key: ${{ steps.turbo-restore.outputs.cache-primary-key }}
+      - name: Save exact trusted dependency content store
+        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && steps.pnpm-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.path }}
+          key: ${{ steps.pnpm-restore.outputs.cache-primary-key }}
       - name: Preserve isolated check timings even after failure
         if: always()
         uses: actions/upload-artifact@v4

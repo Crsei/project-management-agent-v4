@@ -6,7 +6,11 @@
 
 ## 启动与配置
 
-在项目根目录使用Node 24.21.0、pnpm 11.9.0、Rust 1.95.0和[原生编译工具](../docs/guides/development.md#工具链与隔离聚合入口)：
+在项目根目录使用 Node 24.21.0、pnpm 11.9.0 和[原生编译工具](../docs/guides/development.md#工具链与隔离聚合入口)；当前 TypeScript MCP/Skills host 不需要 Rust/Cargo：
+
+工程验证与部署构建分开：`pnpm check:ci` 仍持有完整门禁、真实夹具、回归和清理，仅将明确的 lint/build/host-build 工程叶交由共享调度；本轮覆盖六 lint、声明/完整类型及 PM/Agent/host/Web/marketing 公共产物缓存。`pnpm check:turbo --stage build` 关闭 dotenv 读取，可恢复声明的隔离检查产物，**不是**本节按部署环境生成产物的替代命令，也不证明来源/许可或生产验收通过。已有实例直接托管 checkout 产物时，检查/缓存恢复必须使用新的独立 worktree，不覆盖 live dist；配置/工具修改不自动要求重启业务服务。source 前提、fresh 门禁及未执行的 hosted 范围见[开发与验证](../docs/guides/development.md#turbo-显式任务调度与本地-lint-缓存)。
+
+本轮全 16 叶缓存/8 roots 恢复与独立 Agent 回归的实际通过仅发生在新的自有 worktree；没有用这些隔离产物替换现有公共服务。Main 对 3224 的真实登录页（0 pageerror）、四个 ready/access/PM/Agent Web HTTP 200、原 Worker/API/Agent/gateway cwd/出生身份及 built mode 作了部署前置/现有健康核验；**不是已部署本轮新产物**。primary 的 24 项对照中 23 字节未变，CHANGELOG 的外部并行变化原样保留，没有覆盖 parallel primary/live 输出，也不声称原树全部 unchanged。默认 all 仍因 MinIO Docker FROM 镜像域名 DNS 失败而没有 backend 用例；hosted、真实 Provider/平台/生产与四项发行许可 blocker 不由此关闭，见[本轮证据](../docs/reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)。
 
 ```bash
 node scripts/doctor.mjs

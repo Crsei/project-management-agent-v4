@@ -2,7 +2,11 @@
 
 本页描述当前源码的使用方式和已知限制，不代表当前工作树已通过检查、真实供应商账号验收或生产部署。历史计划和本机验收原件保留在本地，不作为公开安装依赖。
 
-要求 Linux、Node.js 24.21.0、pnpm 11.9.0、Rust 1.95.0、Docker 与 Compose；原生编译工具见[开发与验证](development.md)。在本项目根目录对**全新 v4 空库**执行：
+要求 Linux、Node.js 24.21.0、pnpm 11.9.0、Docker 与 Compose；当前 TypeScript MCP/Skills host 不需要 Rust/Cargo，原生编译工具见[开发与验证](development.md)。在本项目根目录对**全新 v4 空库**执行：
+
+完整工程验收另用 `pnpm check:ci`，不是下列安装步骤已通过的保证。`pnpm check:turbo` 默认六 lint，其 `build` / `host-build` 保留完整原类型/构建叶并可恢复已声明公共产物，但仍只是隔离工程检查，不替代按部署环境运行的 `build:v4`。来源/许可/真实测试/fixture/清理不缓存，完整 agent/all 须显式固定公开 authoring source。若服务已托管当前 checkout 的产物，应在新的独立 worktree 中检查，避免覆盖 live dist；参数、source 前提、linked-worktree 和 trusted-only hosted cache 边界见[开发指南](development.md#turbo-显式任务调度与本地-lint-缓存)。
+
+本轮本机缓存/恢复与独立完整 Agent 有实际通过证据，但默认 `all` 的真实 backend 因 MinIO Docker FROM 镜像域名 DNS 失败尚未进入用例；不把工程 HIT、独立回归或现有 3224 健康当作新安装、生产或 hosted 全量成功。实际 hosted workflow、真实 Provider/平台/生产及四项发行许可 blocker 未关闭；结果与测量范围见[本轮证据](../reference/turbo-rollout-plan.zh.md#本阶段执行证据与未决事项)。
 
 ```bash
 node scripts/doctor.mjs

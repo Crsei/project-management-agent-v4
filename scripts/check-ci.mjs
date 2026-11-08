@@ -1,11 +1,12 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ciPostgresLabel, isOwnedCiPostgres, processBirth } from './ci-postgres.ts';
 import { createCiCommandRunner, createCiRecorder } from './check-ci-process.mjs';
+import { createTurboDispatcher } from './check-turbo.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const dockerHost = ['--host', 'unix:///var/run/docker.sock'];
@@ -22,10 +23,24 @@ function stop(signal) {
 const sigint = () => stop('SIGINT'), sigterm = () => stop('SIGTERM');
 
 async function main(recorder) {
-  const requested = process.argv.slice(2);
-  const stage = requested.length === 0 ? 'all' : requested.length === 2 && requested[0] === '--stage' ? requested[1] : '';
-  if (!['all', 'static', 'build', 'backend', 'agent', 'host'].includes(stage)) throw new Error('Usage: node scripts/check-ci.mjs [--stage all|static|build|backend|agent|host]');
-  recorder.record('run', 'Repository checks', 'scope', { stage });
+  const usage = 'Usage: node scripts/check-ci.mjs [--stage all|static|build|backend|agent|host] [--baseline | --cache-name NAME]';
+  const requested = process.argv.slice(2), stages = ['all', 'static', 'build', 'backend', 'agent', 'host'];
+  let stage = 'all', baseline = false, cacheName = 'default', selectedStage = false, selectedCache = false;
+  for (let index = 0; index < requested.length; index++) {
+    const argument = requested[index];
+    if (argument === '--stage' && !selectedStage) {
+      stage = requested[++index];
+      if (!stages.includes(stage)) throw new Error(usage);
+      selectedStage = true;
+    } else if (argument === '--baseline' && !baseline && !selectedCache) {
+      baseline = true;
+    } else if (argument === '--cache-name' && !selectedCache && !baseline) {
+      cacheName = requested[++index];
+      if (typeof cacheName !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(cacheName)) throw new Error(usage);
+      selectedCache = true;
+    } else throw new Error(usage);
+  }
+  recorder.record('run', 'Repository checks', 'scope', { stage, mode: baseline ? 'baseline' : 'turbo', ...(baseline ? {} : { cacheName }) });
   const selected = name => stage === name || stage === 'all';
   if (process.platform !== 'linux') throw new Error('CI isolation requires Linux procfs, util-linux flock, Bubblewrap and local Docker');
   const birth = processBirth(process.pid);
@@ -41,7 +56,7 @@ async function main(recorder) {
     PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
     HOME: path.join(temporary, 'home'), TMPDIR: path.join(temporary, 'tmp'),
     XDG_CONFIG_HOME: path.join(temporary, 'config'), XDG_DATA_HOME: path.join(temporary, 'data'), XDG_CACHE_HOME: path.join(temporary, 'cache'),
-    CI: 'true', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', TZ: 'UTC',
+    CI: 'true', DOVSPACE_ISOLATED_CHECKS: '1', LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', TZ: 'UTC',
     NODE_OPTIONS: '--max-old-space-size=4096', CHOKIDAR_USEPOLLING: 'true',
     GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0',
     GIT_AUTHOR_NAME: 'Dovspace CI', GIT_AUTHOR_EMAIL: 'ci@example.invalid', GIT_COMMITTER_NAME: 'Dovspace CI', GIT_COMMITTER_EMAIL: 'ci@example.invalid',
@@ -52,20 +67,31 @@ async function main(recorder) {
   const { run } = commandRunner;
   const measure = (label, operation) => recorder.measure('stage', label, operation, () => interrupted);
   const node = (label, args, options) => run(label, process.execPath, args, env, options);
-  const pnpm = (label, args) => run(label, 'pnpm', args, env);
   const docker = (label, args, options = {}) => run(label, 'docker', [...dockerHost, ...args], env, options);
   process.on('SIGINT', sigint); process.on('SIGTERM', sigterm);
   let failure;
   try {
     await measure('preflight', async () => {
-      for (const directory of ['HOME', 'TMPDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'CARGO_HOME']) await mkdir(env[directory], { mode: 0o700 });
+      for (const directory of ['HOME', 'TMPDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME']) await mkdir(env[directory], { mode: 0o700 });
       if (selected('backend') || selected('agent')) await access('/usr/bin/flock');
       if (selected('agent')) {
         await access('/usr/bin/bwrap'); await access('/usr/bin/prlimit');
         // Preview binds this process's doctor-checked executable read-only into its namespace.
+        const source = process.env.PM_OPENHANDS_AUTHORING_SOURCE;
+        if (typeof source !== 'string' || !path.isAbsolute(source)) throw new Error('Agent checks require an explicit authenticated pinned public PM_OPENHANDS_AUTHORING_SOURCE checkout');
+        const canonical = await realpath(source), sourceEntry = await lstat(source), host = await realpath(root);
+        if (!sourceEntry.isDirectory() || sourceEntry.isSymbolicLink() || canonical !== path.resolve(source) || canonical === host || canonical.startsWith(`${host}${path.sep}`) || host.startsWith(`${canonical}${path.sep}`)) throw new Error('OpenHands authoring source must be a separate canonical public checkout, not private state or host outputs');
+        env.PM_OPENHANDS_AUTHORING_SOURCE = canonical;
+        // Authenticate real pinned Git objects, selected worktree bytes, npm archive
+        // and legal identity under the same private environment as the actual test.
+        await node('Authenticating pinned public OpenHands authoring source', [
+          '--input-type=module', '--eval',
+          "import { readFile } from 'node:fs/promises'; import { inputs, originalsFrom } from './vendor/openhands-extensions/scripts/provenance.mjs'; const loaded = await inputs(); await originalsFrom(process.env.PM_OPENHANDS_AUTHORING_SOURCE, await readFile('vendor/openhands-extensions/source-inputs/extensions-0.36.0.tgz'), loaded);",
+        ]);
       }
       await node('Toolchain preflight', ['scripts/doctor.mjs']);
     });
+    const turbo = createTurboDispatcher({ root, runner: commandRunner, env, cacheName });
     const prepareFixtures = async () => measure('fixtures', async () => {
     await docker('Checking local Docker daemon', ['info', '--format', '{{.ServerVersion}}'], { capture: true });
     const create = async (kind, args, image, command, extraEnv = {}) => {
@@ -162,28 +188,16 @@ process.exit(result.status ?? 1);
       await node('Import boundaries', ['scripts/check-import-boundaries.mjs']);
       await node('Third-party notice and asset integrity (not release approval)', ['scripts/check-third-party-notices.mjs', '--integrity']);
       await node('Pinned source and resource provenance', ['scripts/check-sources.mjs']);
-      await pnpm('PM lint', ['lint']);
-      await pnpm('Gateway lint', ['exec', 'eslint', 'apps/server/gateway.ts', 'apps/server/gateway.test.ts', '--max-warnings=0']);
-      await pnpm('Agent and host lint', ['lint:agent']);
-      await pnpm('Complete owned Web lint', ['--filter', '@pm/web', 'lint']);
-      await pnpm('CI entrypoint lint', ['exec', 'oxlint', '--deny-warnings', 'scripts/check-ci.mjs', 'scripts/check-ci-process.mjs', 'scripts/check-ci-process.test.mjs', 'scripts/check-sources.mjs']);
+      await turbo.runStage('lint', { baseline });
     });
     if (selected('build')) await measure('build', async () => {
       // Package exports name emitted declarations. Fresh checkouts must produce
       // them before PM/Agent/Web type graphs can resolve workspace consumers.
-      await pnpm('Agent contract declarations', ['--filter', '@agent-workspace/contracts', 'build']);
-      await pnpm('Agent client runtime declarations', ['--filter', '@agent-workspace/client-runtime', 'build']);
-      await pnpm('Complete client runtime types, including tests and provider exports', ['--filter', '@agent-workspace/client-runtime', 'typecheck']);
-      await pnpm('PM and gateway typecheck', ['typecheck']);
-      await pnpm('PM production build', ['build']);
-      await pnpm('Agent complete types and production build', ['--filter', '@agent-workspace/server', 'build']);
-      await pnpm('Complete Web types and production build', ['build:web']);
-      await pnpm('Marketing types', ['typecheck:marketing']);
-      await pnpm('Marketing production build', ['build:marketing']);
+      await turbo.runStage('build', { baseline });
       await node('Post-build source provenance', ['scripts/check-sources.mjs']);
     });
     if (selected('host')) await measure('host', async () => {
-      await pnpm('TypeScript host build', ['--filter', '@agent-workspace/cc-switch-host', 'build']);
+      await turbo.runStage('host-build', { baseline });
       await node('TypeScript host protocol tests', ['--test', 'apps/server/cc-switch-host/tests/host-protocol.test.ts']);
       await node('Agent extension integration tests against TypeScript host', ['--test', 'apps/server/agent/src/extensions/service.integration.test.ts']);
     });
