@@ -207,19 +207,28 @@ for (const shell of ["posix", "cmd", "powershell"]) {
     assert.equal(context.binFiles.length, 6);
     const env = { PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) };
     const args = ["argument with spaces", "literal$quote"];
-    async function invoke(commandName, args) {
+    async function invoke(commandName, args, childEnv = env) {
       const shim = join(f.output, "node_modules/.bin", shell === "posix" ? commandName : shell === "cmd" ? `${commandName}.CMD` : `${commandName}.ps1`);
-      if (shell === "posix") return execute(shim, args, { env });
+      if (shell === "posix") return execute(shim, args, { env: childEnv });
       if (shell === "cmd") {
         const command = `""${shim}" ${args.map((arg) => `"${arg}"`).join(" ")}"`;
-        return execute(join(process.env.SystemRoot, "System32/cmd.exe"), ["/d", "/s", "/c", command], { env });
+        return execute(join(process.env.SystemRoot, "System32/cmd.exe"), ["/d", "/s", "/c", command], { env: childEnv, windowsVerbatimArguments: true });
       }
       return execute(join(process.env.SystemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"),
-        ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", shim, ...args], { env });
+        ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", shim, ...args], { env: childEnv });
     }
     for (const command of ["jp", "yaml"]) {
-      assert.deepEqual(JSON.parse((await invoke(command, args)).stdout), args);
+      const result = await invoke(command, args);
+      assert.equal(result.stderr, "", result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), args);
       await assert.rejects(invoke(command, ["--exit"]), (error) => error.code === 19);
+    }
+    if (shell === "powershell") {
+      const emptyPath = join(f.source, "empty-path");
+      await mkdir(emptyPath);
+      for (const command of ["jp", "yaml"])
+        await assert.rejects(invoke(command, args, { ...env, PATH: emptyPath }),
+          (error) => Number.isInteger(error.code) && error.code !== 0 && error.stdout === "");
     }
     for (const file of context.binFiles) {
       const contents = await readFile(join(f.output, file.path), "utf8");

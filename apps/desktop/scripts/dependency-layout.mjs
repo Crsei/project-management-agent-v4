@@ -247,7 +247,7 @@ async function copyCommandShims(graph, context, prepared) {
     const contents = extension === "cmd"
       ? `@ECHO off\r\nSETLOCAL\r\nIF EXIST "%~dp0node.exe" (\r\n  "%~dp0node.exe" "%~dp0${target.replaceAll("/", "\\")}" %*\r\n) ELSE (\r\n  node "%~dp0${target.replaceAll("/", "\\")}" %*\r\n)\r\n`
       : extension === "ps1"
-        ? `#!/usr/bin/env pwsh\n$basedir = Split-Path $MyInvocation.MyCommand.Definition -Parent\n$node = Join-Path $basedir "node.exe"\nif (-not (Test-Path -LiteralPath $node)) { $node = "node" }\n& $node "$basedir/${target}" @args\nexit $LASTEXITCODE\n`
+        ? `#!/usr/bin/env pwsh\n$ErrorActionPreference = "Stop"\n$PSNativeCommandUseErrorActionPreference = $false\n$executable = "node"\nif ($PSVersionTable.PSVersion.Major -lt 6 -or $IsWindows) { $executable = "node.exe" }\n$node = [System.IO.Path]::Combine($PSScriptRoot, $executable)\nif (-not [System.IO.File]::Exists($node)) { $node = $executable }\n& $node "$PSScriptRoot/${target}" @args\nexit $LASTEXITCODE\n`
         : `#!/bin/sh\nbasedir=\${0%/*}\nif [ "$basedir" = "$0" ]; then basedir=.; fi\nif [ -x "$basedir/node" ]; then\n  exec "$basedir/node" "$basedir/${target}" "$@"\nfi\nexec node "$basedir/${target}" "$@"\n`;
     const path = posix.join(context.root, "node_modules/.bin", entry.name);
     const output = join(prepared, path), mode = extension ? 0o644 : 0o755;
