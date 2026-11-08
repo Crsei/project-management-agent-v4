@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import { link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -13,6 +13,8 @@ import { captureSource, checksumDelivery, collectLegal, contentDigest, fileRecor
 import { verifyDelivery, verifyDeliveryFiles } from "./verify-delivery.mjs";
 import { inspectDeployment } from "./stage-workspace.mjs";
 import { inventoryTree, runtimeSources, verifyRuntime } from "./runtime-manifest.mjs";
+import { archiveMemberPath, inspectFinalArtifacts, verifyInstalledApplication } from "./final-artifact.mjs";
+import { dependencyLayoutManifest } from "./dependency-layout-verifier.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const execute = promisify(execFile);
@@ -230,9 +232,26 @@ async function archive(root, files) {
   const resources = join(root, "resources");
   await put(application, "package.json", JSON.stringify({ name: "pm-agent-v4-desktop", version: "0.1.0", main: "dist/main.mjs" }));
   await put(application, "dist/main.mjs", "export const desktop = true;\n");
-  for (const [name, bytes] of Object.entries(files)) await put(application, name, bytes);
+  const instances = [];
+  const dependencies = {};
+  for (const [name, bytes] of Object.entries(files)) {
+    if (name.startsWith("node_modules/") && name.endsWith("/package.json")) {
+      const metadata = { version: "1.0.0", ...JSON.parse(bytes) };
+      await put(application, name, JSON.stringify(metadata));
+      const path = name.slice(0, -"/package.json".length);
+      dependencies[path.slice("node_modules/".length)] = path;
+      instances.push({ id: path, path, sourceId: `original/${path}`, name: metadata.name, version: metadata.version, dependencies: {}, absentDependencies: [], files: [] });
+    } else await put(application, name, bytes);
+  }
+  for (const instance of instances) instance.files = await inventoryTree(join(application, instance.path));
+  await put(application, dependencyLayoutManifest, JSON.stringify({ schemaVersion: 1, contexts: [{ id: "electron", root: ".", dependencies, instances, absentDependencies: [], effectSingleton: null }] }));
   await mkdir(resources);
   await asarTools().createPackage(application, join(resources, "app.asar"));
+  await put(resources, `workspace-runtime/${dependencyLayoutManifest}`, JSON.stringify({ schemaVersion: 1, contexts: [
+    { id: "pm", root: ".", dependencies: {}, instances: [], absentDependencies: [], effectSingleton: null },
+    { id: "agent", root: "apps/server/agent", dependencies: {}, instances: [], absentDependencies: [], effectSingleton: null },
+  ] }));
+  await put(resources, "workspace-runtime/desktop-runtime-native.json", JSON.stringify({ schemaVersion: 1, files: [] }));
   return resources;
 }
 
@@ -302,7 +321,22 @@ async function preparedRuntimeFixture(resources, { cliAlias = false } = {}) {
   return { runtime, manifest };
 }
 
-test("delivery keeps manifest-pinned runtime npm config but rejects changed runtime bytes", async (t) => {
+// A real two-level 7z container fixture exercises member listing/extraction. It
+// is deliberately NOT an executable NSIS installer or native execution evidence.
+async function sealPayload(output, manifest, payloadRoot = join(output, "win-unpacked")) {
+  const scratch = join(dirname(output), "archive-fixture");
+  await mkdir(join(scratch, "$PLUGINSDIR"), { recursive: true });
+  const payload = join(scratch, "$PLUGINSDIR", "app-64.7z");
+  await rm(payload, { force: true });
+  await execute("7z", ["a", "-t7z", payload, "resources"], { cwd: payloadRoot });
+  const artifact = manifest.artifacts[0].path;
+  await rm(join(output, artifact));
+  await execute("7z", ["a", "-t7z", join(output, artifact), "$PLUGINSDIR"], { cwd: scratch });
+  manifest.artifacts = [await fileRecord(output, artifact)];
+  return inspectFinalArtifacts(output, manifest.artifacts, manifest);
+}
+
+test("final delivery is authoritative even when old unpacked staging bytes change", async (t) => {
   const root = await temporary(t);
   const { output, manifest } = await delivery(root);
   const resources = await archive(join(output, "win-unpacked"), {});
@@ -310,13 +344,17 @@ test("delivery keeps manifest-pinned runtime npm config but rejects changed runt
   await verifyRuntime(prepared.runtime, manifest.target);
   const application = await inspectPackagedApplication(resources, manifest.version);
   manifest.applicationResources = "win-unpacked/resources";
-  await refreshVerification(output, manifest, { checks: { application }, nativeSmoke: { status: "not-run" }, published: false });
+  const finalArtifacts = await sealPayload(output, manifest);
+  await refreshVerification(output, manifest, { checks: { application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
   assert.equal((await verifyDelivery(output)).target, manifest.target);
   assert.ok(prepared.manifest.files.some((file) => file.path === "node/node_modules/npm/.npmrc" && file.bytes === 0));
   assert.equal(await readFile(join(prepared.runtime, "node/node_modules/npm/.npmrc"), "utf8"), "");
   const originalInventory = await readFile(join(prepared.runtime, "runtime-manifest.json"));
   await put(prepared.runtime, "node/node_modules/npm/.npmrc", "# changed runtime fixture bytes\n");
-  await assert.rejects(verifyDelivery(output));
+  // Staging bytes are no longer authority for a downloaded installer. The final
+  // archive still contains the unchanged pinned runtime and remains verifiable.
+  assert.equal((await verifyDelivery(output)).target, manifest.target);
+  await assert.rejects(verifyRuntime(prepared.runtime, manifest.target));
   assert.deepEqual(await readFile(join(prepared.runtime, "runtime-manifest.json")), originalInventory);
 });
 
@@ -379,12 +417,21 @@ test("delivery rejects changed ASAR bytes even when application identity and ver
   const { output, manifest } = await delivery(root);
   const appRoot = join(output, "win-unpacked");
   const resources = await archive(appRoot, {});
+  await preparedRuntimeFixture(resources);
   const application = await inspectPackagedApplication(resources, manifest.version);
   manifest.applicationResources = "win-unpacked/resources";
-  await refreshVerification(output, manifest, { checks: { application }, nativeSmoke: { status: "not-run" }, published: false });
+  const finalArtifacts = await sealPayload(output, manifest);
+  await refreshVerification(output, manifest, { checks: { application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
   await put(join(appRoot, "application"), "dist/main.mjs", "export const desktop = 'different bytes, same identity';\n");
   await asarTools().createPackage(join(appRoot, "application"), join(resources, "app.asar"));
-  await assert.rejects(verifyDelivery(output), /Final ASAR bytes differ from the recorded application verification report/);
+  const scratch = join(dirname(output), "archive-fixture");
+  await rm(join(scratch, "$PLUGINSDIR/app-64.7z"));
+  await execute("7z", ["a", "-t7z", join(scratch, "$PLUGINSDIR/app-64.7z"), "resources"], { cwd: appRoot });
+  await rm(join(output, manifest.artifacts[0].path));
+  await execute("7z", ["a", "-t7z", join(output, manifest.artifacts[0].path), "$PLUGINSDIR"], { cwd: scratch });
+  manifest.artifacts = [await fileRecord(output, manifest.artifacts[0].path)];
+  await refreshVerification(output, manifest, { checks: { application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
+  await assert.rejects(verifyDelivery(output), /Final distributable payload differs/);
 });
 
 test("legal derivation rejects a resource-internal relative link that escapes the copied legal root", {
@@ -406,4 +453,70 @@ test("legal derivation rejects a resource-internal relative link that escapes th
   await symlink("../../../../../app.asar", join(resources, "workspace-runtime/apps/web/dist/licenses/cross"));
   await inspectDeployment(resources);
   await assert.rejects(collectLegal(resources, "win32", join(root, "legal")), /nonportable symlink|ENOENT|ELOOP/);
+});
+
+test("archive member safety rejects traversal, absolute paths and alternate data streams", () => {
+  for (const path of ["../outside", "/absolute", "C:\\outside", "resources/../outside", "resources/file:stream", "resources//file", "resources/./file"])
+    assert.throws(() => archiveMemberPath(path), /Unsafe final archive/);
+  assert.equal(archiveMemberPath("$PLUGINSDIR\\app-64.7z"), "$PLUGINSDIR/app-64.7z");
+});
+
+test("actual final archive expansion is rejected while the independent staging layout remains correct", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  const resources = await archive(join(output, "win-unpacked"), {});
+  await preparedRuntimeFixture(resources);
+  const workspace = join(resources, "workspace-runtime");
+  await put(workspace, "node_modules/one/package.json", JSON.stringify({ name: "one", version: "1.0.0" }));
+  await put(workspace, "node_modules/one/index.js", "module.exports = { retained: true };");
+  const instance = { id: "node_modules/one", path: "node_modules/one", sourceId: "original/one", name: "one", version: "1.0.0",
+    dependencies: {}, absentDependencies: [], files: await inventoryTree(join(workspace, "node_modules/one")) };
+  await put(workspace, dependencyLayoutManifest, JSON.stringify({ schemaVersion: 1, contexts: [
+    { id: "pm", root: ".", dependencies: { one: instance.id }, instances: [instance], absentDependencies: [], effectSingleton: null },
+    { id: "agent", root: "apps/server/agent", dependencies: {}, instances: [], absentDependencies: [], effectSingleton: null },
+  ] }));
+  assert.equal((await inspectPackagedApplication(resources, manifest.version)).status, "passed");
+  const correct = await sealPayload(output, manifest);
+  assert.equal(correct.status, "passed");
+  assert.equal(correct.artifacts[0].sha256, manifest.artifacts[0].sha256);
+  assert.ok(correct.artifacts[0].tree.files > 0 && correct.artifacts[0].tree.logicalBytes > 0);
+  const expanded = join(root, "expanded-payload");
+  await cp(resources, join(expanded, "resources"), { recursive: true });
+  const packageRoot = join(expanded, "resources/workspace-runtime/node_modules/one");
+  await cp(join(workspace, "node_modules/one"), join(packageRoot, "node_modules/one"), { recursive: true });
+  await assert.rejects(sealPayload(output, manifest, expanded), /Undeclared or recursively expanded dependency/);
+  assert.equal((await inspectPackagedApplication(resources, manifest.version)).status, "passed");
+});
+
+test("supplied installed resources bind all bytes to the current final artifact, not their self-declared layout", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  const resources = await archive(join(output, "win-unpacked"), {});
+  await preparedRuntimeFixture(resources);
+  await put(resources, "workspace-runtime/apps/server/pm/src/source.js", "original packaged application bytes");
+  const report = await sealPayload(output, manifest);
+  const payload = report.artifacts[0];
+  const installed = join(root, "supplied-installed-tree/resources");
+  await cp(resources, installed, { recursive: true });
+  const checked = await verifyInstalledApplication(installed, payload, manifest);
+  assert.equal(checked.sourceArtifact.sha256, manifest.artifacts[0].sha256);
+  assert.equal(checked.installationExecutedByThisCommand, false);
+  await put(installed, "workspace-runtime/apps/server/pm/src/source.js", "modified bytes outside dependency own-file inventory");
+  await assert.rejects(verifyInstalledApplication(installed, payload, manifest), /differs from the current final distributable/);
+  await assert.rejects(verifyInstalledApplication(installed, null, manifest), /current inspected final artifact digest/);
+});
+
+test("files-only transport remains valid for historical deliveries but cannot promote old win-unpacked smoke", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  await refreshVerification(output, manifest, { checks: {}, nativeSmoke: { status: "passed" }, published: false });
+  assert.equal((await verifyDelivery(output, { filesOnly: true })).target, manifest.target);
+  await assert.rejects(verifyDelivery(output), /actual final distributable payloads/);
+  await assert.rejects(verifyDelivery(output, { filesOnly: true, stage: join(root, "staged") }), /bound to this final distributable payload/);
+});
+
+test("unreferenced loose ASAR dependency copies cannot hide outside the archive inventory", async (t) => {
+  const resources = await archive(await temporary(t), {});
+  await put(resources, "app.asar.unpacked/node_modules/orphan/package.json", JSON.stringify({ name: "orphan", version: "1.0.0" }));
+  await assert.rejects(inspectPackagedApplication(resources, "0.1.0"), /Unrecorded or linked ASAR unpacked resource/);
 });

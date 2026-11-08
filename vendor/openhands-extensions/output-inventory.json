@@ -63,8 +63,8 @@
     },
     {
       "path": "apps/desktop/scripts/stage-workspace.mjs",
-      "sha256": "0d086da506d320d98827a258585635b8716c8ddc82023cf36e4335b7b08f5d03",
-      "bytes": 12571,
+      "sha256": "db844c2196b9cfacfa70ec34c207fcd478abc4658f8e450a6eb37c522f2714be",
+      "bytes": 14220,
       "mode": 420
     }
   ],

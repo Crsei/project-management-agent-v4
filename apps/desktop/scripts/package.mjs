@@ -1,12 +1,14 @@
-import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { desktopBuilderConfig } from "../electron-builder.config.mjs";
+import { prepackApplication } from "./application-asar.mjs";
 import { buildWorkspace, inspectDeployment, run, stageWorkspace } from "./stage-workspace.mjs";
 import { inspectPackagedApplication } from "./packaged-application.mjs";
+import { inspectFinalArtifacts } from "./final-artifact.mjs";
 import { captureSource, fileRecord, requireUnchangedSource, writeReleaseMaterials } from "./release-materials.mjs";
 import {
-  defaultRuntimeRoot, desktopRoot, inside, portable, requireNativeTarget,
+  defaultRuntimeRoot, desktopRoot, hashFile, inside, portable, requireNativeTarget,
   requirePinnedNode, verifyRuntime,
 } from "./runtime-manifest.mjs";
 
@@ -57,7 +59,9 @@ try {
   const application = join(staging, "application");
   const workspaceRuntime = join(staging, "workspace-runtime");
   await stageWorkspace(workspaceRuntime, application);
+  const prepackedApplication = await prepackApplication(application, join(staging, "prepacked-application"));
   const nativeBinaries = [];
+  const nativeRuntimeFiles = [];
   if (process.platform === "darwin") {
     const magic = Buffer.alloc(4);
     const machO = new Set(["feedface", "feedfacf", "cefaedfe", "cffaedfe", "cafebabe", "bebafeca", "cafebabf", "bfbafeca"]);
@@ -69,8 +73,11 @@ try {
           const file = await open(path, "r");
           try {
             const { bytesRead } = await file.read(magic, 0, 4, 0);
-            if (bytesRead === 4 && machO.has(magic.toString("hex")))
-              nativeBinaries.push(`Contents/Resources/${prefix}/${portable(relative(root, path))}`);
+            if (bytesRead === 4 && machO.has(magic.toString("hex"))) {
+              const location = portable(relative(root, path));
+              nativeBinaries.push(`Contents/Resources/${prefix}/${location}`);
+              if (prefix === "desktop-runtime") nativeRuntimeFiles.push({ path: location, bytes: (await lstat(path)).size, sha256: await hashFile(path) });
+            }
           } finally { await file.close(); }
         }
       }
@@ -78,19 +85,22 @@ try {
     await collectBinaries(runtimeRoot, "desktop-runtime");
     await collectBinaries(workspaceRuntime, "workspace-runtime");
   }
+  await writeFile(join(workspaceRuntime, "desktop-runtime-native.json"),
+    JSON.stringify({ schemaVersion: 1, files: nativeRuntimeFiles }, null, 2) + "\n", { flag: "wx" });
   const { Arch, Platform, build } = await import("electron-builder");
   const platform = process.platform === "win32" ? Platform.WINDOWS : Platform.MAC;
   const arch = process.arch === "arm64" ? Arch.arm64 : Arch.x64;
   const artifacts = await build({
+    projectDir: prepackedApplication.directory,
     targets: platform.createTarget(process.platform === "win32" ? ["nsis"] : ["dmg", "zip"], arch),
     publish: "never",
-    config: desktopBuilderConfig({ application, workspaceRuntime, desktopRuntime: runtimeRoot, output, electronVersion: manifest.devDependencies.electron, mode, platform: process.platform, nativeBinaries }),
+    config: desktopBuilderConfig({ application, prepackedApplication, workspaceRuntime, desktopRuntime: runtimeRoot, output, electronVersion: manifest.devDependencies.electron, mode, platform: process.platform, nativeBinaries }),
   });
   const resources = process.platform === "win32"
     ? join(output, "win-unpacked", "resources")
     : join(output, process.arch === "arm64" ? "mac-arm64" : "mac", "PM Agent v4.app", "Contents", "Resources");
   await inspectDeployment(join(resources, "workspace-runtime"));
-  const applicationVerification = await inspectPackagedApplication(resources, manifest.version);
+  const applicationVerification = await inspectPackagedApplication(resources, manifest.version, { signedMachO: process.platform === "darwin" });
   // afterPack verifies runtime bytes before native signing changes executable
   // hashes. Retain that source inventory as provenance; verify the signed bundle
   // and hash the final distributables below instead of rejecting upstream npm files.
@@ -118,6 +128,7 @@ try {
       } finally { delete process.env.PM_DESKTOP_VERIFY_SIGNATURE_PATH; }
     }
   }
+  const finalArtifactVerification = await inspectFinalArtifacts(output, records, { target, version: manifest.version, signing: mode });
   await mkdir(output, { recursive: true });
   await requireUnchangedSource(source);
   const delivery = await writeReleaseMaterials({
@@ -134,6 +145,7 @@ try {
       schemaVersion: 1, generatedAt: new Date().toISOString(), target, signing: mode,
       checks: {
         application: applicationVerification,
+        finalArtifacts: finalArtifactVerification,
         runtime: { status: "passed", scope: "Pinned source runtime inventory verified before signing by afterPack; final native executable smoke is separate." },
         signing: { status: mode === "signed" ? "passed" : "not-applicable", scope: mode === "signed" ? "Final platform signature verification; macOS notarization required by builder." : "Explicit unsigned test build; macOS ad-hoc is not Developer ID." },
         legalMaterials: { status: "collected-not-authorized", scope: "Final shipped legal copies collected; no legal compatibility or distribution approval is implied." },

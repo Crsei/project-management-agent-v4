@@ -1,10 +1,12 @@
 # Windows x64 原生构建与测试交付操作手册
 
-本手册先记录环境、操作、权限与失败恢复，再执行验证和打包。范围仅为本项目 **Windows x64 unsigned NSIS 测试安装包**；不是公开 Release、签名、自动更新、便携版、CLI、WSL 或其他平台交付授权。实现与材料设计见[桌面发布对照](desktop-release-alignment-2026-11-08.zh.md)，使用和数据边界见[桌面指南](../guides/desktop.md)。下列命令是集成冻结后的执行步骤，**不是本阶段已经运行的结果**。
+本手册记录环境、操作、权限与失败恢复。范围仅为本项目 **Windows x64 unsigned NSIS 测试安装包**；不是公开 Release、签名、自动更新、便携版、CLI、WSL 或其他平台交付授权。实现与材料设计见[桌面发布对照](desktop-release-alignment-2026-11-08.zh.md)，使用和数据边界见[桌面指南](../guides/desktop.md)。命令是具备对应权限及原生环境后才能执行的操作说明，不是已经运行的结果。
 
-## 预检结论与可执行路线
+**当前依赖去重批次的权限与环境：** 2026-11-08 操作者已重新明确授权本项目本次依赖去重改动的精确 commit、公开 push 到 `main`、`windows_only=true` / `distribution=unsigned` 的 GitHub Actions 构建及该轮 artifact 下载。仅发布经父级审阅和必要门禁通过的隔离冻结候选；无关并行改动、凭据和运行数据不进入提交或构建。唯一交付 owner 在父级放行后执行远端写入，构建/检查进程不获得发布凭据；授权本身不表示操作已执行、权限足够或构建成功。没有新增本地/SSH Windows 主机或交互桌面，本轮仍未授权 macOS 构建、签名、tag/PR/Release/merge、真实安装器/GUI 执行或接管既有服务。Linux 上真实依赖闭包物化/重打包实验保留为该实验的证据，不升级为新 Windows 安装器或原生 GUI 结果。
 
-2026-11-08 的只读预检：
+## 历史预检结论与可执行路线
+
+以下保留 2026-11-08 **上一轮发布准备**的只读预检与当时授权。表中的 HEAD、权限、磁盘和 PID 是当时观察，不自动成为当前值或本批次授权：
 
 | 项目 | 实际观察及边界 |
 | --- | --- |
@@ -16,13 +18,13 @@
 | 磁盘 | Linux 仓库所在卷当时约有 6.61 TB 可用，`/tmp` 约 81.2 GB 可用，均为十进制字节换算；**不证明 Windows runner 的磁盘容量** |
 | 既有公共入口 | 只读监听及 procfs 显示 3224 网关 PID 31669、4194 PM PID 31667、4325 Agent PID 31668、Worker PID 31655 的 cwd/入口均属于本仓库，55444 仍有既有监听，4326 未监听。本阶段未访问账号、停启服务或部署新产物 |
 
-因此，当前有已知可用的 **GitHub 托管 Windows 构建机制**，没有本地或已登记 remote Windows 主机。本轮操作者随后明确授权直接在 **main** 精确 commit、push origin main、执行 unsigned Windows-only 测试构建并下载本轮 artifact，且已知仓库 public、push 会公开源码。执行路线已选择 A，仍须等待完整集成冻结/必要本地门禁，不能把授权当作已经完成远端写入、Windows 构建或测试。路线 B 仅保留为明确条件下的替代机制，不自动启用；不跨平台绕过 `requireNativeTarget`。
+当时确认有已知的 **GitHub 托管 Windows 构建机制**，没有本地或已登记 remote Windows 主机。上一轮操作者随后明确授权直接在 **main** 精确 commit、push origin main、执行 unsigned Windows-only 测试构建并下载该轮 artifact，且已知仓库 public、push 会公开源码；当时选择路线 A，仍须完整集成冻结/必要本地门禁。该历史授权不是远端动作或原生测试已完成的证据，也不能单独授予当前批次权限；**本次依赖去重使用上方记录的新明确授权**，不是复用旧授权或旧产物。以下保留操作机制与历史预检，不跨平台绕过 `requireNativeTarget`。
 
-### 路线 A：本轮已授权 main 的 GitHub Actions
+### 路线 A：main / GitHub Actions 机制（本批次已重新授权）
 
-1. 父级完成实现/来源审阅并冻结完整源码，列出本轮和保留的上轮修改，生成精确内容身份；先确认没有秘密、运行数据或无关修改进入交付集。
-2. 本轮授权为 **直接在 main 提交本轮精确改动（含上轮 16 路径）并推送 origin main**，不建独立分支、不 force、不创建 tag/PR/Release/merge。先核对 local HEAD、remote main 与冻结基线；发现远端漂移或未知并行修改立即停止，不覆盖。授权 commit 不普遍隐含 push；本轮两项均已分别明确，后续其他内容或渠道不得借用此授权。
-3. 必要本地门禁通过且准确内容提交/推送后，通过仓库 Actions 页面手动运行 [desktop.yml](../../.github/workflows/desktop.yml)：选择 `main`，`distribution=unsigned`、`windows_only=true`，并绑定刚推送的确切 SHA。这不创建 tag、PR 或 GitHub Release。也可由已配置且获授权的操作者使用 GitHub CLI：
+1. 父级完成实现/来源审阅并冻结完整源码，列出该轮及保留修改，生成精确内容身份；先确认没有秘密、运行数据或无关修改进入交付集。
+2. 本批次已明确授权 **直接在 main 提交并推送本次去重候选的精确改动**，不是再次提交上一轮 16 路径，也不包含并行 turbo、根 package/lock 或其他来源维护改动；不建独立分支、不 force、不创建 tag/PR/Release/merge。唯一交付 owner 先核对实际 remote main 和本地对象，基于准确远端祖先创建独立候选并记录逐文件内容；保留主检出、既有历史、index 及无关 dirty/untracked 内容。发现远端漂移或未知候选变动立即停止，不覆盖。commit、公开 push 和 Actions 写入按各自已明确授权的范围执行，不能扩大到其他改动。
+3. 必要门禁通过、父级放行且准确内容已提交/推送后，才可通过仓库 Actions 页面手动运行 [desktop.yml](../../.github/workflows/desktop.yml)：选择获准 `main`，`distribution=unsigned`、`windows_only=true`，绑定确切 SHA。这不创建 tag、PR 或 GitHub Release。下例是本批次授权路线的操作说明，且要求已配置工具；不是已经 dispatch 的证据：
 
    ```sh
    gh workflow run desktop.yml --repo Crsei/project-management-agent-v4 \
@@ -37,7 +39,7 @@
 
 ### 路线 B：操作者提供已授权 Windows x64 主机，无需 commit/push
 
-操作者可以提供专用本机/VM/remote runner 的身份、访问方式、可写构建目录及 **私有源码传输许可**，在该机直接构建冻结快照。这不要求把本轮改动公开推送；但不能自动把另一台未知主机当作获授权 runner，也不能为了取 runner 自行开云资源、安装 Windows 或配置新凭据。
+操作者可以另行提供专用本机/VM/remote runner 的身份、访问方式、可写构建目录及 **私有源码传输许可**，在该机直接构建冻结快照；当前未提供。这不要求把改动公开推送，但不能自动把另一台未知主机当作获授权 runner，也不能为了取得 runner 自行开云资源、安装 Windows 或配置新凭据。
 
 传输内容必须来自父级审阅的完整公开源码/构建闭包，而不是只有 diff 或干净 HEAD：包括批准的 modified/untracked 文件、各 workspace、现有 vendor 来源记录/recipes、patches、固定 manifests/lockfile、构建脚本及适用许可证。逐文件记录路径、字节数、模式/链接规则和 SHA256；另记录完整 base HEAD、dirty 状态、内容清单及其摘要、传输 archive 摘要。接收方在安装依赖前核对精确清单，任何丢文件、行尾变化或新增未知文件都停止。
 
@@ -52,13 +54,14 @@
 | 原生平台 | 实际 Node `process.platform=win32`、`process.arch=x64`，不是 WSL/Linux Node、Wine、Windows ARM64 仿真或 Linux 交叉打包 |
 | 工具链 | Node **24.21.0**、pnpm **11.9.0**；Visual Studio 2022 C++ x64/x86 Build Tools、Windows SDK，并加载包含 `cl.exe`、`link.exe`、`rc.exe` 的开发者环境。当前 cc-switch host 为 TypeScript，本次桌面链不需要恢复已退役 Rust sidecar 或安装另一套 Rust |
 | Shell | 操作示例使用 PowerShell 7，`&&` 确保首个失败停止；系统 Windows PowerShell 及系统模块仍须可用，供 ACL/reparse/进程监督的既有实现调用。不要把仅能运行 `pwsh` 当成系统 PowerShell 前提已满足 |
+| 归档成品门禁 | **全功能 7-Zip**，支持 NSIS、7z、ZIP；验证器优先 `%ProgramFiles%\7-Zip\7z.exe`、`%ProgramFiles(x86)%\7-Zip\7z.exe`，再使用 PATH 上的 `7z`。必须记录真实路径/版本/格式支持；builder 的独立 `7za` 不保证 NSIS，不能替代。缺失即停止，不在预检中调用 builder 下载新 toolset |
 | 文件系统/权限 | 当前用户拥有的本地真实目录，支持原生 ACL、文件身份和正常路径语义；不用网络盘、OneDrive 同步目录、junction/reparse 替代根或共享生产目录。若安装依赖确需 symlink 权限，由主机操作者预先准备最小开发权限，不为构建全局放宽 ACL/ExecutionPolicy 或关闭系统保护 |
 | 路径/临时目录 | 使用较短 checkout（例如专用 `C:\b\pm`）和短私有 Temp。先读取 Git `core.longpaths` 及系统 `LongPathsEnabled`；保留 [`.gitattributes`](../../.gitattributes) 的 LF，不能以 CRLF/hash 刷新绕过来源。NSIS/其他原生工具不保证全部支持长路径，即使注册表启用仍优先短路径；未经授权不改系统注册表 |
 | 磁盘/内存 | checkout、pnpm store、runtime 解压、两套 deploy staging、unpacked app、NSIS、对应源码/许可材料和上传 staging 同时占空间。代码没有可据此宣称足够的统一最低磁盘阈值；操作上建议构建卷及 Temp 合计预留至少 30 GiB 并记录各卷实值，实际峰值以本轮测量为准。保留 `NODE_OPTIONS=--max-old-space-size=4096` 及额外系统/native 内存，不能缩小检查范围应付 OOM |
 | 数据隔离 | 新建私有构建/测试根，使用随机测试端口与自有临时 PG/存储。不加载开发 `.env`，不连接现有 55444 或其他项目库；不导入真实 Provider/PM 账号、签名和发布凭据。使用用户原生 Provider 授权环境的验证另由父级明确执行 |
 | 安装器 | Electron **45.0.0**、electron-builder **26.18.0**，Windows 仅 x64 NSIS；当前 `oneClick=false`、`perMachine=false`、允许选择安装目录，卸载不删除用户数据。使用 `package` 显式 unsigned，不读证书、不尝试自动签名。SmartScreen/未知发布者不代表构建失败，也不能据此关闭保护或改称正式签名版本 |
 
-[Windows 托管镜像说明](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md) 只证明镜像公布的工具集合，不保证新 job 的实际 image/version；工作流会记录 `ImageOS`/`ImageVersion`。镜像预装/缓存的 Node、PostgreSQL 可能与本项目 pin 不同，**不得直接复用**。本项目 doctor 检查准确 Node/pnpm 和编译器，不自动安装工具；也不覆盖磁盘、完整网络、所有运行时模块或 GUI 前提。
+[Windows 托管镜像说明](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md) 只证明镜像公布的工具集合，不保证新 job 的实际 image/version 或全功能 7-Zip 可执行；工作流会记录 `ImageOS`/`ImageVersion`。镜像预装/缓存的 Node、PostgreSQL 可能与本项目 pin 不同，**不得直接复用**。本项目 doctor 检查准确 Node/pnpm 和编译器，不自动安装工具；不覆盖磁盘、7-Zip 全格式支持、完整网络、所有运行时模块或 GUI 前提。macOS 若另行获准构建，还需要 PATH 上的全功能 `7z` 及原生 `/usr/bin/hdiutil`、`/usr/bin/ditto`、`/usr/bin/codesign`；Linux 工具不能替代 DMG 挂载或最终 Mach-O 验签。
 
 ### 固定 runtime 与其他下载
 
@@ -78,11 +81,11 @@
 
 ## 集成冻结后唯一执行批次
 
-此阶段只做预检/文档；**下面所有检查、安装、构建、smoke 和部署均尚未执行**。父级完成全部实现及来源记录并发出冻结交接后，唯一交付执行者再依次执行，不让多个 owner 同时测试或写构建目录。
+本批次已授权上方限定的 Windows-only unsigned 远端交付；下面是集成冻结、必要门禁和父级放行后的唯一执行批次，**不是当前已执行结果**。唯一交付执行者依次执行，不让多个 owner 同时测试或写构建目录。原生构建必须使用独立 checkout/冻结源码快照：`package` 会重建 Agent、Web、desktop，不能在服务正在使用的检出中覆盖其输出；构建和检查环境不携带发布凭据。
 
 ### 1. 绑定当前源码
 
-保存完整 HEAD、批准分支或私有 snapshot 身份、dirty 内容清单/摘要、vendor 来源代次、关键脚本/lock 摘要、实际工具链/OS/image。确认本轮修改与上轮 16 路径都在同一快照，未知并行修改不混入。现有 `thread.aui.tsx`/MCP ledger 与 OpenHands 旧 `web-build.mjs` recipe 的历史不一致，由来源 owner 逐字节解释并获准修复后再开始总门禁；不得简单 recapture、改 marker 或跳过检查。
+保存完整 HEAD、批准分支或私有 snapshot 身份、dirty 内容清单/摘要、vendor 来源代次、关键脚本/lock 摘要、实际工具链/OS/image。明确列出本轮批准改动与刻意排除的并行路径，只从实际已审阅基线叠加批准内容，不将所有 dirty 文件混入。历史上 `thread.aui.tsx`/MCP ledger 与 OpenHands 旧 `web-build.mjs` recipe 曾有来源不一致；旧失败保留为历史事实，新冻结代次按准确字节及来源 owner 交接核对，不简单 recapture、改 marker 或跳过检查。
 
 源码、依赖、来源记录、打包工具或配置在冻结后改变时，旧验证立即失效，应重新冻结并只引用对应代次。仅有 Git HEAD、`git archive HEAD`、旧 dist 或旧 installer 都不能代表 dirty 工作树。
 
@@ -97,6 +100,13 @@ Get-PSDrive -PSProvider FileSystem | Select-Object Name, Used, Free
 Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled
 # Git 元数据存在的检出才读取；不是自动修改 global/system 配置。
 git config --show-origin --get core.longpaths
+# 检查本机真实工具，不能仅引用托管镜像清单。
+Get-Command cl.exe, link.exe, rc.exe -ErrorAction Stop | Select-Object Name, Source
+# 下面示例要求全功能 7-Zip 位于默认 ProgramFiles；若在另一受支持位置，替换为其实际路径。
+$SevenZip = Join-Path $env:ProgramFiles '7-Zip\7z.exe'
+& $SevenZip i
+if ($LASTEXITCODE -ne 0) { throw 'Full 7-Zip unavailable; do not package.' }
+# 保存输出并确认 Formats 包含 Nsis、7z、zip；只有 7za 或版本文本不满足要求。
 
 $env:NODE_OPTIONS = '--max-old-space-size=4096'
 $env:PM_DESKTOP_TEST_POSTGRES_ROOT = Join-Path (Get-Location) 'apps/desktop/.runtime/desktop-runtime/postgres'
@@ -119,7 +129,7 @@ Git `core.longpaths` 未设置时可能返回非零，应作为配置记录解�
 
 ### 3. 生成新目录、验证实际成品、精确暂存
 
-以下为本轮交付 owner 冻结的工具接口，详见[桌面发布设计](desktop-release-alignment-2026-11-08.zh.md)；接口已落地不代表本阶段执行或验证通过。
+以下为当前源码实现的工具接口；接口存在不代表已执行或验证通过。仅在上述权限与原生前提满足后使用，详见[桌面发布设计](desktop-release-alignment-2026-11-08.zh.md)及[桌面指南](../guides/desktop.md)。
 
 ```powershell
 # 这两个路径须为此次执行者拥有、从未存在的新目录；不要覆盖历史安装器。
@@ -132,25 +142,39 @@ if ($LASTEXITCODE -ne 0) { throw 'Native delivery failed; preserve diagnostics a
 
 将 `APPROVED_RUN_ID` 换成已经登记的实际执行身份；`package` 会自行构建 Agent/Web/desktop 并 staging，不需要把旧 Linux dist 复制到 Windows。输出目录已存在时应选择新的执行身份/目录，不删除别人的成品来复用路径。
 
-`--native-smoke` 必须在本次原生构建目录、实际 unpacked resources 仍存在时执行；`--stage` 要求报告中的 native smoke 已通过，只复制并再次核对 manifest 精确文件。`--files-only` 与 `--native-smoke` 互斥，不得用于跳过 Windows 原生验证后暂存上传。
+`package` 的最终门禁必须读取本次准确 `.exe`，先列举/检查外层 NSIS，再读取其中唯一非空 `$PLUGINSDIR/app-64.7z` 并展开，检查所得 `resources`；不能改用 sibling `win-unpacked` 或旧 `dist/nsis/app-64.7z`。macOS 则分别检查本次 DMG/ZIP。`desktop-verification.json` 的 `checks.finalArtifacts.artifacts[]` 绑定每份发行文件的 path/SHA256/bytes、NSIS 内层 payload SHA256/bytes、应用检查、`tree` 文件数/逻辑字节/链接数及 `resourcesTree` 精确摘要。依赖检查按包身份/解析图解释必要实例，拒绝递归展开，而不是按相同 hash 删除路径；逻辑字节也不是实际磁盘占用。
 
-实际交付集包括 NSIS 安装器、`desktop-package.json`、`desktop-verification.json`、`SHA256SUMS`、`desktop-source.tar.gz`、`desktop-source.json`、`desktop-legal.tar.gz` 及 manifest 明确列出的辅助产物。不可只上传 `.exe` 后缀而丢报告/源码/许可，也不将 `win-unpacked`、临时测试实例、日志/任意 ZIP 通配上传。用于本机 native smoke 的 unpacked resources 不是额外的便携版产品。
+`--native-smoke` 在本次原生检出中重验全部最终发行 payload，默认从第一份已核验发行文件提取的资源执行 smoke；不依赖原始 `win-unpacked/resources`，但仍需要当前检出的已构建 `apps/desktop/dist` service controller。报告 scope 为 `final-distributable-payload`；它运行打包的 backend/runtime，不执行安装后的 Electron `app.asar` controller 或 GUI。`--stage` 要求成功的 native smoke 与当前发行文件 SHA256/bytes 绑定，只复制并复核 manifest 精确材料集；旧 staging-only smoke 报告不合格。`--files-only` 与 `--native-smoke` 互斥，不得用于跳过原生执行后冒充当前 smoke 成功。
+
+若已经在单独获准的测试账号/设备安装准确安装器，可核对该安装目录的资源并在其中执行 backend smoke：
+
+```powershell
+# InstallRoot 必须来自已完成且单独记录的安装；此命令本身不会安装。
+$InstallRoot = 'C:\b\installed\APPROVED_RUN_ID'
+node apps/desktop/scripts/verify-delivery.mjs --output $Output --native-smoke --installed-resources (Join-Path $InstallRoot 'resources')
+if ($LASTEXITCODE -ne 0) { throw 'Supplied installed resources failed current-payload binding or native smoke.' }
+```
+
+`--installed-resources` 必须与 `--native-smoke` 一起使用，不能与 `--files-only` 合用。它先核验当前完整发行集，再将 supplied tree 的应用检查及整个 `resources` 树精确摘要与当前第一份发行 payload 对照；报告 `installedTree.sourceArtifact` 与 `nativeSmoke.scope=supplied-installed-tree`。不只是相信所供目录自带 manifest，也不检查 resources 外的 Electron 可执行文件、快捷方式、注册表或数据目录；不能证明目录来自真实安装。报告的 `installationExecuted` / `electronGuiExecuted` 仍为 `false`，安装/升级/卸载/GUI 必须另行执行和记录。
+
+实际交付集包括 NSIS 安装器、`desktop-package.json`、`desktop-verification.json`、`SHA256SUMS`、`desktop-source.tar.gz`、`desktop-source.json`、`desktop-legal.tar.gz` 及 manifest 明确列出的辅助产物。不可只上传 `.exe` 后缀而丢报告/源码/许可，也不将 `win-unpacked`、临时测试实例、日志/任意 ZIP 通配上传。构建 unpacked tree、最终提取资源和所供 installed tree 都不是额外的便携版产品。
 
 最终核对至少包括：
 
 - manifest 的版本、完整 source identity/dirty/source digest、目标 `win32-x64`、`unsigned`、runtime 来源和实际文件 bytes/SHA256；checksum 文件与报告的关系由真实实现定义，不伪造自引用 checksum。
-- 对最终 `app.asar`、unpacked sibling、`workspace-runtime`、`desktop-runtime` 检查 Claude 平台 CLI 包身份（包括 alias），保留通信 SDK/PTY/SQLite/Cursor 及其必要资源，不按文件名泛删。
-- 执行 bundled runtime smoke、真实 packaged managed-instance 初始化/登录/正常停止/重连，且只处理此次拥有的私有测试实例/进程；每条 smoke 的失败、skip 和未运行范围保留。
+- 最终 `app.asar`、unpacked sibling、`workspace-runtime`、`desktop-runtime` 的 Claude 平台 CLI 包身份（包括 alias），保留通信 SDK/PTY/SQLite/Cursor 及必要资源，不按文件名泛删。
+- PM、Agent、Electron 保持独立物理生产依赖闭包，`desktop-dependency-layout.json` 中实际包/版本/peer/缺席 optional 边、资源 hash 与文件数一致；Agent 只有一个物理 Effect 4.0.5。包自有嵌套 fixture/template `node_modules` 仍属于资源清单，不误判为依赖展开。原 Agent manifest 的 `.packages`/links 仅为来源记录。
+- 执行最终提取资源（或与当前 payload 精确绑定的 supplied tree）上的 bundled runtime、原生依赖/Effect 运行时身份与 managed-instance 初始化/登录/正常停止/重连，且只处理此次拥有的私有测试实例/进程；逐条保留失败、skip 与未运行范围。macOS 只允许签名前 magic 记录的 Mach-O 在原生 bundle/逐文件验签后改变，其他依赖/runtime 资源仍精确匹配。
 - 对应源码和 legal 材料与本次成品一致，记录其 SHA256；根 AGPL 和第三方 notices 完整性不等于所有分发权利已获准。
 - 下载/私有传输后再次核对全部 SHA256；若 artifact 外层 archive 有 GitHub digest，分别记录它与内层 installer digest，不混用。
 
-下载到 Linux/其他接收端的 artifact 只有发行材料，没有 unpacked resources；此时使用准确冻结工具的传输完整性模式：
+下载到 Linux/其他接收端的 artifact 通常只有发行材料，不含原始构建 unpacked tree 或 checkout-built controller；此时使用准确冻结工具的传输完整性模式：
 
 ```sh
 node apps/desktop/scripts/verify-delivery.mjs --output /ABS/DOWNLOADED_DELIVERY --files-only
 ```
 
-该模式检查完整文件集合、bytes/hash、源码清单摘要及 `SHA256SUMS`，不执行或重新证明 native smoke；原生结果仍须绑定可信 Windows run/attempt/确切 SHA，不能把接收端检查改称 Windows 验收。
+该模式检查完整材料集合、bytes/hash、源码清单摘要及 `SHA256SUMS`，不展开最终 payload、不执行或重新证明 native smoke，也不补齐旧格式报告缺失的成品门禁。原生结果仍须绑定可信 Windows run/attempt/确切 SHA，不能把接收端 hash 检查改称 Windows 验收。
 
 没有执行的检查不能写为 passed。`--native-smoke` 通过也不等于安装了 NSIS、运行了 Electron GUI、完成真实账号/模型或正式发布。
 
@@ -158,10 +182,13 @@ node apps/desktop/scripts/verify-delivery.mjs --output /ABS/DOWNLOADED_DELIVERY 
 
 | 范围 | 所需证据；不能被什么替代 |
 | --- | --- |
-| 原生构建与脚本回归 | 当前源码身份、真实 Windows x64 工具链、固定 runtime、回归日志、打包与成品 verifier；不能用旧 CI、Linux smoke、配置存在或成功缓存替代 |
-| packaged backend smoke | 本次成品资源下初始化/登录/停止/重连、native 模块加载、ACL/reparse/进程所有权；不是已安装 GUI 验收 |
-| 真实安装/升级/卸载 | 在批准的干净 Windows 测试账号/设备运行准确 SHA256 的 NSIS，确认安装位置/快捷方式、用户权限、升级保持数据、卸载不删数据；不要对操作者工作实例做破坏性试验 |
-| GUI 与备份恢复 | 真实 Electron 启动/页面/关闭/重连、私有数据目录与自有进程、同 OS 备份到新空实例恢复；不能以 HTTP 200 或后台 smoke 宣称 GUI 全部通过 |
+| 脚本/合同测试 | 准确源码身份、实际执行命令/平台、通过/失败/skip；fixtures 或测试通过不能证明本次最终包、安装目录或 GUI |
+| 原生构建 | 当前源码身份、真实 Windows x64 工具链、固定 runtime、回归日志、打包与 verifier；不能用旧 CI、Linux smoke、配置存在或成功缓存替代 |
+| 最终发行 payload | 从本次准确 NSIS 的内层 7z（或 macOS DMG/ZIP）取得资源，记录 artifact/payload/资源树摘要、包图、必要实例、文件数与逻辑字节；不是安装器生命周期或实际安装磁盘占用 |
+| 所供 installed resources | `--installed-resources` 对整个所供 resources 树与当前 payload 精确绑定并记录来源 artifact；不证明实际安装、resources 外的完整安装内容、快捷方式/注册表或 GUI |
+| native backend smoke | 最终提取资源或上述所供树中的 Node/PG/依赖/Effect 身份、初始化/登录/停止/重连，控制器仍为 checkout-built；不是已安装 Electron controller/GUI 验收 |
+| 真实安装/升级/卸载 | 在批准的干净 Windows 测试账号/设备运行准确 SHA256 的 NSIS，确认位置/快捷方式/权限、资源核对、安装占用、升级数据身份和卸载保留数据；不对工作实例试验。基线与候选同为 0.1.0 时只能记同版本替换/重装，不称版本升级 |
+| GUI 与备份恢复 | 真实 Electron 启动/页面/关闭/重连、私有数据目录与自有进程、同 OS 备份到新空实例恢复；HTTP 200 或 backend smoke 不能证明 GUI。`--data-dir` 不隔离固定 Electron userData/浏览器状态，应使用获准的独立测试账号 |
 | Provider/PM | 真实外部 CLI、原生 Home/环境、缺失 Claude 显式失败无包内 fallback、PM 授权/revision/审批/收据，真实账号与模型调用独立获准并记录；受控协议程序不等于供应商账号验收 |
 | 正式发布 | 另行授权与关闭[第三方发布门禁](../../THIRD_PARTY_NOTICES.md#release-blockers)、正式对应源码可访问性、签名身份及最终验签；unsigned 安装成功不授予 commit/push/Release/签名配置权限 |
 
@@ -196,6 +223,12 @@ node apps/desktop/scripts/verify-delivery.mjs --output /ABS/DOWNLOADED_DELIVERY 
 
 ## 当前未执行与交接要求
 
-本阶段仅进行文档/源码/元数据/工具路径/磁盘/限定服务归属的只读调查及编写本手册。没有运行 build、lint、tests、formatters、dependency install、runtime smoke、GUI、真实账号调用、打包、3224 部署、commit、push、workflow dispatch、公开 Release 或签名配置。
+本节保留**上一轮手册编写阶段**的未执行范围：当时仅进行文档/源码/元数据/工具路径/磁盘/限定服务归属的只读调查及编写本手册，没有运行 build、lint、tests、formatters、dependency install、runtime smoke、GUI、真实账号调用、打包、3224 部署、commit、push、workflow dispatch、公开 Release 或签名配置。它不是对随后其他批次实际执行情况的改写。
 
-集成后交付报告必须给出实际选择的执行路线、授权阶段、完整源码身份/摘要、准确命令与退出码、真实 Windows 范围、installer 及全部材料 SHA256、未执行 GUI/安装/账号范围、来源/环境/分发阻塞和 3224 当前/新版本状态。本轮 **main commit + 公开 push + unsigned Windows-only dispatch/下载已经获准，但均未执行**；当前等待完整集成冻结、必要本地门禁与同一精确 SHA 的远端写入/原生 job 实际结果。若原生 job 权限、额度、下载或回归失败，应记录准确失败而不是退回旧 artifact。公共仓库可读、权限预检和历史 CI 绿色均不是本轮 installer 已生成的证据。
+历史交接曾记录 **main commit + 公开 push + unsigned Windows-only dispatch/下载获准但当时未执行**；该历史权限不自动沿用，当前依赖去重已有上方记录的新明确授权。新的交付报告必须独立给出授权阶段、完整源码身份/摘要、准确命令与退出码、真实原生范围、installer 及全部材料 SHA256、未执行安装/GUI/账号范围和来源/环境/分发阻塞。本批次获准使用 GitHub 托管 Windows 构建机制，但没有新增已登记 Windows/macOS host 或交互桌面，也未授权现有机器上的真实安装器/GUI 执行；不能用公共仓库可读、权限预检、历史 CI 或旧 artifact 补成当前 installer 已生成。桌面打包脚本/文档不生成 Linux 3224 运行产物，无运行时源码变化时保持既有服务、不重建或重启；实际入口归属/健康由协调验证 owner 只读记录。
+
+### 旧安装器基线与仍需测量的证据
+
+依赖展开调查使用的**历史 unsigned Windows x64 基线**来自 run `42425753593`、源码 commit `c8acf1409f0c98d65d9f176393783fc4ae71c18c`：`PM-Agent-v4-0.1.0-win-x64-unsigned.exe` 为 **914,109,877 bytes**，SHA256 `58a2533d392ea827bb5f83198d780132e5f613fc123806955d3a43952ae76962`；其内层 archive 有 **614,801 个普通文件、3,721,634,600 逻辑字节**。这是旧包的归档观察，不是当前去重实现的新原生构建、实际安装大小或 GUI 结果；不得拿旧 `dist/nsis/app-64.7z` 代替本次准确 EXE。
+
+本次新安装器 bytes、最终 payload/安装树文件数与逻辑字节、实际磁盘占用、原生模块执行、同版本替换或版本升级的数据保留、卸载保留数据及 Electron GUI 均须绑定新源码/产物身份另行提供实测。Linux 的真实闭包物化/7z 重打包对比须标为隔离实验并记录输入身份、工具和范围；即使改善也不宣称已产出新 Windows 安装器或完成原生安装验收。会话/持久化仍沿用 Agent Chat，统一设计未收口，不随依赖体积修复改变。

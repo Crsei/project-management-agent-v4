@@ -1,7 +1,7 @@
 import { chmod, cp, lstat, mkdir, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { inspectDeployment } from "./scripts/stage-workspace.mjs";
-import { verifyRuntime } from "./scripts/runtime-manifest.mjs";
+import { hashFile, verifyRuntime } from "./scripts/runtime-manifest.mjs";
 import { inspectPackagedApplication } from "./scripts/packaged-application.mjs";
 
 // Installation resources are public code, not private workspace data. cp keeps
@@ -22,15 +22,15 @@ async function normalizeInstallationModes(path, preserveFileModes = false) {
   } else throw new Error("Unsupported installation resource.");
 }
 
-export function desktopBuilderConfig({ application, workspaceRuntime, desktopRuntime, output, electronVersion, mode, platform, nativeBinaries }) {
+export function desktopBuilderConfig({ application, prepackedApplication, workspaceRuntime, desktopRuntime, output, electronVersion, mode, platform, nativeBinaries }) {
   const signed = mode === "signed";
   return {
     appId: "com.projectmanagementagent.v4",
     productName: "PM Agent v4",
     executableName: "PM Agent v4",
     electronVersion,
-    directories: { app: application, output },
-    files: ["dist/**/*", "node_modules/**/*", "package.json"],
+    directories: { app: prepackedApplication.directory, output },
+    files: ["app.asar"],
     asar: true,
     npmRebuild: false,
     nodeGypRebuild: false,
@@ -38,13 +38,15 @@ export function desktopBuilderConfig({ application, workspaceRuntime, desktopRun
     publish: null,
     artifactName: `PM-Agent-v4-\${version}-\${os}-\${arch}-${mode}.\${ext}`,
     // The native Node closure is intentionally outside app.asar and outside
-    // Electron's dependency/rebuild graph. Copying here also preserves the
-    // reviewed Agent packager's relative .packages links on every platform.
+    // Electron's dependency/rebuild graph. Its dependency directories are real
+    // hoisted packages, never graph links for the Windows archiver to expand.
     async afterPack(context) {
       const resources = platform === "darwin"
         ? join(context.appOutDir, "PM Agent v4.app", "Contents", "Resources")
         : join(context.appOutDir, "resources");
       await mkdir(resources, { recursive: true });
+      if (await hashFile(join(resources, "app.asar")) !== prepackedApplication.sha256)
+        throw new Error("Electron builder changed the prepacked application archive.");
       await cp(workspaceRuntime, join(resources, "workspace-runtime"), { recursive: true, verbatimSymlinks: true });
       await cp(desktopRuntime, join(resources, "desktop-runtime"), { recursive: true, verbatimSymlinks: true });
       await inspectDeployment(join(resources, "workspace-runtime"));
