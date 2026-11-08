@@ -40,7 +40,10 @@ test('bootstrap metadata is strict, complete and never persists the initial pass
   assert.throws(() => validateBootstrapState({ ...state, workspaceId: 'foreign' }));
 });
 
-test('real desktop bootstrap recovers every durable account/workspace boundary without password resets or duplicates', { skip: !binariesDir, timeout: 180_000 }, async t => {
+// Windows CI includes PostgreSQL start/restart plus three complete bootstraps in one
+// test; the fresh phase alone has measured ~164s. Production has no wall-clock
+// bootstrap cutoff, so this test budget must not encode one.
+test('real desktop bootstrap recovers every durable account/workspace boundary without password resets or duplicates', { skip: !binariesDir, timeout: 300_000 }, async t => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-desktop-bootstrap-')));
   const dataDir = join(root, 'instance');
   const pg = new ManagedPostgres({ dataDir, binariesDir: binariesDir! });
@@ -82,7 +85,7 @@ test('real desktop bootstrap recovers every durable account/workspace boundary w
   } finally { if (poolOpen) await pool.end(); }
 });
 
-test('real desktop bootstrap rejects missing blob markers and missing restore registration without reinitializing', { skip: !binariesDir, timeout: 180_000 }, async t => {
+test('real desktop bootstrap rejects missing blob markers and missing restore registration without reinitializing', { skip: !binariesDir, timeout: 300_000 }, async t => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pm-desktop-bootstrap-corrupt-')));
   const dataDir = join(root, 'instance');
   const pg = new ManagedPostgres({ dataDir, binariesDir: binariesDir! });
