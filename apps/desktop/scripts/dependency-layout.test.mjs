@@ -205,7 +205,10 @@ for (const shell of ["posix", "cmd", "powershell"]) {
       for (const name of [command, `${command}.CMD`, `${command}.ps1`]) await writeFile(join(original, name), "source package-manager shim");
     const { context } = await stage(f);
     assert.equal(context.binFiles.length, 6);
-    const env = { PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) };
+    const baseEnv = { PATH: dirname(process.execPath), ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}) };
+    // Windows PowerShell uses PATHEXT for native execution vs shell association.
+    // This fixture needs only .EXE, not the ambient executable-extension policy.
+    const env = { ...baseEnv, ...(process.platform === "win32" ? { PATHEXT: ".EXE" } : {}) };
     const args = ["argument with spaces", "literal$quote"];
     async function invokePowerShell(script, args, childEnv = env) {
       return execute(join(process.env.SystemRoot, "System32/WindowsPowerShell/v1.0/powershell.exe"),
@@ -271,27 +274,32 @@ for (const shell of ["posix", "cmd", "powershell"]) {
       }
     }
     if (shell === "powershell") {
-      // Temporary native diagnosis: distinguish PS5.1 host capture from emitted
-      // shim/Node execution. These probes do not replace any consumer assertions.
-      const direct = join(f.source, "host-direct.ps1");
-      await writeFile(direct, '[Console]::Out.Write("host-direct-stdout")\nexit 23\n');
-      await t.test("diagnostic PS5.1 direct host stdout and nonzero exit", async () => {
-        const result = await outcome(() => invokePowerShell(direct, []));
-        const diagnostic = JSON.stringify({ scenario: "direct-host", ...result });
-        assert.equal(result.exitCode, 23, diagnostic);
-        assert.equal(result.stdout, "host-direct-stdout", diagnostic);
-        assert.equal(result.stderr, "", diagnostic);
-      });
-      const nativeScript = join(f.source, "host-native.ps1");
-      const nativeTarget = join(f.source, "host-native.cjs");
-      await writeFile(nativeTarget, 'process.stdout.write("host-native-stdout",()=>process.exit(29));\n');
-      await writeFile(nativeScript, 'param([string]$NodePath,[string]$ScriptPath)\n$ErrorActionPreference="Stop"\n$PSNativeCommandUseErrorActionPreference=$false\n& $NodePath $ScriptPath\nexit $LASTEXITCODE\n');
-      await t.test("diagnostic PS5.1 native no-newline stdout and nonzero exit", async () => {
-        const result = await outcome(() => invokePowerShell(nativeScript, [process.execPath, nativeTarget]));
-        const diagnostic = JSON.stringify({ scenario: "native-host", ...result });
-        assert.equal(result.exitCode, 29, diagnostic);
-        assert.equal(result.stdout.trimEnd(), "host-native-stdout", diagnostic);
-        assert.equal(result.stderr, "", diagnostic);
+      // Temporary same-host discrimination; keep the baseline outcome as
+      // evidence, not an expected failure. Actual shim assertions remain above.
+      const nativeScript = join(f.source, "host-native-pair.ps1");
+      const nativeTarget = join(f.source, "host-native-pair.cjs");
+      await writeFile(nativeTarget, 'require("node:fs").writeFileSync(process.argv[2],JSON.stringify({execPath:process.execPath,argv:process.argv.slice(2),pid:process.pid}));process.stdout.write("host-native-stdout",()=>process.exit(29));\n');
+      await writeFile(nativeScript, 'param([string]$NodePath,[string]$ScriptPath,[string]$HostReceipt,[string]$NativeReceipt)\n$ErrorActionPreference="Stop"\n$PSNativeCommandUseErrorActionPreference=$false\n[System.IO.File]::WriteAllLines($HostReceipt,[string[]]@("PSVersion=$($PSVersionTable.PSVersion)","PSEdition=$($PSVersionTable.PSEdition)","PATHEXT=$env:PATHEXT"))\n& $NodePath $ScriptPath $NativeReceipt\nexit $LASTEXITCODE\n');
+      await t.test("diagnostic same-host stripped vs explicit .EXE native launch", async (t) => {
+        const results = [];
+        for (const [scenario, childEnv] of [["stripped", baseEnv], ["explicit-exe", env]]) {
+          const hostReceipt = join(f.source, `${scenario}-host.txt`);
+          const nativeReceipt = join(f.source, `${scenario}-native.json`);
+          const result = await outcome(() => invokePowerShell(nativeScript, [process.execPath, nativeTarget, hostReceipt, nativeReceipt], childEnv));
+          const host = await readFile(hostReceipt, "utf8").catch((error) => error.code === "ENOENT" ? null : { readError: error.message });
+          const receipt = await readFile(nativeReceipt, "utf8").then(JSON.parse).catch((error) => error.code === "ENOENT" ? null : { readError: error.message });
+          results.push({ scenario, requestedPathext: childEnv.PATHEXT ?? null, ...result, host, receipt, nativeReceipt });
+        }
+        const diagnostic = JSON.stringify({ scenario: "same-host-pathext-pair", results });
+        t.diagnostic(diagnostic);
+        const corrected = results[1];
+        assert.equal(corrected.exitCode, 29, diagnostic);
+        assert.equal(corrected.stdout.trimEnd(), "host-native-stdout", diagnostic);
+        assert.equal(corrected.stderr, "", diagnostic);
+        assert.match(corrected.host ?? "", /^PSVersion=\S+/m, diagnostic);
+        assert.ok(corrected.receipt?.execPath, diagnostic);
+        assert.equal(await realpath(corrected.receipt.execPath), await realpath(process.execPath), diagnostic);
+        assert.deepEqual(corrected.receipt.argv, [corrected.nativeReceipt], diagnostic);
       });
     }
     for (const file of context.binFiles) {
