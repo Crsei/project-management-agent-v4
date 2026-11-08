@@ -149,7 +149,7 @@ export default function UsagePage() {
   const busy = metric === "limits" ? limitsRefreshing : updating;
 
   return <div className="usage-page">
-    <header className="usage-topbar">
+    <header className="usage-topbar desktop-titlebar desktop-titlebar-reserve-controls">
       <div className="usage-breadcrumbs">
         <h1>Usage</h1><span className="usage-breadcrumb-divider" aria-hidden="true">/</span>
         <DropdownMenu><DropdownMenuTrigger className="usage-filter-trigger">{t("本机环境", "Local environment")}<ChevronDown size={13} aria-hidden="true" /></DropdownMenuTrigger>

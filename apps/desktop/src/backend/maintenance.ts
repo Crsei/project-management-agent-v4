@@ -7,22 +7,27 @@ import type { Pool } from 'pg';
 import { createPool, migrate } from '../../../../packages/infrastructure/src/database.ts';
 import { createBlobStore } from '../../../../packages/infrastructure/src/blob-storage-provider.ts';
 import { bindBlobStore, readStorageBinding } from '../../../../packages/infrastructure/src/blob-storage-binding.ts';
-import { exportBlobBackup, restoreBlobBackup } from '../../../../packages/infrastructure/src/blob-storage-backup.ts';
+import { blobBackupManifestSha256, exportBlobBackup, readBlobBackupManifest, restoreBlobBackup } from '../../../../packages/infrastructure/src/blob-storage-backup.ts';
 import { exportLocalProjectCheckpoint, restoreLocalProjectCheckpoint, captureLocalProjectCheckpoint, localProjectCheckpointSha256, localProjectCheckpointSchema } from '../../../../packages/infrastructure/src/project-storage-checkpoint.ts';
 import { readProjectLocation } from '../../../../packages/pm-core/project-locations.ts';
 import { readStoredBlob } from '../../../../packages/infrastructure/src/project-blobs.ts';
 import { registerRestoredBootstrap, validateBootstrapState } from './bootstrap.ts';
 import { ensurePrivateDirectory } from '../private-state.mjs';
-import { copyTree, hashFile, snapshotTree, treeManifestSchema } from './maintenance-files.ts';
+import { copyTree, hashFile, snapshotTree, treeManifestSchema, verifyTree } from './maintenance-files.ts';
+import { LocalBlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
+import { verifyInventoryObjects } from '../../../../packages/infrastructure/src/blob-storage-inventory.ts';
+import { assertBackupCompatibility, requireTrustedBackupSource, withPrivateMaintenanceDirectory } from '../maintenance-archive.mjs';
+import { directoryIdentity } from '../../../../packages/pm-core/platform.ts';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const requestSchema = z.strictObject({
-  operation: z.enum(['backup', 'restore']), databaseUrl: z.string(), dataDir: z.string(),
+  operation: z.enum(['backup', 'restore', 'validate']), databaseUrl: z.string(), dataDir: z.string(),
   destination: z.string().optional(), source: z.string().optional(), postgresRoot: z.string(), serverRoot: z.string(),
+  trustedSourceAcknowledged: z.boolean().optional(),
 });
 type Request = z.infer<typeof requestSchema>;
 const manifestSchema = z.strictObject({
-  format: z.literal('pm-agent-desktop-backup'), version: z.literal(1), createdAt: z.iso.datetime(), postgresMajor: z.literal(16),
+  format: z.literal('pm-agent-desktop-backup'), version: z.union([z.literal(1), z.literal(2)]), applicationVersion: z.string().min(1).optional(), createdAt: z.iso.datetime(), postgresMajor: z.literal(16),
   platform: z.enum(['win32', 'darwin', 'linux']),
   privateData: z.literal(true), bootstrap: z.unknown(), databaseDumpSha256: digest, coreManifestSha256: digest,
   blobManifestSha256: digest, files: localProjectCheckpointSchema, sourceChatRoot: z.string(),
@@ -116,7 +121,8 @@ async function createBackup(request: Request): Promise<void> {
       agentManifestSha256 = (await hashFile(join(destination, 'agent/manifest.json'))).sha256;
     } else if (await exists(agentRoot) && (await readdir(agentRoot)).length) throw new Error('Uninitialized Agent directory contains unclassified data.');
     if (localProjectCheckpointSha256(await captureLocalProjectCheckpoint(coreRoot)) !== files.manifestSha256) throw new Error('Project files changed during backup.');
-    const manifest = manifestSchema.parse({ format: 'pm-agent-desktop-backup', version: 1, createdAt: new Date().toISOString(), postgresMajor: 16, platform: process.platform,
+    const applicationVersion = z.string().min(1).parse((await jsonFile(join(request.serverRoot, 'apps/desktop/package.json')) as { version?: unknown }).version);
+    const manifest = manifestSchema.parse({ format: 'pm-agent-desktop-backup', version: 2, applicationVersion, createdAt: new Date().toISOString(), postgresMajor: 16, platform: process.platform,
       privateData: true, bootstrap, databaseDumpSha256, coreManifestSha256: files.manifestSha256, blobManifestSha256: blobs.manifestSha256,
       files: files.manifest, sourceChatRoot, chatFiles, agentPresent, agentManifestSha256,
       exclusions: ['External/global Provider CLI homes and process environment', 'External project source code and external document-source directories; PM-managed .pm data is included', 'Electron browser cookies, drafts/preferences and unknown-request journal (retain original desktop profile)', 'Rebuildable Agent caches; copied MCP authority is revoked by Agent backup'],
@@ -129,15 +135,63 @@ async function createBackup(request: Request): Promise<void> {
     finally { await pool.end(); }
   }
 }
+async function validateBackup(request: Request): Promise<void> {
+  if (!request.source) throw new Error('A completed backup is required.');
+  if (request.destination) {
+    const tree = await snapshotTree(request.source);
+    await copyTree(request.source, request.destination, tree);
+  }
+  const source = request.destination ?? request.source;
+  const manifest = manifestSchema.parse(await jsonFile(join(source, 'desktop-backup.json')));
+  const version = z.string().min(1).parse((await jsonFile(join(request.serverRoot, 'apps/desktop/package.json')) as { version?: unknown }).version);
+  assertBackupCompatibility(manifest, version);
+  const bootstrap = validateBootstrapState(manifest.bootstrap);
+  if (bootstrap.phase !== 'ready' || (await hashFile(join(source, 'database.dump'))).sha256 !== manifest.databaseDumpSha256) throw new Error('Backup database or setup metadata does not match.');
+  if (manifest.version === 1 && manifest.applicationVersion !== undefined) throw new Error('Unexpected legacy backup version metadata.');
+  if (localProjectCheckpointSha256(manifest.files) !== manifest.coreManifestSha256
+    || localProjectCheckpointSha256(localProjectCheckpointSchema.parse(await jsonFile(join(source, 'files/manifest.json')))) !== manifest.coreManifestSha256) throw new Error('Backup project checkpoint differs.');
+  const blobs = await readBlobBackupManifest(join(source, 'blobs'));
+  if (blobBackupManifestSha256(blobs) !== manifest.blobManifestSha256 || blobs.databaseDumpSha256 !== manifest.databaseDumpSha256 || blobs.coreManifestSha256 !== manifest.coreManifestSha256) throw new Error('Backup attachment manifest differs.');
+  const checkpointTree = {
+    directories: ['core', 'projects', ...manifest.files.coreDirectories.map(path => `core/${path}`),
+      ...manifest.files.projects.flatMap(project => [`projects/${project.storageId}`, ...project.directories.map(path => `projects/${project.storageId}/${path}`)])],
+    files: [{ path: 'manifest.json', ...await hashFile(join(source, 'files/manifest.json')) },
+      ...manifest.files.core.map(file => ({ ...file, path: `core/${file.path}` })),
+      ...manifest.files.projects.flatMap(project => project.files.map(file => ({ ...file, path: `projects/${project.storageId}/${file.path}` })))],
+  };
+  await verifyTree(join(source, 'files'), checkpointTree);
+  await verifyTree(join(source, 'blobs'), {
+    directories: ['objects'], files: [{ path: 'manifest.json', ...await hashFile(join(source, 'blobs/manifest.json')) },
+      ...blobs.entries.map(entry => ({ path: `objects/${entry.key}`, size: entry.size, sha256: entry.sha256 }))],
+  });
+  const store = new LocalBlobStore(join(source, 'blobs/objects'));
+  try { await verifyInventoryObjects(store, blobs.entries); } finally { store.close(); }
+  if (manifest.agentPresent && (!manifest.agentManifestSha256 || (await hashFile(join(source, 'agent/manifest.json'))).sha256 !== manifest.agentManifestSha256)) throw new Error('Backup Agent manifest differs.');
+  await withPrivateMaintenanceDirectory(async (temporary: string) => {
+    // Reuse real restorers for path, registry, credential and content validation.
+    // These scratch copies never initialize the selected instance or any database.
+    await command(pgCommand(request, 'pg_restore'), ['--list', '--file', join(temporary, 'dump-list'), join(source, 'database.dump')], process.env);
+    await restoreLocalProjectCheckpoint({ directory: join(source, 'files'), manifest: manifest.files, expectedManifestSha256: manifest.coreManifestSha256,
+      targetCoreRoot: join(temporary, 'core'), targetProjectsRoot: join(temporary, 'projects'), stopped: true });
+    if (manifest.chatFiles) await copyTree(join(source, 'chat-spaces'), join(temporary, 'chat-spaces'), manifest.chatFiles);
+    else if (await exists(join(source, 'chat-spaces'))) throw new Error('Unclassified chat files in backup.');
+    if (manifest.agentPresent) await agentMaintenance(request, 'restore', join(source, 'agent'), join(temporary, 'agent'));
+    else if (await exists(join(source, 'agent'))) throw new Error('Unclassified Agent files in backup.');
+  });
+  // Refuse unknown top-level content instead of silently dropping it on restore.
+  const allowed = new Set(['desktop-backup.json', 'database.dump', 'files', 'blobs', ...(manifest.chatFiles ? ['chat-spaces'] : []), ...(manifest.agentPresent ? ['agent'] : [])]);
+  if ((await readdir(source)).some(name => !allowed.has(name))) throw new Error('Backup contains unsupported data; nothing was discarded or restored.');
+}
+
 
 async function restoreBackup(request: Request): Promise<void> {
+  requireTrustedBackupSource(request.trustedSourceAcknowledged);
   if (!request.source) throw new Error('A completed backup is required.');
   const source = request.source;
   const manifest = manifestSchema.parse(await jsonFile(join(source, 'desktop-backup.json')));
-  if (manifest.platform !== process.platform) throw new Error('Restore on the original operating system; cross-platform native paths and Provider state require an explicit migration.');
+  const version = z.string().min(1).parse((await jsonFile(join(request.serverRoot, 'apps/desktop/package.json')) as { version?: unknown }).version);
+  assertBackupCompatibility(manifest, version);
   const bootstrap = validateBootstrapState(manifest.bootstrap);
-  if (bootstrap.phase !== 'ready' || (await hashFile(join(source, 'database.dump'))).sha256 !== manifest.databaseDumpSha256) throw new Error('Backup database or setup metadata does not match.');
-  if (manifest.agentPresent && (!manifest.agentManifestSha256 || (await hashFile(join(source, 'agent/manifest.json'))).sha256 !== manifest.agentManifestSha256)) throw new Error('Backup Agent manifest does not match.');
   const pool = createPool(request.databaseUrl, 1);
   const targetCoreRoot = join(request.dataDir, 'pm-workspaces');
   const targetProjectsRoot = join(request.dataDir, 'projects');
@@ -167,10 +221,13 @@ async function restoreBackup(request: Request): Promise<void> {
     const areas = await pool.query<{ workspace_id: string; project_key: string; path: string }>('SELECT workspace_id,project_key,path FROM agent_file_areas');
     for (const area of areas.rows) {
       const part = relative(manifest.sourceChatRoot, area.path);
-      const copied = part === '' || (part !== '..' && !part.startsWith(`..${sep}`) && !isAbsolute(part));
+      const internal = part === '' || (part !== '..' && !part.startsWith(`..${sep}`) && !isAbsolute(part));
+      // A saved optional area may have disappeared or become a regular file
+      // before backup. Only directories actually captured are eligible to rebind.
+      const copied = internal && manifest.chatFiles !== null
+        && (part === '' || manifest.chatFiles.directories.includes(part.split(sep).join('/')));
       const location = copied ? join(targetChatRoot, part) : join(request.dataDir, 'unrestored-areas', randomUUID());
-      const identity = copied ? await lstat(location, { bigint: true }) : null;
-      if (identity && (!identity.isDirectory() || identity.isSymbolicLink())) throw new Error('Restored chat area is not a safe directory.');
+      const identity = copied ? directoryIdentity(location) : null;
       await pool.query('UPDATE agent_file_areas SET path=$1,directory_device=$2,directory_inode=$3,revision=revision+1 WHERE workspace_id=$4 AND project_key=$5', [location, String(identity?.dev ?? 0), String(identity?.ino ?? 0), area.workspace_id, area.project_key]);
     }
     await pool.query('UPDATE agent_storage_settings SET default_root=$1,revision=revision+1', [targetChatRoot]);
@@ -185,7 +242,9 @@ async function main(): Promise<void> {
   let input = '';
   for await (const chunk of process.stdin) { input += chunk; if (Buffer.byteLength(input) > 128 * 1024) throw new Error('Maintenance request is too large.'); }
   const request = requestSchema.parse(JSON.parse(input));
-  if (request.operation === 'backup') await createBackup(request); else await restoreBackup(request);
+  if (request.operation === 'backup') await createBackup(request);
+  else if (request.operation === 'validate') await validateBackup(request);
+  else await restoreBackup(request);
   console.log(JSON.stringify({ operation: request.operation, completed: true }));
 }
-main().catch(() => { console.error('Desktop recovery operation failed. Private details were not logged; the original instance was not overwritten.'); process.exitCode = 1; });
+main().catch(() => { console.error('Desktop recovery operation failed. Private details were not logged. Target cleanup does not roll back external SQL side effects.'); process.exitCode = 1; });

@@ -68,6 +68,9 @@ export async function refreshAgentWorkspaces(): Promise<void> {
     if (sequence === workspaceRefreshSequence) update({ loading: false, error: error instanceof Error ? error.message : String(error) });
   }
 }
+export function getRemoteThread(id: string) {
+  return state.threads.get(id);
+}
 export function acceptRemoteThread(thread: RemoteThread) {
   update({ threads: new Map(state.threads).set(thread.remoteId, thread), threadError: undefined });
 }

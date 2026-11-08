@@ -182,7 +182,9 @@ export function SettingsLayout() {
     <div className={`settings-shell ${pmTheme.page}`} data-extensions-page={extensionPage || undefined}>
       <a className="settings-skip-link" href="#settings-content">{t("跳至设置内容", "Skip to settings")}</a>
       <aside className="settings-sidebar" aria-label={t("Agent 设置", "Agent settings")} onKeyDown={event => { if (event.key === "Escape" && mobileNavigationOpen) { event.preventDefault(); event.stopPropagation(); setMobileNavigationOpen(false); mobileNavigationTrigger.current?.focus(); } }}>
-        <Link to={returnTo} className="settings-product"><MessageSquare aria-hidden="true" /><span>Agent Chat</span></Link>
+        <div className="settings-titlebar desktop-titlebar desktop-titlebar-traffic-lights">
+          <Link to={returnTo} className="settings-product"><MessageSquare aria-hidden="true" /><span>Agent Chat</span></Link>
+        </div>
         <p className="settings-nav-caption">{t("设置", "Settings")}</p>
         <button ref={mobileNavigationTrigger} type="button" className="settings-mobile-navigation-toggle" aria-expanded={mobileNavigationOpen} aria-controls={navigationId} onClick={() => setMobileNavigationOpen(open => !open)}><span>{t("设置页面", "Settings pages")}</span><strong>{pageTitle}</strong><ChevronDown aria-hidden="true" /></button>
         <nav id={navigationId} ref={navigation} className="settings-navigation" data-mobile-open={mobileNavigationOpen || undefined} aria-label={t("设置页面", "Settings pages")}>
@@ -202,7 +204,7 @@ export function SettingsLayout() {
         {fullBleed ? <SettingsContentBoundary key={location.pathname}>
           <Suspense key={location.pathname} fallback={<p role="status" className="p-8">{t("正在加载用量…", "Loading usage…")}</p>}><Outlet /></Suspense>
         </SettingsContentBoundary> : <>
-          <header className="settings-breadcrumb"><span>{t("设置", "Settings")}</span><ChevronRight aria-hidden="true" /><h1 ref={heading} tabIndex={-1}>{extensionPage ? t("自定义", "Customize") : pageTitle}</h1>
+          <header className="settings-breadcrumb desktop-titlebar desktop-titlebar-reserve-controls"><span>{t("设置", "Settings")}</span><ChevronRight aria-hidden="true" /><h1 ref={heading} tabIndex={-1}>{extensionPage ? t("自定义", "Customize") : pageTitle}</h1>
             <span className="settings-draft-status" role="status">{guardState === "busy" ? t("操作进行中", "Working") : guardState === "dirty" ? t("有未保存的修改", "Unsaved changes") : ""}</span>
           </header>
           <div className="settings-content">

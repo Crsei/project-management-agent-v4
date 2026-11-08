@@ -63674,6 +63674,8 @@ components:
           type: string
           format: uuid
           pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        includeSample:
+          type: boolean
       required:
         - name
         - expectedActorId
@@ -63730,8 +63732,10 @@ components:
               format: uuid
               pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
             sampleProjectId:
-              type: string
-              pattern: ^PRJ-\d+$
+              anyOf:
+                - type: string
+                  pattern: ^PRJ-\d+$
+                - type: "null"
           required:
             - status
             - key

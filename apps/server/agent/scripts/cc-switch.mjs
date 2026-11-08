@@ -116,7 +116,7 @@ export async function buildHost(outputRoot) {
   return { ...manifest, manifestSha256: sha256(manifestBytes) };
 }
 
-export async function verifyHost(buildRoot) {
+export async function verifyHost(buildRoot, { installationModes = false } = {}) {
   const root = path.join(buildRoot, "cc-switch", "host");
   const manifestBytes = await readFile(path.join(root, "manifest.json"));
   const manifest = JSON.parse(manifestBytes.toString("utf8"));
@@ -132,7 +132,15 @@ export async function verifyHost(buildRoot) {
     }
     expected.add(entry.path);
     const record = await fileRecord(root, entry.path);
-    if (record.sha256 !== entry.sha256 || record.bytes !== entry.bytes || record.mode !== entry.mode) {
+    let expectedMode = entry.mode;
+    // Desktop afterPack canonicalizes POSIX installation permissions while
+    // preserving whether source resources were executable. Windows cannot model
+    // POSIX group/other bits; retain the existing exact native mode comparison.
+    if (installationModes && process.platform !== "win32") {
+      if (!Number.isInteger(entry.mode) || entry.mode < 0 || entry.mode > 0o777) throw new Error(`Host resource changed: ${entry.path}`);
+      expectedMode = entry.mode & 0o111 ? 0o755 : 0o644;
+    }
+    if (record.sha256 !== entry.sha256 || record.bytes !== entry.bytes || record.mode !== expectedMode) {
       throw new Error(`Host resource changed: ${entry.path}`);
     }
   }

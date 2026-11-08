@@ -15,13 +15,17 @@ async function preload() {
       removeListener: (channel, handler) => { if (listeners.get(channel) === handler) listeners.delete(channel); },
     },
   };
-  vm.runInNewContext(await readFile(new URL("./preload.cjs", import.meta.url), "utf8"), { require: name => { assert.equal(name, "electron"); return electron; } });
+  vm.runInNewContext(await readFile(new URL("./preload.cjs", import.meta.url), "utf8"), {
+    require: name => { assert.equal(name, "electron"); return electron; },
+    process: { platform: "linux" },
+  });
   return { bridge, invocations, listeners };
 }
 
 test("the connection bridge offers no generic filesystem, process, shell or IPC capability", async () => {
   const { bridge, invocations } = await preload();
   assert.equal(Object.isFrozen(bridge), true);
+  assert.equal(bridge.platform, "linux");
   for (const action of ["exec", "readFile", "openExternal", "openPath", "desktop:arbitrary", "constructor"])
     await assert.rejects(bridge.invoke(action, { path: "/private", command: "anything" }), /Unknown desktop action/);
   assert.equal(invocations.length, 0);
@@ -30,6 +34,23 @@ test("the connection bridge offers no generic filesystem, process, shell or IPC 
   assert.equal(JSON.stringify(invocations[0].input), JSON.stringify({ action: "directory", field: "dataDir" }));
   await bridge.invoke("backup", { destination: "/renderer-must-not-choose-this" });
   assert.equal(JSON.stringify(invocations[1].input), JSON.stringify({ action: "backup" }));
+});
+
+test("backup bridge forwards only ephemeral password and explicit legacy acknowledgement, not renderer paths or algorithms", async () => {
+  const { bridge, invocations } = await preload();
+  await bridge.invoke("backup", { password: "synthetic-backup-passphrase", destination: "/not-accepted", kdf: { N: 1 } });
+  assert.equal(JSON.stringify(invocations[0].input), JSON.stringify({ action: "backup", password: "synthetic-backup-passphrase" }));
+  await bridge.invoke("restore", { password: "synthetic-backup-passphrase", allowLegacyUnencrypted: "true", trustedSourceAcknowledged: "true", source: "/not-accepted", dataDir: "/not-accepted" });
+  assert.equal(JSON.stringify(invocations[1].input), JSON.stringify({ action: "restore", password: "synthetic-backup-passphrase", allowLegacyUnencrypted: false, trustedSourceAcknowledged: false }));
+  await bridge.invoke("restore", { allowLegacyUnencrypted: true, trustedSourceAcknowledged: true });
+  assert.equal(JSON.stringify(invocations[2].input), JSON.stringify({ action: "restore", allowLegacyUnencrypted: true, trustedSourceAcknowledged: true }));
+});
+
+test("Quit forwards only the fixed action and no renderer-selected window or process", async () => {
+  const { bridge, invocations } = await preload();
+  await bridge.invoke("quit", { action: "connect", windowId: 99, webContentsId: 100, pid: 1234, force: true });
+  assert.equal(invocations[0].channel, "desktop:action");
+  assert.equal(JSON.stringify(invocations[0].input), JSON.stringify({ action: "quit" }));
 });
 
 test("state subscription removes the Electron event object and can be disposed", async () => {

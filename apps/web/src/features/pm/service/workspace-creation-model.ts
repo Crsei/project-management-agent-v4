@@ -1,11 +1,20 @@
 import type { ProjectManagementClient, WorkspaceCreationResult } from '@contracts';
 import { z } from 'zod';
 
-const workspaceCreationDraftSchema = z.strictObject({ key: z.uuid(), name: z.string().trim().min(1).max(200) });
+const workspaceCreationDraftSchema = z.strictObject({ key: z.uuid(), name: z.string().trim().min(1).max(200), includeSample: z.boolean() });
+// Drafts written before the sample choice existed retain the historical sample
+// intent instead of becoming an unreadable recovery record.
+const storedWorkspaceCreationDraftSchema = z.strictObject({ key: z.uuid(), name: z.string().trim().min(1).max(200), includeSample: z.boolean().optional() });
 export type WorkspaceCreationDraft = z.infer<typeof workspaceCreationDraftSchema>;
 
+export function workspaceCreationStorageKey(origin: string, actorId: string): string {
+  return `pm-workspace-creation:v1:${JSON.stringify([origin, actorId])}`;
+}
+
 export function decodeWorkspaceCreationDraft(value: string | null): WorkspaceCreationDraft | null {
-  return value === null ? null : workspaceCreationDraftSchema.parse(JSON.parse(value));
+  if (value === null) return null;
+  const stored = storedWorkspaceCreationDraftSchema.parse(JSON.parse(value));
+  return { ...stored, includeSample: stored.includeSample !== false };
 }
 
 /** Preparation never replaces a prior uncertain request, including another tab’s. */
@@ -31,10 +40,11 @@ export async function runWorkspaceCreation(client: Pick<ProjectManagementClient,
     if (actor.id !== actorId) throw new Error('The session changed; no further request was sent. / 会话已改变，未发送后续请求。');
   }
   requireCurrent();
+  const intent = { name: original.name, expectedActorId: actorId, includeSample: original.includeSample };
   if (mode === 'create') {
     await requireAuthority();
     requireCurrent();
-    return client.createWorkspace({ name: original.name, expectedActorId: actorId }, original.key);
+    return client.createWorkspace(intent, original.key);
   }
   const result = await client.getWorkspaceCreation(original.key);
   requireCurrent();
@@ -45,5 +55,5 @@ export async function runWorkspaceCreation(client: Pick<ProjectManagementClient,
   // even if another tab changes the Cookie after this authority preflight.
   return result.status === 'pending'
     ? client.recoverWorkspaceCreation(original.key, { expectedActorId: actorId })
-    : client.createWorkspace({ name: original.name, expectedActorId: actorId }, original.key);
+    : client.createWorkspace(intent, original.key);
 }

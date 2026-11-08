@@ -17,6 +17,7 @@ test('workspace creation and recovery contracts require the captured actor witho
   assert.throws(() => workspaceCreationRecoveryRequestSchema.parse({}));
   assert.throws(() => workspaceCreationRequestSchema.parse({ name: 'Own workspace', expectedActorId: 'not-an-actor' }));
   assert.deepEqual(workspaceCreationRequestSchema.parse({ name: 'Own workspace', expectedActorId: key }), { name: 'Own workspace', expectedActorId: key });
+  assert.deepEqual(workspaceCreationRequestSchema.parse({ name: 'Own workspace', expectedActorId: key, includeSample: false }), { name: 'Own workspace', expectedActorId: key, includeSample: false });
   assert.deepEqual(workspaceCreationRecoveryRequestSchema.parse({ expectedActorId: key }), { expectedActorId: key });
 });
 

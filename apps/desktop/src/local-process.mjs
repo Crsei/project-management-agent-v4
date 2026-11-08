@@ -1,10 +1,11 @@
-import { spawn } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { assertOwnedProcess, assertProcessIdentity, isOwnedProcess, ownedProcessIdentity, readProcessIdentity, rememberOwnedProcess, sameProcessIdentity } from "./process-identity.mjs";
 
-// Windows has no POSIX process groups. A private kill-on-close Job Object keeps
-// every descendant owned even when its Node parent exits before desktop does.
+// Windows crash containment is private to this supervisor's Job Object.
+// Graceful-stop timeouts never close/kill the supervisor or its Job Object.
 const windowsJob = `
 using System;
 using System.ComponentModel;
@@ -116,10 +117,17 @@ export function spawnOwned(executable, args, { cwd, env }) {
     const decode = (value) => `[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(value)}'))`;
     const script = `$ErrorActionPreference='Stop'; $PSModuleAutoLoadingPreference='None'; try { Import-Module ($PSHOME+'\\Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1'); Add-Type -TypeDefinition (${decode(windowsJob)}); $result=[DesktopProcessJob]::Run((${decode(executable)}),(${decode([executable, ...args].map(windowsArgument).join(" "))}),(${decode(cwd)})); exit $result } catch { [Console]::Error.WriteLine('Cannot start owned desktop process: '+$_.Exception.Message); exit 1 }`;
     arguments_ = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")];
+  } else if (process.platform === "darwin") {
+    // Capture birth identity while stopped, then exec in-place (same PID). A
+    // short runtime probe must not outrun macOS's native identity inspection.
+    command = "/bin/sh";
+    executable = realpathSync(executable);
+    arguments_ = ["-c", 'kill -STOP "$$"; exec "$@"', "desktop-owned-process", executable, ...args];
   }
   const child = spawn(command, arguments_, {
     cwd, env, stdio: ["pipe", "pipe", "pipe"], detached: process.platform !== "win32", windowsHide: true,
   });
+  rememberOwnedProcess(child, process.platform === "darwin" ? { suspendedExecutable: "/bin/sh", executable } : {});
   // Failure to deliver shutdown to an already-exited process is not a stream error.
   child.stdin.on("error", () => {});
   child.desktopSpawned = false;
@@ -129,44 +137,72 @@ export function spawnOwned(executable, args, { cwd, env }) {
   return child;
 }
 
-export function ownsLiveProcess(child) {
-  if (!child?.pid) return false;
-  if (process.platform === "win32") return child.exitCode === null && child.signalCode === null;
-  try {
-    process.kill(-child.pid, 0);
-    if (process.platform === "linux" && (child.exitCode !== null || child.signalCode !== null)) {
-      // Linux containers can retain adopted zombies. They own no resources and
-      // cannot receive signals; do not report them as running descendants.
-      for (const name of readdirSync("/proc")) {
-        if (!/^\d+$/.test(name)) continue;
-        try {
-          const info = readFileSync(`/proc/${name}/stat`, "utf8");
-          const fields = info.slice(info.lastIndexOf(")") + 2).split(" ");
-          if (Number(fields[2]) === child.pid && fields[0] !== "Z" && fields[0] !== "X") return true;
-        } catch (error) { if (error.code !== "ENOENT" && error.code !== "ESRCH") return true; }
-      }
-      return false;
-    }
-    return true;
+const observedGroups = new WeakMap();
+
+function liveGroupMembers(child) {
+  const owner = ownedProcessIdentity(child);
+  if (!owner) return [];
+  const liveOwner = assertOwnedProcess(child);
+  if (process.platform === "win32") return child.exitCode === null && child.signalCode === null ? [owner] : [];
+  const pids = process.platform === "linux"
+    ? readdirSync("/proc").filter(name => {
+      if (!/^\d+$/.test(name)) return false;
+      try {
+        const text = readFileSync(`/proc/${name}/stat`, "utf8");
+        const fields = text.slice(text.lastIndexOf(")") + 2).split(" ");
+        return Number(fields[2]) === owner.group && Number(fields[3]) === owner.session;
+      } catch (error) { if (["ENOENT", "ESRCH", "EACCES"].includes(error.code)) return false; throw error; }
+    }).map(Number)
+    : execFileSync("/bin/ps", ["-axo", "pid=,pgid=,sess="], { encoding: "utf8", timeout: 5000 }).trim().split("\n").flatMap(line => {
+      const [pid, group, session] = line.trim().split(/\s+/);
+      return Number(group) === owner.group && session === owner.session ? [Number(pid)] : [];
+    });
+  const members = [];
+  const observed = observedGroups.get(child) ?? new Map();
+  for (const pid of pids) {
+    const current = readProcessIdentity(pid);
+    if (current?.group !== owner.group || current.session !== owner.session) continue;
+    if (!liveOwner && !sameProcessIdentity(observed.get(pid), current)) throw new Error("An exited desktop root has an unverified or reused descendant identity; refusing to adopt or signal its process group.");
+    members.push(current);
   }
-  catch (error) { return error.code !== "ESRCH"; }
+  if (liveOwner) {
+    if (assertOwnedProcess(child)) for (const identity of members) observed.set(identity.pid, identity);
+    else for (const identity of members) {
+      if (!sameProcessIdentity(observed.get(identity.pid), identity)) throw new Error("Desktop process ownership changed while inspecting descendants; no new process was adopted.");
+    }
+  }
+  observedGroups.set(child, observed);
+  return members;
 }
 
-export function signalOwned(child, force = false) {
-  if (!child.pid) return;
+export function ownsLiveProcess(child) {
+  if (!child || !isOwnedProcess(child)) return false;
+  // Identity failures are not evidence of exit: keep the ownership entry so
+  // Stop can report the error and a caller cannot delete a possibly live tree.
+  try {
+    const owner = ownedProcessIdentity(child);
+    if (!owner) return false;
+    if (process.platform === "win32" && child.exitCode === null && child.signalCode === null) return true;
+    return liveGroupMembers(child).length > 0;
+  } catch { return true; }
+}
+
+export function signalOwned(child) {
+  const members = liveGroupMembers(child); // Throws for an unowned/reused PID.
   if (process.platform === "win32") {
-    // Closing only this supervisor's handle closes its Job Object, not a process
-    // selected by port/name and never an existing development service.
-    if (force && child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-    else if (!force && !child.stdin.destroyed) child.stdin.write('{"type":"desktop-stop"}\n');
+    if (members.length && !child.stdin.destroyed && !child.stdin.writableEnded) child.stdin.write('{"type":"desktop-stop"}\n');
+    else if (members.length) throw new Error("The owned service shutdown pipe is unavailable; ownership is retained.");
   } else {
-    try { process.kill(-child.pid, force ? "SIGKILL" : "SIGTERM"); }
-    catch (error) { if (error.code !== "ESRCH") throw error; }
+    for (const identity of members) {
+      if (!assertProcessIdentity(identity)) continue;
+      try { process.kill(identity.pid, "SIGTERM"); }
+      catch (error) { if (error.code !== "ESRCH") throw error; }
+    }
   }
 }
 
 const stops = new WeakMap();
-export function stopOwned(child, { graceMs = 2500, forceMs = 1500, force = false } = {}) {
+export function stopOwned(child, { graceMs = 10_000, closeMs = 1500 } = {}) {
   if (stops.has(child)) return stops.get(child);
   const stopping = (async () => {
     if (!child.pid && !child.desktopClosed) {
@@ -177,20 +213,15 @@ export function stopOwned(child, { graceMs = 2500, forceMs = 1500, force = false
         if (child.pid || child.desktopClosed) resolve();
       });
     }
-    if (ownsLiveProcess(child)) {
-      signalOwned(child, force);
-      const deadline = Date.now() + (force ? forceMs : graceMs);
-      while (ownsLiveProcess(child) && Date.now() < deadline) await delay(25);
-      if (ownsLiveProcess(child)) {
-        signalOwned(child, true);
-        const forcedDeadline = Date.now() + forceMs;
-        while (ownsLiveProcess(child) && Date.now() < forcedDeadline) await delay(25);
-      }
-    }
-    if (ownsLiveProcess(child)) throw new Error("An owned desktop process did not exit after forced shutdown.");
-    const closeDeadline = Date.now() + forceMs;
+    // An error event before spawn has no native process to stop.
+    if (!child.pid && child.desktopClosed) return;
+    signalOwned(child);
+    const deadline = Date.now() + graceMs;
+    while (ownsLiveProcess(child) && Date.now() < deadline) await delay(25);
+    if (ownsLiveProcess(child)) throw new Error("An owned desktop process did not exit before the shutdown deadline. Ownership is retained; retry Stop. No process was force-killed.");
+    const closeDeadline = Date.now() + closeMs;
     while (!child.desktopClosed && Date.now() < closeDeadline) await delay(10);
-    if (!child.desktopClosed) throw new Error("An owned desktop process did not close its output streams after shutdown.");
+    if (!child.desktopClosed) throw new Error("An owned desktop process did not close its output streams after shutdown; ownership is retained.");
   })();
   stops.set(child, stopping);
   void stopping.catch(() => { stops.delete(child); });

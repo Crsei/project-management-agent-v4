@@ -624,10 +624,10 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
     localThreadId={localId}
     initialIssueId={entryObject.task}
     initialEntityId={entryObject.entity}
-  ><div className={`pm-agent-chat ${pmTheme.page}`} data-embedded={!!entry} data-right-panel-maximized={rightPanelMaximized && rightPanelOpen ? "true" : undefined}>
+  ><div className={`pm-agent-chat ${pmTheme.page}`} data-embedded={!!entry} data-right-panel-maximized={rightPanelMaximized && rightPanelOpen ? "true" : undefined} data-sidebar-collapsed={sidebarCollapsed || undefined}>
     {sidebarOpen && <button type="button" className="pm-agent-sidebar-backdrop" aria-label={t("关闭会话侧栏", "Close session sidebar")} onClick={closeSidebarDrawer} />}
     <aside id={sidebarId} className="pm-agent-sidebar" data-open={sidebarOpen} data-collapsed={sidebarCollapsed} aria-label={t("工作区与会话", "Workspaces and sessions")}>
-      <header className="pm-agent-product">
+      <header className="pm-agent-product desktop-titlebar desktop-titlebar-traffic-lights">
         <DovspaceBrandLink canLeave={protectNavigation} />
         <button type="button" className="pm-agent-icon" aria-label={drawerSidebar ? t("关闭侧栏", "Close sidebar") : t("折叠侧栏", "Collapse sidebar")} aria-controls={sidebarId} aria-expanded onClick={() => { toggleSidebar(); requestAnimationFrame(() => sidebarToggle.current?.focus()); }}>{drawerSidebar ? <XIcon /> : <PanelLeftIcon />}</button>
       </header>
@@ -704,7 +704,7 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
       </footer>
     </aside>
     <main className="pm-agent-main">
-      <header className="pm-agent-context-header">
+      <header className="pm-agent-context-header desktop-titlebar desktop-titlebar-reserve-controls">
         {(drawerSidebar || sidebarCollapsed) && <button ref={sidebarToggle} type="button" className="pm-agent-icon pm-agent-sidebar-toggle" aria-label={t("切换会话侧栏", "Toggle session sidebar")} aria-controls={sidebarId} aria-expanded={drawerSidebar ? sidebarOpen : !sidebarCollapsed} title={t("切换会话侧栏", "Toggle session sidebar")} onClick={() => { toggleSidebar(); if (!drawerSidebar) requestAnimationFrame(() => document.getElementById(sidebarId)?.querySelector<HTMLButtonElement>(".pm-agent-product button")?.focus()); }}><PanelLeftIcon /></button>}
         <nav className="pm-agent-context-title" aria-label={t("当前位置", "Current location")}><div>{currentWorkspace && <><span title={currentWorkspace.path}>{currentWorkspace.name}</span><span aria-hidden> / </span></>}<strong>{automationsView ? t("自动化", "Automations") : title ?? (remoteId ? t("历史会话", "Past session") : t("新会话", "New session"))}</strong></div></nav>
         {!automationsView && <>
@@ -717,7 +717,7 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
       </header>
       {automationsView ? (automationWorkspace && displayScope
         ? <Suspense fallback={<div className="pm-agent-automation-empty" role="status">{t("正在加载自动化…", "Loading automations…")}</div>}><AutomationPage key={`${state.identity!.actor.id}:${automationWorkspace.id}:${automationWorkspace.version}`} workspace={automationWorkspace} actorId={state.identity!.actor.id} embedded={!!entry} onAssist={assistAutomation} onOpenThread={openAutomationThread} onExit={exitAutomation} onLeaveGuardChange={setAutomationLeaveGuard} onRecheckAccess={() => { void refreshIdentity(); }} /></Suspense>
-        : <section className="pm-agent-automation-empty"><ZapIcon /><h1>{t("选择 PM 业务工作区以管理自动化", "Choose a PM business workspace for automations")}</h1>{state.identityError && <p role="alert">{state.identityError}</p>}<Link to="/pm" onClick={event => { if (!protectNavigation()) event.preventDefault(); }}>{t("前往 PM 选择业务工作区", "Choose a business workspace in PM")}</Link><Button variant="outline" onClick={exitAutomation}>{t("返回对话", "Back to chat")}</Button></section>) : <>
+        : <section className="pm-agent-automation-empty"><ZapIcon /><h1>{t("选择 PM 业务工作区以管理自动化", "Choose a PM business workspace for automations")}</h1>{state.identityError && <p role="alert">{state.identityError}</p>}<Link to="/pm?pick=1" onClick={event => { if (!protectNavigation()) event.preventDefault(); }}>{t("前往 PM 选择业务工作区", "Choose a business workspace in PM")}</Link><Button variant="outline" onClick={exitAutomation}>{t("返回对话", "Back to chat")}</Button></section>) : <>
       <ExecutionContextBar environment={environment} workspace={currentWorkspace} threadId={remoteId} error={execution.error} loading={execution.loading} onConfigure={configureExecution} frozen={executionFrozen} />
       {settingsError && <div role="alert" className="pm-agent-notice">{t("会话设置未保存，输入已保留：", "Session settings were not saved; your input is kept: ")}{settingsError}<Button size="sm" variant="outline" onClick={() => void retry().catch(() => {})}>{t("重试保存设置", "Retry saving settings")}</Button></div>}
       {(entryObject.task || entryObject.entity) && <div className="pm-agent-notice">{t("入口对象：", "Entry object: ")}<code>{entryObject.task || entryObject.entity}</code> <button type="button" onClick={() => {

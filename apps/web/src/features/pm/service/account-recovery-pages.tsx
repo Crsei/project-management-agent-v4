@@ -105,7 +105,7 @@ export function AccountSecurityPage() {
         </section>
       </>}
       <nav className={styles.footerLinks} aria-label={t('相关入口','Related links')}>
-        <Link className={styles.link} to="/pm">{t('返回工作区选择','Workspace chooser')}</Link>
+        <Link className={styles.link} to="/pm?pick=1">{t('返回工作区选择','Workspace chooser')}</Link>
         <Link className={styles.link} to="/pm/account/recovery">{t('通过可信邮箱找回密码','Recover password by email')}</Link>
       </nav>
     </div>

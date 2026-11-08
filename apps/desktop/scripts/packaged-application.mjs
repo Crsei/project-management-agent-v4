@@ -9,6 +9,9 @@ import { verifyFinalRuntime } from "./runtime-inventory-verifier.mjs";
 import { inspectDeployment } from "./stage-workspace.mjs";
 import { hashFile } from "./runtime-manifest.mjs";
 import { enforceExternalAgentBoundary } from "../../server/agent/scripts/external-agent-packages.mjs";
+import { readInstallStamp } from "../src/install-stamp.mjs";
+import { verifyWindowsFile } from "./signatures.mjs";
+import { computeMigrationsSha256 } from "./install-stamp.mjs";
 
 // Use electron-builder's already locked dependency, not a second ASAR version.
 export function asarTools() {
@@ -34,7 +37,27 @@ function inspectHeader(directory, prefix = "", unpacked = false, loose = new Set
   return loose;
 }
 
-export async function inspectPackagedApplication(resources, expectedVersion, { signedMachO = false, target } = {}) {
+export async function inspectPackagedApplication(resources, expectedVersion, { signedMachO = false, target, signing, signer, source, installStamp: expectedInstallStamp } = {}) {
+  const signedPE = signing === "signed" && target === "win32-x64";
+  let installStamp;
+  let workspaceVersion;
+  if (target) {
+    const [platform, arch] = target.split("-");
+    installStamp = await readInstallStamp(resources, { platform, arch, version: expectedVersion });
+    if (signing && installStamp.signing !== signing || source && (installStamp.commit !== source.commit
+      || installStamp.source.sha256 !== source.sha256 || installStamp.source.dirty !== source.dirty))
+      throw new Error("Packaged install stamp differs from exact final source/signing identity.");
+    if (expectedInstallStamp && JSON.stringify(installStamp) !== JSON.stringify(expectedInstallStamp))
+      throw new Error("Final packaged install stamp differs from the complete immutable release stamp.");
+    if (await computeMigrationsSha256(join(resources, "workspace-runtime")) !== installStamp.compatibility.migrationsSha256)
+      throw new Error("Final installed migration/state-code bytes differ from immutable compatibility fingerprint.");
+    const path = join(resources, "workspace-runtime/apps/desktop/package.json");
+    const info = await lstat(path);
+    if (!info.isFile() || info.isSymbolicLink()) throw new Error("Final workspace desktop version metadata must be a regular file.");
+    const metadata = JSON.parse(await readFile(path, "utf8"));
+    if (metadata.version !== expectedVersion) throw new Error("Final workspace desktop version metadata differs from the release version.");
+    workspaceVersion = { status: "passed", path: "workspace-runtime/apps/desktop/package.json", version: metadata.version, sha256: await hashFile(path) };
+  }
   if (signedMachO) {
     if (process.platform !== "darwin") throw new Error("Final Mach-O signature verification requires native macOS.");
     await promisify(execFile)("/usr/bin/codesign", ["--verify", "--deep", "--strict", join(resources, "../..")]);
@@ -79,19 +102,35 @@ export async function inspectPackagedApplication(resources, expectedVersion, { s
     if (metadata.version !== expectedVersion || metadata.name !== "pm-agent-v4-desktop" || metadata.main !== "dist/main.mjs")
       throw new Error("Final Electron application identity/version differs from the desktop release.");
     await lstat(join(extracted, metadata.main));
+    const asarSignatures = [];
+    if (signedPE) {
+      async function visit(directory, prefix = "") {
+        for (const entry of await readdir(directory, { withFileTypes: true })) {
+          const path = join(directory, entry.name), location = prefix ? `${prefix}/${entry.name}` : entry.name;
+          if (entry.isDirectory()) await visit(path, location);
+          else if (entry.isFile() && /\.(?:exe|dll|node)$/i.test(entry.name))
+            asarSignatures.push({ path: location, ...await verifyWindowsFile(path, signer) });
+        }
+      }
+      await visit(extracted);
+      asarSignatures.sort((a, b) => a.path.localeCompare(b.path, "en"));
+    }
     const dependencyLayouts = {
-      electron: await verifyDependencyLayout(extracted, { signedMachO }),
-      workspace: await verifyDependencyLayout(join(resources, "workspace-runtime"), { signedMachO }),
+      electron: await verifyDependencyLayout(extracted, { signedMachO, signedPE, signer }),
+      workspace: await verifyDependencyLayout(join(resources, "workspace-runtime"), { signedMachO, signedPE, signer }),
     };
     const runtimeRoot = join(resources, "desktop-runtime");
     const runtimeInfo = await lstat(runtimeRoot).catch((error) => { if (error.code === "ENOENT") return null; throw error; });
     const runtimeInventory = runtimeInfo ? await verifyFinalRuntime(resources,
-      target ?? JSON.parse(await readFile(join(runtimeRoot, "runtime-manifest.json"), "utf8")).target, { signedMachO }) : null;
+      target ?? JSON.parse(await readFile(join(runtimeRoot, "runtime-manifest.json"), "utf8")).target, { signedMachO, signedPE, signer }) : null;
     return {
       status: "passed", version: metadata.version, archive: "app.asar", sha256: await hashFile(archive),
       scope: ["app.asar extracted content", "app.asar.unpacked including orphaned files", "workspace-runtime", "desktop-runtime"],
       dependencyLayouts,
       runtimeInventory,
+      ...(installStamp ? { installStamp: { status: "passed", path: "desktop-install-stamp.json", sha256: await hashFile(join(resources, "desktop-install-stamp.json")), value: installStamp } } : {}),
+      ...(signedPE ? { asarSignatures } : {}),
+      ...(workspaceVersion ? { workspaceVersion } : {}),
       privateFileScope: ["app.asar extracted content", "app.asar.unpacked including orphaned files", "workspace-runtime"],
       externalClaudePlatformCli: "absent by package identity; communication SDK and other native engines are not pruned",
     };

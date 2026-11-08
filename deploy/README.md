@@ -32,7 +32,7 @@ pnpm services:status
 
 ### 工作区示例初始化升级与恢复
 
-首次设置及明确新建工作区的 Nova 初始化需要 `0052_workspace_samples.sql` 和增量 `0053_workspace_sample_storage.sql`，并同步更新 PM API、Web 与桌面后端；仅到 `0051` 的既有部署不能按 Web-only 更新。升级前核对本项目进程、工作目录、服务模式和数据库身份，按现有停写／一致备份流程执行迁移，不在业务库运行验证夹具。`0052` 原迁移不改写，`0053` 不推断或回填旧目录所有权，已有行初始为 `unclaimed`。旧 `ready` 记录保持原样；旧 `pending` 只有在合法原 state 已存在并通过既有校验后，才可登记其目录身份为 `established`，不由缺失的 state 猜测原所有权。
+首次设置及明确新建工作区的 Nova 初始化需要 `0052_workspace_samples.sql` 和增量 `0053_workspace_sample_storage.sql`；`0054_workspace_creation_without_sample.sql` 允许新建工作区跳过示例，跳过与示例记录共用原请求键并保留同一恢复语义。升级须同步更新 PM API、Web 与桌面后端；仅到 `0051` 的既有部署不能按 Web-only 更新。升级前核对本项目进程、工作目录、服务模式和数据库身份，按现有停写／一致备份流程执行迁移，不在业务库运行验证夹具。`0052` 原迁移不改写，`0053` 不推断或回填旧目录所有权，已有行初始为 `unclaimed`。旧 `ready` 记录保持原样；旧 `pending` 只有在合法原 state 已存在并通过既有校验后，才可登记其目录身份为 `established`，不由缺失的 state 猜测原所有权。
 
 - 新目录必须独占创建，随后将准确设备／inode 身份及 `prestate` 提交到原初始化记录，才允许写首份核心 state；state 持久后先提交 `established`，再写任何示例内容。每个阶段重新取得原工作区锁并核对当前创建者／成员能力。
 - 原请求仅能续接已有持久所有权证明、身份未变的 `prestate`。替换或丢失的原目录、未知已有但没有 state 的目录、`established` 后缺失的 state 均拒绝自动接管或重种。独占建目录后、所有权提交前中断尚无证明，也保持拒绝，不自动删除目录。

@@ -27,7 +27,10 @@ if ($env:PM_DESKTOP_PRIVATE_SECURE -eq '1') {
   if ($item.PSIsContainer) { $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit' }
   $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($me, 'FullControl', $inherit, 'None', 'Allow')
   $acl.AddAccessRule($rule)
-  Set-Acl -LiteralPath $p -AclObject $acl
+  # Set-Acl can attempt an Audit-section write on a protected DACL, requiring
+  # SeSecurityPrivilege. Persist only this object's modified access/owner sections.
+  if ($item.PSIsContainer) { [IO.Directory]::SetAccessControl($p, $acl) }
+  else { [IO.File]::SetAccessControl($p, $acl) }
   $acl = Get-Acl -LiteralPath $p
 }
 if (-not $acl.AreAccessRulesProtected) { throw 'Private path inherits access rules' }

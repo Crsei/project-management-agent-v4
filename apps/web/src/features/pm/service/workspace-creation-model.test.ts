@@ -3,8 +3,8 @@ import test from 'node:test';
 import { ProjectManagementClient, ApiError, type WorkspaceCreationResult } from '../../../../../../packages/contracts/src/client.ts';
 import { decodeWorkspaceCreationDraft, prepareWorkspaceCreation, runWorkspaceCreation } from './workspace-creation-model.ts';
 
-const first = { key: '11111111-1111-4111-8111-111111111111', name: 'Independent workspace' };
-const second = { key: '22222222-2222-4222-8222-222222222222', name: 'Other workspace' };
+const first = { key: '11111111-1111-4111-8111-111111111111', name: 'Independent workspace', includeSample: false };
+const second = { key: '22222222-2222-4222-8222-222222222222', name: 'Other workspace', includeSample: true };
 
 test('workspace preparation persists before sending and retains the exact original across refresh and another tab', () => {
   let value: string | null = null;
@@ -21,6 +21,7 @@ test('unavailable or corrupt workspace recovery storage never authorizes replace
   assert.throws(() => decodeWorkspaceCreationDraft(JSON.stringify({ ...first, credential: 'not-permitted' })));
   assert.throws(() => decodeWorkspaceCreationDraft(JSON.stringify({ ...first, key: 'replacement' })));
   assert.equal(decodeWorkspaceCreationDraft(null), null);
+  assert.deepEqual(decodeWorkspaceCreationDraft(JSON.stringify({ key: first.key, name: first.name })), { key: first.key, name: first.name, includeSample: true });
 });
 
 const actorA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -126,7 +127,7 @@ for (const status of [{ status: 'not_found' } as const, pending]) {
     assert.deepEqual(transport.writes, [{
       actor: actorA,
       key: status.status === 'pending' ? null : first.key,
-      body: status.status === 'pending' ? { expectedActorId: actorA } : { name: first.name, expectedActorId: actorA },
+      body: status.status === 'pending' ? { expectedActorId: actorA } : { name: first.name, expectedActorId: actorA, includeSample: first.includeSample },
       path: status.status === 'pending' ? `/api/v1/workspace-creations/${first.key}/recover` : '/api/v1/workspaces',
     }]);
   });
@@ -149,7 +150,7 @@ test('initial creation also requires the current Cookie actor and retains the ex
   const transport = recoveryTransport();
   assert.deepEqual(await runWorkspaceCreation(transport.client, 'create', first, actorA, () => true), pending);
   assert.deepEqual(transport.requests.map(request => request.path), ['/api/v1/auth/me', '/api/v1/workspaces']);
-  assert.deepEqual(transport.writes, [{ actor: actorA, key: first.key, body: { name: first.name, expectedActorId: actorA }, path: '/api/v1/workspaces' }]);
+  assert.deepEqual(transport.writes, [{ actor: actorA, key: first.key, body: { name: first.name, expectedActorId: actorA, includeSample: first.includeSample }, path: '/api/v1/workspaces' }]);
   transport.switchCookie(actorB);
   await assert.rejects(runWorkspaceCreation(transport.client, 'create', first, actorA, () => true), /session changed/);
   assert.equal(transport.writes.length, 1);
@@ -170,7 +171,7 @@ for (const status of [{ status: 'not_found' } as const, pending]) {
     assert.deepEqual(transport.writes, [{
       actor: actorB,
       key: status.status === 'pending' ? null : first.key,
-      body: status.status === 'pending' ? { expectedActorId: actorA } : { name: first.name, expectedActorId: actorA },
+      body: status.status === 'pending' ? { expectedActorId: actorA } : { name: first.name, expectedActorId: actorA, includeSample: first.includeSample },
       path: status.status === 'pending' ? `/api/v1/workspace-creations/${first.key}/recover` : '/api/v1/workspaces',
     }]);
     assert.equal(transport.requests.length, 3);

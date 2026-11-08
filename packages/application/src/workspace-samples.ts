@@ -20,7 +20,7 @@ const sampleObject = z.strictObject({ title: z.string().trim().min(1).max(500), 
 const sampleSchema = z.strictObject({ version: z.literal(1), key: z.string().regex(/^[a-z][a-z0-9-]{0,80}$/), project: sampleObject, items: z.array(sampleObject.extend({ key: z.string().regex(/^[a-z][a-z0-9-]{0,80}$/), entity: z.enum(entityKinds).refine(kind => kind !== 'project') })).max(100) });
 export type NovaSampleTemplate = z.infer<typeof sampleSchema>;
 export type WorkspaceSampleOptions = { coreRoot: string; localProjects: LocalProjectConfiguration };
-type SampleRow = { workspace_id: string; actor_id: string; workspace_name: string; request_key: string | null; template: unknown; directory: unknown; status: 'pending' | 'ready'; project_id: string | null; core_root_identity: unknown; core_initialization_phase: 'unclaimed' | 'prestate' | 'established' };
+type SampleRow = { workspace_id: string; actor_id: string; workspace_name: string; request_key: string | null; template: unknown; directory: unknown; status: 'pending' | 'ready'; project_id: string | null; sample_skipped: boolean; core_root_identity: unknown; core_initialization_phase: 'unclaimed' | 'prestate' | 'established' };
 const storageIdentitySchema = z.strictObject({ device: z.string().regex(/^\d+$/), inode: z.string().regex(/^\d+$/) });
 const pendingError = () => new DomainError('workspace_initialization_pending', 'Workspace creation is recorded, but its Nova sample initialization is incomplete. Resume the original workspace creation; do not create a replacement.', 503);
 
@@ -50,6 +50,12 @@ export async function queueNovaWorkspaceSample(sql: SqlExecutor, workspaceId: st
   const directory: LocalDirectory | null = options.localProjects.enabled ? { mode: 'new', parentPath: options.localProjects.defaultParent ?? '', folderName: `nova-${workspaceId}` } : null;
   if (directory) localDirectorySchema.parse(directory);
   await sql.query('INSERT INTO workspace_sample_initializations(workspace_id,actor_id,request_key,workspace_name,template,directory) VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb)', [workspaceId, actorId, requestKey, name, JSON.stringify(template), directory ? JSON.stringify(directory) : null]);
+}
+
+/** An opted-out creation is complete in the same transaction that creates the
+ * workspace, so it has no pending phase or filesystem side effects to resume. */
+export async function queueWorkspaceWithoutSample(sql: SqlExecutor, workspaceId: string, actorId: string, name: string, requestKey: string | null = null): Promise<void> {
+  await sql.query("INSERT INTO workspace_sample_initializations(workspace_id,actor_id,request_key,workspace_name,template,sample_skipped,status,completed_at) VALUES($1,$2,$3,$4,NULL,true,'ready',clock_timestamp())", [workspaceId, actorId, requestKey, name]);
 }
 
 export async function assertWorkspaceSampleReady(sql: SqlExecutor, workspaceId: string): Promise<void> {
@@ -184,7 +190,7 @@ export async function readWorkspaceCreation(sql: SqlExecutor, actor: Actor, key:
   const row = (await sql.query<SampleRow>('SELECT * FROM workspace_sample_initializations WHERE actor_id=$1 AND request_key=$2', [actor.id, key])).rows[0];
   if (!row) return { status: 'not_found' };
   await getMembership(sql, actor, row.workspace_id);
-  return row.status === 'ready' ? { status: 'ready', key, workspaceId: row.workspace_id, sampleProjectId: row.project_id! } : { status: 'pending', key, workspaceId: row.workspace_id };
+  return row.status === 'ready' ? { status: 'ready', key, workspaceId: row.workspace_id, sampleProjectId: row.project_id } : { status: 'pending', key, workspaceId: row.workspace_id };
 }
 
 export async function resumeActorWorkspaceSamples(pool: Pool, actor: Actor, options: WorkspaceSampleOptions): Promise<void> {

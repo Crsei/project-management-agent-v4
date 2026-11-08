@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, link, realpath } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { copyTree, snapshotTree } from './maintenance-files.ts';
+import { copyTree, snapshotTree, verifyTree } from './maintenance-files.ts';
 
 async function fixture(t) {
   const root = await mkdtemp(join(await realpath(tmpdir()), 'desktop-backup-files-'));
@@ -56,4 +56,18 @@ test('restore rejects traversal manifests and never overwrites an existing desti
   await writeFile(join(target, 'note.md'), 'existing');
   await assert.rejects(copyTree(source, target, manifest), { code: 'EEXIST' });
   assert.equal(await readFile(join(target, 'note.md'), 'utf8'), 'existing');
+});
+
+test('complete-tree validation rejects unclassified bytes and incomplete directory inventories', async t => {
+  const { source } = await fixture(t);
+  await mkdir(join(source, 'nested'));
+  await writeFile(join(source, 'nested/note.md'), 'private');
+  const manifest = await snapshotTree(source);
+  await verifyTree(source, manifest);
+  await assert.rejects(verifyTree(source, { ...manifest, directories: [] }));
+  await assert.rejects(verifyTree(source, { ...manifest, files: [...manifest.files, { ...manifest.files[0], path: 'nested/NOTE.md' }] }));
+  await writeFile(join(source, 'unclassified'), 'do not silently discard');
+  await assert.rejects(verifyTree(source, manifest));
+  assert.equal(await readFile(join(source, 'nested/note.md'), 'utf8'), 'private');
+  assert.equal(await readFile(join(source, 'unclassified'), 'utf8'), 'do not silently discard');
 });

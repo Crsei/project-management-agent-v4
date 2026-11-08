@@ -119,7 +119,7 @@ export class CoreWorkspacePool {
         if (!state.isFile() || state.isSymbolicLink() || state.nlink !== 1) throw new DomainError('core_workspace_storage_missing', 'The authoritative workspace state is unsafe; restore it before continuing', 503);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-        const evidence = await this.sql?.query<{ used: boolean }>(`SELECT EXISTS(SELECT 1 FROM project_audit WHERE workspace_id=$1) OR EXISTS(SELECT 1 FROM local_project_operations WHERE workspace_id=$1) OR EXISTS(SELECT 1 FROM workspace_sample_initializations WHERE workspace_id=$1) OR EXISTS(SELECT 1 FROM command_receipts WHERE workspace_id=$1 AND command_type IN ('CreateProject','CreateWorkItem','CreateWorkItemFromIntent','CreateMilestone') AND receipt->>'status'='committed') AS used`, [workspaceId]);
+        const evidence = await this.sql?.query<{ used: boolean }>(`SELECT EXISTS(SELECT 1 FROM project_audit WHERE workspace_id=$1) OR EXISTS(SELECT 1 FROM local_project_operations WHERE workspace_id=$1) OR EXISTS(SELECT 1 FROM workspace_sample_initializations WHERE workspace_id=$1 AND NOT sample_skipped) OR EXISTS(SELECT 1 FROM command_receipts WHERE workspace_id=$1 AND command_type IN ('CreateProject','CreateWorkItem','CreateWorkItemFromIntent','CreateMilestone') AND receipt->>'status'='committed') AS used`, [workspaceId]);
         if (evidence?.rows[0]?.used) throw new DomainError('core_workspace_storage_missing', 'Authoritative workspace state is missing; restore the original data root rather than creating an empty replacement', 503);
       }
       workspace = new Workspace(root);

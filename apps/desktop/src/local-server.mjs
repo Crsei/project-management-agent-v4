@@ -381,7 +381,7 @@ export class LocalServer {
     try { return await bounded(Promise.race([result, aborted]), timeout, `${role} helper did not complete within ${Math.round(timeout / 1000)} seconds.`); }
     finally {
       signal.removeEventListener("abort", abort);
-      await stopOwned(child, { force: true });
+      await stopOwned(child);
       if (!ownsLiveProcess(child)) this.children.delete(role);
     }
   }
@@ -433,7 +433,7 @@ export class LocalServer {
       for (const role of [...STOP_ORDER, ...this.children.keys()].filter((role, index, roles) => roles.indexOf(role) === index)) {
         const child = this.children.get(role);
         if (!child) continue;
-        try { await stopOwned(child, { force: !SERVICE_ROLES.includes(role) }); }
+        try { await stopOwned(child); }
         catch (error) { errors.push(`${role}: ${error.message}`); }
         if (!ownsLiveProcess(child)) this.children.delete(role);
       }

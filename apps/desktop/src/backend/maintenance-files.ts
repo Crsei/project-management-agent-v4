@@ -3,8 +3,9 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, realpath } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
+import { ensurePrivateDirectory, securePrivateFile } from '../private-state.mjs';
 
-const member = z.string().min(1).refine(value => value.split('/').every(part => part && part !== '.' && part !== '..' && !/[\\\x00-\x1f<>:"|?*]/.test(part) && !/[. ]$/.test(part) && !/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part)));
+const member = z.string().min(1).refine(value => value.split('/').every(part => part && part !== '.' && part !== '..' && !/[\\\x00-\x1f<>:"|?*]/.test(part) && !/[. ]$/.test(part) && !/^(?:con|prn|aux|nul|conin\$|conout\$|clock\$|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(part)));
 export const treeManifestSchema = z.strictObject({
   directories: z.array(member),
   files: z.array(z.strictObject({ path: member, size: z.number().int().nonnegative(), sha256: z.string().regex(/^[a-f0-9]{64}$/) })),
@@ -48,17 +49,38 @@ export async function snapshotTree(root: string): Promise<TreeManifest> {
   await walk('');
   return result;
 }
-export async function copyTree(source: string, target: string, expected: TreeManifest): Promise<void> {
+/** Validate the complete tree, including empty directories and unclassified extra files. */
+export async function verifyTree(root: string, expected: TreeManifest): Promise<void> {
   const manifest = treeManifestSchema.parse(expected);
   const names = [...manifest.directories, ...manifest.files.map(file => file.path)];
-  if (new Set(names).size !== names.length) throw new Error('Duplicate backup member.');
-  if (JSON.stringify(await snapshotTree(source)) !== JSON.stringify(manifest)) throw new Error('Backup file manifest differs from its contents.');
+  const keys = names.map(name => name.normalize('NFD').toLowerCase());
+  if (new Set(keys).size !== keys.length) throw new Error('Duplicate or case-colliding backup member.');
+  const directories = new Set(manifest.directories);
+  for (const name of names) {
+    const parts = name.split('/'); parts.pop();
+    while (parts.length) {
+      if (!directories.has(parts.join('/'))) throw new Error('Backup member has no parent directory.');
+      parts.pop();
+    }
+  }
+  const normalized = (tree: TreeManifest) => ({
+    directories: [...tree.directories].sort(),
+    files: [...tree.files].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+  });
+  if (JSON.stringify(normalized(await snapshotTree(root))) !== JSON.stringify(normalized(manifest))) throw new Error('Backup file manifest differs from its contents.');
+}
+
+export async function copyTree(source: string, target: string, expected: TreeManifest): Promise<void> {
+  const manifest = treeManifestSchema.parse(expected);
+  await verifyTree(source, manifest);
   await directory(dirname(target));
   await mkdir(target, { mode: 0o700 });
+  await ensurePrivateDirectory(target, { newlyCreated: true });
   for (const relative of manifest.directories) {
     const destination = join(target, ...relative.split('/'));
     await directory(dirname(destination));
     await mkdir(destination, { mode: 0o700 });
+    await ensurePrivateDirectory(destination, { newlyCreated: true });
   }
   for (const entry of manifest.files) {
     const filename = join(source, ...entry.path.split('/'));
@@ -68,6 +90,7 @@ export async function copyTree(source: string, target: string, expected: TreeMan
     const input = await open(filename, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
     const output = await open(destination, 'wx', 0o600);
     try {
+      await securePrivateFile(destination, { newlyCreated: true });
       const info = await input.stat();
       if (!info.isFile() || info.nlink !== 1 || info.size !== entry.size) throw new Error('Backup source changed.');
       const hash = createHash('sha256');

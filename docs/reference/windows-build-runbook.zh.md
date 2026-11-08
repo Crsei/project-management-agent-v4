@@ -4,6 +4,8 @@
 
 **当前所有更新批次的权限与环境：** 2026-11-08 操作者在要求“推送所有更新并再运行一次 actions”后，进一步明确以当前主分支为准：保留主分支既有修复与性能优化，将已审阅增量集成到本地主分支，并在该主分支源码上测试；有实际问题先修复并复验，没有问题后再提交、公开推送并运行 Actions。范围覆盖所有当前可公开的桌面、PM／Agent／Web、Turbo、根 manifest／lock 及来源维护更新，不以旧候选覆盖主目录。测试输出与既有运行产物隔离，必要门禁通过后冻结精确源码，随后只手动触发一次 `windows_only=true` / `distribution=unsigned` 的 Actions 构建，以同一 SHA 的 **Windows 实际 `success`** 为完成目标。**不下载安装器或发行材料到本地；此前下载授权仍已被覆盖**。凭据、运行数据、依赖缓存和旧产物不进入提交或构建。唯一交付 owner 在父级放行后执行远端写入并核对同一 SHA 的真实 run/attempt/job 结论，构建/检查进程不获得发布凭据；授权本身不表示操作已执行、权限足够或构建成功。没有新增本地/SSH Windows 主机或交互桌面，本轮仍未授权 macOS 构建、签名、tag/PR/Release、远端合并操作、真实安装器/GUI 执行或接管既有服务。Linux 上真实依赖闭包物化/重打包实验保留为该实验的证据，不升级为新 Windows 安装器或原生 GUI 结果。
 
+**本次基准实现的权限边界：**下文“本批次已授权”等文字记录历史操作批次，不授予当前会话 commit、push、Actions dispatch、签名或真实安装器执行权限。新增 `install_e2e` job 默认关闭；它及 signed 验证机制的操作条件见[当前桌面指南](../guides/desktop.md#windows-原生生命周期证据)。当前 Linux 服务烟测不能代替本手册要求的 Windows 原生运行。
+
 ## 历史预检结论与可执行路线
 
 以下保留 2026-11-08 **上一轮发布准备**的只读预检与当时授权。表中的 HEAD、权限、磁盘和 PID 是当时观察，不自动成为当前值或本批次授权：
@@ -59,7 +61,7 @@
 | 路径/临时目录 | 使用较短 checkout（例如专用 `C:\b\pm`）和短私有 Temp。先读取 Git `core.longpaths` 及系统 `LongPathsEnabled`；保留 [`.gitattributes`](../../.gitattributes) 的 LF，不能以 CRLF/hash 刷新绕过来源。NSIS/其他原生工具不保证全部支持长路径，即使注册表启用仍优先短路径；未经授权不改系统注册表 |
 | 磁盘/内存 | checkout、pnpm store、runtime 解压、两套 deploy staging、unpacked app、NSIS、对应源码/许可材料和上传 staging 同时占空间。代码没有可据此宣称足够的统一最低磁盘阈值；操作上建议构建卷及 Temp 合计预留至少 30 GiB 并记录各卷实值，实际峰值以本轮测量为准。保留 `NODE_OPTIONS=--max-old-space-size=4096` 及额外系统/native 内存，不能缩小检查范围应付 OOM |
 | 数据隔离 | 新建私有构建/测试根，使用随机测试端口与自有临时 PG/存储。不加载开发 `.env`，不连接现有 55444 或其他项目库；不导入真实 Provider/PM 账号、签名和发布凭据。使用用户原生 Provider 授权环境的验证另由父级明确执行 |
-| 安装器 | Electron **45.0.0**、electron-builder **26.18.0**，Windows 仅 x64 NSIS；当前 `oneClick=false`、`perMachine=false`、允许选择安装目录，卸载不删除用户数据。使用 `package` 显式 unsigned，不读证书、不尝试自动签名。SmartScreen/未知发布者不代表构建失败，也不能据此关闭保护或改称正式签名版本 |
+| 安装器 | Electron **45.0.0**、electron-builder **26.18.0**，Windows 仅 x64 NSIS；`oneClick=false`、仅 per-user、禁止提权／`/allusers`，允许选择安装目录。默认 `app+runtime` 保留数据，其他模式须明确单次同意，项目源码／外部 Provider Home／未知文件始终保留。自有 stamp、准确清单、正常停机和精确删除替代默认递归清理；固定运行时离线加载失败即阻止安装，不远程下载 VC++。`package` 仍显式 unsigned；SmartScreen／未知发布者不能改称正式签名通过 |
 
 [Windows 托管镜像说明](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md) 只证明镜像公布的工具集合，不保证新 job 的实际 image/version 或全功能 7-Zip 可执行；工作流会记录 `ImageOS`/`ImageVersion`。镜像预装/缓存的 Node、PostgreSQL 可能与本项目 pin 不同，**不得直接复用**。本项目 doctor 检查准确 Node/pnpm 和编译器，不自动安装工具；不覆盖磁盘、7-Zip 全格式支持、完整网络、所有运行时模块或 GUI 前提。macOS 若另行获准构建，还需要 PATH 上的全功能 `7z` 及原生 `/usr/bin/hdiutil`、`/usr/bin/ditto`、`/usr/bin/codesign`；Linux 工具不能替代 DMG 挂载或最终 Mach-O 验签。
 

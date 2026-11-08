@@ -51,6 +51,7 @@ import { PmAgentProvider } from "./agent/agent-panel-context"
 import { PmCommandPalette } from "./service/pm-command-palette"
 import { PmAuthPageShell } from "./service/pm-auth-page"
 import { PmUserMenu } from "./service/pm-user-menu"
+import { rememberLastWorkspaceId } from "./service/pm-last-workspace"
 import { PmCommandRecovery } from "./service/pm-ui"
 import { PmNoticeCenterTrigger, PmNoticeProvider, usePmNoticeCenter } from "./service/pm-notice-center"
 import { ServiceProjectSidebar } from "./service/service-project-layout"
@@ -487,10 +488,14 @@ function ServiceFrame({ children }: { children: ReactNode }) {
         : pageSection === "project-detail"
           ? projectDetailVariant
           : ""
-  const [logoutError, setLogoutError] = useState("")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const [retryFeedback, setRetryFeedback] = useState("")
+  const actorId = actor?.id
+  const workspaceId = workspace?.id
+  useEffect(() => {
+    if (actorId && workspaceId) rememberLastWorkspaceId(window.localStorage, window.location.origin, actorId, workspaceId)
+  }, [actorId, workspaceId])
   const online = useSyncExternalStore(onlineManager.subscribe, () => onlineManager.isOnline(), () => true)
   const isServiceHome = pathname === "/pm" || pathname === "/pm/"
   const status = serviceErrorStatus(service.error)
@@ -572,28 +577,11 @@ function ServiceFrame({ children }: { children: ReactNode }) {
           toolbar={
             <>
               <PmNoticeCenterTrigger />
-              {actor && (
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setLogoutError("")
-                    void service.logout().catch((error: unknown) =>
-                      setLogoutError(pmErrorMessage(error, en ? "en" : "zh")),
-                    )
-                  }}
-                >
-                  {en ? "Sign out" : "退出"}
-                </Button>
-              )}
+              {actor && <PmUserMenu placement="header" />}
               <Preferences />
             </>
           }
         >
-          {logoutError && (
-            <p role="alert" className="w-full max-w-96 text-sm text-destructive">
-              {logoutError}
-            </p>
-          )}
           {children}
         </PmAuthPageShell>
       </div>
@@ -668,7 +656,7 @@ function ServiceFrame({ children }: { children: ReactNode }) {
     ...links.map(([path, icon, label, active]) => ({ key: path, to: `${base}/${path}`, icon, label, active })),
   ]
   const sidebarRail = <nav data-pm-sidebar className={shellStyles.rail} aria-label={en ? "Workspace navigation" : "工作区导航"}>
-    <div className="flex h-12 shrink-0 items-center justify-center"><DovspaceBrandLink collapsed /></div>
+    <div className="desktop-titlebar desktop-titlebar-rail flex h-12 shrink-0 items-center justify-center"><DovspaceBrandLink collapsed /></div>
     <PmWorkspaceSwitcher collapsed />
     <div className={shellStyles.railScroll}>
       {workspace && railItems.map(({ key, to, icon: Icon, label, active }) => <Link key={key} to={to} data-navigation-close title={label} aria-label={label} aria-current={active ? "page" : undefined} className={shellStyles.railLink}><Icon className="size-4 shrink-0" aria-hidden="true" /></Link>)}

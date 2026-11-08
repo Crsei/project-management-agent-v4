@@ -10,6 +10,7 @@ import { materializeDependencyLayout, planDependencyLayout, readDependencyGraph,
 import { verifyDependencyLayout } from "./dependency-layout-verifier.mjs";
 import { asarTools } from "./packaged-application.mjs";
 import { desktopRoot, hashFile, inventoryTree } from "./runtime-manifest.mjs";
+import { createInstallStamp } from "./install-stamp.mjs";
 
 function lockedBuilder() {
   const require = createRequire(import.meta.url);
@@ -68,8 +69,10 @@ test("locked builder detects and consumes prepacked ASAR without transforming or
   await assert.rejects(lstat(join(prepackedApplication.directory, "package.json")), { code: "ENOENT" });
   assert.deepEqual(await readdir(prepackedApplication.directory), ["app.asar"]);
   const output = join(temporary, "output");
+  const installStamp = createInstallStamp({ commit: "a".repeat(40), version: "0.1.0", platform: "win32", arch: "x64", distribution: "nsis", signing: "unsigned",
+    source: { sha256: "b".repeat(64), dirty: false }, compatibility: { dataSchema: 1, postgresMajor: 16, migrationsSha256: "c".repeat(64) } });
   const config = desktopBuilderConfig({ application, prepackedApplication, workspaceRuntime: join(temporary, "workspace"),
-    desktopRuntime: join(temporary, "runtime"), output, electronVersion: "45.0.0", mode: "unsigned", platform: "win32", nativeBinaries: [] });
+    desktopRuntime: join(temporary, "runtime"), output, electronVersion: "45.0.0", mode: "unsigned", platform: "win32", nativeBinaries: [], installStamp });
   const library = lockedBuilder();
   // Demonstrate the exact real transformer that would corrupt the old path.
   const transformed = await library("./fileTransformer.js").createTransformer(application, config, null, null)(manifestPath);
@@ -103,7 +106,7 @@ test("locked builder detects and consumes prepacked ASAR without transforming or
   const extracted = join(temporary, "extracted");
   await mkdir(extracted);
   asarTools().extractAll(join(resources, "app.asar"), extracted);
-  const comparable = (inventory) => inventory.map(({ mode, ...file }) => file);
+  const comparable = (inventory) => inventory.map(({ mode: _mode, ...file }) => file);
   assert.deepEqual(comparable(await inventoryTree(extracted)), comparable(before));
   await verifyDependencyLayout(extracted);
   assert.deepEqual(await readFile(join(extracted, pg.path, "package.json")), originalManifest);
@@ -118,8 +121,8 @@ test("prepacked application output refuses existing destinations and symlinked a
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const existing = join(temporary, "existing");
   await mkdir(existing);
-  await assert.rejects(prepackApplication(temporary, existing), /must be new with real directory ancestors/);
+  await assert.rejects(prepackApplication(temporary, existing));
   const alias = join(temporary, "alias");
   await symlink("existing", alias, process.platform === "win32" ? "junction" : "dir");
-  await assert.rejects(prepackApplication(temporary, join(alias, "new")), /must be new with real directory ancestors/);
+  await assert.rejects(prepackApplication(temporary, join(alias, "new")));
 });

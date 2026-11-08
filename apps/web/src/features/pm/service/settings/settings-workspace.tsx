@@ -48,7 +48,7 @@ function ServiceWorkspaceGate({ children }: { children: ReactNode }) {
   if (service.loading) return <p role="status">{t("正在读取会话与工作区…", "Loading session and workspace…")}</p>
   if (service.error || !service.actor || !service.workspace) return <div role="alert" className="space-y-3 text-sm">
     <p>{service.error?.message ?? t("请先登录并选择有权访问的工作区。", "Sign in and choose an authorized workspace first.")}</p>
-    <div className="flex flex-wrap gap-3"><ManagementLink to="/pm">{t("登录 / 选择工作区", "Sign in / choose workspace")}</ManagementLink><Button variant="outline" onClick={() => { setRetryError(null); void service.refresh().catch((error: unknown) => setRetryError(error instanceof Error ? error.message : String(error))) }}><RefreshCw aria-hidden="true" className="size-4" />{t("重新读取会话", "Reload session")}</Button></div>
+    <div className="flex flex-wrap gap-3"><ManagementLink to="/pm?pick=1">{t("登录 / 选择工作区", "Sign in / choose workspace")}</ManagementLink><Button variant="outline" onClick={() => { setRetryError(null); void service.refresh().catch((error: unknown) => setRetryError(error instanceof Error ? error.message : String(error))) }}><RefreshCw aria-hidden="true" className="size-4" />{t("重新读取会话", "Reload session")}</Button></div>
     {retryError && <p>{retryError}</p>}
   </div>
   return children

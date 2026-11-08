@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import { cp, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { extract as extractTar } from "tar";
+import { create as createTar, extract as extractTar } from "tar";
 import { asarTools, inspectPackagedApplication } from "./packaged-application.mjs";
 import { captureSource, checksumDelivery, collectLegal, contentDigest, fileRecord, publicSourcePath, refreshVerification, requireUnchangedSource } from "./release-materials.mjs";
 import { verifyDelivery, verifyDeliveryFiles } from "./verify-delivery.mjs";
@@ -16,6 +16,13 @@ import { inspectDeployment } from "./stage-workspace.mjs";
 import { inventoryTree, runtimeSources, verifyRuntime } from "./runtime-manifest.mjs";
 import { archiveMemberPath, inspectFinalArtifacts, verifyInstalledApplication } from "./final-artifact.mjs";
 import { dependencyLayoutManifest } from "./dependency-layout-verifier.mjs";
+import { computeMigrationsSha256, createInstallStamp } from "./install-stamp.mjs";
+import { inspectShippedSBOM } from "./sbom.mjs";
+import { scanSBOM } from "./osv.mjs";
+import { createInstallationManifest } from "../src/uninstall.mjs";
+import { HOST_SOURCE_COMMIT, HOST_UPSTREAM_VERSION, verifyHost } from "../../server/agent/scripts/cc-switch.mjs";
+import { createReceiptFixture } from "./install-e2e/fixtures.mjs";
+import { INSTALL_E2E_HARNESS } from "./install-e2e/evidence.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const execute = promisify(execFile);
@@ -114,13 +121,18 @@ for (const gitBacked of [false, true]) {
     await put(join(root, "app"), "LICENSE.electron.txt", "synthetic Electron legal fixture\n");
     await put(join(root, "app"), "LICENSES.chromium.html", "synthetic Chromium legal fixture\n");
     const output = join(root, "materials");
+    await mkdir(output);
+    const artifactName = "PM-Agent-v4-0.1.0-win-x64-unsigned.exe";
+    await put(output, artifactName, "Synthetic archive-writer installer fixture; not native evidence");
+    for (const name of ["desktop-sbom.cdx.json", "desktop-osv.json", "desktop-vulnerabilities.sarif"])
+      await put(output, name, '{"scope":"synthetic archive-writer material fixture"}\n');
     const environment = Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
     // Exercise the real archive writer without inheriting the hosted run's SHA.
     await execute(process.execPath, ["--input-type=module", "--eval",
       `import { writeReleaseMaterials } from ${JSON.stringify(new URL("./release-materials.mjs", import.meta.url).href)}; await writeReleaseMaterials(JSON.parse(process.argv[1]));`,
       JSON.stringify({
         output, resources, platform: "win32", sourceRoot: captured, source, legalRoot: join(root, "legal"),
-        manifest: { version: "0.1.0", target: "win32-x64", artifacts: [] },
+        manifest: { version: "0.1.0", target: "win32-x64", signing: "unsigned", artifacts: [await fileRecord(output, artifactName)] },
         verification: { schemaVersion: 1, nativeSmoke: { status: "not-run" }, published: false },
       }),
     ], { cwd: root, env: environment, windowsHide: true });
@@ -439,6 +451,26 @@ if (process.platform === "win32") {
   });
 }
 
+async function hostFixture(resources) {
+  const host = join(resources, "workspace-runtime/apps/server/agent/dist/cc-switch/host");
+  for (const [path, content] of Object.entries({
+    "main.mjs": "// Synthetic separately bundled CC Switch host fixture\n",
+    "LICENSE": "Synthetic host license fixture\n", "NOTICE.md": "Synthetic host notice fixture\n",
+    "PROVENANCE.md": "Synthetic host provenance fixture\n", "UPSTREAM-SOURCES.md": "Synthetic source fixture\n", "upstream.json": "{}\n",
+    "licenses/dependencies/0000/LICENSE": "Synthetic jsonc-parser notice\n",
+    "licenses/dependencies/0001/LICENSE": "Synthetic smol-toml notice\n",
+  })) await put(host, path, content);
+  await put(host, "licenses/dependencies/index.json", JSON.stringify({ scope: "Synthetic actual-host-bundle contract fixture", packages: [
+    { name: "jsonc-parser", version: "3.3.1", license: "MIT", files: ["licenses/dependencies/0000/LICENSE"] },
+    { name: "smol-toml", version: "1.3.1", license: "MIT", files: ["licenses/dependencies/0001/LICENSE"] },
+  ] }));
+  const files = await inventoryTree(host);
+  await put(host, "manifest.json", JSON.stringify({ version: 1, implementation: "typescript", entry: "main.mjs", node: ">=24 <25",
+    sourceCommit: HOST_SOURCE_COMMIT, upstreamVersion: HOST_UPSTREAM_VERSION, files }));
+  return { implementation: "typescript", sourceCommit: HOST_SOURCE_COMMIT, upstreamVersion: HOST_UPSTREAM_VERSION,
+    manifest: "apps/server/agent/dist/cc-switch/host/manifest.json", manifestSha256: hash(await readFile(join(host, "manifest.json"))) };
+}
+
 async function archive(root, files) {
   const application = join(root, "application");
   const resources = join(root, "resources");
@@ -464,8 +496,36 @@ async function archive(root, files) {
     { id: "agent", root: "apps/server/agent", dependencies: {}, instances: [], absentDependencies: [], effectSingleton: null },
   ] }));
   await put(resources, "workspace-runtime/desktop-runtime-native.json", JSON.stringify({ schemaVersion: 1, files: [] }));
+  await put(resources, "workspace-runtime/apps/desktop/package.json", JSON.stringify({ name: "@agent-workspace/desktop", version: "0.1.0" }));
+  await put(resources, "workspace-runtime/packages/infrastructure/migrations/001-fixture.sql", "-- Synthetic migration fingerprint fixture\n");
+  await put(resources, "workspace-runtime/apps/server/agent/dist/index.mjs", "// Synthetic Agent state-code fingerprint fixture\n");
+  const ccSwitchHost = await hostFixture(resources);
+  const source = await readFile(join(dirname(root), "input/desktop-source.json"), "utf8").then(JSON.parse).catch((cause) => {
+    if (cause.code === "ENOENT") return { commit: "a".repeat(40), dirty: true, sha256: "b".repeat(64) };
+    throw cause;
+  });
+  await put(resources, "desktop-install-stamp.json", JSON.stringify(createInstallStamp({ commit: source.commit, source: { sha256: source.sha256, dirty: source.dirty },
+    version: "0.1.0", platform: "win32", arch: "x64", distribution: "nsis", signing: "unsigned",
+    compatibility: { dataSchema: 1, postgresMajor: 16, migrationsSha256: await computeMigrationsSha256(join(resources, "workspace-runtime")) } })));
+  await put(resources, "workspace-runtime/agent-artifact-manifest.json", JSON.stringify({ upstreamCommit: "c".repeat(40), bundled: [], ccSwitchHost }));
+  await put(resources, "workspace-runtime/apps/web/dist/index.js", "Synthetic Web bundle fixture");
+  await put(resources, "workspace-runtime/apps/web/dist/desktop-bundle-inputs.json", JSON.stringify({ schemaVersion: 1, packages: [],
+    outputs: [{ path: "index.js", sha256: hash("Synthetic Web bundle fixture") }] }));
   return resources;
 }
+
+test("final application refuses missing or mismatched maintenance application version", async (t) => {
+  const root = await temporary(t);
+  const resources = await archive(root, {});
+  await preparedRuntimeFixture(resources);
+  const inspect = () => inspectPackagedApplication(resources, "0.1.0", { target: "win32-x64" });
+  assert.equal((await inspect()).status, "passed");
+  const metadata = join(resources, "workspace-runtime/apps/desktop/package.json");
+  await rm(metadata);
+  await assert.rejects(inspect());
+  await put(resources, "workspace-runtime/apps/desktop/package.json", JSON.stringify({ version: "0.2.0" }));
+  await assert.rejects(inspect());
+});
 
 test("final ASAR inspection rejects Claude CLI metadata aliases inside the real archive", async (t) => {
   const root = await temporary(t);
@@ -490,23 +550,37 @@ test("final inspection includes orphaned unpacked package bytes and preserves un
   await assert.rejects(inspectPackagedApplication(resources, "0.1.0"), /External Agent CLI packages/);
 });
 
-async function delivery(root) {
+async function delivery(root, extraSources = {}) {
   const input = join(root, "input");
-  const source = await snapshot(input);
+  const source = await snapshot(input, extraSources);
   const output = join(root, "delivery");
   await mkdir(output);
   await put(output, "PM-Agent-v4-0.1.0-win-x64-unsigned.exe", "unit installer bytes; not a real installer");
   await put(output, "desktop-source.json", JSON.stringify(source));
-  await put(output, "desktop-source.tar.gz", "unit source archive bytes");
+  await createTar({ cwd: input, gzip: true, portable: true, file: join(output, "desktop-source.tar.gz") }, [...source.files.map((file) => file.path), "desktop-source.json"]);
   await put(output, "desktop-legal.tar.gz", "unit legal archive bytes");
   const manifest = {
-    schemaVersion: 2, version: "0.1.0", target: "win32-x64", signing: "unsigned",
+    schemaVersion: 3, version: "0.1.0", target: "win32-x64", signing: "unsigned",
     source: { commit: source.commit, dirty: source.dirty, sha256: source.sha256 },
     artifacts: [await fileRecord(output, "PM-Agent-v4-0.1.0-win-x64-unsigned.exe")],
     materials: await Promise.all(["desktop-source.json", "desktop-source.tar.gz", "desktop-legal.tar.gz"].map((name) => fileRecord(output, name))),
+    toolchain: { electron: "42.0.0" },
   };
+  await scanFixture(output, manifest);
   await refreshVerification(output, manifest, { schemaVersion: 1, nativeSmoke: { status: "not-run" }, published: false });
   return { output, manifest };
+}
+
+async function scanFixture(output, manifest, sbom) {
+  sbom ??= { bomFormat: "CycloneDX", specVersion: "1.6", version: 1,
+    metadata: { properties: [{ name: "dovspace:source", value: JSON.stringify(manifest.source) }, { name: "dovspace:final-artifacts", value: JSON.stringify(manifest.artifacts) }] },
+    components: [{ name: "synthetic-unit-fixture", version: "1.0.0", purl: "pkg:npm/synthetic-unit-fixture@1.0.0", "bom-ref": "unit-fixture" }] };
+  const scan = await scanSBOM(sbom, { fetcher: async (_url, options) => new Response(JSON.stringify({ results: JSON.parse(options.body).queries.map(() => ({})) }), { status: 200 }) });
+  for (const [name, value] of [["desktop-sbom.cdx.json", sbom], ["desktop-osv.json", scan.report], ["desktop-vulnerabilities.sarif", scan.sarif]]) {
+    await put(output, name, JSON.stringify(value, null, 2) + "\n");
+    manifest.materials = manifest.materials.filter((entry) => entry.path !== name);
+    manifest.materials.push(await fileRecord(output, name));
+  }
 }
 
 // Static inventory fixture only: these are not executable Node/PG binaries or
@@ -535,8 +609,25 @@ async function preparedRuntimeFixture(resources, { cliAlias = false } = {}) {
 
 // A real two-level 7z container fixture exercises member listing/extraction. It
 // is deliberately NOT an executable NSIS installer or native execution evidence.
-async function sealPayload(output, manifest, payloadRoot = join(output, "win-unpacked")) {
+async function sealPayload(output, manifest, payloadRoot = join(dirname(output), "payload")) {
+  // Model the real afterPack workspace permission transition before sealing.
+  async function installationModes(directory) {
+    await chmod(directory, 0o755);
+    for (const name of await readdir(directory)) {
+      const path = join(directory, name), info = await lstat(path);
+      if (info.isDirectory()) await installationModes(path);
+      else if (info.isFile()) await chmod(path, info.mode & 0o111 ? 0o755 : 0o644);
+      else throw new Error("Final payload fixture must contain real owned resources.");
+    }
+  }
+  await installationModes(join(payloadRoot, "resources/workspace-runtime"));
   const scratch = join(dirname(output), "archive-fixture");
+  const stamp = JSON.parse(await readFile(join(payloadRoot, "resources/desktop-install-stamp.json"), "utf8"));
+  const ownership = await createInstallationManifest(payloadRoot, stamp);
+  // This real archive fixture ships resources only, not its source ASAR directory.
+  ownership.files = ownership.files.filter((file) => file.path.startsWith("resources/"));
+  ownership.directories = ownership.directories.filter((path) => path === "resources" || path.startsWith("resources/"));
+  await put(payloadRoot, "resources/desktop-install-files.json", JSON.stringify(ownership));
   await mkdir(join(scratch, "$PLUGINSDIR"), { recursive: true });
   const payload = join(scratch, "$PLUGINSDIR", "app-64.7z");
   await rm(payload, { force: true });
@@ -545,13 +636,15 @@ async function sealPayload(output, manifest, payloadRoot = join(output, "win-unp
   await rm(join(output, artifact));
   await execute("7z", ["a", "-t7z", join(output, artifact), "$PLUGINSDIR"], { cwd: scratch });
   manifest.artifacts = [await fileRecord(output, artifact)];
+  const sbom = await inspectShippedSBOM(join(payloadRoot, "resources"), { ...manifest, electronVersion: manifest.toolchain.electron });
+  await scanFixture(output, manifest, sbom);
   return inspectFinalArtifacts(output, manifest.artifacts, manifest);
 }
 
 test("final delivery is authoritative even when old unpacked staging bytes change", async (t) => {
   const root = await temporary(t);
   const { output, manifest } = await delivery(root);
-  const resources = await archive(join(output, "win-unpacked"), {});
+  const resources = await archive(join(dirname(output), "payload"), {});
   const prepared = await preparedRuntimeFixture(resources);
   await verifyRuntime(prepared.runtime, manifest.target);
   const application = await inspectPackagedApplication(resources, manifest.version);
@@ -599,7 +692,7 @@ test("external Claude CLI identity is rejected in runtime even when its file inv
 test("delivery checksums cover every material and manifest without self-reference", async (t) => {
   const { output, manifest } = await delivery(await temporary(t));
   const checked = await verifyDeliveryFiles(output);
-  assert.equal(checked.names.length, 7);
+  assert.equal(checked.names.length, 10);
   const checksums = await readFile(join(output, "SHA256SUMS"), "utf8");
   assert.ok(checksums.includes("  desktop-package.json\n"));
   assert.ok(!checksums.includes("  SHA256SUMS\n"));
@@ -627,7 +720,7 @@ test("delivery refuses partial uploads, updater metadata, unknown archives and p
 test("delivery rejects changed ASAR bytes even when application identity and version are unchanged", async (t) => {
   const root = await temporary(t);
   const { output, manifest } = await delivery(root);
-  const appRoot = join(output, "win-unpacked");
+  const appRoot = join(dirname(output), "payload");
   const resources = await archive(appRoot, {});
   await preparedRuntimeFixture(resources);
   const application = await inspectPackagedApplication(resources, manifest.version);
@@ -643,7 +736,7 @@ test("delivery rejects changed ASAR bytes even when application identity and ver
   await execute("7z", ["a", "-t7z", join(output, manifest.artifacts[0].path), "$PLUGINSDIR"], { cwd: scratch });
   manifest.artifacts = [await fileRecord(output, manifest.artifacts[0].path)];
   await refreshVerification(output, manifest, { checks: { application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
-  await assert.rejects(verifyDelivery(output), /Final distributable payload differs/);
+  await assert.rejects(verifyDelivery(output), /SBOM|Final distributable payload differs/);
 });
 
 test("legal derivation rejects a resource-internal relative link that escapes the copied legal root", {
@@ -676,7 +769,7 @@ test("archive member safety rejects traversal, absolute paths and alternate data
 test("actual final archive expansion is rejected while the independent staging layout remains correct", async (t) => {
   const root = await temporary(t);
   const { output, manifest } = await delivery(root);
-  const resources = await archive(join(output, "win-unpacked"), {});
+  const resources = await archive(join(dirname(output), "payload"), {});
   await preparedRuntimeFixture(resources);
   const workspace = join(resources, "workspace-runtime");
   await put(workspace, "node_modules/one/package.json", JSON.stringify({ name: "one", version: "1.0.0" }));
@@ -703,7 +796,7 @@ test("actual final archive expansion is rejected while the independent staging l
 test("supplied installed resources bind all bytes to the current final artifact, not their self-declared layout", async (t) => {
   const root = await temporary(t);
   const { output, manifest } = await delivery(root);
-  const resources = await archive(join(output, "win-unpacked"), {});
+  const resources = await archive(join(dirname(output), "payload"), {});
   await preparedRuntimeFixture(resources);
   await put(resources, "workspace-runtime/apps/server/pm/src/source.js", "original packaged application bytes");
   const report = await sealPayload(output, manifest);
@@ -732,3 +825,165 @@ test("unreferenced loose ASAR dependency copies cannot hide outside the archive 
   await put(resources, "app.asar.unpacked/node_modules/orphan/package.json", JSON.stringify({ name: "orphan", version: "1.0.0" }));
   await assert.rejects(inspectPackagedApplication(resources, "0.1.0"), /Unrecorded or linked ASAR unpacked resource/);
 });
+
+test("corresponding-source archive is checked against actual inventoried bytes even after transport hashes are refreshed", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  await put(join(root, "input"), "README.md", "different archived source bytes\n");
+  await createTar({ cwd: join(root, "input"), gzip: true, portable: true, file: join(output, "desktop-source.tar.gz") },
+    ["README.md", "apps/desktop/package.json", "pnpm-lock.yaml", "desktop-source.json"]);
+  manifest.materials = manifest.materials.filter((entry) => entry.path !== "desktop-source.tar.gz");
+  manifest.materials.push(await fileRecord(output, "desktop-source.tar.gz"));
+  await refreshVerification(output, manifest, { schemaVersion: 1, nativeSmoke: { status: "not-run" }, published: false });
+  await assert.rejects(verifyDeliveryFiles(output), /Corresponding-source archive/);
+});
+
+test("final payload refuses a stamp with unchanged commit but a different dirty-source digest", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  const resources = await archive(join(root, "payload"), {});
+  await preparedRuntimeFixture(resources);
+  const path = join(resources, "desktop-install-stamp.json");
+  const stamp = JSON.parse(await readFile(path, "utf8"));
+  stamp.source.sha256 = "e".repeat(64);
+  await put(resources, "desktop-install-stamp.json", JSON.stringify(stamp));
+  await assert.rejects(sealPayload(output, manifest));
+});
+
+test("final delivery retains unversioned bundled source identities without invented registry versions or successful OSV queries", async (t) => {
+  const root = await temporary(t);
+  const names = ["@t3tools/provider-core", "@t3tools/client-runtime", "effect-acp"];
+  const { output, manifest } = await delivery(root, Object.fromEntries(names.map((name, index) =>
+    [`vendor/t3code/synthetic-source-${index}/package.json`, JSON.stringify({ name, private: true })])));
+  const resources = await archive(join(root, "payload"), {});
+  await preparedRuntimeFixture(resources);
+  const agentPath = join(resources, "workspace-runtime/agent-artifact-manifest.json");
+  const agent = JSON.parse(await readFile(agentPath, "utf8"));
+  agent.bundled = names.map((name) => ({ name, version: null, license: "MIT", notices: [] }));
+  await writeFile(agentPath, JSON.stringify(agent));
+  const finalArtifacts = await sealPayload(output, manifest);
+  await refreshVerification(output, manifest, { checks: { application: finalArtifacts.artifacts[0].application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
+  await verifyDelivery(output);
+  const bom = JSON.parse(await readFile(join(output, "desktop-sbom.cdx.json"), "utf8"));
+  const scan = JSON.parse(await readFile(join(output, "desktop-osv.json"), "utf8"));
+  for (const name of names) {
+    const entry = bom.components.find((component) => component.name === name);
+    assert.ok(entry);
+    assert.equal(Object.hasOwn(entry, "version"), false);
+    assert.equal(Object.hasOwn(entry, "purl"), false);
+    const source = JSON.parse(entry.properties.find((property) => property.name === "dovspace:source-provenance").value);
+    assert.equal(source.source.sha256, manifest.source.sha256);
+    assert.equal(source.inventory.sha256, hash(await readFile(agentPath)));
+    assert.equal(scan.sourceComponents.find((component) => component.name === name)?.status, "not-scanned-source-provenance");
+    assert.ok(!scan.queries.some((query) => query.components.includes(entry["bom-ref"])));
+  }
+});
+
+test("final SBOM and OSV include separately bundled CC Switch dependency versions and reject modified host evidence", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root);
+  const resources = await archive(join(root, "payload"), {});
+  await preparedRuntimeFixture(resources);
+  const finalArtifacts = await sealPayload(output, manifest);
+  await refreshVerification(output, manifest, { checks: { application: finalArtifacts.artifacts[0].application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
+  await verifyDelivery(output);
+  const bom = JSON.parse(await readFile(join(output, "desktop-sbom.cdx.json"), "utf8"));
+  const scan = JSON.parse(await readFile(join(output, "desktop-osv.json"), "utf8"));
+  for (const [name, version] of [["jsonc-parser", "3.3.1"], ["smol-toml", "1.3.1"]]) {
+    const component = bom.components.find((entry) => entry.name === name && entry["bom-ref"].startsWith("cc-switch-host-bundled/"));
+    assert.equal(component?.version, version);
+    assert.ok(scan.queries.some((query) => query.purl === component.purl && query.components.includes(component["bom-ref"])));
+  }
+  await put(resources, "workspace-runtime/apps/server/agent/dist/cc-switch/host/licenses/dependencies/0000/LICENSE", "changed host notice");
+  await assert.rejects(inspectShippedSBOM(resources, { ...manifest, electronVersion: manifest.toolchain.electron }), /Host resource changed/);
+});
+
+test("consumer receipt import registers both exact native materials in manifest/checksums and survives files-only verification", async (t) => {
+  const root = await temporary(t);
+  const { output, manifest } = await delivery(root, Object.fromEntries(INSTALL_E2E_HARNESS.map((path) => [path, "synthetic harness source fixture; never executed\n"])));
+  const resources = await archive(join(root, "payload"), {});
+  await preparedRuntimeFixture(resources);
+  manifest.installStamp = JSON.parse(await readFile(join(resources, "desktop-install-stamp.json"), "utf8"));
+  const finalArtifacts = await sealPayload(output, manifest);
+  await refreshVerification(output, manifest, { checks: { application: finalArtifacts.artifacts[0].application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
+  const fixture = await createReceiptFixture(join(root, "native-contract-fixture"));
+  const previous = structuredClone(fixture.receipt);
+  const artifact = manifest.artifacts[0];
+  const replacements = new Map([[previous.source.commit, manifest.source.commit], [previous.source.sha256, manifest.source.sha256],
+    [previous.version, manifest.version], [previous.baseline.version, "0.0.9"], [previous.artifact.sha256, artifact.sha256],
+    [previous.controller.appAsarSha256, finalArtifacts.artifacts[0].application.sha256],
+    [previous.compatibility.migrationsSha256, manifest.installStamp.compatibility.migrationsSha256]]);
+  const rebind = (value) => {
+    if (Array.isArray(value)) return value.map(rebind);
+    if (value && typeof value === "object") {
+      if (value.path === previous.artifact.path && value.sha256 === previous.artifact.sha256) return { ...artifact };
+      return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, rebind(entry)]));
+    }
+    return typeof value === "string" ? replacements.get(value) ?? value.replaceAll(previous.artifact.path, artifact.path) : value;
+  };
+  Object.assign(fixture.receipt, rebind(fixture.receipt));
+  const source = JSON.parse(await readFile(join(output, "desktop-source.json"), "utf8"));
+  fixture.receipt.harness.files = INSTALL_E2E_HARNESS.map((path) => {
+    const file = source.files.find((entry) => entry.path === path);
+    return { path, sha256: file.sha256, bytes: file.bytes };
+  });
+  for (const [path, document] of fixture.documents) fixture.documents.set(path, rebind(document));
+  await fixture.persist();
+  // Synthetic validator documents only: this test runs no native installer.
+  await verifyDelivery(output, { installE2EReceipt: fixture.receiptPath });
+  const delivered = JSON.parse(await readFile(join(output, "desktop-package.json"), "utf8"));
+  const sums = await readFile(join(output, "SHA256SUMS"), "utf8");
+  for (const name of ["install-e2e-receipt.json", "install-e2e-evidence.tar.gz"]) {
+    assert.deepEqual(delivered.materials.find((entry) => entry.path === name), await fileRecord(output, name));
+    assert.ok(sums.includes(`  ${name}\n`));
+  }
+  const checked = await verifyDelivery(output, { filesOnly: true });
+  assert.ok(checked.files.includes("install-e2e-receipt.json") && checked.files.includes("install-e2e-evidence.tar.gz"));
+});
+
+if (process.platform !== "win32") {
+  test("final host verification accepts real 0600/0700 to canonical installation modes without relaxing bytes or executable identity", async (t) => {
+    const root = await temporary(t);
+    const { output, manifest } = await delivery(root);
+    const resources = await archive(join(root, "payload"), {});
+    await preparedRuntimeFixture(resources);
+    const workspace = join(resources, "workspace-runtime");
+    const buildRoot = join(workspace, "apps/server/agent/dist");
+    const host = join(buildRoot, "cc-switch/host");
+    const hostManifestPath = join(host, "manifest.json");
+    const hostManifest = JSON.parse(await readFile(hostManifestPath, "utf8"));
+    await chmod(join(host, "main.mjs"), 0o600);
+    hostManifest.files.find((entry) => entry.path === "main.mjs").mode = (await lstat(join(host, "main.mjs"))).mode & 0o777;
+    await put(host, "helper.mjs", "// Synthetic executable host resource\n");
+    await chmod(join(host, "helper.mjs"), 0o700);
+    hostManifest.files.push((await inventoryTree(host)).find((entry) => entry.path === "helper.mjs"));
+    await writeFile(hostManifestPath, JSON.stringify(hostManifest));
+    await verifyHost(buildRoot);
+    await assert.rejects(verifyHost(buildRoot, { installationModes: true }));
+    // Apply exactly the afterPack installation convention with actual chmod.
+    for (const entry of hostManifest.files) await chmod(join(host, entry.path), entry.mode & 0o111 ? 0o755 : 0o644);
+    await chmod(hostManifestPath, 0o644);
+    await assert.rejects(verifyHost(buildRoot));
+    await verifyHost(buildRoot, { installationModes: true });
+    const agentPath = join(workspace, "agent-artifact-manifest.json");
+    const agent = JSON.parse(await readFile(agentPath, "utf8"));
+    agent.ccSwitchHost.manifestSha256 = hash(await readFile(hostManifestPath));
+    await writeFile(agentPath, JSON.stringify(agent));
+    const stampPath = join(resources, "desktop-install-stamp.json");
+    const stamp = JSON.parse(await readFile(stampPath, "utf8"));
+    stamp.compatibility.migrationsSha256 = await computeMigrationsSha256(workspace);
+    await writeFile(stampPath, JSON.stringify(stamp));
+    const finalArtifacts = await sealPayload(output, manifest);
+    await refreshVerification(output, manifest, { checks: { application: finalArtifacts.artifacts[0].application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
+    await verifyDelivery(output);
+    const inspect = () => inspectShippedSBOM(resources, { ...manifest, electronVersion: manifest.toolchain.electron });
+    await chmod(join(host, "helper.mjs"), 0o644);
+    await assert.rejects(inspect());
+    await chmod(join(host, "helper.mjs"), 0o755);
+    await chmod(join(host, "main.mjs"), 0o755);
+    await assert.rejects(inspect());
+    await chmod(join(host, "main.mjs"), 0o644);
+    await writeFile(join(host, "main.mjs"), "// changed content despite canonical mode\n");
+    await assert.rejects(inspect());
+  });
+}

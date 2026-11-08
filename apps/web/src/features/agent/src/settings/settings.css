@@ -32,6 +32,7 @@
   background: var(--background);
   padding: 0 12px;
 }
+.settings-titlebar { display: flex; align-items: center; flex-shrink: 0; min-height: var(--workspace-header-height); }
 .settings-product { display: flex; align-items: center; gap: 10px; min-height: var(--workspace-header-height); padding: 0 10px; font-weight: 600; flex-shrink: 0; }
 .settings-nav-caption { margin: 28px 10px 14px; color: var(--muted-foreground); font-size: 12px; }
 .settings-mobile-navigation-toggle { display: none; }

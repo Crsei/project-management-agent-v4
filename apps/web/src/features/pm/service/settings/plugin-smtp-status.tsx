@@ -60,7 +60,7 @@ function ServiceSmtpStatus() {
     <p>{service.error || retryError ? t(pmErrorMessage(service.error ?? retryError, "zh"), pmErrorMessage(service.error ?? retryError, "en")) : t("请先登录并选择有权访问的工作区。", "Sign in and choose an authorized workspace first.")}</p>
     <div className="flex min-w-0 flex-wrap gap-2">
       <Button variant="outline" size="sm" onClick={() => { void refreshSession() }} className="h-auto min-h-9 w-full whitespace-normal py-2 sm:w-auto"><RefreshCw aria-hidden="true" className="size-3.5 shrink-0" />{t("重新读取会话", "Reload session")}</Button>
-      <Button variant="outline" size="sm" render={<Link to="/pm" />} className="h-auto min-h-9 w-full whitespace-normal py-2 sm:w-auto">{t("登录 / 选择工作区", "Sign in / choose workspace")}</Button>
+      <Button variant="outline" size="sm" render={<Link to="/pm?pick=1" />} className="h-auto min-h-9 w-full whitespace-normal py-2 sm:w-auto">{t("登录 / 选择工作区", "Sign in / choose workspace")}</Button>
     </div>
   </div>
   if (!allowed(service.workspace, "access.manage")) return <SettingsNotice>{t("无权查看：仅具有当前工作区 access.manage 的工作区管理员可读取邀请服务配置状态与邀请记录。本区域不会请求邀请列表，也不展示旧的私有快照。", "No access: only workspace administrators with access.manage for the current workspace may read invitation service configuration status and invitation records. This area does not request the invitation list or display old private snapshots.")}</SettingsNotice>

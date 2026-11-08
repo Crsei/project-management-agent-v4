@@ -1,8 +1,12 @@
-import { chmod, cp, lstat, mkdir, readFile, readdir } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { inspectDeployment } from "./scripts/stage-workspace.mjs";
 import { hashFile, verifyRuntime } from "./scripts/runtime-manifest.mjs";
 import { inspectPackagedApplication } from "./scripts/packaged-application.mjs";
+import { writeInstallStamp } from "./scripts/install-stamp.mjs";
+import { inspectWindowsRuntimeDependencies } from "./scripts/windows-runtime-dependencies.mjs";
+import { windowsSignerIdentity, verifyWindowsFile } from "./scripts/signatures.mjs";
+import { createInstallationManifest, INSTALL_FILES_NAME } from "./src/uninstall.mjs";
 
 // Installation resources are public code, not private workspace data. cp keeps
 // checkout permissions, which may otherwise make a shared /Applications install
@@ -22,8 +26,11 @@ async function normalizeInstallationModes(path, preserveFileModes = false) {
   } else throw new Error("Unsupported installation resource.");
 }
 
-export function desktopBuilderConfig({ application, prepackedApplication, workspaceRuntime, desktopRuntime, output, electronVersion, mode, platform, nativeBinaries }) {
+export function desktopBuilderConfig({ application, prepackedApplication, workspaceRuntime, desktopRuntime, output, electronVersion, mode, platform, nativeBinaries, installStamp }) {
   const signed = mode === "signed";
+  if (!installStamp) throw new Error("Desktop packaging requires an exact source-bound build install stamp.");
+  const windowsSigner = signed && platform === "win32" ? windowsSignerIdentity() : null;
+  if (signed && platform === "darwin" && !/^[A-Z0-9]{10}$/.test(process.env.PM_DESKTOP_MAC_TEAM_ID ?? process.env.APPLE_TEAM_ID ?? "")) throw new Error("Signed macOS packaging requires an exact expected Apple team identity.");
   return {
     appId: "com.projectmanagementagent.v4",
     productName: "PM Agent v4",
@@ -55,16 +62,57 @@ export function desktopBuilderConfig({ application, prepackedApplication, worksp
       // be traversable and non-group-writable after installation by another user.
       await normalizeInstallationModes(join(resources, "desktop-runtime"), true);
       await verifyRuntime(join(resources, "desktop-runtime"));
+      await writeInstallStamp(join(resources, "desktop-install-stamp.json"), installStamp);
+      if (platform === "win32") {
+        const maintenance = join(resources, "desktop-maintenance");
+        await mkdir(maintenance);
+        for (const name of ["uninstall.mjs", "uninstall-cli.mjs", "install-stamp.mjs", "private-state.mjs"]) await cp(join(import.meta.dirname, "src", name), join(maintenance, name));
+        await cp(join(import.meta.dirname, "assets", "desktop-maintenance.ps1"), join(maintenance, "desktop-maintenance.ps1"));
+        await writeFile(join(output, "desktop-lifecycle.generated.nsh"), `!define DOVSPACE_MIGRATIONS_SHA256 "${installStamp.compatibility.migrationsSha256}"\n!include "${join(import.meta.dirname, "assets", "desktop-lifecycle.nsh")}"\n`);
+        await writeFile(join(resources, "windows-runtime-dependencies.json"), `${JSON.stringify(await inspectWindowsRuntimeDependencies(join(resources, "desktop-runtime")), null, 2)}\n`);
+        await writeFile(join(resources, INSTALL_FILES_NAME), `${JSON.stringify(await createInstallationManifest(context.appOutDir, installStamp))}\n`);
+      }
       const metadata = JSON.parse(await readFile(join(application, "package.json"), "utf8"));
-      await inspectPackagedApplication(resources, metadata.version);
+      await inspectPackagedApplication(resources, metadata.version, { target: `${platform}-${installStamp.arch}` });
     },
-    win: { target: [{ target: "nsis", arch: ["x64"] }], signAndEditExecutable: signed },
+    async afterSign(context) {
+      if (platform !== "win32") return;
+      if (signed) {
+        async function signTree(directory) {
+          for (const name of (await readdir(directory)).sort()) {
+            const path = join(directory, name), info = await lstat(path);
+            if (info.isSymbolicLink()) throw new Error("Windows signing cannot follow payload links.");
+            if (info.isDirectory()) await signTree(path);
+            else if (info.isFile() && /\.(?:exe|dll|node)$/i.test(name)) {
+              // The pinned builder signs top-level Electron + app.asar.unpacked,
+              // not our copied runtime closures. Sign every final loose PE.
+              if (!await context.packager.signIf(path)) throw new Error("A shipped Windows native executable was not signed.");
+              await verifyWindowsFile(path, windowsSigner);
+            }
+          }
+        }
+        await signTree(context.appOutDir);
+      }
+      // Authenticode changes bytes: ownership authorization records the exact
+      // final signed tree, never broad binary hash exemptions during uninstall.
+      await writeFile(join(context.appOutDir, "resources", INSTALL_FILES_NAME), `${JSON.stringify(await createInstallationManifest(context.appOutDir, installStamp))}\n`);
+    },
+    win: {
+      target: [{ target: "nsis", arch: ["x64"] }],
+      signAndEditExecutable: signed,
+      signExts: [".exe", ".dll", ".node"],
+      ...(windowsSigner ? { signtoolOptions: { certificateSubjectName: windowsSigner.subject, signingHashAlgorithms: ["sha256"] } } : {}),
+      // Only the two shipped interface languages. Every extra locale adds a
+      // loose .pak file to the install tree and to NSIS uninstall work.
+      electronLanguages: ["en-US", "zh-CN"],
+    },
     nsis: {
       oneClick: false,
       perMachine: false,
-      allowElevation: true,
+      allowElevation: false,
       allowToChangeInstallationDirectory: true,
       deleteAppDataOnUninstall: false,
+      include: join(output, "desktop-lifecycle.generated.nsh"),
       createDesktopShortcut: true,
       createStartMenuShortcut: true,
       shortcutName: "PM Agent v4",

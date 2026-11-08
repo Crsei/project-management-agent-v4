@@ -5,12 +5,18 @@ import { createServer } from "node:net";
 import { join, resolve, delimiter } from "node:path";
 import { Client } from "pg";
 import { assertPrivatePath, ensurePrivateDirectory, readPrivateJson, securePrivateFile, writePrivateJson } from "./private-state.mjs";
+import { assertOwnedProcess, assertProcessIdentity, readProcessIdentity, rememberOwnedProcess, sameProcessIdentity } from "./process-identity.mjs";
 export { ensurePrivateDirectory } from "./private-state.mjs";
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const delay = milliseconds => new Promise(done => setTimeout(done, milliseconds));
 const shutdownSeconds = 60;
 const alive = pid => { try { process.kill(pid, 0); return true; } catch (error) { return error.code !== "ESRCH"; } };
+const samePath = (left, right) => {
+  if (typeof left !== "string" || typeof right !== "string") return false;
+  const a = resolve(left), b = resolve(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+};
 
 export function validateManagedPostgresState(value) {
   const keys = ["formatVersion", "postgresMajor", "instanceId", "username", "password", "port", "phase"];
@@ -57,6 +63,7 @@ export class ManagedPostgres {
     this.child = null;
     this.children = new Set();
     this.windowsPid = null;
+    this.serverIdentity = null;
     this.windowsMonitor = null;
     this.windowsLaunchPending = false;
     this.ready = false;
@@ -84,7 +91,7 @@ export class ManagedPostgres {
   progress(message) { this.onProgress?.({ role: "postgres", message }); }
   async command(name, args, { timeout = 30_000, cancelable = true, captureOutput = false } = {}) {
     if (cancelable) this.checkCancelled();
-    const child = spawn(this.binary(name), args, { cwd: this.dataDir, env: this.environment(), windowsHide: true, stdio: captureOutput ? ["ignore", "pipe", "pipe"] : "ignore" });
+    const child = rememberOwnedProcess(spawn(this.binary(name), args, { cwd: this.dataDir, env: this.environment(), windowsHide: true, stdio: captureOutput ? ["ignore", "pipe", "pipe"] : "ignore" }));
     this.children.add(child);
     return new Promise((done, reject) => {
       let output = "";
@@ -92,7 +99,7 @@ export class ManagedPostgres {
         const capture = bytes => { if (output.length < 16_384) output += bytes.toString("utf8").slice(0, 16_384 - output.length); };
         child.stdout.on("data", capture); child.stderr.on("data", capture);
       }
-      const timer = setTimeout(() => child.kill(), timeout);
+      const timer = setTimeout(() => reject(new Error(`Managed PostgreSQL ${name} timed out. Its process remains owned; no force kill was attempted.`)), timeout);
       child.once("error", () => { clearTimeout(timer); this.children.delete(child); reject(new Error(`Managed PostgreSQL ${name} could not start`)); });
       child.once("close", code => {
         clearTimeout(timer); this.children.delete(child);
@@ -105,12 +112,14 @@ export class ManagedPostgres {
     const path = join(this.dataDir, ".postgres-owner.json");
     const token = randomUUID();
     for (let attempt = 0; attempt < 2; attempt++) {
-      try { await writePrivateJson(path, { formatVersion: 1, pid: process.pid, token }, { exclusive: true }); this.lock = { path, token }; return; }
+      try { await writePrivateJson(path, { formatVersion: 2, pid: process.pid, identity: readProcessIdentity(process.pid), token }, { exclusive: true }); this.lock = { path, token }; return; }
       catch (error) {
         if (error.code !== "EEXIST") throw error;
         const owner = await readPrivateJson(path);
-        if (owner?.formatVersion !== 1 || !Number.isInteger(owner.pid) || owner.pid < 1 || !uuid.test(owner.token ?? "")) throw new Error("Invalid managed PostgreSQL process ownership");
-        if (alive(owner.pid)) throw new Error("Managed PostgreSQL is controlled by another running process");
+        if (![1, 2].includes(owner?.formatVersion) || !Number.isInteger(owner.pid) || owner.pid < 1 || !uuid.test(owner.token ?? "")) throw new Error("Invalid managed PostgreSQL process ownership");
+        if (owner.formatVersion === 2) {
+          if (assertProcessIdentity(owner.identity)) throw new Error("Managed PostgreSQL is controlled by another running process");
+        } else if (alive(owner.pid)) throw new Error("Managed PostgreSQL has legacy ownership held by a running or reused PID; close it normally before continuing");
         await unlink(path);
       }
     }
@@ -118,9 +127,12 @@ export class ManagedPostgres {
   }
   async releaseLock() {
     if (!this.lock) return;
-    const lock = this.lock; this.lock = null;
+    const lock = this.lock;
     const owner = await readPrivateJson(lock.path);
-    if (owner?.token === lock.token && owner.pid === process.pid) await unlink(lock.path);
+    if (owner?.token !== lock.token || owner.pid !== process.pid) throw new Error("Managed PostgreSQL controller ownership changed; retaining the lock for inspection.");
+    await unlink(lock.path);
+    this.lock = null;
+    this.serverIdentity = null;
   }
   async prepareState() {
     let entries;
@@ -227,8 +239,22 @@ export class ManagedPostgres {
       if (!existingClient) await client.connect();
       const result = await client.query("SELECT current_setting('data_directory') AS directory,current_setting('server_version_num') AS version");
       const row = result.rows[0];
-      if (resolve(row.directory) !== this.clusterDir || Math.floor(Number(row.version) / 10_000) !== 16) throw new Error("Managed PostgreSQL server identity mismatch");
+      if (!samePath(row.directory, this.clusterDir) || Math.floor(Number(row.version) / 10_000) !== 16) throw new Error("Managed PostgreSQL server identity mismatch");
     } finally { if (!existingClient) await client.end().catch(() => undefined); }
+  }
+  async recordServerIdentity(pid) {
+    const identity = readProcessIdentity(pid);
+    if (!identity || !samePath(identity.executable, this.binary("postgres"))) throw new Error("Managed PostgreSQL executable identity mismatch");
+    this.serverIdentity = identity;
+    await writePrivateJson(join(this.dataDir, ".postgres-process.json"), { formatVersion: 1, instanceId: this.state.instanceId, clusterDir: this.clusterDir, identity });
+  }
+  async verifyServerIdentity(pid) {
+    const record = await readPrivateJson(join(this.dataDir, ".postgres-process.json"));
+    if (record?.formatVersion !== 1 || record.instanceId !== this.state.instanceId || !samePath(record.clusterDir, this.clusterDir) || record.identity?.pid !== pid || !samePath(record.identity.executable, this.binary("postgres"))) throw new Error("Managed PostgreSQL process creation ownership is missing or changed");
+    if (this.serverIdentity && !sameProcessIdentity(this.serverIdentity, record.identity)) throw new Error("Managed PostgreSQL process ownership record changed");
+    const current = assertProcessIdentity(record.identity);
+    this.serverIdentity = record.identity;
+    return current;
   }
   async recoverOwnedServer({ cancelable = true } = {}) {
     const pidFile = join(this.clusterDir, "postmaster.pid");
@@ -240,8 +266,9 @@ export class ManagedPostgres {
     } catch (error) { if (error.code === "ENOENT") return; throw error; }
     const lines = bytes.split(/\r?\n/);
     const pid = Number(lines[0]);
-    if (!Number.isInteger(pid) || pid < 1 || resolve(lines[1] ?? "") !== this.clusterDir || Number(lines[3]) !== this.state.port) throw new Error("PostgreSQL process ownership mismatch");
+    if (!Number.isInteger(pid) || pid < 1 || !samePath(lines[1], this.clusterDir) || Number(lines[3]) !== this.state.port) throw new Error("PostgreSQL process ownership mismatch");
     if (!alive(pid)) return; // PostgreSQL itself safely handles its stale pid file.
+    if (!(await this.verifyServerIdentity(pid))) return;
     // A dead controller can leave its private server alive. Authenticate before touching it.
     let identified = false;
     const deadline = Date.now() + 10_000;
@@ -251,6 +278,7 @@ export class ManagedPostgres {
       catch { await delay(100); }
     }
     if (!identified) throw new Error("An active foreign or unverifiable PostgreSQL server occupies this cluster");
+    if (!(await this.verifyServerIdentity(pid))) return;
     await this.command("pg_ctl", ["stop", "-D", this.clusterDir, "-m", "fast", "-w", "-t", String(shutdownSeconds)], { timeout: (shutdownSeconds + 5) * 1000, cancelable });
   }
   async readWindowsPid() {
@@ -259,7 +287,7 @@ export class ManagedPostgres {
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096) throw new Error("Unsafe PostgreSQL process state");
     const lines = (await readFile(file, "utf8")).split(/\r?\n/);
     const pid = Number(lines[0]);
-    if (!Number.isInteger(pid) || pid < 1 || resolve(lines[1] ?? "") !== this.clusterDir || Number(lines[3]) !== this.state.port) throw new Error("PostgreSQL process ownership mismatch");
+    if (!Number.isInteger(pid) || pid < 1 || !samePath(lines[1], this.clusterDir) || Number(lines[3]) !== this.state.port) throw new Error("PostgreSQL process ownership mismatch");
     return pid;
   }
   async closeWindowsMonitor() {
@@ -273,6 +301,7 @@ export class ManagedPostgres {
     this.windowsLaunchPending = true;
     await this.command("pg_ctl", ["start", "-D", this.clusterDir, "-o", serverOptions.join(" "), "-l", "NUL", "-w", "-t", "30"], { timeout: 35_000 });
     this.windowsPid = await this.readWindowsPid();
+    await this.recordServerIdentity(this.windowsPid);
     this.windowsLaunchPending = false;
     this.checkCancelled();
     const client = this.createClient();
@@ -304,9 +333,10 @@ export class ManagedPostgres {
       this.windowsLaunchPending = false;
     }
     const pid = this.windowsPid;
-    if (pid !== null && alive(pid)) {
+    if (pid !== null && await this.verifyServerIdentity(pid)) {
       if (await this.readWindowsPid() !== pid) throw new Error("PostgreSQL shutdown ownership changed");
       await this.identify();
+      if (!(await this.verifyServerIdentity(pid))) throw new Error("PostgreSQL identity changed during shutdown");
       try {
         await this.command("pg_ctl", ["stop", "-D", this.clusterDir, "-m", "fast", "-w", "-t", String(shutdownSeconds)], { timeout: (shutdownSeconds + 5) * 1000, cancelable: false });
       } catch {
@@ -338,7 +368,7 @@ export class ManagedPostgres {
       this.progress("Starting private PostgreSQL 16 database");
       const serverOptions = ["-h", "127.0.0.1", "-p", String(this.state.port), "-c", "unix_socket_directories=", "-c", "password_encryption=scram-sha-256", "-c", "logging_collector=off", "-c", "log_statement=none", "-c", "log_min_error_statement=panic", "-c", "log_connections=off", "-c", "log_disconnections=off"];
       if (process.platform === "win32") return await this.startWindows(serverOptions);
-      const child = spawn(this.binary("postgres"), ["-D", this.clusterDir, ...serverOptions], { cwd: this.dataDir, env: this.environment(), windowsHide: true, stdio: "ignore" });
+      const child = rememberOwnedProcess(spawn(this.binary("postgres"), ["-D", this.clusterDir, ...serverOptions], { cwd: this.dataDir, env: this.environment(), windowsHide: true, stdio: "ignore" }));
       this.child = child; this.children.add(child);
       let failure = null;
       child.once("error", () => { failure = new Error("Managed PostgreSQL process could not start"); this.children.delete(child); if (this.child === child) this.child = null; });
@@ -355,6 +385,8 @@ export class ManagedPostgres {
         this.checkCancelled(); if (failure) throw failure;
         try {
           await this.identify();
+          assertOwnedProcess(child);
+          await this.recordServerIdentity(child.pid);
           if (failure || child.exitCode !== null) throw failure ?? new Error("Managed PostgreSQL exited during readiness");
           this.checkCancelled(); this.ready = true;
           return { databaseUrl: this.databaseUrl(), port: this.state.port, instanceId: this.state.instanceId };
@@ -385,7 +417,9 @@ export class ManagedPostgres {
         const stat = await lstat(pidFile);
         if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096) throw new Error("Unsafe PostgreSQL shutdown ownership");
         const lines = (await readFile(pidFile, "utf8")).split(/\r?\n/);
-        if (Number(lines[0]) !== child.pid || resolve(lines[1] ?? "") !== this.clusterDir) throw new Error("PostgreSQL shutdown ownership changed");
+        if (Number(lines[0]) !== child.pid || !samePath(lines[1], this.clusterDir) || Number(lines[3]) !== this.state.port) throw new Error("PostgreSQL shutdown ownership changed");
+        assertOwnedProcess(child);
+        if (this.serverIdentity && !(await this.verifyServerIdentity(child.pid))) return;
         ownedPid = true;
         break;
       } catch (error) {
@@ -393,28 +427,33 @@ export class ManagedPostgres {
         await delay(50);
       }
     }
+    if (ownershipError) throw ownershipError;
     if (ownedPid && child.exitCode === null && child.signalCode === null) {
       try { await this.command("pg_ctl", ["stop", "-D", this.clusterDir, "-m", "fast", "-w", "-t", String(shutdownSeconds)], { timeout: (shutdownSeconds + 5) * 1000, cancelable: false }); stopped = true; }
       catch { /* A slow checkpoint must not turn a normal quit into a database crash. */ }
     }
-    if (!stopped && !ownedPid && child.exitCode === null && child.signalCode === null) child.kill();
+    if (!stopped && !ownedPid && child.exitCode === null && child.signalCode === null && assertOwnedProcess(child)) child.kill("SIGTERM");
     const deadline = Date.now() + 5_000;
     while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) await delay(50);
     if (child.exitCode === null && child.signalCode === null) {
-      if (!ownedPid) child.kill("SIGKILL");
       throw new Error("Managed PostgreSQL is still shutting down. Ownership and data are retained; retry Stop instead of removing the instance.");
     }
-    if (ownershipError) throw ownershipError;
   }
   async stop() {
     this.cancelled = true; this.ready = false;
     if (this.stopping) return this.stopping;
     this.stopping = (async () => {
-      // initdb/version helpers are ours, but never kill the pg_ctl doing a graceful stop.
-      for (const child of this.children) if (child !== this.child && !child.spawnargs?.[0]?.endsWith(process.platform === "win32" ? "pg_ctl.exe" : "pg_ctl")) child.kill();
+      // Never terminate a pg_ctl checkpoint helper or use Windows TerminateProcess.
+      for (const child of this.children) {
+        if (child === this.child || child.spawnargs?.[0]?.endsWith(process.platform === "win32" ? "pg_ctl.exe" : "pg_ctl")) continue;
+        if (process.platform !== "win32" && child.exitCode === null && child.signalCode === null && assertOwnedProcess(child)) child.kill("SIGTERM");
+      }
       await this.stopOwnedProcess();
       if (this.starting) await this.starting.catch(() => undefined);
       await this.stopOwnedProcess();
+      const deadline = Date.now() + 5_000;
+      while (this.children.size && Date.now() < deadline) await delay(50);
+      if (this.children.size) throw new Error("Managed PostgreSQL helper shutdown timed out. Ownership is retained; no process was force-killed.");
       await this.releaseLock();
     })();
     try { await this.stopping; } finally { this.stopping = null; }

@@ -452,7 +452,7 @@ export function PmRightPanel({
 
   if (!inline && !shown) return <span ref={marker} hidden aria-hidden="true" />;
 
-  const tabbar = <div className="pm-right-panel-tabbar" data-right-panel-tabbar>
+  const tabbar = <div className="pm-right-panel-tabbar desktop-titlebar desktop-titlebar-reserve-controls" data-right-panel-tabbar>
     <div ref={tabsRef} className="pm-right-panel-tabs" role="tablist" aria-label={t("右侧面板", "Right panel")} data-right-panel-tab-list>
       <div className="pm-right-panel-tab-track">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

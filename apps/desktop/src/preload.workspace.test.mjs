@@ -10,13 +10,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 function loadPreload(name, exposedName, enabled = true) {
   const calls = [];
   const handlers = new Map();
-  let exposed = null;
+  const exposures = new Map();
   const electron = {
     contextBridge: {
-      exposeInMainWorld: (key, value) => {
-        assert.equal(key, exposedName);
-        exposed = value;
-      },
+      exposeInMainWorld: (key, value) => { exposures.set(key, value); },
     },
     ipcRenderer: {
       invoke: (channel, input) => {
@@ -27,18 +24,31 @@ function loadPreload(name, exposedName, enabled = true) {
       on: (channel, handler) => { handlers.set(channel, handler); },
       removeListener: (channel) => { handlers.delete(channel); },
     },
+    webFrame: { getZoomFactor: () => 1 },
   };
   const source = readFileSync(name, "utf8");
   vm.runInNewContext(source, {
     require: (id) => { assert.equal(id, "electron"); return electron; },
-    process: { argv: enabled ? ["--pm-native-preview"] : [] },
+    process: { argv: enabled ? ["--pm-native-preview"] : [], platform: "linux" },
   });
-  return { exposed, calls, handlers };
+  return { exposed: exposures.get(exposedName) ?? null, exposures, calls, handlers };
 }
 
-test("workspace preload stays absent for remote workspaces", () => {
+test("workspace preview bridge stays absent for remote workspaces", () => {
   const { exposed } = loadPreload(join(here, "preload.workspace.cjs"), "desktopWorkspace", false);
   assert.equal(exposed, null);
+});
+
+test("desktop shell bridge exists in every workspace mode and accepts only light or dark", async () => {
+  const { exposures, calls } = loadPreload(join(here, "preload.workspace.cjs"), "desktopShell", false);
+  const shell = exposures.get("desktopShell");
+  assert.equal(Object.isFrozen(shell), true);
+  assert.equal(shell.platform, "linux");
+  assert.equal(shell.titlebarHeight, 40);
+  await shell.setTitlebarTheme("dark");
+  assert.deepEqual(calls, [{ channel: "desktop:titlebar-theme", input: "dark" }]);
+  await assert.rejects(shell.setTitlebarTheme("system"), /light or dark/);
+  assert.equal(calls.length, 1);
 });
 
 test("workspace preload exposes only the preview and directory allowlists", async () => {

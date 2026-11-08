@@ -6,11 +6,12 @@ import { basename, dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
-import { create as createTar } from "tar";
+import { create as createTar, list as listTar } from "tar";
 import { desktopRoot, hashFile } from "./runtime-manifest.mjs";
 import { assertCanonicalAbsolute, fileStamp, GuardedDirectory, safeRelativePath, sameFileIdentity } from "../../../packages/pm-core/platform.ts";
 import { assertNoWindowsReparsePath, cacheWindowsPathAttributes, getWindowsPathAttributeMetrics } from "../../../packages/pm-core/windows-reparse.ts";
 import { inspectDeployment } from "./stage-workspace.mjs";
+import { requiredDeliveryMaterials, assertExactDeliveryDirectory, validateDeliveryAssets } from "./delivery-assets.mjs";
 
 const execute = promisify(execFile);
 export const repository = resolve(desktopRoot, "../..");
@@ -25,6 +26,58 @@ const additions = [
   "apps/desktop/scripts/release-materials.test.mjs",
   "apps/desktop/scripts/source-capture-benchmark.mjs",
   "apps/desktop/scripts/verify-delivery.mjs",
+  "apps/desktop/scripts/delivery-assets.mjs",
+  "apps/desktop/scripts/signatures.mjs",
+  "apps/desktop/scripts/mac-notarization.mjs",
+  "apps/desktop/scripts/sbom.mjs",
+  "apps/desktop/scripts/osv.mjs",
+  "apps/desktop/scripts/native-receipt.mjs",
+  "apps/desktop/scripts/native-receipt.test.mjs",
+  "apps/desktop/scripts/install-e2e/fixtures.mjs",
+  "apps/web/src/features/agent/hooks/use-chat-settings.test.ts",
+  "apps/web/src/lib/desktop-shell.ts",
+  "apps/web/vite.desktop.config.mjs",
+  "apps/web/src/features/pm/service/pm-last-workspace.ts",
+  "packages/infrastructure/migrations/0054_workspace_creation_without_sample.sql",
+  "apps/desktop/scripts/release-security.test.mjs",
+  "apps/desktop/scripts/install-stamp.mjs",
+  "apps/desktop/scripts/install-stamp.test.mjs",
+  "apps/desktop/scripts/windows-runtime-dependencies.mjs",
+  "apps/desktop/scripts/windows-runtime-dependencies.test.mjs",
+  "apps/desktop/scripts/install-e2e/evidence.mjs",
+  "apps/desktop/scripts/install-e2e/windows.mjs",
+  "apps/desktop/scripts/install-e2e/native-evidence.ps1",
+  "apps/desktop/scripts/install-e2e/provision-windows.ps1",
+  "apps/desktop/scripts/install-e2e.test.mjs",
+  "apps/desktop/scripts/payload-files.mjs",
+  "apps/desktop/scripts/payload-files.test.mjs",
+  "apps/desktop/scripts/payload-report.mjs",
+  "apps/desktop/scripts/payload-report.test.mjs",
+  "apps/desktop/src/install-stamp.mjs",
+  "apps/desktop/src/install-stamp.test.mjs",
+  "apps/desktop/src/process-identity.mjs",
+  "apps/desktop/src/lifecycle-cli.mjs",
+  "apps/desktop/src/lifecycle-cli.test.mjs",
+  "apps/desktop/src/lifecycle-fixtures.mjs",
+  "apps/desktop/src/uninstall.mjs",
+  "apps/desktop/src/uninstall-cli.mjs",
+  "apps/desktop/src/uninstall.test.mjs",
+  "apps/desktop/src/maintenance-archive.mjs",
+  "apps/desktop/src/maintenance-archive.test.mjs",
+  "apps/desktop/src/connection.maintenance.test.mjs",
+  "apps/desktop/src/backend/maintenance.test.ts",
+  "apps/desktop/src/main.security.test.mjs",
+  "apps/desktop/src/main.close.test.mjs",
+  "apps/desktop/src/window-chrome.mjs",
+  "apps/desktop/src/window-chrome.test.mjs",
+  "apps/desktop/src/window-close.mjs",
+  "apps/desktop/src/window-close.test.mjs",
+  "apps/desktop/src/windows-private-state.test.mjs",
+  "apps/desktop/assets/desktop-lifecycle.nsh",
+  "apps/desktop/assets/desktop-maintenance.ps1",
+  "docs/reference/desktop-benchmark-cherry-studio.zh.md",
+  "docs/reference/desktop-benchmark-hermes-agent.zh.md",
+  "docs/reference/desktop-engineering-benchmark.zh.md",
   "docs/reference/desktop-release-alignment-2026-11-08.zh.md",
   "docs/reference/windows-build-runbook.zh.md",
 ];
@@ -316,6 +369,34 @@ export async function fileRecord(output, name) {
   return { path: name, bytes: info.size, sha256: await hashFile(path) };
 }
 
+export async function verifyCorrespondingSourceArchive(output, source) {
+  validateSource(source);
+  const expected = new Map(source.files.map((file) => [file.path, file]));
+  const inventory = await fileRecord(output, "desktop-source.json");
+  expected.set("desktop-source.json", inventory);
+  const seen = new Set();
+  let failure;
+  await listTar({ file: join(output, "desktop-source.tar.gz"), strict: true, onReadEntry(entry) {
+    const file = expected.get(entry.path);
+    if (entry.type !== "File" || !file || seen.has(entry.path) || entry.size !== file.bytes) {
+      failure ??= new Error("Corresponding-source archive has unsafe, extra, duplicate or mismatched source members.");
+      entry.resume();
+      return;
+    }
+    seen.add(entry.path);
+    const hash = createHash("sha256");
+    let bytes = 0;
+    entry.on("data", (chunk) => { bytes += chunk.length; hash.update(chunk); });
+    entry.on("end", () => {
+      if (bytes !== file.bytes || hash.digest("hex") !== file.sha256)
+        failure ??= new Error(`Corresponding-source archive bytes differ from exact source inventory: ${entry.path}`);
+    });
+  } });
+  if (failure) throw failure;
+  if (seen.size !== expected.size) throw new Error("Corresponding-source archive is missing inventoried source bytes.");
+  return { status: "passed", files: source.files.length, sha256: source.sha256, archive: await fileRecord(output, "desktop-source.tar.gz") };
+}
+
 export async function collectLegal(resources, platform, destination) {
   await mkdir(destination, { recursive: true });
   const legalRoot = platform === "darwin" ? resources : dirname(resources);
@@ -356,6 +437,11 @@ export async function checksumDelivery(output, manifest) {
 }
 
 export async function refreshVerification(output, manifest, verification) {
+  verification.source = { commit: manifest.source.commit, dirty: manifest.source.dirty, sha256: manifest.source.sha256 };
+  verification.artifacts = manifest.artifacts;
+  verification.target = manifest.target;
+  verification.signing = manifest.signing;
+  verification.version = manifest.version;
   await writeFile(join(output, "desktop-verification.json"), json(verification));
   manifest.materials = manifest.materials.filter((file) => file.path !== "desktop-verification.json");
   manifest.materials.push(await fileRecord(output, "desktop-verification.json"));
@@ -364,16 +450,16 @@ export async function refreshVerification(output, manifest, verification) {
   await observePackagingPhase("checksumDelivery", () => checksumDelivery(output, manifest));
 }
 
-export async function writeReleaseMaterials({ output, resources, platform, sourceRoot, source, legalRoot, manifest, verification }) {
+export async function writeReleaseMaterials({ output, resources, platform, sourceRoot, source, legalRoot, legalCollected = false, manifest, verification }) {
   await mkdir(output, { recursive: true });
   await observePackagingPhase("archiveSource", () => createTar({ cwd: sourceRoot, gzip: true, portable: true, file: join(output, "desktop-source.tar.gz") }, [...source.files.map((file) => file.path), "desktop-source.json"]));
   await writeFile(join(output, "desktop-source.json"), json(source));
-  await observePackagingPhase("collectLegal", () => collectLegal(resources, platform, legalRoot));
+  if (!legalCollected) await observePackagingPhase("collectLegal", () => collectLegal(resources, platform, legalRoot));
   await observePackagingPhase("archiveLegal", () => createTar({ cwd: legalRoot, gzip: true, portable: true, file: join(output, "desktop-legal.tar.gz") }, ["."]));
   const notices = await readFile(join(repository, "THIRD_PARTY_NOTICES.md"), "utf8");
   const openBlockers = [...notices.matchAll(/^\| ([A-Z][A-Z-]+) \| OPEN \|/gm)].map((match) => match[1]);
   const result = {
-    schemaVersion: 2, ...manifest,
+    ...manifest, schemaVersion: 3,
     source: { commit: source.commit, dirty: source.dirty, sha256: source.sha256, inventory: "desktop-source.json", archive: "desktop-source.tar.gz" },
     toolchain: {
       node: process.versions.node,
@@ -388,9 +474,10 @@ export async function writeReleaseMaterials({ output, resources, platform, sourc
       imageOS: process.env.ImageOS ?? null, imageVersion: process.env.ImageVersion ?? null,
     } : null,
     releaseAuthorization: { status: "not-authorized", openBlockers, published: false, note: "Test delivery only. Checksums and source/legal materials do not grant public distribution or close third-party license/source obligations." },
-    materials: await observePackagingPhase("recordReleaseMaterials", () => Promise.all(["desktop-source.tar.gz", "desktop-source.json", "desktop-legal.tar.gz"].map((name) => fileRecord(output, name)))),
+    materials: await observePackagingPhase("recordReleaseMaterials", () => Promise.all(requiredDeliveryMaterials.filter((name) => name !== "desktop-verification.json").map((name) => fileRecord(output, name)))),
   };
   if (result.ci && result.ci.commit !== source.commit) throw new Error("Actions checkout identity does not match the packaged source commit.");
   await refreshVerification(output, result, verification);
+  await assertExactDeliveryDirectory(output, validateDeliveryAssets(result));
   return result;
 }

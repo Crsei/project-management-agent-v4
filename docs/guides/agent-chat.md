@@ -36,6 +36,7 @@ PM 中“Agent 助手”是文字与向下箭头合并的圆角下拉按钮：�
 - **Session 环境**使用 v2 `agentWorkspaceId + agentWorkspaceRevision`，不再保存 PM 归属、代码组合或 `rootIds`。重命名、关闭、重新打开只增加元数据 revision，不使原 Session 改绑或失效；未来版本仍拒绝。Files / Git 按 Session 与相对路径读取同一实际执行目录；受控交付指向收据拥有的 Worktree，原生仓库模板显示实际仓库副本路径而不冒充 Worktree。
 - **多个仓库**分别打开为不同的 Agent Workspaces，各自创建 Sessions；不存在把多个根拼成一个 Code Workspace 的运行层。普通代码会话、文件检查、Git、终端和原生 Skills 目录解析不依赖 PM 登录或 PM 服务可用。
 - **纯对话**不要求代码仓库。服务端在 Agent 私有数据目录的 `chat-scratch` 下按 Session 分配 scratch 并保存目录身份；Files / Git / Terminal 不把它展示为代码环境。已登记 scratch 丢失或身份改变时拒绝重建；PM 文件区域与保存根配置不是执行回退。
+- scratch 仅在新建时设置平台私有权限；复用时只核验，不自动收紧或接管已有目录。Unix 核对所有者与私有 mode，Windows 核对原生 ACL、目录身份及 reparse 属性，不将 POSIX mode 当作 Windows 权限证明。遇到身份或权限错误应核对原目录，不通过删除登记或重建目录绕过。
 
 | 终端 | 起始目录与切换行为 |
 | --- | --- |
@@ -65,6 +66,8 @@ Inspector 请求携带当前 Session，不接受浏览器任意 cwd 或旧 `root
 | 外观 | 主题 / 跟随系统、减少动态效果、侧栏密度复用 PM 浏览器偏好；Agent 正文字号、内容宽度、代码换行仅影响阅读，不改写消息 |
 | 文件夹入口 | 位于 Chat 侧栏“打开文件夹”，不再提供 Code Workspace／文件区域登记设置页；目录允许范围由服务端配置 |
 | 历史与归档 | 归档保留原 Session 的目录选择与历史，不按 PM 项目归属恢复；运行中不可归档，永久删除需明确确认 |
+
+当前会话参数保存会先采用客户端已接受的较新会话 revision，例如刚完成文件夹选择后的返回快照。尚未观察到的真实并发修改仍返回冲突；失败保留本地草稿并阻止发送，用户明确点击保存／重试时重新读取当前 revision 再提交，不自动重放失败写入或修改全局默认值。
 
 Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity、Muse Code、Pi、OMP（Oh My Pi）、ACP Registry。初始化仍只持久创建 Codex / Claude；其他默认位仅在已配置、有效启用或定向访问时显示，浏览页面不创建实例。FX 位于“显示更多”，ACP Registry 为独立搜索 / 准备入口；Registry 先显式准备，再填写身份并按协议认证，local 命令走较短路径。实例 ID 固定、字母开头、最多64字符，显示名称可清空回退驱动名；默认实例可重置，额外实例可删除。普通字段失焦或 Enter 保存，环境变量和模型显式保存。非敏感环境变量可回显编辑，敏感值遮蔽且空值回传保留；旧环境变量默认按敏感值迁移。模型段统一管理隐藏、排序、收藏、自定义能力选项；Antigravity 不开放自定义模型。独立 OpenAI / Anthropic / DeepSeek API 卡片及新执行入口不恢复，原始历史和私有凭据不删除。
 

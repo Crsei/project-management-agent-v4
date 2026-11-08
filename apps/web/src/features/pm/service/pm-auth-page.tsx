@@ -22,7 +22,7 @@ export function PmAuthPageShell({ children, toolbar, split = true }: {
   const t = useText()
   return (
     <div className={styles.shell}>
-      <header className={styles.header}>
+      <header className={`${styles.header} desktop-titlebar desktop-titlebar-reserve-controls desktop-titlebar-traffic-lights`}>
         <Link to="/pm" className={styles.brand}>
           <DovspaceWordmark />
         </Link>

@@ -274,7 +274,11 @@ export function WorkspaceShell({
   const docked = wide && inspectorOpen && inspector !== undefined
   const panelBody = <div className={styles.inspectorBody}>{inspector}</div>
   const header = (
-    <header className={styles.header}>
+    <header className={cn(
+      styles.header,
+      "desktop-titlebar desktop-titlebar-reserve-controls",
+      headerPlacement === "shell" && "desktop-titlebar-traffic-lights",
+    )}>
       {sidebar !== undefined && (sidebarHeader === undefined || !sidebarInline || sidebarCollapsed) && <Button
         variant="ghost"
         size="icon"
@@ -371,7 +375,7 @@ export function WorkspaceShell({
             {sidebarCollapsed && collapsedSidebar !== undefined
               ? collapsedSidebar
               : sidebarHeader === undefined ? sidebar : <div className="flex h-full min-h-0 flex-col">
-                <div className="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
+                <div className="desktop-titlebar desktop-titlebar-traffic-lights flex h-14 shrink-0 items-center justify-between gap-2 px-3">
                   {sidebarHeader}
                   <Button ref={sidebarCollapseRef} variant="ghost" size="icon" aria-label={t("workspaceShell.collapseSidebar")} aria-expanded
                     onClick={() => { setSidebarCollapsed(true); requestAnimationFrame(() => navigationOpenerRef.current?.focus()) }}>

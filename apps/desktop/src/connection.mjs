@@ -1,10 +1,20 @@
 const bridge = window.desktopConnection;
 const bridgeAvailable = Boolean(bridge && typeof bridge.invoke === "function" && typeof bridge.onState === "function");
+if (bridge?.platform === "darwin" || bridge?.platform === "win32" || bridge?.platform === "linux")
+  document.documentElement.dataset.desktopShell = bridge.platform;
 const bridgeUnavailable = "可信桌面连接桥不可用，请重新安装完整的 Dovspace 桌面应用。";
 const form = document.querySelector("#connection-form");
-const fields = Object.fromEntries(["projectRoot", "dataDir", "nodePath", "remoteUrl"].map(name => [name, form.elements.namedItem(name)]));
+const fields = Object.fromEntries(["projectRoot", "dataDir", "nodePath"].map(name => [name, form.elements.namedItem(name)]));
 const account = Object.fromEntries(["email", "name", "password", "workspaceName"].map(name => [name, form.elements.namedItem(name)]));
 const createAccount = form.elements.namedItem("createAccount");
+const maintenanceSecrets = [...document.querySelectorAll("#backup-password, #backup-password-confirm, #restore-password")];
+const legacyRestore = document.querySelector("#restore-legacy");
+const trustedRestoreSource = document.querySelector("#restore-trusted-source");
+function clearMaintenanceSecrets() {
+  for (const input of maintenanceSecrets) input.value = "";
+  legacyRestore.checked = false;
+  trustedRestoreSource.checked = false;
+}
 const dirty = new Set();
 let current;
 let pending = 0;
@@ -21,7 +31,6 @@ let step = "mode";
 // Validate only a configure submission, never navigation or hidden onboarding steps.
 form.noValidate = true;
 
-function selectedMode() { return form.elements.namedItem("mode").value; }
 function working() { return pending > 0 || ["connecting", "stopping", "maintenance"].includes(current?.status); }
 function clearAccount() { for (const element of Object.values(account)) element.value = ""; }
 function changeStep(next) {
@@ -38,49 +47,39 @@ function showError(selector, message) {
 }
 
 function syncConfiguration(state, replace = false) {
-  const previousMode = selectedMode();
   for (const [name, element] of Object.entries(fields))
     if (replace || !dirty.has(name)) element.value = state.configuration[name] || "";
-  if (replace || !dirty.has("mode")) form.elements.namedItem("mode").value = state.configuration.mode;
   if (replace || !dirty.has("createAccount"))
-    createAccount.checked = Boolean(state.setupSuggested) && selectedMode() === "local";
-  if (previousMode !== selectedMode() && selectedMode() !== "local") clearAccount();
+    createAccount.checked = Boolean(state.setupSuggested);
 }
 
 function statusMessage() {
   if (!bridgeAvailable) return "无法使用桌面连接功能。";
   if (!current) return localError ? "无法读取桌面连接状态。" : "正在读取桌面连接状态…";
   switch (current.status) {
-    case "connecting": return current.configuration.mode === "local" ? "正在准备本地工作区，请稍候…" : "正在检查远程服务，请稍候…";
-    case "connected": return current.configuration.mode === "local"
-      ? "本地工作区已连接。请在工作台中登录；关闭工作台窗口不会停止本地任务。"
-      : "远程服务已连接。请使用该服务的账号登录，任务在远程运行。";
+    case "connecting": return "正在准备工作区，请稍候…";
+    case "connected": return "工作区已连接。请在工作台中登录。";
     case "stopping": return "正在断开连接并停止本地服务与数据库…";
     case "maintenance": return "正在维护工作区数据，请稍候…";
     case "error": return current.localRunning ? "操作未完成，本地服务仍在运行。请查看错误并重试断开或退出。" : "操作未完成，请查看下方错误与原始诊断。";
-    default: return "尚未连接。选择连接方式后继续设置，已有数据不会被重置。";
+    default: return "尚未连接。继续设置本地工作台，已有数据不会被重置。";
   }
 }
 
 function displayMode(disabled) {
-  const local = selectedMode() === "local";
   const configuring = step === "configure";
-  document.querySelector("#local-fields").hidden = !local;
-  document.querySelector("#remote-fields").hidden = local;
-  document.querySelector("#account-fields").hidden = !local || !createAccount.checked;
+  document.querySelector("#account-fields").hidden = !createAccount.checked;
   for (const name of ["dataDir", "projectRoot", "nodePath"])
-    fields[name].disabled = disabled || !configuring || !local || (name === "nodePath" && !current?.developerRuntime);
-  fields.dataDir.required = local;
-  fields.remoteUrl.disabled = disabled || !configuring || local;
-  fields.remoteUrl.required = !local;
-  createAccount.disabled = disabled || !configuring || !local;
+    fields[name].disabled = disabled || !configuring || (name === "nodePath" && !current?.developerRuntime);
+  fields.dataDir.required = true;
+  createAccount.disabled = disabled || !configuring;
   for (const element of Object.values(account)) {
-    element.required = local && createAccount.checked;
-    element.disabled = disabled || !configuring || !local || !createAccount.checked;
+    element.required = createAccount.checked;
+    element.disabled = disabled || !configuring || !createAccount.checked;
   }
   for (const button of document.querySelectorAll("[data-directory]"))
-    button.disabled = disabled || !configuring || !local;
-  document.querySelector("#choose-node").disabled = disabled || !configuring || !local || !current?.developerRuntime;
+    button.disabled = disabled || !configuring;
+  document.querySelector("#choose-node").disabled = disabled || !configuring || !current?.developerRuntime;
 }
 
 function maintenanceStatus() {
@@ -94,7 +93,7 @@ function maintenanceStatus() {
   if (maintenanceNotice) return `${maintenanceNotice} ${availability}`;
   if (maintenanceFeedback?.status === "error") return `上次维护未完成，请查看下方错误。${availability}`;
   if (maintenanceFeedback?.status === "idle" && maintenanceFeedback.started)
-    return `${maintenanceFeedback.action === "restore" ? "恢复已完成，请返回连接页面后手动连接。" : "备份已完成，请妥善保管未加密的私密备份。"} ${availability}`;
+    return `${maintenanceFeedback.action === "restore" ? "恢复已完成，请返回连接页面后手动连接。" : "加密备份已完成，请将备份与口令分开安全保管。"} ${availability}`;
   return working() ? "正在处理桌面操作，请稍候。" : availability;
 }
 
@@ -138,7 +137,7 @@ function render() {
   connect.textContent = current?.status === "connecting" ? "正在连接…"
     : current?.status === "stopping" ? "正在停止…"
     : current?.status === "maintenance" ? "正在维护…"
-    : selectedMode() === "remote" ? "连接远程服务" : createAccount.checked ? "创建并启动工作区" : "启动本地工作区";
+    : createAccount.checked ? "创建并启动工作区" : "启动本地工作区";
   document.querySelector("#open").hidden = !connected || step !== "ready";
   document.querySelector("#open").disabled = disabled;
   document.querySelector("#change-connection").hidden = !connected || step !== "ready";
@@ -150,7 +149,7 @@ function render() {
   disconnect.disabled = disabled;
   disconnect.textContent = current?.status === "stopping" ? "正在停止…" : current?.localRunning ? "断开并停止本地服务" : "断开连接";
   document.querySelector("#ready-summary").textContent = connected
-    ? current.configuration.mode === "local" ? "本地工作区已就绪。打开工作台后，使用你的 PM 账号登录。" : "远程连接已就绪。打开工作台后，使用该服务的 PM 账号登录。"
+    ? "工作区已就绪。打开工作台后，使用你的 PM 账号登录。"
     : recovery ? "连接尚未完成，但本地服务仍在运行。可重试断开以安全停止服务，或退出应用。" : "正在停止连接，请稍候…";
   document.querySelector("#manage-workspace").disabled = disabled;
   document.querySelector("#maintenance-back").disabled = disabled;
@@ -158,6 +157,8 @@ function render() {
     || ["stopping", "maintenance"].includes(current?.status) || ["backup", "restore", "disconnect"].includes(activeAction);
   for (const action of ["backup", "restore"])
     document.querySelector(`#${action}`).disabled = disabled || !current?.maintenanceAllowed;
+  for (const input of [...maintenanceSecrets, legacyRestore, trustedRestoreSource])
+    input.disabled = disabled || !current?.maintenanceAllowed;
   for (const button of document.querySelectorAll("[data-reveal]"))
     button.disabled = disabled || !current?.configuration[button.dataset.reveal];
   document.querySelector("#maintenance-root").textContent = `已保存的工作区：${current?.configuration.dataDir || "尚未读取"}`;
@@ -253,12 +254,13 @@ async function invoke(action, options) {
 function navigate(nextView, nextStep = step) {
   if (working() || !current) return;
   account.password.value = "";
+  clearMaintenanceSecrets();
   view = nextView;
   changeStep(nextStep);
   render();
   const target = view === "maintenance" ? document.querySelector("#maintenance-back")
     : step === "mode" ? form.querySelector('input[name="mode"]:checked')
-    : step === "configure" ? selectedMode() === "remote" ? fields.remoteUrl : createAccount
+    : step === "configure" ? createAccount
     : document.querySelector("#open");
   target?.focus();
 }
@@ -274,11 +276,6 @@ form.addEventListener("change", event => {
     dirty.add("projectRoot");
   }
   if (event.target === createAccount && !createAccount.checked) clearAccount();
-  if (event.target.name === "mode" && selectedMode() !== "local") {
-    clearAccount();
-    createAccount.checked = false;
-    dirty.add("createAccount");
-  }
   render();
 });
 form.addEventListener("submit", async event => {
@@ -291,8 +288,8 @@ form.addEventListener("submit", async event => {
     form.reportValidity();
     return;
   }
-  const configuration = { mode: selectedMode(), ...Object.fromEntries(Object.entries(fields).map(([name, element]) => [name, element.value])) };
-  if (configuration.mode === "local" && createAccount.checked)
+  const configuration = { mode: "local", ...Object.fromEntries(Object.entries(fields).map(([name, element]) => [name, element.value])) };
+  if (createAccount.checked)
     configuration.setup = Object.fromEntries(Object.entries(account).map(([name, element]) => [name, element.value]));
   // Clear both DOM and temporary payload secrets even if startup fails or is cancelled.
   account.password.value = "";
@@ -323,10 +320,37 @@ document.querySelector("#choose-node").addEventListener("click", async () => {
 });
 for (const button of document.querySelectorAll("[data-reveal]"))
   button.addEventListener("click", () => { if (!button.disabled) void invoke("reveal", { field: button.dataset.reveal }); });
-for (const action of ["open", "disconnect", "backup", "restore", "quit"]) {
+for (const action of ["open", "disconnect", "quit"]) {
   const button = document.querySelector(`#${action}`);
   button.addEventListener("click", () => { if (!button.disabled) void invoke(action); });
 }
+for (const action of ["backup", "restore"]) document.querySelector(`#${action}`).addEventListener("click", async () => {
+  if (document.querySelector(`#${action}`).disabled) return;
+  const input = document.querySelector(`#${action}-password`);
+  const password = input.value;
+  const allowLegacyUnencrypted = action === "restore" && legacyRestore.checked;
+  const trustedSourceAcknowledged = action === "restore" && trustedRestoreSource.checked;
+  if (action === "restore" && !trustedSourceAcknowledged) {
+    localError = "请先确认备份来源可信。恢复会以本机账号权限执行备份中的数据库 SQL；加密与口令不能证明作者可信。";
+    render(); trustedRestoreSource.focus(); return;
+  }
+  if (password.length < (action === "backup" ? 12 : allowLegacyUnencrypted ? 0 : 1) || password.length > 1024) {
+    localError = action === "backup" ? "请输入至少 12 个字符的备份口令。" : "请输入备份口令；仅可信旧版未加密备份可不填写。";
+    render(); input.focus(); return;
+  }
+  if (action === "backup" && password !== document.querySelector("#backup-password-confirm").value) {
+    localError = "两次输入的备份口令不一致。"; render(); document.querySelector("#backup-password-confirm").focus(); return;
+  }
+  const options = { password, ...(action === "restore" ? { allowLegacyUnencrypted, trustedSourceAcknowledged } : {}) };
+  clearMaintenanceSecrets();
+  try { await invoke(action, options); }
+  finally {
+    options.password = "";
+    if (action === "restore") { options.trustedSourceAcknowledged = false; options.allowLegacyUnencrypted = false; }
+    clearMaintenanceSecrets();
+  }
+});
+window.addEventListener("pagehide", () => { clearAccount(); clearMaintenanceSecrets(); });
 
 render();
 if (bridgeAvailable) {

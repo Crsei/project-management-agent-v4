@@ -167,7 +167,7 @@ export function ErrorPageScreen({
   ]
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      <header className="flex min-h-16 items-center justify-between gap-4 border-b px-8 py-4 max-sm:px-4">
+      <header className="desktop-titlebar desktop-titlebar-reserve-controls desktop-titlebar-traffic-lights flex min-h-16 items-center justify-between gap-4 border-b px-8 py-4 max-sm:px-4">
         <Link
           to="/pm"
           className="inline-flex items-center gap-2 text-base font-semibold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"

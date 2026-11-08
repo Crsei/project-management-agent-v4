@@ -6,6 +6,14 @@
 
 ### 产品与架构
 
+- 登录后的工作区选择页改为账户菜单 + 工作区列表的轻量选择器：移除重复的登录成功展示、主页面刷新／账号安全入口和默认展开的创建表单；新建工作区改为 Dialog，示例项目默认不创建。单工作区自动进入，多工作区优先恢复本账号上次使用的工作区；`?pick=1`／`?create=1` 保留显式切换与创建入口。新增 `0054_workspace_creation_without_sample.sql` 允许无示例创建，跳过与示例记录共用原请求键并保持恢复幂等。
+- 修复桌面关闭被 renderer 的离页保护静默阻止：窗口关闭、断开和退出共用明确的留在页面／离开确认，取消保留窗口与服务，失败保留可重试的清理状态。
+- 修复当前会话模型参数使用旧 revision 导致“参数未保存”：保存前采用已接受的较新会话快照；真实并发冲突仍保留草稿、阻止发送，用户明确重试时重新读取后保存，不改新会话默认值。
+- 纯 Chat scratch 新建时设置平台私有权限，复用时核验原目录身份；Windows 使用原生 ACL／reparse 检查，不再用 POSIX mode 判断。丢失、替换或不安全的既有目录仍拒绝，不自动修复或重建。
+- Windows 私有状态目录／文件改用仅持久化已修改安全节的 ACL 写入，避免 PowerShell `Set-Acl` 额外写审计信息而要求管理员权限；PM 业务权限不变。Windows 普通用户与原生 GUI 验收仍须在对应平台执行。
+- 桌面连接页与工作区窗口改为 Electron 原生 Overlay 的无边框标题栏：Windows/Linux 隐藏原生标题栏和菜单行但保留应用菜单快捷键，原生最小化/最大化/关闭按钮叠加到 React 顶栏；macOS 使用 `hiddenInset` 保留红黄绿按钮。PM、Agent、设置、Usage、登录和连接页顶栏支持拖动并避开原生控件，原生控件颜色随应用主题同步；普通 Web 布局不变。Electron GUI 拖动、双击最大化、缩放与 macOS 控件仍需对应平台验证。
+- 桌面连接页仅保留本地工作台，移除远程服务入口、地址表单及相关说明；旧远程设置不再影响页面提交模式。现阶段不支持远程连接，本次不删除底层历史连接代码。
+
 - 修复桌面／Web 新建项目原生模态框中的下拉菜单失效：负责人和保存模式菜单留在模态框内；目标日期提供选择入口，字段区分必填／可选，目录草稿不会被延迟回读覆盖。
 - 新 Codex／Claude 配置入口默认未启用、不自动选择模型；Codex 原生 Home 证明接受经文件系统核验的同目录别名，保留不同 Home 拒绝与重启续接校验。
 - Agent 设置限制正文滚动范围；PM → Agent 显示加载、取消与失败重试。桌面本地工作区提供原生目录选择，允许根与服务器核验保持一致。
@@ -43,6 +51,10 @@
 
 ### 发布准备
 
+- 根据桌面工程基准增加不可变 install stamp、PID＋创建身份停机、Windows per-user NSIS 离线预检与四模式精确卸载；保留项目源码、外部 Provider Home 和未知用户文件，超时或所有权不明拒绝删除。升级保留旧代码恢复记录，不声称数据库迁移回滚；macOS 保持 OS/Finder 管理。
+- 新增默认关闭的 Windows 原生安装／覆盖／真实较低版本升级／中断恢复／四模式卸载驱动及 source/artifact/run/attempt 绑定 receipt；无窗口安装后 controller 不代表 Electron GUI，未执行原生矩阵不写成通过。历史发布授权不扩展到本次提交、推送或 dispatch。
+- 桌面交付增加准确资产允许清单、实际成品 CycloneDX SBOM、OSV/SARIF 门禁、Windows 成品／安装后卸载器验签与最终 DMG 公证／Gatekeeper 检查；私有 NSIS 插件由签名容器覆盖。无版本源码组件明确保留来源而不伪造扫描结果；继续无自动更新。
+- 新桌面备份使用 scrypt＋AES-256-GCM；恢复前验证完整性、同版本／同系统与空目标，并逐次确认可信来源。数据库 SQL 可影响目标以外的数据，加密不是作者认证或 SQL 沙箱。增加失效聊天目录恢复处理、IPC／导航／权限负面覆盖及互斥 payload 分解；Linux 真实服务、备份恢复烟测与原生安装／GUI 验收分开记录。
 - README 整理为公共入口，完整用法与限制移至 `docs/guides/`；内部计划和历史验收原件留在本地，公共安装/检查不依赖它们。
 - 当前架构/领域文档明确 Markdown、PostgreSQL、Agent SQLite 的不同权威，保留历史 ADR 和 INV/SC 追踪语义。
 - 提供贡献与安全政策、工具链 doctor 和隔离 CI 入口；文档检查不再绑定内部27步实施计划。
@@ -55,6 +67,8 @@
 - 桌面依赖改为 PM、Agent、Electron 各自独立的物理生产 `node_modules`，保留版本/peer 上下文、完整包资源和 Agent Effect 4.0.5 单实例，不跨闭包按 hash 删包。成品门禁需全功能 7-Zip，检查实际 NSIS 内层 payload 与 macOS DMG/ZIP 的依赖图、资源摘要及文件数/逻辑字节；`--native-smoke` 改用最终提取资源，`--installed-resources` 可将所供资源树精确绑定当前发行文件。控制器仍来自构建检出，均不代替安装/升级/卸载或 Electron GUI；本轮最新授权覆盖所有当前可公开源码更新，以主分支既有修复和性能优化为准，先集成审阅增量并在主分支源码上测试，有实际问题先修复并复验；门禁通过并冻结后精确提交、公开推送并只手动触发一次 Windows-only unsigned 构建，不下载安装器或发行材料。授权不是成功证据，不宣称尚未实测的新安装器体积或原生验收结果，详见[桌面指南](docs/guides/desktop.md)。
   随包 `jp` / `yaml` 的 PowerShell 命令桥接在 Windows 显式查找 `node.exe`，启动失败返回非零并保留实际 Node 退出码，不再把未启动命令误报为成功。
 - 原生安装包工作流支持只运行 Windows x64，不启动 macOS Job；修复 MSVC 链接器帮助返回 1100 时被构建预检误报为缺失，仍拒绝缺失工具、真正链接错误和无效帮助输出。
+- Windows 桌面打包增加安装文件数预算（45,000）与 `payload-report.mjs` 分布报告，Windows 仅保留 `zh-CN`/`en-US` Electron locale；记录 t3code `server.asar`/native-only 的优化方向。预算以最新 unsigned 安装树 39,809 文件为基线，超过即失败；不改卸载器、runtime 布局或用户数据删除语义，真实安装/卸载耗时仍须对应平台验证。
+- 新增 [Hermes Agent 桌面基准](docs/reference/desktop-benchmark-hermes-agent.zh.md)、[Cherry Studio 桌面基准](docs/reference/desktop-benchmark-cherry-studio.zh.md) 与[合并索引](docs/reference/desktop-engineering-benchmark.zh.md)：只读记录安装戳/所有权、卸载模式、数据保留、NSIS 预检、签名/更新和发布复核，并给出 Dovspace P0/P1 差距与目标文件；不代表原生安装/升级/卸载已执行或通过。
 - 桌面预览回归移除把预加载文件 URL 写死为 POSIX 路径的断言，保留导航归一化、分区与权限行为检查，避免 Windows 正确的驱动器路径被误判。
 - Windows 原生辅助程序清单按实际平台记录规范文件模式，不再要求不存在的 POSIX 执行位；文件哈希、大小、模式、目标平台与资源闭包校验保持启用。
 - Web 许可证依赖遍历统一 Vite 模块 ID 与平台目录分隔符，避免 Windows 将实际依赖误判为空；保留依赖许可证闭包缺失时拒绝打包的检查。

@@ -146,3 +146,22 @@ test('readiness inventories untouched Nova authority with local projects disable
   const restored = await f.request<WorkspaceSnapshot>(`/api/v1/workspaces/${created.workspaceId}/core/workspace`);
   assert.equal(restored.status, 200); assert.equal(restored.body.files.length, 27);
 });
+
+test('workspace creation can omit the sample and keeps one idempotent empty workspace', { timeout: localProjectCaseTimeout }, async t => {
+  const f = await createLocalProjectFixture({ signal: t.signal }); t.after(() => f.close());
+  const client = new ProjectManagementClient({ baseUrl: f.origin, auth: { type: 'cookie', credentials: 'include', cookie: () => f.ownerCookie } });
+  const key = randomUUID();
+  const request = { name: 'Empty workspace', expectedActorId: f.owner.id, includeSample: false };
+  const first = await client.createWorkspace(request, key, { signal: f.signal });
+  ready(first);
+  assert.equal(first.sampleProjectId, null);
+  assert.deepEqual(await client.createWorkspace({ ...request, includeSample: true }, key, { signal: f.signal }), first);
+  const list = await f.request<{ items: { id: string }[]; pendingInitializations: { workspaceId: string }[] }>('/api/v1/workspaces');
+  assert.ok(list.body.items.some(item => item.id === first.workspaceId));
+  assert.equal(list.body.pendingInitializations.some(item => item.workspaceId === first.workspaceId), false);
+  const snapshot = await f.request<WorkspaceSnapshot>(`/api/v1/workspaces/${first.workspaceId}/core/workspace`);
+  assert.equal(snapshot.status, 200, JSON.stringify(snapshot.body));
+  assert.deepEqual(snapshot.body.files, []);
+  assert.deepEqual((await f.pool.query('SELECT template,sample_skipped,status,project_id FROM workspace_sample_initializations WHERE workspace_id=$1', [first.workspaceId])).rows[0], { template: null, sample_skipped: true, status: 'ready', project_id: null });
+  assert.equal((await f.pool.query('SELECT count(*)::int AS n FROM workspaces')).rows[0].n, 2);
+});

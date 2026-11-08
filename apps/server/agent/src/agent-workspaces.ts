@@ -4,6 +4,8 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { executionSelectionSchema, type AgentWorkspace, type ExecutionEnvironment, type ExecutionSelection } from "../../../../packages/agent-contracts/src/execution.ts";
+import { assertPrivatePath, makePrivatePath } from "../../../../packages/pm-core/private-path.ts";
+import { assertNoWindowsReparsePath } from "../../../../packages/pm-core/windows-reparse.ts";
 import { DurableError } from "./durable/errors.ts";
 import { listRecords, readRecord, transaction, writeRecord } from "./durable/store.ts";
 import { dataDirectory } from "./paths.ts";
@@ -202,16 +204,26 @@ export function browseAgentDirectories(input?: string): AgentDirectoryListing {
   };
 }
 
-function privateDirectory(directory: string): DirectoryIdentity {
+/** Only newly allocated paths may have their permissions established, never existing scratch. */
+function privateDirectory(directory: string, created = false): DirectoryIdentity {
   try {
-    const stat = lstatSync(directory, { bigint: true });
-    if (!stat.isDirectory() || stat.isSymbolicLink() || (Number(stat.mode) & 0o077) !== 0 || typeof process.getuid === "function" && stat.uid !== BigInt(process.getuid())) {
+    const before = lstatSync(directory, { bigint: true });
+    if (!before.isDirectory() || before.isSymbolicLink() || process.platform !== "win32" && typeof process.getuid === "function" && before.uid !== BigInt(process.getuid())) {
       throw new DurableError(412, "chat_scratch_unavailable", "Private chat scratch identity or permissions are invalid.");
     }
-    return identity(stat);
+    assertNoWindowsReparsePath(directory, before);
+    if (created) makePrivatePath(directory);
+    else assertPrivatePath(directory);
+    const after = lstatSync(directory, { bigint: true });
+    if (!after.isDirectory() || after.isSymbolicLink() || !sameDirectory(identity(before), identity(after))
+      || process.platform !== "win32" && ((Number(after.mode) & 0o077) !== 0 || typeof process.getuid === "function" && after.uid !== BigInt(process.getuid()))) {
+      throw new DurableError(412, "chat_scratch_unavailable", "Private chat scratch identity or permissions are invalid.");
+    }
+    assertNoWindowsReparsePath(directory, after);
+    return identity(after);
   } catch (error) {
     if (error instanceof DurableError) throw error;
-    throw new DurableError(412, "chat_scratch_unavailable", "Private chat scratch is missing or inaccessible; no replacement was created.");
+    throw new DurableError(412, "chat_scratch_unavailable", "Private chat scratch is missing, inaccessible or not private; no replacement was created.");
   }
 }
 
@@ -221,11 +233,12 @@ function chatScratch(sessionId: string): string {
     const existing = readRecord<ScratchRecord>(scratchNamespace, sessionId);
     // Never trust a persisted absolute path: restored stores remain inside their own dataDirectory.
     const parent = path.join(realpathSync(dataDirectory()), "chat-scratch");
+    let parentCreated = false;
     if (!existing) {
-      try { mkdirSync(parent, { mode: 0o700 }); }
+      try { mkdirSync(parent, { mode: 0o700 }); parentCreated = true; }
       catch (error) { if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") throw error; }
     }
-    const parentIdentity = privateDirectory(parent);
+    const parentIdentity = privateDirectory(parent, parentCreated);
     const directory = path.join(parent, createHash("sha256").update(sessionId).digest("hex"));
     if (existing) {
       if (existing.sessionId !== sessionId || !sameDirectory(existing.parentIdentity, parentIdentity) || !sameDirectory(existing.directoryIdentity, privateDirectory(directory))) {
@@ -234,7 +247,7 @@ function chatScratch(sessionId: string): string {
     } else {
       try { mkdirSync(directory, { mode: 0o700 }); }
       catch { throw new DurableError(412, "chat_scratch_unavailable", "Private chat scratch cannot be allocated without adopting an existing directory."); }
-      writeRecord<ScratchRecord>(scratchNamespace, sessionId, { sessionId, parentIdentity, directoryIdentity: privateDirectory(directory) });
+      writeRecord<ScratchRecord>(scratchNamespace, sessionId, { sessionId, parentIdentity, directoryIdentity: privateDirectory(directory, true) });
     }
     if (!sameDirectory(parentIdentity, privateDirectory(parent))) throw new DurableError(412, "chat_scratch_changed", "Private chat scratch changed during resolution.");
     return directory;

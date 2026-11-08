@@ -1,4 +1,6 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webFrame } = require("electron");
+
+const platform = process.platform;
 
 const actions = new Set([
   "state", "create-tab", "close-tab", "register-webview", "navigate",
@@ -23,6 +25,31 @@ const subscribe = (channel, listener) => {
   ipcRenderer.on(channel, handler);
   return () => ipcRenderer.removeListener(channel, handler);
 };
+
+// Window chrome is available in every desktop workspace mode, including remote
+// workspaces. It exposes only the client platform and a theme setter; no
+// filesystem, process, shell or generic IPC capability crosses the bridge.
+contextBridge.exposeInMainWorld("desktopShell", Object.freeze({
+  platform,
+  titlebarHeight: platform === "darwin" ? 56 : 40,
+  setTitlebarTheme: theme => {
+    if (theme !== "light" && theme !== "dark") return Promise.reject(new TypeError("Title bar theme must be light or dark."));
+    return ipcRenderer.invoke("desktop:titlebar-theme", theme);
+  },
+}));
+
+if (platform === "darwin" && typeof document !== "undefined" && typeof window !== "undefined") {
+  // Native traffic lights do not scale with Chromium zoom. Reserve their space
+  // in native points so the React titlebar keeps clear at every zoom level.
+  const syncWindowControlInset = () => {
+    try {
+      document.documentElement.style.setProperty("--desktop-window-controls-inset", `${90 / webFrame.getZoomFactor()}px`);
+    } catch { /* The CSS fallback still reserves the default inset. */ }
+  };
+  window.addEventListener("DOMContentLoaded", syncWindowControlInset, { once: true });
+  window.addEventListener("resize", syncWindowControlInset);
+  syncWindowControlInset();
+}
 
 const enabled = typeof process !== "undefined" && Array.isArray(process.argv) && process.argv.includes("--pm-native-preview");
 if (enabled) contextBridge.exposeInMainWorld("desktopWorkspace", Object.freeze({

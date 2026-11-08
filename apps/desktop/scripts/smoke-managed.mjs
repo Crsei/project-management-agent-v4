@@ -74,7 +74,7 @@ async function verifyNativeClosure(projectRoot) {
     });
   } finally {
     clearTimeout(timer);
-    await stopOwned(child, { force: true });
+    await stopOwned(child);
   }
 }
 async function request(origin, path, init = {}) {

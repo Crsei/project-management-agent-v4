@@ -5,7 +5,7 @@ import { workspaceClient } from "@agent/src/network";
 import { threadSettingsSchema, type RemoteSettings, type RemoteThread } from "@agent-workspace/contracts/chat";
 import { UNSELECTED_THREAD_SETTINGS, type ChatDefaultsResponse } from "@agent-workspace/contracts/settings";
 import { pendingRemoteSettings } from "./remote-settings-patch";
-import { acceptRemoteThread } from "@agent/src/pm/state";
+import { acceptRemoteThread, getRemoteThread } from "@agent/src/pm/state";
 import { agentText } from "@agent/src/i18n-text.ts";
 
 export type ChatSettings = RemoteSettings & { dictation: boolean; speak: boolean };
@@ -101,6 +101,10 @@ export function acceptInitializedThread(draftId: string, thread: RemoteThread): 
   acceptThreadSettings(thread);
 }
 export async function loadThreadSettings(id: string, force = false): Promise<void> {
+  // Other Session mutations also advance settings revision; consume accepted snapshots before the cache.
+  const accepted = getRemoteThread(id);
+  if (accepted && accepted.revision > (stateFor(id).revision ?? -1))
+    acceptThreadSettings(accepted);
   if (!force && stateFor(id).settingsLoaded) return;
   if (loads.has(id)) return loads.get(id);
   putState(id, { ...stateFor(id), loading: true });
@@ -241,6 +245,11 @@ export function useChatSettings(threadId?: string, initialize?: () => Promise<st
           pendingPatch: { ...saved.pendingPatch, ...draft.pendingPatch }, saving: true, error: undefined,
         });
         states.delete(key);
+      }
+      if (before.error) {
+        // A new explicit save after failure also serves as retry (including the dialog).
+        await queues.get(id)?.catch(() => {});
+        await loadThreadSettings(id, true);
       }
       await savePendingSettings(id);
     } catch (error) {

@@ -114,6 +114,28 @@ svg {
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
+
+/* Frameless desktop window: the header is the window drag strip. Native
+   controls are drawn above the page, so reserve their exact geometry. */
+html[data-desktop-shell] .desktop-titlebar {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+html[data-desktop-shell] .desktop-titlebar > * {
+  -webkit-app-region: initial;
+  app-region: initial;
+}
+html[data-desktop-shell] .desktop-titlebar :is(button, a, input, textarea, select, [role="button"], [data-no-drag]) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+html[data-desktop-shell="win32"] .app-header,
+html[data-desktop-shell="linux"] .app-header {
+  padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 12px);
+}
+html[data-desktop-shell="darwin"] .app-header {
+  padding-left: calc(var(--desktop-window-controls-inset, 90px) + 32px);
+}
 .brand {
   display: inline-flex;
   min-width: 0;
@@ -285,7 +307,7 @@ fieldset {
 }
 .mode-picker {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin: 0;
   padding: 0;
@@ -535,18 +557,6 @@ summary {
 .development-runtime .field {
   margin-top: 14px;
 }
-.remote-url-field {
-  margin: 24px 0;
-}
-.remote-url-field > input {
-  min-height: 44px !important;
-}
-.remote-notice > strong {
-  color: var(--ink);
-}
-.remote-notice > p {
-  margin-top: 6px;
-}
 
 button {
   display: inline-flex;
@@ -794,6 +804,16 @@ pre {
   color: var(--secondary);
   font-size: 13px;
   line-height: 1.8;
+}
+.operation-card .field {
+  width: 100%;
+  margin-bottom: 16px;
+}
+.operation-card > small {
+  margin: 8px 0 16px;
+}
+.operation-card > button {
+  margin-top: auto;
 }
 .saved-folders {
   display: flex;

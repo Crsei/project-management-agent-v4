@@ -3,7 +3,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import type { Actor } from '../../../../packages/domain/src/core.ts';
 import { listWorkspaces } from '../../../../packages/application/src/queries.ts';
-import { assertWorkspaceCreationActor, createWorkspaceWithNova } from '../../../../packages/application/src/workspace-creation.ts';
+import { assertWorkspaceCreationActor, createWorkspaceFromRequest } from '../../../../packages/application/src/workspace-creation.ts';
 import { initializeNovaWorkspaceSample, readWorkspaceCreation, resumeActorWorkspaceSamples, type WorkspaceSampleOptions } from '../../../../packages/application/src/workspace-samples.ts';
 import type { WorkspaceInitialization } from '../../../../packages/contracts/src/workspace-creation.ts';
 import { workspaceCreationKeySchema, workspaceCreationRequestSchema, workspaceCreationRecoveryRequestSchema } from '../../../../packages/contracts/src/workspace-creation.ts';
@@ -29,7 +29,7 @@ export function registerWorkspaceCreationRoutes(app: FastifyInstance, options: {
     z.strictObject({}).parse(request.query);
     reply.header('Cache-Control', 'private, no-store');
     const key = workspaceCreationKeySchema.parse(request.headers['idempotency-key']);
-    return createWorkspaceWithNova(options.database(), await options.actor(request), workspaceCreationRequestSchema.parse(request.body), key, options.sample);
+    return createWorkspaceFromRequest(options.database(), await options.actor(request), workspaceCreationRequestSchema.parse(request.body), key, options.sample);
   });
   app.get('/api/v1/workspace-creations/:key', async (request, reply) => {
     z.strictObject({}).parse(request.query);

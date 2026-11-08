@@ -361,7 +361,7 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
       const status = await pool.query<{ live: boolean; failures: string }>("SELECT EXISTS(SELECT 1 FROM service_heartbeats WHERE role='worker' AND heartbeat_at>now()-interval '20 seconds') AS live,(SELECT count(*)::text FROM outbox WHERE published_at IS NULL AND attempts>=10) AS failures");
       workerReady = status.rows[0]?.live ?? false;
       failedOutbox = Number(status.rows[0]?.failures ?? 0);
-      const authorities = await pool.query<{ workspace_id: string }>(`SELECT workspace_id FROM project_audit UNION SELECT workspace_id FROM local_project_operations UNION SELECT workspace_id FROM workspace_sample_initializations UNION SELECT workspace_id FROM command_receipts WHERE command_type IN ('CreateProject','CreateWorkItem','CreateWorkItemFromIntent','CreateMilestone') AND receipt->>'status'='committed'`);
+      const authorities = await pool.query<{ workspace_id: string }>(`SELECT workspace_id FROM project_audit UNION SELECT workspace_id FROM local_project_operations UNION SELECT workspace_id FROM workspace_sample_initializations WHERE NOT sample_skipped UNION SELECT workspace_id FROM command_receipts WHERE command_type IN ('CreateProject','CreateWorkItem','CreateWorkItemFromIntent','CreateMilestone') AND receipt->>'status'='committed'`);
       for (const authority of authorities.rows) {
         const state = lstatSync(path.join(coreRoot, authority.workspace_id, '.pm/state/state.json'));
         if (!state.isFile() || state.isSymbolicLink() || state.nlink !== 1) throw new Error('Authoritative core state is missing or unsafe');

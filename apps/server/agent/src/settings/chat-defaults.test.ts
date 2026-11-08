@@ -221,6 +221,49 @@ test("session settings update provider/model atomically and reject stale or inva
   assert.deepEqual(getThread("session")!.settings, selected);
 });
 
+test("explicit model switches persist exact compatible options for new and existing sessions without changing defaults", async () => {
+  updateProviderInstance(pair.providerInstanceId, { customModels: [
+    { id: pair.model, label: "A", capabilities: { optionDescriptors: [
+      { id: "effort", label: "Effort", type: "select", options: [{ id: "high", label: "High" }] },
+    ] } },
+    { id: "native-fixture-b", label: "B", capabilities: { optionDescriptors: [
+      { id: "variant", label: "Variant", type: "select", options: [{ id: "fast", label: "Fast" }] },
+    ] } },
+  ] });
+  const defaults = await saveChatDefaults({ revision: 0, selection: {
+    ...pair, modelOptions: [{ id: "effort", value: "high" }], interactionMode: "plan",
+  } });
+  seedThread("existing-switch");
+  const created = await createCurrentThread("new-switch");
+  assert.equal(created.status, 200);
+  for (const id of ["existing-switch", "new-switch"]) {
+    const before = getThread(id)!;
+    const incompatible = await put(`/chat/threads/${id}`, {
+      revision: before.revision, settings: { ...before.settings, model: "native-fixture-b" },
+    });
+    assert.equal(incompatible.status, 400);
+    assert.deepEqual(getThread(id)!.settings, before.settings);
+    assert.equal(getThread(id)!.revision, before.revision);
+    const settings = { ...before.settings, model: "native-fixture-b", modelOptions: [{ id: "variant", value: "fast" }] };
+    const saved = await put(`/chat/threads/${id}`, { revision: before.revision, settings });
+    assert.equal(saved.status, 200);
+    assert.deepEqual((await saved.json() as { thread: RemoteThread }).thread.settings, settings);
+  }
+  createProviderInstance({ instanceId: "other-provider", driver: "codex", enabled: true, customModels: [{ id: "other-model", label: "Other" }] });
+  const current = getThread("new-switch")!;
+  const crossProvider = { ...current.settings, providerInstanceId: "other-provider", model: "other-model", modelOptions: [] };
+  const saved = await put("/chat/threads/new-switch", { revision: current.revision, settings: crossProvider });
+  assert.equal(saved.status, 200);
+  const existingSettings = getThread("existing-switch")!.settings;
+  closeStore();
+  for (const [id, expected] of [["new-switch", crossProvider], ["existing-switch", existingSettings]] as const) {
+    const refreshed = await app.request(`http://localhost/api/chat/threads/${id}`);
+    assert.equal(refreshed.status, 200);
+    assert.deepEqual((await refreshed.json() as { thread: RemoteThread }).thread.settings, expected);
+  }
+  assert.deepEqual(readChatDefaults(), defaults.defaults);
+});
+
 
 test("corrupt persisted defaults fail closed without restoring a built-in selection", () => {
   writeRecord("settings:chat-defaults", "default", { revision: 5, selection: { model: "bad" } });

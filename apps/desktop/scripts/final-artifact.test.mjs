@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { crc32 } from "node:zlib";
-import { listArchive } from "./final-artifact.mjs";
+import { listArchive, nsisUninstallerMember, NSIS_UNINSTALLER_BYTE_LIMIT } from "./final-artifact.mjs";
 
 // Actual uncompressed ZIP structures, including Unix symlink metadata. No shell
 // echo, extractor mock, executable installer or native smoke is involved.
@@ -77,4 +77,22 @@ for (const entry of ["resources/NUL.txt", "resources/trailing.", "resources/trai
 test("implicit Windows directory case aliases are rejected even without explicit directory entries", async (t) => {
   const path = await archive(t, [{ path: "resources/Package/a.js" }, { path: "resources/package/b.js" }]);
   await assert.rejects(listArchive(path, { windows: true }), /Case-aliased/);
+});
+
+test("NSIS installed uninstaller selection is exact and excludes private implementation/plugin members", () => {
+  for (const path of ["Uninstall PM Agent v4.exe", "$INSTDIR/Uninstall PM Agent v4.exe"]) {
+    const uninstaller = { path, Path: path, Size: "4096", Folder: "-", Attributes: "A" };
+    assert.equal(nsisUninstallerMember([{ path: "$PLUGINSDIR/System.dll", Size: "1024" }, { path: "$PLUGINSDIR/private-helper.exe", Size: "1024" }, uninstaller]), uninstaller);
+  }
+  assert.throws(() => nsisUninstallerMember([{ path: "$PLUGINSDIR/Uninstall PM Agent v4.exe", Size: "4096" }]), /exactly one bounded regular/);
+});
+
+test("NSIS installed uninstaller parser rejects missing, ambiguous, linked, non-file and oversized members", () => {
+  const entry = { path: "Uninstall PM Agent v4.exe", Path: "Uninstall PM Agent v4.exe", Size: "4096", Folder: "-", Attributes: "A" };
+  for (const members of [
+    [], [entry, entry], [entry, { ...entry, path: "$INSTDIR/Uninstall PM Agent v4.exe" }],
+    [{ ...entry, Size: "0" }], [{ ...entry, Size: String(NSIS_UNINSTALLER_BYTE_LIMIT + 1) }],
+    [{ ...entry, Size: "1e6" }], [{ ...entry, Folder: "+" }], [{ ...entry, Attributes: "D" }],
+    [{ ...entry, "Symbolic Link": "another.exe" }], [{ ...entry, "Hard Link": "another.exe" }],
+  ]) assert.throws(() => nsisUninstallerMember(members), /exactly one bounded regular/);
 });

@@ -43,6 +43,73 @@
   }
 }
 
+/* Electron frameless window chrome. Only the desktop preload sets
+   data-desktop-shell, so the plain Web build keeps its existing layout. */
+html[data-desktop-shell] {
+  --desktop-titlebar-height: 40px;
+  --desktop-native-controls-inset: 8px;
+  --desktop-traffic-lights-inset: 0px;
+}
+html[data-desktop-shell="win32"],
+html[data-desktop-shell="linux"] {
+  --desktop-titlebar-height: max(40px, env(titlebar-area-height, 40px));
+  --desktop-native-controls-inset: calc(
+    100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 10px
+  );
+}
+html[data-desktop-shell="darwin"] {
+  --desktop-titlebar-height: 56px;
+  --desktop-traffic-lights-inset: var(--desktop-window-controls-inset, 90px);
+}
+
+/* The top row is the native drag strip. Interactive descendants must opt out
+   or Electron swallows their clicks while dragging the window. */
+html[data-desktop-shell] .desktop-titlebar {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+html[data-desktop-shell] .desktop-titlebar > * {
+  -webkit-app-region: initial;
+  app-region: initial;
+}
+html[data-desktop-shell] .desktop-titlebar
+  :is(button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-drag]) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+html[data-desktop-shell="win32"] .desktop-titlebar-reserve-controls,
+html[data-desktop-shell="linux"] .desktop-titlebar-reserve-controls {
+  padding-right: var(--desktop-native-controls-inset);
+}
+html[data-desktop-shell="darwin"] .desktop-titlebar-traffic-lights {
+  padding-left: var(--desktop-traffic-lights-inset);
+}
+/* A collapsed navigation rail leaves the main header at the macOS traffic-light
+   edge; keep its content clear without moving the rail itself. */
+html[data-desktop-shell="darwin"] [data-header-placement="main"][data-sidebar-collapsed="true"][data-sidebar-rail]
+  .desktop-titlebar-reserve-controls {
+  padding-left: max(12px, calc(var(--desktop-traffic-lights-inset) - 44px));
+}
+html[data-desktop-shell="darwin"] [data-header-placement="main"][data-sidebar-collapsed="true"]:not(
+    [data-sidebar-rail]
+  )
+  .desktop-titlebar-reserve-controls {
+  padding-left: calc(var(--desktop-traffic-lights-inset) + 12px);
+}
+html[data-desktop-shell="darwin"] .pm-agent-chat[data-sidebar-collapsed="true"] .pm-agent-context-header {
+  padding-left: calc(var(--desktop-traffic-lights-inset) + 12px);
+}
+html[data-desktop-shell="darwin"] .desktop-titlebar-rail {
+  height: auto;
+  min-height: calc(48px + var(--desktop-titlebar-height));
+  padding-top: var(--desktop-titlebar-height);
+}
+/* Embedded Agent chat sits inside the PM content column, not at the window's
+   right edge; only the outer PM header reserves native controls. */
+html[data-desktop-shell] .pm-agent-chat[data-embedded="true"] .desktop-titlebar-reserve-controls {
+  padding-right: 0;
+}
+
 /* 滚动条沿用 Gr8r Studio 的细长设计：10px 槽位，3px 透明边距后约 4px 可见圆角滑块。 */
 ::-webkit-scrollbar {
   width: 10px;

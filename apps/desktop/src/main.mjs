@@ -1,13 +1,21 @@
 import * as electron from "electron";
-import { app, BrowserWindow, Menu, dialog, ipcMain, screen, session, shell } from "electron";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, screen, session, shell } from "electron";
+import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
 import { LocalServer } from "./local-server.mjs";
 import { PreviewManager } from "./preview/manager.mjs";
 import { isAllowedPreviewUrl } from "./preview/preview-policy.mjs";
 import { backupDesktop, restoreDesktop } from "./maintenance.mjs";
 import { captureWindowState, restoredWindowBounds } from "./window-state.mjs";
+import { protectWorkspaceClose } from "./window-close.mjs";
+import { readInstallStamp } from "./install-stamp.mjs";
+import { loadLifecycleRequest, readLifecycleArguments, runLifecycleRequest } from "./lifecycle-cli.mjs";
+import { ensurePrivateDirectory, securePrivateFile, writePrivateJson } from "./private-state.mjs";
+import {
+  macosWindowButtonPosition, normalizeTitleBarTheme, titleBarOverlay, windowTitleBarOptions,
+} from "./window-chrome.mjs";
 import {
   absolutePath, initialSetup, publicConfiguration, readLaunchArguments, remoteAddress,
   safeDesktopMessage, sameService, serviceRequestAllowed, trustedConnectionFrame, trustedWorkspaceFrame, workspacePartition,
@@ -23,9 +31,26 @@ const serverRoot = app.isPackaged ? join(process.resourcesPath, "workspace-runti
 const runtimeRoot = app.isPackaged
   ? join(process.resourcesPath, "desktop-runtime")
   : resolve(process.env.PM_DESKTOP_RUNTIME_ROOT || join(repository, "apps", "desktop", ".runtime", "desktop-runtime"));
+const installRoot = app.isPackaged ? (process.platform === "darwin" ? resolve(process.resourcesPath, "../..") : dirname(app.getPath("exe"))) : null;
+let installStamp;
+let lifecycleContext;
+let lifecycleError;
+try {
+  if (app.isPackaged) installStamp = await readInstallStamp(process.resourcesPath, { version: app.getVersion() });
+  const arguments_ = readLifecycleArguments(process.argv.slice(1));
+  if (arguments_) {
+    lifecycleContext = await loadLifecycleRequest(arguments_, { packaged: app.isPackaged, installRoot, stamp: installStamp });
+    // Single-instance routing must be bound to this private userData first.
+    app.setPath("userData", lifecycleContext.controllerUserDataDir);
+  }
+} catch (cause) { lifecycleError = cause; }
 let connectionWindow;
 let workspaceWindow;
+let workspaceClose;
 let localServer;
+let lifecycleConnection;
+let lifecyclePromise;
+let lifecycleStateFrozen = false;
 let workspaceSession;
 let workspaceMode;
 let workspaceUrl;
@@ -60,8 +85,9 @@ function snapshot() {
     localRunning: localRunning(),
     processCount: localServer?.processCount || 0,
     developerRuntime: !app.isPackaged,
+    installIdentity: installStamp ? { version: installStamp.version, distribution: installStamp.distribution, ownership: installStamp.ownership.installation, updateMechanism: installStamp.updateMechanism } : null,
     workspaceOpen: Boolean(workspaceWindow && !workspaceWindow.isDestroyed()),
-    maintenanceAllowed: !changingConnection && !maintenancePromise && !quitting && !quitPrompt && !localRunning() && !workspaceSession,
+    maintenanceAllowed: !changingConnection && !maintenancePromise && !lifecyclePromise && !quitting && !quitPrompt && !localRunning() && !workspaceSession,
   };
 }
 
@@ -74,11 +100,12 @@ function publish(patch) {
 }
 
 function rememberWindow(kind, window) {
+  if (lifecycleStateFrozen) return;
   const saved = captureWindowState(window);
   if (!saved || !windowStateFile) return;
   windowStates[kind] = saved;
-  const value = `${JSON.stringify(windowStates)}\n`;
-  windowStateWrite = windowStateWrite.catch(() => {}).then(() => writeFile(windowStateFile, value, { mode: 0o600 })).catch(() => {});
+  const value = { ...windowStates };
+  windowStateWrite = windowStateWrite.catch(() => {}).then(() => writePrivateJson(windowStateFile, value)).catch(() => {});
 }
 
 function watchWindow(kind, window) {
@@ -88,7 +115,7 @@ function watchWindow(kind, window) {
     timer = setTimeout(() => rememberWindow(kind, window), 300);
   };
   for (const event of ["resize", "move", "maximize", "unmaximize"]) window.on(event, remember);
-  window.on("close", () => { clearTimeout(timer); rememberWindow(kind, window); });
+  window.on("close", () => { clearTimeout(timer); if (!allowQuit) rememberWindow(kind, window); });
   window.on("closed", () => clearTimeout(timer));
   if (windowStates[kind]?.maximized) window.maximize();
 }
@@ -108,6 +135,44 @@ function lockPermissions(targetSession) {
   targetSession.setDevicePermissionHandler(() => false);
 }
 
+function applyTitleBarTheme(window, theme) {
+  if (!window || window.isDestroyed() || process.platform === "darwin") return;
+  const resolved = normalizeTitleBarTheme(theme);
+  if (resolved) window.setTitleBarOverlay(titleBarOverlay(resolved));
+}
+
+function syncMacosWindowButtons(window) {
+  if (process.platform !== "darwin" || !window || window.isDestroyed() || window.isFullScreen()) return;
+  window.setWindowButtonPosition(macosWindowButtonPosition(window.webContents.getZoomFactor()));
+}
+
+function watchTitleBar(window) {
+  // Keep the application menu for accelerators, but never reserve a native
+  // menu row inside the frameless window. Alt still follows Electron behavior.
+  if (process.platform !== "darwin") window.setMenuBarVisibility(false);
+  if (process.platform !== "darwin") return;
+  syncMacosWindowButtons(window);
+  window.webContents.on("did-finish-load", () => syncMacosWindowButtons(window));
+  window.webContents.on("zoom-changed", () => syncMacosWindowButtons(window));
+  window.on("leave-full-screen", () => syncMacosWindowButtons(window));
+}
+
+async function setTitleBarTheme(event, value) {
+  const theme = normalizeTitleBarTheme(value);
+  if (!theme) throw new Error("Invalid title bar theme.");
+  const workspace = workspaceWindow;
+  if (workspace && !workspace.isDestroyed() && trustedWorkspaceFrame(event, workspace.webContents, workspaceUrl)) {
+    applyTitleBarTheme(workspace, theme);
+    return;
+  }
+  const connection = connectionWindow;
+  if (connection && !connection.isDestroyed() && trustedConnectionFrame(event, connection.webContents, connectionUrl)) {
+    applyTitleBarTheme(connection, theme);
+    return;
+  }
+  throw new Error("Title bar controls are available only in a trusted desktop window.");
+}
+
 function showConnection() {
   if (connectionWindow && !connectionWindow.isDestroyed()) {
     if (connectionWindow.isMinimized()) connectionWindow.restore();
@@ -117,21 +182,28 @@ function showConnection() {
   }
   connectionWindow = new BrowserWindow({
     ...restoredWindowBounds(windowStates.connection, { width: 1080, height: 800, minWidth: 620, minHeight: 660 }, screen.getAllDisplays()),
-    title: "工作区连接 — Dovspace", backgroundColor: "#fafaf9", autoHideMenuBar: false,
+    title: "工作区连接 — Dovspace", backgroundColor: "#fafaf9", autoHideMenuBar: true,
+    ...windowTitleBarOptions(process.platform, nativeTheme.shouldUseDarkColors ? "dark" : "light"),
     webPreferences: securePreferences("desktop-connection", join(here, "preload.cjs")),
   });
   const window = connectionWindow;
+  watchTitleBar(window);
   watchWindow("connection", window);
   lockPermissions(window.webContents.session);
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, url) => { if (url !== connectionUrl) event.preventDefault(); });
+  window.webContents.on("will-frame-navigate", (event) => { if (!event.isMainFrame || event.url !== connectionUrl) event.preventDefault(); });
   window.webContents.on("will-redirect", (event) => event.preventDefault());
   window.webContents.on("will-attach-webview", (event) => event.preventDefault());
   window.on("close", (event) => {
     if (allowQuit) return;
     event.preventDefault();
-    if (workspaceWindow && !workspaceWindow.isDestroyed()) window.hide();
-    else void requestQuit();
+    if (workspaceWindow && !workspaceWindow.isDestroyed()) {
+      window.hide();
+      if (workspaceWindow.isMinimized()) workspaceWindow.restore();
+      workspaceWindow.show();
+      workspaceWindow.focus();
+    } else void requestQuit();
   });
   window.on("closed", () => { if (connectionWindow === window) connectionWindow = null; });
   void window.loadURL(connectionUrl).catch(() => {
@@ -175,15 +247,24 @@ async function createWorkspace(url, targetSession, mode) {
   const origin = new URL(url).origin;
   const window = new BrowserWindow({
     ...restoredWindowBounds(windowStates.workspace, { width: 1440, height: 980, minWidth: 900, minHeight: 640 }, screen.getAllDisplays()),
-    title: "PM Agent v4", backgroundColor: "#fafaf9", show: false,
+    title: "PM Agent v4", backgroundColor: "#fafaf9", show: false, autoHideMenuBar: true,
+    ...windowTitleBarOptions(process.platform, nativeTheme.shouldUseDarkColors ? "dark" : "light"),
     webPreferences: {
       ...securePreferences(undefined, join(here, "preload.workspace.cjs")),
       session: targetSession,
-      webviewTag: true,
+      webviewTag: mode === "local",
       additionalArguments: mode === "local" ? ["--pm-native-preview"] : [],
     },
   });
+  watchTitleBar(window);
   workspaceWindow = window;
+  workspaceClose = protectWorkspaceClose(window, {
+    dialog,
+    onError: (cause) => {
+      publish({ error: `Could not confirm leaving the workspace: ${safeDesktopMessage(cause)}` });
+      showConnection();
+    },
+  });
   workspaceSession = targetSession;
   workspaceMode = mode;
   workspaceUrl = url;
@@ -213,6 +294,7 @@ async function createWorkspace(url, targetSession, mode) {
     if (!sameService(destination, origin)) { event.preventDefault(); void externalLink(destination); }
   });
   window.webContents.on("will-redirect", (event, destination) => { if (!sameService(destination, origin)) event.preventDefault(); });
+  window.webContents.on("will-frame-navigate", (event) => { if (!sameService(event.url, origin)) event.preventDefault(); });
   window.webContents.on("did-navigate", (_event, destination) => {
     // Keep navigation in memory only. Do not persist account forms, auth redirects or URL parameters.
     if (sameService(destination, origin)) {
@@ -260,38 +342,43 @@ async function createWorkspace(url, targetSession, mode) {
 }
 
 async function closeWorkspace() {
-  previewManager?.dispose();
   const previous = workspaceWindow;
-  workspaceWindow = null;
-  if (previous && !previous.isDestroyed()) { rememberWindow("workspace", previous); previous.destroy(); }
+  if (previous && !previous.isDestroyed()) await workspaceClose();
+  previewManager?.dispose();
   const previousSession = workspaceSession;
+  if (previousSession) {
+    try {
+      await previousSession.closeAllConnections();
+      await previousSession.flushStorageData();
+    } catch (cause) {
+      throw new Error(`Browser storage could not be flushed: ${safeDesktopMessage(cause)} Keep the app open and retry Disconnect or Quit.`, { cause });
+    }
+    previousSession.webRequest.onBeforeRequest(null);
+    // Never clear IndexedDB/localStorage: pending/unknown command journals must survive disconnect.
+  }
   workspaceSession = null;
   workspaceMode = null;
   workspaceUrl = null;
-  if (previousSession) {
-    previousSession.webRequest.onBeforeRequest(null);
-    await previousSession.closeAllConnections();
-    await previousSession.flushStorageData();
-    // Never clear IndexedDB/localStorage: pending/unknown command journals must survive disconnect.
-  }
 }
 
 async function stopConnection() {
   if (stopPromise) return stopPromise;
   stopPromise = (async () => {
-    let browserError;
-    try { await closeWorkspace(); } catch (cause) { browserError = cause; }
+    // A cancelled draft guard or failed storage flush must leave services running.
+    await closeWorkspace();
     const server = localServer;
     await server?.stop();
-    if (localServer === server) localServer = null;
-    if (browserError) throw new Error("Local services stopped, but browser storage could not be flushed. Keep the app open and retry Disconnect or Quit.");
+    if (localServer === server) { localServer = null; lifecycleConnection = null; }
   })();
   try { await stopPromise; } finally { stopPromise = null; }
 }
 
 async function confirmLocalStop(message) {
   if (!localRunning() && !(changingConnection && localServer)) return true;
-  const result = await dialog.showMessageBox({
+  const focused = BrowserWindow.getFocusedWindow();
+  const parent = [connectionWindow, workspaceWindow].find(window => window && !window.isDestroyed() && window === focused)
+    || [connectionWindow, workspaceWindow].find(window => window && !window.isDestroyed());
+  const result = await dialog.showMessageBox(...(parent ? [parent] : []), {
     type: "warning", title: "Stop local services?", message,
     detail: "Active local executions will be interrupted. Schedules and folder watches do not run while disconnected or quit. Saved workspace data and pending-command journals are kept. Close only the workspace window to keep tasks running.",
     buttons: ["Keep running", "Stop local services"], defaultId: 0, cancelId: 0,
@@ -318,7 +405,7 @@ async function checkServer(targetSession, origin, token) {
 
 async function saveConfiguration(next) {
   const safe = publicConfiguration(next, !app.isPackaged);
-  await writeFile(settingsFile, `${JSON.stringify({ version: 2, ...safe }, null, 2)}\n`, { mode: 0o600 });
+  await writePrivateJson(settingsFile, { version: 2, ...safe });
   configuration = safe;
 }
 
@@ -339,15 +426,17 @@ function normalizeConfiguration(input) {
 }
 
 async function connect(input) {
-  if (quitting || quitPrompt || changingConnection || maintenancePromise) throw new Error("Another desktop operation is in progress.");
+  if (quitting || quitPrompt || changingConnection || maintenancePromise || lifecyclePromise) throw new Error("Another desktop operation is in progress.");
   const next = normalizeConfiguration(input);
   const setup = next.mode === "local" ? initialSetup(input.setup) : undefined;
   transientSecrets = setup ? Object.values(setup) : [];
   changingConnection = true;
+  let previousStopped = false;
   try {
     if (!(await confirmLocalStop("Changing the connection stops current local services.")) || quitting) return snapshot();
     publish({ status: "connecting", message: next.mode === "local" ? "Preparing the managed local workspace…" : "Checking the remote Server…", error: "", details: "", address: "", runtime: "" });
     await stopConnection();
+    previousStopped = true;
     await saveConfiguration(next);
     if (quitting) throw new Error("Connection cancelled while quitting.");
     if (next.mode === "local") {
@@ -359,7 +448,7 @@ async function connect(input) {
         onExit: (message, details) => {
           if (localServer !== server || quitting) return;
           publish({ status: "error", message: "Local services stopped unexpectedly.", error: message, details: details || "" });
-          void closeWorkspace().catch(() => {}).finally(() => publish({}));
+          void closeWorkspace().catch(cause => publish({ error: `${message}\nWorkspace cleanup did not complete: ${safeDesktopMessage(cause)}` })).finally(() => publish({}));
           showConnection();
         },
       });
@@ -394,7 +483,10 @@ async function connect(input) {
   } catch (cause) {
     const details = localServer?.diagnostic() || "";
     let stopError = "";
-    try { await stopConnection(); } catch (failure) { stopError = `\nShutdown also needs attention: ${safeDesktopMessage(failure, transientSecrets)}`; }
+    // Do not repeat a rejected close of the previous workspace during rollback.
+    if (previousStopped) {
+      try { await stopConnection(); } catch (failure) { stopError = `\nShutdown also needs attention: ${safeDesktopMessage(failure, transientSecrets)}`; }
+    }
     if (!quitting) {
       publish({ status: "error", message: "Workspace connection did not complete. Saved data has not been reset.", error: `${safeDesktopMessage(cause, transientSecrets)}${stopError}`, details });
       showConnection();
@@ -409,7 +501,7 @@ async function connect(input) {
 }
 
 async function reopenWorkspace() {
-  if (changingConnection || maintenancePromise || quitting) return;
+  if (changingConnection || maintenancePromise || lifecyclePromise || quitting) return;
   if (workspaceWindow && !workspaceWindow.isDestroyed()) {
     if (workspaceWindow.isMinimized()) workspaceWindow.restore();
     workspaceWindow.show();
@@ -433,6 +525,7 @@ function finishQuit() {
   quitPromise = (async () => {
     try {
       if (maintenancePromise) await maintenancePromise;
+      if (lifecyclePromise) await lifecyclePromise;
       await stopConnection();
       previewManager?.destroy();
       if (localRunning()) throw new Error("Owned local processes are still running. Retry Quit; do not manually remove workspace data.");
@@ -451,8 +544,8 @@ function finishQuit() {
 
 async function requestQuit() {
   if (quitting || quitPrompt) return;
-  if (maintenancePromise) {
-    publish({ error: "Wait for backup or restore to finish before quitting. Closing the app early could leave an incomplete backup." });
+  if (maintenancePromise || lifecyclePromise) {
+    publish({ error: "Wait for backup, restore or the installed lifecycle operation to finish safely before quitting." });
     showConnection();
     return;
   }
@@ -482,7 +575,7 @@ function trustedWorkspace(event) {
 
 async function chooseWorkspaceDirectory(event) {
   if (workspaceMode !== "local" || !trustedWorkspace(event)) throw new Error("Folder selection is available only in the trusted local workspace.");
-  if (workspaceDirectoryPending || changingConnection || maintenancePromise || quitting) throw new Error("Wait for the current desktop operation.");
+  if (workspaceDirectoryPending || changingConnection || maintenancePromise || lifecyclePromise || quitting) throw new Error("Wait for the current desktop operation.");
   const window = workspaceWindow;
   workspaceDirectoryPending = true;
   try {
@@ -492,7 +585,7 @@ async function chooseWorkspaceDirectory(event) {
       properties: ["openDirectory"],
       dontAddToRecent: true,
     });
-    if (workspaceWindow !== window || workspaceMode !== "local" || !trustedWorkspace(event) || changingConnection || quitting) throw new Error("The local workspace changed while choosing a folder.");
+    if (workspaceWindow !== window || workspaceMode !== "local" || !trustedWorkspace(event) || changingConnection || lifecyclePromise || quitting) throw new Error("The local workspace changed while choosing a folder.");
     // The Agent must still canonicalize and validate the chosen path against its allowed roots.
     return result.canceled || !result.filePaths[0] ? null : absolutePath(result.filePaths[0], "Agent workspace folder");
   } finally {
@@ -503,6 +596,7 @@ async function chooseWorkspaceDirectory(event) {
 async function previewAction(event, input) {
   if (!trustedWorkspace(event)) throw new Error("Preview controls are available only in the trusted workspace window.");
   if (workspaceMode !== "local") throw new Error("Native preview is available only for the local workspace.");
+  if (lifecyclePromise) throw new Error("Wait for the installed lifecycle operation before opening previews.");
   if (!previewManager) throw new Error("Preview is unavailable.");
   if (!input || typeof input !== "object" || typeof input.action !== "string") throw new Error("Invalid preview action.");
   switch (input.action) {
@@ -530,20 +624,28 @@ async function previewAction(event, input) {
   }
 }
 
-async function maintenance(action) {
+async function maintenance(action, input) {
+  let password = input?.password;
+  let trustedSourceAcknowledged = input?.trustedSourceAcknowledged === true;
+  if (input) { input.password = ""; input.trustedSourceAcknowledged = false; }
   if (changingConnection || maintenancePromise || quitting || quitPrompt || localRunning() || workspaceSession || workspaceWindow)
     throw new Error("Disconnect and stop all local services before backup or restore.");
+  const restoring = action === "restore";
+  if (typeof password !== "string" || password.length < (restoring ? (input.allowLegacyUnencrypted === true ? 0 : 1) : 12) || password.length > 1024 || Buffer.byteLength(password, "utf8") > 4096) throw new Error(restoring ? "Enter the backup password (at most 1024 characters)." : "Use a backup password between 12 and 1024 characters.");
+  if (input.allowLegacyUnencrypted !== undefined && typeof input.allowLegacyUnencrypted !== "boolean") throw new Error("Invalid legacy restore confirmation.");
+  if (restoring && !trustedSourceAcknowledged) throw new Error("Confirm the backup's trusted source for this restore operation; a valid password does not establish trusted authorship.");
+  transientSecrets = [password];
   changingConnection = true; // Reserve the desktop while native dialogs are open too.
   const operation = (async () => {
     try {
-      const restoring = action === "restore";
+      const allowLegacyUnencrypted = restoring && input.allowLegacyUnencrypted === true;
       const confirmation = await dialog.showMessageBox(connectionWindow, {
-        type: "warning", title: restoring ? "Restore to a new workspace?" : "Back up private workspace data?",
-        message: restoring ? "Restore only into a NEW, EMPTY workspace data directory." : "This backup includes private data, saved credentials and conversations.",
+        type: "warning", title: restoring ? "Restore trusted database SQL to a new workspace?" : "Create an encrypted private backup?",
+        message: restoring ? "Restore executes the supplied PostgreSQL SQL with the local application/server account's privileges. Only restore a backup from a source you trust." : "This encrypted backup includes private data, saved credentials and conversations.",
         detail: restoring
-          ? "Existing workspaces are never overwritten. Select the backup folder, then a new or empty destination. The restored workspace stays disconnected until you explicitly connect."
-          : `The backup includes PM, registered project storage, managed Agent state, credentials and conversations. Global/external CLI credential homes are excluded. Keep it somewhere private; it is not encrypted. Saved workspace: ${configuration.dataDir}`,
-        buttons: ["Cancel", restoring ? "Choose backup and empty destination" : "Choose backup destination"], defaultId: 0, cancelId: 0,
+          ? `Encryption establishes key possession and detects alteration, not trusted authorship. Supplied SQL can have effects beyond the new destination. This confirmation applies only to this operation. Restore is limited to a NEW, EMPTY directory on the same operating system; existing workspaces are never overwritten.${allowLegacyUnencrypted ? " You also explicitly allowed an old UNENCRYPTED backup; keep its source private." : " Old unencrypted backups are rejected unless explicitly allowed."}`
+          : `Password-derived encryption protects private PM, registered project storage, managed Agent state, credentials and conversations, and detects alteration. It does not identify the archive's author. Global/external CLI credential homes are excluded. Keep the password separately; it cannot be recovered. Saved workspace: ${configuration.dataDir}`,
+        buttons: ["Cancel", restoring ? "I trust this source — choose backup and empty destination" : "Choose backup destination"], defaultId: 0, cancelId: 0,
       });
       if (confirmation.response !== 1 || quitting) return;
       let options;
@@ -560,17 +662,21 @@ async function maintenance(action) {
       }
       publish({ status: "maintenance", message: restoring ? "Restoring into a new isolated workspace…" : "Creating the full workspace backup…", error: "", details: "" });
       const onProgress = message => publish({ message: typeof message === "string" ? message : message?.message || "Maintaining workspace data…" });
-      const result = await (restoring ? restoreDesktop : backupDesktop)({ serverRoot, runtimeRoot, ...options, onProgress });
+      const result = await (restoring ? restoreDesktop : backupDesktop)({ serverRoot, runtimeRoot, ...options, password, ...(restoring ? { allowLegacyUnencrypted, trustedSourceAcknowledged: true } : {}), onProgress });
       if (restoring) await saveConfiguration({ ...configuration, mode: "local", dataDir: result.dataDir, projectRoot: result.projectRoot });
-      publish({ status: "idle", setupSuggested: false, message: restoring ? "Restore complete. Connect Local to sign in to the restored workspace; no existing workspace was overwritten." : "Backup complete. Keep the private backup folder safe.", details: restoring ? result.dataDir : result.directory, error: "", address: "", runtime: "" });
+      publish({ status: "idle", setupSuggested: false, message: restoring ? "Restore complete. Connect Local to sign in to the restored workspace; no existing workspace was overwritten." : "Encrypted backup complete. Keep the backup and its password safe and separate.", details: restoring ? result.dataDir : result.directory, error: "", address: "", runtime: "" });
     } catch (cause) {
-      publish({ status: "error", message: "Maintenance did not complete. Existing workspace data has not been replaced.", error: safeDesktopMessage(cause) });
+      publish({ status: "error", message: "Maintenance did not complete. Existing workspace data has not been replaced.", error: safeDesktopMessage(cause, transientSecrets) });
     }
   })();
   maintenancePromise = operation;
   publish({});
   try { await operation; }
   finally {
+    password = "";
+    trustedSourceAcknowledged = false;
+    if (input) input.password = "";
+    transientSecrets = [];
     maintenancePromise = null;
     changingConnection = false;
     publish({});
@@ -613,6 +719,7 @@ function installMenu() {
 async function desktopAction(event, input) {
   if (!trustedConnection(event)) throw new Error("Desktop controls are available only in the trusted top-level connection window.");
   if (!input || typeof input !== "object") throw new Error("Invalid desktop action.");
+  if (lifecyclePromise && input.action !== "state") throw new Error("Wait for the installed lifecycle operation to finish safely.");
   switch (input.action) {
     case "state": return snapshot();
     case "connect": return connect(input.configuration);
@@ -636,30 +743,99 @@ async function desktopAction(event, input) {
       const result = await dialog.showOpenDialog(connectionWindow, { title: "Choose an explicit development Node 24 executable", properties: ["openFile"] });
       return result.canceled ? null : result.filePaths[0];
     }
-    case "backup": case "restore": return maintenance(input.action);
+    case "backup": case "restore": return maintenance(input.action, input);
     case "quit": await requestQuit(); return snapshot();
     default: throw new Error("Unknown desktop action.");
   }
 }
 
-if (!app.requestSingleInstanceLock()) app.quit();
+async function dispatchLifecycle(context) {
+  const rejection = lifecyclePromise ? "Another packaged lifecycle operation is in progress."
+    : maintenancePromise ? "Wait for the encrypted backup or restore to finish before maintenance."
+    : quitting || quitPrompt ? "Wait for the current quit confirmation or shutdown to finish."
+    : changingConnection && !localServer?.startPromise ? "Wait for the current connection change or native dialog to finish."
+    : context.controllerUserDataDir !== app.getPath("userData") ? "Lifecycle requests cannot cross application user-data instances." : "";
+  if (rejection) {
+    if (context.request.setup) context.request.setup.password = "";
+    await writePrivateJson(context.responseFile, { formatVersion: 1, requestId: context.request.requestId, operation: context.operation, ok: false, installStamp: context.stamp, error: rejection }, { exclusive: true });
+    return { success: false, keepAlive: true };
+  }
+  const previouslyQuitting = quitting;
+  if (["stop", "preinstall", "uninstall"].includes(context.operation)) quitting = true;
+  const pending = runLifecycleRequest(context, {
+    serverRoot, runtimeRoot,
+    getServer: () => localServer,
+    setServer: server => { localServer = server; },
+    getConnection: () => lifecycleConnection,
+    setConnection: connection => { lifecycleConnection = connection; },
+    stop: async () => {
+      await stopConnection();
+      const deadline = Date.now() + 5000;
+      while (changingConnection && Date.now() < deadline) await delay(10);
+      if (changingConnection) throw new Error("The current connection change has not settled; installation cleanup is refused.");
+      if (connectionWindow && !connectionWindow.isDestroyed()) rememberWindow("connection", connectionWindow);
+      await windowStateWrite;
+      lifecycleStateFrozen = true;
+    },
+    quit: async () => {
+      previewManager?.destroy();
+      allowQuit = true;
+      quitting = true;
+      app.quit();
+    },
+    onUnexpectedExit: () => { if (!quitting) publish({ status: "error", error: "An installed lifecycle service exited unexpectedly." }); },
+  });
+  lifecyclePromise = pending;
+  try { return await pending; }
+  finally {
+    lifecyclePromise = null;
+    if (!allowQuit) {
+      lifecycleStateFrozen = false;
+      if (!quitPromise) quitting = previouslyQuitting;
+    }
+  }
+}
+
+if (lifecycleError) {
+  dialog.showErrorBox("Desktop installation identity rejected", safeDesktopMessage(lifecycleError));
+  app.quit();
+} else if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", (_event, argv) => {
-    if (!configuration || !app.isReady()) return;
-    showConnection();
-    try {
+    void (async () => {
+      const arguments_ = readLifecycleArguments(argv);
+      if (arguments_) {
+        const context = await loadLifecycleRequest(arguments_, { packaged: app.isPackaged, installRoot, stamp: installStamp });
+        await app.whenReady();
+        await dispatchLifecycle(context);
+        return;
+      }
+      if (!configuration || !app.isReady() || lifecycleContext) return;
+      showConnection();
       const next = readLaunchArguments(argv);
-      if (next.mode) void connect({ ...configuration, ...next }).catch(cause => publish({ error: safeDesktopMessage(cause) }));
-    } catch (cause) { publish({ error: safeDesktopMessage(cause) }); }
+      if (next.mode) await connect({ ...configuration, ...next });
+    })().catch(cause => { if (!lifecycleContext) publish({ error: safeDesktopMessage(cause) }); });
   });
-  app.on("activate", () => { if (app.isReady() && configuration) void reopenWorkspace(); });
-  app.on("window-all-closed", () => { if (!quitting && app.isReady() && configuration) showConnection(); });
-  app.on("before-quit", event => { if (!allowQuit) { event.preventDefault(); void finishQuit(); } });
+  app.on("activate", () => { if (!lifecycleContext && app.isReady() && configuration) void reopenWorkspace(); });
+  app.on("window-all-closed", () => { if (!lifecycleContext && !quitting && app.isReady() && configuration) showConnection(); });
+  app.on("before-quit", event => { if (!allowQuit) { event.preventDefault(); void requestQuit(); } });
   for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => void finishQuit());
   void app.whenReady().then(async () => {
     settingsFile = join(app.getPath("userData"), "connection.json");
     windowStateFile = join(app.getPath("userData"), "window-state.json");
-    await mkdir(app.getPath("userData"), { recursive: true, mode: 0o700 });
+    await ensurePrivateDirectory(app.getPath("userData"));
+    if (lifecycleContext) {
+      configuration = { mode: "local", dataDir: lifecycleContext.request.dataDir, projectRoot: lifecycleContext.request.projectRoot };
+      const outcome = await dispatchLifecycle(lifecycleContext);
+      if (!outcome.keepAlive && !allowQuit) { allowQuit = true; app.exit(outcome.success ? 0 : 1); }
+      return;
+    }
+    // Upgrade only these known, same-owner GUI metadata files to private ACLs;
+    // never tighten/adopt an arbitrary renderer- or command-selected path.
+    for (const path of [settingsFile, windowStateFile]) {
+      try { await securePrivateFile(path); }
+      catch (cause) { if (cause.code !== "ENOENT") throw cause; }
+    }
     let saved = {};
     let configError = "";
     try {
@@ -704,6 +880,10 @@ else {
     ipcMain.handle("desktop:preview", previewAction);
     ipcMain.handle("desktop:choose-workspace-directory", chooseWorkspaceDirectory);
     ipcMain.handle("desktop:action", desktopAction);
+    ipcMain.handle("desktop:titlebar-theme", setTitleBarTheme);
+    nativeTheme.on("updated", () => {
+      applyTitleBarTheme(connectionWindow, nativeTheme.shouldUseDarkColors ? "dark" : "light");
+    });
     showConnection();
     if (configError) publish({ status: "error", error: configError });
     else if (launch.mode) await connect(configuration);

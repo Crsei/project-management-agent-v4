@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { chmod, chown, lstat, mkdtemp, mkdir, readFile, readdir, realpath, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { chatOnlyExecutionSelection, executionEnvironmentSchema, executionSelectionSchema, type AgentWorkspace, type ExecutionSelection } from "../../../../packages/agent-contracts/src/execution.ts";
+import { assertPrivatePath, makePrivatePath } from "../../../../packages/pm-core/private-path.ts";
 import { browseAgentDirectories, getAgentWorkspace, listAgentWorkspaces, openAgentWorkspace, resolveAgentWorkspaceExecution, updateAgentWorkspace } from "./agent-workspaces.ts";
 import { DurableError } from "./durable/errors.ts";
 import { closeStore, readRecord, writeRecord } from "./durable/store.ts";
@@ -14,9 +17,10 @@ let repository: string;
 const keys = ["AGENT_WORKSPACE_DATA_DIR", "AGENT_WORKSPACE_ALLOWED_ROOTS", "AGENT_WORKSPACE_PROJECT_ROOT", "HOME", "USERPROFILE", "PM_API_URL"] as const;
 let previous: Record<string, string | undefined>;
 let originalFetch: typeof fetch;
+const directoryLink = process.platform === "win32" ? "junction" : "dir";
 
 beforeEach(async () => {
-  directory = await mkdtemp(path.join(tmpdir(), "agent-workspaces-"));
+  directory = await realpath(await mkdtemp(path.join(tmpdir(), "agent-workspaces-")));
   allowed = path.join(directory, "allowed");
   repository = path.join(allowed, "repository");
   await mkdir(repository, { recursive: true });
@@ -46,6 +50,13 @@ function rejectsCode(operation: () => unknown, code: string): void {
   assert.throws(operation, error => error instanceof DurableError && error.code === code);
 }
 
+async function exposeDirectory(location: string): Promise<void> {
+  if (process.platform === "win32") {
+    execFileSync(path.join(process.env.SystemRoot!, "System32", "icacls.exe"),
+      [location, "/grant", "*S-1-1-0:(OI)(CI)RX"], { windowsHide: true, stdio: "ignore", timeout: 30_000 });
+  } else await chmod(location, 0o755);
+}
+
 test("v2 contracts require paired directory identity and never accept the retired multi-root shape", () => {
   assert.deepEqual(executionSelectionSchema.parse(chatOnlyExecutionSelection()), { version: 2, agentWorkspaceId: null, agentWorkspaceRevision: null });
   assert.equal(executionSelectionSchema.safeParse({ version: 2, agentWorkspaceId: "directory", agentWorkspaceRevision: null }).success, false);
@@ -56,7 +67,7 @@ test("v2 contracts require paired directory identity and never accept the retire
 
 test("opening canonical aliases is durable and idempotent without any PM HTTP request", async () => {
   const alias = path.join(allowed, "alias");
-  await symlink(repository, alias, "dir");
+  await symlink(repository, alias, directoryLink);
   const opened = openAgentWorkspace({ path: repository });
   assert.equal(opened.name, "repository");
   assert.equal(opened.status, "available");
@@ -104,7 +115,7 @@ test("missing, replaced and redirected registered directories fail closed instea
   rejectsCode(() => resolveAgentWorkspaceExecution(selection(opened)), "workspace_directory_changed");
   rejectsCode(() => openAgentWorkspace({ path: repository }), "workspace_directory_changed");
   await rm(repository, { recursive: true });
-  await symlink(moved, repository, "dir");
+  await symlink(moved, repository, directoryLink);
   rejectsCode(() => resolveAgentWorkspaceExecution(selection(opened)), "workspace_directory_changed");
   rejectsCode(() => openAgentWorkspace({ path: repository }), "workspace_directory_changed");
   assert.equal(listAgentWorkspaces().length, 1);
@@ -113,7 +124,7 @@ test("missing, replaced and redirected registered directories fail closed instea
 test("allowed-root policy is canonical and rechecked for previously registered execution", async () => {
   const outside = path.join(directory, "outside");
   await mkdir(outside);
-  await symlink(outside, path.join(allowed, "escape"), "dir");
+  await symlink(outside, path.join(allowed, "escape"), directoryLink);
   rejectsCode(() => openAgentWorkspace({ path: outside }), "directory_not_allowed");
   rejectsCode(() => openAgentWorkspace({ path: path.join(allowed, "escape") }), "directory_not_allowed");
   rejectsCode(() => openAgentWorkspace({ path: "relative/path" }), "invalid_workspace_request");
@@ -147,7 +158,7 @@ test("explicit project-parent roots work outside Home without trusting a legacy 
   assert.equal(browseAgentDirectories(allowed).parentPath, null);
   rejectsCode(() => openAgentWorkspace({ path: outside }), "directory_not_allowed");
   const escape = path.join(allowed, "outside-link");
-  await symlink(outside, escape, process.platform === "win32" ? "junction" : "dir");
+  await symlink(outside, escape, directoryLink);
   rejectsCode(() => openAgentWorkspace({ path: escape }), "directory_not_allowed");
   assert.equal(browseAgentDirectories(allowed).directories.some(entry => entry.name === "outside-link"), false);
 });
@@ -157,8 +168,8 @@ test("server browsing returns only canonical allowed directories and never climb
   await mkdir(outside);
   await mkdir(path.join(repository, "child"));
   await writeFile(path.join(allowed, "file.txt"), "not a directory");
-  await symlink(outside, path.join(allowed, "escape"), "dir");
-  await symlink(repository, path.join(allowed, "alias"), "dir");
+  await symlink(outside, path.join(allowed, "escape"), directoryLink);
+  await symlink(repository, path.join(allowed, "alias"), directoryLink);
   assert.deepEqual(browseAgentDirectories(), { path: null, parentPath: null, roots: [allowed], directories: [] });
   assert.deepEqual(browseAgentDirectories(allowed), { path: allowed, parentPath: null, roots: [allowed], directories: [{ name: "alias", path: repository }, { name: "repository", path: repository }] });
   assert.deepEqual(browseAgentDirectories(repository), { path: repository, parentPath: allowed, roots: [allowed], directories: [{ name: "child", path: path.join(repository, "child") }] });
@@ -171,18 +182,22 @@ test("chat-only scratch is private, stable per session and never exposed as a pu
   const other = resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), "other-session");
   assert.notEqual(first.path, other.path);
   assert.equal(path.dirname(first.path), path.join(directory, "store", "chat-scratch"));
-  assert.equal((await stat(first.path)).mode & 0o777, 0o700);
-  assert.equal((await stat(path.dirname(first.path))).mode & 0o777, 0o700);
+  assertPrivatePath(first.path);
+  assertPrivatePath(path.dirname(first.path));
+  if (process.platform !== "win32") {
+    assert.equal((await stat(first.path)).mode & 0o777, 0o700);
+    assert.equal((await stat(path.dirname(first.path))).mode & 0o777, 0o700);
+  }
   assert.equal(first.environment.sourcePath, null);
   assert.equal(first.environment.executionPath, null);
   assert.equal(first.environment.agentWorkspaceId, null);
   assert.equal(executionEnvironmentSchema.safeParse(first.environment).success, true);
+  await writeFile(path.join(first.path, "conversation.txt"), "keep scratch across reopen");
+  assert.deepEqual(resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), "session/../one"), first);
   closeStore();
   assert.deepEqual(resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), "session/../one"), first);
+  assert.equal(await readFile(path.join(first.path, "conversation.txt"), "utf8"), "keep scratch across reopen");
   assert.equal(listAgentWorkspaces().length, 0);
-  await rename(first.path, `${first.path}-old`);
-  await mkdir(first.path, { mode: 0o700 });
-  rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), "session/../one"), "chat_scratch_changed");
 });
 
 test("restored scratch metadata never follows a backup-source absolute path", async () => {
@@ -194,4 +209,111 @@ test("restored scratch metadata never follows a backup-source absolute path", as
   writeRecord("agent:scratch:v1", "restored-session", record);
   rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), "restored-session"), "chat_scratch_unavailable");
   assert.equal(await readFile(path.join(original.path, "original.txt"), "utf8"), "must not follow");
+});
+
+for (const target of ["scratch", "parent"] as const) {
+  test(`chat-only rejects nonprivate registered ${target} without repairing permissions or metadata`, async () => {
+    const sessionId = `permissions-${target}`;
+    const scratch = resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId).path;
+    const location = target === "parent" ? path.dirname(scratch) : scratch;
+    const originalRecord = readRecord("agent:scratch:v1", sessionId);
+    await exposeDirectory(location);
+    rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId), "chat_scratch_unavailable");
+    assert.throws(() => assertPrivatePath(location));
+    assert.deepEqual(readRecord("agent:scratch:v1", sessionId), originalRecord);
+  });
+
+  test(`chat-only never recreates a missing registered ${target}`, async () => {
+    const sessionId = `missing-${target}`;
+    const scratch = resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId).path;
+    const location = target === "parent" ? path.dirname(scratch) : scratch;
+    const originalRecord = readRecord("agent:scratch:v1", sessionId);
+    await rename(location, `${location}-original`);
+    closeStore();
+    rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId), "chat_scratch_unavailable");
+    await assert.rejects(lstat(location), { code: "ENOENT" });
+    assert.deepEqual(readRecord("agent:scratch:v1", sessionId), originalRecord);
+  });
+
+  test(`chat-only rejects a private replacement of registered ${target}`, async () => {
+    const sessionId = `replacement-${target}`;
+    const scratch = resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId).path;
+    const location = target === "parent" ? path.dirname(scratch) : scratch;
+    const originalRecord = readRecord("agent:scratch:v1", sessionId);
+    await rename(location, `${location}-original`);
+    await mkdir(location, { mode: 0o700 });
+    makePrivatePath(location);
+    rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId), "chat_scratch_changed");
+    assert.deepEqual(await readdir(location), []);
+    assert.deepEqual(readRecord("agent:scratch:v1", sessionId), originalRecord);
+  });
+
+  test(`chat-only rejects a registered ${target} redirected through a directory link`, async () => {
+    const sessionId = `linked-${target}`;
+    const scratch = resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId).path;
+    const location = target === "parent" ? path.dirname(scratch) : scratch;
+    const originalRecord = readRecord("agent:scratch:v1", sessionId);
+    await writeFile(path.join(scratch, "keep.txt"), "original scratch");
+    await rename(location, `${location}-original`);
+    await symlink(`${location}-original`, location, directoryLink);
+    rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId), "chat_scratch_unavailable");
+    assert.equal((await lstat(location)).isSymbolicLink(), true);
+    assert.equal(await readFile(path.join(scratch, "keep.txt"), "utf8"), "original scratch");
+    assert.deepEqual(readRecord("agent:scratch:v1", sessionId), originalRecord);
+  });
+
+  if (process.platform !== "win32" && typeof process.getuid === "function" && process.getuid() === 0) {
+    test(`chat-only rejects foreign Unix ownership of registered ${target} without adopting it`, async () => {
+      const sessionId = `owner-${target}`;
+      const scratch = resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId).path;
+      const location = target === "parent" ? path.dirname(scratch) : scratch;
+      const originalRecord = readRecord("agent:scratch:v1", sessionId);
+      const originalOwner = await stat(location);
+      await chown(location, 65534, 65534);
+      try {
+        rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId), "chat_scratch_unavailable");
+        assert.equal((await stat(location)).uid, 65534);
+        assert.deepEqual(readRecord("agent:scratch:v1", sessionId), originalRecord);
+      } finally {
+        await chown(location, originalOwner.uid, originalOwner.gid);
+      }
+    });
+  }
+}
+
+test("chat-only rejects an existing nonprivate scratch parent on first allocation without repairing it", async () => {
+  writeRecord("scratch-test", "initialize-store", {});
+  const parent = path.join(process.env.AGENT_WORKSPACE_DATA_DIR!, "chat-scratch");
+  await mkdir(parent, { mode: 0o700 });
+  makePrivatePath(parent);
+  await exposeDirectory(parent);
+  rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), "first-allocation"), "chat_scratch_unavailable");
+  assert.throws(() => assertPrivatePath(parent));
+  assert.deepEqual(await readdir(parent), []);
+  assert.equal(readRecord("agent:scratch:v1", "first-allocation"), null);
+});
+
+test("chat-only never adopts an unregistered directory already occupying a session scratch path", async () => {
+  const first = resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), "allocated-session");
+  const sessionId = "unregistered-session";
+  const orphan = path.join(path.dirname(first.path), createHash("sha256").update(sessionId).digest("hex"));
+  await mkdir(orphan, { mode: 0o700 });
+  makePrivatePath(orphan);
+  await writeFile(path.join(orphan, "keep.txt"), "unregistered data");
+  rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), sessionId), "chat_scratch_unavailable");
+  assert.equal(await readFile(path.join(orphan, "keep.txt"), "utf8"), "unregistered data");
+  assert.equal(readRecord("agent:scratch:v1", sessionId), null);
+});
+
+test("chat-only rejects a linked scratch parent before first allocation without writing through it", async () => {
+  writeRecord("scratch-test", "initialize-store", {});
+  const target = path.join(directory, "link-target");
+  await mkdir(target, { mode: 0o700 });
+  makePrivatePath(target);
+  const parent = path.join(process.env.AGENT_WORKSPACE_DATA_DIR!, "chat-scratch");
+  await symlink(target, parent, directoryLink);
+  rejectsCode(() => resolveAgentWorkspaceExecution(chatOnlyExecutionSelection(), "linked-first-allocation"), "chat_scratch_unavailable");
+  assert.deepEqual(await readdir(target), []);
+  assert.equal((await lstat(parent)).isSymbolicLink(), true);
+  assert.equal(readRecord("agent:scratch:v1", "linked-first-allocation"), null);
 });

@@ -3,6 +3,7 @@ import { lstat, open, readFile, readdir } from "node:fs/promises";
 import { join, posix, relative } from "node:path";
 import { hashFile, portable } from "./runtime-manifest.mjs";
 import { promisify } from "node:util";
+import { peFileRecord, verifyWindowsFile } from "./signatures.mjs";
 const execute = promisify(execFile);
 const machOMagic = new Set(["feedface", "feedfacf", "cefaedfe", "cffaedfe", "cafebabe", "bebafeca", "cafebabf", "bfbafeca"]);
 
@@ -58,7 +59,7 @@ export function resolveDependencyPath(from, specifier, instances, excluded) {
   return null;
 }
 
-export async function verifyDependencyLayout(root, { signedMachO = false } = {}) {
+export async function verifyDependencyLayout(root, { signedMachO = false, signedPE = false, signer } = {}) {
   const manifestPath = join(root, dependencyLayoutManifest);
   const manifestInfo = await lstat(manifestPath);
   if (!manifestInfo.isFile() || manifestInfo.isSymbolicLink()) throw new Error("Desktop dependency layout manifest must be a real file.");
@@ -201,9 +202,18 @@ export async function verifyDependencyLayout(root, { signedMachO = false } = {})
         if (process.platform === "darwin" && expected.mode !== file.mode)
           throw new Error(`Desktop dependency executable mode changed: ${instance.path}/${file.path}`);
         if (expected.bytes === file.bytes && expected.sha256 === file.sha256) continue;
+        const absolute = join(root, instance.path, file.path);
+        if (signedPE && process.platform === "win32" && expected.signable === "pe"
+          && /^[a-f0-9]{64}$/.test(expected.peSha256 ?? "") && Number.isSafeInteger(expected.peContentBytes) && expected.peContentBytes > 0
+          && expected.peContentBytes <= expected.bytes && (await peFileRecord(absolute, expected.peContentBytes))?.sha256 === expected.peSha256) {
+          const signature = await verifyWindowsFile(absolute, signer);
+          signedResources.push({ path: `${instance.path}/${file.path}`, sha256: file.sha256, bytes: file.bytes,
+            sourceSha256: expected.sha256, peSha256: expected.peSha256, peContentBytes: expected.peContentBytes, signature,
+            scope: "Exact executable content excluding Authenticode certificate/checksum fields; final expected-signer verification" });
+          continue;
+        }
         if (!signedMachO || process.platform !== "darwin" || expected.signable !== "mach-o")
           throw new Error(`Desktop dependency resources missing, changed or expanded: ${instance.path}/${file.path}`);
-        const absolute = join(root, instance.path, file.path);
         const handle = await open(absolute, "r");
         const magic = Buffer.alloc(4);
         try {

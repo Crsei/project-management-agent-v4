@@ -3,6 +3,7 @@ import { chmod, copyFile, lstat, mkdir, open, readFile, readdir, realpath, renam
 import { createRequire } from "node:module";
 import { dirname, join, posix, relative } from "node:path";
 import { hashFile, inside, portable } from "./runtime-manifest.mjs";
+import { peFileRecord } from "./signatures.mjs";
 
 export const dependencyLayoutFile = "desktop-dependency-layout.json";
 const digest = (value) => createHash("sha256").update(value).digest("hex");
@@ -202,7 +203,9 @@ async function copyOwnResources(source, destination) {
         const magic = Buffer.alloc(4);
         const handle = await open(output, "r");
         try { await handle.read(magic, 0, 4, 0); } finally { await handle.close(); }
-        files.push({ path, sha256: before, bytes: info.size, mode, ...(machO.has(magic.toString("hex")) ? { signable: "mach-o" } : {}) });
+        const pe = magic.subarray(0, 2).toString("ascii") === "MZ" ? await peFileRecord(output) : null;
+        files.push({ path, sha256: before, bytes: info.size, mode,
+          ...(machO.has(magic.toString("hex")) ? { signable: "mach-o" } : pe ? { signable: "pe", peSha256: pe.sha256, peContentBytes: pe.contentBytes } : {}) });
       } else throw new Error(`Unsupported package resource: ${path}`);
     }
   }

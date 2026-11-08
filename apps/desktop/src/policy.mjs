@@ -150,10 +150,17 @@ export function safeDesktopMessage(value, secrets = []) {
     .slice(-12_000);
 }
 
+function liveMainFrame(event, contents) {
+  if (!contents || contents.isDestroyed() || event.sender !== contents) return null;
+  const frame = event.senderFrame;
+  if (!frame || frame !== contents.mainFrame || frame.detached || frame.isDestroyed()) return null;
+  return frame;
+}
+
 export function trustedConnectionFrame(event, contents, connectionUrl) {
   try {
-    return Boolean(contents && !contents.isDestroyed() && event.sender === contents &&
-      event.senderFrame === contents.mainFrame && event.senderFrame?.url === connectionUrl);
+    const frame = liveMainFrame(event, contents);
+    return Boolean(frame && typeof connectionUrl === "string" && frame.url === connectionUrl);
   } catch {
     return false; // Electron can invalidate a frame while its IPC request is queued.
   }
@@ -161,8 +168,8 @@ export function trustedConnectionFrame(event, contents, connectionUrl) {
 
 export function trustedWorkspaceFrame(event, contents, workspaceUrl) {
   try {
-    return Boolean(contents && !contents.isDestroyed() && event.sender === contents &&
-      event.senderFrame === contents.mainFrame && sameService(event.senderFrame?.url, new URL(workspaceUrl).origin));
+    const frame = liveMainFrame(event, contents);
+    return Boolean(frame && sameService(frame.url, new URL(workspaceUrl).origin));
   } catch {
     return false;
   }

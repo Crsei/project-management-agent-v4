@@ -31,7 +31,7 @@ import styles from "./pm-user-menu.module.css"
  * card is first opened; after that its cached profile feeds both the card and
  * the trigger without another request.
  */
-export function PmUserMenu({ collapsed = false }: { collapsed?: boolean } = {}) {
+export function PmUserMenu({ collapsed = false, placement = "sidebar" }: { collapsed?: boolean; placement?: "sidebar" | "header" } = {}) {
   const { actor, workspace, logout } = usePmService()
   const navigate = useNavigate()
   const { locale } = useI18n()
@@ -75,7 +75,7 @@ export function PmUserMenu({ collapsed = false }: { collapsed?: boolean } = {}) 
         render={
           <button
             type="button"
-            className={`${styles.trigger} ${collapsed ? styles.collapsedTrigger : ""}`}
+            className={`${styles.trigger} ${collapsed ? styles.collapsedTrigger : ""} ${placement === "header" ? styles.headerTrigger : ""}`}
             aria-label={t("账户菜单", "Account menu")}
             title={t("账户菜单", "Account menu")}
           />
@@ -86,8 +86,8 @@ export function PmUserMenu({ collapsed = false }: { collapsed?: boolean } = {}) 
         {!collapsed && <ChevronsUpDown className={styles.chevron} aria-hidden="true" />}
       </PopoverTrigger>
       <PopoverContent
-        side="top"
-        align="start"
+        side={placement === "header" ? "bottom" : "top"}
+        align={placement === "header" ? "end" : "start"}
         sideOffset={8}
         collisionPadding={8}
         className={styles.card}
@@ -124,20 +124,21 @@ export function PmUserMenu({ collapsed = false }: { collapsed?: boolean } = {}) 
               <UserRound aria-hidden="true" />
               {t("查看个人资料", "View profile")}
             </PopoverClose>
-            <PopoverClose
-              render={
-                <Link
-                  to="/pm/account/security"
-                  data-navigation-close
-                  className={styles.item}
-                />
-              }
-            >
-              <SettingsIcon aria-hidden="true" />
-              {t("账号安全", "Account security")}
-            </PopoverClose>
           </>
         )}
+        <div className={styles.separator} />
+        <PopoverClose
+          render={
+            <Link
+              to="/pm/account/security"
+              data-navigation-close
+              className={styles.item}
+            />
+          }
+        >
+          <SettingsIcon aria-hidden="true" />
+          {t("账号安全", "Account security")}
+        </PopoverClose>
         <div className={styles.separator} />
         <div className={styles.sectionLabel}>{t("主题", "Theme")}</div>
         <Segmented

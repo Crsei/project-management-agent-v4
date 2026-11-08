@@ -3,6 +3,7 @@ import { lstat, open, readFile } from "node:fs/promises";
 import { join, posix } from "node:path";
 import { promisify } from "node:util";
 import { hashFile, inventoryTree, runtimeSources } from "./runtime-manifest.mjs";
+import { peFileRecord, verifyWindowsFile } from "./signatures.mjs";
 
 const execute = promisify(execFile);
 const machO = new Set(["feedface", "feedfacf", "cefaedfe", "cffaedfe", "cafebabe", "bebafeca", "cafebabf", "bfbafeca"]);
@@ -20,7 +21,7 @@ async function isMachO(path) {
 
 // The small native allowlist is captured from source magic BEFORE signing and
 // sealed with the application. Every other original inventory entry stays exact.
-export async function verifyFinalRuntime(resources, target, { signedMachO = false } = {}) {
+export async function verifyFinalRuntime(resources, target, { signedMachO = false, signedPE = false, signer } = {}) {
   const root = join(resources, "desktop-runtime");
   const nativePath = join(resources, "workspace-runtime", nativeRuntimeManifest);
   for (const path of [root, nativePath, join(root, "runtime-manifest.json")]) {
@@ -51,6 +52,8 @@ export async function verifyFinalRuntime(resources, target, { signedMachO = fals
   }
   if (signedMachO && (process.platform !== "darwin" || !target.startsWith("darwin-")))
     throw new Error("Runtime signature mutations require native macOS validation.");
+  if (signedPE && (process.platform !== "win32" || target !== "win32-x64"))
+    throw new Error("Runtime PE signature mutations require native Windows validation.");
   const actual = (await inventoryTree(root)).filter((file) => file.path !== "runtime-manifest.json");
   if (actual.length !== expected.size || actual.some((file) => !expected.has(file.path))) throw new Error("Final runtime has missing or extra resources.");
   const signedResources = [];
@@ -63,7 +66,17 @@ export async function verifyFinalRuntime(resources, target, { signedMachO = fals
     if (target.startsWith("darwin-") && file.mode !== source.mode) throw new Error(`Final runtime resource mode changed: ${file.path}`);
     const changed = file.sha256 !== source.sha256 || file.bytes !== source.bytes;
     if (!changed) {
-      if (allowed.has(file.path) && !await isMachO(join(root, file.path))) throw new Error(`Native runtime allowlist does not identify Mach-O: ${file.path}`);
+      if (allowed.has(file.path) && !(target.startsWith("win32-") ? await peFileRecord(join(root, file.path)) : await isMachO(join(root, file.path))))
+        throw new Error(`Native runtime allowlist does not identify the expected executable format: ${file.path}`);
+      continue;
+    }
+    if (signedPE && allowed.has(file.path) && /^[a-f0-9]{64}$/.test(allowed.get(file.path).peSha256 ?? "")
+      && Number.isSafeInteger(allowed.get(file.path).peContentBytes) && allowed.get(file.path).peContentBytes > 0
+      && allowed.get(file.path).peContentBytes <= source.bytes
+      && (await peFileRecord(join(root, file.path), allowed.get(file.path).peContentBytes))?.sha256 === allowed.get(file.path).peSha256) {
+      const signature = await verifyWindowsFile(join(root, file.path), signer);
+      signedResources.push({ path: file.path, bytes: file.bytes, sha256: file.sha256, sourceSha256: source.sha256,
+        peSha256: allowed.get(file.path).peSha256, peContentBytes: allowed.get(file.path).peContentBytes, signature });
       continue;
     }
     if (!signedMachO || !allowed.has(file.path) || !await isMachO(join(root, file.path)))
@@ -73,5 +86,5 @@ export async function verifyFinalRuntime(resources, target, { signedMachO = fals
   }
   return { status: "passed", sourceManifest: "desktop-runtime/runtime-manifest.json", nativeManifest: `workspace-runtime/${nativeRuntimeManifest}`,
     nativeManifestSha256: await hashFile(nativePath), files: actual.length, signedResources,
-    scope: "Exact complete runtime paths and bytes; only pre-sign magic-identified Mach-O files may differ after strict app and individual signature validation" };
+    scope: "Exact complete runtime paths and bytes; only pre-sign magic-identified native files may differ after native signature validation; PE executable content must remain exact excluding Authenticode fields" };
 }

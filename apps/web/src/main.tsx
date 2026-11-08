@@ -5,6 +5,7 @@ import { PmErrorBoundary } from "@/components/blocks/error-boundary"
 import { AppProviders } from "@/providers/app-providers"
 import { AppRoutes } from "@/routes"
 import { installPageExit } from "@/lib/page-exit"
+import { installDesktopShell } from "@/lib/desktop-shell"
 import "@/index.css"
 
 const container = document.getElementById("root")
@@ -14,6 +15,7 @@ if (!container) {
 }
 
 installPageExit()
+installDesktopShell()
 
 const router = createBrowserRouter([{
   path: "*",

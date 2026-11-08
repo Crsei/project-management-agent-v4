@@ -7,7 +7,10 @@ import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import { inspectPackagedApplication } from "./packaged-application.mjs";
+import { assertWindowsInstallFileLimit, inspectPayloadFiles } from "./payload-files.mjs";
 import { hashFile, inside, portable } from "./runtime-manifest.mjs";
+import { verifyFinalSignatures, verifyWindowsFile } from "./signatures.mjs";
+import { verifyInstallationManifest } from "../src/uninstall.mjs";
 
 // Archive paths are data, never shell arguments or filesystem paths until checked.
 export function archiveMemberPath(value) {
@@ -139,11 +142,43 @@ async function extractArchive(archive, destination, windows) {
   await closed;
 }
 
-async function extractNsisPayload(installer, directory) {
+export const NSIS_UNINSTALLER_BYTE_LIMIT = 64 * 1024 * 1024;
+export function nsisUninstallerMember(members) {
+  // NSIS sets this exact installed filename; SLT may retain the $INSTDIR root.
+  // Neither spelling admits private plugins or a suffix/path wildcard.
+  const selected = members.filter((entry) => ["Uninstall PM Agent v4.exe", "$INSTDIR/Uninstall PM Agent v4.exe"].includes(entry.path));
+  if (selected.length !== 1 || !/^[0-9]+$/.test(selected[0].Size ?? "")
+    || Number(selected[0].Size) < 1 || Number(selected[0].Size) > NSIS_UNINSTALLER_BYTE_LIMIT
+    || selected[0].Folder === "+" || /(?:^|\s)D/.test(selected[0].Attributes ?? "")
+    || "Symbolic Link" in selected[0] || "Hard Link" in selected[0])
+    throw new Error("Final NSIS installer requires exactly one bounded regular installed uninstaller member.");
+  return selected[0];
+}
+
+async function extractNsisPayload(installer, directory, options) {
   const members = await listArchive(installer, { windows: true });
   const payloads = members.filter((entry) => entry.path === "$PLUGINSDIR/app-64.7z");
   if (payloads.length !== 1 || !/^\d+$/.test(payloads[0].Size) || Number(payloads[0].Size) === 0)
     throw new Error("Final NSIS installer must contain exactly one nonempty $PLUGINSDIR/app-64.7z payload.");
+  let uninstaller;
+  if (options.signing === "signed") {
+    const member = nsisUninstallerMember(members);
+    const path = join(directory, "installed-uninstaller.exe");
+    const { child, closed } = start(await sevenZip(), ["x", "-so", "-bd", "-spd", "--", installer, member.Path]);
+    let bytes = 0;
+    try {
+      await Promise.all([pipeline(child.stdout, async function* (source) {
+        for await (const chunk of source) {
+          bytes += chunk.length;
+          if (bytes > Number(member.Size)) throw new Error("Installed uninstaller exceeds its bounded archive member size.");
+          yield chunk;
+        }
+      }, createWriteStream(path, { flags: "wx" })), closed]);
+    } catch (cause) { child.kill(); await closed.catch(() => {}); throw cause; }
+    if (bytes !== Number(member.Size)) throw new Error("Installed uninstaller extraction size differs from its exact archive member.");
+    uninstaller = { member: member.path, ...await verifyWindowsFile(path, options.signer),
+      scope: "Separately embedded native executable installed as Uninstall PM Agent v4.exe; private NSIS plugins are not subject to this per-file publisher check." };
+  }
   const archive = join(directory, "app-64.7z");
   const { child, closed } = start(await sevenZip(), ["x", "-so", "-bd", "--", installer, payloads[0].Path]);
   try {
@@ -156,7 +191,7 @@ async function extractNsisPayload(installer, directory) {
   if ((await lstat(archive)).size !== Number(payloads[0].Size)) throw new Error("NSIS payload extraction size differs from its actual archive member.");
   const application = join(directory, "application");
   await extractArchive(archive, application, true);
-  return { resources: join(application, "resources"), payload: { member: "$PLUGINSDIR/app-64.7z", bytes: Number(payloads[0].Size), sha256: await hashFile(archive) } };
+  return { resources: join(application, "resources"), payload: { member: "$PLUGINSDIR/app-64.7z", bytes: Number(payloads[0].Size), sha256: await hashFile(archive) }, ...(uninstaller ? { uninstaller } : {}) };
 }
 
 async function execute(command, args) {
@@ -165,22 +200,38 @@ async function execute(command, args) {
   await closed;
 }
 
-export async function inspectInstalledApplication(resources, { target, version }) {
+export async function inspectInstalledApplication(resources, options) {
+  const { target, version } = options;
+  if (!/^[a-f0-9]{40}$/.test(options.source?.commit ?? "") || !/^[a-f0-9]{64}$/.test(options.source?.sha256 ?? "") || typeof options.source?.dirty !== "boolean")
+    throw new Error("Final application verification requires the exact corresponding-source commit, SHA256 and dirty identity.");
   resources = resolve(resources);
   const info = await lstat(resources);
   if (!info.isDirectory() || info.isSymbolicLink() || await realpath(resources) !== resources)
     throw new Error("Final application resources must be a real nonescaping directory.");
-  const application = await inspectPackagedApplication(resources, version, { signedMachO: target.startsWith("darwin-"), target });
+  const application = await inspectPackagedApplication(resources, version, { ...options, signedMachO: target.startsWith("darwin-") });
   if (!application.runtimeInventory) throw new Error("Final application is missing its complete pinned runtime.");
-  const tree = await applicationTree(target.startsWith("darwin-") ? resolve(resources, "../..") : dirname(resources));
+  let ownership;
+  if (target === "win32-x64") {
+    const verified = await verifyInstallationManifest(dirname(resources), application.installStamp.value);
+    ownership = { status: "passed", manifest: "resources/desktop-install-files.json", sha256: await hashFile(join(resources, "desktop-install-files.json")),
+      files: verified.fileCount, logicalBytes: verified.bytes, scope: "Exact complete final Windows installation-owned file bytes; original archive expansion, not installation execution." };
+  }
+  const installRoot = target.startsWith("darwin-") ? resolve(resources, "../..") : dirname(resources);
+  const tree = await applicationTree(installRoot);
+  const { root: _root, ...payloadReport } = await inspectPayloadFiles(installRoot, { allowContainedSymlinks: target.startsWith("darwin-") });
+  if (payloadReport.files !== tree.files || payloadReport.bytes !== tree.logicalBytes || payloadReport.links !== tree.links)
+    throw new Error("Final artifact payload component report differs from exact complete application tree.");
+  assertWindowsInstallFileLimit(target, tree.files);
   const resourcesTree = await applicationTree(resources, { digest: true, modes: target.startsWith("darwin-") });
-  return { status: "passed", application, tree, resourcesTree, runtime: application.runtimeInventory };
+  return { status: "passed", application, tree, resourcesTree, runtime: application.runtimeInventory, payloadReport, ...(ownership ? { ownership } : {}) };
 }
 
 export async function verifyInstalledApplication(resources, expectedPayload, options) {
   if (!expectedPayload || !/^[a-f0-9]{64}$/.test(expectedPayload.sha256) || !Number.isSafeInteger(expectedPayload.bytes))
     throw new Error("Installed-tree verification requires the current inspected final artifact digest.");
-  const checked = await inspectInstalledApplication(resources, options);
+  const checked = await inspectInstalledApplication(resources, options).catch((cause) => {
+    throw new Error(`Supplied installed application differs from the current final distributable: ${cause.message}`, { cause });
+  });
   if (JSON.stringify(checked.application) !== JSON.stringify(expectedPayload.application)
     || JSON.stringify(checked.resourcesTree) !== JSON.stringify(expectedPayload.resourcesTree))
     throw new Error("Supplied installed application differs from the current final distributable.");
@@ -236,9 +287,10 @@ export async function inspectFinalArtifacts(output, artifacts, options, onArtifa
     try {
       let resources;
       let payload;
+      let uninstaller;
       if (record.path.endsWith(".exe")) {
         if (options.target !== "win32-x64") throw new Error("NSIS payload is only valid for Windows x64 delivery.");
-        ({ resources, payload } = await extractNsisPayload(archive, temporary));
+        ({ resources, payload, uninstaller } = await extractNsisPayload(archive, temporary, options));
       } else {
         if (!options.target.startsWith("darwin-")) throw new Error("DMG/ZIP payload is only valid for macOS delivery.");
         const application = join(temporary, "application");
@@ -258,8 +310,12 @@ export async function inspectFinalArtifacts(output, artifacts, options, onArtifa
         }
       }
       const checked = await inspectInstalledApplication(resources, options);
-      results.push({ path: record.path, bytes: record.bytes, sha256: record.sha256, ...(payload ? { payload } : {}), ...checked });
+      const signatures = await verifyFinalSignatures(resources, archive, options);
+      results.push({ path: record.path, bytes: record.bytes, sha256: record.sha256, ...(payload ? { payload } : {}), ...checked,
+        signatures: { ...signatures, ...(uninstaller ? { uninstaller } : {}) } });
       if (onArtifact) await onArtifact(resources, record, results.at(-1));
+      if ((await lstat(archive)).size !== record.bytes || await hashFile(archive) !== record.sha256)
+        throw new Error(`Final artifact changed during payload/signature verification: ${record.path}`);
     } finally {
       try {
         if (mounted) await execute("/usr/bin/hdiutil", ["detach", mounted]);

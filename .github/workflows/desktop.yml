@@ -15,6 +15,27 @@ on:
         type: boolean
         default: true
         required: true
+      install_e2e:
+        description: Explicitly authorize real installer lifecycle in a new isolated Windows account (never enabled by default)
+        type: boolean
+        default: false
+        required: true
+      baseline_run_id:
+        description: Exact successful workflow run containing the lower-version baseline Windows delivery
+        type: string
+        required: false
+      baseline_run_attempt:
+        description: Exact baseline run attempt recorded in its desktop-package.json
+        type: string
+        required: false
+      baseline_artifact_name:
+        description: Exact baseline delivery artifact name from that run (no latest lookup)
+        type: string
+        required: false
+      baseline_installer_sha256:
+        description: Independently supplied SHA256 of the exact lower-version NSIS installer
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -96,6 +117,9 @@ jobs:
       - name: Build explicitly unsigned native installers
         run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$env:DESKTOP_ARTIFACT_DIR"
         if: runner.os == 'Windows'
+      - name: Report Windows install file counts
+        if: runner.os == 'Windows'
+        run: node apps/desktop/scripts/payload-report.mjs --root "$env:DESKTOP_ARTIFACT_DIR/win-unpacked"
       - name: Build explicitly unsigned native installers
         run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$DESKTOP_ARTIFACT_DIR"
         if: runner.os == 'macOS'
@@ -180,6 +204,8 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.DESKTOP_WINDOWS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_WINDOWS_CSC_KEY_PASSWORD }}
+          PM_DESKTOP_WINDOWS_SIGNER_SUBJECT: ${{ vars.DESKTOP_WINDOWS_SIGNER_SUBJECT }}
+          PM_DESKTOP_WINDOWS_SIGNER_SHA256: ${{ vars.DESKTOP_WINDOWS_SIGNER_SHA256 }}
         run: pnpm --filter @agent-workspace/desktop package:signed --platform win32 --arch x64 --output "$env:DESKTOP_ARTIFACT_DIR"
       - name: Build Developer ID-signed and notarized DMG and ZIP
         if: runner.os == 'macOS'
@@ -189,6 +215,7 @@ jobs:
           APPLE_ID: ${{ secrets.DESKTOP_APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
+          PM_DESKTOP_MAC_TEAM_ID: ${{ vars.DESKTOP_MAC_TEAM_ID }}
         run: pnpm --filter @agent-workspace/desktop package:signed --platform darwin --arch ${{ matrix.arch }} --output "$DESKTOP_ARTIFACT_DIR"
       - name: Verify signed final archive payloads and execute native runtime smoke (not installer or GUI)
         shell: bash
@@ -200,3 +227,98 @@ jobs:
           retention-days: 14
           compression-level: 0
           path: ${{ env.DESKTOP_DELIVERY_DIR }}/
+
+  install-e2e:
+    name: Opt-in real Windows installation lifecycle
+    needs: [unsigned, signed]
+    if: >-
+      ${{ always() && inputs.install_e2e == true
+        && ((inputs.distribution == 'unsigned' && needs.unsigned.result == 'success')
+          || (inputs.distribution == 'signed' && needs.signed.result == 'success')) }}
+    runs-on: windows-2025
+    timeout-minutes: 180
+    # Cross-run baseline download is read-only; no workflow dispatch or release.
+    permissions:
+      contents: read
+      actions: read
+    env:
+      INSTALL_E2E_CURRENT: ${{ runner.temp }}/desktop-e2e-current-${{ github.run_id }}-${{ github.run_attempt }}
+      INSTALL_E2E_BASELINE: ${{ runner.temp }}/desktop-e2e-baseline-${{ github.run_id }}-${{ github.run_attempt }}
+      INSTALL_E2E_EXPORT: ${{ runner.temp }}/desktop-e2e-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+      INSTALL_E2E_BOUND_DELIVERY: ${{ runner.temp }}/desktop-e2e-bound-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          architecture: x64
+      - uses: pnpm/action-setup@v4
+      - name: Require exact supplied true-upgrade baseline before any lifecycle
+        shell: pwsh
+        env:
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          BASELINE_ATTEMPT: ${{ inputs.baseline_run_attempt }}
+          BASELINE_ARTIFACT: ${{ inputs.baseline_artifact_name }}
+          BASELINE_SHA256: ${{ inputs.baseline_installer_sha256 }}
+        run: |
+          if ($env:BASELINE_RUN_ID -notmatch '^\d+$' -or $env:BASELINE_ATTEMPT -notmatch '^[1-9]\d*$' -or [string]::IsNullOrWhiteSpace($env:BASELINE_ARTIFACT) -or $env:BASELINE_SHA256 -notmatch '^[a-f0-9]{64}$') {
+            throw 'BLOCKED: install-e2e requires an exact older-version delivery run/attempt, artifact name and installer SHA256. Same-version overwrite is not N to N+1.'
+          }
+      - name: Download exact candidate delivery from this run
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-${{ inputs.distribution }}-win32-x64
+          path: ${{ env.INSTALL_E2E_CURRENT }}
+      - name: Download supplied exact baseline delivery without dispatching a workflow
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.baseline_artifact_name }}
+          run-id: ${{ inputs.baseline_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ env.INSTALL_E2E_BASELINE }}
+      - name: Install locked verifier dependencies (no installer lifecycle)
+        run: pnpm install --frozen-lockfile
+      - name: Verify both complete delivery material sets before execution
+        shell: pwsh
+        run: |
+          node apps/desktop/scripts/verify-delivery.mjs --output "$env:INSTALL_E2E_CURRENT" --files-only
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate material verification failed' }
+          node apps/desktop/scripts/verify-delivery.mjs --output "$env:INSTALL_E2E_BASELINE" --files-only
+          if ($LASTEXITCODE -ne 0) { throw 'Baseline material verification failed' }
+      - name: Execute native lifecycle in a new standard account and private roots
+        shell: pwsh
+        env:
+          BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+          BASELINE_ATTEMPT: ${{ inputs.baseline_run_attempt }}
+          BASELINE_SHA256: ${{ inputs.baseline_installer_sha256 }}
+        run: |
+          & apps/desktop/scripts/install-e2e/provision-windows.ps1 -ExecuteInstallerLifecycle `
+            -Delivery "$env:INSTALL_E2E_CURRENT" -Baseline "$env:INSTALL_E2E_BASELINE" `
+            -BaselineSha256 "$env:BASELINE_SHA256" -BaselineRunId "$env:BASELINE_RUN_ID" `
+            -BaselineRunAttempt "$env:BASELINE_ATTEMPT" -ExportParent "$env:INSTALL_E2E_EXPORT"
+      - name: Bind verified receipt and exact evidence hashes to candidate delivery
+        shell: pwsh
+        run: |
+          node apps/desktop/scripts/verify-delivery.mjs --output "$env:INSTALL_E2E_CURRENT" `
+            --install-e2e-receipt "$env:INSTALL_E2E_EXPORT/diagnostics/install-e2e-receipt.json" `
+            --stage "$env:INSTALL_E2E_BOUND_DELIVERY"
+          if ($LASTEXITCODE -ne 0) { throw 'Native receipt validation failed; installation must not be marked passed' }
+      - name: Preserve diagnostics on success, blocked criteria and failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-install-e2e-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 6
+          path: ${{ env.INSTALL_E2E_EXPORT }}/
+      - name: Upload delivery with independently verified native receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ inputs.distribution }}-win32-x64-install-e2e
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: ${{ env.INSTALL_E2E_BOUND_DELIVERY }}/

@@ -155,13 +155,13 @@ export function PmWorkspaceSwitcher({ collapsed = false }: { collapsed?: boolean
               <Users className="size-4 shrink-0" aria-hidden="true" />{en ? "Members & teams" : "成员与团队"}
             </DropdownMenuItem>}
           </>}
-          <DropdownMenuItem render={<a href="/pm" data-navigation-close />}>
+          <DropdownMenuItem render={<a href="/pm?pick=1" data-navigation-close />}>
             <LayoutGrid className="size-4 shrink-0" aria-hidden="true" />
             {en ? "All workspaces" : "全部工作区"}
           </DropdownMenuItem>
-          <DropdownMenuItem render={<a href="/pm#create-workspace" data-navigation-close />}>
+          <DropdownMenuItem render={<a href="/pm?create=1" data-navigation-close />}>
             <Plus className="size-4 shrink-0" aria-hidden="true" />
-            {en ? "Create workspace with Nova" : "新建工作区与 Nova 示例"}
+            {en ? "New workspace" : "新建工作区"}
           </DropdownMenuItem>
         </DropdownMenuGroup>
         {(pending || visibleError || workspaces.some(candidate => candidate.id !== workspace?.id)) && <>

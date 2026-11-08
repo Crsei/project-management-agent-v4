@@ -20,18 +20,19 @@ $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier])
 # Only new-path restriction may adopt that exact token owner, never read/verify.
 if ($owner.Value -ne $sid.Value -and -not ($env:PM_PRIVATE_ACTION -eq 'restrict' -and $owner.Value -eq $identity.Owner.Value)) { throw 'Foreign owner refused' }
 if ($env:PM_PRIVATE_ACTION -eq 'restrict') {
-  if ($item.PSIsContainer) {
-    $acl = New-Object Security.AccessControl.DirectorySecurity
-    $inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
-  } else {
-    $acl = New-Object Security.AccessControl.FileSecurity
-    $inherit = [Security.AccessControl.InheritanceFlags]::None
-  }
-  $acl.SetOwner($sid)
+  # Mutate the loaded descriptor so owner/group/audit remain unchanged unless
+  # this new path has the current token's default owner instead of its user SID.
+  if ($owner.Value -ne $sid.Value) { $acl.SetOwner($sid) }
   $acl.SetAccessRuleProtection($true, $false)
+  foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRuleSpecific($rule) }
+  $inherit = [Security.AccessControl.InheritanceFlags]::None
+  if ($item.PSIsContainer) { $inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit' }
   $rule = New-Object Security.AccessControl.FileSystemAccessRule($sid, [Security.AccessControl.FileSystemRights]::FullControl, $inherit, [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
   $acl.AddAccessRule($rule)
-  Set-Acl -LiteralPath $env:PM_PRIVATE_PATH -AclObject $acl
+  # Set-Acl copies Audit too and can require SeSecurityPrivilege on a protected
+  # DACL. The .NET setter persists only the sections modified above.
+  if ($item.PSIsContainer) { [IO.Directory]::SetAccessControl($env:PM_PRIVATE_PATH, $acl) }
+  else { [IO.File]::SetAccessControl($env:PM_PRIVATE_PATH, $acl) }
   $acl = Get-Acl -LiteralPath $env:PM_PRIVATE_PATH
 }
 if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $sid.Value) { throw 'Owner changed' }

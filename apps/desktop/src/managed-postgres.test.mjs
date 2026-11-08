@@ -10,6 +10,7 @@ import test from "node:test";
 import { Client } from "pg";
 import { ManagedPostgres, validateManagedPostgresState } from "./managed-postgres.mjs";
 import { ensurePrivateDirectory, readPrivateJson, writePrivateJson } from "./private-state.mjs";
+import { readProcessIdentity, sameProcessIdentity } from "./process-identity.mjs";
 
 const binariesDir = process.env.PM_DESKTOP_TEST_POSTGRES_ROOT;
 const sampleState = () => ({ formatVersion: 1, postgresMajor: 16, instanceId: randomUUID(), username: "desktop", password: randomBytes(32).toString("hex"), port: 25432, phase: "ready" });
@@ -57,6 +58,49 @@ test("command waits for buffered output to drain after process exit", { timeout:
   }
   assert.equal(await result, "complete command output");
   assert.equal(pg.ownedProcessCount, 0);
+});
+
+test("command timeout does not kill the helper or discard its ownership", { timeout: 15_000 }, async t => {
+  const { dataDir, processes } = await isolated(t);
+  await mkdir(dataDir);
+  const pg = new ManagedPostgres({ dataDir, binariesDir: dataDir });
+  processes.push(pg);
+  pg.binary = () => process.execPath;
+  const pending = pg.command("slow-owned-helper", ["-e", "const fs=require('node:fs');const timer=setInterval(()=>{if(fs.existsSync('release-helper'))clearInterval(timer)},25);"], { timeout: 10 });
+  const child = pg.children.values().next().value;
+  const closed = once(child, "close");
+  try {
+    await assert.rejects(pending, /timed out.*remains owned.*no force kill/);
+    assert.equal(pg.children.has(child), true);
+    assert.equal(child.exitCode, null);
+  } finally {
+    await writeFile(join(dataDir, "release-helper"), "yes");
+    await closed;
+  }
+  assert.equal(pg.ownedProcessCount, 0);
+});
+
+test("a reused controller PID and PostgreSQL creation identity refuse without signalling", async t => {
+  const { dataDir, processes } = await isolated(t);
+  await ensurePrivateDirectory(dataDir);
+  const identity = readProcessIdentity(process.pid);
+  const reused = { ...identity, creationTime: `${identity.creationTime}-reused` };
+  const pg = new ManagedPostgres({ dataDir, binariesDir: dataDir });
+  processes.push(pg);
+  const owner = { formatVersion: 2, pid: process.pid, identity: reused, token: randomUUID() };
+  await writePrivateJson(join(dataDir, ".postgres-owner.json"), owner);
+  await assert.rejects(pg.acquireLock(), /reused|identity changed/);
+  assert.deepEqual(await readPrivateJson(join(dataDir, ".postgres-owner.json")), owner);
+  pg.state = sampleState();
+  pg.binary = () => identity.executable;
+  await ensurePrivateDirectory(pg.clusterDir);
+  await writePrivateJson(join(dataDir, ".postgres-process.json"), { formatVersion: 1, instanceId: pg.state.instanceId, clusterDir: pg.clusterDir, identity: reused });
+  await writeFile(join(pg.clusterDir, "postmaster.pid"), `${process.pid}\n${pg.clusterDir}\n0\n${pg.state.port}\n`, { mode: 0o600 });
+  let identified = false;
+  pg.identify = async () => { identified = true; };
+  await assert.rejects(pg.recoverOwnedServer(), /reused|identity changed/);
+  assert.equal(identified, false);
+  assert.equal(sameProcessIdentity(readProcessIdentity(process.pid), identity), true);
 });
 
 test("unowned nonempty roots are preserved and never initialized", async t => {
@@ -130,6 +174,22 @@ test("failed stop control retains the owned database and committed data instead 
     try { assert.deepEqual((await survivor.query("SELECT value FROM shutdown_probe")).rows, [{ value: "committed" }]); }
     finally { await survivor.end(); }
   } finally { pg.command = command; }
+  await pg.stop();
+  assert.equal(pg.running, false);
+});
+
+test("real PG16 tampered creation ownership refuses shutdown and a restored record permits normal retry", { skip: !binariesDir, timeout: 180_000 }, async t => {
+  const { dataDir, processes } = await isolated(t);
+  const pg = new ManagedPostgres({ dataDir, binariesDir });
+  processes.push(pg);
+  await pg.start();
+  const path = join(dataDir, ".postgres-process.json");
+  const original = await readPrivateJson(path);
+  await writePrivateJson(path, { ...original, identity: { ...original.identity, creationTime: `${original.identity.creationTime}-reused` } });
+  await assert.rejects(pg.stop(), /ownership record changed|reused|identity changed/);
+  assert.equal(pg.running, true);
+  assert.ok(await readPrivateJson(join(dataDir, ".postgres-owner.json")));
+  await writePrivateJson(path, original);
   await pg.stop();
   assert.equal(pg.running, false);
 });

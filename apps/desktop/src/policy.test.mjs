@@ -124,7 +124,7 @@ test("diagnostics retain actionable context but exclude known setup secrets and 
 
 test("native controls accept only the exact bundled top-level frame", () => {
   const url = "file:///desktop/connection.html";
-  const frame = { url };
+  const frame = { url, detached: false, isDestroyed: () => false };
   const contents = { isDestroyed: () => false, mainFrame: frame };
   assert.equal(trustedConnectionFrame({ sender: contents, senderFrame: frame }, contents, url), true);
   assert.equal(trustedConnectionFrame({ sender: contents, senderFrame: { url } }, contents, url), false);
@@ -136,7 +136,7 @@ test("native controls accept only the exact bundled top-level frame", () => {
 
 test("workspace native controls reject subframes, guests, changed origins and invalidated frames", () => {
   const url = "http://127.0.0.1:45913/agent/workspace";
-  const frame = { url };
+  const frame = { url, detached: false, isDestroyed: () => false };
   const contents = { isDestroyed: () => false, mainFrame: frame };
   const event = { sender: contents, senderFrame: frame };
   assert.equal(trustedWorkspaceFrame(event, contents, url), true);
@@ -154,4 +154,29 @@ test("workspace native controls reject subframes, guests, changed origins and in
   assert.equal(trustedWorkspaceFrame(event, { ...contents, isDestroyed: () => true }, url), false);
   assert.equal(trustedWorkspaceFrame({ get sender() { throw new Error("disposed"); } }, contents, url), false);
   assert.equal(trustedWorkspaceFrame(event, contents, null), false);
+});
+
+test("queued desktop IPC fails closed for detached, destroyed and replaced top-level frames", () => {
+  for (const [trust, url] of [
+    [trustedConnectionFrame, "file:///desktop/connection.html"],
+    [trustedWorkspaceFrame, "http://127.0.0.1:45913/pm"],
+  ]) {
+    const frame = { url, detached: false, isDestroyed: () => false };
+    const contents = { isDestroyed: () => false, mainFrame: frame };
+    const event = { sender: contents, senderFrame: frame };
+    assert.equal(trust(event, contents, url), true);
+    frame.detached = true;
+    assert.equal(trust(event, contents, url), false);
+    frame.detached = false;
+    frame.isDestroyed = () => true;
+    assert.equal(trust(event, contents, url), false);
+    frame.isDestroyed = () => { throw new Error("frame already disposed"); };
+    assert.equal(trust(event, contents, url), false);
+    frame.isDestroyed = () => false;
+    contents.mainFrame = { ...frame };
+    assert.equal(trust(event, contents, url), false);
+    contents.mainFrame = frame;
+    assert.equal(trust({ sender: contents, get senderFrame() { throw new Error("invalidated request"); } }, contents, url), false);
+    assert.equal(trust(event, { ...contents, isDestroyed() { throw new Error("contents disposed"); } }, url), false);
+  }
 });
