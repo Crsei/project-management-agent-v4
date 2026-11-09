@@ -48,6 +48,7 @@ pnpm services:status
 | [产品规划](docs/guides/product-roadmap.md) / [App 预览](docs/guides/app-preview.md) | PRD/Roadmap、真实任务与依赖、提交覆盖、本机 Linux 预览协议 |
 | [自动化](docs/guides/automations.md) | 47 个模板、触发、集成、分析候选与旧报告能力边界 |
 | [桌面](docs/guides/desktop.md) | Windows x64、macOS arm64/x64 目标、安装数据、备份与原生构建 |
+| [发布流水线](docs/guides/release.md) | 标签触发、精确提交 CI 门禁、draft Release、未签名证据与限制 |
 | [外部集成](docs/guides/integrations.md) | SMTP/可信恢复邮箱、私有S3配置/停写维护、出站Webhook接收协议 |
 | [营销站](docs/guides/marketing.md) | 独立静态构建、公开地址配置、素材与许可边界 |
 | [PM 分析 Skills](.agents/skills/README.md) | 需求审阅、计划草稿、证据审阅与项目摘要；不表示 Chat 自动加载 |

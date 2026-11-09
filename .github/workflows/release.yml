@@ -1,0 +1,351 @@
+name: Tag release
+
+# "Repository checks" dispatches this workflow only after the exact tag commit
+# passed the full check suite. Manual dispatch exists for retries and rechecks
+# the same successful CI run before anything is built or published.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing v-prefixed semantic-version tag
+        required: true
+        type: string
+      expected_sha:
+        description: Exact 40-hex commit the tag must point at
+        required: true
+        type: string
+      ci_run_id:
+        description: Exact successful Repository checks run id (optional; resolved by commit when omitted)
+        required: false
+        type: string
+
+# Read-only by default. Only the draft-release job receives contents:write.
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  NODE_OPTIONS: --max-old-space-size=4096
+  RELEASE_TAG: ${{ inputs.tag }}
+  RELEASE_SHA: ${{ inputs.expected_sha }}
+
+jobs:
+  verify:
+    name: Verify tag, version and exact-commit checks
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      ci_run_url: ${{ steps.ci.outputs.url }}
+      ci_run_id: ${{ steps.ci.outputs.id }}
+    steps:
+      - name: Validate dispatch inputs
+        shell: bash
+        env:
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "expected_sha must be one full lowercase commit id: $RELEASE_SHA" >&2
+            exit 1
+          fi
+          if [[ -n "${CI_RUN_ID:-}" && ! "$CI_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "ci_run_id must be numeric when provided" >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+      - name: Require release tooling on the tagged commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f scripts/release-package.mjs ]; then
+            echo "Tag $RELEASE_TAG predates the release packaging tool; create a new tag after this pipeline is on the default branch." >&2
+            exit 1
+          fi
+      - name: Verify checkout and package version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$RELEASE_SHA" ]; then
+            echo "Checkout resolved to $actual, not $RELEASE_SHA" >&2
+            exit 1
+          fi
+          version="$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")"
+          if [ "v$version" != "$RELEASE_TAG" ]; then
+            echo "Tag $RELEASE_TAG does not match package.json version $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Verify the tag still points at the exact commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+          target_sha="$(jq -r '.object.sha' <<<"$ref_json")"
+          target_type="$(jq -r '.object.type' <<<"$ref_json")"
+          if [ "$target_type" = "tag" ]; then
+            tag_json="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$target_sha")"
+            target_sha="$(jq -r '.object.sha' <<<"$tag_json")"
+            target_type="$(jq -r '.object.type' <<<"$tag_json")"
+          fi
+          if [ "$target_type" != "commit" ] || [ "$target_sha" != "$RELEASE_SHA" ]; then
+            echo "Tag $RELEASE_TAG does not point at commit $RELEASE_SHA" >&2
+            exit 1
+          fi
+      - name: Verify the commit is on the default branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          default_branch="$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)"
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$default_branch...$RELEASE_SHA" --jq .status)"
+          # "behind" means the release commit is an ancestor of the default branch.
+          if [ "$status" != "identical" ] && [ "$status" != "behind" ]; then
+            echo "Release commit $RELEASE_SHA is not on $default_branch (comparison: $status)" >&2
+            exit 1
+          fi
+      - name: Verify successful Repository checks for the exact commit
+        id: ci
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CI_RUN_ID:-}" ]; then
+            # The dispatching CI run is still finishing this job when the
+            # release starts, so wait for its recorded completion first.
+            gh run watch "$CI_RUN_ID" --interval 10 --exit-status >/dev/null || true
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID")"
+          else
+            # The newest completed push run is authoritative: a later failure
+            # is not hidden by an earlier success for the same commit.
+            run_json="$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+              -f head_sha="$RELEASE_SHA" -f event=push -f status=completed -F per_page=100 \
+              --jq '[.workflow_runs[]][0] // empty')"
+            if [ -z "$run_json" ]; then
+              echo "No completed Repository checks push run exists for $RELEASE_SHA; wait for CI or pass its run id" >&2
+              exit 1
+            fi
+          fi
+          if ! jq -e --arg sha "$RELEASE_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            .head_sha == $sha and .event == "push" and .status == "completed" and
+            .conclusion == "success" and .head_repository.full_name == $repo and
+            .path == ".github/workflows/ci.yml"
+          ' <<<"$run_json" >/dev/null; then
+            echo "The selected run is not a successful Repository checks push run for $RELEASE_SHA" >&2
+            exit 1
+          fi
+          echo "id=$(jq -r '.id' <<<"$run_json")" >> "$GITHUB_OUTPUT"
+          echo "url=$(jq -r '.html_url' <<<"$run_json")" >> "$GITHUB_OUTPUT"
+          echo "Verified run $(jq -r '.html_url' <<<"$run_json")" >> "$GITHUB_STEP_SUMMARY"
+
+  license:
+    name: Recorded release authorization gate
+    needs: [verify]
+    if: ${{ !cancelled() && needs.verify.result == 'success' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - name: Check recorded release gate without granting authorization
+        shell: bash
+        run: |
+          set +e
+          output="$(node scripts/check-third-party-notices.mjs --release 2>&1)"
+          code=$?
+          set -e
+          printf '%s\n' "$output"
+          {
+            echo '### Recorded release authorization gate'
+            echo
+            echo '```'
+            printf '%s\n' "$output"
+            echo '```'
+            if [ "$code" -ne 0 ]; then
+              echo
+              echo '**Blocked.** No draft release is created while a release blocker is open. See THIRD_PARTY_NOTICES.md (release-blockers).'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+
+  package:
+    name: Build and package unsigned evidence
+    needs: [verify]
+    if: ${{ !cancelled() && needs.verify.result == 'success' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.9.0'
+          run_install: false
+      - name: Install native compiler prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential pkg-config
+      - name: Install locked workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test the release packaging tool on this commit
+        run: node --test scripts/release-package.test.mjs
+      - name: Build PM, Agent and unified Web products
+        env:
+          PM_ENABLE_LAB: 'false'
+        run: pnpm build:v4
+      - name: Package source and build evidence with checksums
+        run: node scripts/release-package.mjs prepare --tag "$RELEASE_TAG" --sha "$RELEASE_SHA" --output "$RUNNER_TEMP/release"
+      - name: Verify the produced directory before upload
+        run: node scripts/release-package.mjs verify --directory "$RUNNER_TEMP/release"
+      - name: Preserve the verified unsigned evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ inputs.tag }}-${{ inputs.expected_sha }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: ${{ runner.temp }}/release/
+
+  publish:
+    name: Create draft GitHub Release
+    needs: [verify, license, package]
+    if: >-
+      ${{ !cancelled() && needs.verify.result == 'success'
+        && needs.license.result == 'success' && needs.package.result == 'success' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - name: Download the verified evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ inputs.tag }}-${{ inputs.expected_sha }}
+          path: ${{ runner.temp }}/release
+      - name: Re-verify downloaded evidence
+        run: node scripts/release-package.mjs verify --directory "$RUNNER_TEMP/release"
+      - name: Require the tag to still point at the exact commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+          target_sha="$(jq -r '.object.sha' <<<"$ref_json")"
+          target_type="$(jq -r '.object.type' <<<"$ref_json")"
+          if [ "$target_type" = "tag" ]; then
+            tag_json="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$target_sha")"
+            target_sha="$(jq -r '.object.sha' <<<"$tag_json")"
+          fi
+          if [ "$target_sha" != "$RELEASE_SHA" ]; then
+            echo "Tag moved after verification; refusing to publish" >&2
+            exit 1
+          fi
+      - name: Create or refresh a draft release with the verified assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN_URL: ${{ needs.verify.outputs.ci_run_url }}
+          CI_RUN_ID: ${{ needs.verify.outputs.ci_run_id }}
+        run: |
+          set -euo pipefail
+          directory="$RUNNER_TEMP/release"
+          body="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "# $RELEASE_TAG"
+            echo
+            echo "- Commit: \`$RELEASE_SHA\`"
+            echo "- Repository checks: $CI_RUN_URL (run $CI_RUN_ID)"
+            echo "- Recorded release gate: clear. This records repository metadata only; it is not a legal review or distribution authorization."
+            echo
+            echo "## Assets"
+            echo
+            jq -r '.artifacts[] | "- \(.name) — \(.sha256) (\(.bytes) bytes)"' "$directory/release-manifest.json"
+            echo
+            echo "Unsigned source and build-evidence archives only. Desktop installers are built separately and are not included. Maintainers review this draft before publishing."
+          } > "$body"
+          extra=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then extra+=(--prerelease); fi
+          existing="$(gh release view "$RELEASE_TAG" --json isDraft 2>/dev/null || true)"
+          if [ -n "$existing" ]; then
+            if [ "$(jq -r '.isDraft' <<<"$existing")" != "true" ]; then
+              echo "A published release already exists for $RELEASE_TAG; refusing to modify it" >&2
+              exit 1
+            fi
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file "$body" "${extra[@]}"
+          else
+            gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" --notes-file "$body" "${extra[@]}"
+          fi
+          gh release upload "$RELEASE_TAG" "$directory"/* --clobber
+          url="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
+          {
+            echo "### Draft release"
+            echo
+            echo "$url"
+            echo
+            gh release view "$RELEASE_TAG" --json assets --jq '.assets[] | "- \(.name) — \(.size) bytes"'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  report:
+    name: Report release pipeline result
+    needs: [verify, license, package, publish]
+    if: always()
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Summarize gate results
+        shell: bash
+        env:
+          VERIFY: ${{ needs.verify.result }}
+          LICENSE: ${{ needs.license.result }}
+          PACKAGE: ${{ needs.package.result }}
+          PUBLISH: ${{ needs.publish.result }}
+        run: |
+          {
+            echo '### Tag release pipeline'
+            echo
+            echo '| Gate | Result |'
+            echo '| --- | --- |'
+            printf '| Exact tag, version and CI run | %s |\n' "$VERIFY"
+            printf '| Recorded release authorization | %s |\n' "$LICENSE"
+            printf '| Build and evidence packaging | %s |\n' "$PACKAGE"
+            printf '| Draft GitHub Release | %s |\n' "$PUBLISH"
+            echo
+            echo 'A successful run creates or refreshes a **draft** release only. Publishing the draft, signing, installer lifecycle, deployment and business acceptance remain separate operator steps.'
+          } >> "$GITHUB_STEP_SUMMARY"

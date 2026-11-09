@@ -155,3 +155,33 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
+
+  start-release:
+    name: Start tag release after checks
+    needs: [checks]
+    if: ${{ success() && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    # Only this job can start another workflow; it checks out no repository code.
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch the release workflow for the exact tag commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          CI_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Tag $TAG is not a release tag; no release workflow dispatched." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          default_branch="$(gh api "repos/$GH_REPO" --jq .default_branch)"
+          gh workflow run release.yml --repo "$GH_REPO" --ref "$default_branch" \
+            -f tag="$TAG" -f expected_sha="$SHA" -f ci_run_id="$CI_RUN_ID"
+          echo "Dispatched Tag release for $TAG at $SHA from $default_branch." >> "$GITHUB_STEP_SUMMARY"

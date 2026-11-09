@@ -34,6 +34,8 @@ pnpm install --frozen-lockfile
 | `pnpm build:v4` | PM、Agent 依赖与服务、统一 Web；不等于桌面打包或平台验收 |
 | `pnpm check:ci` / `node scripts/check-ci.mjs` | 默认 `all`：static → build → host → backend → agent；Linux、Docker、Bubblewrap，真实本轮 PostgreSQL/MinIO、临时 HOME，不读 `.env`；工程叶可用本地缓存，门禁/协议/完整测试/清理始终新鲜；互斥 `--baseline` / `--cache-name NAME` 不改变覆盖，失败/非豁免 skip 返回非零 |
 | `pnpm check:affected` | 开发者本地变更选择器；`--dry-run` 展示原因/命令，重复 `--file` 显式替代 Git 发现；未知输入保守全量，但无论选择结果都不替代默认 CI |
+| `pnpm check:release` | 记录在案的发行授权门禁；当前仍有 open blocker 时失败，不代表法律审查或分发授权 |
+| `node scripts/release-package.mjs` | `prepare`/`verify` 标签源码与构建证据、校验和及 manifest；需干净精确提交，不是签名、安装器或部署入口 |
 | `pnpm check:turbo` | 显式叶调度，默认六 lint；`--stage lint\|build\|host-build` 或重复 `--task ID`，`--dry` / `--baseline` 互斥；九 build/typecheck 与独立 host 纳入完整公共输入/输出缓存，不缓存真实测试/业务状态。不是完整 CI 或生产配置构建替代入口，见[开发指南](docs/guides/development.md#turbo-显式任务调度与本地-lint-缓存)及[完整计划](docs/reference/turbo-rollout-plan.zh.md) |
 
 Turbo 完整禁止隐式安装的入口为 `node scripts/check-turbo.mjs ...`，或 `pnpm_config_verify_deps_before_run=error pnpm check:turbo ...`。runner 在其 pnpm 调用边界固定依赖状态 `error` 策略，并在 HIT 前新鲜预检；不承诺 pnpm 内部后代环境值永不变化。未带环境变量的外层 pnpm 在 Node 启动前仍遵循自身策略，不能宣称被 runner 拦截。冻结安装是单独前提，不改变 workspace 全局策略。
@@ -51,3 +53,5 @@ Turbo 完整禁止隐式安装的入口为 `node scripts/check-turbo.mjs ...`，
 仓库正式托管地址与贡献接收流程确定后，使用该平台实际提供的分支/PR 功能；本指南不提供虚构仓库地址。请在变更说明中列出行为、兼容/迁移影响、测试证据和已知限制。
 
 自有代码使用 `AGPL-3.0-only`，完整条款见 [LICENSE](LICENSE)。引入第三方代码/字体/图片时保留原许可、来源、固定版本和本地补丁记录，并更新[第三方清单](THIRD_PARTY_NOTICES.md)。没有授权证明的素材不可因根许可证存在而假定可分发。对经网络提供修改版本涉及的对应源码义务，应按 AGPL 原文落实真实可用的获取方式，不用未配置的地址充数。
+
+标签发布与证据打包见[发布流水线](docs/guides/release.md)：CI 通过只表示检查完成，流水线只创建 draft release；发布 draft、签名、安装器和部署仍需操作者分别确认。
