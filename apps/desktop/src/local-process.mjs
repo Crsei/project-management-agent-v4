@@ -5,7 +5,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { assertOwnedProcess, assertProcessIdentity, isOwnedProcess, ownedProcessIdentity, readProcessIdentity, rememberOwnedProcess, sameProcessIdentity } from "./process-identity.mjs";
 
 // Windows crash containment is private to this supervisor's Job Object.
-// Graceful-stop timeouts never close/kill the supervisor or its Job Object.
+// A graceful-stop timeout never closes the supervisor or its Job Object; only
+// a helper whose stdin channel is already consumed is terminated by handle.
 const windowsJob = `
 using System;
 using System.ComponentModel;
@@ -190,8 +191,14 @@ export function ownsLiveProcess(child) {
 export function signalOwned(child) {
   const members = liveGroupMembers(child); // Throws for an unowned/reused PID.
   if (process.platform === "win32") {
-    if (members.length && !child.stdin.destroyed && !child.stdin.writableEnded) child.stdin.write('{"type":"desktop-stop"}\n');
-    else if (members.length) throw new Error("The owned service shutdown pipe is unavailable; ownership is retained.");
+    if (!members.length) return;
+    if (!child.stdin.destroyed && !child.stdin.writableEnded) { child.stdin.write('{"type":"desktop-stop"}\n'); return; }
+    // One-shot helpers consume stdin to EOF, so the line protocol is gone.
+    // Terminate only the identity-verified supervisor handle we spawned; its
+    // private kill-on-close Job Object ends the owned tree. No PID lookup and
+    // no foreign process is signalled.
+    assertOwnedProcess(child);
+    if (!child.kill()) throw new Error("The owned desktop supervisor could not be terminated; ownership is retained.");
   } else {
     for (const identity of members) {
       if (!assertProcessIdentity(identity)) continue;

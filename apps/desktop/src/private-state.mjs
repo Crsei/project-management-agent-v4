@@ -48,7 +48,11 @@ async function windowsAcl(path, secure, newlyCreated = false) {
   await new Promise((done, reject) => execFile(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", windowsAclScript], {
     windowsHide: true, timeout: 15_000, maxBuffer: 16_384,
     env: { SystemRoot: systemRoot, WINDIR: systemRoot, PM_DESKTOP_PRIVATE_PATH: path, PM_DESKTOP_PRIVATE_SECURE: secure ? "1" : "0", PM_DESKTOP_PRIVATE_NEW: newlyCreated ? "1" : "0" },
-  }, error => error ? reject(new Error("Desktop private path ACL cannot be verified")) : done()));
+  }, (error) => {
+    if (!error) return done();
+    const detail = error.killed || error.signal ? "helper did not finish within its deadline" : String(error.stderr || "").trim().split(/\r?\n/).filter(Boolean).at(-1);
+    reject(new Error(`Desktop private path ACL cannot be verified${detail ? `: ${detail}` : ""}`));
+  }));
 }
 
 export async function assertPrivatePath(path, directory = false) {
