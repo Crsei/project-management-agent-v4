@@ -20,6 +20,26 @@ Var DovspaceStage
   !define MUI_CUSTOMFUNCTION_ABORT DovspaceAbort
 !endif
 
+; The builder loads this include concurrently with its plugin resources.
+; Expand functions only after all plugin directories and registry definitions
+; are available, including StdUtils used by the updated-install flag.
+!macro customHeader
+!ifndef BUILD_UNINSTALLER
+Function DovspaceRestore
+  ${If} $DovspacePrepared == "yes"
+    ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$DovspaceHelper" -Stage restore -InstallRoot "$INSTDIR" -StateFile "$DovspaceState" -InstallRegistryKey "${INSTALL_REGISTRY_KEY}" -UninstallRegistryKey "${UNINSTALL_REGISTRY_KEY}"' $R2
+    ${If} $R2 != 0
+      MessageBox MB_ICONSTOP "Automatic application rollback could not be completed safely. Do not start the candidate. Preserve the .rollback-* tree and matching .json recovery receipt next to the installation; user data has not been migrated." /SD IDOK
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+Function .onInstFailed
+  Call DovspaceRestore
+FunctionEnd
+Function DovspaceAbort
+  Call DovspaceRestore
+FunctionEnd
+!endif
 Function ${DOVSPACE_PREFIX}DovspacePrepare
   ${If} $DovspacePrepared == "yes"
     Return
@@ -85,6 +105,7 @@ Function ${DOVSPACE_PREFIX}DovspacePrepare
   ${EndIf}
   StrCpy $DovspacePrepared "yes"
 FunctionEnd
+!macroend
 
 ; This replaces electron-builder's image-name process sweep. It is an actual
 ; authenticated lifecycle gate, including when the silent uninstaller calls it
@@ -122,23 +143,6 @@ FunctionEnd
     Quit
   ${EndIf}
 !macroend
-
-!ifndef BUILD_UNINSTALLER
-Function DovspaceRestore
-  ${If} $DovspacePrepared == "yes"
-    ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$DovspaceHelper" -Stage restore -InstallRoot "$INSTDIR" -StateFile "$DovspaceState" -InstallRegistryKey "${INSTALL_REGISTRY_KEY}" -UninstallRegistryKey "${UNINSTALL_REGISTRY_KEY}"' $R2
-    ${If} $R2 != 0
-      MessageBox MB_ICONSTOP "Automatic application rollback could not be completed safely. Do not start the candidate. Preserve the .rollback-* tree and matching .json recovery receipt next to the installation; user data has not been migrated." /SD IDOK
-    ${EndIf}
-  ${EndIf}
-FunctionEnd
-Function .onInstFailed
-  Call DovspaceRestore
-FunctionEnd
-Function DovspaceAbort
-  Call DovspaceRestore
-FunctionEnd
-!endif
 
 !macro customInstall
   ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$DovspaceHelper" -Stage probe -InstallRoot "$INSTDIR"' $R2
