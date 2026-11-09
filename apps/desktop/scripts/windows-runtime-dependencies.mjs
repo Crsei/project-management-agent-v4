@@ -31,7 +31,10 @@ export function inspectPeImports(bytes) {
     const start = offset(rva), end = bytes.indexOf(0, start);
     if (end < start || end - start > 260) fail();
     const value = bytes.toString("ascii", start, end).toLowerCase();
-    if (!/^[a-z0-9_.+-]+\.dll$/.test(value)) fail();
+    // PE imports name modules, not a DLL extension: PostgreSQL extensions
+    // import postgres.exe and the pinned GUI libraries import WINSPOOL.DRV.
+    // Keep basename/path validation without rejecting legitimate module types.
+    if (!/^[a-z0-9_.+-]+$/.test(value) || value.endsWith(".")) fail();
     return value;
   }
   const imports = new Set();

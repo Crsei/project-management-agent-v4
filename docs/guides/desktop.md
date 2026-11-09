@@ -70,6 +70,8 @@ pnpm --filter @agent-workspace/desktop package
 
 Windows signed 模式还须设置准确的 `PM_DESKTOP_WINDOWS_SIGNER_SUBJECT` 与证书 SHA256 `PM_DESKTOP_WINDOWS_SIGNER_SHA256`；最终安装器、实际交付的 `.exe/.dll/.node`、ASAR 原生成员及独立嵌入的安装后卸载器均验签。NSIS 私有插件由外层安装器签名与精确文件摘要覆盖，不要求另签成应用发布者。macOS 使用 `PM_DESKTOP_MAC_TEAM_ID`（或 `APPLE_TEAM_ID`）核对身份；最终 DMG 单独公证、staple 后才记录摘要，检查 `codesign --verify --deep --strict`、`stapler validate` 与 `spctl`。工具、身份或凭据缺失均失败；源码路径存在不代表原生签名已执行。
 
+Windows 离线依赖预检按 PE 导入表的模块名解析，不假定导入项只能以 `.dll` 结尾：PostgreSQL 扩展会导入 `postgres.exe`，随包库也会导入系统 `WINSPOOL.DRV`。模块名仍须为安全 basename，拒绝路径、ADS、尾点／空格及损坏的表边界；是否为 VC runtime 仍按实际模块身份记录，不推测或下载 redist。
+
 每组交付包含安装器、`desktop-package.json`、`desktop-verification.json`、`SHA256SUMS`、`desktop-source.tar.gz`、`desktop-source.json`、`desktop-legal.tar.gz`，以及 manifest 明确列出的辅助产物。对应源码保留已审阅本地改动、构建脚本及根 `turbo.json`；Git 与已审阅的 gitless 快照均将该配置的准确字节纳入清单和源码归档，构建后修改或删除会使源码复核失败。不含 `.env*`、`.local`、Home/凭据、内部历史计划、依赖缓存或旧产物。legal 材料来自最终成品，包括 runtime/Electron/Chromium 的原始许可；它是材料收集而不是第三方分发授权。具体上游 stable/nightly 实际 assets、采用/不采用理由、授权及回滚边界见 [发布设计](../reference/desktop-release-alignment-2026-11-08.zh.md)。
 
 schema 3 交付另含 `desktop-sbom.cdx.json`、`desktop-osv.json`、`desktop-vulnerabilities.sarif`。SBOM 按实际 PM／Agent／CC Switch host／Web／Electron／Node／PostgreSQL 闭包记录，不把整个开发依赖树当成成品。无版本的随包源码组件保留封存来源，标记为未执行注册表漏洞查询，不伪造版本或 PURL。OSV 查询失败与发现漏洞分别失败关闭；未撤回公告阻止交付。Node／PostgreSQL 的 OSS-Fuzz 映射不等于完整厂商 CVE 覆盖。资产集合、逐文件摘要、源码与 legal 必须完全对账，未知文件、缺文件和 updater feed 均拒绝；维持 `publish:null`／`publish:"never"`。
