@@ -25,6 +25,19 @@ const binariesDir = process.env.PM_DESKTOP_TEST_POSTGRES_ROOT;
 const serverRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const backupPassword = 'independent encrypted desktop backup passphrase';
 
+async function measured<T>(phase: string, operation: () => Promise<T>): Promise<T> {
+  const start = performance.now();
+  console.log(JSON.stringify({ scope: 'desktop-maintenance-regression', phase, status: 'start' }));
+  try {
+    const value = await operation();
+    console.log(JSON.stringify({ scope: 'desktop-maintenance-regression', phase, status: 'end', elapsedMs: performance.now() - start }));
+    return value;
+  } catch (error) {
+    console.log(JSON.stringify({ scope: 'desktop-maintenance-regression', phase, status: 'failure', elapsedMs: performance.now() - start }));
+    throw error;
+  }
+}
+
 async function rejectedMaintenance(input: Record<string, unknown>): Promise<{ phase: string; reason: string }> {
   const child = spawn(process.execPath, ['--conditions=development', join(serverRoot, 'apps/desktop/src/backend/maintenance.ts')], {
     cwd: serverRoot, env: { ...process.env, PM_DESKTOP_MANAGED: '1' }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
@@ -128,9 +141,9 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
       await assert.rejects(lstat(refusedDestination), { code: 'ENOENT' });
     }
   });
-  await database.stop();
+  await measured('stop-source', () => database.stop());
   const options = { serverRoot, runtimeRoot, trustedSourceAcknowledged: true };
-  const backedUp = await backupDesktop({ ...options, dataDir, destination, password: backupPassword });
+  const backedUp = await measured('backup', () => backupDesktop({ ...options, dataDir, destination, password: backupPassword }));
   assert.equal(backedUp.encrypted, true);
   assert.deepEqual(await readdir(destination), ['desktop-backup.enc']);
   const encrypted = await readFile(join(destination, 'desktop-backup.enc'));
@@ -146,7 +159,7 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   await assert.rejects(lstat(denied), { code: 'ENOENT' });
   await writeFile(join(destination, 'desktop-backup.enc'), encrypted);
   const restoredDir = join(root, 'restored');
-  const result = await restoreDesktop({ ...options, source: destination, dataDir: restoredDir, password: backupPassword });
+  const result = await measured('restore', () => restoreDesktop({ ...options, source: destination, dataDir: restoredDir, password: backupPassword }));
   assert.equal(result.projectRoot, join(restoredDir, 'projects'));
   assert.equal(await readFile(join(restoredDir, 'chat-spaces/private-chat.txt'), 'utf8'), 'managed chat file survives');
   assert.deepEqual(readCurrentCore(join(restoredDir, 'pm-workspaces', initialized.workspaceId)).files.map(file => ({ id: file.id, raw: file.raw })), core);
@@ -185,7 +198,7 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   assert.deepEqual(await readPrivateJson(join(restoredDir, 'bootstrap.json')), restoredBootstrap);
   assert.equal(await readFile(join(restoredDir, 'chat-spaces/private-chat.txt'), 'utf8'), 'managed chat file survives');
   const plaintext = join(root, 'plaintext');
-  await decryptBackupDirectory(join(destination, 'desktop-backup.enc'), plaintext, backupPassword);
+  await measured('decrypt-fixture', () => decryptBackupDirectory(join(destination, 'desktop-backup.enc'), plaintext, backupPassword));
   const manifestPath = join(plaintext, 'desktop-backup.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   for (const [label, change] of [
@@ -196,15 +209,15 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   ] as const) {
     await writeFile(manifestPath, JSON.stringify({ ...manifest, ...change }), { mode: 0o600 });
     const incompatible = join(root, label); await mkdir(incompatible);
-    await encryptBackupDirectory(plaintext, join(incompatible, 'desktop-backup.enc'), backupPassword);
-    await assert.rejects(restoreDesktop({ ...options, source: incompatible, dataDir: denied, password: backupPassword }));
+    await measured(`encrypt-${label}`, () => encryptBackupDirectory(plaintext, join(incompatible, 'desktop-backup.enc'), backupPassword));
+    await measured(`reject-${label}`, () => assert.rejects(restoreDesktop({ ...options, source: incompatible, dataDir: denied, password: backupPassword })));
     await assert.rejects(lstat(denied), { code: 'ENOENT' });
   }
   await writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 });
   await writeFile(join(plaintext, 'unclassified-private-data'), 'must not silently disappear', { mode: 0o600 });
   const malformed = join(root, 'malformed'); await mkdir(malformed);
-  await encryptBackupDirectory(plaintext, join(malformed, 'desktop-backup.enc'), backupPassword);
-  await assert.rejects(restoreDesktop({ ...options, source: malformed, dataDir: denied, password: backupPassword }));
+  await measured('encrypt-unclassified', () => encryptBackupDirectory(plaintext, join(malformed, 'desktop-backup.enc'), backupPassword));
+  await measured('reject-unclassified', () => assert.rejects(restoreDesktop({ ...options, source: malformed, dataDir: denied, password: backupPassword })));
   await assert.rejects(lstat(denied), { code: 'ENOENT' });
   await rm(join(plaintext, 'unclassified-private-data'));
   // Make an internally authenticated, filesystem-valid backup whose attachment
@@ -217,9 +230,9 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   await rm(join(plaintext, 'blobs/objects', blob.key));
   await writeFile(manifestPath, JSON.stringify({ ...manifest, blobManifestSha256: blobBackupManifestSha256(inconsistentBlobs) }), { mode: 0o600 });
   const inconsistent = join(root, 'sql-inconsistent'); await mkdir(inconsistent);
-  await encryptBackupDirectory(plaintext, join(inconsistent, 'desktop-backup.enc'), backupPassword);
+  await measured('encrypt-sql-inconsistent', () => encryptBackupDirectory(plaintext, join(inconsistent, 'desktop-backup.enc'), backupPassword));
   await ensurePrivateDirectory(denied);
-  await assert.rejects(restoreDesktop({ ...options, source: inconsistent, dataDir: denied, password: backupPassword }));
+  await measured('reject-sql-inconsistent', () => assert.rejects(restoreDesktop({ ...options, source: inconsistent, dataDir: denied, password: backupPassword })));
   assert.deepEqual(await readdir(denied), [], 'failed restore must not leave PostgreSQL ownership, data or a ready bootstrap');
   await rm(denied, { recursive: true });
   await writeFile(blobManifestPath, JSON.stringify(blobManifest), { mode: 0o600 });
@@ -230,7 +243,7 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   await assert.rejects(restoreDesktop({ ...options, source: plaintext, dataDir: denied }));
   await assert.rejects(lstat(denied), { code: 'ENOENT' });
   const legacyTarget = join(root, 'legacy-restored');
-  await restoreDesktop({ ...options, source: plaintext, dataDir: legacyTarget, allowLegacyUnencrypted: true });
+  await measured('legacy-restore', () => restoreDesktop({ ...options, source: plaintext, dataDir: legacyTarget, allowLegacyUnencrypted: true }));
   assert.equal(await readFile(join(legacyTarget, 'chat-spaces/private-chat.txt'), 'utf8'), 'managed chat file survives');
   assert.equal((await readPrivateJson(join(legacyTarget, 'bootstrap.json'))).phase, 'ready');
 });
