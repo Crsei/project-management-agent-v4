@@ -20,7 +20,9 @@ function deferred() {
 }
 
 async function until(predicate, message) {
-  const deadline = Date.now() + 10_000;
+  // Includes private ACL preparation and native Windows supervisor startup,
+  // not just HTTP listener time. Keep the wait bounded on every platform.
+  const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     if (await predicate()) return;
     await delay(25);
@@ -31,19 +33,33 @@ async function until(predicate, message) {
 async function fixture(t, behavior = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "pm-v4-desktop-")));
   let server;
-  t.after(async () => { await server?.stop(); await rm(root, { recursive: true, force: true }); });
+  t.after(async () => {
+    // A failed cancellation assertion must not strand a blocking fixture.
+    // The test itself never opens this escape hatch before asserting teardown.
+    await writeFile(join(root, "release-bootstrap"), "yes");
+    await server?.stop();
+    await rm(root, { recursive: true, force: true });
+  });
   const dataDir = join(root, "instance");
   const projectRoot = join(root, "selected-projects");
   await mkdir(projectRoot);
   await writeFile(join(root, "package.json"), '{"type":"module"}');
   const bootstrap = `
 import { appendFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 let text=''; for await (const chunk of process.stdin) text+=chunk;
 const input=JSON.parse(text);
 await writeFile(join(input.dataDir,'bootstrap-received.json'),JSON.stringify({ database:input.databaseUrl.startsWith('postgresql:'),projectRoot:input.projectRoot,setup:!!input.setup,keys:Object.keys(process.env) }));
-await appendFile(join(input.dataDir,'events'),'bootstrap-started\\n');
-if (${Boolean(behavior.blockBootstrap)}) await new Promise(() => setInterval(() => {},1000));
+if (${Boolean(behavior.blockBootstrap)}) {
+  const source="const fs=require('node:fs'),http=require('node:http');const server=http.createServer((q,s)=>s.end('bootstrap-descendant'));const stop=()=>{clearInterval(timer);server.close(()=>process.exit(0))};const timer=setInterval(()=>{if(fs.existsSync('../release-bootstrap'))stop()},25);process.on('SIGTERM',stop);server.listen(0,'127.0.0.1',()=>console.log(server.address().port));";
+  const nested=spawn(process.execPath,['--eval',source],{stdio:['ignore','pipe','inherit']});
+  const port=await new Promise((done,reject)=>{nested.once('error',reject);nested.once('exit',()=>reject(new Error('Bootstrap descendant exited before readiness')));nested.stdout.once('data',chunk=>done(chunk.toString().trim()))});
+  await writeFile(join(input.dataDir,'bootstrap-descendant-port'),port);
+  await appendFile(join(input.dataDir,'events'),'bootstrap-started\\n');
+  await new Promise(done=>{const timer=setInterval(()=>{if(existsSync('../release-bootstrap')){clearInterval(timer);done()}},25)});
+} else await appendFile(join(input.dataDir,'events'),'bootstrap-started\\n');
 if (input.setup) {
   const secret=input.setup.password;
   process.stderr.write('fixture secret '+secret.slice(0,7));
@@ -343,11 +359,19 @@ test("stop during bootstrap cannot spawn application services after disconnect",
   const started = f.server.start(f.configuration);
   const rejection = assert.rejects(started, /cancelled/i);
   await until(async () => (await readFile(join(f.dataDir, "events"), "utf8").catch(() => "")).includes("bootstrap-started"), "bootstrap did not enter");
+  const bootstrap = f.server.children.get("bootstrap");
+  assert.ok(bootstrap);
+  assert.equal(bootstrap.stdin.writableEnded, true);
+  const origin = `http://127.0.0.1:${await readFile(join(f.dataDir, "bootstrap-descendant-port"), "utf8")}`;
+  assert.equal(await (await fetch(origin, { signal: AbortSignal.timeout(2000) })).text(), "bootstrap-descendant");
   await f.server.stop();
   await rejection;
   await delay(100);
   assert.equal(f.server.running, false);
   assert.equal(f.server.processCount, 0);
+  assert.equal(bootstrap.desktopClosed, true);
+  assert.equal(f.server.children.size, 0);
+  await assert.rejects(fetch(origin, { signal: AbortSignal.timeout(500) }));
   assert.doesNotMatch(await readFile(join(f.dataDir, "events"), "utf8"), /(?:worker|pm|agent|gateway)-started/);
 });
 
@@ -367,8 +391,15 @@ test("live HTTP listeners without worker/database readiness are never declared r
   const started = f.server.start(f.configuration);
   void started.then(() => { settled = true; }, () => { settled = true; });
   const rejection = assert.rejects(started, /cancelled/i);
-  await until(() => f.server.children.size === 4, "application listeners were not launched");
-  await delay(400);
+  await until(async () => {
+    if (f.server.children.size !== 4) return false;
+    const ports = JSON.parse(await readFile(join(f.dataDir, "service-ports.json"), "utf8"));
+    try {
+      const response = await fetch(`http://127.0.0.1:${ports.public}/health/ready`, { signal: AbortSignal.timeout(500) });
+      const body = await response.json();
+      return response.status === 503 && body.status === "not_ready" && body.checks.database === true && body.checks.worker === false;
+    } catch { return false; }
+  }, "application listeners did not return the explicit unready response");
   assert.equal(settled, false);
   assert.equal(f.server.ready, false);
   await f.server.stop();

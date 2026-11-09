@@ -240,13 +240,31 @@ export function stopOwned(child, { graceMs = 10_000, closeMs = 1500 } = {}) {
 export const serviceEntry = `
 import { pathToFileURL } from 'node:url';
 let pending = '';
+let stopPending = false;
+function deliverStop() {
+  if (!stopPending || process.listenerCount('SIGTERM') === 0) return;
+  stopPending = false;
+  process.removeListener('newListener', listenerAdded);
+  process.emit('SIGTERM');
+}
+function listenerAdded(event) {
+  // newListener fires before installation. Deliver after the handler exists,
+  // even when the service stays inside a top-level await until shutdown.
+  if (event === 'SIGTERM') queueMicrotask(deliverStop);
+}
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => {
   pending += chunk;
   let boundary;
   while ((boundary = pending.indexOf('\\n')) !== -1) {
     const line = pending.slice(0, boundary); pending = pending.slice(boundary + 1);
-    if (line === '{"type":"desktop-stop"}') process.emit('SIGTERM');
+    if (line === '{"type":"desktop-stop"}') {
+      if (!stopPending) {
+        stopPending = true;
+        process.on('newListener', listenerAdded);
+      }
+      deliverStop();
+    }
   }
 });
 process.stdin.on('error', () => {});

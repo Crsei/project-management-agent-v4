@@ -80,17 +80,21 @@ export function rememberOwnedProcess(child, { suspendedExecutable, executable } 
     try {
       if (child.exitCode !== null || child.signalCode !== null) throw new Error("The spawned desktop process exited before its creation identity was captured. Descendant ownership is unknown and retained; cleanup is refused.");
       if (process.platform === "win32" && !suspendedExecutable) {
-        // The live child handle is the ownership authority; a PID cannot be
-        // reused while it is open. Resolve the native creation time in the
-        // background so spawning never blocks on a PowerShell start.
+        // The live child handle is the ownership authority, not the PID. Keep
+        // birth metadata for persisted lifecycle receipts, but never switch
+        // handle-based shutdown to synchronous process-table inspection.
         record.identity = Object.freeze({ pid: child.pid, creationTime: null, executable: executable ?? child.spawnfile ?? "" });
         const executablePath = join(process.env.SystemRoot || "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe");
-        const script = `$ErrorActionPreference='Stop'; $p=[Diagnostics.Process]::GetProcessById(${child.pid}); ConvertTo-Json -Compress ([ordered]@{pid=$p.Id;creationTime=$p.StartTime.ToUniversalTime().ToFileTimeUtc().ToString();executable=$p.MainModule.FileName})`;
-        execFile(executablePath, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", windowsHide: true, timeout: 15_000, maxBuffer: 8192, env: { SystemRoot: process.env.SystemRoot || "C:\\Windows" } }, (error, stdout) => {
+        const script = `$ErrorActionPreference='Stop'; $PSModuleAutoLoadingPreference='None'; Import-Module ($PSHOME+'\\Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1'); $p=[Diagnostics.Process]::GetProcessById(${child.pid}); ConvertTo-Json -Compress ([ordered]@{pid=$p.Id;creationTime=$p.StartTime.ToUniversalTime().ToFileTimeUtc().ToString();executable=$p.MainModule.FileName})`;
+        const controller = new AbortController();
+        const exited = () => controller.abort();
+        child.once("exit", exited);
+        execFile(executablePath, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", windowsHide: true, timeout: 15_000, signal: controller.signal, maxBuffer: 8192, env: { SystemRoot: process.env.SystemRoot || "C:\\Windows" } }, (error, stdout) => {
+          child.removeListener("exit", exited);
           if (error) return;
           try {
             const value = JSON.parse(stdout.trim());
-            if (value.pid === child.pid && typeof value.creationTime === "string" && typeof value.executable === "string") record.identity = Object.freeze(value);
+            if (child.exitCode === null && child.signalCode === null && value.pid === child.pid && typeof value.creationTime === "string" && value.creationTime && typeof value.executable === "string" && value.executable) record.identity = Object.freeze(value);
           } catch { /* the handle remains authoritative ownership */ }
         });
         return;
@@ -126,8 +130,9 @@ export function assertOwnedProcess(child) {
   const identity = ownedProcessIdentity(child);
   if (!identity && child.exitCode === null && child.signalCode === null) throw new Error("Desktop process creation identity was not captured; ownership is retained.");
   if (!identity) return null;
-  // Windows ownership is the open child handle, not a saved PID. A creation
-  // time may still be pending in the background and is not required to stop.
-  if (process.platform === "win32" && identity.creationTime === null) return child.exitCode === null && child.signalCode === null ? identity : null;
+  // The recorded Windows ChildProcess handle remains the authority even after
+  // birth metadata arrives. Once exited, never inspect or signal a reused PID.
+  // Persisted identities still require assertProcessIdentity's native check.
+  if (process.platform === "win32") return child.exitCode === null && child.signalCode === null ? identity : null;
   return assertProcessIdentity(identity);
 }

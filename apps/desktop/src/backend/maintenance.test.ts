@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -6,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { Client } from 'pg';
 import { createPool } from '../../../../packages/infrastructure/src/database.ts';
 import { LocalBlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
 import { login } from '../../../../packages/infrastructure/src/auth.ts';
@@ -22,6 +24,29 @@ import { bootstrapDesktop } from './bootstrap.ts';
 const binariesDir = process.env.PM_DESKTOP_TEST_POSTGRES_ROOT;
 const serverRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const backupPassword = 'independent encrypted desktop backup passphrase';
+
+async function rejectedMaintenance(input: Record<string, unknown>): Promise<{ phase: string; reason: string }> {
+  const child = spawn(process.execPath, ['--conditions=development', join(serverRoot, 'apps/desktop/src/backend/maintenance.ts')], {
+    cwd: serverRoot, env: { ...process.env, PM_DESKTOP_MANAGED: '1' }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
+  });
+  let output = '';
+  child.stdout.on('data', chunk => { output += chunk.toString(); if (output.length > 128 * 1024) child.kill(); });
+  child.stderr.resume();
+  child.stdin.on('error', () => {});
+  const { promise, resolve, reject } = Promise.withResolvers<number | null>();
+  child.once('error', () => reject(new Error('Maintenance regression child could not start.')));
+  child.once('close', resolve);
+  child.stdin.end(JSON.stringify(input));
+  const code = await promise;
+  assert.equal(code, 1);
+  let result;
+  try { result = JSON.parse(output); } catch { throw new Error('Maintenance regression returned no sanitized diagnostic.'); }
+  assert.equal(result.completed, false);
+  for (const privateValue of [input.databaseUrl, input.dataDir, input.destination]) {
+    if (typeof privateValue === 'string' && privateValue) assert.equal(output.includes(privateValue), false, 'diagnostics must not expose private input');
+  }
+  return result.diagnostic;
+}
 
 // Real PostgreSQL, real PM bootstrap/storage/checkpoints and bundled Agent backup.
 // Native runners must supply both the complete pinned runtime and built Agent dist.
@@ -82,6 +107,27 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   await securePrivateFile(join(agentRoot, 'workspace.sqlite'), { newlyCreated: true });
   await writeFile(join(agentRoot, 'providers.json'), '{"version":1,"providers":{"synthetic":{"apiKey":"synthetic-credential-retained"}}}', { mode: 0o600 });
   await securePrivateFile(join(agentRoot, 'providers.json'), { newlyCreated: true });
+  await t.test('maintenance rejects foreign clients even with the monitor name and rejects stale monitor identities', async () => {
+    const monitor = await database.maintenanceMonitorIdentity();
+    const refusedDestination = join(root, 'active-client-backup');
+    const request = { operation: 'backup', databaseUrl: started.databaseUrl, dataDir, destination: refusedDestination, postgresRoot: binariesDir!, serverRoot, monitor };
+    const foreign = new Client({ connectionString: started.databaseUrl, application_name: 'pm-desktop-owner' });
+    await foreign.connect();
+    try {
+      const diagnostic = await rejectedMaintenance(request);
+      assert.equal(diagnostic.phase, 'stopped-clients');
+      assert.equal(diagnostic.reason, 'active-clients');
+      assert.equal((await foreign.query('SELECT 1 AS retained')).rows[0].retained, 1, 'maintenance must not terminate a foreign connection');
+      await assert.rejects(lstat(refusedDestination), { code: 'ENOENT' });
+    } finally { await foreign.end(); }
+    if (monitor) {
+      const stale = await rejectedMaintenance({ ...request, monitor: { ...monitor, backendStart: '1970-01-01T00:00:00Z' } });
+      assert.equal(stale.reason, 'monitor-mismatch');
+      const absent = await rejectedMaintenance({ ...request, monitor: undefined });
+      assert.equal(absent.reason, 'active-clients');
+      await assert.rejects(lstat(refusedDestination), { code: 'ENOENT' });
+    }
+  });
   await database.stop();
   const options = { serverRoot, runtimeRoot, trustedSourceAcknowledged: true };
   const backedUp = await backupDesktop({ ...options, dataDir, destination, password: backupPassword });
@@ -172,7 +218,7 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   await writeFile(manifestPath, JSON.stringify({ ...manifest, blobManifestSha256: blobBackupManifestSha256(inconsistentBlobs) }), { mode: 0o600 });
   const inconsistent = join(root, 'sql-inconsistent'); await mkdir(inconsistent);
   await encryptBackupDirectory(plaintext, join(inconsistent, 'desktop-backup.enc'), backupPassword);
-  await mkdir(denied, { mode: 0o700 });
+  await ensurePrivateDirectory(denied);
   await assert.rejects(restoreDesktop({ ...options, source: inconsistent, dataDir: denied, password: backupPassword }));
   assert.deepEqual(await readdir(denied), [], 'failed restore must not leave PostgreSQL ownership, data or a ready bootstrap');
   await rm(denied, { recursive: true });

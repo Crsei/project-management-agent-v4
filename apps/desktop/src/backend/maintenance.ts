@@ -18,12 +18,17 @@ import { LocalBlobStore } from '../../../../packages/infrastructure/src/blobs.ts
 import { verifyInventoryObjects } from '../../../../packages/infrastructure/src/blob-storage-inventory.ts';
 import { assertBackupCompatibility, requireTrustedBackupSource, withPrivateMaintenanceDirectory } from '../maintenance-archive.mjs';
 import { directoryIdentity } from '../../../../packages/pm-core/platform.ts';
+import { maintenanceDiagnostic, maintenanceErrorReason } from '../maintenance-diagnostics.mjs';
+
+let diagnosticOperation = 'unknown';
+let diagnosticPhase = 'request';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const requestSchema = z.strictObject({
   operation: z.enum(['backup', 'restore', 'validate']), databaseUrl: z.string(), dataDir: z.string(),
   destination: z.string().optional(), source: z.string().optional(), postgresRoot: z.string(), serverRoot: z.string(),
   trustedSourceAcknowledged: z.boolean().optional(),
+  monitor: z.strictObject({ pid: z.number().int().positive(), backendStart: z.string().min(1).max(64) }).optional(),
 });
 type Request = z.infer<typeof requestSchema>;
 const manifestSchema = z.strictObject({
@@ -56,8 +61,8 @@ async function command(executable: string, args: string[], environment: NodeJS.P
   child.stdout.on('data', chunk => { output += chunk.toString(); if (output.length > 128 * 1024) { overflow = true; child.kill(); } });
   child.stderr.resume();
   child.stdin.on('error', () => {});
-  child.once('error', () => reject(new Error('A bundled maintenance executable could not start.')));
-  child.once('close', code => code === 0 && !overflow ? resolve(output) : reject(new Error('A bundled maintenance command failed.')));
+  child.once('error', () => reject(Object.assign(new Error('A bundled maintenance executable could not start.'), { code: 'command-start' })));
+  child.once('close', code => code === 0 && !overflow ? resolve(output) : reject(Object.assign(new Error('A bundled maintenance command failed.'), { code: overflow ? 'output-limit' : 'command-failed', exitCode: code })));
   child.stdin.end(input === undefined ? undefined : JSON.stringify(input));
   return promise;
 }
@@ -72,9 +77,23 @@ async function agentMaintenance(request: Request, operation: 'backup' | 'restore
   const entry = join(request.serverRoot, 'apps/server/agent/dist/desktop-agent-maintenance.mjs');
   await command(process.execPath, [entry], { ...process.env, PM_DESKTOP_MANAGED: '1' }, { operation, source, destination });
 }
-async function assertStopped(pool: Pool): Promise<void> {
-  const result = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()');
-  if (result.rows[0]?.count !== 0) throw new Error('Application database clients are still connected. Stop the desktop before maintenance.');
+async function assertStopped(pool: Pool, monitor: Request['monitor']): Promise<void> {
+  diagnosticPhase = 'stopped-clients';
+  // The Windows controller keeps one authenticated ownership connection open.
+  // Match its exact backend incarnation, not the spoofable application name.
+  // Every other connection, including another identically named client, blocks.
+  const result = await pool.query<{ other: number; monitors: number }>(`
+    WITH clients AS (
+      SELECT COALESCE(pid=$1 AND backend_start=$2::timestamptz
+        AND application_name='pm-desktop-owner' AND state='idle'
+        AND client_addr='127.0.0.1'::inet, false) AS monitor
+      FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()
+    )
+    SELECT count(*) FILTER (WHERE NOT monitor)::int AS other,
+      count(*) FILTER (WHERE monitor)::int AS monitors FROM clients`,
+  [monitor?.pid ?? null, monitor?.backendStart ?? null]);
+  if (result.rows[0]?.monitors !== (monitor ? 1 : 0)) throw Object.assign(new Error('The owned database monitor identity changed.'), { code: 'monitor-mismatch' });
+  if (result.rows[0]?.other !== 0) throw Object.assign(new Error('Application database clients are still connected. Stop the desktop before maintenance.'), { code: 'active-clients' });
 }
 
 async function createBackup(request: Request): Promise<void> {
@@ -92,24 +111,29 @@ async function createBackup(request: Request): Promise<void> {
   const blobRoot = join(request.dataDir, 'blobs');
   const source = createBlobStore({ provider: 'local', root: blobRoot });
   try {
-    await assertStopped(pool);
+    await assertStopped(pool, request.monitor);
     await mkdir(destination, { mode: 0o700 });
     await ensurePrivateDirectory(destination, { newlyCreated: true });
+    diagnosticPhase = 'project-export';
     const files = await exportLocalProjectCheckpoint({ coreRoot, directory: join(destination, 'files'), stopped: true });
     const dump = join(destination, 'database.dump');
+    diagnosticPhase = 'database-dump';
     await command(pgCommand(request, 'pg_dump'), ['--format=custom', '--no-owner', '--no-acl', '--file', dump], pgEnvironment(request.databaseUrl));
     await chmod(dump, 0o600);
     const databaseDumpSha256 = (await hashFile(dump)).sha256;
     // Inventory and attachment references must come from the frozen dump, not a later live SQL view.
+    diagnosticPhase = 'database-clone';
     await pool.query(`CREATE DATABASE ${cloneName}`);
     cloneCreated = true;
     await command(pgCommand(request, 'pg_restore'), ['--exit-on-error', '--no-owner', '--no-acl', '--dbname', cloneName, dump], pgEnvironment(cloneUrl.toString()));
     clone = createPool(cloneUrl.toString(), 1);
     const locator = { provider: 'local' as const, root: blobRoot };
+    diagnosticPhase = 'blob-export';
     const blobs = await exportBlobBackup({ pool: clone, source: { provider: source, locator }, directory: join(destination, 'blobs'),
       databaseDumpSha256, coreManifestSha256: files.manifestSha256, stopped: true,
       readObject: entry => readStoredBlob({ sql: clone!, legacy: bindBlobStore(clone!, locator, source), resolveProject: (workspaceId, projectId) => readProjectLocation(join(coreRoot, workspaceId), projectId) }, entry),
     });
+    diagnosticPhase = 'chat-copy';
     const sourceChatRoot = join(request.dataDir, 'chat-spaces');
     const chatFiles = await exists(sourceChatRoot) ? await snapshotTree(sourceChatRoot) : null;
     if (chatFiles) await copyTree(sourceChatRoot, join(destination, 'chat-spaces'), chatFiles);
@@ -117,9 +141,11 @@ async function createBackup(request: Request): Promise<void> {
     const agentPresent = await exists(join(agentRoot, 'workspace.sqlite'));
     let agentManifestSha256: string | null = null;
     if (agentPresent) {
+      diagnosticPhase = 'agent-backup';
       await agentMaintenance(request, 'backup', agentRoot, join(destination, 'agent'));
       agentManifestSha256 = (await hashFile(join(destination, 'agent/manifest.json'))).sha256;
     } else if (await exists(agentRoot) && (await readdir(agentRoot)).length) throw new Error('Uninitialized Agent directory contains unclassified data.');
+    diagnosticPhase = 'manifest';
     if (localProjectCheckpointSha256(await captureLocalProjectCheckpoint(coreRoot)) !== files.manifestSha256) throw new Error('Project files changed during backup.');
     const applicationVersion = z.string().min(1).parse((await jsonFile(join(request.serverRoot, 'apps/desktop/package.json')) as { version?: unknown }).version);
     const manifest = manifestSchema.parse({ format: 'pm-agent-desktop-backup', version: 2, applicationVersion, createdAt: new Date().toISOString(), postgresMajor: 16, platform: process.platform,
@@ -136,6 +162,7 @@ async function createBackup(request: Request): Promise<void> {
   }
 }
 async function validateBackup(request: Request): Promise<void> {
+  diagnosticPhase = 'backup-validation';
   if (!request.source) throw new Error('A completed backup is required.');
   if (request.destination) {
     const tree = await snapshotTree(request.source);
@@ -170,11 +197,14 @@ async function validateBackup(request: Request): Promise<void> {
   await withPrivateMaintenanceDirectory(async (temporary: string) => {
     // Reuse real restorers for path, registry, credential and content validation.
     // These scratch copies never initialize the selected instance or any database.
+    diagnosticPhase = 'dump-validation';
     await command(pgCommand(request, 'pg_restore'), ['--list', '--file', join(temporary, 'dump-list'), join(source, 'database.dump')], process.env);
+    diagnosticPhase = 'project-restore';
     await restoreLocalProjectCheckpoint({ directory: join(source, 'files'), manifest: manifest.files, expectedManifestSha256: manifest.coreManifestSha256,
       targetCoreRoot: join(temporary, 'core'), targetProjectsRoot: join(temporary, 'projects'), stopped: true });
     if (manifest.chatFiles) await copyTree(join(source, 'chat-spaces'), join(temporary, 'chat-spaces'), manifest.chatFiles);
     else if (await exists(join(source, 'chat-spaces'))) throw new Error('Unclassified chat files in backup.');
+    diagnosticPhase = 'agent-restore';
     if (manifest.agentPresent) await agentMaintenance(request, 'restore', join(source, 'agent'), join(temporary, 'agent'));
     else if (await exists(join(source, 'agent'))) throw new Error('Unclassified Agent files in backup.');
   });
@@ -199,25 +229,32 @@ async function restoreBackup(request: Request): Promise<void> {
   const blobRoot = join(request.dataDir, 'blobs');
   const target = createBlobStore({ provider: 'local', root: blobRoot });
   try {
-    await assertStopped(pool);
+    await assertStopped(pool, request.monitor);
     const existing = await pool.query("SELECT tablename FROM pg_tables WHERE schemaname='public'");
     if (existing.rowCount) throw new Error('Restore database is not empty. Existing data was not changed.');
+    diagnosticPhase = 'database-restore';
     await command(pgCommand(request, 'pg_restore'), ['--exit-on-error', '--no-owner', '--no-acl', '--dbname', decodeURIComponent(new URL(request.databaseUrl).pathname.slice(1)), join(source, 'database.dump')], pgEnvironment(request.databaseUrl));
+    diagnosticPhase = 'database-migrate';
     await migrate(pool);
+    diagnosticPhase = 'project-restore';
     await restoreLocalProjectCheckpoint({ directory: join(source, 'files'), manifest: manifest.files, expectedManifestSha256: manifest.coreManifestSha256,
       targetCoreRoot, targetProjectsRoot, stopped: true });
     const binding = await readStorageBinding(pool);
     if (!binding) throw new Error('Backup has no active storage identity.');
     const storeId = randomUUID();
+    diagnosticPhase = 'blob-restore';
     await restoreBlobBackup({ pool, target: { provider: target, locator: { provider: 'local', root: blobRoot } }, directory: join(source, 'blobs'),
       expectedManifestSha256: manifest.blobManifestSha256, databaseDumpSha256: manifest.databaseDumpSha256, coreManifestSha256: manifest.coreManifestSha256,
       stopped: true, targetStoreId: storeId, expectedEpoch: binding.epoch, operationId: randomUUID() });
+    diagnosticPhase = 'chat-copy';
     if (manifest.chatFiles) await copyTree(join(source, 'chat-spaces'), targetChatRoot, manifest.chatFiles);
     else await mkdir(targetChatRoot, { mode: 0o700 });
+    diagnosticPhase = 'agent-restore';
     if (manifest.agentPresent) await agentMaintenance(request, 'restore', join(source, 'agent'), join(request.dataDir, 'agent-data'));
     else await mkdir(join(request.dataDir, 'agent-data'), { mode: 0o700 });
     // Default managed chat files have been copied. External execution directories
     // have not: pin those mappings to unavailable paths until explicitly relinked.
+    diagnosticPhase = 'area-rebind';
     const areas = await pool.query<{ workspace_id: string; project_key: string; path: string }>('SELECT workspace_id,project_key,path FROM agent_file_areas');
     for (const area of areas.rows) {
       const part = relative(manifest.sourceChatRoot, area.path);
@@ -234,6 +271,7 @@ async function restoreBackup(request: Request): Promise<void> {
     // External document directories are not part of this recovery set. Never
     // reactivate the source installation merely because its original path exists.
     await pool.query("UPDATE document_sources SET path=$1 || '/' || workspace_id::text || '/' || source_id,directory_device='0',directory_inode='0',revision=revision+1 WHERE path IS NOT NULL", [join(request.dataDir, 'unrestored-document-sources')]);
+    diagnosticPhase = 'bootstrap';
     await registerRestoredBootstrap({ databaseUrl: request.databaseUrl, dataDir: request.dataDir, source: bootstrap, storeId });
   } finally { target.close(); await pool.end(); }
 }
@@ -242,9 +280,17 @@ async function main(): Promise<void> {
   let input = '';
   for await (const chunk of process.stdin) { input += chunk; if (Buffer.byteLength(input) > 128 * 1024) throw new Error('Maintenance request is too large.'); }
   const request = requestSchema.parse(JSON.parse(input));
+  diagnosticOperation = request.operation;
+  diagnosticPhase = request.operation === 'backup' ? 'manifest' : 'backup-validation';
   if (request.operation === 'backup') await createBackup(request);
   else if (request.operation === 'validate') await validateBackup(request);
   else await restoreBackup(request);
   console.log(JSON.stringify({ operation: request.operation, completed: true }));
 }
-main().catch(() => { console.error('Desktop recovery operation failed. Private details were not logged. Target cleanup does not roll back external SQL side effects.'); process.exitCode = 1; });
+main().catch((error: unknown) => {
+  const exitCode = error && typeof error === 'object' && 'exitCode' in error ? error.exitCode : null;
+  console.log(JSON.stringify({ completed: false, diagnostic: maintenanceDiagnostic({
+    operation: diagnosticOperation, phase: diagnosticPhase, reason: maintenanceErrorReason(error), exitCode,
+  }) }));
+  process.exitCode = 1;
+});

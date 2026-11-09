@@ -112,10 +112,18 @@ jobs:
         run: pnpm --filter @agent-workspace/server build
       - name: Typecheck desktop backend helpers
         run: pnpm --filter @agent-workspace/desktop typecheck
-      - name: Desktop contracts and real PostgreSQL bootstrap tests
-        run: pnpm --filter @agent-workspace/desktop test
+      - name: Desktop contracts
+        timeout-minutes: 10
+        run: pnpm --filter @agent-workspace/desktop test:contracts
+      - name: Desktop process lifecycle and private filesystem regressions
+        timeout-minutes: 15
+        run: pnpm --filter @agent-workspace/desktop test:lifecycle
+      - name: Desktop real PostgreSQL bootstrap and encrypted backup regressions
+        timeout-minutes: 20
+        run: pnpm --filter @agent-workspace/desktop test:integration
       - name: Native filesystem identity, private permissions and reparse regressions
-        run: pnpm exec node --conditions=development --test packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
+        timeout-minutes: 10
+        run: pnpm exec node --conditions=development --test --test-concurrency=1 --test-timeout=180000 packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
       - name: Build explicitly unsigned native installers
         run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$env:DESKTOP_ARTIFACT_DIR"
         if: runner.os == 'Windows'
@@ -199,10 +207,18 @@ jobs:
         run: pnpm --filter @agent-workspace/server build
       - name: Typecheck desktop backend helpers
         run: pnpm --filter @agent-workspace/desktop typecheck
-      - name: Desktop contracts and real PostgreSQL bootstrap tests
-        run: pnpm --filter @agent-workspace/desktop test
+      - name: Desktop contracts
+        timeout-minutes: 10
+        run: pnpm --filter @agent-workspace/desktop test:contracts
+      - name: Desktop process lifecycle and private filesystem regressions
+        timeout-minutes: 15
+        run: pnpm --filter @agent-workspace/desktop test:lifecycle
+      - name: Desktop real PostgreSQL bootstrap and encrypted backup regressions
+        timeout-minutes: 20
+        run: pnpm --filter @agent-workspace/desktop test:integration
       - name: Native filesystem identity, private permissions and reparse regressions
-        run: pnpm exec node --conditions=development --test packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
+        timeout-minutes: 10
+        run: pnpm exec node --conditions=development --test --test-concurrency=1 --test-timeout=180000 packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
       - name: Build Authenticode-signed NSIS installer
         if: runner.os == 'Windows'
         env:

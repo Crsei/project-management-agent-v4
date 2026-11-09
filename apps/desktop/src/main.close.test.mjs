@@ -9,7 +9,10 @@ import { LocalServer } from "./local-server.mjs";
 
 const event = () => ({ defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } });
 
-test("desktop close preserves drafts, IPC trust, owned services and retryable shutdown", { timeout: 10_000 }, async t => {
+// This parent includes repeated real private-state writes (native ACL helpers on
+// Windows), not just the mocked Electron calls. Bound the entire scenario while
+// allowing those operations to complete independently of the quit assertions.
+test("desktop close preserves drafts, IPC trust, owned services and retryable shutdown", { timeout: 120_000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), "desktop-close-"));
   const windows = [];
   const sessions = new Map();

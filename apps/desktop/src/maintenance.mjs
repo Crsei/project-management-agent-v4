@@ -5,6 +5,7 @@ import { ManagedPostgres } from './managed-postgres.mjs';
 import { prepareServicePorts, bindServicePorts } from './local-server.mjs';
 import { ensurePrivateDirectory } from './private-state.mjs';
 import { assertBackupCompatibility, decryptBackupDirectory, encryptBackupDirectory, encryptedBackupFilename, requireTrustedBackupSource, validateBackupPassword, withPrivateMaintenanceDirectory } from './maintenance-archive.mjs';
+import { maintenanceFailureMessage } from './maintenance-diagnostics.mjs';
 
 async function safePath(value, existing = false) {
   if (typeof value !== 'string' || !isAbsolute(value) || value.includes('\0')) throw new Error('Choose an absolute maintenance path.');
@@ -67,7 +68,7 @@ async function executeMaintenance({ serverRoot, runtimeRoot, input, onProgress }
   child.stdin.on('error', () => {});
   child.once('error', () => reject(new Error('Could not start the bundled maintenance runtime.')));
   child.once('close', code => {
-    if (code !== 0 || failed) { reject(new Error('Desktop maintenance did not complete. Review the trusted backup, runtime version and available disk space before retrying. New-target cleanup cannot undo external side effects of supplied SQL.')); return; }
+    if (code !== 0 || failed) { reject(new Error(maintenanceFailureMessage(output, input.operation, code, failed))); return; }
     try { resolve(JSON.parse(output)); }
     catch { reject(new Error('The maintenance runtime returned an invalid result.')); }
   });
@@ -94,6 +95,7 @@ export async function backupDesktop({ serverRoot, runtimeRoot, dataDir, destinat
       const started = await postgres.start();
       await executeMaintenance({ serverRoot, runtimeRoot, onProgress, input: {
         operation: 'backup', databaseUrl: started.databaseUrl, dataDir: source, destination: plaintext,
+        monitor: await postgres.maintenanceMonitorIdentity(),
         postgresRoot: join(runtimeRoot, 'postgres'), serverRoot,
       } });
       await mkdir(target, { mode: 0o700 }); targetCreated = true;
@@ -152,6 +154,7 @@ export async function restoreDesktop({ serverRoot, runtimeRoot, source, dataDir,
       await bindServicePorts(target, started.instanceId);
       await executeMaintenance({ serverRoot, runtimeRoot, onProgress, input: {
         operation: 'restore', databaseUrl: started.databaseUrl, dataDir: target, source: plaintext,
+        monitor: await postgres.maintenanceMonitorIdentity(),
         trustedSourceAcknowledged: true,
         postgresRoot: join(runtimeRoot, 'postgres'), serverRoot,
       } });

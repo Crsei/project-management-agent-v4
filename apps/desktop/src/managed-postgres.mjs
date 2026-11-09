@@ -295,6 +295,16 @@ export class ManagedPostgres {
     this.windowsMonitor = null;
     await client?.end().catch(() => undefined);
   }
+  async maintenanceMonitorIdentity() {
+    if (process.platform !== "win32") return undefined;
+    const client = this.windowsMonitor;
+    if (!this.ready || !client) throw new Error("Managed PostgreSQL ownership monitor is unavailable");
+    await this.identify(client);
+    const result = await client.query("SELECT pid,backend_start::text AS backend_start FROM pg_stat_activity WHERE pid=pg_backend_pid()");
+    const row = result.rows[0];
+    if (!this.ready || this.windowsMonitor !== client || !Number.isSafeInteger(row?.pid) || typeof row.backend_start !== "string") throw new Error("Managed PostgreSQL ownership monitor changed");
+    return { pid: row.pid, backendStart: row.backend_start };
+  }
   async startWindows(serverOptions) {
     // pg_ctl uses PostgreSQL's restricted-token launcher on Windows. Direct
     // postgres.exe rejects an elevated desktop/runner token; never run it as admin.

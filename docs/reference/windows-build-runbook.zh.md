@@ -121,13 +121,18 @@ node scripts/doctor.mjs &&
   pnpm --filter @agent-workspace/desktop runtime:smoke &&
   pnpm --filter @agent-workspace/contracts build &&
   pnpm --filter @agent-workspace/client-runtime build &&
+  pnpm --filter @agent-workspace/server build &&
   pnpm --filter @agent-workspace/desktop typecheck &&
-  pnpm --filter @agent-workspace/desktop test &&
-  pnpm exec node --conditions=development --test packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
+  pnpm --filter @agent-workspace/desktop test:contracts &&
+  pnpm --filter @agent-workspace/desktop test:lifecycle &&
+  pnpm --filter @agent-workspace/desktop test:integration &&
+  pnpm exec node --conditions=development --test --test-concurrency=1 --test-timeout=180000 packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
 if ($LASTEXITCODE -ne 0) { throw 'Windows prerequisite or regression batch failed; do not package.' }
 ```
 
 Git `core.longpaths` 未设置时可能返回非零，应作为配置记录解释，不伪报构建失败或擅改系统。具体受影响 Agent、Web、来源工具和交付验证回归还须采用父级冻结交接的准确清单；上面不是全仓回归通过声明。`pnpm check:licenses` 是 integrity，不是 release authorization。真实 PG/bootstrap 测试必须使用此次准备的固定 Windows PG；skip、初始化失败或不兼容均单列，不借系统预装数据库补绿。
+
+Actions 将合同、进程／私有文件系统、真实 PostgreSQL／加密备份分别限制为 10、15、20 分钟；原生文件系统步骤为 10 分钟。`test` 仍按顺序运行全部三组，不减少覆盖；合同文件并发为 2，涉及原生进程／ACL／数据库的两组按文件串行，避免大量 PowerShell 同时竞争。测试默认期限分别为 120、180、900 秒，单个已有场景的显式期限仍生效；阶段失败立即阻止后续打包。全新检出必须先构建 Agent 维护入口，不能依赖已有 `dist`。
 
 ### 3. 生成新目录、验证实际成品、精确暂存
 

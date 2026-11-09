@@ -7,20 +7,25 @@ import { execFile } from "node:child_process";
 const windowsAclScript = String.raw`
 $ErrorActionPreference = 'Stop'
 $PSModuleAutoLoadingPreference = 'None'
+$phase = 'load-modules'
+try {
 Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Management\Microsoft.PowerShell.Management.psd1')
 Import-Module ($PSHOME+'\Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1')
 $p = $env:PM_DESKTOP_PRIVATE_PATH
 $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
 $me = $identity.User
+$phase = 'inspect-path'
 $item = Get-Item -LiteralPath $p -Force
 if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Unsafe private path' }
 $acl = Get-Acl -LiteralPath $p
+$phase = 'owner-check'
 $owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier])
 if ($owner.Value -ne $me.Value) {
   if ($env:PM_DESKTOP_PRIVATE_NEW -ne '1' -or $env:PM_DESKTOP_PRIVATE_SECURE -ne '1' -or $owner.Value -ne $identity.Owner.Value) { throw 'Private path has another owner' }
   $acl.SetOwner($me)
 }
 if ($env:PM_DESKTOP_PRIVATE_SECURE -eq '1') {
+  $phase = 'write-acl'
   $acl.SetAccessRuleProtection($true, $false)
   foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRuleSpecific($rule) }
   $inherit = [System.Security.AccessControl.InheritanceFlags]::None
@@ -33,6 +38,7 @@ if ($env:PM_DESKTOP_PRIVATE_SECURE -eq '1') {
   else { [IO.File]::SetAccessControl($p, $acl) }
   $acl = Get-Acl -LiteralPath $p
 }
+$phase = 'verify-acl'
 if (-not $acl.AreAccessRulesProtected) { throw 'Private path inherits access rules' }
 $ownerAccess = $false
 foreach ($rule in $acl.Access) {
@@ -41,6 +47,11 @@ foreach ($rule in $acl.Access) {
   if ($rule.AccessControlType -eq 'Allow' -and $sid -ne $me.Value -and $sid -ne 'S-1-5-18' -and $sid -ne 'S-1-5-32-544') { throw 'Private path grants another principal access' }
 }
 if (-not $ownerAccess) { throw 'Private path has no explicit owner access' }
+} catch {
+  # Emit only a fixed phase, never exception text containing paths or principals.
+  [Console]::Out.Write('PM_DESKTOP_ACL_FAILURE:' + $phase)
+  exit 1
+}
 `;
 
 async function windowsAcl(path, secure, newlyCreated = false) {
@@ -48,10 +59,11 @@ async function windowsAcl(path, secure, newlyCreated = false) {
   await new Promise((done, reject) => execFile(join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", windowsAclScript], {
     windowsHide: true, timeout: 15_000, maxBuffer: 16_384,
     env: { SystemRoot: systemRoot, WINDIR: systemRoot, PM_DESKTOP_PRIVATE_PATH: path, PM_DESKTOP_PRIVATE_SECURE: secure ? "1" : "0", PM_DESKTOP_PRIVATE_NEW: newlyCreated ? "1" : "0" },
-  }, (error) => {
+  }, (error, stdout) => {
     if (!error) return done();
-    const detail = [error.killed || error.signal ? "helper did not finish within its deadline" : "", error.code, String(error.stderr || "").trim().split(/\r?\n/).filter(Boolean).at(-1)].filter(Boolean).join("; ");
-    reject(new Error(`Desktop private path ACL cannot be verified for ${path}${detail ? `: ${detail}` : ""}`));
+    const phase = /^PM_DESKTOP_ACL_FAILURE:(load-modules|inspect-path|owner-check|write-acl|verify-acl)$/.exec(stdout.trim())?.[1] ?? "helper";
+    const detail = error.killed || error.signal ? "deadline-or-signal" : Number.isInteger(error.code) ? `exit-${error.code}` : ["ENOENT", "EACCES", "EPERM"].includes(error.code) ? error.code : "failed";
+    reject(new Error(`Desktop private path ACL cannot be verified (${phase}; ${detail}). Check current-user ownership and private access permissions.`));
   }));
 }
 

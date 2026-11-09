@@ -17,7 +17,10 @@
     "smoke:managed": "node scripts/smoke-managed.mjs",
     "package": "node scripts/package.mjs --unsigned",
     "package:signed": "node scripts/package.mjs --signed",
-    "test": "node --test \"src/*.test.mjs\" \"src/backend/*.test.mjs\" \"src/backend/*.test.ts\" \"scripts/*.test.mjs\""
+    "test": "node scripts/test.mjs",
+    "test:contracts": "node scripts/test.mjs contracts",
+    "test:lifecycle": "node scripts/test.mjs lifecycle",
+    "test:integration": "node scripts/test.mjs integration"
   },
   "dependencies": {
     "pg": "8.23.1"

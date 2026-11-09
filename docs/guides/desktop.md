@@ -108,6 +108,12 @@ node apps/desktop/scripts/verify-delivery.mjs --output ABS_PACKAGE_DIR --install
 
 CI 在桌面类型检查前依次构建 `@agent-workspace/contracts` 与 `@agent-workspace/client-runtime`，生成包导出的类型声明；全新检出不能依赖开发机已有的 `dist` 缓存。[`.gitattributes`](../../.gitattributes) 固定文本检出的 LF 行尾，避免 Windows `core.autocrlf` 改变受固定哈希保护的构建输入；不放宽或重写完整性校验。完整 Web 类型检查超出托管 macOS 默认堆上限，工作流显式设置 `NODE_OPTIONS=--max-old-space-size=4096`，保留全部类型检查。
 
+桌面 CI 分为 `test:contracts`、`test:lifecycle`、`test:integration`，分别设置 10／15／20 分钟步骤期限；`test` 顺序执行全部分组。进程／ACL 与真实 PostgreSQL 文件串行运行，避免原生辅助程序并发挤占。测试前必须构建 Agent 的 `desktop-agent-maintenance.mjs`；原生文件系统回归另设 10 分钟期限，不以增加整个 Job 时限代替失败清理。
+
+Windows 本次启动的进程使用持有的子进程句柄进行停机核验，不因异步出生信息返回而切回同步 PowerShell 轮询；持久化的 PID／出生身份仍执行原生核验。读取到 EOF 的一次性 helper 由自有 supervisor 的句柄结束并清理其 Job Object；长期服务继续通过停止消息触发原有 SIGTERM 处理器。处理器尚未安装时保留停止请求，不等待包含长期顶层 await 的服务模块导入结束。
+
+Windows 备份／恢复只排除控制器持有的准确 PostgreSQL 监督连接（PID、backend_start、空闲状态及 loopback 身份）；相同 application_name 的其他连接仍阻止维护。ACL 与维护失败只返回固定阶段、允许的错误类别及退出码，不输出原始子进程 stderr、目录、数据库口令或备份正文。这些修复不改变会话与持久化暂沿用 Agent Chat、统一设计尚未收口的边界。
+
 Actions 只缓存 pnpm 内容仓与 `apps/desktop/.cache/runtime-downloads` 下载归档，signed/unsigned 分离，不缓存应用产物、已安装运行时、私有 Home 或签名材料。缓存命中后仍执行冻结安装、归档 SHA256/官方 Node checksum 校验、重新解压和 runtime smoke，以及全部原生测试、打包和成品冒烟。比较构建耗时必须记录真实 run/attempt、提交、OS/架构、runner image 与缓存命中状态；没有运行结果时不能宣称提速或发布通过，见 [CI 耗时记录](../reference/ci-performance-2026-11-06.zh.md)。
 
 Windows 权限、reparse 检查和进程监督脚本显式加载系统 PowerShell 模块，不依赖 runner 的模块分析缓存或完整用户环境。打包 staging 目录创建后转为真实路径，兼容 macOS 的 `/var` 临时目录别名，同时保留产物目录的符号链接拒绝规则。

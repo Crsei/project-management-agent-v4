@@ -13,6 +13,12 @@ async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), "desktop-uninstall-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const installRoot = join(root, "install"), userDataDir = join(root, "userData"), dataDir = join(userDataDir, "workspace"), external = join(root, "external"), nativeHome = join(root, "native-home");
+  // Create the private roots through the production helper before populating
+  // them. On elevated Windows tokens mkdir can assign the token's group owner;
+  // only a newly-created root may legitimately transfer that owner to the user.
+  await ensurePrivateDirectory(userDataDir);
+  await ensurePrivateDirectory(dataDir);
+  await ensurePrivateDirectory(join(dataDir, "agent-data"));
   async function put(base, path, value) { await mkdir(dirname(join(base, path)), { recursive: true, mode: 0o700 }); await writeFile(join(base, path), typeof value === "string" ? value : JSON.stringify(value), { mode: 0o600 }); }
   await put(installRoot, "PM Agent v4.exe", "gui-binary");
   await put(installRoot, "resources/app.asar", "application");
@@ -38,9 +44,6 @@ async function fixture(t) {
   await put(userDataDir, "operator-notes.txt", "not-app-owned");
   await put(external, ".pm/core/project.md", "external-project");
   await put(nativeHome, ".credentials", "native-provider-private-fixture");
-  await ensurePrivateDirectory(userDataDir);
-  await ensurePrivateDirectory(dataDir);
-  await ensurePrivateDirectory(join(dataDir, "agent-data"));
   return { root, installRoot, userDataDir, dataDir, external, nativeHome, put, stamp, externalRoots: [external, nativeHome] };
 }
 function options(f, mode, extra = {}) { return { ...f, mode, consent: { mode, deleteData: ["full", "data-only"].includes(mode) }, stop: async () => ({ stopped: true, remainingProcesses: 0 }), ...extra }; }

@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { ownsLiveProcess, serviceEntry, signalOwned, spawnOwned, stopOwned } from "./local-process.mjs";
-import { assertProcessIdentity, readProcessIdentity, rememberOwnedProcess, sameProcessIdentity } from "./process-identity.mjs";
+import { assertOwnedProcess, assertProcessIdentity, ownedProcessIdentity, readProcessIdentity, rememberOwnedProcess, sameProcessIdentity } from "./process-identity.mjs";
 
 function environment() {
   return Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR"].flatMap((key) => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
@@ -23,7 +23,12 @@ async function processFixture(t, source, args = []) {
   child.stdout.on("data", (chunk) => { output += chunk.toString(); });
   child.stderr.on("data", (chunk) => { failure += chunk.toString(); });
   child.on("error", (error) => { failure += error.message; });
-  t.after(async () => { await writeFile(join(directory, "allow-stop"), "yes"); await stopOwned(child); await rm(directory, { recursive: true, force: true }); });
+  t.after(async () => {
+    await writeFile(join(directory, "allow-stop"), "yes");
+    await writeFile(join(directory, "release-import"), "yes");
+    await stopOwned(child);
+    await rm(directory, { recursive: true, force: true });
+  });
   async function ready(marker) {
     const deadline = Date.now() + 20_000;
     while (!output.includes(marker) && Date.now() < deadline) {
@@ -82,6 +87,82 @@ console.log('owned-ready');
   assert.equal(ownsLiveProcess(f.child), false);
 });
 
+if (process.platform === "win32") test("Windows handle ownership stays authoritative after asynchronous birth capture", async t => {
+  const f = await processFixture(t, `
+import { writeFile } from 'node:fs/promises';
+const timer=setInterval(()=>{},1000);
+process.on('SIGTERM',async()=>{await writeFile('graceful','yes');clearInterval(timer)});
+console.log('owned-ready');
+`);
+  await f.ready("owned-ready");
+  const deadline = Date.now() + 20_000;
+  while (!ownedProcessIdentity(f.child)?.creationTime && Date.now() < deadline) await delay(25);
+  assert.ok(ownedProcessIdentity(f.child)?.creationTime, "Native birth metadata was not captured");
+  const systemRoot = process.env.SystemRoot;
+  try {
+    // A stop must not start another native inspector, whether its asynchronous
+    // birth query has completed or the supervisor has already exited.
+    process.env.SystemRoot = join(f.directory, "missing-native-inspector");
+    assert.ok(assertOwnedProcess(f.child));
+    await stopOwned(f.child);
+    assert.equal(assertOwnedProcess(f.child), null);
+    assert.equal(ownsLiveProcess(f.child), false);
+  } finally {
+    if (systemRoot === undefined) delete process.env.SystemRoot;
+    else process.env.SystemRoot = systemRoot;
+  }
+  assert.equal(await readFile(join(f.directory, "graceful"), "utf8"), "yes");
+});
+
+if (process.platform === "win32") test("a stop received during service import waits for its graceful handler", async t => {
+  const f = await processFixture(t, `
+import { existsSync, writeFileSync } from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
+process.stdin.on('data',chunk=>{if(chunk.includes('desktop-stop'))console.log('stop-received')});
+console.log('import-waiting');
+while(!existsSync('release-import'))await delay(25);
+const timer=setInterval(()=>{},1000);
+process.on('SIGTERM',()=>{writeFileSync('graceful','yes');clearInterval(timer)});
+`);
+  await f.ready("import-waiting");
+  const stopping = stopOwned(f.child);
+  // Observe delivery before allowing the module to install its handler.
+  const stopped = stopping.then(() => null, error => error);
+  try { await f.ready("stop-received"); }
+  finally { await writeFile(join(f.directory, "release-import"), "yes"); }
+  assert.equal(await stopped, null);
+  assert.equal(await readFile(join(f.directory, "graceful"), "utf8"), "yes");
+  assert.equal(f.child.desktopClosed, true);
+});
+
+for (const early of [true, false]) test(`pipe shutdown reaches a top-level-await service ${early ? "before" : "after"} handler registration`, async t => {
+  const f = await processFixture(t, `
+import { existsSync, writeFileSync } from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
+process.stdin.on('data',chunk=>{if(chunk.includes('desktop-stop'))console.log('stop-received')});
+console.log('import-waiting');
+if (${early}) while(!existsSync('release-import'))await delay(25);
+let finish;
+const stopped=new Promise(resolve=>{finish=()=>{writeFileSync('graceful','yes');clearInterval(timer);resolve()}});
+const timer=setInterval(()=>{if(existsSync('allow-stop'))finish()},25);
+process.on('SIGTERM',finish);
+console.log('handler-ready');
+// Like the real Worker, import only completes after the stop handler runs.
+await stopped;
+console.log('graceful-stopped');
+`);
+  await f.ready(early ? "import-waiting" : "handler-ready");
+  f.child.stdin.write('{"type":"desktop-stop"}\n');
+  try { await f.ready("stop-received"); }
+  finally { await writeFile(join(f.directory, "release-import"), "yes"); }
+  // Do not call stopOwned (which sends a POSIX signal) until pipe delivery
+  // itself has proven it released the top-level await.
+  await f.ready("graceful-stopped");
+  assert.equal(await readFile(join(f.directory, "graceful"), "utf8"), "yes");
+  await stopOwned(f.child);
+  assert.equal(f.child.desktopClosed, true);
+});
+
 test("unexpected parent exit cannot orphan an owned descendant", async (t) => {
   const f = await processFixture(t, `
 import { spawn } from 'node:child_process';
@@ -112,24 +193,35 @@ test("a PID, spoofed identity property or reused creation identity never grants 
   assert.equal(sameProcessIdentity(readProcessIdentity(process.pid), current), true);
 });
 
-test("an exited leader with uncaptured creation identity retains unknown descendants and refuses cleanup", { timeout: 40_000 }, async t => {
+test("an exited leader with uncaptured creation identity retains unknown descendants and refuses cleanup", { timeout: 60_000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), "desktop-unknown-birth-"));
-  const descendant = "const fs=require('node:fs'),http=require('node:http');const server=http.createServer((q,s)=>s.end('identity-not-adopted'));const timer=setInterval(()=>{if(fs.existsSync('release-descendant')){clearInterval(timer);server.close()}},25);server.listen(0,'127.0.0.1',()=>console.log('port:'+server.address().port));";
-  const source = `const {spawn}=require('node:child_process'),fs=require('node:fs');const child=spawn(process.execPath,['--eval',${JSON.stringify(descendant)}],{stdio:['ignore','pipe','inherit']});child.stdout.pipe(process.stdout);setInterval(()=>{if(fs.existsSync('release-parent'))process.exit(9)},25);`;
+  // Windows/libuv contains non-detached children in its own kill-on-close job.
+  // This deliberately independent descendant must survive its leader so the
+  // refusal assertion exercises a live unknown tree on every platform.
+  const descendant = "const fs=require('node:fs'),http=require('node:http');const server=http.createServer((q,s)=>s.end('identity-not-adopted'));const timer=setInterval(()=>{if(fs.existsSync('release-descendant')){clearInterval(timer);server.close(()=>fs.writeFileSync('descendant-stopped','yes'))}},25);server.listen(0,'127.0.0.1',()=>fs.writeFileSync('descendant-port',String(server.address().port)));";
+  const source = `const {spawn}=require('node:child_process'),fs=require('node:fs');spawn(process.execPath,['--eval',${JSON.stringify(descendant)}],{detached:process.platform==='win32',stdio:'ignore'});setInterval(()=>{if(fs.existsSync('release-parent'))process.exit(9)},25);`;
   const child = spawn(process.execPath, ["--eval", source], { cwd: directory, env: environment(), stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
-  let output = "";
-  child.stdout.on("data", chunk => { output += chunk; });
+  child.stdout.resume();
   child.stderr.resume();
   const closed = once(child, "close");
   t.after(async () => {
     await writeFile(join(directory, "release-parent"), "yes");
     await writeFile(join(directory, "release-descendant"), "yes");
-    await Promise.race([closed, delay(10_000, undefined, { ref: false }).then(() => { throw new Error("The explicit test-owned fixture did not exit cooperatively."); })]);
+    await Promise.race([closed, delay(10_000, undefined, { ref: false }).then(() => { throw new Error("The explicit test-owned leader did not exit cooperatively."); })]);
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline && await readFile(join(directory, "descendant-stopped"), "utf8").catch(() => "") !== "yes") await delay(25);
+    assert.equal(await readFile(join(directory, "descendant-stopped"), "utf8"), "yes", "The independent descendant did not stop cooperatively.");
     await rm(directory, { recursive: true, force: true });
   });
-  const deadline = Date.now() + 15_000;
-  while (!output.includes("port:") && child.exitCode === null && Date.now() < deadline) await delay(25);
-  assert.match(output, /port:\d+/);
+  let port = "";
+  const deadline = Date.now() + 30_000;
+  while (!port && child.exitCode === null && Date.now() < deadline) {
+    port = await readFile(join(directory, "descendant-port"), "utf8").catch(() => "");
+    if (!port) await delay(25);
+  }
+  assert.match(port, /^\d+$/);
+  const origin = `http://127.0.0.1:${port}`;
+  assert.equal(await (await fetch(origin, { signal: AbortSignal.timeout(2000) })).text(), "identity-not-adopted");
   const exited = once(child, "exit");
   await writeFile(join(directory, "release-parent"), "yes");
   await exited;
@@ -137,8 +229,7 @@ test("an exited leader with uncaptured creation identity retains unknown descend
   assert.equal(ownsLiveProcess(child), true);
   assert.throws(() => signalOwned(child), /identity.*captured.*unknown.*retained/);
   await assert.rejects(stopOwned(child, { graceMs: 50 }), /identity.*captured.*unknown.*retained/);
-  const origin = `http://127.0.0.1:${Number(/port:(\d+)/.exec(output)[1])}`;
-  assert.equal(await (await fetch(origin)).text(), "identity-not-adopted");
+  assert.equal(await (await fetch(origin, { signal: AbortSignal.timeout(2000) })).text(), "identity-not-adopted");
 });
 
 if (process.platform === "win32") test("a missing native inspection helper is not reported as an exited PID", () => {

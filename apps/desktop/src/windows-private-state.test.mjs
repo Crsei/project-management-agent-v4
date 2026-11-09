@@ -123,7 +123,12 @@ $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($everyone,
 [IO.File]::SetAccessControl($env:PM_ACL_EXPOSED_FILE, $acl)
 `)},
       ], { env: { ...process.env, PM_ACL_EXPOSED_FILE: exposed }, windowsHide: true, stdio: 'pipe', timeout: 30_000 });
-      await assert.rejects(readPrivateJson(exposed), /ACL cannot be verified/);
+      await assert.rejects(readPrivateJson(exposed), error => {
+        assert.match(error.message, /ACL cannot be verified \\(verify-acl; exit-1\\)/);
+        assert.equal(error.message.includes(root), false);
+        assert.equal(error.message.includes(exposed), false);
+        return true;
+      });
       assert.throws(() => assertCorePrivate(exposed), /current-user-only Windows ACL/);
       await assert.rejects(readPrivateJson(exposed), /ACL cannot be verified/);
       assert.deepEqual(JSON.parse(readFileSync(exposed, 'utf8')), { mustRemain: true });
