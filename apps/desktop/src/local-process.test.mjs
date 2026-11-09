@@ -198,7 +198,9 @@ test("an exited leader with uncaptured creation identity retains unknown descend
   // Windows/libuv contains non-detached children in its own kill-on-close job.
   // This deliberately independent descendant must survive its leader so the
   // refusal assertion exercises a live unknown tree on every platform.
-  const descendant = "const fs=require('node:fs'),http=require('node:http');const server=http.createServer((q,s)=>s.end('identity-not-adopted'));const timer=setInterval(()=>{if(fs.existsSync('release-descendant')){clearInterval(timer);server.close(()=>fs.writeFileSync('descendant-stopped','yes'))}},25);server.listen(0,'127.0.0.1',()=>fs.writeFileSync('descendant-port',String(server.address().port)));";
+  // Closing the listener is not process exit: retain a handle briefly after
+  // close so cleanup must observe native termination, not a completion file.
+  const descendant = "const fs=require('node:fs'),http=require('node:http');fs.writeFileSync('descendant-pid',String(process.pid));const server=http.createServer((q,s)=>s.end('identity-not-adopted'));const timer=setInterval(()=>{if(fs.existsSync('release-descendant')){clearInterval(timer);server.close(()=>setTimeout(()=>{},250))}},25);server.listen(0,'127.0.0.1',()=>fs.writeFileSync('descendant-port',String(server.address().port)));";
   const source = `const {spawn}=require('node:child_process'),fs=require('node:fs');spawn(process.execPath,['--eval',${JSON.stringify(descendant)}],{detached:process.platform==='win32',stdio:'ignore'});setInterval(()=>{if(fs.existsSync('release-parent'))process.exit(9)},25);`;
   const child = spawn(process.execPath, ["--eval", source], { cwd: directory, env: environment(), stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
   child.stdout.resume();
@@ -208,9 +210,19 @@ test("an exited leader with uncaptured creation identity retains unknown descend
     await writeFile(join(directory, "release-parent"), "yes");
     await writeFile(join(directory, "release-descendant"), "yes");
     await Promise.race([closed, delay(10_000, undefined, { ref: false }).then(() => { throw new Error("The explicit test-owned leader did not exit cooperatively."); })]);
+    const pid = Number(await readFile(join(directory, "descendant-pid"), "utf8"));
     const deadline = Date.now() + 10_000;
-    while (Date.now() < deadline && await readFile(join(directory, "descendant-stopped"), "utf8").catch(() => "") !== "yes") await delay(25);
-    assert.equal(await readFile(join(directory, "descendant-stopped"), "utf8"), "yes", "The independent descendant did not stop cooperatively.");
+    let exited = false;
+    let inspectionError;
+    while (Date.now() < deadline) {
+      try {
+        // Native inspection can straddle teardown (for example /proc's exe
+        // disappears before stat reports a zombie). Unknown is not exited.
+        if (readProcessIdentity(pid) === null) { exited = true; break; }
+      } catch (error) { inspectionError = error; }
+      await delay(25);
+    }
+    if (!exited) throw new Error("The independent descendant did not exit cooperatively; its directory is retained.", { cause: inspectionError });
     await rm(directory, { recursive: true, force: true });
   });
   let port = "";

@@ -20,7 +20,8 @@
     "test": "node scripts/test.mjs",
     "test:contracts": "node scripts/test.mjs contracts",
     "test:lifecycle": "node scripts/test.mjs lifecycle",
-    "test:integration": "node scripts/test.mjs integration"
+    "test:integration": "node scripts/test.mjs integration",
+    "test:release": "node scripts/test.mjs release"
   },
   "dependencies": {
     "pg": "8.23.1"

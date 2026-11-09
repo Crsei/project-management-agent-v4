@@ -124,6 +124,9 @@ jobs:
       - name: Native filesystem identity, private permissions and reparse regressions
         timeout-minutes: 10
         run: pnpm exec node --conditions=development --test --test-concurrency=1 --test-timeout=180000 packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
+      - name: Desktop release materials and final archive regressions
+        timeout-minutes: 25
+        run: pnpm --filter @agent-workspace/desktop test:release
       - name: Build explicitly unsigned native installers
         run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$env:DESKTOP_ARTIFACT_DIR"
         if: runner.os == 'Windows'
@@ -219,6 +222,9 @@ jobs:
       - name: Native filesystem identity, private permissions and reparse regressions
         timeout-minutes: 10
         run: pnpm exec node --conditions=development --test --test-concurrency=1 --test-timeout=180000 packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
+      - name: Desktop release materials and final archive regressions
+        timeout-minutes: 25
+        run: pnpm --filter @agent-workspace/desktop test:release
       - name: Build Authenticode-signed NSIS installer
         if: runner.os == 'Windows'
         env:
