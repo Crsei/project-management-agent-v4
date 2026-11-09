@@ -50,8 +50,8 @@ async function windowsAcl(path, secure, newlyCreated = false) {
     env: { SystemRoot: systemRoot, WINDIR: systemRoot, PM_DESKTOP_PRIVATE_PATH: path, PM_DESKTOP_PRIVATE_SECURE: secure ? "1" : "0", PM_DESKTOP_PRIVATE_NEW: newlyCreated ? "1" : "0" },
   }, (error) => {
     if (!error) return done();
-    const detail = error.killed || error.signal ? "helper did not finish within its deadline" : String(error.stderr || "").trim().split(/\r?\n/).filter(Boolean).at(-1);
-    reject(new Error(`Desktop private path ACL cannot be verified${detail ? `: ${detail}` : ""}`));
+    const detail = [error.killed || error.signal ? "helper did not finish within its deadline" : "", error.code, String(error.stderr || "").trim().split(/\r?\n/).filter(Boolean).at(-1)].filter(Boolean).join("; ");
+    reject(new Error(`Desktop private path ACL cannot be verified for ${path}${detail ? `: ${detail}` : ""}`));
   }));
 }
 

@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { readFileSync, readlinkSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -79,6 +79,22 @@ export function rememberOwnedProcess(child, { suspendedExecutable, executable } 
   const capture = () => {
     try {
       if (child.exitCode !== null || child.signalCode !== null) throw new Error("The spawned desktop process exited before its creation identity was captured. Descendant ownership is unknown and retained; cleanup is refused.");
+      if (process.platform === "win32" && !suspendedExecutable) {
+        // The live child handle is the ownership authority; a PID cannot be
+        // reused while it is open. Resolve the native creation time in the
+        // background so spawning never blocks on a PowerShell start.
+        record.identity = Object.freeze({ pid: child.pid, creationTime: null, executable: executable ?? child.spawnfile ?? "" });
+        const executablePath = join(process.env.SystemRoot || "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe");
+        const script = `$ErrorActionPreference='Stop'; $p=[Diagnostics.Process]::GetProcessById(${child.pid}); ConvertTo-Json -Compress ([ordered]@{pid=$p.Id;creationTime=$p.StartTime.ToUniversalTime().ToFileTimeUtc().ToString();executable=$p.MainModule.FileName})`;
+        execFile(executablePath, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", windowsHide: true, timeout: 15_000, maxBuffer: 8192, env: { SystemRoot: process.env.SystemRoot || "C:\\Windows" } }, (error, stdout) => {
+          if (error) return;
+          try {
+            const value = JSON.parse(stdout.trim());
+            if (value.pid === child.pid && typeof value.creationTime === "string" && typeof value.executable === "string") record.identity = Object.freeze(value);
+          } catch { /* the handle remains authoritative ownership */ }
+        });
+        return;
+      }
       const identity = readProcessIdentity(child.pid);
       if (!identity) throw new Error("A spawned desktop process exited before its creation identity was captured. Ownership of any descendants is unknown and retained; cleanup is refused.");
       if (suspendedExecutable) {
@@ -109,5 +125,9 @@ export function ownedProcessIdentity(child) {
 export function assertOwnedProcess(child) {
   const identity = ownedProcessIdentity(child);
   if (!identity && child.exitCode === null && child.signalCode === null) throw new Error("Desktop process creation identity was not captured; ownership is retained.");
-  return identity ? assertProcessIdentity(identity) : null;
+  if (!identity) return null;
+  // Windows ownership is the open child handle, not a saved PID. A creation
+  // time may still be pending in the background and is not required to stop.
+  if (process.platform === "win32" && identity.creationTime === null) return child.exitCode === null && child.signalCode === null ? identity : null;
+  return assertProcessIdentity(identity);
 }
