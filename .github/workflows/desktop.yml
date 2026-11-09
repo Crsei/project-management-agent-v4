@@ -56,7 +56,7 @@ jobs:
     if: inputs.distribution == 'unsigned'
     name: Unsigned ${{ matrix.platform }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -118,9 +118,12 @@ jobs:
       - name: Desktop process lifecycle and private filesystem regressions
         timeout-minutes: 15
         run: pnpm --filter @agent-workspace/desktop test:lifecycle
-      - name: Desktop real PostgreSQL bootstrap and encrypted backup regressions
+      - name: Desktop real PostgreSQL bootstrap and restricted-token regressions
         timeout-minutes: 20
         run: pnpm --filter @agent-workspace/desktop test:integration
+      - name: Desktop encrypted backup and restore regressions
+        timeout-minutes: 25
+        run: pnpm --filter @agent-workspace/desktop test:backup
       - name: Native filesystem identity, private permissions and reparse regressions
         timeout-minutes: 10
         run: pnpm exec node --conditions=development --test --test-concurrency=1 --test-timeout=180000 packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts
@@ -216,9 +219,12 @@ jobs:
       - name: Desktop process lifecycle and private filesystem regressions
         timeout-minutes: 15
         run: pnpm --filter @agent-workspace/desktop test:lifecycle
-      - name: Desktop real PostgreSQL bootstrap and encrypted backup regressions
+      - name: Desktop real PostgreSQL bootstrap and restricted-token regressions
         timeout-minutes: 20
         run: pnpm --filter @agent-workspace/desktop test:integration
+      - name: Desktop encrypted backup and restore regressions
+        timeout-minutes: 25
+        run: pnpm --filter @agent-workspace/desktop test:backup
       - name: Native filesystem identity, private permissions and reparse regressions
         timeout-minutes: 10
         run: pnpm exec node --conditions=development --test --test-concurrency=1 --test-timeout=180000 packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts

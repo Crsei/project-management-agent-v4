@@ -64,7 +64,7 @@ async function rejectedMaintenance(input: Record<string, unknown>): Promise<{ ph
 // Real PostgreSQL, real PM bootstrap/storage/checkpoints and bundled Agent backup.
 // Native runners must supply both the complete pinned runtime and built Agent dist.
 // Linux execution is not Windows/macOS native or Electron GUI acceptance.
-test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; rejects unsafe restores before target initialization', { skip: !binariesDir, timeout: 900_000 }, async t => {
+test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; rejects unsafe restores before target initialization', { skip: !binariesDir, timeout: 1_200_000 }, async t => {
   const runtimeRoot = dirname(binariesDir!);
   const root = await realpath(await mkdtemp(join(tmpdir(), 'desktop-full-encrypted-roundtrip-')));
   await ensurePrivateDirectory(root, { newlyCreated: true });

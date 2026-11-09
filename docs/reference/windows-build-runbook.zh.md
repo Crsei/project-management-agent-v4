@@ -126,6 +126,7 @@ node scripts/doctor.mjs &&
   pnpm --filter @agent-workspace/desktop test:contracts &&
   pnpm --filter @agent-workspace/desktop test:lifecycle &&
   pnpm --filter @agent-workspace/desktop test:integration &&
+  pnpm --filter @agent-workspace/desktop test:backup &&
   pnpm exec node --conditions=development --test --test-concurrency=1 --test-timeout=180000 packages/pm-core/tests/platform.test.ts packages/infrastructure/tests/blobs.test.ts &&
   pnpm --filter @agent-workspace/desktop test:release
 if ($LASTEXITCODE -ne 0) { throw 'Windows prerequisite or regression batch failed; do not package.' }
@@ -133,7 +134,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows prerequisite or regression batch faile
 
 Git `core.longpaths` 未设置时可能返回非零，应作为配置记录解释，不伪报构建失败或擅改系统。具体受影响 Agent、Web、来源工具和交付验证回归还须采用父级冻结交接的准确清单；上面不是全仓回归通过声明。`pnpm check:licenses` 是 integrity，不是 release authorization。真实 PG/bootstrap 测试必须使用此次准备的固定 Windows PG；skip、初始化失败或不兼容均单列，不借系统预装数据库补绿。
 
-Actions 将合同、进程／私有文件系统、真实 PostgreSQL／加密备份、发行材料／最终归档回归分别限制为 10、15、20、25 分钟；原生文件系统步骤为 10 分钟。`test` 仍按顺序运行全部四组，不减少覆盖；合同文件并发为 2，其余分组按文件串行，避免大量 PowerShell 同时竞争。默认单用例期限分别为 120、180、900、300 秒，单个已有场景的显式期限仍生效；阶段失败立即阻止后续打包。发行材料回归曾在 Windows 累计耗时约 14 分 46 秒，故使用独立阶段预算，不与进程清理用例共享 15 分钟。全新检出必须先构建 Agent 维护入口，不能依赖已有 `dist`。
+Actions 将合同、进程／私有文件系统、真实 PostgreSQL／低权限 bootstrap、加密备份往返、发行材料／最终归档回归分别限制为 10、15、20、25、25 分钟；原生文件系统步骤为 10 分钟。`test` 仍按顺序运行全部五组，不减少覆盖；合同文件并发为 2，其余分组按文件串行，避免大量 PowerShell 同时竞争。默认单用例期限分别为 120、180、900、1200、300 秒，单个已有场景的显式期限仍生效；阶段失败立即阻止后续打包。Windows 实测完整加密往返约 12 分 24 秒、发行材料约 14 分 46 秒，故各用独立预算；unsigned Job 为完整回归及后续原生打包保留 120 分钟，不取消任何单步骤期限。往返用例仅打印固定阶段、状态和耗时，不打印路径、密码、数据库连接串或原始错误。全新检出必须先构建 Agent 维护入口，不能依赖已有 `dist`。
 
 ### 3. 生成新目录、验证实际成品、精确暂存
 

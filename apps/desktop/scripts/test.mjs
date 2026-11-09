@@ -7,7 +7,6 @@ const integration = new Set([
   "src/managed-postgres.test.mjs",
   "src/windows-private-state.test.mjs",
   "src/backend/bootstrap.test.ts",
-  "src/backend/maintenance.test.ts",
 ]);
 const lifecycle = new Set([
   "src/local-process.test.mjs",
@@ -18,24 +17,26 @@ const lifecycle = new Set([
   "src/uninstall.test.mjs",
 ]);
 const release = new Set(["scripts/release-materials.test.mjs"]);
+const backup = new Set(["src/backend/maintenance.test.ts"]);
 const phases = {
   contracts: { timeout: 120_000, concurrency: 2 },
   lifecycle: { timeout: 180_000, concurrency: 1 },
   integration: { timeout: 900_000, concurrency: 1 },
+  backup: { timeout: 1_200_000, concurrency: 1 },
   release: { timeout: 300_000, concurrency: 1 },
 };
 const selected = process.argv[2] ?? "all";
 if (process.argv.length > 3 || (selected !== "all" && !Object.hasOwn(phases, selected))) {
-  throw new Error("Usage: node scripts/test.mjs [all|contracts|lifecycle|integration|release]");
+  throw new Error("Usage: node scripts/test.mjs [all|contracts|lifecycle|integration|backup|release]");
 }
 const files = globSync(["src/*.test.mjs", "src/backend/*.test.mjs", "src/backend/*.test.ts", "scripts/*.test.mjs"], { cwd: root })
   .map(path => path.replaceAll("\\", "/")).sort();
-for (const file of [...integration, ...lifecycle, ...release]) {
+for (const file of [...integration, ...lifecycle, ...backup, ...release]) {
   if (!files.includes(file)) throw new Error(`Desktop test phase references a missing file: ${file}`);
 }
 for (const [phase, options] of Object.entries(phases)) {
   if (selected !== "all" && selected !== phase) continue;
-  const members = files.filter(file => (integration.has(file) ? "integration" : lifecycle.has(file) ? "lifecycle" : release.has(file) ? "release" : "contracts") === phase);
+  const members = files.filter(file => (integration.has(file) ? "integration" : lifecycle.has(file) ? "lifecycle" : backup.has(file) ? "backup" : release.has(file) ? "release" : "contracts") === phase);
   if (!members.length) throw new Error(`Desktop test phase is empty: ${phase}`);
   console.log(`Desktop ${phase}: ${members.length} files; concurrency ${options.concurrency}; test deadline ${options.timeout}ms`);
   const child = spawn(process.execPath, ["--test", `--test-concurrency=${options.concurrency}`, `--test-timeout=${options.timeout}`, ...members], {

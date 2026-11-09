@@ -108,7 +108,7 @@ node apps/desktop/scripts/verify-delivery.mjs --output ABS_PACKAGE_DIR --install
 
 CI 在桌面类型检查前依次构建 `@agent-workspace/contracts` 与 `@agent-workspace/client-runtime`，生成包导出的类型声明；全新检出不能依赖开发机已有的 `dist` 缓存。[`.gitattributes`](../../.gitattributes) 固定文本检出的 LF 行尾，避免 Windows `core.autocrlf` 改变受固定哈希保护的构建输入；不放宽或重写完整性校验。完整 Web 类型检查超出托管 macOS 默认堆上限，工作流显式设置 `NODE_OPTIONS=--max-old-space-size=4096`，保留全部类型检查。
 
-桌面 CI 分为 `test:contracts`、`test:lifecycle`、`test:integration`、`test:release`，分别设置 10／15／20／25 分钟步骤期限；`test` 顺序执行全部分组。发行材料／最终归档回归单独运行，不再抢占进程清理与 ACL 用例的期限。进程／ACL、真实 PostgreSQL 和发行材料文件串行运行，默认单用例期限分别为 180／900／300 秒（合同为 120 秒），已有显式期限仍生效。测试前必须构建 Agent 的 `desktop-agent-maintenance.mjs`；原生文件系统回归另设 10 分钟期限，不以增加整个 Job 时限代替失败清理。独立后代测试通过原生进程表确认退出后才删除工作目录；HTTP 关闭或标记文件不作为进程退出证明。
+桌面 CI 分为 `test:contracts`、`test:lifecycle`、`test:integration`、`test:backup`、`test:release`，分别设置 10／15／20／25／25 分钟步骤期限；`test` 顺序执行全部分组。加密备份往返和发行材料／最终归档回归各自独立，不抢占进程清理、PostgreSQL 或低权限用例的期限。合同文件并发为 2，其余组串行；默认单用例期限分别为 120／180／900／1200／300 秒，已有显式期限仍生效。测试前必须构建 Agent 的 `desktop-agent-maintenance.mjs`；原生文件系统回归另设 10 分钟期限。Windows 实测完整加密往返约 12 分 24 秒、发行材料约 14 分 46 秒，unsigned Job 因完整回归和后续原生打包设为 120 分钟，但各阶段仍独立限时，不以 Job 期限代替失败清理。独立后代测试通过原生进程表确认退出后才删除工作目录；HTTP 关闭或标记文件不作为进程退出证明。
 
 Windows 本次启动的进程使用持有的子进程句柄进行停机核验，不因异步出生信息返回而切回同步 PowerShell 轮询；持久化的 PID／出生身份仍执行原生核验。读取到 EOF 的一次性 helper 由自有 supervisor 的句柄结束并清理其 Job Object；长期服务继续通过停止消息触发原有 SIGTERM 处理器。处理器尚未安装时保留停止请求，不等待包含长期顶层 await 的服务模块导入结束。
 

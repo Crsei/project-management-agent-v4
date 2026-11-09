@@ -21,6 +21,7 @@
     "test:contracts": "node scripts/test.mjs contracts",
     "test:lifecycle": "node scripts/test.mjs lifecycle",
     "test:integration": "node scripts/test.mjs integration",
+    "test:backup": "node scripts/test.mjs backup",
     "test:release": "node scripts/test.mjs release"
   },
   "dependencies": {
