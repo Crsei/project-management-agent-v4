@@ -41,9 +41,13 @@ async function rejectReparse(paths) {
   if (process.platform !== "win32" || !paths.length) return;
   // lstat rejects symlinks/junctions; native attributes also reject every other
   // reparse type. No user profile, PATH command, or remotely fetched helper.
-  const script = "$ErrorActionPreference='Stop'; [Console]::InputEncoding=[Text.UTF8Encoding]::new($false); $paths=ConvertFrom-Json ([Console]::In.ReadToEnd()); foreach($p in $paths) { if (([IO.File]::GetAttributes($p) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Reparse point in uninstall path' } }";
+  const script = "$ErrorActionPreference='Stop'; $PSModuleAutoLoadingPreference='None'; Import-Module ($PSHOME+'\\Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1'); [Console]::InputEncoding=[Text.UTF8Encoding]::new($false); $paths=ConvertFrom-Json ([Console]::In.ReadToEnd()); foreach($p in $paths) { if (([IO.File]::GetAttributes($p) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Reparse point in uninstall path' } }";
   await new Promise((done, fail) => {
-    const child = execFile(join(process.env.SystemRoot ?? "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 120_000, maxBuffer: 4096, env: { SystemRoot: process.env.SystemRoot ?? "C:\\Windows" } }, error => error ? fail(new Error("Cannot prove uninstall paths are free of Windows reparse points.")) : done());
+    const child = execFile(join(process.env.SystemRoot ?? "C:\\Windows", "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], { windowsHide: true, timeout: 15_000, maxBuffer: 4096, env: { SystemRoot: process.env.SystemRoot ?? "C:\\Windows" } }, error => {
+      if (!error) return done();
+      const detail = error.killed || error.signal ? "deadline-or-signal" : Number.isInteger(error.code) ? `exit-${error.code}` : ["ENOENT", "EACCES", "EPERM"].includes(error.code) ? error.code : "failed";
+      fail(new Error(`Cannot prove uninstall paths are free of Windows reparse points (${detail}).`));
+    });
     child.stdin.on("error", () => {});
     child.stdin.end(JSON.stringify(paths));
   });
