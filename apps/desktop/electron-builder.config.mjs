@@ -110,6 +110,9 @@ export function desktopBuilderConfig({ application, prepackedApplication, worksp
       oneClick: false,
       perMachine: false,
       allowElevation: false,
+      // Per-user maintenance never elevates. The builder otherwise injects
+      // elevate.exe after afterPack, outside the exact ownership manifest.
+      packElevateHelper: false,
       allowToChangeInstallationDirectory: true,
       deleteAppDataOnUninstall: false,
       include: join(output, "desktop-lifecycle.generated.nsh"),
