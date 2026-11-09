@@ -75,7 +75,7 @@
 | Node 官方 checksum | [SHASUMS256.txt](https://nodejs.org/dist/v24.21.0/SHASUMS256.txt)；预检只读取得的 Windows ZIP 条目与上述 pin 一致。prepare 仍须实时交叉核对官方条目并验证下载字节 |
 | PostgreSQL | [postgresql-16.15.0-x86_64-pc-windows-msvc.tar.gz](https://github.com/theseus-rs/postgresql-binaries/releases/download/16.15.0/postgresql-16.15.0-x86_64-pc-windows-msvc.tar.gz)，`157bd7322f8c653f06b0373d1b2280e9cb238b6a6d3bd05541aeb8f33885a8ad`。公开 [release API](https://api.github.com/repos/theseus-rs/postgresql-binaries/releases/tags/16.15.0) 当时记录 46,608,717 bytes、相同 digest；版本 16.15、release 16.15.0，来源 commit `2954f800589f74265f136cdb490b87749e209e7c` |
 
-上述只是公开 metadata/checksum 的只读证据；本阶段没有下载二进制，也没有证明 Windows 主机可达资源或归档实际可执行。最终执行仍须 SHA256、重新解压、完整文件清单、LICENSE/库/share 检查及 runtime smoke。
+上述 metadata/checksum 不能代替 Windows 主机的实际归档验证。最终执行仍须 SHA256、重新解压、完整文件清单、LICENSE/库/share 检查及 runtime smoke。Node 从已验证归档生成 `execution-only-v1` 运行库，不随包提供 npm/npx/corepack 或 Windows 工具链安装脚本；原始源文件清单、保留字节和省略工具的许可证迁移由 runtime manifest v2 核对，完整 PostgreSQL 不变。旧版完整 Node 运行库不可复用，须使用新目录准备，不手工刷新旧清单。构建主机仍需要 Node/npm/pnpm 工具链，此约束仅针对最终应用随包内容。
 
 构建时还需要锁定 npm registry 包、pnpm/action 工具、Electron Windows x64 分发及其 checksum、electron-builder NSIS 编译器/资源和原生依赖资源。默认下载域涉及 `registry.npmjs.org`、`nodejs.org`、`github.com`、`api.github.com` 及 GitHub 资产跳转/CDN；允许列表应由执行环境操作者按真实目标配置，不能只允许网页域或擅改全局代理。锁定的 builder 当前默认 NSIS toolset 使用 `nsis-3.0.4.1.7z` 与 `nsis-resources-3.4.1.7z`，由其既有下载器校验；不在本轮升级 NSIS 或换未审阅镜像。
 

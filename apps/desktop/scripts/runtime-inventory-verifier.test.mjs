@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { nativeRuntimeManifest, verifyFinalRuntime } from "./runtime-inventory-verifier.mjs";
-import { inventoryTree, runtimeSources } from "./runtime-manifest.mjs";
+import { inventoryTree, prepareNodeDistribution, RUNTIME_MANIFEST_VERSION, runtimeSources } from "./runtime-manifest.mjs";
 
 async function put(root, path, bytes) {
   await mkdir(dirname(join(root, path)), { recursive: true });
@@ -17,10 +17,11 @@ async function fixture(t, target = "win32-x64") {
   const suffix = target.startsWith("win32-") ? ".exe" : "";
   await put(root, suffix ? "node/node.exe" : "node/bin/node", "static fixture, never executed");
   for (const name of ["postgres", "initdb", "pg_ctl", "pg_dump", "pg_restore", "psql"]) await put(root, `postgres/bin/${name}${suffix}`, `static ${name} fixture`);
-  await put(root, "node/node_modules/npm/npm.js", "// npm JavaScript resource\n");
+  await put(root, `node/${suffix ? "" : "lib/"}node_modules/npm/LICENSE`, "original npm legal material\n");
   await put(root, "postgres/share/extension.sql", "-- required PostgreSQL resource\n");
   await put(root, "node/LICENSE", "original legal material\n");
-  const manifest = { version: 1, target, sources: runtimeSources(target), files: await inventoryTree(root) };
+  const nodeDistribution = await prepareNodeDistribution(root, target);
+  const manifest = { version: RUNTIME_MANIFEST_VERSION, target, sources: runtimeSources(target), nodeDistribution, files: await inventoryTree(root) };
   await put(root, "runtime-manifest.json", JSON.stringify(manifest));
   await put(resources, `workspace-runtime/${nativeRuntimeManifest}`, JSON.stringify({ schemaVersion: 1, files: [] }));
   return { resources, root, manifest };
@@ -36,7 +37,7 @@ test("final runtime verifies every resource and does not rewrite original invent
   assert.deepEqual(await readFile(join(root, "runtime-manifest.json")), before);
 });
 
-for (const name of ["node/node_modules/npm/npm.js", "postgres/share/extension.sql", "node/LICENSE", "node/node.exe"]) {
+for (const name of ["node-tooling-notices/node_modules/npm/LICENSE", "postgres/share/extension.sql", "node/LICENSE", "node/node.exe"]) {
   test(`final runtime rejects changed ${name} without a signature exemption`, async (t) => {
     const { resources, root, manifest } = await fixture(t);
     await put(root, name, "changed resource bytes\n");
@@ -53,9 +54,9 @@ test("final runtime rejects both missing and unrecorded resource paths", async (
   await assert.rejects(verifyFinalRuntime(resources, manifest.target));
 });
 
-test("signature allowlist cannot exempt JavaScript, arbitrary hashes or escaping paths", async (t) => {
+test("signature allowlist cannot exempt legal material, arbitrary hashes or escaping paths", async (t) => {
   const { resources, root, manifest } = await fixture(t);
-  const original = manifest.files.find((file) => file.path === "node/node_modules/npm/npm.js");
+  const original = manifest.files.find((file) => file.path === "node-tooling-notices/node_modules/npm/LICENSE");
   const native = join(resources, "workspace-runtime", nativeRuntimeManifest);
   await writeFile(native, JSON.stringify({ schemaVersion: 1, files: [{ path: original.path, bytes: original.bytes, sha256: original.sha256 }] }));
   await assert.rejects(verifyFinalRuntime(resources, manifest.target));
@@ -63,12 +64,12 @@ test("signature allowlist cannot exempt JavaScript, arbitrary hashes or escaping
   await assert.rejects(verifyFinalRuntime(resources, manifest.target));
   await writeFile(native, JSON.stringify({ schemaVersion: 1, files: [{ path: "../outside", bytes: 0, sha256: "0".repeat(64) }] }));
   await assert.rejects(verifyFinalRuntime(resources, manifest.target));
-  assert.equal(await readFile(join(root, original.path), "utf8"), "// npm JavaScript resource\n");
+  assert.equal(await readFile(join(root, original.path), "utf8"), "original npm legal material\n");
 });
 
 test("unsigned pre-sign inspection rejects modifications even to pre-identified Mach-O", async (t) => {
   const { resources, root, manifest } = await fixture(t, "darwin-arm64");
-  const path = "node/bin/native-fixture";
+  const path = "postgres/bin/native-fixture";
   await put(root, path, Buffer.from("feedface01020304", "hex"));
   manifest.files = (await inventoryTree(root)).filter((file) => file.path !== "runtime-manifest.json");
   await put(root, "runtime-manifest.json", JSON.stringify(manifest));
@@ -77,4 +78,22 @@ test("unsigned pre-sign inspection rejects modifications even to pre-identified 
   assert.equal((await verifyFinalRuntime(resources, manifest.target)).status, "passed");
   await put(root, path, Buffer.from("feedface05060708", "hex"));
   await assert.rejects(verifyFinalRuntime(resources, manifest.target));
+});
+
+test("final runtime rejects a legacy full distribution and reintroduced package managers", async (t) => {
+  const { resources, root, manifest } = await fixture(t);
+  await put(root, "runtime-manifest.json", JSON.stringify({ ...manifest, version: 1 }));
+  await assert.rejects(verifyFinalRuntime(resources, manifest.target), /version\/target\/profile/);
+  await put(root, "runtime-manifest.json", JSON.stringify(manifest));
+  await mkdir(join(root, "node/node_modules"));
+  await assert.rejects(verifyFinalRuntime(resources, manifest.target), /forbidden tooling/);
+});
+
+test("final runtime rejects inventorially excused Node omissions", async (t) => {
+  const { resources, root, manifest } = await fixture(t);
+  const path = "node/LICENSE";
+  await rm(join(root, path));
+  manifest.files = manifest.files.filter((file) => file.path !== path);
+  await put(root, "runtime-manifest.json", JSON.stringify(manifest));
+  await assert.rejects(verifyFinalRuntime(resources, manifest.target), /exact declared official-archive transformation/);
 });

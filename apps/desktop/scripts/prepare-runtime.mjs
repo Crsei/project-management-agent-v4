@@ -7,7 +7,7 @@ import extractZip from "extract-zip";
 import { x as extractTar } from "tar";
 import {
   defaultRuntimeRoot, desktopRoot, hashFile, inventoryTree, requireNativeTarget,
-  requirePinnedNode, runtimeSources, runtimeTargets, verifyRuntime,
+  prepareNodeDistribution, requirePinnedNode, RUNTIME_MANIFEST_VERSION, runtimeSources, runtimeTargets, verifyRuntime,
 } from "./runtime-manifest.mjs";
 
 const options = new Map();
@@ -101,14 +101,16 @@ if (await exists(output)) {
     await untar(postgresArchive, join(prepared, "postgres"), `postgresql-${sources.postgres.release}-${runtimeTargets[target].postgresTarget}`);
     await access(join(prepared, "node", "LICENSE"));
     await access(join(prepared, "postgres", "LICENSE"));
+    const nodeDistribution = await prepareNodeDistribution(prepared, target);
     await writeFile(join(prepared, "THIRD-PARTY-NOTICES.json"), JSON.stringify({
-      node: { version: sources.node.version, notice: "node/LICENSE", source: sources.node.url },
+      node: { version: sources.node.version, notice: "node/LICENSE", source: sources.node.url, profile: nodeDistribution.profile,
+        omittedToolingNotices: "node-tooling-notices", transformation: "runtime-manifest.json#nodeDistribution" },
       postgres: { version: sources.postgres.version, notice: "postgres/LICENSE", source: sources.postgres.url, upstreamCommit: sources.postgres.upstreamCommit },
-      distribution: "Complete binary distributions retained, including shipped libraries, share data and dependency notices. No executable is downloaded at application startup.",
+      distribution: "Node execution-only distribution: only declared npm/npx/corepack launchers, package-manager trees and Windows install/environment helpers omitted from the verified official archive. Original Node LICENSE and all omitted-tooling license/notice files retained unchanged. PostgreSQL complete binary distribution retained, including libraries, share data and dependency notices. No executable is downloaded at application startup.",
       linuxVerification: "Linux GNU runtime requires a Debian 12/glibc 2.36-or-newer compatible host and its OS libraries; Linux is not a desktop product target.",
     }, null, 2) + "\n");
     const files = await inventoryTree(prepared);
-    await writeFile(join(prepared, "runtime-manifest.json"), JSON.stringify({ version: 1, target, sources, files }, null, 2) + "\n");
+    await writeFile(join(prepared, "runtime-manifest.json"), JSON.stringify({ version: RUNTIME_MANIFEST_VERSION, target, sources, nodeDistribution, files }, null, 2) + "\n");
     await verifyRuntime(prepared, target);
     // Never replace a caller-owned or previously prepared directory.
     if (await exists(output)) throw new Error("Runtime output appeared during preparation; refusing to replace it.");

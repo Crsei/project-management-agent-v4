@@ -7,6 +7,7 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import katex, { type KatexOptions } from 'katex';
 import { createMarkdown, maskHiddenComments, parseMarkdown } from '../../../../../../packages/pm-markdown/index.ts';
 import type { FileRecord } from '../../../../../../packages/pm-schema/index.ts';
 import type { Entity as ServiceEntity } from '../../../../../../packages/contracts/src/client.ts';
@@ -42,6 +43,13 @@ test('KaTeX renders inline/block math and malformed or untrusted TeX remains a s
   assert.match(html, /class="katex-display"/);
   assert.match(html, /katex-error/);
   assert.doesNotMatch(html, /href="javascript:|<script|onclick=/);
+});
+
+test('KaTeX ignores inherited trust settings instead of enabling links or remote images', () => {
+  const options = Object.create({ trust: true }) as KatexOptions;
+  const html = katex.renderToString('\\href{javascript:alert(1)}{click}\\includegraphics{https://example.test/image.png}', options);
+  assert.match(html, /class="katex"/);
+  assert.doesNotMatch(html, /<a\b|<img\b|href=|src=/);
 });
 
 test('GFM footnotes and local anchors coexist with hidden title, source lines, block targets and embeds', () => {

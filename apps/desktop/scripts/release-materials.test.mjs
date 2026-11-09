@@ -13,7 +13,7 @@ import { asarTools, inspectPackagedApplication } from "./packaged-application.mj
 import { captureSource, checksumDelivery, collectLegal, contentDigest, fileRecord, publicSourcePath, refreshVerification, requireUnchangedSource } from "./release-materials.mjs";
 import { verifyDelivery, verifyDeliveryFiles } from "./verify-delivery.mjs";
 import { inspectDeployment } from "./stage-workspace.mjs";
-import { inventoryTree, runtimeSources, verifyRuntime } from "./runtime-manifest.mjs";
+import { inventoryTree, prepareNodeDistribution, RUNTIME_MANIFEST_VERSION, runtimeSources, verifyRuntime } from "./runtime-manifest.mjs";
 import { archiveMemberPath, inspectFinalArtifacts, verifyInstalledApplication } from "./final-artifact.mjs";
 import { dependencyLayoutManifest } from "./dependency-layout-verifier.mjs";
 import { computeMigrationsSha256, createInstallStamp } from "./install-stamp.mjs";
@@ -116,6 +116,7 @@ for (const gitBacked of [false, true]) {
     for (const path of [
       "workspace-runtime/licenses/LICENSE", "workspace-runtime/apps/web/dist/licenses/LICENSE",
       "desktop-runtime/node/LICENSE", "desktop-runtime/postgres/LICENSE", "desktop-runtime/THIRD-PARTY-NOTICES.json",
+      "desktop-runtime/node-tooling-notices/node_modules/npm/LICENSE",
     ]) await put(resources, path, "synthetic legal fixture\n");
     await mkdir(join(resources, "workspace-runtime/apps/web/dist/fonts"), { recursive: true });
     await put(join(root, "app"), "LICENSE.electron.txt", "synthetic Electron legal fixture\n");
@@ -593,16 +594,18 @@ async function preparedRuntimeFixture(resources, { cliAlias = false } = {}) {
     "node/npm.cmd": "static npm launcher fixture",
     "node/npx.cmd": "static npx launcher fixture",
     "node/node_modules/npm/package.json": JSON.stringify({ name: "npm", version: "unit-fixture" }),
-    "node/node_modules/npm/.npmrc": "",
+    "node/node_modules/npm/LICENSE": "npm legal fixture",
+    "node/node_modules/npm/NOTICE": "",
     "node/node_modules/npm/bin/npm-cli.js": "// static npm fixture\n",
     "postgres/LICENSE": "PostgreSQL legal fixture",
     "THIRD-PARTY-NOTICES.json": "{}",
   };
   for (const tool of ["postgres", "initdb", "pg_ctl", "pg_dump", "pg_restore", "psql"])
     files[`postgres/bin/${tool}.exe`] = `static ${tool} executable fixture`;
-  if (cliAlias) files["node/node_modules/renamed-cli/package.json"] = JSON.stringify({ name: "@anthropic-ai/claude-agent-sdk-win32-x64" });
+  if (cliAlias) files["postgres/share/node_modules/renamed-cli/package.json"] = JSON.stringify({ name: "@anthropic-ai/claude-agent-sdk-win32-x64" });
   for (const [name, bytes] of Object.entries(files)) await put(runtime, name, bytes);
-  const manifest = { version: 1, target: "win32-x64", sources: runtimeSources("win32-x64"), files: await inventoryTree(runtime) };
+  const nodeDistribution = await prepareNodeDistribution(runtime, "win32-x64");
+  const manifest = { version: RUNTIME_MANIFEST_VERSION, target: "win32-x64", sources: runtimeSources("win32-x64"), nodeDistribution, files: await inventoryTree(runtime) };
   await put(runtime, "runtime-manifest.json", JSON.stringify(manifest));
   return { runtime, manifest };
 }
@@ -652,10 +655,10 @@ test("final delivery is authoritative even when old unpacked staging bytes chang
   const finalArtifacts = await sealPayload(output, manifest);
   await refreshVerification(output, manifest, { checks: { application, finalArtifacts }, nativeSmoke: { status: "not-run" }, published: false });
   assert.equal((await verifyDelivery(output)).target, manifest.target);
-  assert.ok(prepared.manifest.files.some((file) => file.path === "node/node_modules/npm/.npmrc" && file.bytes === 0));
-  assert.equal(await readFile(join(prepared.runtime, "node/node_modules/npm/.npmrc"), "utf8"), "");
+  assert.ok(prepared.manifest.files.some((file) => file.path === "node-tooling-notices/node_modules/npm/NOTICE" && file.bytes === 0));
+  assert.equal(await readFile(join(prepared.runtime, "node-tooling-notices/node_modules/npm/NOTICE"), "utf8"), "");
   const originalInventory = await readFile(join(prepared.runtime, "runtime-manifest.json"));
-  await put(prepared.runtime, "node/node_modules/npm/.npmrc", "# changed runtime fixture bytes\n");
+  await put(prepared.runtime, "node-tooling-notices/node_modules/npm/NOTICE", "# changed runtime fixture bytes\n");
   // Staging bytes are no longer authority for a downloaded installer. The final
   // archive still contains the unchanged pinned runtime and remains verifiable.
   assert.equal((await verifyDelivery(output)).target, manifest.target);
@@ -677,7 +680,7 @@ for (const location of ["app.asar", "app.asar.unpacked", "workspace-runtime"]) {
     } else await put(resources, `${location}/.npmrc`, privateBytes);
     await assert.rejects(inspectPackagedApplication(resources, "0.1.0"));
     assert.equal(await readFile(location === "app.asar" ? join(root, "application/.npmrc") : join(resources, location, ".npmrc"), "utf8"), privateBytes);
-    assert.equal(await readFile(join(prepared.runtime, "node/node_modules/npm/.npmrc"), "utf8"), "");
+    assert.equal(await readFile(join(prepared.runtime, "node-tooling-notices/node_modules/npm/NOTICE"), "utf8"), "");
   });
 }
 
@@ -687,6 +690,23 @@ test("external Claude CLI identity is rejected in runtime even when its file inv
   const prepared = await preparedRuntimeFixture(resources, { cliAlias: true });
   await verifyRuntime(prepared.runtime, "win32-x64");
   await assert.rejects(inspectPackagedApplication(resources, "0.1.0"));
+});
+
+test("shipped SBOM accepts the execution-only runtime without npm directories and records its provenance", async (t) => {
+  const root = await temporary(t);
+  const resources = await archive(root, {});
+  const prepared = await preparedRuntimeFixture(resources);
+  const inputs = { target: "win32-x64", version: "0.1.0", electronVersion: "40.0.0",
+    source: { commit: "a".repeat(40), dirty: false, sha256: "b".repeat(64) },
+    artifacts: [{ path: "fixture.exe", bytes: 1, sha256: "c".repeat(64) }] };
+  const sbom = await inspectShippedSBOM(resources, inputs);
+  await assert.rejects(lstat(join(prepared.runtime, "node/node_modules")), { code: "ENOENT" });
+  assert.equal(sbom.components.some((entry) => entry["bom-ref"].startsWith("desktop-runtime/node/node_modules")), false);
+  const node = sbom.components.find((entry) => entry["bom-ref"] === "desktop-runtime/node");
+  assert.equal(node.properties.find((property) => property.name === "dovspace:runtime-profile").value, "execution-only-v1");
+  assert.equal(node.properties.find((property) => property.name === "dovspace:source-archive-sha256").value, runtimeSources("win32-x64").node.sha256);
+  await put(prepared.runtime, "node/node_modules/npm/package.json", JSON.stringify({ name: "npm", version: "1.0.0" }));
+  await assert.rejects(inspectShippedSBOM(resources, inputs), /forbidden tooling/);
 });
 
 test("delivery checksums cover every material and manifest without self-reference", async (t) => {
@@ -749,6 +769,7 @@ test("legal derivation rejects a resource-internal relative link that escapes th
     "workspace-runtime/apps/web/dist/licenses/LICENSE": "web license",
     "workspace-runtime/apps/web/dist/fonts/Inter-LICENSE.txt": "font license",
     "desktop-runtime/node/LICENSE": "node license",
+    "desktop-runtime/node-tooling-notices/node_modules/npm/LICENSE": "npm license",
     "desktop-runtime/postgres/LICENSE": "postgres license",
     "desktop-runtime/THIRD-PARTY-NOTICES.json": "{}",
     "app.asar": "unit resource bytes, not an executable archive",
@@ -758,6 +779,28 @@ test("legal derivation rejects a resource-internal relative link that escapes th
   await symlink("../../../../../app.asar", join(resources, "workspace-runtime/apps/web/dist/licenses/cross"));
   await inspectDeployment(resources);
   await assert.rejects(collectLegal(resources, "win32", join(root, "legal")), /nonportable symlink|ENOENT|ELOOP/);
+});
+
+test("legal archive collection retains original Node and omitted-tooling notices unchanged", async (t) => {
+  const root = await temporary(t), resources = join(root, "app/resources");
+  const legal = {
+    "workspace-runtime/licenses/LICENSE": "workspace legal",
+    "workspace-runtime/apps/web/dist/licenses/LICENSE": "web legal",
+    "desktop-runtime/node/LICENSE": "complete original Node and bundled third-party licenses\n",
+    "desktop-runtime/node-tooling-notices/node_modules/npm/LICENSE": "original npm license\n",
+    "desktop-runtime/node-tooling-notices/node_modules/npm/node_modules/dependency/NOTICE": "original dependency notice\n",
+    "desktop-runtime/postgres/LICENSE": "original PostgreSQL legal",
+    "desktop-runtime/THIRD-PARTY-NOTICES.json": "{}",
+  };
+  for (const [name, bytes] of Object.entries(legal)) await put(resources, name, bytes);
+  await mkdir(join(resources, "workspace-runtime/apps/web/dist/fonts"));
+  await put(join(root, "app"), "LICENSE.electron.txt", "electron legal");
+  await put(join(root, "app"), "LICENSES.chromium.html", "chromium legal");
+  const destination = join(root, "legal");
+  await collectLegal(resources, "win32", destination);
+  assert.equal(await readFile(join(destination, "runtime/node-LICENSE"), "utf8"), legal["desktop-runtime/node/LICENSE"]);
+  for (const path of ["node_modules/npm/LICENSE", "node_modules/npm/node_modules/dependency/NOTICE"])
+    assert.equal(await readFile(join(destination, "runtime/node-tooling-notices", path), "utf8"), legal[`desktop-runtime/node-tooling-notices/${path}`]);
 });
 
 test("archive member safety rejects traversal, absolute paths and alternate data streams", () => {

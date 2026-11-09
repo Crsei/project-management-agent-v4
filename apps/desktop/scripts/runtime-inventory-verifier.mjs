@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { lstat, open, readFile } from "node:fs/promises";
 import { join, posix } from "node:path";
 import { promisify } from "node:util";
-import { hashFile, inventoryTree, runtimeSources } from "./runtime-manifest.mjs";
+import { assertNoNodeTooling, hashFile, inventoryTree, validateRuntimeManifest } from "./runtime-manifest.mjs";
 import { peFileRecord, verifyWindowsFile } from "./signatures.mjs";
 
 const execute = promisify(execFile);
@@ -30,9 +30,9 @@ export async function verifyFinalRuntime(resources, target, { signedMachO = fals
   }
   const original = JSON.parse(await readFile(join(root, "runtime-manifest.json"), "utf8"));
   const native = JSON.parse(await readFile(nativePath, "utf8"));
-  if (original.version !== 1 || original.target !== target || JSON.stringify(original.sources) !== JSON.stringify(runtimeSources(target))
-    || !Array.isArray(original.files) || native.schemaVersion !== 1 || !Array.isArray(native.files))
-    throw new Error("Invalid final runtime source/native inventory.");
+  validateRuntimeManifest(original, target);
+  await assertNoNodeTooling(root, target);
+  if (native.schemaVersion !== 1 || !Array.isArray(native.files)) throw new Error("Invalid final runtime native inventory.");
   const expected = new Map();
   for (const file of original.files) {
     if (!safe(file.path) || expected.has(file.path)) throw new Error("Invalid or duplicated runtime inventory path.");
@@ -86,5 +86,5 @@ export async function verifyFinalRuntime(resources, target, { signedMachO = fals
   }
   return { status: "passed", sourceManifest: "desktop-runtime/runtime-manifest.json", nativeManifest: `workspace-runtime/${nativeRuntimeManifest}`,
     nativeManifestSha256: await hashFile(nativePath), files: actual.length, signedResources,
-    scope: "Exact complete runtime paths and bytes; only pre-sign magic-identified native files may differ after native signature validation; PE executable content must remain exact excluding Authenticode fields" };
+    scope: "Exact declared execution-only Node transformation and complete PostgreSQL paths and bytes; only pre-sign magic-identified native files may differ after native signature validation; PE executable content must remain exact excluding Authenticode fields" };
 }

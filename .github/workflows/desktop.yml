@@ -133,9 +133,21 @@ jobs:
       - name: Build explicitly unsigned native installers
         run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$env:DESKTOP_ARTIFACT_DIR"
         if: runner.os == 'Windows'
-      - name: Report Windows install file counts
+      - name: Report verified Windows archive file counts
         if: runner.os == 'Windows'
-        run: node apps/desktop/scripts/payload-report.mjs --root "$env:DESKTOP_ARTIFACT_DIR/win-unpacked"
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          import { join } from "node:path";
+          const verification = JSON.parse(await readFile(join(process.env.DESKTOP_ARTIFACT_DIR, "desktop-verification.json"), "utf8"));
+          const final = verification.checks.finalArtifacts;
+          if (final.status !== "passed" || !final.artifacts.length) throw new Error("Missing final archive verification.");
+          for (const artifact of final.artifacts) {
+            if (!artifact.payloadReport?.budgets.withinLimit) throw new Error("Final archive exceeds its payload budget.");
+            console.log(JSON.stringify({ artifact: artifact.path, sha256: artifact.sha256, payload: artifact.payloadReport }));
+          }
+          NODE
       - name: Build explicitly unsigned native installers
         run: pnpm --filter @agent-workspace/desktop package --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --output "$DESKTOP_ARTIFACT_DIR"
         if: runner.os == 'macOS'

@@ -167,6 +167,12 @@ try {
   const vulnerabilityScan = await observePackagingPhase("scanShippedVulnerabilities", () => scanSBOM(sbom));
   await writeFile(join(output, "desktop-osv.json"), JSON.stringify(vulnerabilityScan.report, null, 2) + "\n", { flag: "wx" });
   await writeFile(join(output, "desktop-vulnerabilities.sarif"), JSON.stringify(vulnerabilityScan.sarif, null, 2) + "\n", { flag: "wx" });
+  // Failed packages are never uploaded. Keep public component/advisory identities
+  // in the job log so the blocking report remains actionable after runner cleanup.
+  for (const finding of vulnerabilityScan.report.vulnerabilities) {
+    const purls = vulnerabilityScan.report.queries.filter((query) => query.components.some((component) => finding.components.includes(component))).map((query) => query.purl);
+    console.error(JSON.stringify({ scope: "desktop-vulnerability", id: finding.id, packages: purls, fixedVersions: finding.fixedVersions }));
+  }
   requireCleanVulnerabilityReport(vulnerabilityScan.report);
   await requireUnchangedSource(source);
   const delivery = await observePackagingPhase("writeReleaseMaterials", () => writeReleaseMaterials({

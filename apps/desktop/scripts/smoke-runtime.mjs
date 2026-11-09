@@ -6,7 +6,7 @@ if (process.argv.length !== 2 && (process.argv.length !== 4 || process.argv[2] !
   throw new Error("Usage: smoke-runtime.mjs [--runtime-root DIRECTORY]");
 const root = resolve(process.argv[3] ?? process.env.PM_DESKTOP_RUNTIME_ROOT ?? defaultRuntimeRoot);
 const target = requireNativeTarget();
-await verifyRuntime(root, target);
+const manifest = await verifyRuntime(root, target);
 const environment = Object.fromEntries(["SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR"].flatMap((name) => process.env[name] === undefined ? [] : [[name, process.env[name]]]));
 environment.PATH = "";
 async function version(executable) {
@@ -30,4 +30,5 @@ for (const name of tools) {
   const output = await version(join(root, "postgres", "bin", `${name}${process.platform === "win32" ? ".exe" : ""}`));
   if (!output.includes(`(PostgreSQL) ${POSTGRES_VERSION}`)) throw new Error("Prepared PostgreSQL tool version does not match the pinned version.");
 }
-console.log(JSON.stringify({ target, node: NODE_VERSION, postgres: POSTGRES_VERSION, tools, ambientPathUsed: false, productInstaller: false }));
+console.log(JSON.stringify({ target, node: NODE_VERSION, nodeProfile: manifest.nodeDistribution.profile, bundledPackageManagers: false,
+  postgres: POSTGRES_VERSION, tools, ambientPathUsed: false, productInstaller: false }));

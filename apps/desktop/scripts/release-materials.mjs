@@ -404,6 +404,7 @@ export async function collectLegal(resources, platform, destination) {
     [join(resources, "workspace-runtime/licenses"), "workspace/licenses"],
     [join(resources, "workspace-runtime/apps/web/dist/licenses"), "web/licenses"],
     [join(resources, "desktop-runtime/node/LICENSE"), "runtime/node-LICENSE"],
+    [join(resources, "desktop-runtime/node-tooling-notices"), "runtime/node-tooling-notices"],
     [join(resources, "desktop-runtime/postgres/LICENSE"), "runtime/postgres-LICENSE"],
     [join(resources, "desktop-runtime/THIRD-PARTY-NOTICES.json"), "runtime/THIRD-PARTY-NOTICES.json"],
     [join(legalRoot, "LICENSE.electron.txt"), "electron/LICENSE.electron.txt"],

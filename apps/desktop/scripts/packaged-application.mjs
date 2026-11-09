@@ -62,9 +62,9 @@ export async function inspectPackagedApplication(resources, expectedVersion, { s
     if (process.platform !== "darwin") throw new Error("Final Mach-O signature verification requires native macOS.");
     await promisify(execFile)("/usr/bin/codesign", ["--verify", "--deep", "--strict", join(resources, "../..")]);
   }
-  // CLI package identity applies to every loose resource, including the pinned
-  // runtime. Private checkout rules belong only to application/workspace trees:
-  // the complete official Node distribution legitimately contains npm config.
+  // CLI package identity applies to every loose dependency tree, including the
+  // runtime. Private checkout rules belong to application/workspace trees;
+  // runtime resources and relocated notices have their own exact inventory.
   await enforceExternalAgentBoundary(resources);
   for (const name of ["app.asar.unpacked", "workspace-runtime"]) {
     const directory = join(resources, name);

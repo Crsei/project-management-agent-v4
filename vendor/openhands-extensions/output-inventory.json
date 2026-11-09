@@ -15,20 +15,20 @@
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "180c056b5b9468cad3577778bae5602bc9fa755669a0a10ecfc612143feba654",
-      "bytes": 753251,
+      "sha256": "d0b107b4f47e17487bc98bb0277a8dfe04140930aa7af7bf8841340a18a7a4cc",
+      "bytes": 752656,
       "mode": 420
     },
     {
       "path": "pnpm-workspace.yaml",
-      "sha256": "c58526cf9c38eed67f91d05c757590c33354106f01f56ed1f4fc9717a4028f4f",
-      "bytes": 1535,
+      "sha256": "d9e08ec1c9ee0b029a76ae3f6df21874d2ffa0be0b1f2008884d40a76b8df10f",
+      "bytes": 2016,
       "mode": 420
     },
     {
       "path": "apps/web/package.json",
-      "sha256": "5219fe3625f81f83f01663c1e868e60008d8e55ccf0394b59a67f251c0472cf0",
-      "bytes": 4061,
+      "sha256": "60e626d9e20c38ba3bed204916b7f9f51d9775dfb45af62140c3a88f2d3aaa27",
+      "bytes": 4060,
       "mode": 420
     },
     {

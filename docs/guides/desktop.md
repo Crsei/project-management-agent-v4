@@ -4,6 +4,8 @@
 
 桌面复用现有 Web，通过独立 Node **24.21.0** 启动 PM、Worker、Agent 和同源网关，并管理私有 PostgreSQL **16.15**。安装后的本地模式不依赖用户预装 Docker、Node 或 PostgreSQL；Git、Provider CLI、账号和外部集成仍按对应能力显式配置。**现阶段仅支持本地工作台，不支持远程连接**；桌面连接页不提供远程服务入口。
 
+随包 Node 仅提供应用执行运行库，**不提供 npm、npx 或包管理器安装脚本**。固定官方归档仍须校验来源与 SHA256，再按明确的发行内容规则生成新的完整文件清单；保留原始 Node 许可证与完整 PostgreSQL 分发，被省略工具的许可证原样放在 `node-tooling-notices/` 并纳入 legal 材料。不通过修改旧清单或忽略漏洞来裁剪，旧完整运行库不能直接复用，须在新目录重新准备。需要 npm/npx 的外部 Provider 或项目工具由操作者另行安装、配置；桌面不会为此自动下载工具链或导入全局凭据。
+
 Claude CLI 由用户在服务所在机器安装并在 Provider 的 Runtime binary 配置（默认 `claude`）；缺失或路径错误不会改用内置 Claude。Agent、桌面 workspace runtime、Electron 应用的独立部署闭包与容器交付均排除 Claude SDK 平台 CLI 包，保留通信 SDK 全部资源。SDK 不等于 CLI：Cursor 当前仍使用本地 Agent SDK 引擎及其必要原生工具，SQLite / PTY 等依赖也不因本次修复被删除。Codex / Antigravity managed 与 ACP Registry 的原生安装流程保持既有语义，详见 [Provider 指南](agent-chat.md#配置并使用-provider)。
 
 桌面打包将 **PM、Agent、Electron 三个生产依赖闭包分别物化为真实、独立的 `node_modules`**，使用已锁定 electron-builder 的 hoister；不跨闭包共用包、不引入运行时 loader，也不升级依赖。相同源码身份可提升到祖先目录，版本冲突、peer 上下文及解析路径确有需要的实例仍保留；Agent 必须只有一个物理 Effect **4.0.5** 实例。包自有 SDK、原生二进制、许可证和嵌套 fixture/template 资源保留，原有 PM `jp` / `yaml` 命令入口也保留，不按文件 hash 或 tests/source-map 名称泛删资源。

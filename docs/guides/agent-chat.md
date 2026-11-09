@@ -79,6 +79,8 @@ Provider 集合为 Codex、Claude、Cursor、Grok、FX、OpenCode、Antigravity�
 
 这不移除现有明确选择的安装流程：Codex managed、Antigravity managed 和 ACP Registry 各有原生准备／安装语义。ACP 的 npx / uvx 状态探测还可能解析并准备 Registry 包，不能概括成所有 Provider 的检查都绝不下载；该行为与桌面安装包预捆绑外部 CLI 不同，本次未重做 ACP 安装流程。
 
+桌面随包 Node 仅用于运行应用，不包含 npm/npx。ACP 的 npx 分发路径需要有效 Provider 环境 PATH 中另行安装的 npm；缺失时检查返回缺少 runner，准备操作明确失败，不自动补装工具链。此边界不改变操作者配置的原生 CLI Home、环境覆盖或已明确触发的 Provider 安装流程。
+
 安装、更新、取消与移除仅对实际支持的驱动开放；“继续使用 ChatGPT”先准备运行时，再发起登录，Codex 的只读检查或发送消息不会自动下载。维护与认证 / 执行互斥。原生 Home 留空时继承宿主规则，显式 Home 和实例环境覆盖对应配置，不重写进程 HOME / XDG，也不清除宿主 Provider 凭据。应用自有状态与原生 Home 分离，重置、删除和备份不收集、创建或删除外部 Home。PM 作用域、审批与完成规则不变。
 
 Codex 执行仍要求本次原生操作确认同一个 Home。Windows 路径命名空间、分隔符或真实目录别名不再仅因字符串不同被拒绝，但必须由当前文件系统的规范路径／目录身份证明一致；不同、缺失或无法核验的 Home 仍拒绝执行，重连不会跳过证明。

@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdtemp, readFile, readdir, realpath, rm } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { asarTools } from "./packaged-application.mjs";
 import { dependencyLayoutManifest } from "./dependency-layout-verifier.mjs";
-import { hashFile, inventoryTree, NODE_VERSION, POSTGRES_VERSION, runtimeSources } from "./runtime-manifest.mjs";
+import { assertNoNodeTooling, hashFile, inventoryTree, NODE_VERSION, POSTGRES_VERSION, validateRuntimeManifest } from "./runtime-manifest.mjs";
 import { verifyHost } from "../../server/agent/scripts/cc-switch.mjs";
 
 const sha = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -99,25 +99,17 @@ export async function inspectShippedSBOM(resources, { target, version, electronV
       components.push(component(entry.name, entry.version, `web-bundled/${index}`, web.outputs, { license: entry.license }));
     const runtime = join(resources, "desktop-runtime");
     const runtimeManifest = JSON.parse(await readFile(join(runtime, "runtime-manifest.json"), "utf8"));
-    if (runtimeManifest.target !== target || JSON.stringify(runtimeManifest.sources) !== JSON.stringify(runtimeSources(target))) throw new Error("SBOM runtime differs from pinned final runtime sources.");
-    for (const [name, runtimeVersion, directory] of [["nodejs", NODE_VERSION, "node"], ["postgresql", POSTGRES_VERSION, "postgres"]])
-      components.push(component(name, runtimeVersion, `desktop-runtime/${directory}`, await inventoryTree(join(runtime, directory)), { ecosystem: "generic" }));
-    async function runtimePackages(directory, prefix) {
-      const metadataPath = join(directory, "package.json");
-      const metadataInfo = await lstat(metadataPath).catch((cause) => { if (cause.code === "ENOENT") return null; throw cause; });
-      if (metadataInfo) {
-        if (!metadataInfo.isFile() || metadataInfo.isSymbolicLink()) throw new Error("Linked runtime SBOM package metadata.");
-        const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-        if (metadata.name && metadata.version) components.push(component(metadata.name, metadata.version, prefix,
-          [{ path: "package.json", sha256: await hashFile(metadataPath) }], { license: metadata.license }));
-      }
-      for (const entry of await readdir(directory, { withFileTypes: true })) {
-        if (entry.isSymbolicLink()) continue;
-        if (entry.isDirectory()) await runtimePackages(join(directory, entry.name), `${prefix}/${entry.name}`);
-      }
+    validateRuntimeManifest(runtimeManifest, target);
+    await assertNoNodeTooling(runtime, target);
+    for (const [name, runtimeVersion, directory] of [["nodejs", NODE_VERSION, "node"], ["postgresql", POSTGRES_VERSION, "postgres"]]) {
+      const entry = component(name, runtimeVersion, `desktop-runtime/${directory}`, await inventoryTree(join(runtime, directory)), { ecosystem: "generic" });
+      if (directory === "node") entry.properties.push(
+        { name: "dovspace:runtime-profile", value: runtimeManifest.nodeDistribution.profile },
+        { name: "dovspace:source-archive-sha256", value: runtimeManifest.nodeDistribution.sourceArchiveSha256 },
+        { name: "dovspace:source-inventory-sha256", value: sha(runtimeManifest.nodeDistribution.sourceFiles) },
+        { name: "dovspace:omitted-tooling-notices", value: "desktop-runtime/node-tooling-notices; legal material only, no package-manager code" });
+      components.push(entry);
     }
-    const npmPrefix = `desktop-runtime/node/${target.startsWith("win32-") ? "" : "lib/"}node_modules`;
-    await runtimePackages(join(resources, npmPrefix), npmPrefix);
     const electron = component("electron", electronVersion, "electron-runtime", artifacts);
     electron.properties.push({ name: "dovspace:identity-source", value: "Pinned electronVersion from corresponding-source desktop/package.json and builder config; hashes bind final containers. Not an independently executed Electron version probe." });
     components.push(electron);
@@ -128,7 +120,7 @@ export async function inspectShippedSBOM(resources, { target, version, electronV
       metadata: { component: { type: "application", name: "Dovspace", version, "bom-ref": "desktop-application" },
         properties: [{ name: "dovspace:target", value: target }, { name: "dovspace:source", value: JSON.stringify(source) },
           { name: "dovspace:final-artifacts", value: JSON.stringify(artifacts) },
-          { name: "dovspace:scope", value: "Verified physical production closures, exact Agent/CC Switch/Web bundled-input provenance, runtime npm contents, pinned Node/PostgreSQL/Electron; unversioned source/vendor components retain sealed source identity without invented registry versions. Not a legal authorization." }] },
+          { name: "dovspace:scope", value: "Verified physical production closures, exact Agent/CC Switch/Web bundled-input provenance, pinned execution-only Node/PostgreSQL/Electron; omitted Node tooling is not shipped code and its unchanged legal material is retained. Unversioned source/vendor components retain sealed source identity without invented registry versions. Not a legal authorization." }] },
       components, dependencies };
   } finally { asar.uncache(archive); await rm(temporary, { recursive: true, force: true }); }
 }
