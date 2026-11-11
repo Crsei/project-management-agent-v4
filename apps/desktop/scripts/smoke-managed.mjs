@@ -146,6 +146,7 @@ try {
   const first = await server.start({ mode: "local", dataDir, projectRoot });
   stage = "fresh-web-first-run-setup";
   await completeFirstRunSetup({ origin: first.origin, setupToken: server.setupToken, credentials: { ...credentials, name: "Desktop Smoke", workspaceName: "Desktop Smoke Workspace" } });
+  stage = "fresh-web-first-run-finalize";
   check((await server.finalizeSetup())?.phase === "ready", "Fresh first-run setup did not finalize.");
   stage = "fresh-pm-login-and-authorized-workspace";
   const workspace = await exercise(first, credentials);
@@ -179,7 +180,18 @@ if (failure) {
   // Never print service logs, setup values, cookies, URLs with authority, or an
   // exception whose library context could contain a connection string.
   const message = String(failure.message ?? "");
-  const detail = message.includes("shutdown exceeded") ? "shutdown_deadline"
+  const setupDetail = (() => {
+    const http = /^First-run setup failed \(HTTP (\d{3})(?:: ([a-z0-9_]+))?\)\.$/.exec(message);
+    if (http) return `setup_http_${http[1]}${http[2] ? `_${http[2]}` : ""}`;
+    if (message === "Fresh first-run setup did not finalize.") return "finalize_not_ready";
+    if (message.startsWith("Managed first-run finalize returned")) return "finalize_invalid";
+    if (message === "The local first-run setup token is unavailable.") return "setup_token_unavailable";
+    if (message === "First-run setup response was invalid.") return "setup_response_invalid";
+    if (message.startsWith("bootstrap helper failed")) return "bootstrap_helper_failed";
+    return "setup_failure";
+  })();
+  const detail = failureStage === "fresh-web-first-run-setup" || failureStage === "fresh-web-first-run-finalize" ? setupDetail
+    : message.includes("shutdown exceeded") ? "shutdown_deadline"
     : message.includes("Owned process map") ? "owned_process_map_not_empty"
     : message.includes("service process tree survived") ? "service_tree_survived"
     : message.includes("PostgreSQL child survived") ? "postgres_child_survived"

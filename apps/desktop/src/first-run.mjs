@@ -26,7 +26,7 @@ export async function completeFirstRunSetup({ origin, setupToken, credentials })
     method: "POST", credentials: "include", redirect: "error",
     headers: { "Content-Type": "application/json", Origin: origin },
     body: JSON.stringify({ setupToken, email, password, name, workspaceName }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(300_000),
   });
   const value = await response.json().catch(() => null);
   if (!response.ok) {

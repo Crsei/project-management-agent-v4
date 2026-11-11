@@ -112,7 +112,7 @@ export function PmFirstUsePage() {
     setSubmissionFailure(null)
     try {
       try {
-        const response = await client.setup(request, { signal: AbortSignal.timeout(20_000) })
+        const response = await client.setup(request, { signal: AbortSignal.timeout(300_000) })
         let result
         try { result = parseSetupResponse(response) }
         catch { throw new PmServiceError("invalid_response") }
