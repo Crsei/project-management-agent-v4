@@ -34,6 +34,17 @@ test("migration/state-code modifications invalidate old-code rollback compatibil
   await writeFile(join(f.agent, "index.mjs"), "export const dataSchema=2;\n");
   assert.notEqual(await computeMigrationsSha256(f.root), second);
 });
+test("version-only build provenance does not block an update with unchanged state code", async t => {
+  const f = await fixture(t), metadata = join(f.agent, "build-inputs.json");
+  await writeFile(metadata, JSON.stringify({ version: 1, hostBuildInputs: [{ path: "package.json", sha256: "a".repeat(64) }] }));
+  const baseline = await computeMigrationsSha256(f.root);
+  await writeFile(metadata, JSON.stringify({ version: 1, hostBuildInputs: [{ path: "package.json", sha256: "b".repeat(64) }] }));
+  assert.equal(await computeMigrationsSha256(f.root), baseline);
+  // Only the packager's exact root provenance document is non-runtime data.
+  await mkdir(join(f.agent, "provider"));
+  await writeFile(join(f.agent, "provider", "build-inputs.json"), '{"dataSchema":2}');
+  assert.notEqual(await computeMigrationsSha256(f.root), baseline);
+});
 test("missing source or unknown compatibility never becomes a deletion-authorizing build stamp", () => {
   assert.throws(() => createInstallStamp(input), /identity|compatibility|ownership/);
   assert.throws(() => createInstallStamp({ ...input, compatibility: { dataSchema: 1, postgresMajor: 16, migrationsSha256: "not-a-digest" } }), /compatibility|ownership/);

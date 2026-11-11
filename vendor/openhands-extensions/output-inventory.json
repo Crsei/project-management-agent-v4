@@ -9,14 +9,14 @@
   "hostBuildInputs": [
     {
       "path": "package.json",
-      "sha256": "3ba954b087a41c339b67e9e481fa77172d52c1ab3f68ebc1c394106b215f64c1",
-      "bytes": 6920,
+      "sha256": "808e639a49bd11ed7c76d44c40fa905eb0f8dcfbc8b4fee9b936e62f5110112d",
+      "bytes": 6930,
       "mode": 420
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "17d9af44b801c81847d7c80caf4ea3049c45acb0f5a6e20b38a25e587840bfda",
-      "bytes": 752656,
+      "sha256": "c8afeeead038eeb4c2f0031641b95fdf7d1d0a45d949b4742a2423dd74359ffb",
+      "bytes": 753845,
       "mode": 420
     },
     {

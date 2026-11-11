@@ -29,14 +29,18 @@ export async function writeInstallStamp(path, input) {
 // Bind all shipped SQL migrations and the complete Agent code that can mutate
 // SQLite/provider state. Changed state code requires an explicit future schema
 // compatibility design; installers never guess that old code can reopen it.
+// The root build-inputs.json is authenticated packaging provenance, not state
+// code. Its host manifest digest changes on every app version bump; delivery
+// hashes still bind it, but it must not make identical state code incompatible.
 export async function computeMigrationsSha256(workspaceRuntime) {
   const files = [];
+  const buildProvenance = join(workspaceRuntime, "apps", "server", "agent", "dist", "build-inputs.json");
   async function visit(directory) {
     for (const name of (await readdir(directory)).sort()) {
       const path = join(directory, name), info = await lstat(path);
       if (info.isSymbolicLink() || !info.isDirectory() && (!info.isFile() || info.nlink !== 1)) throw new Error("Data compatibility inputs must be real unshared files.");
       if (info.isDirectory()) await visit(path);
-      else files.push({ path: relative(workspaceRuntime, path).split(sep).join("/"), bytes: await readFile(path) });
+      else if (path !== buildProvenance) files.push({ path: relative(workspaceRuntime, path).split(sep).join("/"), bytes: await readFile(path) });
     }
   }
   await visit(join(workspaceRuntime, "packages", "infrastructure", "migrations"));

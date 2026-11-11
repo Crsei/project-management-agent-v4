@@ -61,6 +61,8 @@ node scripts/release-package.mjs verify --directory <已生成目录>
 
 在每个准确的版本提交上手动触发；此操作不生成公开 Release：
 
+每次升版先同步根与桌面 `package.json`。根 manifest 和锁文件属于已登记的宿主构建输入：逐项审阅版本／桌面依赖差异，通过既有来源记录工具更新精确绑定，保持上游 pin、无关输出及 recipes 不变，再运行 `node scripts/check-sources.mjs` 和 Agent 构建。只改版本而遗漏来源记录会被 `Host build tool hash mismatch` 拒绝；不得跳过检查或沿用旧提交的构建。
+
 ```sh
 gh workflow run desktop.yml --ref main \
   -f distribution=unsigned -f windows_only=true \
