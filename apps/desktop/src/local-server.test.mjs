@@ -48,10 +48,11 @@ import { appendFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
+import { writePrivateJson } from ${JSON.stringify(new URL("./private-state.mjs", import.meta.url).href)};
 let text=''; for await (const chunk of process.stdin) text+=chunk;
 const input=JSON.parse(text);
 await writeFile(join(input.dataDir,'bootstrap-received.json'),JSON.stringify({ database:input.databaseUrl.startsWith('postgresql:'),projectRoot:input.projectRoot,setup:!!input.setup,live:!!input.live,keys:Object.keys(process.env) }));
-if (!existsSync(join(input.dataDir,'setup-token.json'))) await writeFile(join(input.dataDir,'setup-token.json'),JSON.stringify({token:'${"A".repeat(43)}'}),{mode:0o600});
+if (!existsSync(join(input.dataDir,'setup-token.json'))) await writePrivateJson(join(input.dataDir,'setup-token.json'),{token:'${"A".repeat(43)}'},{exclusive:true});
 if (${Boolean(behavior.blockBootstrap)}) {
   const source="const fs=require('node:fs'),http=require('node:http');const server=http.createServer((q,s)=>s.end('bootstrap-descendant'));const stop=()=>{clearInterval(timer);server.close(()=>process.exit(0))};const timer=setInterval(()=>{if(fs.existsSync('../release-bootstrap'))stop()},25);process.on('SIGTERM',stop);server.listen(0,'127.0.0.1',()=>console.log(server.address().port));";
   const nested=spawn(process.execPath,['--eval',source],{stdio:['ignore','pipe','inherit']});
