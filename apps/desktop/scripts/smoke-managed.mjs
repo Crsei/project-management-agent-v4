@@ -23,10 +23,15 @@ const { ensurePrivateDirectory } = await import(pathToFileURL(join(desktopRoot, 
 let temporary;
 let server;
 let stage = "private-temporary-root";
+let failureStage = null;
 let unexpectedExit = false;
 let failure;
 const previousPath = process.env.PATH;
 const check = (condition, message) => { if (!condition) throw new Error(message); };
+const watchdog = setTimeout(() => {
+  process.stdout.write(`${JSON.stringify({ ok: false, target, stage: failureStage ?? stage, error: "managed_desktop_smoke_timeout" })}\n`, () => process.exit(1));
+}, 20 * 60_000);
+watchdog.unref();
 async function verifyNativeClosure(projectRoot) {
   const environment = Object.fromEntries(["SystemRoot", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR"].flatMap((name) => process.env[name] === undefined ? [] : [[name, process.env[name]]]));
   Object.assign(environment, { PATH: "", HOME: temporary, USERPROFILE: temporary, XDG_CONFIG_HOME: join(temporary, ".config"), XDG_DATA_HOME: join(temporary, ".local/share"), XDG_CACHE_HOME: join(temporary, ".cache") });
@@ -156,8 +161,14 @@ try {
   await stopAndAssert();
 } catch (error) {
   failure = error;
+  failureStage = stage;
 } finally {
-  try { await stopAndAssert(); } catch (error) { failure ??= error; stage = "owned-shutdown"; }
+  try {
+    if (server && (server.running || server.children.size || server.postgres?.running)) await stopAndAssert();
+  } catch (error) {
+    failure ??= error;
+    failureStage ??= "final-owned-shutdown";
+  }
   if (previousPath === undefined) delete process.env.PATH;
   else process.env.PATH = previousPath;
   // The root was freshly created by this invocation, never supplied by a user.
@@ -167,6 +178,13 @@ try {
 if (failure) {
   // Never print service logs, setup values, cookies, URLs with authority, or an
   // exception whose library context could contain a connection string.
-  console.log(JSON.stringify({ ok: false, target, stage, error: "managed_desktop_smoke_failed" }));
-  process.exitCode = 1;
-} else console.log(JSON.stringify({ ok: true, target, providerAndPtyNativeClosure: true, effectSingletonRuntimeIdentity: true, managedPostgres: true, migrationsAndStorageBootstrap: true, pmPasswordLogin: true, authorizedWorkspace: true, agentAccess: true, bundledWeb: true, sameInstanceAndWorkspaceAfterRestart: true, ownedProcessCleanup: true, ambientPathUsed: false }));
+  const message = String(failure.message ?? "");
+  const detail = message.includes("shutdown exceeded") ? "shutdown_deadline"
+    : message.includes("Owned process map") ? "owned_process_map_not_empty"
+    : message.includes("service process tree survived") ? "service_tree_survived"
+    : message.includes("PostgreSQL child survived") ? "postgres_child_survived"
+    : message.includes("PostgreSQL is still shutting down") ? "postgres_stop_timeout"
+    : message.includes("did not become ready") ? "readiness_timeout"
+    : "smoke_failure";
+  process.stdout.write(`${JSON.stringify({ ok: false, target, stage: failureStage ?? stage, detail, error: "managed_desktop_smoke_failed" })}\n`, () => process.exit(1));
+} else process.stdout.write(`${JSON.stringify({ ok: true, target, providerAndPtyNativeClosure: true, effectSingletonRuntimeIdentity: true, managedPostgres: true, migrationsAndStorageBootstrap: true, pmPasswordLogin: true, authorizedWorkspace: true, agentAccess: true, bundledWeb: true, sameInstanceAndWorkspaceAfterRestart: true, ownedProcessCleanup: true, ambientPathUsed: false })}\n`, () => process.exit(0));
