@@ -112,3 +112,56 @@ test('legacy permission is opt-in for one restore and is reset on cancellation, 
   assert.equal(page.element('#backup-password').value, '');
   assert.equal(page.element('#restore-trusted-source').checked, false);
 });
+
+test('update UI keeps versions, unsupported reasons and errors visible without enabling install', async () => {
+  const page = await connectionPage();
+  page.receiveState({ ...page.state, update: {
+    status: 'unavailable', enabled: false, currentVersion: '0.1.1-preview.1', targetVersion: '', channel: 'preview',
+    message: 'Unsigned macOS updates are unavailable.', error: '', canCheck: false, canDownload: false, canInstall: false,
+  } });
+  assert.match(page.element('#update-versions').textContent, /0.1.1-preview.1.*preview/);
+  assert.match(page.element('#update-detail').textContent, /Unsigned macOS/);
+  for (const action of ['check', 'download', 'install']) assert.equal(page.element(`#update-${action}`).disabled, true);
+  await page.click('#update-install');
+  assert.equal(page.calls.length, 0);
+  page.receiveState({ ...page.state, update: {
+    status: 'error', currentVersion: '0.1.1-preview.1', targetVersion: '0.1.1-preview.2', channel: 'preview',
+    error: 'Migration fingerprint differs. Installation blocked.', testPackage: true, canCheck: true,
+  } });
+  assert.match(page.element('#update-versions').textContent, /0.1.1-preview.2/);
+  assert.match(page.element('#update-error').textContent, /Migration fingerprint/);
+  assert.equal(page.element('#update-test-warning').hidden, false);
+  assert.equal(page.element('#update-install').disabled, true);
+});
+
+test('update progress blocks connection and maintenance but preserves explicit download cancellation', async () => {
+  const page = await connectionPage();
+  page.receiveState({ ...page.state, update: {
+    status: 'downloading', busy: true, currentVersion: '0.1.1-preview.1', targetVersion: '0.1.1-preview.2',
+    canCancel: true, progress: { percent: 25, transferred: 1_048_576, total: 4_194_304, bytesPerSecond: 524_288 },
+  } });
+  assert.equal(page.element('#continue').disabled, true);
+  assert.equal(page.element('#manage-workspace').disabled, true);
+  assert.equal(page.element('#backup').disabled, true);
+  assert.equal(page.element('#update-install').disabled, true);
+  assert.equal(page.element('#update-progress').hidden, false);
+  assert.equal(page.element('#update-progress').value, 25);
+  assert.match(page.element('#update-transfer').textContent, /25.0%.*1.0 \/ 4.0 MiB/);
+  await page.click('#update-cancel');
+  assert.equal(page.calls[0].action, 'update-cancel');
+});
+
+test('verified update requires an explicit restart action and UI does not infer success after IPC errors', async () => {
+  const page = await connectionPage();
+  const ready = { ...page.state, update: {
+    status: 'downloaded', busy: false, currentVersion: '0.1.1-preview.1', targetVersion: '0.1.1-preview.2', canInstall: true,
+  } };
+  page.receiveState(ready);
+  assert.equal(page.calls.length, 0);
+  assert.equal(page.element('#update-install').disabled, false);
+  page.setResponse(async () => { throw new Error('Draft cancellation preserved the workspace.'); });
+  await page.click('#update-install');
+  assert.equal(page.calls[0].action, 'update-install');
+  assert.match(page.element('#error').textContent, /Draft cancellation/);
+  assert.doesNotMatch(page.element('#update-status').textContent, /正在启动安装器/);
+});

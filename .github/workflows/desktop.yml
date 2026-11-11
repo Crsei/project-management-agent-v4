@@ -36,12 +36,36 @@ on:
         description: Independently supplied SHA256 of the exact lower-version NSIS installer
         type: string
         required: false
+      release_action:
+        description: Explicit GitHub Release action; none builds artifacts only, draft is not an update, publish makes a complete release visible
+        type: choice
+        options: [none, draft, publish]
+        default: none
+        required: true
+      release_channel:
+        description: preview requires preview.N; stable requires a stable version and signed installers
+        type: choice
+        options: [preview, stable]
+        default: preview
+        required: true
+      release_tag:
+        description: Existing exact v-prefixed application version tag; required for draft/publish
+        type: string
+        required: false
+      expected_sha:
+        description: Full lowercase 40-hex source SHA, identical to the dispatch ref; required for draft/publish
+        type: string
+        required: false
+      ci_run_id:
+        description: Exact successful Repository checks push run for expected_sha; required for draft/publish
+        type: string
+        required: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-${{ github.ref }}-${{ inputs.distribution }}
+  group: desktop-${{ inputs.release_tag || format('{0}-{1}', github.ref, inputs.distribution) }}
   cancel-in-progress: false
 
 env:
@@ -50,10 +74,65 @@ env:
   DESKTOP_ARTIFACT_DIR: ${{ github.workspace }}/apps/desktop/releases/ci-${{ github.run_id }}-${{ github.run_attempt }}
   DESKTOP_DELIVERY_DIR: ${{ github.workspace }}/apps/desktop/releases/delivery-${{ github.run_id }}-${{ github.run_attempt }}
   PM_DESKTOP_TEST_POSTGRES_ROOT: ${{ github.workspace }}/apps/desktop/.runtime/desktop-runtime/postgres
+  DESKTOP_RELEASE_ACTION: ${{ inputs.release_action }}
+  DESKTOP_RELEASE_CHANNEL: ${{ inputs.release_channel }}
+  DESKTOP_RELEASE_TAG: ${{ inputs.release_tag }}
+  DESKTOP_RELEASE_SHA: ${{ inputs.expected_sha }}
+  DESKTOP_CI_RUN_ID: ${{ inputs.ci_run_id }}
+  DESKTOP_DISTRIBUTION: ${{ inputs.distribution }}
+  DESKTOP_WINDOWS_ONLY: ${{ inputs.windows_only }}
 
 jobs:
+  release-preflight:
+    name: Verify exact desktop release identity and prior publication
+    if: inputs.release_action != 'none'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      already_published: ${{ steps.preflight.outputs.already_published }}
+      staged_draft: ${{ steps.preflight.outputs.staged_draft }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - name: Reject mismatched tag, version, SHA, channel and CI provenance
+        id: preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/desktop-release.mjs preflight
+
+  release-authorization:
+    name: Hard third-party release authorization gate
+    if: inputs.release_action != 'none'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - name: Keep every recorded OPEN blocker fatal, including preview tests
+        run: node scripts/check-third-party-notices.mjs --release
+
   unsigned:
-    if: inputs.distribution == 'unsigned'
+    needs: [release-preflight]
+    if: >-
+      ${{ !cancelled() && inputs.distribution == 'unsigned'
+        && (inputs.release_action == 'none'
+          || (needs.release-preflight.result == 'success' && needs.release-preflight.outputs.already_published != 'true'
+            && needs.release-preflight.outputs.staged_draft != 'true')) }}
     name: Unsigned ${{ matrix.platform }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
@@ -68,6 +147,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
@@ -163,7 +243,12 @@ jobs:
           path: ${{ env.DESKTOP_DELIVERY_DIR }}/
 
   signed:
-    if: inputs.distribution == 'signed'
+    needs: [release-preflight]
+    if: >-
+      ${{ !cancelled() && inputs.distribution == 'signed'
+        && (inputs.release_action == 'none'
+          || (needs.release-preflight.result == 'success' && needs.release-preflight.outputs.already_published != 'true'
+            && needs.release-preflight.outputs.staged_draft != 'true')) }}
     name: Signed ${{ matrix.platform }}-${{ matrix.arch }}
     # Configure approval and repository-owned certificate secrets here. Missing
     # materials fail closed; this job never falls back to unsigned output.
@@ -181,6 +266,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
@@ -288,6 +374,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
@@ -371,3 +458,67 @@ jobs:
           retention-days: 14
           compression-level: 0
           path: ${{ runner.temp }}/desktop-e2e-bound-${{ github.run_id }}-${{ github.run_attempt }}/
+
+  release:
+    name: Stage complete native assets then explicitly retain draft or publish
+    needs: [release-preflight, release-authorization, unsigned, signed, install-e2e]
+    if: >-
+      ${{ !cancelled() && inputs.release_action != 'none'
+        && needs.release-preflight.result == 'success'
+        && needs.release-preflight.outputs.already_published != 'true'
+        && needs.release-authorization.result == 'success'
+        && (needs.release-preflight.outputs.staged_draft == 'true'
+          || (inputs.distribution == 'unsigned' && needs.unsigned.result == 'success')
+          || (inputs.distribution == 'signed' && needs.signed.result == 'success'))
+        && (inputs.install_e2e != true || needs.install-e2e.result == 'success') }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    # No other job can mutate GitHub Releases; source-evidence release.yml cannot.
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - name: Test release orchestration state and immutable-asset rules
+        run: node --test scripts/desktop-release.test.mjs
+      - name: Download exact Windows native delivery from this run
+        if: needs.release-preflight.outputs.staged_draft != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-${{ inputs.distribution }}-win32-x64${{ inputs.install_e2e && '-install-e2e' || '' }}
+          path: ${{ runner.temp }}/desktop-release-deliveries/desktop-${{ inputs.distribution }}-win32-x64
+      - name: Download exact Intel macOS native delivery from this run
+        if: inputs.windows_only != true && needs.release-preflight.outputs.staged_draft != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-${{ inputs.distribution }}-darwin-x64
+          path: ${{ runner.temp }}/desktop-release-deliveries/desktop-${{ inputs.distribution }}-darwin-x64
+      - name: Download exact Apple Silicon native delivery from this run
+        if: inputs.windows_only != true && needs.release-preflight.outputs.staged_draft != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-${{ inputs.distribution }}-darwin-arm64
+          path: ${{ runner.temp }}/desktop-release-deliveries/desktop-${{ inputs.distribution }}-darwin-arm64
+      - name: Reverify every gate, source identity and asset before changing visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DESKTOP_RELEASE_DELIVERIES: ${{ runner.temp }}/desktop-release-deliveries
+          DESKTOP_RELEASE_STAGE: ${{ runner.temp }}/desktop-release-stage
+        run: node scripts/desktop-release.mjs release
+      - name: Retain exact staged release evidence even if draft upload fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-${{ inputs.release_tag }}-${{ github.run_id }}-${{ github.run_attempt }}
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 14
+          path: ${{ runner.temp }}/desktop-release-stage/

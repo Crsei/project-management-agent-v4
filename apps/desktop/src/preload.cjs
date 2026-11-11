@@ -14,7 +14,7 @@ if (platform === "darwin" && typeof document !== "undefined" && typeof window !=
 }
 
 // Bundled connection page only. Business/remote pages receive no native bridge.
-const actions = new Set(["state", "connect", "open", "disconnect", "directory", "reveal", "node", "backup", "restore", "quit"]);
+const actions = new Set(["state", "connect", "open", "disconnect", "directory", "reveal", "node", "backup", "restore", "quit", "update-check", "update-download", "update-cancel", "update-install"]);
 contextBridge.exposeInMainWorld("desktopConnection", Object.freeze({
   platform,
   invoke: (action, options = {}) => {

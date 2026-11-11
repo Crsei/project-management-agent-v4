@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { computeMigrationsSha256, createInstallStamp, writeInstallStamp } from "./install-stamp.mjs";
 
 async function fixture(t) {
@@ -41,3 +43,50 @@ test("empty migration/Agent fixtures cannot claim rollback coverage", async t =>
   const f = await fixture(t); await rm(join(f.migrations, "0001.sql"));
   await assert.rejects(computeMigrationsSha256(f.root), /nonempty PM migrations/);
 });
+
+if (process.platform === "win32") {
+  test("native manual first-updater handoff accepts only historical unsigned 0.1.0 and preserves its exact identity", async (t) => {
+    const f = await fixture(t);
+    const installRoot = join(f.root, "installed");
+    await mkdir(join(installRoot, "resources"), { recursive: true });
+    const stampPath = join(installRoot, "resources", "desktop-install-stamp.json");
+    const helper = join(import.meta.dirname, "../assets/desktop-maintenance.ps1");
+    const script = join(f.root, "read-native-identity.ps1");
+    const quote = (value) => `'${value.replaceAll("'", "''")}'`;
+    // Execute the real production validator functions under system PowerShell.
+    // Parsing avoids executing installer/registry/process side effects; these
+    // are behavioral results on actual files, not source/wiring assertions.
+    await writeFile(script, `param([string]$IdentityStage)
+$ErrorActionPreference='Stop'
+$PSModuleAutoLoadingPreference='None'
+Import-Module ($PSHOME+'\\Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1')
+$tokens=$null;$errors=$null
+$ast=[System.Management.Automation.Language.Parser]::ParseFile(${quote(helper)},[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'Invalid native helper syntax'}
+foreach($name in @('Read-Json','Get-Stamp')){
+  $function=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq $name},$true)
+  if(-not $function){throw 'Native identity validator is unavailable'}
+  . ([scriptblock]::Create($function.Extent.Text))
+}
+$InstallRoot=${quote(installRoot)}
+$Stage=$IdentityStage
+Get-Stamp | ConvertTo-Json -Depth 20 -Compress
+`);
+    const execute = promisify(execFile);
+    const powershell = join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+    const readNative = (stage) => execute(powershell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-IdentityStage", stage], { windowsHide: true, timeout: 30_000 });
+    const current = createInstallStamp({ ...input, version: "0.1.1-preview.1", compatibility: { dataSchema: 1, postgresMajor: 16, migrationsSha256: "c".repeat(64) } });
+    const historical = { ...current, version: "0.1.0", updateMechanism: "none" };
+    const bytes = `${JSON.stringify(historical, null, 2)}\n`;
+    await writeFile(stampPath, bytes);
+    assert.deepEqual(JSON.parse((await readNative("prepare-install")).stdout), historical);
+    assert.equal(await readFile(stampPath, "utf8"), bytes);
+    for (const stage of ["prepare-uninstall", "runtime", "handoff", "upgrade", "restore"]) await assert.rejects(readNative(stage));
+    for (const change of [{ version: "0.1.1-preview.1" }, { signing: "signed" }, { distribution: "os-managed" }, { updateMechanism: "unknown" }, { compatibility: { ...current.compatibility, migrationsSha256: "unknown" } }]) {
+      await writeFile(stampPath, JSON.stringify({ ...historical, ...change }));
+      await assert.rejects(readNative("prepare-install"));
+    }
+    await writeFile(stampPath, JSON.stringify(current));
+    for (const stage of ["prepare-install", "prepare-uninstall"]) assert.deepEqual(JSON.parse((await readNative(stage)).stdout), current);
+  });
+}

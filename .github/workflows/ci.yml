@@ -52,6 +52,8 @@ jobs:
           sudo apt-get install --yes build-essential pkg-config bubblewrap util-linux
       - name: Install locked workspace dependencies
         run: pnpm install --frozen-lockfile
+      - name: Check desktop release identity and immutable draft/publication contracts
+        run: node --test scripts/desktop-release.test.mjs
       - name: Prepare private local task-cache directories
         shell: bash
         run: |
@@ -157,7 +159,7 @@ jobs:
           retention-days: 14
 
   start-release:
-    name: Start tag release after checks
+    name: Start tag source evidence after checks
     needs: [checks]
     if: ${{ success() && github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
     runs-on: ubuntu-22.04
@@ -167,7 +169,7 @@ jobs:
       actions: write
       contents: read
     steps:
-      - name: Dispatch the release workflow for the exact tag commit
+      - name: Dispatch non-mutating source evidence for the exact tag commit
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -184,4 +186,4 @@ jobs:
           default_branch="$(gh api "repos/$GH_REPO" --jq .default_branch)"
           gh workflow run release.yml --repo "$GH_REPO" --ref "$default_branch" \
             -f tag="$TAG" -f expected_sha="$SHA" -f ci_run_id="$CI_RUN_ID"
-          echo "Dispatched Tag release for $TAG at $SHA from $default_branch." >> "$GITHUB_STEP_SUMMARY"
+          echo "Dispatched Tag source evidence for $TAG at $SHA; GitHub Releases are owned only by explicit desktop.yml release actions." >> "$GITHUB_STEP_SUMMARY"

@@ -29,7 +29,7 @@ let step = "mode";
 // Validate only a configure submission, never navigation or hidden onboarding steps.
 form.noValidate = true;
 
-function working() { return pending > 0 || ["connecting", "stopping", "maintenance"].includes(current?.status); }
+function working() { return pending > 0 || Boolean(current?.update?.busy) || ["connecting", "stopping", "maintenance"].includes(current?.status); }
 function changeStep(next) {
   step = next;
 }
@@ -84,6 +84,39 @@ function maintenanceStatus() {
     return `${maintenanceFeedback.action === "restore" ? "恢复已完成，请返回连接页面后手动连接。" : "加密备份已完成，请将备份与口令分开安全保管。"} ${availability}`;
   return working() ? "正在处理桌面操作，请稍候。" : availability;
 }
+function renderUpdate() {
+  const update = current?.update;
+  const statuses = {
+    unavailable: "此安装不支持应用内自动更新。", idle: "可以检查同一发布通道的更新。",
+    checking: "正在检查 GitHub Releases 并核对候选安装元数据…", current: "当前已是此通道的最新版本。",
+    available: "发现兼容更新，可手动下载。", downloading: "正在下载并校验安装器；不会自动安装。",
+    downloaded: "安装器校验完成，等待你确认重启安装。", preparing: "正在重新核对发布来源和数据兼容性…",
+    stopping: "正在等待草稿确认，并正常停止本地服务与 PostgreSQL…", installing: "正在启动安装器…",
+    error: "更新未完成，请查看错误；应用不会自动重试安装。",
+  };
+  document.querySelector("#update-versions").textContent = update
+    ? `当前版本 ${update.currentVersion}${update.channel ? ` · ${update.channel} 通道` : ""}${update.targetVersion ? ` · 目标版本 ${update.targetVersion}` : ""}`
+    : "尚未读取更新版本。";
+  document.querySelector("#update-status").textContent = update ? statuses[update.status] || "更新状态未知，请重新检查。" : "正在读取更新状态…";
+  document.querySelector("#update-detail").textContent = update?.message || "";
+  document.querySelector("#update-test-warning").hidden = !update?.testPackage;
+  showError("#update-error", update?.error);
+  const progress = document.querySelector("#update-progress");
+  progress.hidden = update?.status !== "downloading";
+  if (update?.progress) progress.value = update.progress.percent;
+  else progress.removeAttribute("value");
+  const transfer = document.querySelector("#update-transfer");
+  transfer.hidden = !update?.progress;
+  transfer.textContent = update?.progress
+    ? `${update.progress.percent.toFixed(1)}% · ${(update.progress.transferred / 1_048_576).toFixed(1)} / ${(update.progress.total / 1_048_576).toFixed(1)} MiB · ${(update.progress.bytesPerSecond / 1_048_576).toFixed(1)} MiB/s`
+    : "";
+  for (const [action, permission] of [["check", "canCheck"], ["download", "canDownload"], ["install", "canInstall"]])
+    document.querySelector(`#update-${action}`).disabled = !bridgeAvailable || !update?.[permission] || working();
+  const cancel = document.querySelector("#update-cancel");
+  cancel.hidden = !update?.canCancel;
+  cancel.disabled = !bridgeAvailable || !update?.canCancel || activeAction === "update-cancel";
+}
+
 
 function render() {
   const disabled = !bridgeAvailable || !current || working();
@@ -144,7 +177,7 @@ function render() {
   document.querySelector("#manage-workspace").disabled = disabled;
   document.querySelector("#maintenance-back").disabled = disabled;
   document.querySelector("#quit").disabled = !bridgeAvailable || quitPending
-    || ["stopping", "maintenance"].includes(current?.status) || ["backup", "restore", "disconnect"].includes(activeAction);
+    || Boolean(current?.update?.busy) || ["stopping", "maintenance"].includes(current?.status) || ["backup", "restore", "disconnect"].includes(activeAction);
   for (const action of ["backup", "restore"])
     document.querySelector(`#${action}`).disabled = disabled || !current?.maintenanceAllowed;
   for (const input of [...maintenanceSecrets, legacyRestore, trustedRestoreSource])
@@ -158,6 +191,7 @@ function render() {
   const maintenanceDetails = diagnostics(maintenanceFeedback || current);
   document.querySelector("#maintenance-diagnostics").hidden = !maintenanceDetails;
   document.querySelector("#maintenance-details").textContent = maintenanceDetails;
+  renderUpdate();
 }
 
 function receiveState(state) {
@@ -198,7 +232,10 @@ function receiveState(state) {
 
 async function invoke(action, options) {
   if (!bridgeAvailable) { localError = bridgeUnavailable; render(); return; }
-  if (action === "quit") {
+  if (action === "update-cancel") {
+    if (!current?.update?.canCancel || activeAction === "update-cancel") return;
+    activeAction = action;
+  } else if (action === "quit") {
     if (quitPending || ["stopping", "maintenance"].includes(current?.status) || ["backup", "restore", "disconnect"].includes(activeAction)) return;
     quitPending = true;
   } else {
@@ -298,9 +335,9 @@ document.querySelector("#choose-node").addEventListener("click", async () => {
 });
 for (const button of document.querySelectorAll("[data-reveal]"))
   button.addEventListener("click", () => { if (!button.disabled) void invoke("reveal", { field: button.dataset.reveal }); });
-for (const action of ["open", "disconnect", "quit"]) {
+for (const action of ["open", "disconnect", "quit", "update-check", "update-download", "update-cancel", "update-install"]) {
   const button = document.querySelector(`#${action}`);
-  button.addEventListener("click", () => { if (!button.disabled) void invoke(action); });
+  button.addEventListener("click", () => { if (!button.disabled) return invoke(action); });
 }
 for (const action of ["backup", "restore"]) document.querySelector(`#${action}`).addEventListener("click", async () => {
   if (document.querySelector(`#${action}`).disabled) return;

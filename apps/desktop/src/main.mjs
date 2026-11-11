@@ -13,6 +13,8 @@ import { captureWindowState, restoredWindowBounds } from "./window-state.mjs";
 import { protectWorkspaceClose } from "./window-close.mjs";
 import { readInstallStamp } from "./install-stamp.mjs";
 import { loadLifecycleRequest, readLifecycleArguments, runLifecycleRequest } from "./lifecycle-cli.mjs";
+import { DesktopUpdater, desktopUpdateTargetArch } from "./updater.mjs";
+import { desktopUpdatePolicy } from "./update-policy.mjs";
 import { ensurePrivateDirectory, securePrivateFile, writePrivateJson } from "./private-state.mjs";
 import {
   macosWindowButtonPosition, normalizeTitleBarTheme, titleBarOverlay, windowTitleBarOptions,
@@ -63,6 +65,8 @@ let quitPromise;
 let stopPromise;
 let maintenancePromise;
 let changingConnection = false;
+let desktopUpdater;
+let updateInstalling = false;
 let firstRunTimer = null;
 let externalPrompt = false;
 let configuration;
@@ -90,7 +94,8 @@ function snapshot() {
     installIdentity: installStamp ? { version: installStamp.version, distribution: installStamp.distribution, ownership: installStamp.ownership.installation, updateMechanism: installStamp.updateMechanism } : null,
     workspaceOpen: Boolean(workspaceWindow && !workspaceWindow.isDestroyed()),
     firstRunPending: Boolean(localServer?.setupPending),
-    maintenanceAllowed: !changingConnection && !maintenancePromise && !lifecyclePromise && !quitting && !quitPrompt && !localRunning() && !workspaceSession,
+    maintenanceAllowed: !changingConnection && !maintenancePromise && !lifecyclePromise && !desktopUpdater?.busy && !quitting && !quitPrompt && !localRunning() && !workspaceSession,
+    update: desktopUpdater?.snapshot() ?? null,
   };
 }
 
@@ -462,7 +467,7 @@ function watchFirstRun(server, origin) {
 }
 
 async function connect(input) {
-  if (quitting || quitPrompt || changingConnection || maintenancePromise || lifecyclePromise) throw new Error("Another desktop operation is in progress.");
+  if (quitting || quitPrompt || changingConnection || maintenancePromise || lifecyclePromise || desktopUpdater?.busy) throw new Error("Another desktop operation is in progress.");
   const next = normalizeConfiguration(input);
   changingConnection = true;
   let previousStopped = false;
@@ -539,7 +544,7 @@ async function connect(input) {
 }
 
 async function reopenWorkspace() {
-  if (changingConnection || maintenancePromise || lifecyclePromise || quitting) return;
+  if (changingConnection || maintenancePromise || lifecyclePromise || desktopUpdater?.busy || quitting) return;
   if (workspaceWindow && !workspaceWindow.isDestroyed()) {
     if (workspaceWindow.isMinimized()) workspaceWindow.restore();
     workspaceWindow.show();
@@ -558,6 +563,11 @@ async function reopenWorkspace() {
 
 function finishQuit() {
   if (quitPromise) return quitPromise;
+  if (desktopUpdater?.busy) {
+    publish({ error: "Wait for the current update operation to finish, or cancel its download, before quitting." });
+    showConnection();
+    return;
+  }
   quitting = true;
   publish({ status: maintenancePromise ? "maintenance" : "stopping", message: maintenancePromise ? "Waiting for the current backup or restore to finish safely…" : "Stopping local services and PostgreSQL…" });
   quitPromise = (async () => {
@@ -582,8 +592,8 @@ function finishQuit() {
 
 async function requestQuit() {
   if (quitting || quitPrompt) return;
-  if (maintenancePromise || lifecyclePromise) {
-    publish({ error: "Wait for backup, restore or the installed lifecycle operation to finish safely before quitting." });
+  if (maintenancePromise || lifecyclePromise || desktopUpdater?.busy) {
+    publish({ error: "Wait for backup, restore, the installed lifecycle or update operation to finish safely before quitting." });
     showConnection();
     return;
   }
@@ -624,7 +634,7 @@ async function firstRunToken(event) {
 
 async function chooseWorkspaceDirectory(event) {
   if (workspaceMode !== "local" || !trustedWorkspace(event)) throw new Error("Folder selection is available only in the trusted local workspace.");
-  if (workspaceDirectoryPending || changingConnection || maintenancePromise || lifecyclePromise || quitting) throw new Error("Wait for the current desktop operation.");
+  if (workspaceDirectoryPending || changingConnection || maintenancePromise || lifecyclePromise || desktopUpdater?.busy || quitting) throw new Error("Wait for the current desktop operation.");
   const window = workspaceWindow;
   workspaceDirectoryPending = true;
   try {
@@ -634,7 +644,7 @@ async function chooseWorkspaceDirectory(event) {
       properties: ["openDirectory"],
       dontAddToRecent: true,
     });
-    if (workspaceWindow !== window || workspaceMode !== "local" || !trustedWorkspace(event) || changingConnection || lifecyclePromise || quitting) throw new Error("The local workspace changed while choosing a folder.");
+    if (workspaceWindow !== window || workspaceMode !== "local" || !trustedWorkspace(event) || changingConnection || lifecyclePromise || desktopUpdater?.busy || quitting) throw new Error("The local workspace changed while choosing a folder.");
     // The Agent must still canonicalize and validate the chosen path against its allowed roots.
     return result.canceled || !result.filePaths[0] ? null : absolutePath(result.filePaths[0], "Agent workspace folder");
   } finally {
@@ -645,7 +655,7 @@ async function chooseWorkspaceDirectory(event) {
 async function previewAction(event, input) {
   if (!trustedWorkspace(event)) throw new Error("Preview controls are available only in the trusted workspace window.");
   if (workspaceMode !== "local") throw new Error("Native preview is available only for the local workspace.");
-  if (lifecyclePromise) throw new Error("Wait for the installed lifecycle operation before opening previews.");
+  if (lifecyclePromise || desktopUpdater?.busy) throw new Error("Wait for the lifecycle or update operation before opening previews.");
   if (!previewManager) throw new Error("Preview is unavailable.");
   if (!input || typeof input !== "object" || typeof input.action !== "string") throw new Error("Invalid preview action.");
   switch (input.action) {
@@ -677,7 +687,7 @@ async function maintenance(action, input) {
   let password = input?.password;
   let trustedSourceAcknowledged = input?.trustedSourceAcknowledged === true;
   if (input) { input.password = ""; input.trustedSourceAcknowledged = false; }
-  if (changingConnection || maintenancePromise || quitting || quitPrompt || localRunning() || workspaceSession || workspaceWindow)
+  if (changingConnection || maintenancePromise || lifecyclePromise || desktopUpdater?.busy || quitting || quitPrompt || localRunning() || workspaceSession || workspaceWindow)
     throw new Error("Disconnect and stop all local services before backup or restore.");
   const restoring = action === "restore";
   if (typeof password !== "string" || password.length < (restoring ? (input.allowLegacyUnencrypted === true ? 0 : 1) : 12) || password.length > 1024 || Buffer.byteLength(password, "utf8") > 4096) throw new Error(restoring ? "Enter the backup password (at most 1024 characters)." : "Use a backup password between 12 and 1024 characters.");
@@ -735,7 +745,7 @@ async function maintenance(action, input) {
 
 async function directory(field) {
   if (!["dataDir", "projectRoot"].includes(field)) throw new Error("Invalid directory selection.");
-  if (changingConnection || maintenancePromise || quitting) throw new Error("Wait for the current desktop operation.");
+  if (changingConnection || maintenancePromise || lifecyclePromise || desktopUpdater?.busy || quitting) throw new Error("Wait for the current desktop operation.");
   const result = await dialog.showOpenDialog(connectionWindow, {
     title: field === "dataDir" ? "Choose a new empty managed workspace folder, or an existing desktop-managed workspace" : "Choose an explicit local project root",
     properties: ["openDirectory", "createDirectory"],
@@ -751,11 +761,75 @@ async function reveal(field) {
   return snapshot();
 }
 
+async function initializeUpdater() {
+  const version = app.getVersion?.() || installStamp?.version || "0.0.0";
+  let api;
+  let unavailableReason = "";
+  try {
+    if (app.isPackaged && installStamp && desktopUpdatePolicy(installStamp).enabled) {
+      const module = await import("electron-updater");
+      api = module.default || module;
+    }
+  } catch (cause) { unavailableReason = `The installed updater could not be initialized: ${safeDesktopMessage(cause)}`; }
+  desktopUpdater = new DesktopUpdater({
+    version, stamp: installStamp, packaged: app.isPackaged, updater: api?.autoUpdater,
+    targetArch: desktopUpdateTargetArch({ platform: process.platform, arch: installStamp?.arch ?? process.arch, runningUnderARM64Translation: app.runningUnderARM64Translation }),
+    createCancellationToken: () => new api.CancellationToken(),
+    unavailableReason,
+    canOperate: () => !changingConnection && !maintenancePromise && !lifecyclePromise && !stopPromise && !quitting && !quitPrompt && !workspaceDirectoryPending,
+    confirmInstall: async update => {
+      const window = showConnection();
+      const confirmation = await dialog.showMessageBox(window, {
+        type: "warning", title: "Restart and install desktop update?",
+        message: `Install ${update.targetVersion} and restart Dovspace?`,
+        detail: `Current version: ${update.currentVersion}. Back up important workspace data first. Installation replaces application files, not workspace data; there is no automatic migration or rollback.${update.testPackage ? " This is an UNSIGNED Windows PREVIEW TEST package, not a trusted signed production release." : ""}`,
+        buttons: ["Keep current version", "Continue to safe shutdown"], defaultId: 0, cancelId: 0,
+      });
+      if (confirmation.response !== 1) return false;
+      return confirmLocalStop("Restarting to install the update stops local background tasks and PostgreSQL.");
+    },
+    stop: async () => {
+      await stopConnection();
+      if (localRunning()) throw new Error("Owned local services are still running. Update installation is blocked.");
+      if (connectionWindow && !connectionWindow.isDestroyed()) rememberWindow("connection", connectionWindow);
+      await windowStateWrite;
+      publish({ status: "idle", address: "", runtime: "", message: "Local services stopped for the confirmed update. If installation fails, reconnect manually.", error: "" });
+    },
+    install: async startInstaller => {
+      updateInstalling = true;
+      quitting = true;
+      allowQuit = true;
+      try {
+        startInstaller();
+        // Revoke quit authorization on synchronous/next-turn startup errors
+        // before electron-updater's scheduled application quit.
+        await new Promise(resolve => setImmediate(resolve));
+        if (!updateInstalling) throw new Error("The installer could not start. The application remains open.");
+      } catch (cause) {
+        updateInstalling = false;
+        quitting = false;
+        allowQuit = false;
+        throw cause;
+      }
+    },
+    onState: update => {
+      if (update.status === "error" && updateInstalling) {
+        updateInstalling = false;
+        quitting = false;
+        allowQuit = false;
+        showConnection();
+      }
+      publish({});
+    },
+  });
+}
+
 function installMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: "工作区", submenu: [
       { label: "打开工作区", accelerator: "CmdOrCtrl+Shift+O", click: () => void reopenWorkspace() },
       { label: "连接设置…", accelerator: "CmdOrCtrl+,", click: showConnection },
+      { label: "检查桌面更新…", click: showConnection },
       { type: "separator" },
       { label: "退出 Dovspace…", accelerator: "CmdOrCtrl+Q", click: () => void requestQuit() },
     ] },
@@ -769,6 +843,18 @@ async function desktopAction(event, input) {
   if (!trustedConnection(event)) throw new Error("Desktop controls are available only in the trusted top-level connection window.");
   if (!input || typeof input !== "object") throw new Error("Invalid desktop action.");
   if (lifecyclePromise && input.action !== "state") throw new Error("Wait for the installed lifecycle operation to finish safely.");
+  if (typeof input.action === "string" && input.action.startsWith("update-")) {
+    if (Object.keys(input).length !== 1 || !desktopUpdater) throw new Error("Invalid fixed desktop update action.");
+    switch (input.action) {
+      case "update-check": await desktopUpdater.check(); break;
+      case "update-download": await desktopUpdater.download(); break;
+      case "update-cancel": desktopUpdater.cancel(); break;
+      case "update-install": await desktopUpdater.restartAndInstall(); break;
+      default: throw new Error("Unknown desktop update action.");
+    }
+    return snapshot();
+  }
+  if (desktopUpdater?.busy && input.action !== "state") throw new Error("Wait for the update operation to finish safely.");
   switch (input.action) {
     case "state": return snapshot();
     case "connect": return connect(input.configuration);
@@ -788,7 +874,7 @@ async function desktopAction(event, input) {
     case "directory": return directory(input.field);
     case "reveal": return reveal(input.field);
     case "node": {
-      if (app.isPackaged || changingConnection || maintenancePromise || quitting) throw new Error("Packaged workspaces use only the bundled Node runtime.");
+      if (app.isPackaged || changingConnection || maintenancePromise || lifecyclePromise || desktopUpdater?.busy || quitting) throw new Error("Packaged workspaces use only the bundled Node runtime.");
       const result = await dialog.showOpenDialog(connectionWindow, { title: "Choose an explicit development Node 24 executable", properties: ["openFile"] });
       return result.canceled ? null : result.filePaths[0];
     }
@@ -801,6 +887,7 @@ async function desktopAction(event, input) {
 async function dispatchLifecycle(context) {
   const rejection = lifecyclePromise ? "Another packaged lifecycle operation is in progress."
     : maintenancePromise ? "Wait for the encrypted backup or restore to finish before maintenance."
+    : desktopUpdater?.busy ? "Wait for the desktop update operation before installed maintenance."
     : quitting || quitPrompt ? "Wait for the current quit confirmation or shutdown to finish."
     : changingConnection && !localServer?.startPromise ? "Wait for the current connection change or native dialog to finish."
     : context.controllerUserDataDir !== app.getPath("userData") ? "Lifecycle requests cannot cross application user-data instances." : "";
@@ -868,7 +955,7 @@ else {
   app.on("activate", () => { if (!lifecycleContext && app.isReady() && configuration) void reopenWorkspace(); });
   app.on("window-all-closed", () => { if (!lifecycleContext && !quitting && app.isReady() && configuration) showConnection(); });
   app.on("before-quit", event => { if (!allowQuit) { event.preventDefault(); void requestQuit(); } });
-  for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => void finishQuit());
+  for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => void requestQuit());
   void app.whenReady().then(async () => {
     settingsFile = join(app.getPath("userData"), "connection.json");
     windowStateFile = join(app.getPath("userData"), "window-state.json");
@@ -933,9 +1020,11 @@ else {
     nativeTheme.on("updated", () => {
       applyTitleBarTheme(connectionWindow, nativeTheme.shouldUseDarkColors ? "dark" : "light");
     });
+    await initializeUpdater();
     showConnection();
     if (configError) publish({ status: "error", error: configError });
     else if (launch.mode) await connect(configuration);
+    if (desktopUpdater?.snapshot().enabled) void desktopUpdater.check().catch(cause => publish({ error: safeDesktopMessage(cause) }));
   }).catch(cause => {
     dialog.showErrorBox("Desktop startup failed", safeDesktopMessage(cause));
     void finishQuit();

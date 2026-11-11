@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { assertExactDeliveryDirectory, configuredArtifactNames, requiredDeliveryMaterials, validateDeliveryAssets } from "./delivery-assets.mjs";
+import { assertExactDeliveryDirectory, configuredArtifactNames, deliveryMaterialNames, validateDeliveryAssets } from "./delivery-assets.mjs";
 import { comparableFinalArtifactReport, peContentRecord, validateWindowsSignature, verifyFinalSignatures, windowsSignerIdentity } from "./signatures.mjs";
 import { requireCleanVulnerabilityReport, scanSBOM } from "./osv.mjs";
 import { finalDmgNotarizationOptions, notarizeFinalDmg } from "./mac-notarization.mjs";
@@ -126,7 +126,8 @@ test("OSV blocks an unwithdrawn advisory even without severity and emits actiona
   assert.throws(() => requireCleanVulnerabilityReport(tampered), /gate failed/);
 });
 test("asset policy rejects arbitrary extras, missing native target and duplicate material names", async (t) => {
-  const manifest = { version: "0.1.0", target: "win32-x64", signing: "unsigned", artifacts: [], materials: requiredDeliveryMaterials.map((path) => ({ path })) };
+  const manifest = { version: "0.1.0", target: "win32-x64", signing: "unsigned", artifacts: [], materials: [] };
+  manifest.materials = deliveryMaterialNames(manifest).map((path) => ({ path }));
   const name = configuredArtifactNames(manifest).required[0]; manifest.artifacts.push({ path: name });
   const names = validateDeliveryAssets(manifest);
   const root = await realpath(await mkdtemp(join(tmpdir(), "pm-delivery-assets-"))); t.after(() => rm(root, { recursive: true, force: true }));

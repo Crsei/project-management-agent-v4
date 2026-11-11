@@ -23,6 +23,7 @@ import { createInstallationManifest } from "../src/uninstall.mjs";
 import { HOST_SOURCE_COMMIT, HOST_UPSTREAM_VERSION, verifyHost } from "../../server/agent/scripts/cc-switch.mjs";
 import { createReceiptFixture } from "./install-e2e/fixtures.mjs";
 import { INSTALL_E2E_HARNESS } from "./install-e2e/evidence.mjs";
+import { desktopUpdatePolicy } from "../src/update-policy.mjs";
 
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const execute = promisify(execFile);
@@ -121,6 +122,11 @@ for (const gitBacked of [false, true]) {
     await mkdir(join(resources, "workspace-runtime/apps/web/dist/fonts"), { recursive: true });
     await put(join(root, "app"), "LICENSE.electron.txt", "synthetic Electron legal fixture\n");
     await put(join(root, "app"), "LICENSES.chromium.html", "synthetic Chromium legal fixture\n");
+    await put(resources, "desktop-install-stamp.json", JSON.stringify(createInstallStamp({
+      commit: source.commit, source: { sha256: source.sha256, dirty: source.dirty },
+      version: "0.1.0", platform: "win32", arch: "x64", distribution: "nsis", signing: "unsigned",
+      compatibility: { dataSchema: 1, postgresMajor: 16, migrationsSha256: "d".repeat(64) },
+    })));
     const output = join(root, "materials");
     await mkdir(output);
     const artifactName = "PM-Agent-v4-0.1.0-win-x64-unsigned.exe";
@@ -560,11 +566,15 @@ async function delivery(root, extraSources = {}) {
   await put(output, "desktop-source.json", JSON.stringify(source));
   await createTar({ cwd: input, gzip: true, portable: true, file: join(output, "desktop-source.tar.gz") }, [...source.files.map((file) => file.path), "desktop-source.json"]);
   await put(output, "desktop-legal.tar.gz", "unit legal archive bytes");
+  const installStamp = createInstallStamp({ commit: source.commit, version: "0.1.0", platform: "win32", arch: "x64", distribution: "nsis", signing: "unsigned",
+    source: { sha256: source.sha256, dirty: source.dirty }, compatibility: { dataSchema: 1, postgresMajor: 16, migrationsSha256: "c".repeat(64) } });
+  await put(output, "desktop-install-stamp-win32-x64.json", JSON.stringify(installStamp));
   const manifest = {
     schemaVersion: 3, version: "0.1.0", target: "win32-x64", signing: "unsigned",
     source: { commit: source.commit, dirty: source.dirty, sha256: source.sha256 },
+    installStamp, updates: desktopUpdatePolicy({ version: "0.1.0", platform: "win32", signing: "unsigned" }),
     artifacts: [await fileRecord(output, "PM-Agent-v4-0.1.0-win-x64-unsigned.exe")],
-    materials: await Promise.all(["desktop-source.json", "desktop-source.tar.gz", "desktop-legal.tar.gz"].map((name) => fileRecord(output, name))),
+    materials: await Promise.all(["desktop-source.json", "desktop-source.tar.gz", "desktop-legal.tar.gz", "desktop-install-stamp-win32-x64.json"].map((name) => fileRecord(output, name))),
     toolchain: { electron: "42.0.0" },
   };
   await scanFixture(output, manifest);
@@ -610,22 +620,27 @@ async function preparedRuntimeFixture(resources, { cliAlias = false } = {}) {
   return { runtime, manifest };
 }
 
+// Model afterPack's public installation modes without changing inventory bytes.
+async function installationModes(directory) {
+  await chmod(directory, 0o755);
+  for (const name of await readdir(directory)) {
+    const path = join(directory, name), info = await lstat(path);
+    if (info.isDirectory()) await installationModes(path);
+    else if (info.isFile()) await chmod(path, info.mode & 0o111 ? 0o755 : 0o644);
+    else throw new Error("Final payload fixture must contain real owned resources.");
+  }
+}
+
 // A real two-level 7z container fixture exercises member listing/extraction. It
 // is deliberately NOT an executable NSIS installer or native execution evidence.
 async function sealPayload(output, manifest, payloadRoot = join(dirname(output), "payload")) {
-  // Model the real afterPack workspace permission transition before sealing.
-  async function installationModes(directory) {
-    await chmod(directory, 0o755);
-    for (const name of await readdir(directory)) {
-      const path = join(directory, name), info = await lstat(path);
-      if (info.isDirectory()) await installationModes(path);
-      else if (info.isFile()) await chmod(path, info.mode & 0o111 ? 0o755 : 0o644);
-      else throw new Error("Final payload fixture must contain real owned resources.");
-    }
-  }
   await installationModes(join(payloadRoot, "resources/workspace-runtime"));
   const scratch = join(dirname(output), "archive-fixture");
   const stamp = JSON.parse(await readFile(join(payloadRoot, "resources/desktop-install-stamp.json"), "utf8"));
+  manifest.installStamp = stamp;
+  await put(output, "desktop-install-stamp-win32-x64.json", JSON.stringify(stamp));
+  manifest.materials = manifest.materials.filter((file) => file.path !== "desktop-install-stamp-win32-x64.json");
+  manifest.materials.push(await fileRecord(output, "desktop-install-stamp-win32-x64.json"));
   const ownership = await createInstallationManifest(payloadRoot, stamp);
   // This real archive fixture ships resources only, not its source ASAR directory.
   ownership.files = ownership.files.filter((file) => file.path.startsWith("resources/"));
@@ -696,6 +711,7 @@ test("shipped SBOM accepts the execution-only runtime without npm directories an
   const root = await temporary(t);
   const resources = await archive(root, {});
   const prepared = await preparedRuntimeFixture(resources);
+  await installationModes(join(resources, "workspace-runtime"));
   const inputs = { target: "win32-x64", version: "0.1.0", electronVersion: "40.0.0",
     source: { commit: "a".repeat(40), dirty: false, sha256: "b".repeat(64) },
     artifacts: [{ path: "fixture.exe", bytes: 1, sha256: "c".repeat(64) }] };
@@ -712,7 +728,7 @@ test("shipped SBOM accepts the execution-only runtime without npm directories an
 test("delivery checksums cover every material and manifest without self-reference", async (t) => {
   const { output, manifest } = await delivery(await temporary(t));
   const checked = await verifyDeliveryFiles(output);
-  assert.equal(checked.names.length, 10);
+  assert.equal(checked.names.length, 11);
   const checksums = await readFile(join(output, "SHA256SUMS"), "utf8");
   assert.ok(checksums.includes("  desktop-package.json\n"));
   assert.ok(!checksums.includes("  SHA256SUMS\n"));
@@ -722,7 +738,25 @@ test("delivery checksums cover every material and manifest without self-referenc
   await assert.rejects(verifyDeliveryFiles(output), /hash\/size mismatch/);
 });
 
-test("delivery refuses partial uploads, updater metadata, unknown archives and path escapes", async (t) => {
+test("public candidate install stamp is checksum-bound and cannot detach from release source identity", async (t) => {
+  const { output, manifest } = await delivery(await temporary(t));
+  const name = "desktop-install-stamp-win32-x64.json";
+  const path = join(output, name);
+  assert.ok((await readFile(join(output, "SHA256SUMS"), "utf8")).includes(`  ${name}\n`));
+  const original = await readFile(path, "utf8");
+  const stamp = JSON.parse(original);
+  stamp.source.sha256 = "f".repeat(64);
+  await put(output, name, JSON.stringify(stamp));
+  await assert.rejects(verifyDeliveryFiles(output), /hash\/size mismatch/);
+  manifest.materials = manifest.materials.map((file) => file.path === name ? { ...file } : file);
+  manifest.materials[manifest.materials.findIndex((file) => file.path === name)] = await fileRecord(output, name);
+  manifest.installStamp = stamp;
+  await refreshVerification(output, manifest, { schemaVersion: 1, nativeSmoke: { status: "not-run" }, published: false });
+  await assert.rejects(verifyDeliveryFiles(output), /install stamp.*source/);
+  await put(output, name, original);
+});
+
+test("delivery refuses partial uploads, unconfigured updater metadata, unknown archives and path escapes", async (t) => {
   const { output, manifest } = await delivery(await temporary(t));
   await put(output, "latest.yml", "version: 0.1.0\n");
   await assert.rejects(verifyDeliveryFiles(output), /update feed/);

@@ -11,7 +11,7 @@ export function createInstallStamp(input) {
     formatVersion: 1,
     appId: "com.projectmanagementagent.v4",
     payload: "bundled",
-    updateMechanism: "none",
+    updateMechanism: "github-releases",
     ownership: { installation: input.platform === "darwin" || input.distribution === "dmg" ? "os-managed" : "self", scope: "per-user" },
     runtime: { node: NODE_VERSION, postgres: POSTGRES_VERSION },
     compatibility: input.compatibility,

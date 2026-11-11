@@ -188,7 +188,11 @@ function Wait-Controllers($Processes) {
 }
 function Get-Stamp {
   $stamp = Read-Json ($InstallRoot+'\resources\desktop-install-stamp.json')
-  if ($stamp.formatVersion -ne 1 -or $stamp.appId -cne 'com.projectmanagementagent.v4' -or $stamp.ownership.installation -cne 'self' -or $stamp.ownership.scope -cne 'per-user' -or $stamp.platform -cne 'win32' -or $stamp.arch -cne 'x64' -or $stamp.updateMechanism -cne 'none' -or $stamp.payload -cne 'bundled' -or $stamp.commit -notmatch '^[a-f0-9]{40}$' -or $stamp.source.sha256 -notmatch '^[a-f0-9]{64}$' -or $stamp.compatibility.dataSchema -ne 1 -or $stamp.compatibility.postgresMajor -ne 16) { throw 'Unsupported, non-owned, or rollback-incompatible install stamp' }
+  # A manual first-updater install may read the immutable historical 0.1.0
+  # identity. Its own installed controller performs the stop; keep its bytes
+  # intact for exact ownership/rollback records. This never enables an old feed.
+  $historicalPreinstall = $Stage -ceq 'prepare-install' -and $stamp.version -ceq '0.1.0' -and $stamp.distribution -ceq 'nsis' -and $stamp.signing -ceq 'unsigned' -and $stamp.updateMechanism -ceq 'none'
+  if ($stamp.formatVersion -ne 1 -or $stamp.appId -cne 'com.projectmanagementagent.v4' -or $stamp.ownership.installation -cne 'self' -or $stamp.ownership.scope -cne 'per-user' -or $stamp.platform -cne 'win32' -or $stamp.arch -cne 'x64' -or ($stamp.updateMechanism -cne 'github-releases' -and -not $historicalPreinstall) -or $stamp.payload -cne 'bundled' -or $stamp.commit -notmatch '^[a-f0-9]{40}$' -or $stamp.source.sha256 -notmatch '^[a-f0-9]{64}$' -or $stamp.compatibility.dataSchema -ne 1 -or $stamp.compatibility.postgresMajor -ne 16) { throw 'Unsupported, non-owned, or rollback-incompatible install stamp' }
   if($stamp.compatibility.migrationsSha256 -notmatch '^[a-f0-9]{64}$') {throw 'Missing exact data-mutation compatibility fingerprint'}
   return $stamp
 }

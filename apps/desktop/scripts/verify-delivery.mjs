@@ -5,7 +5,7 @@ import { inspectFinalArtifacts, verifyInstalledApplication } from "./final-artif
 import { fileRecord, refreshVerification, validateSource, verifyCorrespondingSourceArchive } from "./release-materials.mjs";
 import { inside, requireNativeTarget, requirePinnedNode } from "./runtime-manifest.mjs";
 import { run } from "./stage-workspace.mjs";
-import { assertExactDeliveryDirectory, nativeReceiptMaterials, validateDeliveryAssets } from "./delivery-assets.mjs";
+import { assertExactDeliveryDirectory, nativeReceiptMaterials, validateDeliveryAssets, verifyUpdateDelivery } from "./delivery-assets.mjs";
 import { importNativeReceipt, verifyNativeReceiptMaterials } from "./native-receipt.mjs";
 import { inspectShippedSBOM } from "./sbom.mjs";
 import { requireCleanVulnerabilityReport, vulnerabilitySARIF } from "./osv.mjs";
@@ -27,6 +27,7 @@ export async function verifyDeliveryFiles(output) {
     if (expected.sha256 !== actual.sha256 || expected.bytes !== actual.bytes)
       throw new Error(`Delivery file hash/size mismatch: ${expected.path}`);
   }
+  await verifyUpdateDelivery(output, manifest);
   const source = JSON.parse(await readFile(join(output, "desktop-source.json"), "utf8"));
   if (source.commit !== manifest.source.commit || source.dirty !== manifest.source.dirty || source.sha256 !== manifest.source.sha256)
     throw new Error("Delivery corresponding-source identity mismatch.");

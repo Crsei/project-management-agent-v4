@@ -131,12 +131,26 @@ try {
   const records = [];
   const delivered = new Set();
   for (const path of artifacts) {
-    if (!isAbsolute(path) || !inside(builderOutput, path) || dirname(path) !== builderOutput || !/\.(?:exe|dmg|zip|blockmap)$/.test(path))
-      throw new Error("Builder returned an unexpected artifact path or unconfigured update metadata.");
-    delivered.add(basename(path));
+    const name = basename(path);
+    const configured = configuredArtifactNames({ version: manifest.version, target, signing: mode });
+    if (!isAbsolute(path) || !inside(builderOutput, path) || dirname(path) !== builderOutput || ![...configured.allowed, ...(configured.update.feedName ? [configured.update.builderFeedName] : [])].includes(name))
+      throw new Error("Builder returned an unexpected artifact path outside the exact native/updater allowlist.");
+    delivered.add(name);
   }
   // Builder scratch trees/debug logs never enter the delivery directory.
   const configured = configuredArtifactNames({ version: manifest.version, target, signing: mode });
+  if (configured.update.feedName && configured.update.feedName !== configured.update.builderFeedName) {
+    await copyFile(join(builderOutput, configured.update.builderFeedName), join(builderOutput, configured.update.feedName), constants.COPYFILE_EXCL);
+    delivered.delete(configured.update.builderFeedName);
+    delivered.add(configured.update.feedName);
+  }
+  // Metadata may be emitted by a separate builder completion event. Only the
+  // configured channel/target feed is admitted; arbitrary YAML is never copied.
+  for (const name of await readdir(builderOutput)) {
+    if (/\.ya?ml$/i.test(name) && ![...(configured.update.feedName ? [configured.update.builderFeedName, configured.update.feedName] : []), "builder-debug.yml", "builder-effective-config.yaml"].includes(name))
+      throw new Error("Builder generated unexpected desktop updater metadata.");
+    if (name === configured.update.feedName) delivered.add(name);
+  }
   for (const name of await readdir(builderOutput)) if (name.endsWith(".blockmap")) delivered.add(name);
   if (configured.required.some((name) => !delivered.has(name)) || [...delivered].some((name) => !configured.allowed.includes(name)))
     throw new Error("Builder output differs from the exact configured final artifact allowlist.");
@@ -184,7 +198,6 @@ try {
       ...(signer ? { signer } : {}),
       installStamp,
       artifacts: records,
-      updates: "Manual installer replacement only; managed data is outside installation and is preserved. No update feed or publishing is configured.",
     },
     verification: {
       schemaVersion: 1, generatedAt: new Date().toISOString(), target, signing: mode,

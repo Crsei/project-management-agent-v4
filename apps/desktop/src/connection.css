@@ -1013,3 +1013,22 @@ body[data-view="maintenance"] #manage-workspace {
     border-color: ButtonText;
   }
 }
+
+.desktop-updates {
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.desktop-updates > .muted, #update-detail {
+  font-size: 12px;
+}
+.update-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.desktop-updates progress {
+  width: 100%;
+}

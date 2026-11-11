@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { assertSelfOwnedInstall, readInstallStamp, validateInstallStamp } from "./install-stamp.mjs";
 
-const sampleStamp = () => ({ formatVersion: 1, appId: "com.projectmanagementagent.v4", commit: "a".repeat(40), version: "4.0.0", platform: "win32", arch: "x64", distribution: "nsis", payload: "bundled", updateMechanism: "none", ownership: { installation: "self", scope: "per-user" }, source: { sha256: "b".repeat(64), dirty: true }, signing: "unsigned", runtime: { node: "24.21.0", postgres: "16.15" }, compatibility: { dataSchema: 1, postgresMajor: 16, migrationsSha256: "c".repeat(64) } });
+const sampleStamp = () => ({ formatVersion: 1, appId: "com.projectmanagementagent.v4", commit: "a".repeat(40), version: "4.0.0", platform: "win32", arch: "x64", distribution: "nsis", payload: "bundled", updateMechanism: "github-releases", ownership: { installation: "self", scope: "per-user" }, source: { sha256: "b".repeat(64), dirty: true }, signing: "unsigned", runtime: { node: "24.21.0", postgres: "16.15" }, compatibility: { dataSchema: 1, postgresMajor: 16, migrationsSha256: "c".repeat(64) } });
 const context = { platform: "win32", arch: "x64", version: "4.0.0" };
 
 test("runtime installation identity is validated, copied and deeply frozen", () => {
@@ -22,6 +22,7 @@ test("runtime installation identity is validated, copied and deeply frozen", () 
 
 test("unsupported or tampered identity refuses matching runtime and self-removal", () => {
   for (const change of [{ commit: "HEAD" }, { commit: ["a".repeat(40)] }, { source: { sha256: "b".repeat(64) } }, { runtime: { node: "24.21.0", postgres: "17.0" } }, { compatibility: { dataSchema: 1, postgresMajor: 16 } }, { compatibility: { ...sampleStamp().compatibility, migrationsSha256: "unknown" } }, { updateMechanism: "unsigned-feed" }, { platform: "darwin" }, { arch: "arm64" }, { version: "4.0.1" }, { ownership: { installation: "self", scope: "per-machine" } }, { extraAuthority: true }]) assert.throws(() => validateInstallStamp({ ...sampleStamp(), ...change }, context));
+  assert.throws(() => validateInstallStamp({ ...sampleStamp(), updateMechanism: "none" }, context));
   const managed = validateInstallStamp({ ...sampleStamp(), distribution: "os-managed", ownership: { installation: "os-managed", scope: "per-user" } }, context);
   assert.throws(() => assertSelfOwnedInstall(managed), /Windows Settings.*package manager/);
   const mac = { ...sampleStamp(), platform: "darwin", arch: "arm64", distribution: "dmg", ownership: { installation: "os-managed", scope: "per-user" } };

@@ -41,6 +41,19 @@ Claude CLI 由用户在服务所在机器安装并在 Provider 的 Runtime binar
 - Agent Chat 本地工作区可用原生“选择文件夹”。桌面启动 Agent 时显式传入用户 Home、受管项目目录与配置项目父目录作为允许根；其他路径仍需操作者配置，选择按钮不扩大服务端授权。
 - 新安装的 Codex／Claude 卡片未启用且不代表已认证；启用、原生检查、模型选择分别进行。已有配置保留。Codex 重连仍核验本次操作确认的原生 Home；同目录路径别名必须由文件系统身份确认，不跳过不同 Home 或目录替换检查。
 
+## 应用内版本更新
+
+安装了更新客户端的桌面包从固定公开仓库 [Crsei/project-management-agent-v4](https://github.com/Crsei/project-management-agent-v4/releases) 检查更新，不读取操作者 GitHub token，也不接受页面提供的自定义发行地址。连接窗口的「桌面应用更新」显示当前／目标版本、通道、进度和错误；工作区菜单「检查桌面更新…」打开同一连接窗口。普通浏览器工作台没有本机安装权限。
+
+- 普通桌面启动时自动检查一次，也可点击「检查更新」；生命周期维护 CLI 不发起更新检查。只有真实的无更新结果才显示最新，网络／元数据失败保留错误。
+- `X.Y.Z-preview.N` 只接受 `preview` 通道，稳定版只接受稳定版本；未知预发布通道拒绝。不降级、不跨通道，GitHub 草稿不是可见更新。旧 `0.1.0` 包没有客户端，必须先手动安装包含更新能力的基线版本。
+- 点击「下载更新」才下载完整安装器，可取消下载；普通退出不会自动安装。校验上游 SHA512、发行清单 SHA256／大小、候选 install stamp、准确 tag/commit、平台／签名模式和数据兼容指纹。
+- 点击「重启并安装…」后再次核对发行材料，并要求明确安装／停止本地任务确认、未保存草稿处理、浏览器存储刷新及受管服务／PostgreSQL 正常停机。取消、备份／连接／维护冲突、兼容性不符或停机失败均不启动安装器；不强杀进程，不自动迁移数据库或承诺降级恢复。安装器启动失败时显示错误，已经停止的服务需手动重连。
+- Windows unsigned preview 明确标识为未签名测试包；signed 包保留原生验签。macOS 必须是 signed、公证的完整发行包；unsigned/ad-hoc、unsigned 稳定版、开发运行和 OS-managed 分发明确不可用，不关闭签名校验。Rosetta 下的 x64 应用遵循更新器选择原生 arm64 候选，并核对该目标的独立安装身份。
+- 更新会停止本地任务和终端，先备份重要数据。会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口，不能承诺运行中的会话／终端无损跨重启。
+
+构建、draft/publish 门禁和两版本测试见[发布指南](release.md)及[双版本计划](../reference/desktop-github-updates-plan.zh.md)。功能已实现不等于公开更新可用；发行许可、签名和实际平台验收仍分开记录。
+
 **备份与恢复**
 
 通过连接窗口底部的「管理本地数据」进入独立管理页面，使用「返回连接」回到引导。仅在连接已断开、本地服务停止后允许备份/恢复；维护期间禁用切换与重复操作，结果和错误留在管理页供核对。恢复成功后仍需手动连接，不自动进入工作台。
@@ -68,7 +81,7 @@ pnpm --filter @agent-workspace/desktop package
 
 运行时下载固定版本并校验归档及文件清单，保留完整 PostgreSQL 客户端、库、share 与许可证；不在应用启动时下载。代理环境需要为 Node 设置 `NODE_USE_ENV_PROXY=1`。开发调试另需 `pnpm --filter @agent-workspace/desktop runtime:install`，再执行 `pnpm build:v4 && pnpm build:desktop` 和 `pnpm --filter @agent-workspace/desktop start`；Electron 安装脚本不会在依赖安装时自动执行。
 
-`package` 明确生成 unsigned 测试包；macOS ad-hoc 不等于 Developer ID 签名或公证。`package:signed` 是独立显式模式，需提供证书及 macOS 公证材料，缺失时失败而不降级；本轮没有选择或配置签名。默认输出 `apps/desktop/releases/<version>/<platform>-<arch>/<unsigned|signed>/`，`desktop-package.json` 记录完整 Git commit、公开源码内容摘要/dirty 身份、实际版本、runtime 来源、产物与材料 SHA256/bytes。源码、许可材料存在不表示正式发布获准；没有自动更新源，也不自动发布 GitHub Release。
+`package` 明确生成 unsigned 测试包；macOS ad-hoc 不等于 Developer ID 签名或公证。`package:signed` 是独立显式模式，需提供证书及 macOS 公证材料，缺失时失败而不降级。默认输出 `apps/desktop/releases/<version>/<platform>-<arch>/<unsigned|signed>/`，`desktop-package.json` 记录完整 Git commit、公开源码内容摘要/dirty 身份、实际版本、runtime 来源、更新策略、产物与材料 SHA256/bytes。构建可生成受支持通道的更新材料，但保持 `publish: "never"`；仅显式授权的 GitHub 流水线可在全部门禁通过后发布。
 
 Windows signed 模式还须设置准确的 `PM_DESKTOP_WINDOWS_SIGNER_SUBJECT` 与证书 SHA256 `PM_DESKTOP_WINDOWS_SIGNER_SHA256`；最终安装器、实际交付的 `.exe/.dll/.node`、ASAR 原生成员及独立嵌入的安装后卸载器均验签。NSIS 私有插件由外层安装器签名与精确文件摘要覆盖，不要求另签成应用发布者。macOS 使用 `PM_DESKTOP_MAC_TEAM_ID`（或 `APPLE_TEAM_ID`）核对身份；最终 DMG 单独公证、staple 后才记录摘要，检查 `codesign --verify --deep --strict`、`stapler validate` 与 `spctl`。工具、身份或凭据缺失均失败；源码路径存在不代表原生签名已执行。
 
@@ -76,7 +89,7 @@ Windows 离线依赖预检按 PE 导入表的模块名解析，不假定导入�
 
 每组交付包含安装器、`desktop-package.json`、`desktop-verification.json`、`SHA256SUMS`、`desktop-source.tar.gz`、`desktop-source.json`、`desktop-legal.tar.gz`，以及 manifest 明确列出的辅助产物。对应源码保留已审阅本地改动、构建脚本及根 `turbo.json`；Git 与已审阅的 gitless 快照均将该配置的准确字节纳入清单和源码归档，构建后修改或删除会使源码复核失败。不含 `.env*`、`.local`、Home/凭据、内部历史计划、依赖缓存或旧产物。legal 材料来自最终成品，包括 runtime/Electron/Chromium 的原始许可；它是材料收集而不是第三方分发授权。具体上游 stable/nightly 实际 assets、采用/不采用理由、授权及回滚边界见 [发布设计](../reference/desktop-release-alignment-2026-11-08.zh.md)。
 
-schema 3 交付另含 `desktop-sbom.cdx.json`、`desktop-osv.json`、`desktop-vulnerabilities.sarif`。SBOM 按实际 PM／Agent／CC Switch host／Web／Electron／Node／PostgreSQL 闭包记录，不把整个开发依赖树当成成品。无版本的随包源码组件保留封存来源，标记为未执行注册表漏洞查询，不伪造版本或 PURL。OSV 查询失败与发现漏洞分别失败关闭；未撤回公告阻止交付。Node／PostgreSQL 的 OSS-Fuzz 映射不等于完整厂商 CVE 覆盖。资产集合、逐文件摘要、源码与 legal 必须完全对账，未知文件、缺文件和 updater feed 均拒绝；维持 `publish:null`／`publish:"never"`。
+schema 3 交付另含 `desktop-sbom.cdx.json`、`desktop-osv.json`、`desktop-vulnerabilities.sarif`，以及目标独立的 `desktop-install-stamp-<platform>-<arch>.json`。SBOM 按实际 PM／Agent／CC Switch host／Web／Electron／Node／PostgreSQL 闭包记录，不把整个开发依赖树当成成品。无版本的随包源码组件保留封存来源，标记为未执行注册表漏洞查询，不伪造版本或 PURL。OSV 查询失败与发现漏洞分别失败关闭；未撤回公告阻止交付。Node／PostgreSQL 的 OSS-Fuzz 映射不等于完整厂商 CVE 覆盖。资产集合、逐文件摘要、源码与 legal 必须完全对账；只允许准确通道／目标的 feed 和 blockmap，校验版本、完整安装器大小／摘要及候选安装身份，未知 YAML、缺文件或跨目标材料均拒绝。
 
 桌面打包通过 [`vite.desktop.config.mjs`](../../apps/web/vite.desktop.config.mjs) 合并原有 Web 配置，保留完整 CSS 生成、TypeScript 检查及 Vite 构建，额外生成 `desktop-bundle-inputs.json`，记录实际随包 npm 模块与输出摘要。普通 Web 构建配置和 OpenHands 已封存的 host inputs 不变；不得为打包跳过来源完整性检查。维护服务的桌面版本元数据另由打包调用方复制，最终成品必须与发行版本一致。
 
@@ -130,7 +143,7 @@ macOS 签名工具使用[固定补丁](../../patches/@electron__osx-sign@1.3.3.p
 
 ## Windows 安装文件数与卸载优化
 
-Windows NSIS 维护仅支持 per-user，拒绝 `/allusers` 和通用 `--delete-app-data`。构建期写入不可变 install stamp，绑定 commit、dirty 源码摘要、分发形式、runtime、无更新策略、所有权及数据兼容指纹；运行时只读冻结。只有自有、登记和完整清单匹配的安装可删除；macOS `.app` 由 Finder／操作系统管理，自动四模式矩阵不适用。
+Windows NSIS 维护仅支持 per-user，拒绝 `/allusers` 和通用 `--delete-app-data`。构建期写入不可变 install stamp，绑定 commit、dirty 源码摘要、分发形式、runtime、`github-releases` 更新机制、所有权及数据兼容指纹；运行时只读冻结。旧 unsigned `0.1.0` NSIS 的 `none` 身份仅在手动升级准备阶段按准确历史身份处理，保留旧字节／所有权与兼容性门禁，不作为新应用的更新策略。只有自有、登记和完整清单匹配的安装可删除；macOS `.app` 由 Finder／操作系统管理，自动四模式矩阵不适用。
 
 | 模式 | 安装代码 | 自有实例／客户端状态 | 始终保留 |
 | --- | --- | --- | --- |

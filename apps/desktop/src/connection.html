@@ -147,6 +147,23 @@
         <section class="maintenance-feedback" aria-label="数据管理状态"><p id="maintenance-status" role="status" aria-live="polite">正在读取本地工作台状态，备份与恢复暂不可用。</p><p id="maintenance-error" class="error-message" role="alert" hidden></p><details id="maintenance-diagnostics" class="diagnostics" hidden><summary>查看诊断与操作结果</summary><pre id="maintenance-details"></pre></details></section>
       </section>
 
+      <section class="desktop-updates" aria-labelledby="updates-title">
+        <div class="section-heading"><h2 id="updates-title">桌面应用更新</h2><p id="update-versions">正在读取当前版本…</p></div>
+        <p id="update-status" role="status" aria-live="polite">正在读取更新状态…</p>
+        <p id="update-test-warning" class="notice" hidden>此 Windows 预览版为未签名测试包，不是可信的正式签名生产版本。</p>
+        <p class="muted">仅从固定的 GitHub Releases 仓库检查同一通道。下载不会自动安装；重启安装须逐次确认、通过草稿保护并正常停止本地服务。请先备份重要数据，不提供自动数据迁移或回滚。</p>
+        <progress id="update-progress" max="100" aria-label="更新下载进度" hidden></progress>
+        <p id="update-transfer" class="mono" hidden></p>
+        <p id="update-error" class="error-message" role="alert" hidden></p>
+        <p id="update-detail" class="muted"></p>
+        <div class="actions update-actions">
+          <button type="button" id="update-check" disabled>检查更新</button>
+          <button type="button" id="update-download" disabled>下载更新</button>
+          <button type="button" id="update-cancel" hidden>取消下载</button>
+          <button class="primary" type="button" id="update-install" disabled>重启并安装…</button>
+        </div>
+      </section>
+
       <footer class="app-footer">
         <div class="lifecycle-notes"><p><strong>关闭工作台窗口</strong>不会停止本地任务；连接窗口会保留。重新连接会保留待确认的命令记录，不会重放结果不明的操作。</p><p><strong>退出应用</strong>将停止本地服务、PostgreSQL 与 Worker，本地定时任务也会停止。</p></div>
         <div class="actions footer-actions"><button type="button" id="manage-workspace">管理本地数据</button><button class="quiet" type="button" id="quit">退出应用…</button></div>

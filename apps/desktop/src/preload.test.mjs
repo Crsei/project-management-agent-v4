@@ -53,6 +53,14 @@ test("Quit forwards only the fixed action and no renderer-selected window or pro
   assert.equal(JSON.stringify(invocations[0].input), JSON.stringify({ action: "quit" }));
 });
 
+test("update bridge accepts only fixed actions and strips URLs, tokens, paths and install flags", async () => {
+  const { bridge, invocations } = await preload();
+  for (const action of ["update-check", "update-download", "update-cancel", "update-install"])
+    await bridge.invoke(action, { url: "https://untrusted.invalid/update.yml", token: "never-forward", path: "/arbitrary/installer", force: true, channel: "latest" });
+  assert.deepEqual(invocations.map(value => JSON.parse(JSON.stringify(value))), ["update-check", "update-download", "update-cancel", "update-install"].map(action => ({ channel: "desktop:action", input: { action } })));
+  await assert.rejects(bridge.invoke("update-configure", { url: "https://untrusted.invalid" }), /Unknown desktop action/);
+});
+
 test("state subscription removes the Electron event object and can be disposed", async () => {
   const { bridge, listeners } = await preload();
   let received;

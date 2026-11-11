@@ -12,6 +12,7 @@ import { enforceExternalAgentBoundary } from "../../server/agent/scripts/externa
 import { readInstallStamp } from "../src/install-stamp.mjs";
 import { verifyWindowsFile } from "./signatures.mjs";
 import { computeMigrationsSha256 } from "./install-stamp.mjs";
+import { verifyPackagedUpdateConfiguration } from "./delivery-assets.mjs";
 
 // Use electron-builder's already locked dependency, not a second ASAR version.
 export function asarTools() {
@@ -37,10 +38,11 @@ function inspectHeader(directory, prefix = "", unpacked = false, loose = new Set
   return loose;
 }
 
-export async function inspectPackagedApplication(resources, expectedVersion, { signedMachO = false, target, signing, signer, source, installStamp: expectedInstallStamp } = {}) {
+export async function inspectPackagedApplication(resources, expectedVersion, { signedMachO = false, target, signing, signer, source, installStamp: expectedInstallStamp, updateConfiguration = true } = {}) {
   const signedPE = signing === "signed" && target === "win32-x64";
   let installStamp;
   let workspaceVersion;
+  let updaterConfiguration;
   if (target) {
     const [platform, arch] = target.split("-");
     installStamp = await readInstallStamp(resources, { platform, arch, version: expectedVersion });
@@ -57,6 +59,7 @@ export async function inspectPackagedApplication(resources, expectedVersion, { s
     const metadata = JSON.parse(await readFile(path, "utf8"));
     if (metadata.version !== expectedVersion) throw new Error("Final workspace desktop version metadata differs from the release version.");
     workspaceVersion = { status: "passed", path: "workspace-runtime/apps/desktop/package.json", version: metadata.version, sha256: await hashFile(path) };
+    if (updateConfiguration) updaterConfiguration = await verifyPackagedUpdateConfiguration(resources, installStamp);
   }
   if (signedMachO) {
     if (process.platform !== "darwin") throw new Error("Final Mach-O signature verification requires native macOS.");
@@ -128,6 +131,7 @@ export async function inspectPackagedApplication(resources, expectedVersion, { s
       scope: ["app.asar extracted content", "app.asar.unpacked including orphaned files", "workspace-runtime", "desktop-runtime"],
       dependencyLayouts,
       runtimeInventory,
+      ...(updaterConfiguration ? { updaterConfiguration } : {}),
       ...(installStamp ? { installStamp: { status: "passed", path: "desktop-install-stamp.json", sha256: await hashFile(join(resources, "desktop-install-stamp.json")), value: installStamp } } : {}),
       ...(signedPE ? { asarSignatures } : {}),
       ...(workspaceVersion ? { workspaceVersion } : {}),

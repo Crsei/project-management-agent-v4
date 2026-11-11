@@ -1,8 +1,8 @@
-name: Tag release
+name: Tag source evidence
 
-# "Repository checks" dispatches this workflow only after the exact tag commit
-# passed the full check suite. Manual dispatch exists for retries and rechecks
-# the same successful CI run before anything is built or published.
+# Repository checks may dispatch source-evidence packaging after exact-tag CI.
+# GitHub Releases belong exclusively to desktop.yml; this workflow never creates,
+# updates or publishes a release and cannot collide with desktop updater tags.
 on:
   workflow_dispatch:
     inputs:
@@ -19,7 +19,7 @@ on:
         required: false
         type: string
 
-# Read-only by default. Only the draft-release job receives contents:write.
+# Source evidence never receives permission to mutate a GitHub Release.
 permissions:
   contents: read
   actions: read
@@ -35,7 +35,7 @@ env:
 
 jobs:
   verify:
-    name: Verify tag, version and exact-commit checks
+    name: Verify source evidence tag, version and exact-commit checks
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     outputs:
@@ -187,7 +187,7 @@ jobs:
             echo '```'
             if [ "$code" -ne 0 ]; then
               echo
-              echo '**Blocked.** No draft release is created while a release blocker is open. See THIRD_PARTY_NOTICES.md (release-blockers).'
+              echo '**Blocked.** Public desktop releases remain prohibited while a release blocker is open. Source evidence artifacts do not authorize distribution. See THIRD_PARTY_NOTICES.md (release-blockers).'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$code"
@@ -235,96 +235,9 @@ jobs:
           compression-level: 0
           path: ${{ runner.temp }}/release/
 
-  publish:
-    name: Create draft GitHub Release
-    needs: [verify, license, package]
-    if: >-
-      ${{ !cancelled() && needs.verify.result == 'success'
-        && needs.license.result == 'success' && needs.package.result == 'success' }}
-    runs-on: ubuntu-22.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ inputs.expected_sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-      - name: Download the verified evidence
-        uses: actions/download-artifact@v4
-        with:
-          name: release-${{ inputs.tag }}-${{ inputs.expected_sha }}
-          path: ${{ runner.temp }}/release
-      - name: Re-verify downloaded evidence
-        run: node scripts/release-package.mjs verify --directory "$RUNNER_TEMP/release"
-      - name: Require the tag to still point at the exact commit
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")"
-          target_sha="$(jq -r '.object.sha' <<<"$ref_json")"
-          target_type="$(jq -r '.object.type' <<<"$ref_json")"
-          if [ "$target_type" = "tag" ]; then
-            tag_json="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$target_sha")"
-            target_sha="$(jq -r '.object.sha' <<<"$tag_json")"
-          fi
-          if [ "$target_sha" != "$RELEASE_SHA" ]; then
-            echo "Tag moved after verification; refusing to publish" >&2
-            exit 1
-          fi
-      - name: Create or refresh a draft release with the verified assets
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CI_RUN_URL: ${{ needs.verify.outputs.ci_run_url }}
-          CI_RUN_ID: ${{ needs.verify.outputs.ci_run_id }}
-        run: |
-          set -euo pipefail
-          directory="$RUNNER_TEMP/release"
-          body="$RUNNER_TEMP/release-notes.md"
-          {
-            echo "# $RELEASE_TAG"
-            echo
-            echo "- Commit: \`$RELEASE_SHA\`"
-            echo "- Repository checks: $CI_RUN_URL (run $CI_RUN_ID)"
-            echo "- Recorded release gate: clear. This records repository metadata only; it is not a legal review or distribution authorization."
-            echo
-            echo "## Assets"
-            echo
-            jq -r '.artifacts[] | "- \(.name) — \(.sha256) (\(.bytes) bytes)"' "$directory/release-manifest.json"
-            echo
-            echo "Unsigned source and build-evidence archives only. Desktop installers are built separately and are not included. Maintainers review this draft before publishing."
-          } > "$body"
-          extra=()
-          if [[ "$RELEASE_TAG" == *-* ]]; then extra+=(--prerelease); fi
-          existing="$(gh release view "$RELEASE_TAG" --json isDraft 2>/dev/null || true)"
-          if [ -n "$existing" ]; then
-            if [ "$(jq -r '.isDraft' <<<"$existing")" != "true" ]; then
-              echo "A published release already exists for $RELEASE_TAG; refusing to modify it" >&2
-              exit 1
-            fi
-            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file "$body" "${extra[@]}"
-          else
-            gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" --notes-file "$body" "${extra[@]}"
-          fi
-          gh release upload "$RELEASE_TAG" "$directory"/* --clobber
-          url="$(gh release view "$RELEASE_TAG" --json url --jq .url)"
-          {
-            echo "### Draft release"
-            echo
-            echo "$url"
-            echo
-            gh release view "$RELEASE_TAG" --json assets --jq '.assets[] | "- \(.name) — \(.size) bytes"'
-          } >> "$GITHUB_STEP_SUMMARY"
-
   report:
     name: Report release pipeline result
-    needs: [verify, license, package, publish]
+    needs: [verify, license, package]
     if: always()
     runs-on: ubuntu-22.04
     timeout-minutes: 5
@@ -335,17 +248,16 @@ jobs:
           VERIFY: ${{ needs.verify.result }}
           LICENSE: ${{ needs.license.result }}
           PACKAGE: ${{ needs.package.result }}
-          PUBLISH: ${{ needs.publish.result }}
         run: |
           {
-            echo '### Tag release pipeline'
+            echo '### Tag source evidence pipeline'
             echo
             echo '| Gate | Result |'
             echo '| --- | --- |'
             printf '| Exact tag, version and CI run | %s |\n' "$VERIFY"
             printf '| Recorded release authorization | %s |\n' "$LICENSE"
             printf '| Build and evidence packaging | %s |\n' "$PACKAGE"
-            printf '| Draft GitHub Release | %s |\n' "$PUBLISH"
+            echo '| GitHub Release mutation | Not permitted (desktop.yml owns releases) |'
             echo
-            echo 'A successful run creates or refreshes a **draft** release only. Publishing the draft, signing, installer lifecycle, deployment and business acceptance remain separate operator steps.'
+            echo 'This workflow retains source/build evidence as Actions artifacts only. It does not create a GitHub Release or an updater feed. Desktop release publication is a separate explicit, fully gated desktop.yml action.'
           } >> "$GITHUB_STEP_SUMMARY"

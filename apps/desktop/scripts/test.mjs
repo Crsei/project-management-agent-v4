@@ -13,6 +13,7 @@ const lifecycle = new Set([
   "src/local-server.test.mjs",
   "src/main.close.test.mjs",
   "src/main.security.test.mjs",
+  "src/main.update.test.mjs",
   "src/private-state.test.mjs",
   "src/uninstall.test.mjs",
 ]);

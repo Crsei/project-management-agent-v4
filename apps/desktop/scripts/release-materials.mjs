@@ -11,7 +11,10 @@ import { desktopRoot, hashFile } from "./runtime-manifest.mjs";
 import { assertCanonicalAbsolute, fileStamp, GuardedDirectory, safeRelativePath, sameFileIdentity } from "../../../packages/pm-core/platform.ts";
 import { assertNoWindowsReparsePath, cacheWindowsPathAttributes, getWindowsPathAttributeMetrics } from "../../../packages/pm-core/windows-reparse.ts";
 import { inspectDeployment } from "./stage-workspace.mjs";
-import { requiredDeliveryMaterials, assertExactDeliveryDirectory, validateDeliveryAssets } from "./delivery-assets.mjs";
+import { deliveryMaterialNames, assertExactDeliveryDirectory, validateDeliveryAssets, verifyUpdateDelivery } from "./delivery-assets.mjs";
+import { readInstallStamp } from "../src/install-stamp.mjs";
+import { desktopUpdatePolicy, updateInstallStampAssetName } from "../src/update-policy.mjs";
+import { writeInstallStamp } from "./install-stamp.mjs";
 
 const execute = promisify(execFile);
 export const repository = resolve(desktopRoot, "../..");
@@ -55,6 +58,17 @@ const additions = [
   "apps/desktop/scripts/payload-report.test.mjs",
   "apps/desktop/src/install-stamp.mjs",
   "apps/desktop/src/install-stamp.test.mjs",
+  "apps/desktop/src/update-policy.mjs",
+  "apps/desktop/src/update-policy.test.mjs",
+  "apps/desktop/scripts/delivery-assets.test.mjs",
+  "apps/desktop/src/updater.mjs",
+  "apps/desktop/src/updater.test.mjs",
+  "apps/desktop/src/updater.network.test.mjs",
+  "apps/desktop/src/main.update.test.mjs",
+  "apps/desktop/src/tests/updater-fixture.mjs",
+  "scripts/desktop-release.mjs",
+  "scripts/desktop-release.test.mjs",
+  "docs/reference/desktop-github-updates-plan.zh.md",
   "apps/desktop/src/process-identity.mjs",
   "apps/desktop/src/lifecycle-cli.mjs",
   "apps/desktop/src/lifecycle-cli.test.mjs",
@@ -457,10 +471,18 @@ export async function writeReleaseMaterials({ output, resources, platform, sourc
   await writeFile(join(output, "desktop-source.json"), json(source));
   if (!legalCollected) await observePackagingPhase("collectLegal", () => collectLegal(resources, platform, legalRoot));
   await observePackagingPhase("archiveLegal", () => createTar({ cwd: legalRoot, gzip: true, portable: true, file: join(output, "desktop-legal.tar.gz") }, ["."]));
+  const [stampPlatform, stampArch] = manifest.target.split("-");
+  const installStamp = await readInstallStamp(resources, { platform: stampPlatform, arch: stampArch, version: manifest.version });
+  if (installStamp.commit !== source.commit || installStamp.source.sha256 !== source.sha256 || installStamp.source.dirty !== source.dirty || installStamp.signing !== manifest.signing
+    || manifest.installStamp && JSON.stringify(manifest.installStamp) !== JSON.stringify(installStamp))
+    throw new Error("Public candidate install stamp must match the complete final source-bound package identity.");
+  await writeInstallStamp(join(output, updateInstallStampAssetName({ platform: stampPlatform, arch: stampArch })), installStamp);
   const notices = await readFile(join(repository, "THIRD_PARTY_NOTICES.md"), "utf8");
   const openBlockers = [...notices.matchAll(/^\| ([A-Z][A-Z-]+) \| OPEN \|/gm)].map((match) => match[1]);
   const result = {
     ...manifest, schemaVersion: 3,
+    installStamp,
+    updates: desktopUpdatePolicy({ version: manifest.version, platform: stampPlatform, signing: manifest.signing }),
     source: { commit: source.commit, dirty: source.dirty, sha256: source.sha256, inventory: "desktop-source.json", archive: "desktop-source.tar.gz" },
     toolchain: {
       node: process.versions.node,
@@ -475,10 +497,11 @@ export async function writeReleaseMaterials({ output, resources, platform, sourc
       imageOS: process.env.ImageOS ?? null, imageVersion: process.env.ImageVersion ?? null,
     } : null,
     releaseAuthorization: { status: "not-authorized", openBlockers, published: false, note: "Test delivery only. Checksums and source/legal materials do not grant public distribution or close third-party license/source obligations." },
-    materials: await observePackagingPhase("recordReleaseMaterials", () => Promise.all(requiredDeliveryMaterials.filter((name) => name !== "desktop-verification.json").map((name) => fileRecord(output, name)))),
+    materials: await observePackagingPhase("recordReleaseMaterials", () => Promise.all(deliveryMaterialNames(manifest).filter((name) => name !== "desktop-verification.json").map((name) => fileRecord(output, name)))),
   };
   if (result.ci && result.ci.commit !== source.commit) throw new Error("Actions checkout identity does not match the packaged source commit.");
   await refreshVerification(output, result, verification);
   await assertExactDeliveryDirectory(output, validateDeliveryAssets(result));
+  await verifyUpdateDelivery(output, result);
   return result;
 }

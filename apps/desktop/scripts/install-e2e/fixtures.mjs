@@ -20,7 +20,7 @@ export async function createReceiptFixture(directory) {
   const harnessFiles = INSTALL_E2E_HARNESS.map((path) => ({ path, bytes: 10, sha256: hash(path) }));
   const compatibility = { dataSchema: 1, postgresMajor: 16, migrationsSha256: "8".repeat(64) };
   const manifest = { schemaVersion: 3, target: "win32-x64", signing: "unsigned", version: "1.1.0", source, artifacts: [artifact], materials: [], ci: { repository: run.repository, commit: run.commit, runId: run.id, attempt: run.attempt },
-    installStamp: { formatVersion: 1, appId: "com.projectmanagementagent.v4", commit: source.commit, version: "1.1.0", platform: "win32", arch: "x64", distribution: "nsis", payload: "bundled", updateMechanism: "none", ownership: { installation: "self", scope: "per-user" }, source: { sha256: source.sha256, dirty: source.dirty }, signing: "unsigned", runtime: { node: "24.21.0", postgres: "16.15" }, compatibility },
+    installStamp: { formatVersion: 1, appId: "com.projectmanagementagent.v4", commit: source.commit, version: "1.1.0", platform: "win32", arch: "x64", distribution: "nsis", payload: "bundled", updateMechanism: "github-releases", ownership: { installation: "self", scope: "per-user" }, source: { sha256: source.sha256, dirty: source.dirty }, signing: "unsigned", runtime: { node: "24.21.0", postgres: "16.15" }, compatibility },
   };
   const fixtureDataPath = "\\workspace";
   const finalArtifacts = { status: "passed", artifacts: [{ ...artifact, application: { sha256: appAsarSha256 } }] };

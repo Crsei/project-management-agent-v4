@@ -5,7 +5,7 @@ import { verifyDependencyLayout } from "./dependency-layout-verifier.mjs";
 import { hashFile } from "./runtime-manifest.mjs";
 import { inspectDeployment } from "./stage-workspace.mjs";
 
-// The Electron closure is the reviewed pure-JS pg closure. Native Node/SDK
+// The Electron closure includes pg and the GitHub updater. Native Node/SDK
 // dependencies remain in the separate, loose workspace-runtime. Prepacking the
 // whole Electron closure keeps builder's dependency filters and package.json
 // cleanup from changing inventoried resources (including README/type files).

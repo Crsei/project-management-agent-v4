@@ -1,6 +1,6 @@
 {
   "name": "@agent-workspace/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1-preview.1",
   "private": true,
   "description": "Secure Electron host for the PM Agent v4 unified Web and local services",
   "type": "module",
@@ -25,6 +25,7 @@
     "test:release": "node scripts/test.mjs release"
   },
   "dependencies": {
+    "electron-updater": "6.8.11",
     "pg": "8.23.1"
   },
   "devDependencies": {

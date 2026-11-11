@@ -7,6 +7,7 @@ import { writeInstallStamp } from "./scripts/install-stamp.mjs";
 import { inspectWindowsRuntimeDependencies } from "./scripts/windows-runtime-dependencies.mjs";
 import { windowsSignerIdentity, verifyWindowsFile } from "./scripts/signatures.mjs";
 import { createInstallationManifest, INSTALL_FILES_NAME } from "./src/uninstall.mjs";
+import { desktopUpdatePolicy } from "./src/update-policy.mjs";
 
 // Installation resources are public code, not private workspace data. cp keeps
 // checkout permissions, which may otherwise make a shared /Applications install
@@ -29,6 +30,7 @@ async function normalizeInstallationModes(path, preserveFileModes = false) {
 export function desktopBuilderConfig({ application, prepackedApplication, workspaceRuntime, desktopRuntime, output, electronVersion, mode, platform, nativeBinaries, installStamp }) {
   const signed = mode === "signed";
   if (!installStamp) throw new Error("Desktop packaging requires an exact source-bound build install stamp.");
+  const updates = desktopUpdatePolicy({ version: installStamp.version, platform, signing: mode });
   const windowsSigner = signed && platform === "win32" ? windowsSignerIdentity() : null;
   if (signed && platform === "darwin" && !/^[A-Z0-9]{10}$/.test(process.env.PM_DESKTOP_MAC_TEAM_ID ?? process.env.APPLE_TEAM_ID ?? "")) throw new Error("Signed macOS packaging requires an exact expected Apple team identity.");
   return {
@@ -42,7 +44,9 @@ export function desktopBuilderConfig({ application, prepackedApplication, worksp
     npmRebuild: false,
     nodeGypRebuild: false,
     forceCodeSigning: signed,
-    publish: null,
+    publish: updates.enabled ? { provider: updates.provider, owner: updates.owner, repo: updates.repo, channel: updates.channel, private: false, releaseType: updates.allowPrerelease ? "prerelease" : "release" } : null,
+    generateUpdatesFilesForAllChannels: false,
+    electronUpdaterCompatibility: ">=6.8.11",
     artifactName: `PM-Agent-v4-\${version}-\${os}-\${arch}-${mode}.\${ext}`,
     // The native Node closure is intentionally outside app.asar and outside
     // Electron's dependency/rebuild graph. Its dependency directories are real
@@ -73,7 +77,7 @@ export function desktopBuilderConfig({ application, prepackedApplication, worksp
         await writeFile(join(resources, INSTALL_FILES_NAME), `${JSON.stringify(await createInstallationManifest(context.appOutDir, installStamp))}\n`);
       }
       const metadata = JSON.parse(await readFile(join(application, "package.json"), "utf8"));
-      await inspectPackagedApplication(resources, metadata.version, { target: `${platform}-${installStamp.arch}` });
+      await inspectPackagedApplication(resources, metadata.version, { target: `${platform}-${installStamp.arch}`, updateConfiguration: false });
     },
     async afterSign(context) {
       if (platform !== "win32") return;

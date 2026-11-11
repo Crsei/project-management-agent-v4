@@ -50,8 +50,8 @@ Turbo 完整禁止隐式安装的入口为 `node scripts/check-turbo.mjs ...`，
 
 ## 提交与许可
 
-仓库正式托管地址与贡献接收流程确定后，使用该平台实际提供的分支/PR 功能；本指南不提供虚构仓库地址。请在变更说明中列出行为、兼容/迁移影响、测试证据和已知限制。
+公开仓库为 [Crsei/project-management-agent-v4](https://github.com/Crsei/project-management-agent-v4)。请在变更说明中列出行为、兼容/迁移影响、测试证据和已知限制；仓库可访问不代表发行授权已闭合。
 
 自有代码使用 `AGPL-3.0-only`，完整条款见 [LICENSE](LICENSE)。引入第三方代码/字体/图片时保留原许可、来源、固定版本和本地补丁记录，并更新[第三方清单](THIRD_PARTY_NOTICES.md)。没有授权证明的素材不可因根许可证存在而假定可分发。对经网络提供修改版本涉及的对应源码义务，应按 AGPL 原文落实真实可用的获取方式，不用未配置的地址充数。
 
-标签发布与证据打包见[发布流水线](docs/guides/release.md)：CI 通过只表示检查完成，流水线只创建 draft release；发布 draft、签名、安装器和部署仍需操作者分别确认。
+标签证据与桌面发布见[发布流水线](docs/guides/release.md)：标签流水线只上传源码／构建证据；桌面流水线默认仅生成 Actions artifacts，显式 `draft`／`publish` 仍要求精确版本／提交、完整原生材料、CI 和发行授权门禁。签名、真实安装和部署不是 CI 成功的同义词。
