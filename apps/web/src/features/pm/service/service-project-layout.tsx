@@ -130,7 +130,8 @@ function ProjectSidebarContent({ base, projectId }: { base: string; projectId?: 
   const activeProject = accessible.some(project => project.id === projectId)
   const activeView = useActiveProjectView(projectId ? `${base}/projects/${encodeURIComponent(projectId)}` : "")
   const needle = search.trim().toLocaleLowerCase()
-  const visible = accessible.filter(project => !needle || `${project.id} ${string(project.data.name)}`.toLocaleLowerCase().includes(needle))
+  const matched = accessible.filter(project => !needle || `${project.id} ${string(project.data.name)}`.toLocaleLowerCase().includes(needle))
+  const visible = matched.slice(0, 4)
   const favoriteIds = useMemo(() => {
     const ids = new Set<string>()
     if (extras.data && !extras.error) {
@@ -195,7 +196,7 @@ function ProjectSidebarContent({ base, projectId }: { base: string; projectId?: 
               </li>
             })}
           </ul>
-          {!!needle && visible.length === 0 && accessible.length > 0 && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{t("没有匹配的项目。", "No matching projects.")}</p>}
+          {!!needle && matched.length === 0 && accessible.length > 0 && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{t("没有匹配的项目。", "No matching projects.")}</p>}
         </QueryNotice>
         <Link to={`${base}/projects?archive=archived`} data-navigation-close className="flex min-h-9 items-center gap-2 px-3 text-xs text-muted-foreground hover:text-foreground"><Archive className="size-3.5" aria-hidden="true" />{t("已归档项目", "Archived projects")}{archivedCount > 0 && <span>({archivedCount})</span>}</Link>
         {persistenceError && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">{t("无法保存展开偏好；当前标签页仍可使用。", "Expansion preferences could not be saved; they still work in this tab.")}</p>}

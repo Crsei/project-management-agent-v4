@@ -25,6 +25,7 @@ import { verifyMcpServiceBearer } from "../../../../../packages/infrastructure/s
 import { chatOnlyExecutionSelection, type ExecutionEnvironment } from "@agent-workspace/contracts/chat";
 import { resolveAgentExecution } from "../durable/agent-execution.ts";
 import { openAgentWorkspace } from "../agent-workspaces.ts";
+import { recordPmContentProvenance } from "../pm-visibility.ts";
 
 let directory: string;
 const originalDirectory = process.env.AGENT_WORKSPACE_DATA_DIR;
@@ -35,6 +36,7 @@ const originalServiceSecret = process.env.PM_AUTOMATION_SERVICE_SECRET;
 const workspaceId = "c951d34a-3d60-4655-b6d0-a55c1367e58d";
 let pmServer: Server;
 let pmAllowed = true;
+let pmUnavailable = false;
 const pmRequests: string[] = [];
 let beforeAuthorizationReply: (() => Promise<void>) | undefined;
 beforeEach(async () => {
@@ -42,11 +44,21 @@ beforeEach(async () => {
   process.env.AGENT_WORKSPACE_DATA_DIR = directory;
   process.env.AGENT_WORKSPACE_ALLOWED_ROOTS = JSON.stringify([directory]);
   pmAllowed = true;
+  pmUnavailable = false;
   pmRequests.length = 0;
   beforeAuthorizationReply = undefined;
-  // Only delegated Apps consult PM membership. Ordinary directory Apps never do.
+  // Native-only Apps stay independent of PM; explicit PM provenance requires live payload authority.
   pmServer = createServer(async (request, response) => {
     pmRequests.push(request.url ?? "");
+    if (request.url === "/api/v1/agent-contexts/authorize" && request.method === "POST") {
+      let body = ""; for await (const chunk of request) body += String(chunk);
+      if (pmUnavailable || !pmAllowed || request.headers.cookie !== "current-browser") {
+        response.writeHead(pmUnavailable ? 503 : 403, { "content-type": "application/json" }).end(JSON.stringify({ error: "PM payload authority unavailable" })); return;
+      }
+      response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
+        actorId: "6def94b1-26bb-4e22-99d0-1a10321b06be", scope: JSON.parse(body),
+      })); return;
+    }
     if (request.url === "/api/v1/agent-contexts" && request.method === "GET") {
       const authorization = request.headers.authorization ?? "";
       const identity = authorization.startsWith("Bearer ") ? verifyMcpServiceBearer(authorization.slice(7)) : null;
@@ -85,7 +97,7 @@ afterEach(async () => {
   else process.env.AGENT_WORKSPACE_DATA_DIR = originalDirectory;
 });
 
-async function fixture(blockCall?: () => void, externalGrant = false) {
+async function fixture(blockCall?: () => void, externalGrant = false, afterOperation?: (kind: "call" | "resource") => void) {
   let selection = chatOnlyExecutionSelection();
   if (!externalGrant) {
     const cwd = path.join(directory, "workspace");
@@ -141,10 +153,11 @@ async function fixture(blockCall?: () => void, externalGrant = false) {
       listTools: () => Effect.succeed([{ name: "refresh", annotations: { readOnlyHint: true } }, { name: "hidden", _meta: { ui: { visibility: ["model"] } } }]),
       callTool: input => Effect.sync(() => {
         calls.push({ server: input.server, tool: input.tool });
+        afterOperation?.("call");
         blockCall?.();
         return { content: [{ type: "text", text: "fresh" }] };
       }).pipe(Effect.flatMap(result => blockCall ? Effect.never : Effect.succeed(result))),
-      readResource: input => Effect.sync(() => { resources.push({ server: input.server, uri: input.uri }); return { contents: [{ uri: input.uri, text: "resource" }] }; }),
+      readResource: input => Effect.sync(() => { resources.push({ server: input.server, uri: input.uri }); afterOperation?.("resource"); return { contents: [{ uri: input.uri, text: "resource" }] }; }),
     } });
   return { app, calls, resources, cwd: execution.path, environment: execution.environment, originatingMcpGrant,
     counts: () => ({ closed, checks }), revoke: () => { authorized = false; }, stale: () => { leaseCurrent = false; } };
@@ -221,6 +234,53 @@ test("real routes load private CSP HTML and bind native calls/resources to the p
   assert.deepEqual(pmRequests, [], "Native directory Apps do not require PM availability or membership.");
 });
 
+test("MCP App historical HTML and native actions require current producing-generation PM visibility", async () => {
+  const f = await fixture();
+  recordPmContentProvenance({ threadId: "thread", generationId: "generation", operationIds: [],
+    targets: [{ workspaceId, projectId: "PRJ-001" }] });
+  assert.equal((await request("snapshot")).status, 200);
+  const original = readRecord("native-output", "generation");
+  for (const unavailable of [false, true]) {
+    pmAllowed = unavailable;
+    pmUnavailable = unavailable;
+    for (const [action, body] of [
+      ["snapshot", undefined], ["tools", undefined], ["call", { name: "refresh", arguments: {} }],
+      ["resource", { uri: "weather://current" }], ["context", { content: [{ type: "text", text: "untrusted cached context" }] }],
+    ] as const) {
+      const response = await request(action, body);
+      assert.equal(response.status, unavailable ? 503 : 403, action);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      const value = await response.json() as { error: string; code: string };
+      assert.deepEqual(Object.keys(value).sort(), ["code", "error"]);
+      assert.equal(value.code, unavailable ? "mcp_app_content_unavailable" : "mcp_app_content_redacted");
+      assert.doesNotMatch(JSON.stringify(value), /weather|Austin|historical serialized result|toolInput|toolResult|Content-Security-Policy|untrusted cached context/);
+    }
+    assert.deepEqual(f.calls, [], "hidden producing Apps cannot issue a native command");
+    assert.deepEqual(f.resources, [], "hidden producing Apps cannot retrieve a native resource");
+    assert.equal(readRecord("mcp-app-model-context-v1", JSON.stringify(["thread", "app-item"])), null);
+    assert.deepEqual(readRecord("native-output", "generation"), original, "read projection does not erase private execution evidence");
+  }
+  pmAllowed = true; pmUnavailable = false;
+  assert.equal((await request("snapshot")).status, 200, "unavailable reads never fall back to old payloads and are recoverable by a fresh authorized read");
+});
+
+for (const action of ["call", "resource"] as const) {
+  test(`MCP App ${action} response rechecks producing PM content after its native operation without replay`, async () => {
+    const f = await fixture(undefined, false, kind => { if (kind === action) pmAllowed = false; });
+    recordPmContentProvenance({ threadId: "thread", generationId: "generation", operationIds: [],
+      targets: [{ workspaceId, projectId: "PRJ-001" }] });
+    const body = action === "call" ? { name: "refresh", arguments: {} } : { uri: "weather://current" };
+    const first = await request(action, body);
+    assert.equal(first.status, 403);
+    const value = await first.json() as { code: string };
+    assert.equal(value.code, "mcp_app_content_redacted");
+    assert.doesNotMatch(JSON.stringify(value), /fresh|weather|resource|toolResult|structuredContent/);
+    assert.equal(action === "call" ? f.calls.length : f.resources.length, 1, "the original native operation happened before withdrawal; denial is not a rollback claim");
+    assert.equal((await request(action, body)).status, 403);
+    assert.equal(action === "call" ? f.calls.length : f.resources.length, 1, "a subsequent unauthorized request cannot redispatch the operation");
+  });
+}
+
 test("model context replaces/clears, persists once, and enters only a matching authorized next native turn", async () => {
   const f = await fixture();
   assert.equal((await request("context", { content: [{ type: "text", text: "first" }] })).status, 200);
@@ -240,6 +300,29 @@ test("model context replaces/clears, persists once, and enters only a matching a
   assert.deepEqual(await mcpAppContextForTurn(context, source), [{ key: "mcp_app_app-item", text: "preserved" }], "Context is selected once, never appended.");
   await closeMcpAppSession("thread");
   assert.deepEqual(await mcpAppContextForTurn(context, source), []);
+});
+
+test("App model context selection refreshes producing PM visibility instead of reusing previously visible text", async () => {
+  const f = await fixture();
+  assert.equal((await request("context", { content: [{ type: "text", text: "private producing App context" }] })).status, 200);
+  const { context, source } = continuation(f);
+  let visible = true, checks = 0;
+  const guarded: ProviderDriverContext = { ...context, authorizeMcpAppContext: async producing => {
+    checks++;
+    assert.deepEqual(producing, f.app.producing);
+    return visible;
+  } };
+  const selected = await mcpAppContextForTurn(guarded, source);
+  assert.deepEqual(selected, [{ key: "mcp_app_app-item", text: "private producing App context" }]);
+  visible = false;
+  const refreshed = await mcpAppContextForTurn(guarded, source);
+  assert.deepEqual(refreshed, [], "a buffered continuation must refresh selection after visibility withdrawal");
+  assert.doesNotMatch(JSON.stringify(refreshed), /private producing App context/);
+  assert.deepEqual(await mcpAppContextForTurn({ ...context, authorizeMcpAppContext: async () => false }, source), [], "hidden or unavailable producing content is never injected");
+  visible = true;
+  assert.deepEqual(await mcpAppContextForTurn(guarded, source), selected, "a fresh authorized read can recover the original private context without appending it");
+  assert.ok(checks >= 3);
+  assert.deepEqual(f.calls, []);
 });
 
 test("model context cannot cross directory execution or native session identity at selection or dispatch", async () => {

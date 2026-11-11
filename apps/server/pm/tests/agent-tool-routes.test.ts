@@ -22,6 +22,7 @@ type Operation = {
   operation_id: string; workspace_id: string; actor_id: string; request_hash: string; name: string;
   thread_id: string; message_id: string; generation_id: string; status: string;
   result: unknown; error: unknown; created_at: Date; finished_at: Date | null;
+  target: unknown; recovery_identity: unknown; linkage: unknown; delegation_id: string | null; outcome_evidence: unknown;
 };
 
 async function fixture() {
@@ -52,7 +53,9 @@ async function fixture() {
       const id = String(values[0]);
       if (operations.has(id)) return { rows: [], rowCount: 0 };
       const row: Operation = { operation_id: id, workspace_id: String(values[1]), actor_id: String(values[2]), request_hash: String(values[3]), name: String(values[4]),
-        thread_id: String(values[5]), message_id: String(values[6]), generation_id: String(values[7]), status: 'running', result: null, error: null, created_at: new Date(), finished_at: null };
+        thread_id: String(values[5]), message_id: String(values[6]), generation_id: String(values[7]), status: 'running', result: null, error: null, created_at: new Date(), finished_at: null,
+        target: JSON.parse(String(values[8])), recovery_identity: values[9] === null ? null : JSON.parse(String(values[9])),
+        linkage: values[10] === null ? null : JSON.parse(String(values[10])), delegation_id: values[11] === null ? null : String(values[11]), outcome_evidence: null };
       operations.set(id, row);
       return { rows: [row], rowCount: 1 };
     }
@@ -62,6 +65,7 @@ async function fixture() {
       row.status = String(values[1]);
       row.result = values[2] === null ? null : JSON.parse(String(values[2]));
       row.error = values[3] === null ? null : JSON.parse(String(values[3]));
+      row.outcome_evidence = values[4];
       row.finished_at = ['succeeded', 'failed'].includes(row.status) ? new Date() : null;
       return { rows: [row], rowCount: 1 };
     }

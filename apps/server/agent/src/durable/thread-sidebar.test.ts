@@ -18,6 +18,7 @@ import { closeStore, writeRecord } from "./store.ts";
 import { ensureThread, getThread, getThreadHistory, saveFormattedMessage, updateThread } from "./threads.ts";
 import { getThreadSidebar, updateThreadSidebar } from "./thread-sidebar.ts";
 import { getChatGeneration, type ChatGeneration } from "./chat-runtime.ts";
+import { closeNativeInteractions, endNativeOutput, initializeNativeOutput, requestNativeInteraction, respondNativeInteraction, recoverNativeOutputs } from "./native-output.ts";
 
 const originalDirectory = process.env.AGENT_WORKSPACE_DATA_DIR;
 const originalFetch = globalThis.fetch;
@@ -199,7 +200,7 @@ test("sidebar revisions are independent, persisted, conflict-safe and manual set
   assert.equal(getThread("one")!.revision, 1);
 });
 
-test("snooze survives success, wakes on failure, timer and pending input, and guards queued requests", () => {
+test("snooze survives success, wakes on failure, timer and pending input, and guards queued requests", async () => {
   const thread = seed("running");
   let run = generation("running", "running");
   assert.equal(getThreadSidebar(thread, t(1, 1)).running, true);
@@ -219,7 +220,11 @@ test("snooze survives success, wakes on failure, timer and pending input, and gu
   const waitingThread = seed("waiting");
   const waiting = generation("waiting", "running");
   view = updateThreadSidebar("waiting", { action: "snooze", revision: 0, snoozedUntil: t(2) }, t(1, 1));
-  writeRecord("native-output", waiting.id, { generationId: waiting.id, threadId: "waiting", sequence: 1, status: "running", items: [{ id: "q", type: "user_input_request", status: "waiting", request: { id: "q", itemId: "q", kind: "user_input", title: "Question", respondable: true } }] });
+  initializeNativeOutput(waiting.id, "waiting", "running");
+  const closed = assert.rejects(requestNativeInteraction(waiting.id, {
+    id: "q", itemId: "q", kind: "user_input", title: "Question", respondable: true,
+    questions: [{ id: "answer", prompt: "Answer", allowText: true }],
+  }));
   view = getThreadSidebar(waitingThread, t(1, 2));
   assert.equal(view.section, "active");
   assert.equal(view.canSnooze, false);
@@ -227,6 +232,61 @@ test("snooze survives success, wakes on failure, timer and pending input, and gu
   const queuedThread = seed("queued");
   generation("queued", "queued");
   assert.equal(getThreadSidebar(queuedThread, t(1, 1)).canSnooze, false);
+  endNativeOutput(waiting.id, "cancelled");
+  await closed;
+});
+
+test("sidebar activity uses generation authority and only live respondable waits, with terminal and SQLite recovery cleanup", async () => {
+  const thread = seed("activity");
+  assert.deepEqual(getThreadSidebar(thread, t(1, 1)).activity, { status: "idle" });
+  let run = generation("activity", "queued");
+  assert.deepEqual(getThreadSidebar(thread, t(1, 1)).activity, { status: "queued", generationId: run.id });
+  run = { ...run, status: "running" };
+  writeRecord("chat:generations", run.id, run);
+  initializeNativeOutput(run.id, thread.remoteId, "running");
+  assert.equal(getThreadSidebar(thread, t(1, 1)).activity.status, "running");
+  const response = requestNativeInteraction(run.id, {
+    id: "question", itemId: "question", kind: "user_input", title: "Question", respondable: true,
+    questions: [{ id: "text", prompt: "Answer", allowText: true }],
+  });
+  assert.deepEqual(getThreadSidebar(thread, t(1, 1)).activity, { status: "waiting_input", generationId: run.id });
+  const approval = requestNativeInteraction(run.id, {
+    id: "approval", itemId: "approval", kind: "approval", title: "Approval", respondable: true,
+    options: [{ id: "allow", label: "Allow" }],
+  });
+  assert.equal(getThreadSidebar(thread, t(1, 1)).activity.status, "waiting_approval");
+  respondNativeInteraction(run.id, "approval", { optionId: "allow" });
+  await approval;
+  assert.equal(getThreadSidebar(thread, t(1, 1)).activity.status, "waiting_input");
+  respondNativeInteraction(run.id, "question", { answers: { text: "Continue" } });
+  await response;
+  assert.equal(getThreadSidebar(thread, t(1, 1)).activity.status, "running");
+  const rejected = assert.rejects(requestNativeInteraction(run.id, {
+    id: "closing", itemId: "closing", kind: "approval", title: "Closing", respondable: true,
+    options: [{ id: "allow", label: "Allow" }],
+  }));
+  closeNativeInteractions(run.id);
+  await rejected;
+  assert.equal(getThreadSidebar(thread, t(1, 1)).activity.status, "running");
+  // A stale persisted wait is not a live channel, including before recovery runs.
+  writeRecord("native-output", run.id, { generationId: run.id, threadId: thread.remoteId, sequence: 30, status: "running",
+    items: [{ id: "old-wait", type: "user_input_request", status: "waiting",
+      request: { id: "old-wait", itemId: "old-wait", kind: "user_input", title: "Stale", respondable: true } }] });
+  closeStore();
+  assert.equal(getThreadSidebar(getThread(thread.remoteId)!, t(1, 1)).activity.status, "running");
+  recoverNativeOutputs();
+  for (const status of ["failed", "cancelled", "interrupted", "completed"] as const) {
+    writeRecord("chat:generations", run.id, { ...run, status, endedAt: t(1, 2) });
+    const view = getThreadSidebar(thread, t(1, 3));
+    assert.equal(view.activity.status, status === "completed" ? "idle" : status);
+    assert.equal(view.running, false);
+    assert.equal(view.canSnooze, true);
+    assert.throws(() => respondNativeInteraction(run.id, "old-wait", { answers: { text: "stale" } }));
+  }
+  // A later terminal result cannot hide another still-active generation.
+  writeRecord("chat:generations", "background", { ...run, id: "background", createdAt: t(1), status: "running" });
+  writeRecord("chat:generations", run.id, { ...run, createdAt: t(1, 1), status: "failed", endedAt: t(1, 2) });
+  assert.deepEqual(getThreadSidebar(thread, t(1, 3)).activity, { status: "running", generationId: "background" });
 });
 
 test("three-day inactivity settles only eligible threads; explicit override and wake prevent premature settling", () => {

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { pmChangeSetSchema } from "./pm-changes.ts";
 import { agentChatToolResultSchema } from "./pm-tool-result.ts";
+import { pmToolLinkageSchema } from "./pm-tool-linkage.ts";
+export { pmToolLinkageSchema, type PmToolLinkage } from "./pm-tool-linkage.ts";
 
 /** A PM business authority target, never an Agent directory or Session owner. */
 export const pmToolTargetSchema = z.strictObject({
@@ -8,6 +10,36 @@ export const pmToolTargetSchema = z.strictObject({
   projectId: z.string().regex(/^PRJ-\d+$/).nullable(),
 });
 export type PmToolTarget = z.infer<typeof pmToolTargetSchema>;
+
+export const pmToolRequestSchema = z.strictObject({
+  operationId: z.uuid().toLowerCase(), name: z.string().min(1).max(100),
+  arguments: z.unknown(), target: pmToolTargetSchema,
+  threadId: z.string().max(200).default(""), messageId: z.string().max(200).default(""),
+  generationId: z.string().max(200).default(""), linkage: pmToolLinkageSchema.optional(),
+  executionRoot: z.literal("external").optional(),
+}).superRefine((value, context) => {
+  if (value.arguments === undefined) context.addIssue({ code: "custom", path: ["arguments"], message: "Arguments are required" });
+  const external = value.executionRoot === "external" || value.linkage?.executionRoot === "external";
+  if (!external && (!value.threadId || !value.messageId || !value.generationId))
+    context.addIssue({ code: "custom", message: "Chat execution requires its original correlation IDs" });
+  if (external && (value.threadId || value.messageId || value.generationId))
+    context.addIssue({ code: "custom", message: "External execution does not create Chat correlation IDs" });
+});
+export type PmToolRequest = z.infer<typeof pmToolRequestSchema>;
+
+/** Service-only proof of the original request; contains no business arguments. */
+export const pmToolReconcileRequestSchema = z.strictObject({
+  operationId: z.uuid().toLowerCase(), actorId: z.uuid().toLowerCase(),
+  target: pmToolTargetSchema, requestHash: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type PmToolReconcileRequest = z.infer<typeof pmToolReconcileRequestSchema>;
+export const pmToolReconcileResultSchema = pmToolReconcileRequestSchema.extend({
+  status: z.enum(["succeeded", "failed", "unknown"]),
+  evidence: z.enum(["operation", "command_receipt", "native_journal", "unresolved"]),
+  commandIds: z.array(z.string().min(1).max(200)).max(100),
+  linkage: pmToolLinkageSchema.optional(),
+}).strict();
+export type PmToolReconcileResult = z.infer<typeof pmToolReconcileResultSchema>;
 
 export const pmToolInvocationSchema = z.strictObject({
   operationId: z.uuid(), name: z.string().min(1).max(100),
@@ -52,5 +84,25 @@ export const pmToolCallRecordSchema = z.object({
   arguments: z.unknown().optional(),
   /** Change details supplied by the producer; consumers must never infer missing values. */
   changeSet: pmChangeSetSchema.optional(),
+  visibility: z.enum(["visible", "redacted", "unavailable"]).optional(),
+  certainty: z.strictObject({
+    dispatch: z.enum(["not_sent", "possibly_sent"]),
+    evidence: z.enum(["local_rejection", "pm_result", "internal_proof", "unresolved"]),
+  }).optional(),
+  linkage: pmToolLinkageSchema.optional(),
+  /** Original command set; empty on reads, absent on historical unlinked operations. */
+  commandIds: z.array(z.string().min(1).max(200)).max(100).optional(),
+  /** Safe nonblocking diagnostics; never an approval or an operation permission. */
+  notices: z.array(z.strictObject({ code: z.string().min(1).max(100), message: z.string().min(1).max(500) })).max(20).optional(),
 });
 export type PmToolCallRecord = z.infer<typeof pmToolCallRecordSchema>;
+
+/** A denied projection has no business identity, status, arguments, result or error. */
+export const pmToolCallPlaceholderSchema = z.strictObject({
+  operationId: z.uuid(), threadId: z.string(), messageId: z.string(), generationId: z.string(),
+  visibility: z.enum(["redacted", "unavailable"]),
+});
+export const pmToolCallProjectionSchema = z.union([
+  pmToolCallPlaceholderSchema, pmToolCallRecordSchema.extend({ visibility: z.literal("visible") }),
+]);
+export type PmToolCallProjection = z.infer<typeof pmToolCallProjectionSchema>;

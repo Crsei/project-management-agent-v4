@@ -70,6 +70,56 @@ test('gateway preserves API paths, headers, streaming and unified static fallbac
   assert.match(new TextDecoder().decode((await reader.read()).value), /data: second/);
 });
 
+test('gateway denies private PM proof paths before proxying bodies, credentials or upgrades', async t => {
+  const received: { url: string | undefined; headers: http.IncomingHttpHeaders; body: string }[] = [];
+  const upstream = http.createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += String(chunk);
+    received.push({ url: req.url, headers: req.headers, body });
+    res.setHeader('x-private-proof', 'must-not-leak');
+    res.end('private-upstream-body');
+  });
+  let upgrades = 0;
+  upstream.on('upgrade', (_req, socket) => { upgrades++; socket.end(); });
+  const upstreamUrl = await listen(upstream);
+  const gateway = createGateway({ pmUrl: upstreamUrl, agentUrl: upstreamUrl, webDevUrl: upstreamUrl });
+  const url = await listen(gateway);
+  t.after(async () => { await close(gateway); await close(upstream); });
+  for (const route of [
+    '/api/v1/internal', '/api/v1/internal/', '/api/v1/internal/agent-tools/reconcile?operationId=secret',
+    '/api/v1/%69nternal/agent-tools/reconcile', '/api/v1/in%74ernal/agent-tools/reconcile',
+    '/api/v1/public/../internal/agent-tools/reconcile',
+  ]) {
+    const response = await fetch(url + route, { method: 'POST',
+      headers: { authorization: 'Bearer private-service-proof', cookie: 'pm_v4_session=private', 'content-type': 'application/json' },
+      body: '{"requestHash":"private-body"}' });
+    assert.equal(response.status, 404, route);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('x-private-proof'), null);
+    assert.equal(await response.text(), '');
+  }
+  for (const method of ['GET', 'HEAD', 'OPTIONS']) {
+    const response = await fetch(url + '/api/v1/internal/agent-tools/reconcile', { method });
+    assert.equal(response.status, 404);
+  }
+  const encodedSeparator = await fetch(url + '/api/v1/internal%2fagent-tools/reconcile');
+  assert.equal(encodedSeparator.status, 400);
+  assert.equal(received.length, 0, 'private body and headers never reach any PM, Agent or dev upstream');
+  const address = new URL(url), socket = net.connect(Number(address.port), address.hostname);
+  await once(socket, 'connect');
+  socket.write(`GET /api/v1/%69nternal/agent-tools/reconcile HTTP/1.1\r\nHost: ${address.host}\r\nAuthorization: Bearer private-service-proof\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n`);
+  let response = '';
+  for await (const chunk of socket) response += chunk.toString();
+  assert.match(response, /^HTTP\/1\.1 404/);
+  assert.doesNotMatch(response, /private-service-proof|private-upstream-body|x-private-proof/);
+  assert.equal(upgrades, 0);
+  assert.equal(received.length, 0);
+  for (const route of ['/api/v1/internalish', '/api/v1/agent-tools', '/agent/api/mcp/clients']) {
+    assert.equal((await fetch(url + route)).status, 200, 'neighboring public routes retain their original proxy behavior');
+  }
+  assert.deepEqual(received.map(item => item.url), ['/api/v1/internalish', '/api/v1/agent-tools', '/api/mcp/clients']);
+});
+
 test('gateway forwards WebSocket upgrades and Vite dev traffic without changing Origin', async t => {
   const agent = http.createServer();
   let agentRequest: { url: string | undefined; host: string | undefined; origin: string | undefined } | undefined;

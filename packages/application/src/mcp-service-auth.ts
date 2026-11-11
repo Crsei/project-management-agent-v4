@@ -1,6 +1,6 @@
 import { DomainError, type Actor } from '../../domain/src/core.ts';
 import { introspectMcpGrant, verifyMcpServiceBearer, type McpInvocationIdentity, type McpServiceIdentity } from '../../infrastructure/src/mcp-service-auth.ts';
-import { pmToolTargetSchema } from '../../agent-contracts/src/pm-tools.ts';
+import { pmToolTargetSchema, pmToolRequestSchema } from '../../agent-contracts/src/pm-tools.ts';
 import { pmReferenceResolveRequestSchema } from '../../agent-contracts/src/pm-references.ts';
 import { AGENT_CHAT_TOOL_REGISTRY } from './agent-chat-tools.ts';
 import { assertProjectScope, getMembership } from './access.ts';
@@ -33,7 +33,11 @@ export function assertMcpEndpoint(identity: McpInvocationIdentity, request: Requ
     const tool = AGENT_CHAT_TOOL_REGISTRY.find(item => item.name === body?.name), selected = pmToolTargetSchema.safeParse(body?.target);
     const selectedAllowed = selected.success && selected.data.workspaceId === scope.workspaceId
       && (scope.projectId === null || selected.data.projectId === scope.projectId);
-    allowed = !!tool && (!tool.write || identity.access === 'full') && selectedAllowed && typeof body?.threadId === 'string' && identity.threadIds.includes(body.threadId) && typeof body.operationId === 'string' && typeof body.generationId === 'string' && typeof body.messageId === 'string';
+    const parsed = pmToolRequestSchema.safeParse(request.body);
+    const external = parsed.success && (parsed.data.executionRoot === 'external' || parsed.data.linkage?.executionRoot === 'external');
+    const correlationAllowed = external || typeof body?.threadId === 'string' && identity.threadIds.includes(body.threadId)
+      && typeof body.generationId === 'string' && typeof body.messageId === 'string';
+    allowed = !!tool && (!tool.write || identity.access === 'full') && selectedAllowed && parsed.success && correlationAllowed;
   }
   if (!allowed) throw new DomainError('mcp_scope_forbidden', 'MCP delegation cannot authorize this endpoint, action, thread or target', 403);
 }

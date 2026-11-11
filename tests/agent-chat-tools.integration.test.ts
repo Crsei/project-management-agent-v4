@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, it } from 'node:test';
@@ -24,6 +24,10 @@ import { DomainError, type Actor } from '../packages/domain/src/core.ts';
 import { WorkspaceError } from '../packages/pm-core/index.ts';
 import { createUser, createWorkspace } from '../packages/infrastructure/src/auth.ts';
 import { createPool, migrate } from '../packages/infrastructure/src/database.ts';
+import { createMcpServiceBearer, type McpInvocationIdentity } from '../packages/infrastructure/src/mcp-service-auth.ts';
+import { PM_TOOL_RECONCILE_PATH, createPmToolLinkageBearer, createPmToolReconcileBearer, pmToolRequestHash } from '../packages/infrastructure/src/pm-tool-service-auth.ts';
+import { pmToolReconcileResultSchema, type PmToolLinkage } from '../packages/agent-contracts/src/pm-tools.ts';
+import { readProjectAudit } from '../packages/application/src/project-audit.ts';
 
 const databaseUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 async function fixture() {
@@ -91,7 +95,7 @@ async function fixture() {
     function context(actor: Actor = owner, projects = [first.id], kind: 'workspace' | 'projects' = 'projects'): AgentChatToolContext {
       return { actor, workspaceId: ws.id, threadId: randomUUID(), messageId: randomUUID(), operationId: randomUUID(), scope: { kind, projectIds: projects } };
     }
-    return { close, database, coreWorkspaces, workspace, ws, owner, limited, first, second, task, peer, hidden, document, tools, options, context };
+    return { close, database, coreWorkspaces, workspace, ws, owner, limited, first, second, task, peer, hidden, document, tools, options, context, coreFor };
   } catch (error) { await close(); throw error; }
 }
 
@@ -165,7 +169,205 @@ describe('Agent tools use native PM services and real PostgreSQL authority', { s
     assert.equal(unknown.json().status, 'unknown');
     const noReplay = await app.inject({ method: 'POST', url: `${base}/call`, payload: pending });
     assert.equal(noReplay.json().status, 'unknown');
+    await f.database.query("UPDATE pm_agent_tool_operations SET status='failed',outcome_evidence=NULL,error='{\"code\":\"legacy_http_403\",\"message\":\"Old uncertain denial\"}'::jsonb WHERE operation_id=$1", [pending.operationId]);
+    const legacy = await app.inject({ method: 'POST', url: `${base}/result`, payload: pending });
+    assert.equal(legacy.json().status, 'unknown', 'An old HTTP-derived failure is not authoritative without original evidence');
+    assert.equal(legacy.json().certainty.evidence, 'unresolved');
     assert.equal(f.workspace.items({ entity: 'work_item', q: pending.arguments.title }).length, 0);
+  });
+
+  it('retains a commit before a delegated 403 and reconciles only its bound status after revocation', async t => {
+    const f = await fixture(); t.after(() => f.close());
+    const oldSecret = process.env.PM_AUTOMATION_SERVICE_SECRET, oldUrl = process.env.PM_MCP_AGENT_URL;
+    process.env.PM_AUTOMATION_SERVICE_SECRET = 'isolated-pm-operation-reconciliation-secret'.repeat(3);
+    process.env.PM_MCP_AGENT_URL = 'http://127.0.0.1:4123';
+    t.after(() => {
+      if (oldSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = oldSecret;
+      if (oldUrl === undefined) delete process.env.PM_MCP_AGENT_URL; else process.env.PM_MCP_AGENT_URL = oldUrl;
+    });
+    let revoked = false, executions = 0;
+    const target = { workspaceId: f.ws.id, projectId: f.first.id };
+    const delegation: McpInvocationIdentity = { grantId: randomUUID(), actorId: f.limited.id, scope: target, access: 'full', threadIds: ['original-thread'], version: 1 };
+    t.mock.method(globalThis, 'fetch', async () => revoked ? new Response(null, { status: 403 }) : Response.json(delegation));
+    const linkage: PmToolLinkage = { traceId: randomUUID(), invocationId: randomUUID(), executionRoot: 'generation',
+      inputMessageId: 'original-user-message', executionGrantId: randomUUID(), clientKind: 'chat', policy: 'full', enforcement: 'audit-only' };
+    const secretText = `BUSINESS-BODY-${randomUUID()}`;
+    const input = { operationId: randomUUID(), name: 'pm_create_task', arguments: { ...taskInput(f.first.id), description: secretText },
+      target, threadId: 'original-thread', messageId: 'assistant-output', generationId: 'original-generation', linkage };
+    const hash = pmToolRequestHash(input, f.limited.id);
+    const app = Fastify();
+    app.setErrorHandler((error, _request, reply) => reply.code(error instanceof DomainError ? error.status : 500).send({ error: { code: error instanceof DomainError ? error.code : 'unexpected' } }));
+    registerAgentToolRoutes(app, { database: () => f.database, actor: async () => f.limited, coreWorkspaces: f.coreWorkspaces,
+      tools: { ...f.tools, async execute(name, args, context) {
+        executions++;
+        const result = await f.tools.execute(name, args, context);
+        await f.database.query('UPDATE memberships SET revoked_at=clock_timestamp(),version=version+1 WHERE workspace_id=$1 AND user_id=$2', [f.ws.id, f.limited.id]);
+        revoked = true;
+        return result;
+      } } });
+    t.after(() => app.close());
+    const headers = { authorization: `Bearer ${createMcpServiceBearer(delegation)}`, 'x-pm-tool-linkage': createPmToolLinkageBearer(f.limited.id, hash, linkage) };
+    const call = await app.inject({ method: 'POST', url: `/api/v1/workspaces/${f.ws.id}/agent-tools/call`, headers, payload: input });
+    assert.equal(call.statusCode, 403);
+    const stored = (await f.database.query<{ status: string; result: { receipt: { commandId: string } }; linkage: PmToolLinkage }>('SELECT status,result,linkage FROM pm_agent_tool_operations WHERE operation_id=$1', [input.operationId])).rows[0]!;
+    assert.equal(stored.status, 'succeeded'); assert.deepEqual(stored.linkage, linkage);
+    const proof = { operationId: input.operationId, actorId: f.limited.id, target, requestHash: hash };
+    const bearer = createPmToolReconcileBearer(proof);
+    const internal = await app.inject({ method: 'POST', url: PM_TOOL_RECONCILE_PATH, headers: { authorization: `Bearer ${bearer}` }, payload: proof });
+    assert.equal(internal.statusCode, 200);
+    const status = pmToolReconcileResultSchema.parse(internal.json());
+    assert.equal(status.status, 'succeeded'); assert.equal(status.evidence, 'operation');
+    assert.deepEqual(status.commandIds, [stored.result.receipt.commandId]);
+    assert.equal(internal.body.includes(secretText), false);
+    for (const key of ['result', 'arguments', 'error', 'title', 'revision', 'cookie', 'token']) assert.equal(key in status, false);
+    assert.equal((await app.inject({ method: 'POST', url: PM_TOOL_RECONCILE_PATH, headers: { authorization: `Bearer ${bearer}` }, payload: proof })).statusCode, 401, 'Consumed nonce survives in SQL');
+    for (const authorization of ['Bearer ordinary-user-token', headers.authorization]) {
+      assert.equal((await app.inject({ method: 'POST', url: PM_TOOL_RECONCILE_PATH, headers: { authorization }, payload: proof })).statusCode, 401);
+    }
+    for (const forged of [{ ...proof, actorId: f.owner.id }, { ...proof, target: { ...target, projectId: f.second.id } }, { ...proof, operationId: randomUUID() }]) {
+      assert.equal((await app.inject({ method: 'POST', url: PM_TOOL_RECONCILE_PATH, headers: { authorization: `Bearer ${createPmToolReconcileBearer(forged)}` }, payload: forged })).statusCode, 404);
+    }
+    assert.equal((await app.inject({ method: 'POST', url: `/api/v1/workspaces/${f.ws.id}/agent-tools/result`, headers, payload: input })).statusCode, 403);
+    // Fault injection: file/audit committed, but the original PM delivery record was not finished.
+    await f.database.query("UPDATE pm_agent_tool_operations SET status='unknown',result=NULL,outcome_evidence=NULL,finished_at=NULL WHERE operation_id=$1", [input.operationId]);
+    const journalProof = await app.inject({ method: 'POST', url: PM_TOOL_RECONCILE_PATH,
+      headers: { authorization: `Bearer ${createPmToolReconcileBearer(proof)}` }, payload: proof });
+    assert.equal(journalProof.json().status, 'succeeded'); assert.equal(journalProof.json().evidence, 'native_journal');
+    assert.equal((await f.database.query('SELECT result FROM pm_agent_tool_operations WHERE operation_id=$1', [input.operationId])).rows[0]!.result, null);
+    await f.database.query('UPDATE memberships SET revoked_at=NULL,version=version+1 WHERE workspace_id=$1 AND user_id=$2', [f.ws.id, f.limited.id]);
+    revoked = false;
+    const restored = await app.inject({ method: 'POST', url: `/api/v1/workspaces/${f.ws.id}/agent-tools/result`,
+      headers: { authorization: `Bearer ${createMcpServiceBearer(delegation)}` }, payload: input });
+    assert.equal(restored.json().status, 'succeeded');
+    assert.equal(restored.json().result.receipt.commandId, stored.result.receipt.commandId, 'Authorized hydration restores the original receipt without another write');
+    assert.ok((await f.database.query('SELECT result FROM pm_agent_tool_operations WHERE operation_id=$1', [input.operationId])).rows[0]!.result);
+    assert.equal(executions, 1);
+    assert.equal(f.workspace.items({ entity: 'work_item', q: input.arguments.title }).length, 1);
+    assert.equal((await f.database.query('SELECT id FROM project_audit WHERE workspace_id=$1 AND command_id=$2', [f.ws.id, status.commandIds[0]])).rowCount, 1);
+  });
+
+  it('keeps missing journals and interrupted audit persistence unresolved, then uses authorized original audit recovery once', async t => {
+    const f = await fixture(); t.after(() => f.close());
+    const oldSecret = process.env.PM_AUTOMATION_SERVICE_SECRET;
+    process.env.PM_AUTOMATION_SERVICE_SECRET = 'isolated-pm-audit-reconciliation-secret'.repeat(3);
+    t.after(() => { if (oldSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = oldSecret; });
+    const app = Fastify();
+    app.setErrorHandler((error, _request, reply) => reply.code(error instanceof DomainError ? error.status : 500).send({ error: 'safe-error' }));
+    let executions = 0;
+    registerAgentToolRoutes(app, { database: () => f.database, actor: async () => f.owner, coreWorkspaces: f.coreWorkspaces,
+      tools: { ...f.tools, execute: async (...args) => { executions++; return f.tools.execute(...args); } } });
+    t.after(() => app.close());
+    const input = { operationId: randomUUID(), name: 'pm_create_task', arguments: taskInput(f.first.id),
+      target: { workspaceId: f.ws.id, projectId: f.first.id }, threadId: 'thread', messageId: 'output', generationId: 'generation' };
+    const proof = { operationId: input.operationId, actorId: f.owner.id, target: input.target, requestHash: pmToolRequestHash(input, f.owner.id) };
+    const internal = () => app.inject({ method: 'POST', url: PM_TOOL_RECONCILE_PATH, headers: { authorization: `Bearer ${createPmToolReconcileBearer(proof)}` }, payload: proof });
+    await f.database.query(`CREATE FUNCTION reject_agent_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.source='core_http' THEN RAISE EXCEPTION 'injected agent audit outage'; END IF; RETURN NEW; END $$;
+      CREATE TRIGGER reject_agent_audit BEFORE INSERT ON project_audit FOR EACH ROW EXECUTE FUNCTION reject_agent_audit()`);
+    const base = `/api/v1/workspaces/${f.ws.id}/agent-tools`;
+    const first = await app.inject({ method: 'POST', url: `${base}/call`, payload: input });
+    assert.equal(first.json().status, 'unknown');
+    const created = f.workspace.items({ entity: 'work_item', q: input.arguments.title });
+    assert.equal(created.length, 1);
+    const revision = created[0]!.revision;
+    assert.equal((await internal()).json().status, 'unknown', 'File completion with missing SQL audit is not a final proof');
+    await f.database.query('DROP TRIGGER reject_agent_audit ON project_audit; DROP FUNCTION reject_agent_audit()');
+    const journal = join(f.workspace.root, '.pm/state/pm-command-journal.ndjson'), held = `${journal}.held`;
+    await rename(journal, held);
+    try {
+      assert.equal((await internal()).json().status, 'unknown', 'Journal absence never proves nonexecution');
+      assert.equal((await app.inject({ method: 'POST', url: `${base}/call`, payload: input })).json().status, 'unknown');
+    } finally { await rename(held, journal); }
+    const recovered = await app.inject({ method: 'POST', url: `${base}/result`, payload: input });
+    assert.equal(recovered.json().status, 'succeeded');
+    const commandId = recovered.json().result.receipt.commandId;
+    assert.equal((await internal()).json().status, 'succeeded');
+    assert.equal((await app.inject({ method: 'POST', url: `${base}/result`, payload: input })).json().status, 'succeeded');
+    assert.equal(executions, 1); assert.equal(f.workspace.get(created[0]!.id).revision, revision);
+    assert.equal((await f.database.query('SELECT id FROM project_audit WHERE workspace_id=$1 AND command_id=$2', [f.ws.id, commandId])).rowCount, 1);
+  });
+
+  it('uses original SQL receipts but never absence or a native deletion tombstone as execution proof', async t => {
+    const f = await fixture(); t.after(() => f.close());
+    const context = f.context(), args = { projectId: f.first.id, taskId: f.task.id, content: 'Private comment body' };
+    const identity = f.tools.recoveryIdentity('pm_create_comment', args, context)!;
+    assert.deepEqual(await f.tools.inspectOutcome(identity, f.owner.id, f.ws.id), { status: 'unknown', evidence: 'unresolved' });
+    await f.tools.execute('pm_create_comment', args, context);
+    assert.deepEqual(await f.tools.inspectOutcome(identity, f.owner.id, f.ws.id), { status: 'succeeded', evidence: 'command_receipt' });
+    assert.deepEqual(await f.tools.inspectOutcome({ ...identity, hash: 'f'.repeat(64) }, f.owner.id, f.ws.id), { status: 'unknown', evidence: 'unresolved' });
+    assert.deepEqual(await f.tools.inspectOutcome(identity, f.limited.id, f.ws.id), { status: 'unknown', evidence: 'unresolved' });
+    const creationContext = f.context(), creationArgs = { ...taskInput(f.first.id), title: 'Conservative deletion proof' };
+    const creation = await f.tools.execute('pm_create_task', creationArgs, creationContext);
+    const task = f.workspace.get(creation.receipt!.targetId!);
+    await f.tools.execute('pm_archive_task', { id: task.id, revision: task.revision }, f.context());
+    const archived = f.workspace.get(task.id), deletionContext = f.context(), deletionArgs = { id: task.id, revision: archived.revision };
+    const deletion = f.tools.recoveryIdentity('pm_delete_task', deletionArgs, deletionContext)!;
+    await f.tools.execute('pm_delete_task', deletionArgs, deletionContext);
+    assert.deepEqual(await f.tools.inspectOutcome(deletion, f.owner.id, f.ws.id), { status: 'unknown', evidence: 'unresolved' });
+    assert.equal(await f.tools.recover('pm_delete_task', deletionArgs, deletionContext), null);
+    const originalCreation = await f.tools.recover('pm_create_task', creationArgs, creationContext);
+    assert.deepEqual(originalCreation?.receipt, creation.receipt, 'A deleted current task does not erase the exact original creation receipt');
+    assert.deepEqual(originalCreation?.items, []);
+  });
+
+  it('links trusted traces to exact existing audit rows with full audit-only policy and current audit authority', async t => {
+    const f = await fixture(); t.after(() => f.close());
+    const oldSecret = process.env.PM_AUTOMATION_SERVICE_SECRET;
+    process.env.PM_AUTOMATION_SERVICE_SECRET = 'isolated-pm-audit-trace-secret'.repeat(3);
+    t.after(() => { if (oldSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = oldSecret; });
+    const app = Fastify();
+    app.setErrorHandler((error, _request, reply) => reply.code(error instanceof DomainError ? error.status : 500).send({ error: 'safe-error' }));
+    registerAgentToolRoutes(app, { database: () => f.database, actor: async request => request.headers['x-test-actor'] === 'limited' ? f.limited : f.owner,
+      coreWorkspaces: f.coreWorkspaces, tools: f.tools });
+    t.after(() => app.close());
+    const target = { workspaceId: f.ws.id, projectId: f.first.id }, traceId = randomUUID(), privateBody = `DO-NOT-AUDIT-${randomUUID()}`;
+    const input = { operationId: randomUUID(), name: 'pm_create_task', arguments: { ...taskInput(f.first.id), description: privateBody }, target,
+      threadId: 'thread', messageId: 'output-message', generationId: 'generation',
+      linkage: { traceId, invocationId: randomUUID(), inputMessageId: 'accepted-input-message', executionRoot: 'generation' as const,
+        executionGrantId: randomUUID(), clientKind: 'chat' as const, policy: 'full' as const, enforcement: 'audit-only' as const } };
+    const base = `/api/v1/workspaces/${f.ws.id}/agent-tools`;
+    const headers = { 'x-pm-tool-linkage': createPmToolLinkageBearer(f.owner.id, pmToolRequestHash(input, f.owner.id), input.linkage) };
+    const first = await app.inject({ method: 'POST', url: `${base}/call`, headers, payload: input });
+    assert.equal(first.statusCode, 200); assert.equal(first.json().status, 'succeeded');
+    assert.equal(first.json().linkage.traceId, traceId); assert.equal(first.json().linkage.policy, 'full');
+    const commandId = first.json().result.receipt.commandId;
+    assert.match(commandId, /^[a-f0-9]{64}$/);
+    assert.deepEqual(first.json().commandIds, [commandId]); assert.deepEqual(first.json().result.receipt.linkage, input.linkage);
+    assert.deepEqual((await app.inject({ method: 'POST', url: `${base}/call`, headers, payload: input })).json(), first.json());
+    for (const altered of [{ ...input, arguments: { ...input.arguments, title: 'Different request' } }, { ...input, target: { ...target, projectId: f.second.id } }]) {
+      assert.equal((await app.inject({ method: 'POST', url: `${base}/call`, payload: altered })).statusCode, 409);
+    }
+    assert.equal((await app.inject({ method: 'POST', url: `${base}/call`, headers: { 'x-test-actor': 'limited' }, payload: input })).statusCode, 409);
+    const next = { ...input, operationId: randomUUID(), arguments: { ...input.arguments, title: 'Second independently bound call' },
+      linkage: { ...input.linkage, invocationId: randomUUID() } };
+    const second = await app.inject({ method: 'POST', url: `${base}/call`, payload: next,
+      headers: { 'x-pm-tool-linkage': createPmToolLinkageBearer(f.owner.id, pmToolRequestHash(next, f.owner.id), next.linkage) } });
+    assert.equal(second.json().linkage.traceId, traceId);
+    assert.notEqual(second.json().commandIds[0], commandId);
+    const ctx = { sql: f.database, actor: f.owner, workspaceId: f.ws.id, membership: await getMembership(f.database, f.owner, f.ws.id), now: new Date(), core: await f.coreFor(f.owner) };
+    const exact = await readProjectAudit(ctx, f.first.id, { commandId, operationId: input.operationId });
+    assert.equal(exact.entries.length, 1); assert.equal(exact.entries[0]!.commandId, commandId);
+    assert.deepEqual(exact.entries[0]!.correlation, { operationId: input.operationId, traceId, invocationId: input.linkage.invocationId,
+      executionRoot: 'generation', executionGrantId: input.linkage.executionGrantId, clientKind: 'chat', policy: 'full', enforcement: 'audit-only' });
+    assert.equal(JSON.stringify(exact).includes(privateBody), false);
+    assert.equal(JSON.stringify(exact).includes('requestHash'), false);
+    assert.equal(JSON.stringify(exact).includes('inputMessageId'), false);
+    assert.equal((await readProjectAudit(ctx, f.first.id, { commandId, operationId: next.operationId })).entries.length, 0);
+    assert.equal((await readProjectAudit(ctx, f.second.id, { commandId })).entries.length, 0);
+    const page = await readProjectAudit(ctx, f.first.id, { limit: 1 });
+    assert.ok(page.nextCursor);
+    await assert.rejects(readProjectAudit(ctx, f.first.id, { cursor: page.nextCursor, commandId }), (error: unknown) => error instanceof DomainError && error.code === 'validation_failed');
+    const limitedCtx = { ...ctx, actor: f.limited, membership: await getMembership(f.database, f.limited, f.ws.id), core: await f.coreFor(f.limited) };
+    await assert.rejects(readProjectAudit(limitedCtx, f.first.id, { commandId }), (error: unknown) => error instanceof DomainError && error.status === 403);
+    const forged = { ...input, operationId: randomUUID(), arguments: { ...input.arguments, title: 'Unsigned correlation does not grant provenance' } };
+    const unsigned = await app.inject({ method: 'POST', url: `${base}/call`, payload: forged });
+    assert.equal(unsigned.json().status, 'succeeded'); assert.equal(unsigned.json().linkage, undefined, 'An untrusted trace hint cannot become audit attribution');
+    const external = { operationId: randomUUID(), name: 'pm_create_task', arguments: { ...taskInput(f.first.id), title: 'External full-access call' }, target, executionRoot: 'external' };
+    const externalResult = await app.inject({ method: 'POST', url: `${base}/call`, payload: external });
+    assert.equal(externalResult.json().status, 'succeeded');
+    assert.equal(externalResult.json().threadId, ''); assert.equal(externalResult.json().messageId, ''); assert.equal(externalResult.json().generationId, '');
+    assert.equal(externalResult.json().linkage.executionRoot, 'external'); assert.equal(externalResult.json().linkage.enforcement, 'audit-only');
+    assert.equal((await app.inject({ method: 'POST', url: `${base}/result`, payload: external })).json().linkage.traceId, externalResult.json().linkage.traceId);
   });
   it('bounds and sources query/body pages, intersects explicit workspace grants and current membership', async t => {
     const f = await fixture(); t.after(() => f.close());

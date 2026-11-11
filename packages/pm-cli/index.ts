@@ -6,6 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { parseDocument } from 'yaml';
 import type { Diagnostic, FileRecord, UnsupportedFile } from '../pm-schema/index.ts';
 import { authenticate, CliAuthError, loginCli, logoutCli, serviceOrigin } from './auth.ts';
+import { pluginOperation, pluginRead } from './plugin-adapter.ts';
+import { managePlugin, PLUGIN_POLICY_NOTICE } from './plugin-distribution.ts';
 
 const HELP = `Markdown PM Lab — operate the same live workspace as the browser
 
@@ -13,6 +15,11 @@ Usage:
   pm login [--email EMAIL]
   pm logout
   pm protocol
+  pm plugin tools
+  pm plugin workspaces
+  pm plugin call|result --file ORIGINAL_REQUEST.json
+  pm plugin generate|install|update --root ABSOLUTE_PRIVATE_DIR --origin CONCRETE_ORIGIN
+  pm plugin uninstall --root ABSOLUTE_PRIVATE_DIR
   pm file ID
   pm context ID
   pm task list [--project ID] [--status todo] [--priority high] [--q text] [--sort id] [--archived exclude|include|only]
@@ -83,6 +90,10 @@ removes only this origin's saved session; failures retain local credentials.
 PM_WORKSPACE_ID selects the workspace; otherwise the CLI uses the single
 workspace the account can access.
 Commands operate on /api/v1/workspaces/{workspaceId}/core, the Markdown core.
+Plugin adapters use the same PM login, explicit targets, revisions and native
+business service. Keep the original request file and operationId. Repeated
+plugin call attempts query /result only; unknown is never redispatched.
+Plugin distribution never rewrites native client configs or reads their tokens.
 `;
 
 const FIELD_OPTIONS = ['title', 'project', 'kind', 'status', 'priority', 'parent', 'blocked-by', 'related-to', 'assignee', 'labels', 'due', 'owner', 'goal', 'document-kind', 'start', 'archived', 'cycle', 'milestone', 'module', 'requirement', 'release', 'goals', 'target', 'unit', 'version'];
@@ -279,6 +290,27 @@ async function executeCli(args: string[]): Promise<void> {
   if (!args.length || args.includes('--help') || args[0] === 'help' || args[0] === '-h') {
     console.log(HELP);
     return;
+  }
+  if (args[0] === 'plugin') {
+    const action = args[1];
+    if (action === 'tools' || action === 'workspaces') {
+      if (args.length !== 2) throw new Error(`Usage: pm plugin ${action}`);
+      console.error(PLUGIN_POLICY_NOTICE);
+      console.log(JSON.stringify(await pluginRead(action), null, 2));
+      return;
+    }
+    if (action === 'call' || action === 'result') {
+      const options = parseOptions(args.slice(2), ['file']);
+      console.error(PLUGIN_POLICY_NOTICE);
+      console.log(JSON.stringify(await pluginOperation(action, await inputFile(options.file)), null, 2));
+      return;
+    }
+    if (action === 'generate' || action === 'install' || action === 'update' || action === 'uninstall') {
+      const options = parseOptions(args.slice(2), action === 'uninstall' ? ['root'] : ['root', 'origin']);
+      console.log(JSON.stringify(await managePlugin(action, nonempty(options.root, '--root'), action === 'uninstall' ? undefined : nonempty(options.origin, '--origin')), null, 2));
+      return;
+    }
+    throw new Error('Usage: pm plugin tools|workspaces|call|result|generate|install|update|uninstall');
   }
   if (args[0] === 'login') {
     const options = parseOptions(args.slice(1), ['email']);

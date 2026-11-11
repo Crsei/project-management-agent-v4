@@ -8,7 +8,7 @@ export const pmReferenceInputSchema = z.strictObject({
   kind: pmReferenceKindSchema,
   id: z.string().trim().min(1).max(200),
   projectId: z.string().regex(/^PRJ-\d+$/).nullable(),
-  /** Selected revision; null means no pin and the server returns the current one. */
+  /** Null selects current metadata at admission; a non-null revision must still match. Never a historical body selector. */
   revision: z.string().trim().min(1).max(200).nullable(),
 });
 export type PmReferenceInput = z.infer<typeof pmReferenceInputSchema>;
@@ -37,3 +37,23 @@ export const pmReferenceResolveResponseSchema = z.strictObject({
   items: z.array(pmReferenceResolutionSchema),
 });
 export type PmReferenceResolveResponse = z.infer<typeof pmReferenceResolveResponseSchema>;
+
+/** Server-accepted reference metadata, not a PM document/body snapshot or authority grant. */
+export const turnContextSchema = z.strictObject({
+  version: z.literal(1),
+  threadId: z.string().min(1).max(256),
+  /** Accepted input USER message; never the generation's assistant output messageId. */
+  messageId: z.string().min(1).max(256),
+  acceptedAt: z.iso.datetime(),
+  pmReferences: z.array(pmReferenceResolutionSchema).max(50),
+  executionGrantId: z.uuid().optional(),
+});
+export type TurnContext = z.infer<typeof turnContextSchema>;
+
+/** Informational execution binding; existing authentication, leases and PM checks remain authoritative. */
+export const executionPolicySchema = z.strictObject({
+  access: z.literal("full"),
+  mode: z.literal("audit-only"),
+  notice: z.string(),
+});
+export type ExecutionPolicy = z.infer<typeof executionPolicySchema>;

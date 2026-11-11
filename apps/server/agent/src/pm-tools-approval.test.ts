@@ -119,10 +119,16 @@ test("destructive PM tools wait for approval and execute the original request on
       },
       request: { operationId: foreignId, name: "pm_archive_task", arguments: { id: "TASK-9", revision: "rev-1" }, scope: { kind: "workspace", projectIds: [] }, threadId: "foreign-thread", messageId: "m", generationId: "g" },
     });
-    assert.equal((await pmToolRoutes.request("http://localhost/pm-tools/threads/foreign-thread/calls", { headers })).status, 409);
+    const foreignCalls = await pmToolRoutes.request("http://localhost/pm-tools/threads/foreign-thread/calls", { headers });
+    assert.equal(foreignCalls.status, 200);
+    const foreignProjection = await foreignCalls.json() as { items: { visibility: string }[] };
+    assert.equal(foreignProjection.items[0]?.visibility, "unavailable");
+    assert.doesNotMatch(JSON.stringify(foreignProjection), /TASK-9|Historical interrupted write|pm_archive_task/);
     assert.equal((await pmToolRoutes.request(`http://localhost/pm-tools/calls/${foreignId}/approve`, { method: "POST", headers })).status, 409);
-    assert.equal((await pmToolRoutes.request(`http://localhost/pm-tools/calls/${foreignId}/reconcile`, { method: "POST", headers })).status, 409,
-      "a historical unknown write without an explicit target must never be upgraded or replayed");
+    const foreignReconcile = await pmToolRoutes.request(`http://localhost/pm-tools/calls/${foreignId}/reconcile`, { method: "POST", headers });
+    assert.equal(foreignReconcile.status, 200);
+    assert.equal((await foreignReconcile.json() as { visibility: string }).visibility, "unavailable",
+      "a historical unknown write without an explicit target remains an unavailable placeholder, never upgraded or replayed");
     assert.equal((await send({ ...input, operationId: foreignId })).status, 400);
     assert.equal(calls.length, 0);
 

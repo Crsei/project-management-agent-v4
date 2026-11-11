@@ -59891,8 +59891,8 @@ paths:
             type: string
             minLength: 1
             maxLength: 2048
-          description: Opaque ProjectAuditPage.nextCursor; pass unchanged. Bound to the authenticated actor, workspace, project
-            and initial history high-water mark. Current permission is checked on every page.
+          description: Opaque ProjectAuditPage.nextCursor; pass unchanged. Bound to actor, workspace, project, exact
+            command/operation filters and initial history high-water mark. Current permission is checked on every page.
         - name: limit
           in: query
           required: false
@@ -59901,6 +59901,20 @@ paths:
             minimum: 1
             maximum: 100
             default: 30
+        - name: commandId
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^(?:[a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$
+          description: Exact original UUID or native SHA-256 command identity; never coerced to a new UUID.
+        - name: operationId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Exact original Agent operation; combined with commandId using AND. Does not grant operation or trace access.
       responses:
         "200":
           description: Success
@@ -59952,9 +59966,10 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
       operationId: getProjectAudit
       description: Requires current audit.read and domain.read for this project on every page. Follow nextCursor until null;
-        the first page is not the complete history. Safe allowlisted field changes only; private entries are visible
-        solely to their actor. History starts with controlled writes after audit activation; it does not claim
-        attribution for external file edits or rely on retained SSE notifications.
+        the first page is not the complete history. Safe allowlisted field changes and trusted optional operation/trace
+        correlation only; private entries are visible solely to their actor. Legacy records omit correlation. History
+        starts with controlled writes after audit activation; it does not attribute external file edits or rely on
+        retained SSE notifications.
   /api/v1/workspaces/{workspaceId}/tasks/{taskId}/comments:
     get:
       summary: Read authorized comments on the current task and pinned project; deletion is a recoverable tombstone, not erasure
@@ -64573,6 +64588,53 @@ components:
                   type:
                     - string
                     - "null"
+                linkage:
+                  type: object
+                  properties:
+                    traceId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    invocationId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    executionRoot:
+                      type: string
+                      enum:
+                        - generation
+                        - external
+                    inputMessageId:
+                      type: string
+                      minLength: 1
+                      maxLength: 200
+                    executionGrantId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    clientKind:
+                      type: string
+                      enum:
+                        - chat
+                        - mcp
+                        - cli
+                        - plugin
+                        - automation
+                        - api
+                    policy:
+                      type: string
+                      const: full
+                    enforcement:
+                      type: string
+                      const: audit-only
+                  required:
+                    - traceId
+                    - invocationId
+                    - executionRoot
+                    - clientKind
+                    - policy
+                    - enforcement
+                  additionalProperties: false
               required:
                 - kind
                 - operationId
@@ -64706,6 +64768,53 @@ components:
                   type:
                     - string
                     - "null"
+                linkage:
+                  type: object
+                  properties:
+                    traceId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    invocationId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    executionRoot:
+                      type: string
+                      enum:
+                        - generation
+                        - external
+                    inputMessageId:
+                      type: string
+                      minLength: 1
+                      maxLength: 200
+                    executionGrantId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    clientKind:
+                      type: string
+                      enum:
+                        - chat
+                        - mcp
+                        - cli
+                        - plugin
+                        - automation
+                        - api
+                    policy:
+                      type: string
+                      const: full
+                    enforcement:
+                      type: string
+                      const: audit-only
+                  required:
+                    - traceId
+                    - invocationId
+                    - executionRoot
+                    - clientKind
+                    - policy
+                    - enforcement
+                  additionalProperties: false
               required:
                 - kind
                 - operationId
@@ -64828,6 +64937,53 @@ components:
                   type:
                     - string
                     - "null"
+                linkage:
+                  type: object
+                  properties:
+                    traceId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    invocationId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    executionRoot:
+                      type: string
+                      enum:
+                        - generation
+                        - external
+                    inputMessageId:
+                      type: string
+                      minLength: 1
+                      maxLength: 200
+                    executionGrantId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    clientKind:
+                      type: string
+                      enum:
+                        - chat
+                        - mcp
+                        - cli
+                        - plugin
+                        - automation
+                        - api
+                    policy:
+                      type: string
+                      const: full
+                    enforcement:
+                      type: string
+                      const: audit-only
+                  required:
+                    - traceId
+                    - invocationId
+                    - executionRoot
+                    - clientKind
+                    - policy
+                    - enforcement
+                  additionalProperties: false
               required:
                 - kind
                 - operationId
@@ -65002,6 +65158,53 @@ components:
                   type:
                     - string
                     - "null"
+                linkage:
+                  type: object
+                  properties:
+                    traceId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    invocationId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    executionRoot:
+                      type: string
+                      enum:
+                        - generation
+                        - external
+                    inputMessageId:
+                      type: string
+                      minLength: 1
+                      maxLength: 200
+                    executionGrantId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    clientKind:
+                      type: string
+                      enum:
+                        - chat
+                        - mcp
+                        - cli
+                        - plugin
+                        - automation
+                        - api
+                    policy:
+                      type: string
+                      const: full
+                    enforcement:
+                      type: string
+                      const: audit-only
+                  required:
+                    - traceId
+                    - invocationId
+                    - executionRoot
+                    - clientKind
+                    - policy
+                    - enforcement
+                  additionalProperties: false
               required:
                 - kind
                 - operationId
@@ -65129,6 +65332,53 @@ components:
                   type:
                     - string
                     - "null"
+                linkage:
+                  type: object
+                  properties:
+                    traceId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    invocationId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    executionRoot:
+                      type: string
+                      enum:
+                        - generation
+                        - external
+                    inputMessageId:
+                      type: string
+                      minLength: 1
+                      maxLength: 200
+                    executionGrantId:
+                      type: string
+                      format: uuid
+                      pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                    clientKind:
+                      type: string
+                      enum:
+                        - chat
+                        - mcp
+                        - cli
+                        - plugin
+                        - automation
+                        - api
+                    policy:
+                      type: string
+                      const: full
+                    enforcement:
+                      type: string
+                      const: audit-only
+                  required:
+                    - traceId
+                    - invocationId
+                    - executionRoot
+                    - clientKind
+                    - policy
+                    - enforcement
+                  additionalProperties: false
               required:
                 - kind
                 - operationId
@@ -68226,6 +68476,58 @@ components:
                   additionalProperties: false
               private:
                 type: boolean
+              correlation:
+                type: object
+                properties:
+                  operationId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  traceId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  invocationId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  executionRoot:
+                    type: string
+                    enum:
+                      - generation
+                      - external
+                  executionGrantId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  delegationId:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                  clientKind:
+                    type: string
+                    enum:
+                      - chat
+                      - mcp
+                      - cli
+                      - plugin
+                      - automation
+                      - api
+                  policy:
+                    type: string
+                    const: full
+                  enforcement:
+                    type: string
+                    const: audit-only
+                required:
+                  - operationId
+                  - traceId
+                  - invocationId
+                  - executionRoot
+                  - clientKind
+                  - policy
+                  - enforcement
+                additionalProperties: false
             required:
               - id
               - projectId

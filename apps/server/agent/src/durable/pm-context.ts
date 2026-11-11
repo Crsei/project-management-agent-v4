@@ -71,7 +71,7 @@ export async function resolvePmReferences(
     const group = groups.get(reference.workspaceId);
     if (group) group.push(index); else groups.set(reference.workspaceId, [index]);
   }
-  const items = new Array<PmReferenceResolution>(body.references.length);
+  const items: PmReferenceResolution[] = [];
   await Promise.all([...groups].map(async ([workspaceId, indices]) => {
     const parsed = pmReferenceResolveResponseSchema.safeParse(await pmPost(
       `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/agent-references/resolve`,
@@ -86,6 +86,8 @@ export async function resolvePmReferences(
       if (item.workspaceId !== input.workspaceId || item.kind !== input.kind || item.id !== input.id ||
           input.projectId !== null && item.projectId !== input.projectId)
         throw new DurableError(412, "pm_reference_invalid", `PM 未返回引用 ${input.id} 的匹配目标解析结果，未接受本次请求。`);
+      if (item.availability === "available" && input.revision !== null && item.revision !== input.revision)
+        throw new DurableError(412, "pm_reference_stale", "所选 PM 引用版本已变化；当前解析器只读取当前元数据，请显式刷新引用后重新发送。");
       items[index] = item;
     }
   }));
@@ -125,12 +127,16 @@ export function assertResolvedReferences(items: readonly PmReferenceResolution[]
       throw new DurableError(403, "pm_reference_forbidden", `引用 ${item.id} 当前不可访问，未接受本次请求。`);
     if (item.availability === "deleted")
       throw new DurableError(412, "pm_reference_unavailable", `引用 ${item.id} 已被归档或删除，未接受本次请求。`);
+    if (item.availability === "stale")
+      throw new DurableError(412, "pm_reference_stale", "所选 PM 引用版本已变化；不以当前元数据或正文冒充旧版本，请显式刷新引用。");
+    if (!item.revision)
+      throw new DurableError(412, "pm_reference_invalid", "PM 引用缺少可冻结的修订，未接受本次请求。");
   }
 }
 
 export function pmContextPromptLine(references: readonly PmReferenceResolution[] | undefined): string | undefined {
   if (!references?.length) return undefined;
-  return `显式 PM 引用（仅目标、ID、标题与修订，不含正文，也不授予额外权限）：${JSON.stringify(references.map(item => ({
+  return `本次消息冻结的显式 PM 引用（仅受理时核验的目标、ID、标题与修订元数据；不是历史正文快照，不包含正文，也不授予额外权限）：${JSON.stringify(references.map(item => ({
     workspaceId: item.workspaceId, projectId: item.projectId, kind: item.kind, id: item.id,
     title: item.title, revision: item.revision, availability: item.availability, reason: item.reason,
   })))}\n使用 PM 工具读取或修改引用的明确 workspaceId/projectId 目标。代码目录与 PM 文档存储相互独立，不得假设代码目录包含 .pm/core。原生状态转换、关系或数据库评论必须使用相应 PM 工具；文件编辑或模型文字不是原生任务完成、审核或数据库写入的证明。`;

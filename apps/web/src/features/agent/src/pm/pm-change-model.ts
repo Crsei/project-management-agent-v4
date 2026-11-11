@@ -37,6 +37,7 @@ const TOOL_STATE: Readonly<Record<NativeOutputItem["status"], PmChangeState>> = 
   failed: "failed",
   cancelled: "failed",
   interrupted: "failed",
+  unknown: "unknown",
 };
 
 const KIND_ACTIONS: Readonly<Record<PmChangeKind, [string, string]>> = {

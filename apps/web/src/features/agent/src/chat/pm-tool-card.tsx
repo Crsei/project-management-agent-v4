@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { PmToolCallRecord } from "@agent-workspace/contracts/pm-tools";
+import type { PmToolCallProjection, PmToolCallRecord } from "@agent-workspace/contracts/pm-tools";
 import { workspaceClient } from "../network";
 import { useAgentText } from "../i18n";
+import type { ProjectAuditPage } from "../../../../../../../packages/contracts/src/client";
+import { pmJson } from "../pm/state";
 
-export type PmToolRecord = PmToolCallRecord;
+export type PmToolRecord = PmToolCallProjection;
 
 function objectHref(workspaceId: string | null, kind: string, id: string, projectId?: string | null) {
   if (!workspaceId) return undefined;
@@ -13,7 +15,23 @@ function objectHref(workspaceId: string | null, kind: string, id: string, projec
 
 export function PmToolCard({ record, onUpdate }: { record: PmToolRecord; onUpdate: (record: PmToolRecord) => void }) {
   const t = useAgentText();
+  if (record.visibility === "redacted" || record.visibility === "unavailable" || !("name" in record)) {
+    return <section className="native-output-card pm-tool-card" data-visibility={record.visibility}>
+      <header><strong>{t("PM 工具记录", "PM tool record")}</strong></header>
+      <p role="status" className="native-card-body">{record.visibility === "redacted"
+        ? t("内容已不可访问。", "This content is no longer accessible.")
+        : t("暂时无法核验内容访问权限，请稍后刷新。", "Content access cannot be verified right now. Refresh later.")}</p>
+    </section>;
+  }
+  return <VisiblePmToolCard record={record} onUpdate={onUpdate} />;
+}
+
+function VisiblePmToolCard({ record, onUpdate }: { record: PmToolCallRecord; onUpdate: (record: PmToolRecord) => void }) {
+  const t = useAgentText();
   const notified = useRef(false);
+  useEffect(() => {
+    if (window.location.hash === `#pm-operation-${record.operationId}`) document.getElementById(`pm-operation-${record.operationId}`)?.scrollIntoView({ block: "center" });
+  }, [record.operationId]);
   useEffect(() => {
     if (record.status === "succeeded" && record.result?.receipt && !notified.current) {
       notified.current = true;
@@ -29,10 +47,13 @@ export function PmToolCard({ record, onUpdate }: { record: PmToolRecord; onUpdat
     void workspaceClient.json<PmToolRecord>(`/api/pm-tools/calls/${encodeURIComponent(record.operationId)}/${decision}`, { method: "POST" }).then(onUpdate).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause))).finally(() => { deciding.current = false; setBusy(false); });
   };
   const result = record.result;
-  return <section className="native-output-card pm-tool-card" data-state={record.status}>
-    <header><strong>{record.name}</strong><span>{record.status === "pending_approval" ? t("等待批准", "Awaiting approval") : record.status === "running" ? t("进行中", "Running") : record.status === "succeeded" ? t("已完成", "Completed") : record.status === "unknown" ? t("结果未知", "Result unknown") : record.error?.code === "approval_rejected" ? t("已拒绝", "Rejected") : t("失败", "Failed")}</span></header>
+  return <section id={`pm-operation-${record.operationId}`} className="native-output-card pm-tool-card" data-state={record.status}>
+    <header><strong>{record.name}</strong><span>{record.status === "pending_approval" ? t("等待批准", "Awaiting approval") : record.status === "running" ? t("进行中", "Running") : record.status === "succeeded" ? t("已完成", "Completed") : record.status === "unknown" ? t("待核实", "Needs verification") : record.error?.code === "approval_rejected" ? t("已拒绝", "Rejected") : t("失败", "Failed")}</span></header>
     <div className="native-card-body">
       {record.target && <p className="text-xs">{t("PM 目标：", "PM target: ")}<code>{record.target.workspaceId}{record.target.projectId ? ` / ${record.target.projectId}` : ""}</code></p>}
+      {record.linkage && <p className="text-xs" role="status">{t("新增许可：Full access · 仅记录与提醒；既有 PM 授权仍须核验。", "New policy: Full access · audit and notices only; existing PM authorization still applies.")}</p>}
+      {record.notices?.map(notice => <p key={notice.code} role="status" className="text-xs">{notice.message}</p>)}
+      {record.status === "succeeded" && !result && <div role="status"><p>{t("原操作已确认成功，业务结果正文尚未取得；不会重新执行。", "The original operation is confirmed successful; its business payload has not been retrieved. It will not be rerun.")}</p>{record.commandIds?.map(commandId => <p key={commandId}>commandId: <code>{commandId}</code></p>)}</div>}
       {record.status === "pending_approval" && <>
         <p role="status">{t("该操作会更改或移除任务。批准后才会把原始请求发送给 PM；拒绝不会写入任何内容。", "This operation changes or removes tasks. The original request is sent to PM only after approval; rejecting writes nothing.")}</p>
         <button type="button" disabled={busy} onClick={() => decide("approve")}>{busy ? t("处理中…", "Working…") : t("批准执行", "Approve and run")}</button>
@@ -61,8 +82,69 @@ export function PmToolCard({ record, onUpdate }: { record: PmToolRecord; onUpdat
         {result.nextCursor && <p>{t("下一游标：", "Next cursor: ")}<code>{result.nextCursor}</code></p>}
         {!!result.sources.length && <details><summary>{t("数据来源和版本", "Data sources and versions")}</summary><ul>{result.sources.map((source, index) => <li key={`${source.entityId}:${index}`}>{source.kind === "comment" ? <span>{source.title || source.entityId}</span> : <a href={objectHref(source.workspaceId, source.kind, source.entityId, source.projectId)}>{source.title || source.entityId}</a>} · <code>{source.revision}</code>{source.truncated && t(" · 已截断", " · truncated")}</li>)}</ul></details>}
         {result.receipt && <details><summary>{t("业务收据", "Business receipt")}</summary><p>{result.receipt.kind} · {result.receipt.action}</p><p>commandId: <code>{result.receipt.commandId}</code></p><p>operationId: <code>{result.receipt.operationId}</code></p>{result.receipt.targetId && <p>{t("目标：", "Target: ")}{result.receipt.targetId}</p>}{result.receipt.revision && <p>revision: {result.receipt.revision}</p>}</details>}
+        {result.receipt && record.target?.projectId && <PmReceiptAudit workspaceId={record.target.workspaceId} projectId={record.target.projectId} operationId={record.operationId} commandId={result.receipt.commandId} />}
       </>}
       <small>{t("操作 ID：", "Operation ID: ")}<code>{record.operationId}</code></small>
+      {record.linkage && <details><summary>{t("执行关联", "Execution links")}</summary><dl>
+        <dt>traceId</dt><dd><code>{record.linkage.traceId}</code></dd>
+        <dt>invocationId</dt><dd><code>{record.linkage.invocationId}</code></dd>
+        {record.linkage.inputMessageId && <><dt>{t("输入消息", "Input message")}</dt><dd><code>{record.linkage.inputMessageId}</code></dd></>}
+        {record.linkage.executionGrantId && <><dt>{t("执行策略记录", "Execution policy record")}</dt><dd><code>{record.linkage.executionGrantId}</code></dd></>}
+      </dl></details>}
     </div>
+  </section>;
+}
+
+function PmReceiptAudit({ workspaceId, projectId, operationId, commandId }: {
+  workspaceId: string; projectId: string; operationId: string; commandId: string;
+}) {
+  const t = useAgentText();
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState<string>();
+  const [page, setPage] = useState<ProjectAuditPage>();
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    setPage(undefined); setError(undefined);
+    if (!open) return;
+    const controller = new AbortController();
+    let running = false;
+    const refresh = async () => {
+      if (running) return;
+      running = true; setLoading(true);
+      try {
+        const query = new URLSearchParams({ commandId, operationId, limit: "30", ...(cursor ? { cursor } : {}) });
+        const result = await pmJson<ProjectAuditPage>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/audit?${query}`, { signal: controller.signal });
+        if (!controller.signal.aborted) { setPage(result); setError(undefined); }
+      } catch (cause) {
+        if (!controller.signal.aborted) { setPage(undefined); setError(cause instanceof Error ? cause.message : String(cause)); }
+      } finally {
+        running = false;
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 10_000);
+    const onFocus = () => { setPage(undefined); void refresh(); };
+    window.addEventListener("focus", onFocus);
+    return () => { controller.abort(); window.clearInterval(interval); window.removeEventListener("focus", onFocus); };
+  }, [open, workspaceId, projectId, operationId, commandId, cursor]);
+  return <section className="mt-2 text-xs">
+    <button type="button" aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? t("收起命令审计", "Hide command audit") : t("查看关联命令审计", "View linked command audit")}</button>
+    {open && <>
+      {loading && <p role="status">{t("正在核验审计访问…", "Verifying audit access…")}</p>}
+      {error && <p role="alert">{t("审计内容不可读取：", "Audit content cannot be read: ")}{error}</p>}
+      {page && <><ul>{page.entries.map(entry => <li key={entry.id} className="my-2 break-all">
+        <strong>{entry.action}</strong> · <time>{entry.occurredAt}</time>
+        <p>{t("操作者：", "Actor: ")}<code>{entry.actorId}</code> · {t("目标：", "Target: ")}<a href={objectHref(workspaceId, entry.targetKind, entry.targetId, projectId)}>{entry.targetId}</a></p>
+        <p>revision <code>{entry.beforeVersion ?? "—"}</code> → <code>{entry.afterVersion ?? "—"}</code></p>
+        <p>commandId: <code>{entry.commandId}</code></p>
+        {entry.correlation && <p>traceId: <code>{entry.correlation.traceId}</code> · operationId: <code>{entry.correlation.operationId}</code></p>}
+      </li>)}</ul>
+        {!page.entries.length && <p>{t("尚无可见的关联审计记录；不能据此推断操作失败。", "No linked audit entry is visible yet; this does not prove operation failure.")}</p>}
+        {page.nextCursor && <button type="button" disabled={loading} onClick={() => setCursor(page.nextCursor!)}>{t("下一页", "Next page")}</button>}
+        {cursor && <button type="button" disabled={loading} onClick={() => setCursor(undefined)}>{t("回到第一页", "First page")}</button>}
+      </>}
+    </>}
   </section>;
 }

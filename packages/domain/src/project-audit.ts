@@ -2,6 +2,15 @@ import { z } from 'zod';
 
 export type ProjectAuditValue = string | number | boolean | null;
 export type ProjectAuditChange = { field: string; before: ProjectAuditValue; after: ProjectAuditValue };
+/** Safe correlation only; never an authorization credential or a business payload. */
+export const projectAuditCorrelationSchema = z.strictObject({
+  operationId: z.uuid(), traceId: z.uuid(), invocationId: z.uuid(),
+  executionRoot: z.enum(['generation', 'external']),
+  executionGrantId: z.uuid().optional(), delegationId: z.uuid().optional(),
+  clientKind: z.enum(['chat', 'mcp', 'cli', 'plugin', 'automation', 'api']),
+  policy: z.literal('full'), enforcement: z.literal('audit-only'),
+});
+export type ProjectAuditCorrelation = z.infer<typeof projectAuditCorrelationSchema>;
 export type ProjectAuditEntry = {
   id: string;
   projectId: string;
@@ -16,8 +25,9 @@ export type ProjectAuditEntry = {
   afterVersion: string | null;
   changes: ProjectAuditChange[];
   private: boolean;
+  correlation?: ProjectAuditCorrelation;
 };
-export type ProjectAuditOptions = { cursor?: string; limit?: number };
+export type ProjectAuditOptions = { cursor?: string; limit?: number; commandId?: string; operationId?: string };
 export type ProjectAuditPage = { projectId: string; entries: ProjectAuditEntry[]; nextCursor: string | null };
 
 /** Excludes body text, notes, messages, custom fields, source, paths and bytes. */
@@ -37,6 +47,7 @@ export const projectAuditEntrySchema = z.object({
   actorId: z.uuid(), occurredAt: z.iso.datetime({ offset: true }), targetId: z.string().min(1).max(80), targetKind: z.string().min(1).max(80),
   beforeVersion: z.string().min(1).max(128).nullable(), afterVersion: z.string().min(1).max(128).nullable(),
   changes: z.array(projectAuditChangeSchema).max(40), private: z.boolean(),
+  correlation: projectAuditCorrelationSchema.optional(),
 }).strict();
 export const projectAuditPageSchema = z.object({ projectId: z.string().min(1).max(80), entries: z.array(projectAuditEntrySchema), nextCursor: z.string().max(2048).nullable() }).strict();
 

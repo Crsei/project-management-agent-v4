@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import type { NativeInteractionRequest } from "@agent-workspace/contracts/output";
+import type { NativeInteractionRequest, NativeOutputItem } from "@agent-workspace/contracts/output";
 import { DurableError } from "./errors.ts";
 import {
   closeNativeInteractions, emitNativeNotification, emitNativeOutput, endNativeOutput, getNativeOutput,
@@ -11,7 +11,7 @@ import {
   respondNativeInteraction, setNativeOutputStatus, subscribeCommandOutput,
   subscribeNativeOutput,
 } from "./native-output.ts";
-import { closeStore } from "./store.ts";
+import { closeStore, writeRecord } from "./store.ts";
 
 let directory: string;
 const originalDirectory = process.env.AGENT_WORKSPACE_DATA_DIR;
@@ -231,4 +231,70 @@ test("late native notifications survive SSE snapshot replay without reopening a 
   if (frame?.kind === "snapshot") assert.equal(frame.snapshot.items[0].text, "Background work was not automatically resumed.");
   assert.equal((await reader.read()).done, true);
   await assert.rejects(requestNativeInteraction("late-native", approval("late-request")), DurableError);
+});
+
+test("native scopes order late items without comparing unrelated ordinals or duplicating revisions", async () => {
+  initializeNativeOutput("scopes", "thread", "running");
+  const put = (id: string, scope?: string, ordinal = 0, text = id) => emitNativeOutput("scopes", {
+    type: "item.upsert", item: { id, type: "assistant_message", status: "completed", text,
+      ...(scope ? { order: { scope, ordinal } } : {}) },
+  });
+  put("old-one");
+  put("a-late-position", "turn-a", 30);
+  put("b-first-position", "turn-b", 0);
+  put("old-two");
+  put("a-first-position", "turn-a", 10);
+  put("a-middle-position", "turn-a", 20);
+  put("a-late-position", "turn-a", 30, "same ID, revised body");
+  put("b-other-turn", "turn-b-retry", 0);
+  const snapshot = getNativeOutput("scopes")!;
+  assert.deepEqual(snapshot.items.map(item => item.id), [
+    "old-one", "a-first-position", "a-middle-position", "a-late-position",
+    "b-first-position", "old-two", "b-other-turn",
+  ]);
+  assert.equal(snapshot.items.filter(item => item.id === "a-late-position").length, 1);
+  assert.equal(snapshot.items[3]?.text, "same ID, revised body");
+  assert.equal(snapshot.status, "running");
+  endNativeOutput("scopes", "completed");
+  closeStore();
+  assert.deepEqual(getNativeOutput("scopes")?.items.map(item => item.id), snapshot.items.map(item => item.id));
+  const replay = subscribeNativeOutput("scopes").getReader();
+  assert.deepEqual((await replay.read()).value, { kind: "snapshot", snapshot: getNativeOutput("scopes")! });
+  assert.equal((await replay.read()).done, true);
+});
+
+test("phase is explicit and independent of generation completion; timing never promotes observations or legacy history", () => {
+  initializeNativeOutput("semantics", "thread", "running");
+  const start = "2026-11-01T10:00:00.000Z";
+  const end = "2026-11-01T10:00:05.000Z";
+  const items: NativeOutputItem[] = [
+    { id: "progress", type: "assistant_message", status: "completed", phase: "commentary", text: "Working" },
+    { id: "final", type: "assistant_message", status: "completed", phase: "final_answer", text: "Answer",
+      startedAt: start, completedAt: end, timing: { source: "provider" } },
+    { id: "unknown", type: "assistant_message", status: "completed", text: "Unclassified text" },
+    { id: "reason", type: "reasoning", status: "completed", text: "Summary received only at completion" },
+    { id: "clock", type: "reasoning", status: "completed", startedAt: start, completedAt: end },
+    { id: "active", type: "reasoning", status: "running", startedAt: start, timing: { source: "provider" } },
+  ];
+  for (const item of items) emitNativeOutput("semantics", { type: "item.upsert", item });
+  let snapshot = getNativeOutput("semantics")!;
+  assert.equal(snapshot.status, "running", "Neither final_answer nor item completion ends a generation.");
+  assert.deepEqual(snapshot.items.find(item => item.id === "final")?.timing, { source: "provider" });
+  for (const id of ["unknown", "reason", "clock"]) assert.deepEqual(snapshot.items.find(item => item.id === id)?.timing, { source: "observed" });
+  assert.equal(snapshot.items.find(item => item.id === "unknown")?.phase, undefined);
+  emitNativeOutput("semantics", { type: "item.upsert", item: { id: "final", type: "assistant_message", status: "completed", text: "Answer revised" } });
+  assert.equal(getNativeOutput("semantics")?.items.find(item => item.id === "final")?.phase, "final_answer");
+  endNativeOutput("semantics", "cancelled");
+  snapshot = getNativeOutput("semantics")!;
+  assert.equal(snapshot.items.find(item => item.id === "final")?.phase, "final_answer");
+  assert.equal(snapshot.items.find(item => item.id === "active")?.status, "cancelled");
+  assert.deepEqual(snapshot.items.find(item => item.id === "active")?.timing, { source: "observed" });
+  const legacy = { generationId: "old", threadId: "thread", sequence: 4, status: "completed", items: [
+    { id: "old-b", type: "reasoning", status: "completed", startedAt: start, completedAt: end, text: "Old text" },
+    { id: "old-a", type: "assistant_message", status: "completed", text: "Unchanged old body" },
+  ] };
+  writeRecord("native-output", "old", legacy);
+  closeStore();
+  recoverNativeOutputs();
+  assert.deepEqual(getNativeOutput("old"), legacy, "Reading old records must not rewrite text, assign a phase or invent timestamp provenance.");
 });

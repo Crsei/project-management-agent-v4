@@ -134,6 +134,11 @@ describe('immutable authorized project business audit', { skip: !dashboardDataba
     assert.equal(metadata.beforeVersion, before.body.revision);
     assert.equal(metadata.afterVersion, committedFile.body.revision);
     assert.deepEqual(metadata.changes, [{ field: 'priority', before: 'low', after: 'high' }]);
+    const exact = await f.request<ProjectAuditPage>(`/api/v1/workspaces/${f.workspaceId}/projects/${project.id}/audit?commandId=${metadata.commandId}`);
+    assert.equal(exact.status, 200);
+    assert.deepEqual(exact.body.entries.map(row => row.commandId), [metadata.commandId], 'The existing HTTP audit endpoint performs an exact native-command lookup');
+    assert.equal((await f.request<ProjectAuditPage>(`/api/v1/workspaces/${f.workspaceId}/projects/${project.id}/audit?commandId=${metadata.commandId}&operationId=${randomUUID()}`)).body.entries.length, 0);
+    assert.equal((await f.request(`/api/v1/workspaces/${f.workspaceId}/projects/${project.id}/audit?commandId=not-a-command`)).status, 400);
     assert.equal(native.filter(row => row.action === 'UpdateCoreSource').length, 1);
     assert.equal(JSON.stringify(audit.body).includes(secret), false);
   });

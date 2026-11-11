@@ -1,3 +1,4 @@
+import type { PmToolCallProjection } from "@agent-workspace/contracts/pm-tools";
 import { usePmIssueWorkspace } from "./pm-issue-workspace";
 import { PmSidebarContext } from "./pm-sidebar-context";
 import { usePmToolCalls } from "../chat/pm-tool-calls";
@@ -22,7 +23,7 @@ export function PmSidebarSection() {
     }}
     onClearSelection={workspace.clearSelection}
     onAddSelected={workspace.addSelectedToReferences}
-    changes={pmToolChanges(calls?.items ?? [])}
+    changes={pmToolChanges((calls?.items ?? []).filter((call): call is Extract<PmToolCallProjection, { name: string }> => "name" in call && call.visibility === "visible"))}
     changesLoading={calls?.loading}
     changesError={calls?.error}
     loading={workspace.loading}

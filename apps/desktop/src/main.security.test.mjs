@@ -132,7 +132,7 @@ test("main enforces frame identity, sandbox preferences, navigation, guest and p
       running: { get: () => this.testRunning }, processCount: { get: () => this.testRunning ? 4 : 0 },
     });
     servers.push(this);
-    return { origin: "http://127.0.0.1:58764", instanceId: "isolated-security-test", token: "isolated-private-token", runtime: "test" };
+    return { phase: "ready", origin: "http://127.0.0.1:58764", instanceId: "isolated-security-test", token: "isolated-private-token", runtime: "test" };
   });
   t.mock.method(LocalServer.prototype, "stop", async function () { this.testRunning = false; });
   try {
@@ -164,6 +164,24 @@ test("main enforces frame identity, sandbox preferences, navigation, guest and p
       assert.equal(workspace.options.webPreferences.webviewTag, true); // Intentionally local-only preview support.
       assert.notEqual(connectionContents.session, contents.session);
       assert.notEqual(guest.session, contents.session);
+    });
+
+    await t.test("first-run token is available only to the local setup page while pending", async () => {
+      const server = servers[0];
+      const invoke = () => handlers.get("desktop:first-run-token")(workspaceSource);
+      await assert.rejects(invoke(), /not pending/);
+      server.setupPending = true;
+      server.setupToken = "A".repeat(43);
+      assert.equal(await invoke(), server.setupToken);
+      const setupUrl = contents.mainFrame.url;
+      contents.mainFrame.url = `${origin}/agent/workspace`;
+      await assert.rejects(invoke(), /setup page/);
+      contents.mainFrame.url = `${origin}/pm/workspace/home`;
+      await assert.rejects(invoke(), /setup page/);
+      contents.mainFrame.url = setupUrl;
+      assert.equal(await invoke(), server.setupToken);
+      server.setupPending = false;
+      server.setupToken = "";
     });
 
     await t.test("every privileged IPC rejects same-origin child frames, guests, wrong windows and invalidated senders", async () => {

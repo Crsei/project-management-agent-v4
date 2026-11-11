@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { responseStreamingModeSchema } from "./output.ts";
-import { pmReferenceInputSchema } from "./pm-references.ts";
-import type { PmReferenceResolution } from "./pm-references.ts";
+import { pmReferenceInputSchema, turnContextSchema } from "./pm-references.ts";
+import type { ExecutionPolicy, PmReferenceResolution, TurnContext } from "./pm-references.ts";
 import type { ProviderOptionSelection } from "./provider.ts";
 export { agentWorkspaceSchema, executionSelectionSchema, executionEnvironmentSchema, chatOnlyExecutionSelection } from "./execution.ts";
 export type { AgentWorkspace, ExecutionSelection, ExecutionEnvironment } from "./execution.ts";
@@ -39,6 +39,8 @@ export const storedMessageSchema = z.object({
   parent_id: z.string().nullable(),
   format: z.string().min(1).max(128),
   content: messageContentSchema,
+  /** Server-owned on reads; history writes cannot create or replace a binding. */
+  turnContext: turnContextSchema.optional(),
 });
 export const chatBodySchema = z.object({
   id: z.string().min(1).max(256),
@@ -101,6 +103,11 @@ export type ThreadSidebar = {
   unread: boolean;
   section: "pinned" | "active" | "snoozed" | "settled";
   running: boolean;
+  /** Derived from current generations and live, respondable interaction requests. */
+  activity: {
+    status: "idle" | "queued" | "running" | "waiting_approval" | "waiting_input" | "failed" | "cancelled" | "interrupted";
+    generationId?: string;
+  };
   canSnooze: boolean;
 };
 
@@ -131,6 +138,12 @@ export type ChatGenerationView = {
   id: string;
   threadId: string;
   messageId: string;
+  /** Legacy records may lack these server-owned execution links. */
+  inputMessageId?: string;
+  traceId?: string;
+  executionGrantId?: string;
+  executionPolicy?: ExecutionPolicy;
+  turnContext?: TurnContext;
   status: "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
   createdAt: string;
   error?: string;

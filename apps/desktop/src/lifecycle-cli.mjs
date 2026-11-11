@@ -7,6 +7,7 @@ import { assertPrivatePath, ensurePrivateDirectory, readPrivateJson, writePrivat
 import { assertProcessIdentity, ownedProcessIdentity } from "./process-identity.mjs";
 import { assertSelfOwnedInstall } from "./install-stamp.mjs";
 import { initialSetup, safeDesktopMessage } from "./policy.mjs";
+import { completeFirstRunSetup } from "./first-run.mjs";
 import { createInstalledFixture, exerciseInstalledHealth, snapshotInstalledFixture } from "./lifecycle-fixtures.mjs";
 
 const operations = new Set(["start-health", "health", "snapshot", "stop", "preinstall", "uninstall-plan", "uninstall"]);
@@ -152,8 +153,12 @@ export async function runLifecycleRequest(context, host) {
         }
         const server = new LocalServer({ serverRoot: host.serverRoot, runtimeRoot: host.runtimeRoot, webRoot: join(host.serverRoot, "apps/web/dist"), onExit: () => host.onUnexpectedExit?.() });
         host.setServer(server);
-        const connection = await server.start({ mode: "local", dataDir: input.dataDir, projectRoot: input.projectRoot, ...(input.createFixture === true ? { setup } : {}) });
+        const connection = await server.start({ mode: "local", dataDir: input.dataDir, projectRoot: input.projectRoot });
         host.setConnection(connection);
+        if (input.createFixture === true) {
+          await completeFirstRunSetup({ origin: connection.origin, setupToken: server.setupToken, credentials: setup });
+          check((await server.finalizeSetup())?.phase === "ready", "Installed first-run setup did not finalize.");
+        }
         const health = await exerciseInstalledHealth(connection, setup);
         if (input.createFixture === true) await createInstalledFixture({ request: input, connection, health });
         const snapshot = await snapshotInstalledFixture({ request: input, server, connection });

@@ -112,6 +112,8 @@ export function publicConfiguration(value, allowNodeOverride = false) {
   };
 }
 
+/** Validates the private installer lifecycle fixture account. The desktop UI
+ * never collects account fields; first-run registration happens in Web. */
 export function initialSetup(value) {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "object" || Array.isArray(value))

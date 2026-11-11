@@ -1,4 +1,4 @@
-import { createUIMessageStreamResponse, type UIMessage } from "ai";
+import { createUIMessageStreamResponse, type UIMessage, type UIMessageChunk } from "ai";
 import { Hono } from "hono";
 import { z } from "zod";
 import { ProviderRuntimeError } from "./providers/runtime.ts";
@@ -23,6 +23,7 @@ import {
   cancelChat,
   cancelThreadChat,
   continueChat,
+  defaultChatExecutionPolicy,
   forkChatGeneration,
   getActiveChat,
   getChatGeneration,
@@ -54,6 +55,7 @@ import { setThreadNativeSession } from "./durable/threads.ts";
 import { closeMcpAppSession } from "./mcp-apps/live.ts";
 import { resolveChatExecutionScope } from "./task-delivery/binding.ts";
 import { terminateSessionTerminals } from "./inspector/terminal.ts";
+import { createPmVisibilityProjector, type PmVisibilityProjector } from "./pm-visibility.ts";
 
 export const chatRoutes = new Hono();
 export const publicThread = (thread: ThreadMetadata) => ({
@@ -75,6 +77,11 @@ export const publicChatGeneration = (generation: ChatGeneration) => ({
   id: generation.id,
   threadId: generation.threadId,
   messageId: generation.messageId,
+  inputMessageId: generation.inputMessageId,
+  traceId: generation.traceId,
+  executionGrantId: generation.executionGrantId,
+  executionPolicy: generation.executionPolicy,
+  turnContext: generation.turnContext,
   status: generation.status,
   createdAt: generation.createdAt,
   endedAt: generation.endedAt,
@@ -88,6 +95,13 @@ export const publicChatGeneration = (generation: ChatGeneration) => ({
   handoff: generation.handoff,
   pmReferences: generation.pmReferences,
 });
+
+export async function publicAuthorizedThread(thread: ThreadMetadata, headers: Headers) {
+  const projector = await createPmVisibilityProjector(thread.remoteId, headers);
+  const result = publicThread(thread);
+  // Legacy Session titles/custom summaries have no item-level dependency proof.
+  return projector.nativeContextContaminated ? { ...result, title: "会话", custom: undefined } : result;
+}
 
 async function accessibleGeneration(id: string): Promise<ChatGeneration> {
   const generation = getChatGeneration(id);
@@ -109,6 +123,17 @@ function outputSse<T>(stream: ReadableStream<T>): Response {
     "x-accel-buffering": "no",
   } });
 }
+
+/** Recheck CURRENT PM authority at serialization, including reconnect and slow-consumer snapshots. */
+function authorizedStream<T>(threadId: string, headers: Headers, stream: ReadableStream<T>,
+  project: (projector: PmVisibilityProjector, frame: T) => T): ReadableStream<T> {
+  return stream.pipeThrough(new TransformStream<T, T>({
+    async transform(frame, controller) {
+      const projector = await createPmVisibilityProjector(threadId, headers);
+      controller.enqueue(project(projector, frame));
+    },
+  }));
+}
 chatRoutes.onError((error, c) => {
   if (error instanceof ChatDefaultsError)
     return c.json({ error: error.message, code: error.code }, error.status);
@@ -126,7 +151,9 @@ chatRoutes.onError((error, c) => {
   console.error("Chat request failed:", error instanceof Error ? error.name : "unknown");
   return c.json({ error: "无法保存或读取会话，请检查服务端存储。", code: "chat_error" }, 500);
 });
-chatRoutes.get("/chat/threads", (c) => c.json({ threads: listThreads().map(publicThread) }));
+chatRoutes.get("/chat/threads", async (c) => c.json({
+  threads: await Promise.all(listThreads().map(thread => publicAuthorizedThread(thread, c.req.raw.headers))),
+}));
 chatRoutes.post("/chat/threads", async (c) => {
   const { id, executionSelection } = createThreadSchema.parse(await c.req.json());
   if (!validThreadId(id)) return c.json({ error: "无效的会话 ID。", code: "invalid_request" }, 400);
@@ -135,19 +162,19 @@ chatRoutes.post("/chat/threads", async (c) => {
   const thread = getThread(id);
   if (!thread) return c.json({ error: "会话已删除。", code: "thread_deleted" }, 409);
   updateThread(id, {});
-  return c.json({ thread: publicThread(thread) });
+  return c.json({ thread: await publicAuthorizedThread(thread, c.req.raw.headers) });
 });
-chatRoutes.get("/chat/threads/:id", (c) => {
+chatRoutes.get("/chat/threads/:id", async (c) => {
   const thread = getThread(c.req.param("id"));
   return thread
-    ? c.json({ thread: publicThread(thread) })
+    ? c.json({ thread: await publicAuthorizedThread(thread, c.req.raw.headers) })
     : c.json({ error: "找不到会话。", code: "not_found" }, 404);
 });
 chatRoutes.get("/chat/threads/:id/execution", async c => {
   const thread = getThread(c.req.param("id"));
   if (!thread) throw new DurableError(404, "not_found", "找不到会话。");
   const snapshot = await resolveChatExecutionScope(thread, c.req.raw.headers, "inspect", c.req.raw.signal);
-  return c.json({ environment: snapshot.environment });
+  return c.json({ environment: snapshot.environment, executionPolicy: defaultChatExecutionPolicy });
 });
 chatRoutes.post("/chat/threads/:id/native-session/restart", async c => {
   z.strictObject({}).parse(await c.req.json());
@@ -171,7 +198,7 @@ chatRoutes.post("/chat/threads/:id/native-session/restart", async c => {
     setThreadNativeSession(id, undefined);
     return getThread(id)!;
   });
-  return c.json({ thread: publicThread(current) });
+  return c.json({ thread: await publicAuthorizedThread(current, c.req.raw.headers) });
 });
 chatRoutes.put("/chat/threads/:id", async (c) => {
   const id = c.req.param("id");
@@ -195,7 +222,7 @@ chatRoutes.put("/chat/threads/:id", async (c) => {
     if (!latest || latest.revision !== thread.revision || latest.executionEnvironment?.frozen || listChatGenerations(id).length ||
         listRuns(id).some(run => run.status === "queued" || run.status === "running"))
       throw new ThreadConflictError("Session execution changed while saving its directory.", "execution_frozen");
-    return c.json({ thread: publicThread(updateThread(id, { ...patch, executionEnvironment: snapshot.environment })) });
+    return c.json({ thread: await publicAuthorizedThread(updateThread(id, { ...patch, executionEnvironment: snapshot.environment }), c.req.raw.headers) });
   }
   if (patch.status) {
     const thread = getThread(id);
@@ -225,7 +252,7 @@ chatRoutes.put("/chat/threads/:id", async (c) => {
     if (patch.status === "archived" && getActiveChat(id))
       throw new DurableError(409, "chat_busy", "会话仍在运行，请先停止生成。");
   }
-  return c.json({ thread: publicThread(updateThread(id, patch)) });
+  return c.json({ thread: await publicAuthorizedThread(updateThread(id, patch), c.req.raw.headers) });
 });
 chatRoutes.post("/chat/threads/:id/sidebar", async (c) => {
   const id = c.req.param("id");
@@ -235,7 +262,7 @@ chatRoutes.post("/chat/threads/:id/sidebar", async (c) => {
   updateThreadSidebar(id, action);
   const current = getThread(id);
   if (!current) throw new DurableError(404, "not_found", "找不到会话。");
-  return c.json({ thread: publicThread(current) });
+  return c.json({ thread: await publicAuthorizedThread(current, c.req.raw.headers) });
 });
 chatRoutes.post("/chat/threads/:id/regenerate-title", async (c) => {
   const id = c.req.param("id");
@@ -247,7 +274,7 @@ chatRoutes.post("/chat/threads/:id/regenerate-title", async (c) => {
   if (generations.some(isChatActive))
     throw new DurableError(409, "chat_busy", "会话仍在运行，请等待生成结束后重新生成标题。");
   const history = JSON.stringify(getThreadHistory(id));
-  const title = await generateThreadTitle(current, c.req.raw.signal);
+  const title = await generateThreadTitle(current, c.req.raw.signal, c.req.raw.headers);
   const saved = transaction(() => {
     const latest = getThread(id);
     if (!latest) throw new DurableError(404, "not_found", "找不到会话。");
@@ -259,7 +286,7 @@ chatRoutes.post("/chat/threads/:id/regenerate-title", async (c) => {
       throw new ThreadConflictError("生成标题期间会话已更改，请重新载入。", "title_conflict");
     return title === current.title || title === "New thread" ? latest : updateThread(id, { title, revision });
   });
-  return c.json({ thread: publicThread(saved) });
+  return c.json({ thread: await publicAuthorizedThread(saved, c.req.raw.headers) });
 });
 chatRoutes.delete("/chat/threads/:id", async (c) => {
   const id = c.req.param("id");
@@ -276,7 +303,7 @@ chatRoutes.delete("/chat/threads/:id", async (c) => {
   deleteThread(id);
   return c.json({ deleted: true });
 });
-chatRoutes.get("/chat/threads/:id/history", (c) => {
+chatRoutes.get("/chat/threads/:id/history", async (c) => {
   const id = c.req.param("id");
   if (!getThread(id)) return c.json({ error: "找不到会话。", code: "not_found" }, 404);
   const history = getThreadHistory(id, c.req.query("format") ?? "ai-sdk/v6");
@@ -286,18 +313,34 @@ chatRoutes.get("/chat/threads/:id/history", (c) => {
   // A frontend-tool continuation retains the original pre-generation message.
   const original = active?.request.messages.at(-1);
   const continuing = original?.id === active?.messageId && original?.role === "assistant";
-  const messages = history.messages.flatMap((message) => {
+  const rawMessages = history.messages.flatMap((message) => {
     if (message.id !== active?.messageId) return [message];
     if (!continuing || !original) return [];
     const { id: messageId, ...content } = original;
     return [{ id: messageId, parent_id: active!.parentId, format: history.format, content }];
   });
+  const projector = await createPmVisibilityProjector(id, c.req.raw.headers);
+  const messages = projector.history(rawMessages).map(message => message.turnContext ? {
+    ...message, content: { ...message.content, metadata: {
+      ...(message.content.metadata as Record<string, unknown> | undefined), turnContext: message.turnContext,
+    } },
+  } : message);
   return c.json({
     headId: active ? (continuing ? active.messageId : active.parentId) : history.headId,
     messages,
     activeGenerationId: active?.id,
-    latestGeneration: latest ? publicChatGeneration(latest) : null,
+    latestGeneration: latest ? projector.generation(publicChatGeneration(latest)) : null,
   });
+});
+chatRoutes.get("/chat/threads/:id/messages/:messageId/context", async c => {
+  const id = c.req.param("id");
+  if (!getThread(id)) throw new DurableError(404, "not_found", "找不到会话。");
+  const message = getThreadHistory(id).messages.find(message => message.id === c.req.param("messageId"));
+  if (!message || message.content.role !== "user") throw new DurableError(404, "not_found", "找不到输入消息。");
+  const projector = await createPmVisibilityProjector(id, c.req.raw.headers);
+  const projected = projector.history([message])[0]!;
+  const metadata = projected.content.metadata as { pmVisibility?: string } | undefined;
+  return c.json({ turnContext: projected.turnContext, visibility: metadata?.pmVisibility ?? "visible" });
 });
 chatRoutes.put("/chat/threads/:id/history", async (c) => {
   const id = c.req.param("id");
@@ -311,9 +354,12 @@ chatRoutes.put("/chat/threads/:id/history", async (c) => {
   saveFormattedMessage(id, entry, false, false);
   return c.json({ saved: true });
 });
-chatRoutes.get("/chat/threads/:id/generations", (c) =>
-  c.json({ generations: listChatGenerations(c.req.param("id")).map(publicChatGeneration) }),
-);
+chatRoutes.get("/chat/threads/:id/generations", async (c) => {
+  const id = c.req.param("id");
+  if (!getThread(id)) throw new DurableError(404, "not_found", "找不到会话。");
+  const projector = await createPmVisibilityProjector(id, c.req.raw.headers);
+  return c.json({ generations: listChatGenerations(id).map(generation => projector.generation(publicChatGeneration(generation))) });
+});
 chatRoutes.post("/chat/threads/:id/cancel", async (c) => {
   const body = z
     .object({ generationId: z.string().optional(), messageId: z.string().max(256).optional() })
@@ -331,7 +377,8 @@ chatRoutes.post("/chat/generations/:id/continue", async (c) => {
     .object({ confirmSideEffects: z.boolean().default(false) })
     .parse(await c.req.json());
   const generation = await continueChat(c.req.param("id"), body.confirmSideEffects, undefined, undefined, c.req.raw.headers);
-  return c.json({ generation: publicChatGeneration(generation) }, 202);
+  const projector = await createPmVisibilityProjector(generation.threadId, c.req.raw.headers);
+  return c.json({ generation: projector.generation(publicChatGeneration(generation)) }, 202);
 });
 chatRoutes.post("/chat/generations/:id/fork", async (c) => {
   const options = z
@@ -340,7 +387,7 @@ chatRoutes.post("/chat/generations/:id/fork", async (c) => {
       idempotencyKey: z.string().max(200).optional(),
     })
     .parse(await c.req.json());
-  return c.json(await forkChatGeneration(c.req.param("id"), options), 201);
+  return c.json(await forkChatGeneration(c.req.param("id"), options, c.req.raw.headers), 201);
 });
 chatRoutes.get("/chat/generations/:id/output", async (c) => {
   const generation = await accessibleGeneration(c.req.param("id"));
@@ -350,14 +397,17 @@ chatRoutes.get("/chat/generations/:id/output", async (c) => {
   if (!getNativeOutput(generation.id))
     return c.json({ error: "该回复没有原生输出。", code: "not_found" }, 404);
   // A full snapshot is a safe reset for any cursor, including one from another server lifetime.
-  return outputSse(subscribeNativeOutput(generation.id, c.req.raw.signal));
+  return outputSse(authorizedStream(generation.threadId, c.req.raw.headers,
+    subscribeNativeOutput(generation.id, c.req.raw.signal), (projector, frame) => projector.nativeFrame(frame)));
 });
 chatRoutes.get("/chat/generations/:id/items/:itemId/output", async (c) => {
   const generation = await accessibleGeneration(c.req.param("id"));
   const item = getNativeOutput(generation.id)?.items.find((entry) => entry.id === c.req.param("itemId"));
   if (!item || item.type !== "command_execution")
     return c.json({ error: "找不到该命令。", code: "not_found" }, 404);
-  return outputSse(subscribeCommandOutput(generation.id, item.id, c.req.raw.signal));
+  return outputSse(authorizedStream(generation.threadId, c.req.raw.headers,
+    subscribeCommandOutput(generation.id, item.id, c.req.raw.signal),
+    (projector, frame) => projector.commandFrame(frame, generation.id, item.id)));
 });
 chatRoutes.post("/chat/generations/:id/requests/:requestId/respond", async (c) => {
   const generation = await accessibleGeneration(c.req.param("id"));
@@ -365,11 +415,11 @@ chatRoutes.post("/chat/generations/:id/requests/:requestId/respond", async (c) =
   respondNativeInteraction(generation.id, c.req.param("requestId"), response);
   return c.json({ accepted: true });
 });
-chatRoutes.get("/chat/streams/:id", (c) => {
-  const generation = getChatGeneration(c.req.param("id"));
-  if (!generation) return c.json({ error: "找不到该回复。", code: "not_found" }, 404);
+chatRoutes.get("/chat/streams/:id", async (c) => {
+  const generation = await accessibleGeneration(c.req.param("id"));
   return createUIMessageStreamResponse({
-    stream: subscribeChat(generation.id, c.req.raw.signal),
+    stream: authorizedStream(generation.threadId, c.req.raw.headers, subscribeChat(generation.id, c.req.raw.signal),
+      (projector, frame: UIMessageChunk) => projector.uiChunk(frame, generation.id)),
     headers: { "x-resumable-stream-id": generation.id, "cache-control": "no-store" },
   });
 });
@@ -380,7 +430,11 @@ chatRoutes.post("/chat", async (c) => {
   const request = { ...body, messages: body.messages as UIMessage[] } as ChatRequest;
   const generation = await submitChat(request, undefined, c.req.raw.headers);
   return createUIMessageStreamResponse({
-    stream: subscribeChat(generation.id, c.req.raw.signal),
-    headers: { "x-resumable-stream-id": generation.id, "cache-control": "no-store" },
+    stream: authorizedStream(generation.threadId, c.req.raw.headers, subscribeChat(generation.id, c.req.raw.signal),
+      (projector, frame: UIMessageChunk) => projector.uiChunk(frame, generation.id)),
+    headers: { "x-resumable-stream-id": generation.id, "cache-control": "no-store",
+      ...(generation.inputMessageId ? { "x-accepted-input-message-id": generation.inputMessageId } : {}),
+      ...(generation.traceId ? { "x-turn-trace-id": generation.traceId } : {}),
+    },
   });
 });

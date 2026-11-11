@@ -130,9 +130,37 @@ if (args.includes("--version")) {
       const marker = fs.existsSync(markerPath) ? fs.readFileSync(markerPath, "utf8") : "native answer";
       scopeRecord({ turn: params, cwd: process.cwd(), marker });
       respond({ turn }); notify("turn/started", { threadId: thread.id, turn });
-      notify("item/agentMessage/delta", { threadId: thread.id, turnId: turn.id, itemId: `${turn.id}:assistant`, delta: marker });
+      if (process.env.MODE !== "activity") notify("item/agentMessage/delta", { threadId: thread.id, turnId: turn.id, itemId: `${turn.id}:assistant`, delta: marker });
       if (process.env.MODE === "cancel") continue;
       if (process.env.MODE === "eof") process.exit(0);
+      if (process.env.MODE === "activity") {
+        const base = { threadId: thread.id, turnId: turn.id };
+        const reasoning = { id: `${turn.id}:reason`, type: "reasoning", summary: [], content: [] };
+        notify("item/started", { ...base, startedAtMs: 1793318400000, item: reasoning });
+        notify("item/reasoning/summaryTextDelta", { ...base, itemId: reasoning.id, summaryIndex: 0, delta: "Checking native evidence" });
+        notify("item/reasoning/textDelta", { ...base, itemId: reasoning.id, contentIndex: 0, delta: "Controlled reasoning part" });
+        const commentary = { id: `${turn.id}:progress`, type: "agentMessage", text: "Progress, not the answer", phase: "commentary" };
+        notify("item/started", { ...base, startedAtMs: 1793318401000, item: commentary });
+        notify("item/agentMessage/delta", { ...base, itemId: commentary.id, delta: commentary.text });
+        notify("item/completed", { ...base, completedAtMs: 1793318402000, item: commentary });
+        const command = { type: "commandExecution", id: `${turn.id}:command`, command: "pwd", cwd: process.cwd(),
+          processId: "42", source: "unifiedExecStartup", status: "inProgress",
+          commandActions: [{ type: "unknown", command: "pwd" }], aggregatedOutput: null, exitCode: null, durationMs: null };
+        notify("item/started", { ...base, startedAtMs: 1793318402000, item: command });
+        notify("item/completed", { ...base, completedAtMs: 1793318403000, item: { ...command, status: "completed", aggregatedOutput: "controlled\\n", exitCode: 0, durationMs: 1000 } });
+        // The coalesced reasoning row may arrive after the tool, but owns its native ordinal.
+        notify("item/completed", { ...base, completedAtMs: 1793318404000, item: { ...reasoning, summary: ["Checking native evidence"], content: ["Controlled reasoning part"] } });
+        notify("item/completed", { ...base, completedAtMs: 1793318404000,
+          item: { id: `${turn.id}:late-reason`, type: "reasoning", summary: ["Summary first seen at completion"], content: [] } });
+        const final = { id: `${turn.id}:assistant`, type: "agentMessage", text: marker, phase: "final_answer" };
+        notify("item/started", { ...base, startedAtMs: 1793318404000, item: final });
+        notify("item/agentMessage/delta", { ...base, itemId: final.id, delta: marker });
+        notify("item/completed", { ...base, completedAtMs: 1793318405000, item: final });
+        send({ id: "input-1", method: "item/tool/requestUserInput", params: { ...base, itemId: "activity-question", isBlocking: true, questions: [
+          { id: "color", header: "Continue", question: "Confirm native terminal", isOther: false, isSecret: false, options: [{ label: "Blue", description: "Continue" }] },
+        ] } });
+        continue;
+      }
       if (process.env.MODE === "input") {
         send({ id: "input-1", method: "item/tool/requestUserInput", params: { threadId: thread.id, turnId: turn.id, itemId: "question-tool", isBlocking: true, questions: [
           { id: "color", header: "Color", question: "Choose a color", isOther: false, isSecret: false, options: [{ label: "Blue", description: "Blue option" }] },

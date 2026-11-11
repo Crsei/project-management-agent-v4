@@ -41,7 +41,6 @@ export function PmAuthPageShell({ children, toolbar, split = true }: {
                 <div><FolderKanban size={24} /></div>
               </div>
             </div>
-            <p className={styles.storyNote}>{t("由团队成员协作推进，由工作区权限保护。", "Driven by your team. Protected by workspace permissions.")}</p>
           </aside>
         )}
         <div className={styles.content}>{children}</div>
@@ -202,8 +201,6 @@ export function PmLoginPage({ titleAs = "h1" }: { titleAs?: "h1" | "h2" } = {}) 
         {service.loading && !busy && <p role="status" className={styles.hint}>{t("正在读取当前会话，请稍候。", "Reading your current session. Please wait.")}</p>}
       </div>
       <div className={styles.accountGuidance}>
-        <p>{t("使用已有账号登录；新成员仅通过有效邀请加入工作区。首次设置不会更改已有实例的账号或密码。", "Sign in with an existing account. New members join through a valid invitation only. First-time setup never changes an existing instance's accounts or passwords.")}</p>
-        <p>{t("公开注册未开放。邮件找回只面向本人已独立验证的恢复邮箱；设置账号、历史登录邮箱或邀请不是验证证明。", "Public signup is unavailable. Email recovery requires an independently verified recovery email; account setup, a historical sign-in email, or an invitation is not verification.")}</p>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
           <Link to="/pm/account/recovery" className="text-sm text-primary hover:text-foreground">{t("忘记密码 / 查看邮件找回状态", "Forgot password / email recovery availability")}</Link>
           <Link to="/pm/account/security" className="text-sm text-primary hover:text-foreground">{t("本人账号安全", "Account security")}</Link>

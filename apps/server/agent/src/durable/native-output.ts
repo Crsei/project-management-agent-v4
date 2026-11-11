@@ -4,6 +4,7 @@ import {
   nativeInteractionRequestSchema,
   nativeInteractionResponseSchema,
   nativeOutputItemSchema,
+  upsertNativeOutputItem,
   type AgentOutputFrame,
   type AgentOutputSnapshot,
   type CommandOutputFrame,
@@ -24,6 +25,7 @@ import {
 import { DurableError } from "./errors.ts";
 import { listRecords, readRecord, transaction, writeRecord } from "./store.ts";
 import { indexMcpAppItem } from "../mcp-apps/items.ts";
+import { pmOutcomeFromToolOutput, projectPmNativeOutcome } from "../pm-outcomes.ts";
 
 const OUTPUTS = "native-output";
 const QUEUE_LIMIT = 128;
@@ -151,6 +153,7 @@ function scheduleItem(frame: AgentOutputFrame & { kind: "item" }): void {
 function upsert(generationId: string, item: NativeOutputItem, settling = false): void {
   const snapshot = requireOutput(generationId);
   if (!active(snapshot.status)) return;
+  item = projectPmNativeOutcome(item);
   const output: unknown = item.output;
   const text = output === undefined ? undefined : typeof output === "string" ? output : JSON.stringify(normalizeToolValue(output));
   const boundedOutput = text !== undefined && text.length > TERMINAL_OUTPUT_TAIL_CHARS
@@ -164,6 +167,11 @@ function upsert(generationId: string, item: NativeOutputItem, settling = false):
   });
   const index = snapshot.items.findIndex((entry) => entry.id === checked.id);
   const previous = snapshot.items[index];
+  if (previous?.id.startsWith("pm-tool:") && previous.status === "completed" && checked.status !== "completed") return;
+  checked = {
+    ...checked, order: checked.order ?? previous?.order, phase: checked.phase ?? previous?.phase,
+    reasoningPart: checked.reasoningPart ?? previous?.reasoningPart,
+  };
   let pending = [...(state.requests.get(generationId)?.values() ?? [])].find((entry) => entry.request.itemId === checked.id);
   if (!settling && pending && (!isOutputActive(checked.status) || (checked.request && (checked.request.id !== pending.request.id || !checked.request.respondable)))) {
     const requests = state.requests.get(generationId)!;
@@ -185,13 +193,16 @@ function upsert(generationId: string, item: NativeOutputItem, settling = false):
   if (!settling && checked.status === "completed" && state.closingItems.get(generationId)?.has(checked.id)) {
     checked = { ...checked, status: previous && isOutputActive(previous.status) ? previous.status : "running", completedAt: undefined };
   }
-  // Use provider timestamps when present; otherwise measure observed execution,
-  // preserving the first arrival across cumulative item revisions.
+  // Adapter clocks and first-arrival clocks are observations unless both edges
+  // carry explicit provider evidence. Never promote legacy timestamps to precision.
   const now = new Date().toISOString();
+  const startedAt = checked.startedAt ?? previous?.startedAt ?? now;
+  const completedAt = isOutputActive(checked.status) || checked.status === "unknown" ? undefined : checked.completedAt ?? previous?.completedAt ?? now;
+  const providerTiming = checked.timing?.source === "provider" && checked.startedAt !== undefined
+    && (isOutputActive(checked.status) || checked.completedAt !== undefined);
   checked = {
-    ...checked,
-    startedAt: checked.startedAt ?? previous?.startedAt ?? now,
-    completedAt: isOutputActive(checked.status) ? undefined : checked.completedAt ?? previous?.completedAt ?? now,
+    ...checked, startedAt, completedAt,
+    timing: { source: providerTiming ? "provider" : "observed" },
   };
   if (checked.type === "command_execution" && isOutputActive(checked.status) && checked.output !== undefined) {
     const command = getCommand(generationId, checked.id);
@@ -213,8 +224,7 @@ function upsert(generationId: string, item: NativeOutputItem, settling = false):
     };
   }
   if (index < 0) flushItems(generationId);
-  if (index < 0) snapshot.items.push(checked);
-  else snapshot.items[index] = checked;
+  upsertNativeOutputItem(snapshot.items, checked);
   snapshot.sequence = nextSequence(snapshot);
   transaction(() => {
     indexMcpAppItem(snapshot, checked);
@@ -262,6 +272,11 @@ export function endNativeOutput(generationId: string, status: TerminalStatus): v
   const current = requireOutput(generationId);
   const endedAt = new Date().toISOString();
   for (const item of current.items) {
+    // A provider ending cannot settle a PM operation or cancel its committed effects.
+    if (item.id.startsWith("pm-tool:") || pmOutcomeFromToolOutput(item.output)) {
+      if (item.status === "running" || item.status === "pending") upsert(generationId, { ...item, status: "unknown", completedAt: undefined, streaming: false }, true);
+      continue;
+    }
     const interruptedWhileClosing = (status === "cancelled" || status === "interrupted") &&
       item.status === "completed" && state.closingItems.get(generationId)?.has(item.id);
     if (!isOutputActive(item.status) && !interruptedWhileClosing && !item.request?.respondable) continue;
@@ -270,6 +285,7 @@ export function endNativeOutput(generationId: string, status: TerminalStatus): v
       : item.status;
     upsert(generationId, {
       ...item, status: itemStatus, streaming: false, completedAt: item.completedAt ?? endedAt,
+      timing: { source: "observed" },
       ...(item.request ? { request: { ...item.request, respondable: false, unavailableReason: "The generation has ended." } } : {}),
     }, true);
   }
@@ -295,8 +311,24 @@ export function endNativeOutput(generationId: string, status: TerminalStatus): v
 /** Only records created by this projection are recovered; legacy chats are untouched. */
 export function recoverNativeOutputs(): void {
   for (const snapshot of listRecords<AgentOutputSnapshot>(OUTPUTS)) {
+    snapshot.items = snapshot.items.map(projectPmNativeOutcome);
+    save(snapshot);
     if (active(snapshot.status)) endNativeOutput(snapshot.generationId, "interrupted");
   }
+}
+
+/** Reconciliation may update the original business item after its model generation has ended. */
+export function updatePmNativeOutput(generationId: string, item: NativeOutputItem): void {
+  const snapshot = requireOutput(generationId);
+  if (!item.id.startsWith("pm-tool:") || item.type !== "dynamic_tool")
+    throw new DurableError(409, "native_output_conflict", "Only original PM operation items may be reconciled.");
+  if (active(snapshot.status)) { upsert(generationId, item); return; }
+  const checked = nativeOutputItemSchema.parse(item.status === "unknown" ? { ...item, completedAt: undefined } : item);
+  upsertNativeOutputItem(snapshot.items, checked);
+  snapshot.sequence = nextSequence(snapshot);
+  save(snapshot);
+  const retained = snapshot.items.find(entry => entry.id === item.id)!;
+  publish(generationId, { kind: "item", generationId, sequence: snapshot.sequence, item: retained });
 }
 export function emitNativeOutput(generationId: string, event: NativeOutputEvent): void {
   if (event.type === "item.upsert") {
@@ -323,9 +355,7 @@ export function emitNativeNotification(generationId: string, threadId: string, i
     throw new DurableError(409, "native_output_conflict", "Native notification does not belong to this saved generation.");
   if (active(snapshot.status)) { upsert(generationId, item); return; }
   const checked = nativeOutputItemSchema.parse(item);
-  const index = snapshot.items.findIndex((entry) => entry.id === checked.id);
-  if (index < 0) snapshot.items.push(checked);
-  else snapshot.items[index] = checked;
+  upsertNativeOutputItem(snapshot.items, checked);
   snapshot.sequence = nextSequence(snapshot);
   save(snapshot);
   publish(generationId, { kind: "item", generationId, sequence: snapshot.sequence, item: checked });
@@ -333,6 +363,14 @@ export function emitNativeNotification(generationId: string, threadId: string, i
 
 function requestError(message: string): DurableError {
   return new DurableError(409, "native_interaction_closed", message);
+}
+/** Durable flags alone cannot prove a live response channel after restart/closure. */
+export function isNativeInteractionRespondable(generationId: string, requestId: string): boolean {
+  const snapshot = getNativeOutput(generationId);
+  const pending = state.requests.get(generationId)?.get(requestId);
+  if (snapshot?.status !== "running" || state.closedInteractions.has(generationId) || !pending) return false;
+  return snapshot.items.some(item => item.id === pending.request.itemId && item.status === "waiting"
+    && item.request?.id === requestId && item.request.respondable);
 }
 export function requestNativeInteraction(generationId: string, input: NativeInteractionRequest): Promise<NativeInteractionResponse> {
   const request = nativeInteractionRequestSchema.parse(input);

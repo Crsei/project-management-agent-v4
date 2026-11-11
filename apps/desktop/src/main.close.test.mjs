@@ -146,7 +146,7 @@ test("desktop close preserves drafts, IPC trust, owned services and retryable sh
     this.testRunning = true;
     this.stopCalls = 0;
     servers.push(this);
-    return { origin: "http://127.0.0.1:58763", instanceId: "isolated-close-test", token: "private-test-token", runtime: "test" };
+    return { phase: "ready", origin: "http://127.0.0.1:58763", instanceId: "isolated-close-test", token: "private-test-token", runtime: "test" };
   });
   t.mock.method(LocalServer.prototype, "stop", async function () {
     this.stopCalls++;

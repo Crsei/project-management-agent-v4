@@ -11,6 +11,7 @@ import { Client } from 'pg';
 import { createPool } from '../../../../packages/infrastructure/src/database.ts';
 import { LocalBlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
 import { login } from '../../../../packages/infrastructure/src/auth.ts';
+import { completeInstanceSetup } from '../../../../packages/application/src/instance-setup.ts';
 import { readStorageBinding } from '../../../../packages/infrastructure/src/blob-storage-binding.ts';
 import { blobBackupManifestSha256 } from '../../../../packages/infrastructure/src/blob-storage-backup.ts';
 import { collectBlobInventory } from '../../../../packages/infrastructure/src/blob-storage-maintenance.ts';
@@ -24,6 +25,20 @@ import { bootstrapDesktop } from './bootstrap.ts';
 const binariesDir = process.env.PM_DESKTOP_TEST_POSTGRES_ROOT;
 const serverRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const backupPassword = 'independent encrypted desktop backup passphrase';
+
+async function initializeDesktop(databaseUrl: string, dataDir: string, setup: { email: string; password: string; name: string; workspaceName: string }) {
+  const projectRoot = join(dataDir, 'projects');
+  const prepared = await bootstrapDesktop({ databaseUrl, dataDir, projectRoot });
+  if (prepared.phase !== 'pending') throw new Error('Expected a pending desktop first run');
+  const token = (await readPrivateJson(join(dataDir, 'setup-token.json'), 1024)) as { token: string };
+  const sample = { coreRoot: join(dataDir, 'pm-workspaces'), localProjects: { enabled: true, dataRoot: dataDir, defaultParent: projectRoot, allowedRoots: [projectRoot], backupRoot: join(dataDir, 'backups'), coreRoot: join(dataDir, 'pm-workspaces') } };
+  const pool = createPool(databaseUrl, 2);
+  try { await completeInstanceSetup(pool, { setupToken: token.token, ...setup }, { sample }); }
+  finally { await pool.end(); }
+  const finalized = await bootstrapDesktop({ databaseUrl, dataDir, projectRoot });
+  if (finalized.phase !== 'ready') throw new Error('Expected a finalized desktop first run');
+  return finalized;
+}
 
 async function measured<T>(phase: string, operation: () => Promise<T>): Promise<T> {
   const start = performance.now();
@@ -75,7 +90,7 @@ test('real encrypted desktop roundtrip preserves PM, blobs, chat and Agent; reje
   assert.equal((await lstat(join(serverRoot, 'apps/server/agent/dist/desktop-agent-maintenance.mjs'))).isFile(), true, 'Build the Agent desktop maintenance entry before this real regression.');
   const started = await database.start();
   const setup = { email: 'backup-roundtrip@example.invalid', password: `login-${randomUUID()}`, name: 'Backup User', workspaceName: 'Backup Workspace' };
-  const initialized = await bootstrapDesktop({ databaseUrl: started.databaseUrl, dataDir, projectRoot: join(dataDir, 'projects'), setup });
+  const initialized = await initializeDesktop(started.databaseUrl, dataDir, setup);
   const core = readCurrentCore(join(dataDir, 'pm-workspaces', initialized.workspaceId)).files.map(file => ({ id: file.id, raw: file.raw }));
   const chatRoot = join(dataDir, 'chat-spaces');
   const availableArea = join(chatRoot, 'available');

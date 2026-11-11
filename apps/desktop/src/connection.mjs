@@ -5,8 +5,6 @@ if (bridge?.platform === "darwin" || bridge?.platform === "win32" || bridge?.pla
 const bridgeUnavailable = "可信桌面连接桥不可用，请重新安装完整的 Dovspace 桌面应用。";
 const form = document.querySelector("#connection-form");
 const fields = Object.fromEntries(["projectRoot", "dataDir", "nodePath"].map(name => [name, form.elements.namedItem(name)]));
-const account = Object.fromEntries(["email", "name", "password", "workspaceName"].map(name => [name, form.elements.namedItem(name)]));
-const createAccount = form.elements.namedItem("createAccount");
 const maintenanceSecrets = [...document.querySelectorAll("#backup-password, #backup-password-confirm, #restore-password")];
 const legacyRestore = document.querySelector("#restore-legacy");
 const trustedRestoreSource = document.querySelector("#restore-trusted-source");
@@ -32,9 +30,7 @@ let step = "mode";
 form.noValidate = true;
 
 function working() { return pending > 0 || ["connecting", "stopping", "maintenance"].includes(current?.status); }
-function clearAccount() { for (const element of Object.values(account)) element.value = ""; }
 function changeStep(next) {
-  if (step !== next) account.password.value = "";
   step = next;
 }
 function diagnostics(state) {
@@ -49,8 +45,6 @@ function showError(selector, message) {
 function syncConfiguration(state, replace = false) {
   for (const [name, element] of Object.entries(fields))
     if (replace || !dirty.has(name)) element.value = state.configuration[name] || "";
-  if (replace || !dirty.has("createAccount"))
-    createAccount.checked = Boolean(state.setupSuggested);
 }
 
 function statusMessage() {
@@ -58,7 +52,7 @@ function statusMessage() {
   if (!current) return localError ? "无法读取桌面连接状态。" : "正在读取桌面连接状态…";
   switch (current.status) {
     case "connecting": return "正在准备工作区，请稍候…";
-    case "connected": return "工作区已连接。请在工作台中登录。";
+    case "connected": return current?.firstRunPending ? "工作区已启动。请在工作台页面完成首次账号与工作区设置。" : "工作区已连接。请在工作台中登录。";
     case "stopping": return "正在断开连接并停止本地服务与数据库…";
     case "maintenance": return "正在维护工作区数据，请稍候…";
     case "error": return current.localRunning ? "操作未完成，本地服务仍在运行。请查看错误并重试断开或退出。" : "操作未完成，请查看下方错误与原始诊断。";
@@ -68,15 +62,9 @@ function statusMessage() {
 
 function displayMode(disabled) {
   const configuring = step === "configure";
-  document.querySelector("#account-fields").hidden = !createAccount.checked;
   for (const name of ["dataDir", "projectRoot", "nodePath"])
     fields[name].disabled = disabled || !configuring || (name === "nodePath" && !current?.developerRuntime);
   fields.dataDir.required = true;
-  createAccount.disabled = disabled || !configuring;
-  for (const element of Object.values(account)) {
-    element.required = createAccount.checked;
-    element.disabled = disabled || !configuring || !createAccount.checked;
-  }
   for (const button of document.querySelectorAll("[data-directory]"))
     button.disabled = disabled || !configuring;
   document.querySelector("#choose-node").disabled = disabled || !configuring || !current?.developerRuntime;
@@ -137,7 +125,7 @@ function render() {
   connect.textContent = current?.status === "connecting" ? "正在连接…"
     : current?.status === "stopping" ? "正在停止…"
     : current?.status === "maintenance" ? "正在维护…"
-    : createAccount.checked ? "创建并启动工作区" : "启动本地工作区";
+    : "启动本地工作台";
   document.querySelector("#open").hidden = !connected || step !== "ready";
   document.querySelector("#open").disabled = disabled;
   document.querySelector("#change-connection").hidden = !connected || step !== "ready";
@@ -149,7 +137,9 @@ function render() {
   disconnect.disabled = disabled;
   disconnect.textContent = current?.status === "stopping" ? "正在停止…" : current?.localRunning ? "断开并停止本地服务" : "断开连接";
   document.querySelector("#ready-summary").textContent = connected
-    ? "工作区已就绪。打开工作台后，使用你的 PM 账号登录。"
+    ? current?.firstRunPending
+      ? "工作区已启动。请在已打开的工作台页面完成首次账号与工作区设置；桌面端会提供本机一次性令牌。"
+      : "工作区已就绪。打开工作台后，使用你的 PM 账号登录。"
     : recovery ? "连接尚未完成，但本地服务仍在运行。可重试断开以安全停止服务，或退出应用。" : "正在停止连接，请稍候…";
   document.querySelector("#manage-workspace").disabled = disabled;
   document.querySelector("#maintenance-back").disabled = disabled;
@@ -180,9 +170,6 @@ function receiveState(state) {
     connectionAttempt.completed = true;
     dirty.clear();
     syncConfiguration(state, true);
-    clearAccount();
-    createAccount.checked = false;
-    dirty.add("createAccount");
   }
   if ((state.status === "connected" && previous?.status !== "connected") || completedConnection) changeStep("ready");
   else if (state.status === "idle" && previous?.status === "stopping" && !state.localRunning) changeStep("mode");
@@ -195,7 +182,6 @@ function receiveState(state) {
       maintenanceOperation.completed = true;
       dirty.clear();
       syncConfiguration(state, true);
-      clearAccount();
     }
     const changed = ["status", "message", "error", "details"].some(key => state[key] !== maintenanceOperation.before[key]);
     if (maintenanceOperation.started || changed) {
@@ -253,21 +239,19 @@ async function invoke(action, options) {
 
 function navigate(nextView, nextStep = step) {
   if (working() || !current) return;
-  account.password.value = "";
   clearMaintenanceSecrets();
   view = nextView;
   changeStep(nextStep);
   render();
   const target = view === "maintenance" ? document.querySelector("#maintenance-back")
     : step === "mode" ? form.querySelector('input[name="mode"]:checked')
-    : step === "configure" ? createAccount
+    : step === "configure" ? fields.dataDir
     : document.querySelector("#open");
   target?.focus();
 }
 
 form.addEventListener("input", event => {
   if (event.target.name) dirty.add(event.target.name);
-  if (Object.values(account).includes(event.target)) dirty.add("createAccount");
 });
 form.addEventListener("change", event => {
   if (event.target.name) dirty.add(event.target.name);
@@ -275,7 +259,6 @@ form.addEventListener("change", event => {
     fields.projectRoot.value = "";
     dirty.add("projectRoot");
   }
-  if (event.target === createAccount && !createAccount.checked) clearAccount();
   render();
 });
 form.addEventListener("submit", async event => {
@@ -289,12 +272,7 @@ form.addEventListener("submit", async event => {
     return;
   }
   const configuration = { mode: "local", ...Object.fromEntries(Object.entries(fields).map(([name, element]) => [name, element.value])) };
-  if (createAccount.checked)
-    configuration.setup = Object.fromEntries(Object.entries(account).map(([name, element]) => [name, element.value]));
-  // Clear both DOM and temporary payload secrets even if startup fails or is cancelled.
-  account.password.value = "";
-  try { await invoke("connect", { configuration }); }
-  finally { if (configuration.setup) configuration.setup.password = ""; }
+  await invoke("connect", { configuration });
 });
 document.querySelector("#continue").addEventListener("click", () => navigate("onboarding", "configure"));
 document.querySelector("#back").addEventListener("click", () => navigate("onboarding", "mode"));
@@ -350,7 +328,7 @@ for (const action of ["backup", "restore"]) document.querySelector(`#${action}`)
     clearMaintenanceSecrets();
   }
 });
-window.addEventListener("pagehide", () => { clearAccount(); clearMaintenanceSecrets(); });
+window.addEventListener("pagehide", () => { clearMaintenanceSecrets(); });
 
 render();
 if (bridgeAvailable) {

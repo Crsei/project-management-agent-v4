@@ -13,7 +13,7 @@ import { PmCommandError } from '../service/pm-errors';
 import { allowed } from '../service/pm-ui';
 import { hasUncertainProjectTaskDraft } from '../service/project-task-editing-model';
 import { teamTaskCreateProjectProblem } from '../service/team-task-actions-model';
-import { localDirectorySchema, localProjectInputSchema, type LocalDirectory, type LocalProjectPreview, type LocalProjectSettings } from '../../../../../../packages/contracts/src/local-projects';
+import { localDirectorySchema, localProjectInputSchema, type LocalDirectory, type LocalProjectSettings } from '../../../../../../packages/contracts/src/local-projects';
 import { localProjectApi } from '../service/local-project-api';
 import { useLocalProjectSettings } from '../service/local-project-hooks';
 
@@ -21,11 +21,9 @@ export interface EntityCreationOptions { initial?: CreationInitial; projectId?: 
 export interface LocalProjectCreationState {
   draft: CreationDraft | undefined;
   localSettings: { data: LocalProjectSettings | undefined; error: Error | null; refetch: () => Promise<unknown> };
-  localPreview: LocalProjectPreview | null;
   busy: boolean;
   canWrite: boolean;
   changeDirectory: (directory: LocalDirectory) => void;
-  previewDirectory: () => Promise<void>;
 }
 
 function subscribeOnline(notify: () => void): () => void {
@@ -53,7 +51,6 @@ export function useEntityCreation(options: EntityCreationOptions) {
   });
   const draft = drafts[id];
   const localSettings = useLocalProjectSettings((draft?.kind ?? options.initial?.entity) === 'project');
-  const [localPreview, setLocalPreview] = useState<{ directory: string; result: LocalProjectPreview } | null>(null);
   const initialized = useRef(draft !== undefined || options.draftId !== undefined);
   const appliedEntryInitial = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -61,8 +58,8 @@ export function useEntityCreation(options: EntityCreationOptions) {
   const [issues, setIssues] = useState<Diagnostic[]>([]);
   const active = useRef(true);
   const submitting = useRef(false);
-  const latest = useRef({ service, command, options, localSettings, localPreview });
-  latest.current = { service, command, options, localSettings, localPreview };
+  const latest = useRef({ service, command, options, localSettings });
+  latest.current = { service, command, options, localSettings };
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const sources = usePrivateQuery<WorkspaceSnapshot>(session.queryKey.slice(0, -2), 'domain.read', undefined, async (_client, _workspaceId, signal) => {
     try { return await session.api.workspace(signal); }
@@ -147,17 +144,6 @@ export function useEntityCreation(options: EntityCreationOptions) {
   }
   function changeDirectory(localDirectory: LocalDirectory) {
     edit(current => current.attempt?.phase === 'prepared' && !current.attempt.localDirectory ? { ...current, localDirectory, updatedAt: Date.now() } : editCreationDraft(current, { localDirectory }));
-    setLocalPreview(null);
-  }
-  async function previewDirectory() {
-    await run(async () => {
-      const current = session.creationDrafts.getSnapshot()[id];
-      if (!current || current.kind !== 'project') return;
-      if (!latest.current.localSettings.data?.enabled || !latest.current.localSettings.data.canManage) throw new Error('Local directory management is unavailable. / 当前不可管理本地目录。');
-      const directory = localDirectorySchema.parse(current.localDirectory);
-      const result = await localProjectApi(service.client, session.queryKey[3]).preview(directory);
-      if (active.current) setLocalPreview({ directory: JSON.stringify(directory), result });
-    });
   }
   function writeProblem(current: CreationDraft, isOnline = navigator.onLine): string | null {
     const now = latest.current;
@@ -179,8 +165,7 @@ export function useEntityCreation(options: EntityCreationOptions) {
       if (settings.enabled) {
         if (!settings.canManage) return 'Local project creation requires unrestricted workspace storage management. / 本地项目创建需要工作区全局存储管理权限。';
         const directory = current.attempt?.localDirectory ?? current.localDirectory;
-        if (!localDirectorySchema.safeParse(directory).success) return 'Choose and preview a final project directory. / 请选择并预检项目最终目录。';
-        if (!current.attempt?.localDirectory && now.localPreview?.directory !== JSON.stringify(directory)) return 'Preview the selected directory before creating. / 创建前请预检所选目录。';
+        if (!localDirectorySchema.safeParse(directory).success) return 'Choose a project directory. / 请选择项目目录。';
       }
     }
     return null;
@@ -412,8 +397,8 @@ export function useEntityCreation(options: EntityCreationOptions) {
   const recoveryDraftId = Object.values(drafts).find(item => item.draftId !== id && hasUncertainCreationDrafts({ [item.draftId]: item }))?.draftId;
   return {
     draft, draftId: id, busy, error, issues, sources, directory, sourceDrafts, canWrite, guard, recoveryDraftId,
-    localSettings, localPreview: localPreview && localPreview.directory === JSON.stringify(draft?.attempt?.localDirectory ?? draft?.localDirectory) ? localPreview.result : null,
-    changeDirectory, previewDirectory,
+    localSettings,
+    changeDirectory,
     storageFailed: session.creationDrafts.persistenceError(),
     applyAppScenario: () => edit(current => {
       if (!scenarioFitsDraft(current) || !creationDraftEditable(current)) throw new Error('场景只可填入空白任务草稿，不覆盖已有标题、描述或已发送请求。');

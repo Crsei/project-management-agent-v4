@@ -33,6 +33,8 @@ export type ProviderDriverContext = {
   authorizeExecution?: (action: "compaction" | "tool") => Promise<void>;
   /** Ordinary Chat only. The caller supplies fresh browser headers, never the producing turn's credentials. */
   authorizeMcpApp?: (requestHeaders: Headers, producing: McpAppProducingIdentity) => Promise<void>;
+  /** Request-local historical PM visibility for cached App model content, never an execution permission grant. */
+  authorizeMcpAppContext?: (producing: McpAppProducingIdentity) => Promise<boolean>;
   /** Nonsecret originating grant lineage; never a bearer or a replacement browser authority. */
   originatingMcpGrant?: Pick<McpInvocationIdentity, "grantId" | "actorId" | "scope" | "access" | "version">;
   /** Host-issued frozen-evidence analysis; never accepted from browser/native configuration. */

@@ -5,7 +5,7 @@ import { Link, useLocation } from "react-router-dom";
 import { CheckIcon, ChevronDownIcon, Loader2Icon, SearchIcon, Settings2Icon, StarIcon } from "lucide-react";
 import type { ProviderInstance, ProviderModel } from "@agent-workspace/contracts/provider";
 import {
-  formatProviderUpdateRequiredNotice, getProviderInstanceDisplayName, getProviderModelShortName,
+  getProviderInstanceDisplayName, getProviderModelShortName,
   resolveProviderModelSelection, shouldShowProviderInstanceBadge,
 } from "@agent-workspace/client-runtime/providers";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -13,7 +13,7 @@ import { cn } from "@agent/lib/utils";
 import { ProviderGlyph } from "@agent/src/settings/provider-card";
 import { workspaceClient } from "@agent/src/network";
 import { providerSelectable, visibleProviderModels } from "@agent/src/settings/model-option-controls";
-import { useAgentText, type AgentText } from "@agent/src/i18n";
+import { useAgentText } from "@agent/src/i18n";
 
 export type ComposerModelPickerCatalog = {
   providers: readonly ProviderInstance[];
@@ -84,14 +84,6 @@ function ready(provider: ProviderInstance): boolean {
   return providerSelectable(provider);
 }
 
-function providerNotice(provider: ProviderInstance, t: AgentText): string | null {
-  if (!provider.enabled) return t("此提供商已停用。", "This provider is disabled.");
-  if (!ready(provider)) return t("原生会话尚未就绪；请检查 Agent。", "The native session is not ready; check the agent.");
-  if (provider.authStatus === "unknown") return t("原生会话已就绪；账号身份未知。", "The native session is ready; account identity is unknown.");
-  if (!provider.models.length) return t("此提供商没有可选择的模型。", "This provider has no selectable models.");
-  return null;
-}
-
 function Glyph({ provider, providers, small = false }: { provider: ProviderInstance; providers: readonly ProviderInstance[]; small?: boolean }) {
   return <span className={cn("inline-flex shrink-0 items-center justify-center [&_.provider-glyph]:inline-flex [&_.provider-glyph]:items-center [&_.provider-glyph]:justify-center [&_.provider-glyph]:size-5 [&_.provider-glyph_svg]:size-5", small && "[&_.provider-glyph]:size-3 [&_.provider-glyph_svg]:size-3")}><ProviderGlyph driver={provider.driver} accentColor={provider.accentColor} displayName={getProviderInstanceDisplayName(provider)} showInstanceBadge={shouldShowProviderInstanceBadge(provider, providers)} /></span>;
 }
@@ -123,14 +115,6 @@ export function ComposerModelPicker({
   const activeProvider = "provider" in selection ? selection.provider : undefined;
   const activeModel = "model" in selection ? selection.model : activeProvider?.models.find((option) => option.id === model || option.aliases?.includes(model));
   const validSelection = selection.status === "selected" && ready(selection.provider);
-  const selectionNotice = selection.status === "unselected-provider" ? t("请选择提供商和模型。", "Select a provider and model.")
-    : selection.status === "missing-provider" ? t(`原提供商 ${selection.instanceId} 已不可用。`, `The original provider ${selection.instanceId} is unavailable.`)
-    : selection.status === "disabled-provider" ? t("所选提供商已停用。", "The selected provider is disabled.")
-    : selection.status === "unselected-model" ? t("请明确选择模型。", "Select a model explicitly.")
-    : selection.status === "missing-model" ? t(`原模型 ${selection.modelId} 已不可用。`, `The original model ${selection.modelId} is unavailable.`)
-    : selection.status === "disabled-model" ? selection.model.disabledReason
-    : !ready(selection.provider) ? providerNotice(selection.provider, t)
-    : null;
   const favorites = useMemo(() => new Set(catalog.providers.flatMap((provider) => (provider.modelPreferences?.favorites ?? []).map((id) => pairKey(provider.instanceId, id)))), [catalog.providers]);
   const items = useMemo(() => catalog.providers.flatMap((provider) => visibleProviderModels(provider).map((option) => ({ provider, model: option, key: pairKey(provider.instanceId, option.id) }))), [catalog.providers]);
   // Browse a real provider even for an unset/stale selection; never save a fallback model.
@@ -150,11 +134,6 @@ export function ComposerModelPicker({
     }
     return items.filter((item) => section.kind === "favorites" ? favorites.has(item.key) : item.provider.instanceId === selectedProvider?.instanceId);
   }, [items, query, searching, section, favorites, selectedProvider?.instanceId]);
-  const noticeProviders = searching || section.kind === "favorites" ? catalog.providers : selectedProvider ? [selectedProvider] : [];
-  const updateNotices = noticeProviders.flatMap((provider) => {
-    const notice = formatProviderUpdateRequiredNotice(provider, query);
-    return notice ? [{ provider, notice }] : [];
-  });
   const canChoose = !disabled && !saving && !pending && !refreshing && !catalog.loading && !catalog.error;
   const selectable = visible.filter((item) => ready(item.provider) && !item.model.disabledReason);
   const highlightedItem = selectable.find((item) => item.key === highlighted) ?? selectable[0];
@@ -280,7 +259,7 @@ export function ComposerModelPicker({
   };
 
   return <Popover open={open} onOpenChange={changeOpen}>
-    <PopoverTrigger render={<button type="button" disabled={disabled} aria-label={t("切换模型和提供商", "Switch model and provider")} title={validSelection ? `${activeProvider && getProviderInstanceDisplayName(activeProvider)} · ${activeModel?.label}` : `${providerInstanceId} / ${model} · ${selectionNotice ?? ""}`} className={cn("text-muted-foreground hover:text-foreground flex h-7 min-w-0 max-w-56 items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-xs outline-none transition-colors hover:bg-foreground/[0.04] disabled:opacity-50", className)} />}>
+    <PopoverTrigger render={<button type="button" disabled={disabled} aria-label={t("切换模型和提供商", "Switch model and provider")} title={validSelection ? `${activeProvider && getProviderInstanceDisplayName(activeProvider)} · ${activeModel?.label}` : `${providerInstanceId} / ${model}`} className={cn("text-muted-foreground hover:text-foreground flex h-7 min-w-0 max-w-56 items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-xs outline-none transition-colors hover:bg-foreground/[0.04] disabled:opacity-50", className)} />}>
       {activeProvider && <Glyph provider={activeProvider} providers={catalog.providers} small />}
       <span className={cn("min-w-0 truncate", validSelection ? "text-foreground/80" : "text-destructive")}>{activeModel && activeProvider ? getProviderModelShortName(activeProvider.driver, activeModel) ?? activeModel.label : model || t("选择模型", "Select model")}{(providerInstanceId || model) && !validSelection ? t("（不可用）", " (unavailable)") : ""}</span>
       {(saving || pending) && <Loader2Icon aria-label={t("保存中", "Saving")} className="size-3 shrink-0 animate-spin" />}
@@ -300,15 +279,13 @@ export function ComposerModelPicker({
         }}>
           <button type="button" aria-label={t("收藏", "Favorite")} title={t("收藏", "Favorite")} aria-pressed={section.kind === "favorites"} onClick={() => selectSection({ kind: "favorites" })} className="relative flex aspect-square w-full items-center justify-center rounded-md hover:bg-foreground/10 focus-visible:bg-foreground/10 focus-visible:outline-none"><StarIcon className="size-5 fill-current" aria-hidden="true" />{section.kind === "favorites" && <span className="absolute -right-1 h-5 w-[3px] rounded-l-full bg-primary" />}</button>
           <div className="my-1 border-b border-border/70" />
-          {catalog.providers.map((provider) => <button key={provider.instanceId} type="button" aria-label={`${getProviderInstanceDisplayName(provider)}${providerNotice(provider, t) ? ` · ${providerNotice(provider, t)}` : ""}`} title={`${getProviderInstanceDisplayName(provider)}${providerNotice(provider, t) ? ` · ${providerNotice(provider, t)}` : ""}`} aria-pressed={section.kind === "provider" && selectedProvider?.instanceId === provider.instanceId} onClick={() => selectSection({ kind: "provider", instanceId: provider.instanceId })} className={cn("relative flex aspect-square w-full items-center justify-center rounded-md hover:bg-foreground/10 focus-visible:bg-foreground/10 focus-visible:outline-none", !ready(provider) && "opacity-50")}><Glyph provider={provider} providers={catalog.providers} />{section.kind === "provider" && selectedProvider?.instanceId === provider.instanceId && <span className="absolute -right-1 h-5 w-[3px] rounded-l-full bg-primary" />}</button>)}
+          {catalog.providers.map((provider) => <button key={provider.instanceId} type="button" aria-label={getProviderInstanceDisplayName(provider)} title={getProviderInstanceDisplayName(provider)} aria-pressed={section.kind === "provider" && selectedProvider?.instanceId === provider.instanceId} onClick={() => selectSection({ kind: "provider", instanceId: provider.instanceId })} className={cn("relative flex aspect-square w-full items-center justify-center rounded-md hover:bg-foreground/10 focus-visible:bg-foreground/10 focus-visible:outline-none", !ready(provider) && "opacity-50")}><Glyph provider={provider} providers={catalog.providers} />{section.kind === "provider" && selectedProvider?.instanceId === provider.instanceId && <span className="absolute -right-1 h-5 w-[3px] rounded-l-full bg-primary" />}</button>)}
         </div>}
         <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-muted/40", !searching && "border-l border-border/70")}>
           <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3"><SearchIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" /><input ref={searchRef} role="combobox" aria-label={t("搜索模型或提供商", "Search models or providers")} aria-expanded="true" aria-controls={listId} aria-activedescendant={highlightedItem ? `${listId}-option-${visible.indexOf(highlightedItem)}` : undefined} aria-autocomplete="list" value={query} onChange={(event) => { setQuery(event.target.value); setHighlighted(null); }} onKeyDown={onSearchKeyDown} placeholder={t("搜索模型…", "Search models…")} className="h-10 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60" /></div>
           <div ref={listRef} id={listId} role="listbox" aria-label={t("模型列表", "Model list")} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1">
             {(catalog.loading || refreshing) && <p role="status" className="px-2 py-3 text-xs text-muted-foreground">{t("正在加载模型目录…", "Loading model catalog…")}</p>}
             {catalog.error && <div role="alert" className="px-2 py-3 text-xs text-destructive">{t("模型目录读取失败：", "Failed to load the model catalog: ")}{catalog.error} <button type="button" className="hover:bg-foreground/[0.05]" onClick={refresh}>{t("重试", "Retry")}</button></div>}
-            {!catalog.loading && !refreshing && !catalog.error && selectionNotice && <p role="status" className="break-words px-2 py-2 text-xs text-destructive">{selectionNotice} {t("不会自动替换所选模型。", "The selected model is never replaced automatically.")}</p>}
-            {!catalog.loading && !catalog.error && updateNotices.map(({ provider, notice }) => <p key={provider.instanceId} role="status" className="break-words px-2 py-2 text-xs text-muted-foreground">{getProviderInstanceDisplayName(provider)} · {notice}</p>)}
             {!catalog.loading && !refreshing && !catalog.error && visible.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">{searching ? t("没有匹配的模型。", "No matching models.") : section.kind === "favorites" ? t("尚无收藏模型。", "No favorite models yet.") : t("没有可展示的模型。", "No models to show.")}</p>}
             {visible.map((item, index) => {
               const selected = item.provider.instanceId === providerInstanceId && item.model.id === activeModel?.id;
@@ -323,7 +300,6 @@ export function ComposerModelPicker({
               </div>;
             })}
           </div>
-          {!searching && selectedProvider && providerNotice(selectedProvider, t) && <div className="max-h-20 shrink-0 overflow-y-auto border-t border-border/70 px-3 py-2 text-xs text-muted-foreground">{providerNotice(selectedProvider, t)}{selectedProvider.message && <p className="mt-1 break-words">{selectedProvider.message}</p>} <Link to="/agent/settings/providers" state={{ settingsReturnTo: `${location.pathname}${location.search}` }} className="hover:text-primary">{t("前往配置", "Configure")}</Link></div>}
           {(saveError || localError) && <div role="alert" className="max-h-20 shrink-0 overflow-y-auto break-words border-t border-border/70 px-3 py-2 text-xs text-destructive">{saveError || localError}{onRetry && <> <button type="button" disabled={saving || pending} onClick={retrySave} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("重试保存", "Retry save")}</button></>} <button type="button" disabled={refreshing || catalog.loading} onClick={refresh} className="enabled:hover:bg-foreground/[0.05] disabled:opacity-50">{t("刷新模型目录", "Refresh catalog")}</button></div>}
           <div className="shrink-0 border-t border-border/70 p-1"><Link to="/agent/settings/providers" state={{ settingsReturnTo: `${location.pathname}${location.search}` }} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"><Settings2Icon aria-hidden="true" className="size-3.5" />{t("管理模型提供商", "Manage model providers")}</Link></div>
         </div>

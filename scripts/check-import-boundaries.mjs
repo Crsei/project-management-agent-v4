@@ -22,6 +22,7 @@ const allowed = new Map([
   [provider + "t3code/management.ts", [native + "provider/providerMaintenanceCommand.ts", native + "provider/ProviderAuthService.ts", packages + "provider-opencode/src/server/liveWorkspace.ts", packages + "provider-pi/src/server/liveWorkspace.ts", packages + "provider-acp/src/server/liveWorkspace.ts", packages + "provider-acp-registry/src/server/probe.ts"]],
   [provider + "t3code/families/claude.ts", [native + "provider/Drivers/ClaudeDriver.ts", native + "orchestration-v2/Adapters/ClaudeAdapterV2.ts", native + "provider/ModelManifest.ts"]],
   [provider + "t3code/families/codex.ts", [native + "provider/Drivers/CodexDriver.ts", native + "orchestration-v2/Adapters/CodexAdapterV2.ts", native + "provider/ModelManifest.ts", native + "provider/CodexInstallation.ts", native + "provider/CodexManagedTokenBroker.ts", native + "provider/CodexManagedHome.ts"]],
+  [provider + "t3code/families/codex-activity.ts", [native + "orchestration-v2/Adapters/CodexAdapterV2.ts"]],
   [provider + "t3code/families/codex-chatgpt-auth.ts", [native + "provider/CodexChatGptAuth.ts"]],
   [provider + "t3code/families/codex-persistence.ts", [native + "provider/ProviderCredentialStore.ts"]],
   [provider + "t3code/families/antigravity.ts", [native + "provider/Drivers/AntigravityDriver.ts", native + "provider/AntigravityInstallation.ts", native + "provider/Drivers/AntigravityUsage.ts", native + "provider/antigravityAuthSupport.ts", native + "provider/ModelManifest.ts"]],

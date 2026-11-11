@@ -160,6 +160,9 @@ async function start(messageId = "authorization-user"): Promise<{ generation: Ch
   const generation = await submitChat({ id: "authorization-chat", messages }, undefined, headers);
   const context = await admitted.promise;
   assert.equal(context.execution?.generationId, generation.id);
+  assert.equal(context.execution?.inputMessageId, generation.inputMessageId);
+  assert.equal(context.execution?.traceId, generation.traceId);
+  assert.equal(context.execution?.executionGrantId, generation.executionGrantId);
   assert.equal(context.execution?.environment.agentWorkspaceId, selection.agentWorkspaceId);
   assert.equal(context.cwd, executionPath);
   assert.ok(context.authorizeExecution);

@@ -139,6 +139,9 @@ export class LocalServer {
     this.ready = false;
     this.failure = "";
     this.token = "";
+    this.setupPending = false;
+    this.setupToken = "";
+    this.finalizePromise = null;
     this.workerStarted = false;
   }
 
@@ -186,8 +189,11 @@ export class LocalServer {
     this.ready = false;
     this.logs = "";
     this.workerStarted = false;
+    this.setupPending = false;
+    this.setupToken = "";
+    this.finalizePromise = null;
     this.redactionBuffers.clear();
-    this.secrets = typeof configuration.setup?.password === "string" && configuration.setup.password ? [configuration.setup.password] : [];
+    this.secrets = [];
     this.controller = new AbortController();
     const pending = this.startManaged(configuration);
     this.startPromise = pending;
@@ -277,11 +283,31 @@ export class LocalServer {
         CORE_WORKSPACE_ROOT: join(dataDir, "pm-workspaces"), PM_CHAT_SPACE_ROOT: join(dataDir, "chat-spaces"),
       };
       const service = { PM_API_URL: pmUrl, PM_AUTOMATION_SERVICE_SECRET: ports.serviceSecret, PM_AUTOMATION_AGENT_URL: agentUrl, PM_MCP_AGENT_URL: agentUrl };
-      this.progress("Preparing local workspace storage and accounts…");
+      this.nodeExecutable = runtime.executable;
+      this.databaseUrl = database.databaseUrl;
+      this.dataDir = dataDir;
+      this.projectRoot = projectRoot;
+      this.bootstrapEntry = entries.bootstrap;
+      this.bootstrapEnvironment = { ...common, ...storage, BLOB_PROVIDER: "local", BLOB_ROOT: join(dataDir, "blobs") };
+      this.instanceId = database.instanceId;
+      this.progress("Preparing local workspace storage…");
       const initialized = JSON.parse((await this.runNode("bootstrap", runtime.executable, ["--conditions=development", entries.bootstrap], {
-        cwd: dataDir, env: { ...common, ...storage, BLOB_PROVIDER: "local", BLOB_ROOT: join(dataDir, "blobs") },
-      }, BOOTSTRAP_DEADLINE, { databaseUrl: database.databaseUrl, dataDir, projectRoot, ...(configuration.setup ? { setup: configuration.setup } : {}) })).trim());
-      if (typeof initialized.userId !== "string" || !UUID.test(initialized.userId) || typeof initialized.workspaceId !== "string" || !UUID.test(initialized.workspaceId) || typeof initialized.initialized !== "boolean" || initialized.instanceId && initialized.instanceId !== database.instanceId) throw new Error("Managed database bootstrap returned an invalid account/workspace identity.");
+        cwd: dataDir, env: this.bootstrapEnvironment,
+      }, BOOTSTRAP_DEADLINE, { databaseUrl: database.databaseUrl, dataDir, projectRoot })).trim());
+      if (!initialized || initialized.instanceId !== database.instanceId) throw new Error("Managed database bootstrap returned an invalid instance identity.");
+      if (initialized.phase === "pending") {
+        const saved = await readPrivateJson(join(dataDir, "setup-token.json"), 1024);
+        if (!saved || typeof saved.token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(saved.token))
+          throw new Error("Managed first-run setup token is missing or invalid. Restore the original private token file.");
+        this.setupPending = true;
+        this.setupToken = saved.token;
+        this.secrets.push(saved.token);
+      } else if (initialized.phase === "ready") {
+        if (typeof initialized.userId !== "string" || !UUID.test(initialized.userId) || typeof initialized.workspaceId !== "string" || !UUID.test(initialized.workspaceId))
+          throw new Error("Managed database bootstrap returned an invalid account/workspace identity.");
+        this.setupPending = false;
+        this.setupToken = "";
+      } else throw new Error("Managed database bootstrap returned an invalid first-run state.");
       this.assertActive();
       const environments = {
         worker: { ...common, ...storage, ...service, DATABASE_URL: database.databaseUrl, PUBLIC_ORIGIN: origin },
@@ -312,7 +338,7 @@ export class LocalServer {
       this.assertActive();
       this.ready = true;
       this.progress("Local workspace is ready.");
-      return { origin, token: this.token, runtime: runtime.version, instanceId: database.instanceId };
+      return { phase: this.setupPending ? "pending" : "ready", origin, token: this.token, runtime: runtime.version, instanceId: database.instanceId };
     } catch (error) {
       const message = this.redact(error.message || error);
       let cleanupError;
@@ -386,6 +412,34 @@ export class LocalServer {
     }
   }
 
+  /** Re-runs bootstrap after the web page completes first-run setup. The HTTP
+   * account/workspace creation remains owned by the application service; this
+   * only adopts and persists the resulting desktop identity. */
+  async finalizeSetup() {
+    if (!this.ready) throw new Error("Local services are not running.");
+    if (!this.setupPending) return { phase: "ready" };
+    if (this.finalizePromise) return this.finalizePromise;
+    const pending = (async () => {
+      this.assertActive();
+      const token = this.setupToken;
+      const output = await this.runNode("bootstrap", this.nodeExecutable, ["--conditions=development", this.bootstrapEntry], {
+        cwd: this.dataDir, env: this.bootstrapEnvironment,
+      }, BOOTSTRAP_DEADLINE, { databaseUrl: this.databaseUrl, dataDir: this.dataDir, projectRoot: this.projectRoot, live: true });
+      const result = JSON.parse(output.trim());
+      if (!result || result.instanceId !== this.instanceId) throw new Error("Managed first-run finalize returned an invalid instance identity.");
+      if (result.phase === "ready") {
+        if (typeof result.userId !== "string" || !UUID.test(result.userId) || typeof result.workspaceId !== "string" || !UUID.test(result.workspaceId))
+          throw new Error("Managed first-run finalize returned an invalid account/workspace identity.");
+        this.setupPending = false;
+        this.secrets = this.secrets.filter(secret => secret !== token);
+        this.setupToken = "";
+      } else if (result.phase !== "pending") throw new Error("Managed first-run finalize returned an invalid state.");
+      return result;
+    })();
+    this.finalizePromise = pending;
+    try { return await pending; } finally { if (this.finalizePromise === pending) this.finalizePromise = null; }
+  }
+
   async waitForReadiness({ origin, pmUrl, agentUrl }) {
     const deadline = Date.now() + STARTUP_DEADLINE;
     let last = "Waiting for service listeners.";
@@ -445,6 +499,10 @@ export class LocalServer {
       }
       else if (this.postgres) errors.push("Managed PostgreSQL remains running until every owned application process has exited.");
       this.token = "";
+      this.setupPending = false;
+      this.setupToken = "";
+      this.databaseUrl = "";
+      this.bootstrapEnvironment = null;
       if (errors.length) throw new Error(this.redact(errors.join(" ")));
       if (this.processCount || this.postgres?.running) throw new Error("Owned local processes are still running; desktop has not disconnected safely.");
       this.secrets = [];

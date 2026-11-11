@@ -15,6 +15,15 @@ import { relationFields } from '../../../../packages/pm-schema/relations.ts';
 import { inspectFrontmatter, patchMarkdown, titleLineIndex } from '../../../../packages/pm-markdown/index.ts';
 import { CoreWorkspacePool, authorizeCoreScope, executeAuditedCoreMutation, recoverAuditedCoreMutation, nativeCommandId } from './core-routes.ts';
 import { coreVersion, replaceBody, updateWorkItemRaw } from './core-adapter.ts';
+import { CoreCommandJournal } from './core-journal.ts';
+
+/** No argument text: retained original native identity used only for status inspection. */
+export const agentToolRecoveryIdentitySchema = z.strictObject({
+  kind: z.enum(['command', 'core']), commandId: z.string().min(1).max(200),
+  hash: z.string().regex(/^[a-f0-9]{64}$/), action: z.string().min(1).max(100),
+});
+export type AgentToolRecoveryIdentity = z.infer<typeof agentToolRecoveryIdentitySchema>;
+export type AgentToolOutcomeProof = { status: 'succeeded' | 'failed' | 'unknown'; evidence: 'command_receipt' | 'native_journal' | 'unresolved' };
 
 export type { AgentChatToolContext, AgentChatToolName } from '../../../../packages/application/src/agent-chat-tools.ts';
 export type AgentChatToolsOptions = {
@@ -36,6 +45,8 @@ export type AgentChatTools = {
   availableToolNames: AgentChatToolName[];
   execute(name: string, input: unknown, context: AgentChatToolContext): Promise<AgentChatToolResult>;
   recover(name: string, input: unknown, context: AgentChatToolContext): Promise<AgentChatToolResult | null>;
+  recoveryIdentity(name: string, input: unknown, context: AgentChatToolContext): AgentToolRecoveryIdentity | null;
+  inspectOutcome(identity: AgentToolRecoveryIdentity, actorId: string, workspaceId: string): Promise<AgentToolOutcomeProof>;
 };
 type NativeIdentity = { action: string; input: Record<string, unknown>; targetId?: string };
 type NativeMutation = FileRecord | { id: string; deleted: true };
@@ -74,10 +85,12 @@ function commandFailure(receipt: CommandReceipt): void {
   if (receipt.status !== 'committed') throw new DomainError(receipt.error?.code ?? 'agent_tool_rejected', receipt.error?.message ?? 'The native command was rejected', receipt.httpStatus);
 }
 function commandReceipt(context: AgentChatToolContext, receipt: CommandReceipt, action: string, targetId: string | null, revision: string | null): AgentChatToolReceipt {
-  return { kind: 'command', operationId: context.operationId, commandId: receipt.commandId, action, targetId, revision };
+  return { kind: 'command', operationId: context.operationId, commandId: receipt.commandId, action, targetId, revision,
+    ...(context.linkage ? { linkage: context.linkage } : {}) };
 }
 function nativeReceipt(context: AgentChatToolContext, request: Pick<NativeRequest, 'action' | 'targetId'>, record: FileRecord, originalRevision = record.revision): AgentChatToolReceipt {
-  return { kind: 'core', operationId: context.operationId, commandId: nativeCommandId(context.workspaceId, context.actor.id, request.action, request.targetId, context.operationId), action: request.action, targetId: record.id, revision: originalRevision };
+  return { kind: 'core', operationId: context.operationId, commandId: nativeCommandId(context.workspaceId, context.actor.id, request.action, request.targetId, context.operationId), action: request.action, targetId: record.id, revision: originalRevision,
+    ...(context.linkage ? { linkage: context.linkage } : {}) };
 }
 function lifecycleResult(context: AgentChatToolContext, receipt: AgentChatToolReceipt, record?: FileRecord): AgentChatToolResult {
   if (!record) return { kind: 'lifecycle', items: [], nextCursor: null, truncated: false, sources: [], receipt };
@@ -356,7 +369,7 @@ export function createAgentChatTools(options: AgentChatToolsOptions): AgentChatT
         if ('entity' in result) throw new DomainError('core_write_outcome_unknown', 'The native deletion did not return a tombstone', 503);
         return lifecycleResult(context, { kind: 'core', operationId: context.operationId,
           commandId: nativeCommandId(context.workspaceId, context.actor.id, request.action, request.targetId, context.operationId),
-          action: request.action, targetId: result.id, revision: null });
+          action: request.action, targetId: result.id, revision: null, ...(context.linkage ? { linkage: context.linkage } : {}) });
       }
       if (!('entity' in result)) throw new DomainError('core_write_outcome_unknown', 'The native lifecycle write did not return a source record', 503);
       assertAgentToolRecord(context.scope, result);
@@ -448,7 +461,8 @@ export function createAgentChatTools(options: AgentChatToolsOptions): AgentChatT
     });
     if (!saved || saved.kind === 'http_pending') return null;
     if (saved.kind === 'http_rejected') throw new DomainError('agent_tool_recovered_rejection', 'The original native write was rejected; it was not replayed', 409);
-    const receipt: AgentChatToolReceipt = { kind: 'core', operationId: context.operationId, commandId, action: request.action, targetId: saved.targetId, revision: saved.revision };
+    const receipt: AgentChatToolReceipt = { kind: 'core', operationId: context.operationId, commandId, action: request.action, targetId: saved.targetId, revision: saved.revision,
+      ...(context.linkage ? { linkage: context.linkage } : {}) };
     // A proven permanent deletion leaves a native tombstone this service cannot read; report no invented success.
     if (name === 'pm_delete_task') return null;
     let record: FileRecord;
@@ -480,5 +494,49 @@ export function createAgentChatTools(options: AgentChatToolsOptions): AgentChatT
     if (isLifecycleTool(name)) return lifecycleResult(context, receipt, record);
     return entityResult(context, record, receipt);
   }
-  return { definitions, registry, availableToolNames, execute, recover };
+
+  function recoveryIdentity(nameValue: string, input: unknown, context: AgentChatToolContext): AgentToolRecoveryIdentity | null {
+    const name = toolName(nameValue);
+    parseAgentChatToolInput(name, input);
+    if (!AGENT_CHAT_TOOL_REGISTRY.find(tool => tool.name === name)?.write) return null;
+    if (name === 'pm_create_project' || name === 'pm_create_comment') {
+      const projectId = name === 'pm_create_comment' ? parseAgentChatToolInput(name, input).projectId : undefined;
+      const command = creationCommand(name, input, context, options.localProjects, projectId);
+      return { kind: 'command', commandId: command.commandId, action: command.commandType,
+        hash: requestHash(command as unknown as Record<string, unknown>) };
+    }
+    const identity = nativeIdentity(name, input);
+    return { kind: 'core', commandId: nativeCommandId(context.workspaceId, context.actor.id, identity.action, identity.targetId, context.operationId),
+      action: identity.action, hash: requestHash({ action: identity.action, targetId: identity.targetId, input: identity.input }) };
+  }
+
+  /** Internal status inspection never executes, mutates files, rebuilds a Workspace or returns business data. */
+  async function inspectOutcome(input: AgentToolRecoveryIdentity, actorId: string, workspaceId: string): Promise<AgentToolOutcomeProof> {
+    const identity = agentToolRecoveryIdentitySchema.parse(input);
+    const unresolved: AgentToolOutcomeProof = { status: 'unknown', evidence: 'unresolved' };
+    if (identity.kind === 'command') {
+      const row = (await options.database().query<{ request_hash: string; command_type: string; status: string; code: string | null }>(
+        `SELECT request_hash,command_type,receipt->>'status' AS status,receipt#>>'{error,code}' AS code
+         FROM command_receipts WHERE workspace_id=$1 AND actor_id=$2 AND command_id=$3`,
+        [workspaceId, actorId, identity.commandId])).rows[0];
+      if (!row || row.request_hash !== identity.hash || row.command_type !== identity.action) return unresolved;
+      if (row.status === 'committed') return { status: 'succeeded', evidence: 'command_receipt' };
+      if (row.status === 'rejected' && !/unknown|pending|recovered/i.test(row.code ?? ''))
+        return { status: 'failed', evidence: 'command_receipt' };
+      return unresolved;
+    }
+    const saved = new CoreCommandJournal(options.coreWorkspaces.rootFor(workspaceId)).httpOutcome(identity.commandId, actorId);
+    if (!saved || saved.hash !== identity.hash || saved.kind === 'http_pending') return unresolved;
+    if (saved.kind === 'http_rejected') return { status: 'failed', evidence: 'native_journal' };
+    // Preserve the existing deletion recovery conservatism: absence/tombstone alone is not a recovered receipt.
+    if (identity.action === 'DeleteCoreEntity') return unresolved;
+    if (saved.audit.some(entry => entry.action !== identity.action || entry.commandId !== identity.commandId || entry.actorId !== actorId)) return unresolved;
+    const audit = await options.database().query<{ count: number }>(
+      'SELECT count(*)::int AS count FROM project_audit WHERE workspace_id=$1 AND actor_id=$2 AND command_id=$3',
+      [workspaceId, actorId, identity.commandId]);
+    // An incomplete file/SQL audit boundary is repaired only by the existing authorized recovery entry.
+    if ((audit.rows[0]?.count ?? 0) < saved.audit.length) return unresolved;
+    return { status: 'succeeded', evidence: 'native_journal' };
+  }
+  return { definitions, registry, availableToolNames, execute, recover, recoveryIdentity, inspectOutcome };
 }

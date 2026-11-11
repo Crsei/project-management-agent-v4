@@ -53,6 +53,9 @@ if (platform === "darwin" && typeof document !== "undefined" && typeof window !=
 
 const enabled = typeof process !== "undefined" && Array.isArray(process.argv) && process.argv.includes("--pm-native-preview");
 if (enabled) contextBridge.exposeInMainWorld("desktopWorkspace", Object.freeze({
+  setup: Object.freeze({
+    token: () => ipcRenderer.invoke("desktop:first-run-token"),
+  }),
   directories: Object.freeze({
     choose: () => ipcRenderer.invoke("desktop:choose-workspace-directory"),
   }),

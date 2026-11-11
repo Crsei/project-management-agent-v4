@@ -93,6 +93,7 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
   execution?: PmExecutionIdentity;
   authorizeExecution?: ProviderDriverContext["authorizeExecution"];
   authorizeMcpApp?: ProviderDriverContext["authorizeMcpApp"];
+  authorizeMcpAppContext?: ProviderDriverContext["authorizeMcpAppContext"];
   originatingMcpGrant?: ProviderDriverContext["originatingMcpGrant"];
   pmAnalysis?: true;
   authorizeWorktreeWrite?: ProviderDriverContext["authorizeWorktreeWrite"];
@@ -140,6 +141,7 @@ export async function runNativeRuntime(runtime: ProviderRuntime, options: {
       mcpServers: options.mcpServers, execution: options.execution, authorizeExecution: options.authorizeExecution,
       authorizeWorktreeWrite: options.authorizeWorktreeWrite,
       authorizeMcpApp: options.authorizeMcpApp,
+      authorizeMcpAppContext: options.authorizeMcpAppContext,
       originatingMcpGrant: options.originatingMcpGrant,
       ...(options.pmAnalysis ? { pmAnalysis: true as const } : {}) }, {
       model: runtime.modelId, prompt: options.prompt, signal: options.signal,

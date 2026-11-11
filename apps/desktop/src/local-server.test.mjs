@@ -10,7 +10,6 @@ import { bindServicePorts, LocalServer, prepareServicePorts } from "./local-serv
 const instanceId = "11111111-2222-4333-8444-555555555555";
 const userId = "22222222-2222-4333-8444-555555555555";
 const workspaceId = "33333333-2222-4333-8444-555555555555";
-const setup = { email: "desktop-fixture@example.invalid", password: "fixture-only-password-4738", name: "Desktop fixture", workspaceName: "Fixture workspace" };
 const node24 = Number(process.versions.node.split(".")[0]) === 24;
 
 function deferred() {
@@ -51,7 +50,8 @@ import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 let text=''; for await (const chunk of process.stdin) text+=chunk;
 const input=JSON.parse(text);
-await writeFile(join(input.dataDir,'bootstrap-received.json'),JSON.stringify({ database:input.databaseUrl.startsWith('postgresql:'),projectRoot:input.projectRoot,setup:!!input.setup,keys:Object.keys(process.env) }));
+await writeFile(join(input.dataDir,'bootstrap-received.json'),JSON.stringify({ database:input.databaseUrl.startsWith('postgresql:'),projectRoot:input.projectRoot,setup:!!input.setup,live:!!input.live,keys:Object.keys(process.env) }));
+if (!existsSync(join(input.dataDir,'setup-token.json'))) await writeFile(join(input.dataDir,'setup-token.json'),JSON.stringify({token:'${"A".repeat(43)}'}),{mode:0o600});
 if (${Boolean(behavior.blockBootstrap)}) {
   const source="const fs=require('node:fs'),http=require('node:http');const server=http.createServer((q,s)=>s.end('bootstrap-descendant'));const stop=()=>{clearInterval(timer);server.close(()=>process.exit(0))};const timer=setInterval(()=>{if(fs.existsSync('../release-bootstrap'))stop()},25);process.on('SIGTERM',stop);server.listen(0,'127.0.0.1',()=>console.log(server.address().port));";
   const nested=spawn(process.execPath,['--eval',source],{stdio:['ignore','pipe','inherit']});
@@ -60,13 +60,8 @@ if (${Boolean(behavior.blockBootstrap)}) {
   await appendFile(join(input.dataDir,'events'),'bootstrap-started\\n');
   await new Promise(done=>{const timer=setInterval(()=>{if(existsSync('../release-bootstrap')){clearInterval(timer);done()}},25)});
 } else await appendFile(join(input.dataDir,'events'),'bootstrap-started\\n');
-if (input.setup) {
-  const secret=input.setup.password;
-  process.stderr.write('fixture secret '+secret.slice(0,7));
-  await new Promise(done=>setTimeout(done,30));
-  process.stderr.write(secret.slice(7)+'\\n');
-}
-console.log(JSON.stringify({instanceId:${JSON.stringify(instanceId)},userId:${JSON.stringify(userId)},workspaceId:${JSON.stringify(workspaceId)},initialized:true}));
+const ready=existsSync(join(input.dataDir,'instance-ready'));
+console.log(JSON.stringify(ready?{phase:'ready',instanceId:${JSON.stringify(instanceId)},userId:${JSON.stringify(userId)},workspaceId:${JSON.stringify(workspaceId)},initialized:true}:{phase:'pending',instanceId:${JSON.stringify(instanceId)}}));
 `;
   const service = (role) => `
 import http from 'node:http';
@@ -150,7 +145,7 @@ process.on('SIGTERM',async()=>{
     return manager;
   };
   const options = { serverRoot: root, webRoot: join(root, "apps/web/dist"), runtimeRoot: join(root, "runtime") };
-  const configuration = { dataDir, projectRoot, nodePath: process.execPath, setup };
+  const configuration = { dataDir, projectRoot, nodePath: process.execPath };
   server = new LocalServer(options, { postgresFactory });
   return { root, dataDir, projectRoot, server, managers, postgresEntered, options, postgresFactory, configuration };
 }
@@ -273,23 +268,27 @@ test("managed startup isolates roles, authenticates readiness, and retains origi
   assert.equal(gateway.agentToken, null);
   const received = JSON.parse(await readFile(join(f.dataDir, "bootstrap-received.json"), "utf8"));
   assert.equal(received.database, true);
-  assert.equal(received.setup, true);
+  assert.equal(received.setup, false);
+  assert.equal(received.live, false);
   assert.equal(received.keys.includes("DATABASE_URL"), false);
-  assert.doesNotMatch(f.server.diagnostic(), new RegExp(setup.password));
-  assert.match(f.server.diagnostic(), /credential redacted/);
+  assert.equal(f.server.setupPending, true);
+  assert.match(f.server.setupToken, /^A{43}$/);
   await f.server.stop();
   assert.equal(f.server.running, false);
   assert.equal(f.server.processCount, 0);
   assert.equal(f.server.child, null);
+  assert.equal(f.server.setupPending, false);
+  assert.equal(f.server.setupToken, "");
   const events = (await readFile(join(f.dataDir, "events"), "utf8")).trim().split("\n");
   const order = ["gateway-stopped", "worker-stopped", "agent-stopped", "pm-stopped", "postgres-stopped"].map((event) => events.indexOf(event));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   assert.equal(order.every((index) => index >= 0), true);
-  const reconnect = { ...f.configuration };
-  delete reconnect.setup;
-  const second = await f.server.start(reconnect);
+  await writeFile(join(f.dataDir, "instance-ready"), "");
+  const second = await f.server.start(f.configuration);
   assert.equal(second.origin, first.origin);
   assert.equal(second.instanceId, first.instanceId);
+  assert.equal(second.phase, "ready");
+  assert.equal(f.server.setupPending, false);
   assert.notEqual(second.token, first.token);
   assert.equal((await snapshot(f.dataDir, "agent")).serviceSecret, agent.serviceSecret);
   await f.server.stop();

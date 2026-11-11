@@ -14,6 +14,8 @@ import { startPmProviderApplication, stopPmProviderApplication } from "../t3code
 import { getPmProviderApplication } from "../t3code/application-access.ts";
 import { codexDriver, makeCodexDriverLayer, codexProtocolResolver, codexCapabilities, codexInstallationMethods } from "../t3code/families/codex.ts";
 import { makePmProviderFamily } from "../t3code/registration.ts";
+import { emitNativeOutput, endNativeOutput, getNativeOutput, initializeNativeOutput, requestNativeInteraction, respondNativeInteraction, subscribeNativeOutput } from "../../durable/native-output.ts";
+import type { CliChatResult } from "../../agents/cli-chat.ts";
 
 async function fixture(environment: Record<string, string> = {}, options: { homeAlias?: boolean } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "codex-original-protocol-"));
@@ -162,6 +164,71 @@ test("source Codex keeps command output, native tool results and final assistant
     assert.ok(events.some(event => event.type === "item.upsert" && event.item.type === "dynamic_tool"));
     assert.doesNotMatch(result.text, /native-command|Sunny/);
   } finally { await f.close(); }
+});
+
+test("native Codex activity preserves phases, late reasoning identity, provider time and SQLite snapshots without redispatch", { timeout: 20_000 }, async t => {
+  const f = await fixture({ MODE: "activity" });
+  const requested = Promise.withResolvers<string>();
+  const generationId = "native-activity";
+  initializeNativeOutput(generationId, "activity-thread", "running");
+  let settled = false;
+  let run: Promise<CliChatResult> | undefined;
+  try {
+    run = codexAdapter.run(f.context, {
+      model: "native-codex-1", prompt: "native activity", signal: t.signal, onEvent: event => emitNativeOutput(generationId, event),
+      onRequest: request => {
+        const response = requestNativeInteraction(generationId, request);
+        requested.resolve(request.id);
+        return response;
+      },
+    }).finally(() => { settled = true; });
+    const requestId = await Promise.race([requested.promise, run.then(() => { throw new Error("Native turn ended without the offered response channel."); })]);
+    const active = getNativeOutput(generationId)!;
+    assert.equal(settled, false, "A final answer and completed command do not terminate a native generation.");
+    assert.equal(active.status, "running");
+    const reasoning = active.items.find(item => item.type === "reasoning")!;
+    const commentary = active.items.find(item => item.phase === "commentary")!;
+    const command = active.items.find(item => item.type === "command_execution")!;
+    const final = active.items.find(item => item.phase === "final_answer")!;
+    assert.ok(reasoning && commentary && command && final);
+    assert.deepEqual(reasoning.reasoningPart, { kind: "summary", index: 0 });
+    assert.ok(reasoning.nativeItemId?.endsWith(":reason"));
+    const reasoningText = active.items.find(item => item.type === "reasoning" && item.reasoningPart?.kind === "text")!;
+    assert.deepEqual(reasoningText.reasoningPart, { kind: "text", index: 0 });
+    assert.equal(reasoningText.nativeItemId, reasoning.nativeItemId);
+    assert.notEqual(reasoningText.id, reasoning.id);
+    const completionOnly = active.items.find(item => item.nativeItemId?.endsWith(":late-reason"))!;
+    assert.deepEqual(completionOnly.timing, { source: "observed" });
+    assert.deepEqual(reasoning.timing, { source: "provider" });
+    assert.equal(reasoning.startedAt, new Date(1793318400000).toISOString());
+    assert.equal(reasoning.completedAt, new Date(1793318404000).toISOString());
+    assert.equal(commentary.text, "Progress, not the answer");
+    assert.equal(final.text, "native answer");
+    assert.ok(active.items.indexOf(reasoning) < active.items.indexOf(commentary));
+    assert.ok(active.items.indexOf(commentary) < active.items.indexOf(command));
+    assert.ok(active.items.indexOf(command) < active.items.indexOf(final));
+    assert.equal(new Set([reasoning.order?.scope, commentary.order?.scope, command.order?.scope, final.order?.scope]).size, 1);
+    const live = subscribeNativeOutput(generationId).getReader();
+    assert.equal((await live.read()).value?.kind, "snapshot");
+    await live.cancel();
+    respondNativeInteraction(generationId, requestId, { answers: { color: "Blue" } });
+    const result = await run;
+    assert.equal(result.text, "native answer");
+    endNativeOutput(generationId, "completed");
+    const snapshot = getNativeOutput(generationId)!;
+    assert.equal(snapshot.items.filter(item => item.id === final.id).length, 1);
+    const starts = (await f.events()).filter(event => event.rpc?.method === "turn/start").length;
+    await f.restart();
+    assert.deepEqual(getNativeOutput(generationId), snapshot);
+    const reconnected = subscribeNativeOutput(generationId).getReader();
+    assert.deepEqual((await reconnected.read()).value, { kind: "snapshot", snapshot });
+    assert.equal((await reconnected.read()).done, true);
+    assert.equal((await f.events()).filter(event => event.rpc?.method === "turn/start").length, starts);
+  } finally {
+    endNativeOutput(generationId, "cancelled");
+    await run?.catch(() => {});
+    await f.close();
+  }
 });
 
 test("operation-native handshake evidence rejects a different native Home before a thread or prompt is created", async () => {

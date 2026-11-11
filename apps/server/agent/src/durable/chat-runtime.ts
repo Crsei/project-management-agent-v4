@@ -14,13 +14,15 @@ import {
 import type { CliSessionOptions, NativeSessionRef, ProviderOptionSelection } from "@agent-workspace/contracts/provider";
 import type { RemoteSettings as ThreadSettings } from "@agent-workspace/contracts/chat";
 import type { PmToolTarget } from "@agent-workspace/contracts/pm-tools";
-import type { PmReferenceInput, PmReferenceResolution } from "@agent-workspace/contracts/pm-references";
-import type { NativeOutputItem, ResponseStreamingMode } from "@agent-workspace/contracts/output";
+import type { ExecutionPolicy, TurnContext, PmReferenceInput, PmReferenceResolution } from "@agent-workspace/contracts/pm-references";
+import { pmReferenceResolutionSchema } from "@agent-workspace/contracts/pm-references";
+import { upsertNativeOutputItem, type NativeOutputItem, type ResponseStreamingMode } from "@agent-workspace/contracts/output";
 import type { NativeUsageUpdate, ThreadUsageSnapshot } from "@agent-workspace/contracts/usage";
 import type { ContextTransfer } from "@agent-workspace/contracts/durable";
 import type { McpAppProducingIdentity } from "@agent-workspace/contracts/mcp-apps";
 import { closeMcpAppSession } from "../mcp-apps/live.ts";
 import { assertMcpThread, mcpIdentityFromHeaders } from "../mcp/identity.ts";
+import { createPmVisibilityProjector, pmPayloadTargets, recordPmContentProvenance, recordPmQuoteProvenance } from "../pm-visibility.ts";
 import { beginThreadUsage, getThreadUsage, recordNativeUsage, updateUsageSession } from "../usage/ledger.ts";
 import { recordUsageLaunch, recordUsageLaunchSession } from "../usage/service-tiers.ts";
 import {
@@ -63,6 +65,7 @@ import {
 } from "./agent-execution.ts";
 import {
   CHAT_FORMAT,
+  bindMessageTurnContext,
   ensureThread,
   getThread,
   getThreadBranch,
@@ -76,7 +79,6 @@ import {
   type StoredMessage,
 } from "./threads.ts";
 import {
-  assertResolvedReferences,
   pmContextPromptLine,
   resolvePmReferenceOperations,
 } from "./pm-context.ts";
@@ -102,12 +104,20 @@ export type ChatGeneration = {
   id: string;
   threadId: string;
   messageId: string;
+  /** Input USER message identity is independent of the assistant output messageId. */
+  inputMessageId?: string;
+  traceId?: string;
+  executionGrantId?: string;
+  executionPolicy?: ExecutionPolicy;
+  turnContext?: TurnContext;
   parentId: string | null;
   status: "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
   createdAt: string;
   endedAt?: string;
   seq: number;
   request: ChatRequest;
+  /** Exact sanitized system/transfer context selected for the model; raw admission evidence stays unchanged. */
+  modelInputContext?: { system?: string; transferContext?: string };
   providerInstanceId: string;
   providerInstanceRevision: number;
   modelId: string;
@@ -175,10 +185,17 @@ export function recordGenerationPmOperation(generationId: string, operation: { a
   transaction(() => {
     const generation = getChatGeneration(generationId);
     if (!generation || !isChatActive(generation)) throw new DurableError(409, "stale_execution", "PM operation no longer belongs to an active generation.");
+    recordPmContentProvenance({ threadId: generation.threadId, generationId,
+      messageIds: [generation.messageId], operationIds: [], targets: [operation.target], authorities: [operation] });
     const operations = generation.pmOperations ?? [];
     if (operations.some(item => item.actorId === operation.actorId && item.target.workspaceId === operation.target.workspaceId &&
         item.target.projectId === operation.target.projectId)) return;
-    saveGeneration({ ...generation, pmOperations: [...operations, { actorId: operation.actorId, target: { ...operation.target } }] });
+    const authorizationEvidence = [...operations, { actorId: operation.actorId, target: { ...operation.target } }];
+    saveGeneration({ ...generation, pmOperations: authorizationEvidence });
+    if (generation.executionGrantId) {
+      const grant = readRecord<Record<string, unknown>>("chat:execution-grants", generation.executionGrantId);
+      if (grant) writeRecord("chat:execution-grants", generation.executionGrantId, { ...grant, authorizationEvidence });
+    }
   });
 }
 function appendChunk(id: string, chunk: UIMessageChunk): void {
@@ -242,11 +259,73 @@ export function subscribeChat(id: string, signal?: AbortSignal): ReadableStream<
   });
 }
 const toUIMessage = (entry: StoredMessage): UIMessage =>
-  ({ id: entry.id, ...entry.content }) as UIMessage;
+  ({ id: entry.id, ...entry.content, ...(entry.turnContext ? {
+    metadata: { ...(entry.content.metadata as Record<string, unknown> | undefined), turnContext: entry.turnContext },
+  } : {}) }) as UIMessage;
 const toStoredMessage = (message: UIMessage, parentId: string | null): StoredMessage => {
   const { id, ...content } = message;
   return { id, parent_id: parentId, format: CHAT_FORMAT, content };
 };
+
+export const defaultChatExecutionPolicy: ExecutionPolicy = {
+  access: "full",
+  mode: "audit-only",
+  notice: "执行来源记录默认 full / audit-only；不新增操作许可或审批，现有身份、PM 权限、撤权及部署审批仍生效。",
+};
+const inputDigest = (message: UIMessage, originalQuote?: unknown) => createHash("sha256").update(JSON.stringify({
+  role: message.role, parts: message.parts,
+  quote: (message.metadata as { custom?: { quote?: unknown } } | undefined)?.custom?.quote ?? originalQuote,
+})).digest("hex");
+function inputMessage(request: ChatRequest): UIMessage {
+  const message = request.messages.findLast(message => message.role === "user");
+  if (!message) throw new ThreadConflictError("执行必须有输入用户消息。", "invalid_turn_context");
+  return message;
+}
+function frozenReferenceInputs(context: TurnContext): PmReferenceInput[] {
+  return context.pmReferences.map(({ workspaceId, projectId, kind, id, revision }) => ({ workspaceId, projectId, kind, id, revision }));
+}
+function validateInputBinding(request: ChatRequest): TurnContext | undefined {
+  const input = inputMessage(request);
+  const saved = getThreadHistory(request.id).messages.find(message => message.id === input.id);
+  if (saved && request.messages.at(-1)?.role === "user" && inputDigest(toUIMessage(saved)) !==
+      inputDigest(input, (saved.content.metadata as { custom?: { quote?: unknown } } | undefined)?.custom?.quote))
+    throw new ThreadConflictError("相同输入消息 ID 对应了不同内容；编辑须使用新消息 ID。", "idempotency_conflict");
+  const context = saved?.turnContext;
+  if (context && request.pmReferences !== undefined) {
+    const frozen = frozenReferenceInputs(context);
+    if (request.pmReferences.length !== frozen.length || request.pmReferences.some((reference, index) => {
+      const original = frozen[index]!;
+      return reference.workspaceId !== original.workspaceId || reference.projectId !== original.projectId ||
+        reference.kind !== original.kind || reference.id !== original.id ||
+        reference.revision !== null && reference.revision !== original.revision;
+    }))
+      throw new ThreadConflictError("已受理消息的 PM 上下文不可修改；请发送新消息。", "turn_context_conflict");
+  }
+  return context;
+}
+/** Audit metadata only: it never authorizes, expires or gates an operation. No credentials are stored. */
+function bindExecutionInput(request: ChatRequest, generationId: string, references: PmReferenceResolution[],
+  operations: NonNullable<ChatGeneration["pmOperations"]>, requestHeaders?: Headers) {
+  const input = inputMessage(request);
+  const existing = validateInputBinding(request);
+  const executionGrantId = crypto.randomUUID();
+  const traceId = crypto.randomUUID();
+  const context: TurnContext = existing ?? {
+    version: 1, threadId: request.id, messageId: input.id,
+    acceptedAt: new Date().toISOString(), pmReferences: references, executionGrantId,
+  };
+  bindMessageTurnContext(request.id, context);
+  const identity = requestHeaders ? mcpIdentityFromHeaders(requestHeaders) : null;
+  writeRecord("chat:execution-grants", executionGrantId, {
+    id: executionGrantId, threadId: request.id, inputMessageId: input.id, generationId, traceId,
+    inputDigest: inputDigest(input),
+    issuedAt: new Date().toISOString(), policy: defaultChatExecutionPolicy,
+    authorizationEvidence: operations,
+    ...(identity ? { sourceGrantId: identity.grantId, actorId: identity.actorId } : { source: "local" }),
+  });
+  return { inputMessageId: input.id, traceId, executionGrantId,
+    executionPolicy: defaultChatExecutionPolicy, turnContext: context };
+}
 function acceptMessages(request: ChatRequest): UIMessage[] {
   const history = getThreadHistory(request.id);
   const incomingIds = new Set(request.messages.map((message) => message.id));
@@ -271,9 +350,12 @@ function acceptMessages(request: ChatRequest): UIMessage[] {
     if (stored && stored.parent_id !== parent)
       throw new ThreadConflictError("消息分支与服务端历史不一致。", "invalid_history");
     saveFormattedMessage(request.id, toStoredMessage(message, parent), !stored, false);
-    accepted.push(
-      toUIMessage(getThreadHistory(request.id).messages.find((entry) => entry.id === message.id)!),
-    );
+    const canonical = getThreadHistory(request.id).messages.find(entry => entry.id === message.id)!;
+    const quote = (canonical.content.metadata as { custom?: { quote?: { messageId?: unknown } } } | undefined)?.custom?.quote;
+    if (canonical.content.role === "user" && typeof quote?.messageId === "string" &&
+        quote.messageId !== message.id && known.has(quote.messageId))
+      recordPmQuoteProvenance({ threadId: request.id, messageId: message.id, sourceMessageId: quote.messageId });
+    accepted.push(toUIMessage(canonical));
     parent = message.id;
   }
   setThreadHead(request.id, parent);
@@ -450,11 +532,32 @@ export async function submitChat(
   }
   ensureThread(request.id);
   const thread = requireRunnableThread(request.id, request.config?.threadSettingsRevision);
-  const referenceEvidence = request.pmReferences?.length
-    ? await resolvePmReferenceOperations(request.pmReferences, requestHeaders)
+  const submittedInput = inputMessage(request);
+  const savedInput = getThreadHistory(request.id).messages.find(message => message.id === submittedInput.id);
+  const savedQuote = (savedInput?.content.metadata as { custom?: { quote?: unknown } } | undefined)?.custom?.quote;
+  if (savedInput && request.messages.at(-1)?.role === "user" &&
+      inputDigest(toUIMessage(savedInput)) !== inputDigest(submittedInput, savedQuote)) {
+    const projector = await createPmVisibilityProjector(request.id, requestHeaders ?? new Headers());
+    const projectedInput = projector.history([savedInput])[0]!;
+    if (inputDigest(toUIMessage(projectedInput)) === inputDigest(submittedInput))
+      request = { ...request, messages: request.messages.map(message =>
+        message.id === savedInput.id ? toUIMessage(savedInput) : message) };
+  }
+  const boundContext = validateInputBinding(request);
+  if (boundContext && request.trigger !== "regenerate-message" && request.messages.at(-1)?.role === "user") {
+    const original = listChatGenerations(request.id).find(generation => generation.inputMessageId === boundContext.messageId &&
+      generation.request.trigger !== "regenerate-message" && !generation.continuationOf);
+    if (original) { await resolveChatExecutionScope(thread, requestHeaders); return original; }
+  }
+  // A frozen context is metadata evidence, not a historic-body read. Recheck live
+  // authority against the same entity, retaining the ORIGINAL accepted metadata.
+  const referencesToAuthorize = boundContext
+    ? frozenReferenceInputs(boundContext).map(reference => ({ ...reference, revision: null }))
+    : request.pmReferences ?? [];
+  const referenceEvidence = referencesToAuthorize.length
+    ? await resolvePmReferenceOperations(referencesToAuthorize, requestHeaders)
     : undefined;
-  const pmReferences = referenceEvidence?.references;
-  if (pmReferences) assertResolvedReferences(pmReferences);
+  const pmReferences = boundContext?.pmReferences ?? referenceEvidence?.references;
   if (
     (request.config?.providerInstanceId !== undefined &&
       request.config.providerInstanceId !== thread.settings.providerInstanceId) ||
@@ -492,6 +595,12 @@ export async function submitChat(
   const generation = transaction(() => {
     const duplicate = findSubmittedChat(identity, fingerprint);
     if (duplicate) return duplicate;
+    const acceptedContext = validateInputBinding(request);
+    if (acceptedContext && request.trigger !== "regenerate-message" && request.messages.at(-1)?.role === "user") {
+      const original = listChatGenerations(request.id).find(generation => generation.inputMessageId === acceptedContext.messageId &&
+        generation.request.trigger !== "regenerate-message" && !generation.continuationOf);
+      if (original) return original;
+    }
     // Provider/PM resolution yields; archiving, deletion, settings or binding edits may have won meanwhile.
     requireRunnableThread(request.id, thread.revision);
     if (JSON.stringify(getThread(request.id)?.executionSelection) !== JSON.stringify(thread.executionSelection))
@@ -533,6 +642,7 @@ export async function submitChat(
       request: {
         ...request,
         messages: accepted,
+        ...(pmReferences ? { pmReferences: pmReferences.map(({ workspaceId, projectId, kind, id, revision }) => ({ workspaceId, projectId, kind, id, revision })) } : {}),
         system: request.system ?? thread.settings.systemPrompt,
         transferContext: transfer,
       },
@@ -545,6 +655,7 @@ export async function submitChat(
       ...(idle ? { idleCompaction: idle.mode } : {}),
       threadSettingsSnapshot: { ...thread.settings },
       executionSnapshot,
+      ...bindExecutionInput({ ...request, messages: accepted }, id, pmReferences ?? [], referenceEvidence?.operations ?? [], requestHeaders),
       ...(pmReferences ? { pmReferences } : {}),
       ...(referenceEvidence?.operations.length ? { pmOperations: referenceEvidence.operations } : {}),
     };
@@ -566,6 +677,7 @@ export async function submitChat(
 function nativePlan(
   generation: ChatGeneration,
   runtime: ProviderRuntime,
+  forcePortable = false,
 ): {
   session?: CliSessionOptions;
   prompt: string;
@@ -578,12 +690,14 @@ function nativePlan(
   const system = [
     generation.request.system,
     snapshot && agentExecutionIdentity(snapshot),
-    pmContextPromptLine(generation.pmReferences),
     snapshot && `本次执行工作目录：${JSON.stringify(snapshot.path)}。目录位置不是隔离沙箱或额外授权。`,
   ].filter(Boolean).join("\n\n");
+  // Per-message evidence must reach resume, not only the first native system prompt.
+  const turnEvidence = pmContextPromptLine(generation.pmReferences);
   const compatibleDirectory = (ref: NativeSessionRef | undefined) =>
     Boolean(snapshot && ref?.cwd === snapshot.path);
   if (
+    !forcePortable &&
     fork &&
     !generation.continuationOf &&
     sameExecutionIdentity(thread.pendingForkEnvironment, snapshot?.environment) &&
@@ -600,7 +714,7 @@ function nativePlan(
       session: { fork },
       prompt: buildChatPrompt(
         generation.request.messages.slice(-1),
-        system,
+        [system, turnEvidence].filter(Boolean).join("\n\n"),
         generation.request.transferContext,
       ),
       handoff: { mode: "native-fork", reason: "从已保存的原生边界建立分支。" },
@@ -614,6 +728,7 @@ function nativePlan(
   const modelCompatible =
     ref?.modelId === runtime.modelId || runtime.capabilities.modelTransition === "native";
   if (
+    !forcePortable &&
     ref?.providerInstanceId === runtime.providerInstanceId &&
     ref.instanceRevision === runtime.instanceRevision &&
     sameExecutionIdentity(thread.nativeEnvironment, snapshot?.environment) &&
@@ -628,7 +743,7 @@ function nativePlan(
       session: { resume: ref },
       prompt: buildChatPrompt(
         generation.request.messages.slice(index + 1),
-        undefined,
+        turnEvidence,
         generation.request.transferContext,
       ),
       handoff: { mode: "native", reason: "同账号原生会话续接；只发送新的回合。" },
@@ -636,6 +751,7 @@ function nativePlan(
   }
   const previous = generation.continuationOf ? getChatGeneration(generation.continuationOf) : null;
   if (
+    !forcePortable &&
     generation.continuationOf &&
     generation.nativeSession?.providerInstanceId === runtime.providerInstanceId &&
     generation.nativeSession.instanceRevision === runtime.instanceRevision &&
@@ -652,7 +768,7 @@ function nativePlan(
       session: { resume: generation.nativeSession },
       prompt: buildChatPrompt(
         generation.request.messages.slice(-1),
-        undefined,
+        turnEvidence,
         generation.request.transferContext,
       ),
       handoff: { mode: "native", reason: "用户确认后的原生恢复；先核对已有进度，不重放原始任务。" },
@@ -661,13 +777,14 @@ function nativePlan(
   return {
     prompt: buildChatPrompt(
       generation.request.messages,
-      system,
+      [system, turnEvidence].filter(Boolean).join("\n\n"),
       generation.request.transferContext,
     ),
     handoff: {
       mode: "portable",
-      reason:
-        ref || fork || previous
+      reason: forcePortable
+        ? "历史 PM 内容当前不可读或来源无法证明，使用过滤后的历史重建上下文；不重放业务工具。"
+        : ref || fork || previous
           ? "实例、模型、系统指令、作用域目录或分支边界变化，使用已保存上下文移交。"
           : "首次使用当前实例。",
     },
@@ -783,6 +900,8 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
       const bridge = generation.idleCompaction || templateChild ? undefined : await openPmToolBridge({
         threadId: generation.threadId, messageId: generation.messageId,
         generationId: generation.id, headers: requestHeaders, authorizeExecution,
+        traceId: generation.traceId, inputMessageId: generation.inputMessageId,
+        executionGrantId: generation.executionGrantId,
         targetCeiling: getNativeGenerationPmTargetCeiling(generation),
         onAuthorizedOperation: operation => recordGenerationPmOperation(generation.id, operation),
       });
@@ -794,12 +913,64 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
       automationConnectors = await openAutomationGenerationConnectors(generation, requestHeaders, authorizeExecution);
       let failed: unknown;
       let source: ReadableStream<UIMessageChunk>;
-        const plan = nativePlan(generation, runtime);
+        const projector = await createPmVisibilityProjector(generation.threadId, requestHeaders ?? new Headers());
+        const stored = getThreadHistory(generation.threadId).messages;
+        const byId = new Map(stored.map(message => [message.id, message]));
+        const projectedHistory = projector.history(generation.request.messages.map((message, index) =>
+          byId.get(message.id) ?? toStoredMessage(message, generation.request.messages[index - 1]?.id ?? null)));
+        const visibleReferences = (entry: StoredMessage | undefined) => (entry?.turnContext?.pmReferences ?? [])
+          .flatMap(reference => { const parsed = pmReferenceResolutionSchema.safeParse(reference); return parsed.success ? [parsed.data] : []; });
+        const modelMessages = projectedHistory.map(entry => {
+          const message = toUIMessage(entry);
+          const line = entry.id !== generation.inputMessageId ? pmContextPromptLine(visibleReferences(entry)) : undefined;
+          return line ? { ...message, parts: [{ type: "text" as const, text: line }, ...message.parts] } : message;
+        });
+        const dependencies = projector.visibleProvenance(modelMessages.map(message => message.id));
+        const lineage = new Set([generation.id]);
+        let ancestor = generation.continuationOf;
+        while (ancestor && !lineage.has(ancestor)) {
+          lineage.add(ancestor);
+          ancestor = getChatGeneration(ancestor)?.continuationOf;
+        }
+        const transfers = listRecords<ContextTransfer>(TRANSFERS).filter(transfer =>
+          transfer.parentThreadId === generation.threadId && transfer.consumedByRunId && lineage.has(transfer.consumedByRunId));
+        const transferTargets: PmToolTarget[] = [];
+        const transferOperationIds: string[] = [];
+        const transferAuthorities: NonNullable<ChatGeneration["pmOperations"]> = [];
+        let transferContaminated = Boolean(generation.request.transferContext?.trim() && !transfers.length);
+        for (const transfer of transfers) {
+          if (!getThread(transfer.sourceThreadId)) { transferContaminated = true; continue; }
+          const sourceProjection = await createPmVisibilityProjector(transfer.sourceThreadId, requestHeaders ?? new Headers());
+          transferContaminated ||= sourceProjection.nativeContextContaminated;
+          transferTargets.push(...sourceProjection.provenance.targets);
+          transferOperationIds.push(...sourceProjection.provenance.operationIds);
+          transferAuthorities.push(...(sourceProjection.provenance.authorities ?? []));
+        }
+        const contaminated = projector.nativeContextContaminated || transferContaminated;
+        recordPmContentProvenance({
+          threadId: generation.threadId, generationId: generation.id, messageIds: [generation.messageId],
+          operationIds: [...dependencies.operationIds, ...(!transferContaminated ? transferOperationIds : [])],
+          targets: [...dependencies.targets, ...pmPayloadTargets(projectedHistory), ...(!transferContaminated ? transferTargets : [])],
+          authorities: [...(dependencies.authorities ?? []), ...(!transferContaminated ? transferAuthorities : []),
+            ...(generation.pmOperations ?? []).filter(operation => visibleReferences(
+              projectedHistory.find(message => message.id === generation.inputMessageId)).some(reference =>
+                reference.workspaceId === operation.target.workspaceId && reference.projectId === operation.target.projectId))],
+        });
+        const modelGeneration: ChatGeneration = {
+          ...generation,
+          pmReferences: visibleReferences(projectedHistory.find(message => message.id === generation.inputMessageId)),
+          request: {
+            ...generation.request, messages: modelMessages,
+            ...(contaminated ? { system: threadSnapshot?.settings.systemPrompt, transferContext: undefined } : {}),
+          },
+        };
+        const plan = nativePlan(modelGeneration, runtime, contaminated);
         if (generation.idleCompaction && !plan.session?.resume)
           throw new ThreadConflictError("原生会话已变化，跳过自动压缩。", "stale_compaction");
         saveGeneration({
           ...getChatGeneration(generation.id)!,
           handoff: plan.handoff,
+          modelInputContext: { system: modelGeneration.request.system, transferContext: modelGeneration.request.transferContext },
           nativeSession: plan.session?.resume,
         });
         beginThreadUsage({ threadId: generation.threadId, generationId: generation.id,
@@ -809,7 +980,10 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
           generateId: () => generation.messageId,
           execute: async ({ writer }) => {
             const textId = crypto.randomUUID();
-            writer.write({ type: "start", messageId: generation.messageId, messageMetadata: { durable: { generationId: generation.id, nativeOutput: true } } });
+            writer.write({ type: "start", messageId: generation.messageId, messageMetadata: { durable: {
+              generationId: generation.id, inputMessageId: generation.inputMessageId, traceId: generation.traceId,
+              executionGrantId: generation.executionGrantId, executionPolicy: generation.executionPolicy, nativeOutput: true,
+            } } });
             writer.write({ type: "text-start", id: textId });
             const mode = generation.request.config?.responseStreamingMode ?? "paragraph";
             const filter = makeAssistantStreamingFilter(mode);
@@ -818,6 +992,7 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
             let legacyText = "";
             let legacyVisible = "";
             let hasAssistantItem = false;
+            let bodySettled = false;
             let timer: NodeJS.Timeout | undefined;
             let usageSession: NativeSessionRef | undefined = plan.session?.resume
               ? { ...plan.session.resume, turnId: undefined, messageId: undefined }
@@ -843,14 +1018,14 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
               legacyVisible = text;
             };
             const publishStructuredJournal = () => {
-              let text = "";
-              let first = true;
-              for (const [key, item] of items) {
-                if (item.parentItemId) continue;
-                if (!first) text += "\n\n";
-                text += visible.get(key) ?? "";
-                first = false;
-              }
+              const ordered: NativeOutputItem[] = [];
+              for (const item of items.values()) upsertNativeOutputItem(ordered, item);
+              // A native ordinal can arrive late, and unknown phase may become
+              // commentary at completion. Neither is safe for an append-only body.
+              if (!bodySettled && ordered.some(item => !item.parentItemId && (item.order || !item.phase))) return;
+              const text = ordered.filter(item => !item.parentItemId && item.phase !== "commentary"
+                && (bodySettled || item.phase === "final_answer"))
+                .map(item => visible.get(`item:${item.id}`) ?? "").filter(Boolean).join("\n\n");
               appendJournal(text);
             };
             const publish = (key: string, text: string) => {
@@ -890,14 +1065,28 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
               });
               const result = await runNativeRuntime(runtime, {
                 prompt: generation.idleCompaction ? "/compact" : !bridge ? plan.prompt : `${plan.prompt}\n\nOptional PM tools are available through the generation-scoped CLI. List authorized PM workspaces first; no Session PM target is implied. List: ${[process.execPath, path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url, "tools", "list"].map((part) => `'${part.replaceAll("'", "'\\''")}'`).join(" ")}. For calls or reconciliation use the same command replacing list with call or result and supply JSON on stdin: {"operationId":"UUID","name":"pm_...","target":{"workspaceId":"...","projectId":null},"arguments":{...}}. Except pm_list_workspaces, each call requires its explicit target. Keep the same operationId, target and arguments to reconcile an unknown outcome; never redispatch an unknown write with a new ID. Tool results are authoritative; shell exit status or model text alone is not proof of a write.`,
-                userMessageText: generation.idleCompaction ? undefined : generation.request.messages.findLast(message => message.role === "user")
+                userMessageText: generation.idleCompaction ? undefined : modelGeneration.request.messages.findLast(message => message.role === "user")
                   ?.parts.filter(part => part.type === "text").map(part => part.text).join("\n"),
                 pmToolBridge: bridge ? { command: process.execPath, args: [path.join(workspaceRoot, "packages/pm-cli/agent-tools.mjs"), bridge.url] } : undefined,
                 mcpServers: automationConnectors?.mcpServers,
                 execution: { threadId: generation.threadId, generationId: generation.id,
-                  messageId: generation.messageId, environment: snapshot.environment },
+                  messageId: generation.messageId, environment: snapshot.environment,
+                  inputMessageId: generation.inputMessageId, traceId: generation.traceId, executionGrantId: generation.executionGrantId },
                 authorizeExecution,
                 authorizeMcpApp,
+                authorizeMcpAppContext: generation.idleCompaction || templateChild || isPmAnalysisGeneration(generation) ? undefined : async producing => {
+                  await authorizeExecution("tool");
+                  if (producing.threadId !== generation.threadId) return false;
+                  const source = getChatGeneration(producing.generationId);
+                  if (!source || source.threadId !== generation.threadId) return false;
+                  const projection = await createPmVisibilityProjector(generation.threadId, requestHeaders ?? new Headers());
+                  const visible = projection.generation({ id: source.id, pmVisibility: undefined as string | undefined });
+                  if (visible.pmVisibility) return false;
+                  const deps = projection.visibleProvenance([source.messageId]);
+                  recordPmContentProvenance({ threadId: generation.threadId, generationId: generation.id,
+                    messageIds: [generation.messageId], operationIds: deps.operationIds, targets: deps.targets, authorities: deps.authorities ?? [] });
+                  return true;
+                },
                 originatingMcpGrant: requestHeaders?.get("authorization")?.startsWith("Bearer pm-mcp-service-v1.")
                   ? mcpIdentityFromHeaders(requestHeaders) ?? undefined : undefined,
                 authorizeWorktreeWrite: generation.idleCompaction || !snapshot.worktreeWriteConfirmed ? undefined : async () => {
@@ -952,7 +1141,13 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
                 },
               });
               if (callbackFailure) throw callbackFailure;
-              if (hasAssistantItem) appendJournal(result.text);
+              // Native items own the body, including phase and ordering; a driver's
+              // convenience result must not append commentary or duplicate a revision.
+              if (hasAssistantItem) {
+                bodySettled = true;
+                for (const [key, item] of items) visible.set(key, item.text ?? "");
+                publishStructuredJournal();
+              }
               if (result.nativeSession)
                 saveGeneration({
                   ...getChatGeneration(generation.id)!,
@@ -967,7 +1162,10 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
               succeeded = true;
             } finally {
               clearTimeout(timer);
+              bodySettled = true;
+              if (hasAssistantItem) for (const [key, item] of items) visible.set(key, item.text ?? "");
               for (const release of filter.flush()) publish(release.key, release.text);
+              if (hasAssistantItem) publishStructuredJournal();
               if (!hasAssistantItem && legacyText) {
                 emitNativeOutput(generation.id, {
                   type: "item.upsert",
@@ -1002,7 +1200,9 @@ function launchChat(generation: ChatGeneration, runtime: ProviderRuntime, reques
         const current = getChatGeneration(generation.id)!;
         const metadata = {
           ...(message.metadata as Record<string, unknown> | undefined),
-          durable: { generationId: current.id, status: current.status, nativeOutput: true, ...(current.usage ? { usage: current.usage } : {}) },
+          durable: { generationId: current.id, inputMessageId: current.inputMessageId, traceId: current.traceId,
+            executionGrantId: current.executionGrantId, executionPolicy: current.executionPolicy,
+            status: current.status, nativeOutput: true, ...(current.usage ? { usage: current.usage } : {}) },
         };
         saveFormattedMessage(
           generation.threadId,
@@ -1075,6 +1275,8 @@ function settleChat(id: string, status: ChatGeneration["status"], error?: unknow
               ...(saved.content.metadata as Record<string, unknown> | undefined),
               durable: {
                 generationId: id,
+                inputMessageId: current.inputMessageId, traceId: current.traceId,
+                executionGrantId: current.executionGrantId, executionPolicy: current.executionPolicy,
                 ...(getNativeOutput(id) ? { nativeOutput: true } : {}),
                 status,
                 ...(current.usage ? { usage: current.usage } : {}),
@@ -1180,10 +1382,11 @@ export async function continueChat(
       "CLI 的外部副作用可能已发生。请核对后确认恢复。",
       "side_effect_confirmation_required",
     );
-  const referenceEvidence = previous.request.pmReferences?.length
-    ? await resolvePmReferenceOperations(previous.request.pmReferences, requestHeaders)
+  const frozenReferences = previous.turnContext?.pmReferences ?? previous.pmReferences ?? [];
+  const referenceEvidence = frozenReferences.length
+    ? await resolvePmReferenceOperations(frozenReferences.map(({ workspaceId, projectId, kind, id }) =>
+      ({ workspaceId, projectId, kind, id, revision: null })), requestHeaders)
     : undefined;
-  if (referenceEvidence) assertResolvedReferences(referenceEvidence.references);
   const recovery: UIMessage = {
     id: crypto.randomUUID(),
     role: "user",
@@ -1215,7 +1418,7 @@ export async function continueChat(
     tools: previous.request.tools,
     config: previous.request.config,
     trigger: "submit-message",
-    pmReferences: previous.request.pmReferences,
+    pmReferences: frozenReferences.map(({ workspaceId, projectId, kind, id, revision }) => ({ workspaceId, projectId, kind, id, revision })),
     idempotencyKey,
   };
   // All identity checks and the lineage link commit before scheduling the provider.
@@ -1229,8 +1432,9 @@ export async function continueChat(
     freezeThreadExecution(previous.threadId, executionSnapshot.environment!, executionSnapshot.path);
     executionSnapshot.environment = { ...executionSnapshot.environment!, frozen: true };
     const messages = acceptMessages(request);
+    const generationId = crypto.randomUUID();
     const next: ChatGeneration = {
-      id: crypto.randomUUID(),
+      id: generationId,
       threadId: previous.threadId,
       messageId: crypto.randomUUID(),
       parentId: recovery.id,
@@ -1246,9 +1450,11 @@ export async function continueChat(
       interactionMode: thread.settings.interactionMode ?? "default",
       threadSettingsSnapshot: { ...thread.settings },
       executionSnapshot,
+      ...bindExecutionInput({ ...request, messages }, generationId, frozenReferences, referenceEvidence?.operations ?? [], requestHeaders),
       continuationOf: id,
       nativeSession: previous.nativeSession,
-      ...(referenceEvidence ? { pmReferences: referenceEvidence.references, pmOperations: referenceEvidence.operations } : {}),
+      ...(frozenReferences.length ? { pmReferences: frozenReferences } : {}),
+      ...(referenceEvidence ? { pmOperations: referenceEvidence.operations } : {}),
     };
     saveGeneration(next);
     initializeNativeOutput(next.id, next.threadId);
@@ -1374,17 +1580,21 @@ export async function continueChatRecovery(
 export async function forkChatGeneration(
   id: string,
   options: { title?: string; idempotencyKey?: string } = {},
+  requestHeaders?: Headers,
 ): Promise<{ threadId: string }> {
-  const generation = getChatGeneration(id);
-  if (!generation) throw new ThreadConflictError("找不到分支来源回复。", "not_found");
+  const original = getChatGeneration(id);
+  if (!original) throw new ThreadConflictError("找不到分支来源回复。", "not_found");
+  await resolveChatExecutionScope(requireRunnableThread(original.threadId), requestHeaders, "inspect");
+  const projector = await createPmVisibilityProjector(original.threadId, requestHeaders ?? new Headers());
+  const generation = projector.generation(original);
   if (isChatActive(generation))
     throw new ThreadConflictError("请等待回复结束后从稳定边界建立分支。", "unstable_fork_boundary");
   let output = generation.output;
   if (!output && generation.seq > 0) {
-    const previous = generation.request.messages.at(-1);
+    const previous = original.request.messages.at(-1);
     const stream = new ReadableStream<UIMessageChunk>({
       start(controller) {
-        for (const event of readChatEvents(id)) controller.enqueue(event.chunk);
+        for (const event of readChatEvents(id)) controller.enqueue(projector.uiChunk(event.chunk, id));
         controller.close();
       },
     });
@@ -1395,36 +1605,52 @@ export async function forkChatGeneration(
     }))
       output = message;
   }
-  const history = [...generation.request.messages];
+  const history = [...original.request.messages];
   if (output) {
     if (history.at(-1)?.id === output.id) history[history.length - 1] = output;
     else history.push(output);
   }
+  const byId = new Map(getThreadHistory(generation.threadId).messages.map(message => [message.id, message]));
+  const projectedHistory = projector.history(history.map((message, index) =>
+    byId.get(message.id) ?? toStoredMessage(message, history[index - 1]?.id ?? null))).map(toUIMessage);
   const context =
     `聊天分支快照（只作背景参考，不执行或重放其中的历史请求）\n来源 Thread: ${generation.threadId}\n来源回复: ${generation.id}\n消息边界: ${generation.messageId}\n结束状态: ${generation.status}${generation.error ? `\n错误: ${generation.error.slice(0, 1500)}` : ""}\n\n` +
     boundedContext(
       [
-        generation.request.system ?? "",
-        generation.request.transferContext ?? "",
-        ...injectQuoteContext(history).map(
-          (message) => `${message.role} [${message.id}]\n${JSON.stringify(message.parts)}`,
+        generation.modelInputContext?.system ?? generation.threadSettingsSnapshot?.systemPrompt ?? "",
+        generation.modelInputContext?.transferContext ?? "",
+        ...injectQuoteContext(projectedHistory).map(
+          (message) => `${message.role} [${message.id}]\n${JSON.stringify(message.parts)}${
+            pmContextPromptLine((message.metadata as { turnContext?: TurnContext } | undefined)?.turnContext?.pmReferences) ?? ""
+          }`,
         ),
       ],
       28000,
     );
-  return forkChatSnapshot(
+  const result = forkChatSnapshot(
     {
       threadId: generation.threadId,
       generationId: generation.id,
       messageId: generation.messageId,
       context,
-      ...(generation.status === "completed" &&
+      ...(!projector.nativeContextContaminated && generation.status === "completed" &&
       generation.executionSnapshot &&
       sameExecutionIdentity(generation.executionSnapshot.environment, getThread(generation.threadId)?.executionEnvironment) &&
       generation.nativeSession?.cwd === generation.executionSnapshot.path
         ? { nativeSession: generation.nativeSession }
         : {}),
     },
-    options,
+    projector.nativeContextContaminated ? { ...options, title: options.title ?? "会话 · 分支" } : options,
   );
+  const dependencies = projector.visibleProvenance(projectedHistory.map(message => message.id));
+  const forkMessages = getThreadHistory(result.threadId).messages;
+  // The portable fork summary is itself PM-derived content, not a fresh user fact.
+  for (const message of forkMessages) {
+    const metadata = message.content.metadata as { custom?: { forkContext?: boolean } } | undefined;
+    if (metadata?.custom?.forkContext)
+      recordPmContentProvenance({ threadId: result.threadId, generationId: `fork:${message.id}`,
+        messageIds: [message.id], operationIds: dependencies.operationIds,
+        targets: [...dependencies.targets, ...pmPayloadTargets(projectedHistory)], authorities: dependencies.authorities ?? [] });
+  }
+  return result;
 }

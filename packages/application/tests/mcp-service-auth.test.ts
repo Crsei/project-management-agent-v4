@@ -6,7 +6,7 @@ import type { SqlExecutor } from '../src/ports.ts';
 
 const identity: McpInvocationIdentity = { grantId: '11111111-1111-4111-8111-111111111111', actorId: '22222222-2222-4222-8222-222222222222', scope: { workspaceId: '33333333-3333-4333-8333-333333333333', projectId: 'PRJ-001' }, threadIds: ['granted-thread'], access: 'read-only', version: 1 };
 const base = `/api/v1/workspaces/${identity.scope.workspaceId}/agent-tools`;
-const body = { name: 'pm_read', arguments: { id: 'TASK-001' }, target: { ...identity.scope }, threadId: 'granted-thread', messageId: 'message', generationId: 'generation', operationId: 'operation' };
+const body = { name: 'pm_read', arguments: { id: 'TASK-001' }, target: { ...identity.scope }, threadId: 'granted-thread', messageId: 'message', generationId: 'generation', operationId: '55555555-5555-4555-8555-555555555555' };
 const oldSecret = process.env.PM_AUTOMATION_SERVICE_SECRET, oldUrl = process.env.PM_MCP_AGENT_URL;
 afterEach(() => { mock.restoreAll(); if (oldSecret === undefined) delete process.env.PM_AUTOMATION_SERVICE_SECRET; else process.env.PM_AUTOMATION_SERVICE_SECRET = oldSecret; if (oldUrl === undefined) delete process.env.PM_MCP_AGENT_URL; else process.env.PM_MCP_AGENT_URL = oldUrl; });
 
@@ -37,6 +37,18 @@ test('workspace grants accept explicit targets without acquiring any directory e
   for (const url of ['/api/v1/agent-tools?workspaceId=forged', '/api/agent-workspaces', '/api/agent-workspaces/directories', '/api/v1/agent-tools/core-files']) {
     assert.throws(() => assertMcpEndpoint(workspaceGrant, { method: 'GET', url, body: null }));
   }
+});
+test('external PM roots need no Chat thread but retain the existing live target and read/full ceiling', () => {
+  const external = { operationId: body.operationId, name: body.name, target: body.target, arguments: body.arguments, executionRoot: 'external' };
+  const direct = { ...identity, threadIds: [] };
+  assert.doesNotThrow(() => assertMcpEndpoint(direct, { method: 'POST', url: base + '/call', body: external }));
+  assert.doesNotThrow(() => assertMcpEndpoint(direct, { method: 'POST', url: base + '/result', body: external }));
+  for (const changed of [{ ...external, name: 'pm_create_task' }, { ...external, target: { ...body.target, projectId: 'PRJ-002' } },
+    { ...external, threadId: 'pretend-chat' }, { ...external, executionRoot: undefined }]) {
+    assert.throws(() => assertMcpEndpoint(direct, { method: 'POST', url: base + '/call', body: changed }));
+  }
+  assert.throws(() => assertMcpEndpoint(direct, { method: 'POST', url: '/api/v1/internal/agent-tools/reconcile', body: external }));
+  assert.throws(() => assertMcpEndpoint(direct, { method: 'GET', url: '/api/threads/granted-thread', body: null }));
 });
 test('reference delegation requires explicit workspace and rejects forged project ceilings', () => {
   const url = `/api/v1/workspaces/${identity.scope.workspaceId}/agent-references/resolve`;

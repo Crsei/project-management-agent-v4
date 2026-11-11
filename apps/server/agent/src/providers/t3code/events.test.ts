@@ -133,3 +133,28 @@ test("string-valued structured HTTP status survives the original adapter error b
   assert.equal(publicError.errorClass, "authentication");
   assert.equal("cause" in publicError, false);
 });
+
+test("native order scopes stay distinct and cumulative final body excludes children while keeping unknown phase unclassified", () => {
+  const adapter = makePmEventAdapter({ canRespond: false, onRequest: () => assert.fail("unexpected request"), onRequestClosed: () => {},
+    isRootItem: row => row.threadId === "thread" });
+  const assistant = (id: string, ordinal: number, text: string, providerTurnId = "native-turn") =>
+    item({ ...base, id, ordinal, providerTurnId, type: "assistant_message", messageId: id, text, streaming: false, status: "completed" });
+  adapter.handle({ type: "turn_item.updated", driver, turnItem: assistant("late", 30, "Last") });
+  adapter.handle({ type: "turn_item.updated", driver, turnItem: assistant("other-turn", 0, "Other", "other-native-turn") });
+  adapter.handle({ type: "turn_item.updated", driver, turnItem: assistant("early", 10, "First") });
+  adapter.handle({ type: "turn_item.updated", driver, turnItem: assistant("late", 30, "Last revised") });
+  adapter.handle({ type: "turn_item.updated", driver, turnItem: item({ ...base, id: "child-answer", threadId: "child",
+    type: "assistant_message", messageId: "child-message", text: "Child-only body", streaming: false, status: "completed" }) });
+  assert.equal(adapter.finalText(), "First\n\nLast revised\n\nOther");
+  const early = adapter.items.get("early")!;
+  assert.equal(early.order?.scope, adapter.items.get("late")?.order?.scope);
+  assert.notEqual(early.order?.scope, adapter.items.get("other-turn")?.order?.scope);
+  assert.equal(early.order?.ordinal, 10);
+  assert.equal(early.phase, undefined);
+  assert.deepEqual(early.timing, { source: "observed" }, "Adapter clocks alone are not provider timing evidence.");
+  adapter.handle({ type: "turn_item.updated", driver, turnItem: item({ ...base, id: "reason-part", parentItemId: "reason-parent",
+    type: "reasoning", text: "Reasoning body", streaming: false }) });
+  assert.equal(adapter.items.get("reason-part")?.parentItemId, "reason-parent");
+  assert.equal(adapter.items.get("reason-part")?.nativeItemId, "native-item");
+  assert.equal(adapter.items.get("reason-part")?.reasoningPart, undefined, "No part kind/index is invented without explicit transport evidence.");
+});

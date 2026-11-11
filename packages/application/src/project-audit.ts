@@ -6,20 +6,24 @@ import { requireCapability } from './access.ts';
 import type { DashboardReadContext } from './dashboard-read.ts';
 import type { SqlExecutor } from './ports.ts';
 
-export const projectAuditOptionsSchema = z.object({ cursor: z.string().min(1).max(2048).optional(), limit: z.coerce.number().int().min(1).max(100).default(30) }).strict();
+const auditFilters = { commandId: z.string().regex(/^(?:[a-f0-9]{64}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/).optional(), operationId: z.uuid().optional() };
+export const projectAuditOptionsSchema = z.object({ cursor: z.string().min(1).max(2048).optional(), limit: z.coerce.number().int().min(1).max(100).default(30), ...auditFilters }).strict();
 const auditSequenceSchema = z.string().regex(/^(?:0|[1-9]\d{0,18})$/).refine(value => value.length < 19 || value.length === 19 && value <= '9223372036854775807', 'Audit sequence is outside the int64 range');
-const cursorSchema = z.object({ workspaceId: z.uuid(), projectId: z.string().min(1).max(80), actorId: z.uuid(), through: auditSequenceSchema, before: auditSequenceSchema.refine(value => value !== '0') }).strict();
-export const projectAuditWriteSchema = projectAuditEntrySchema.omit({ id: true, private: true }).extend({ audienceActorId: z.uuid().nullable() }).strict();
-export type ProjectAuditWrite = Omit<ProjectAuditEntry, 'id' | 'private'> & { audienceActorId: string | null };
+const cursorSchema = z.object({ workspaceId: z.uuid(), projectId: z.string().min(1).max(80), actorId: z.uuid(), through: auditSequenceSchema, before: auditSequenceSchema.refine(value => value !== '0'), ...auditFilters }).strict();
+export const projectAuditWriteSchema = projectAuditEntrySchema.omit({ id: true, private: true, correlation: true }).extend({ audienceActorId: z.uuid().nullable() }).strict();
+export type ProjectAuditWrite = Omit<ProjectAuditEntry, 'id' | 'private' | 'correlation'> & { audienceActorId: string | null };
 type AuditRow = {
   id: string; project_id: string; source: 'command' | 'core_http'; command_id: string; action: string; actor_id: string;
   occurred_at: Date; target_id: string; target_kind: string; before_version: string | null; after_version: string | null;
   changes: unknown; audience_actor_id: string | null;
+  correlation?: unknown;
 };
 function fromRow(row: AuditRow): ProjectAuditEntry {
-  return projectAuditEntrySchema.parse({ id: row.id, projectId: row.project_id, source: row.source, commandId: row.command_id, action: row.action,
+  const { correlation, ...entry } = projectAuditEntrySchema.parse({ id: row.id, projectId: row.project_id, source: row.source, commandId: row.command_id, action: row.action,
     actorId: row.actor_id, occurredAt: row.occurred_at.toISOString(), targetId: row.target_id, targetKind: row.target_kind,
-    beforeVersion: row.before_version, afterVersion: row.after_version, changes: row.changes, private: row.audience_actor_id !== null });
+    beforeVersion: row.before_version, afterVersion: row.after_version, changes: row.changes, private: row.audience_actor_id !== null,
+    ...(row.correlation ? { correlation: row.correlation } : {}) });
+  return { ...entry, ...(correlation === undefined ? {} : { correlation }) };
 }
 
 /** Caller holds the workspace transaction lock. Recovery must use the journal's exact safe snapshot, never today's files. */
@@ -61,17 +65,29 @@ export async function readProjectAudit(ctx: DashboardReadContext, projectId: str
     catch { throw new DomainError('validation_failed', 'Invalid audit cursor', 400); }
     const cursor = cursorSchema.safeParse(decoded);
     if (!cursor.success || cursor.data.workspaceId !== ctx.workspaceId || cursor.data.projectId !== projectId || cursor.data.actorId !== ctx.actor.id
+      || cursor.data.commandId !== parsed.data.commandId || cursor.data.operationId !== parsed.data.operationId
       || BigInt(cursor.data.before) > BigInt(cursor.data.through)) throw new DomainError('validation_failed', 'Invalid audit cursor', 400);
     through = cursor.data.through; before = cursor.data.before;
   } else {
     const snapshot = await ctx.sql.query<{ through: string }>('SELECT coalesce(max(id),0)::text AS through FROM project_audit WHERE workspace_id=$1 AND project_id=$2 AND (audience_actor_id IS NULL OR audience_actor_id=$3)', [ctx.workspaceId, projectId, ctx.actor.id]);
     through = snapshot.rows[0]!.through;
   }
-  const result = await ctx.sql.query<AuditRow>(`SELECT id::text,project_id,source,command_id,action,actor_id,occurred_at,target_id,target_kind,before_version,after_version,changes,audience_actor_id
-    FROM project_audit WHERE workspace_id=$1 AND project_id=$2 AND (audience_actor_id IS NULL OR audience_actor_id=$3)
-    AND id<=$4::bigint AND ($5::bigint IS NULL OR id<$5::bigint) ORDER BY project_audit.id DESC LIMIT $6`, [ctx.workspaceId, projectId, ctx.actor.id, through, before, parsed.data.limit + 1]);
+  const result = await ctx.sql.query<AuditRow>(`SELECT a.id::text,a.project_id,a.source,a.command_id,a.action,a.actor_id,a.occurred_at,a.target_id,a.target_kind,a.before_version,a.after_version,a.changes,a.audience_actor_id,
+    (SELECT jsonb_build_object('operationId',o.operation_id,'traceId',o.linkage->>'traceId','invocationId',o.linkage->>'invocationId',
+      'executionRoot',o.linkage->>'executionRoot','clientKind',o.linkage->>'clientKind','policy','full','enforcement','audit-only')
+      || CASE WHEN o.linkage ? 'executionGrantId' THEN jsonb_build_object('executionGrantId',o.linkage->>'executionGrantId') ELSE '{}'::jsonb END
+      || CASE WHEN o.delegation_id IS NOT NULL THEN jsonb_build_object('delegationId',o.delegation_id) ELSE '{}'::jsonb END
+      FROM pm_agent_tool_operations o WHERE o.workspace_id=a.workspace_id AND o.actor_id=a.actor_id
+      AND o.recovery_identity->>'commandId'=a.command_id AND o.linkage IS NOT NULL LIMIT 1) AS correlation
+    FROM project_audit a WHERE a.workspace_id=$1 AND a.project_id=$2 AND (a.audience_actor_id IS NULL OR a.audience_actor_id=$3)
+    AND a.id<=$4::bigint AND ($5::bigint IS NULL OR a.id<$5::bigint)
+    AND ($7::text IS NULL OR a.command_id=$7) AND ($8::uuid IS NULL OR EXISTS(
+      SELECT 1 FROM pm_agent_tool_operations selected WHERE selected.operation_id=$8 AND selected.workspace_id=a.workspace_id
+      AND selected.actor_id=a.actor_id AND selected.recovery_identity->>'commandId'=a.command_id))
+    ORDER BY a.id DESC LIMIT $6`, [ctx.workspaceId, projectId, ctx.actor.id, through, before, parsed.data.limit + 1, parsed.data.commandId ?? null, parsed.data.operationId ?? null]);
   const entries = result.rows.slice(0, parsed.data.limit).map(fromRow);
   const last = entries.at(-1);
-  const nextCursor = result.rows.length > parsed.data.limit && last ? Buffer.from(JSON.stringify({ workspaceId: ctx.workspaceId, projectId, actorId: ctx.actor.id, through, before: last.id })).toString('base64url') : null;
+  const nextCursor = result.rows.length > parsed.data.limit && last ? Buffer.from(JSON.stringify({ workspaceId: ctx.workspaceId, projectId, actorId: ctx.actor.id, through, before: last.id,
+    ...(parsed.data.commandId ? { commandId: parsed.data.commandId } : {}), ...(parsed.data.operationId ? { operationId: parsed.data.operationId } : {}) })).toString('base64url') : null;
   return { projectId, entries, nextCursor };
 }

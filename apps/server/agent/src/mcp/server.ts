@@ -28,7 +28,10 @@ async function makeSession(identity: McpInvocationIdentity): Promise<Session> {
         try: () => invokeMcpTool(session.identity, definition.name, parameters),
         catch: error => error,
       }).pipe(Effect.match({
-        onSuccess: result => new McpSchema.CallToolResult({ content: [{ type: "text", text: JSON.stringify(result) }] }),
+        onSuccess: result => {
+          const text = JSON.stringify(result);
+          return new McpSchema.CallToolResult({ structuredContent: JSON.parse(text), content: [{ type: "text", text }] });
+        },
         onFailure: error => new McpSchema.CallToolResult({ isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : "Tool call failed" }] }),
       })),
     });

@@ -1,5 +1,6 @@
 import type { NativeSessionRef, CliSessionOptions } from "@agent-workspace/contracts/provider";
 import { chatOnlyExecutionSelection, type ExecutionSelection, type ExecutionEnvironment, type RemoteSettings as ThreadSettings } from "@agent-workspace/contracts/chat";
+import type { TurnContext } from "@agent-workspace/contracts/pm-references";
 import { deleteRecord, listRecords, readRecord, transaction, writeRecord } from "./store.ts";
 import { newThreadSettingsSnapshot } from "../settings/chat-defaults.ts";
 import { sameExecutionIdentity } from "./agent-execution.ts";
@@ -37,6 +38,8 @@ export type StoredMessage = {
   parent_id: string | null;
   format: string;
   content: Record<string, unknown>;
+  /** Immutable server-owned input binding. Missing on legacy/unaccepted messages, never inferred. */
+  turnContext?: TurnContext;
 };
 export type ThreadHistory = {
   threadId: string;
@@ -148,6 +151,8 @@ export function deleteThread(threadId: string): void {
     if (!thread) return;
     writeRecord(THREADS, threadId, { ...thread, deleted: true });
     deleteRecord("chat:sidebar", threadId);
+    for (const grant of listRecords<{ id: string; threadId: string }>("chat:execution-grants"))
+      if (grant.threadId === threadId) deleteRecord("chat:execution-grants", grant.id);
     for (const history of listRecords<ThreadHistory>(HISTORY)) {
       if (history.threadId === threadId)
         deleteRecord(HISTORY, historyKey(threadId, history.format));
@@ -250,6 +255,19 @@ export function saveFormattedMessage(
     const history = getThreadHistory(threadId, entry.format);
     const index = history.messages.findIndex((message) => message.id === entry.id);
     const existing = history.messages[index];
+    // Only admission's server-side binder can attach a context. Browser history
+    // writes and subsequent assistant snapshots cannot replace accepted evidence.
+    entry = { ...entry };
+    if (existing?.turnContext) entry.turnContext = existing.turnContext;
+    else delete entry.turnContext;
+    const metadata = entry.content.metadata;
+    if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+      const { turnContext: _clientContext, custom, ...rest } = metadata as Record<string, unknown>;
+      if (custom && typeof custom === "object" && !Array.isArray(custom)) {
+        const { turnContext: _clientCustomContext, ...trustedCustom } = custom as Record<string, unknown>;
+        entry.content = { ...entry.content, metadata: { ...rest, custom: trustedCustom } };
+      } else entry.content = { ...entry.content, metadata: { ...rest, ...(custom === undefined ? {} : { custom }) } };
+    }
     if (existing && !authoritative) {
       if (history.authoritativeIds.includes(entry.id))
         entry = mergeFrontendToolResults(existing, entry);
@@ -262,6 +280,21 @@ export function saveFormattedMessage(
     if (setHead) history.headId = entry.id;
     writeRecord(HISTORY, historyKey(threadId, entry.format), history);
   });
+}
+
+/** Called inside generation admission's transaction, after its input message was saved. */
+export function bindMessageTurnContext(threadId: string, context: TurnContext): void {
+  const history = getThreadHistory(threadId);
+  const entry = history.messages.find(message => message.id === context.messageId);
+  if (context.threadId !== threadId || !entry || entry.content.role !== "user")
+    throw new ThreadConflictError("TurnContext 必须绑定已受理的输入用户消息。", "invalid_turn_context");
+  if (entry.turnContext) {
+    if (JSON.stringify(entry.turnContext) !== JSON.stringify(context))
+      throw new ThreadConflictError("已受理消息的 PM 上下文不可修改；请使用新消息 ID。", "turn_context_conflict");
+    return;
+  }
+  entry.turnContext = context;
+  writeRecord(HISTORY, historyKey(threadId, CHAT_FORMAT), history);
 }
 export function setThreadHead(threadId: string, headId: string | null): void {
   const history = getThreadHistory(threadId);

@@ -8,7 +8,6 @@
 .task-creation.project-creation .project-creation-body { display: grid; flex: 1 1 auto; align-content: start; min-height: 0; gap: 14px; padding: 16px 20px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .task-creation.project-creation .project-creation-heading h2 { margin: 0; font-size: 18px; font-weight: 600; }
 .task-creation.project-creation .project-creation-fields { display: grid; gap: 14px; }
-.task-creation.project-creation .project-creation-intro { margin: 0; color: var(--muted-foreground); font-size: 12.5px; line-height: 1.5; }
 .task-creation.project-creation .project-creation-name-row { display: flex; align-items: flex-start; gap: 10px; }
 .task-creation.project-creation .project-creation-name-row > label { flex: 1; }
 .task-creation.project-creation .project-creation-preview { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 36px; width: 36px; height: 36px; margin-top: 25px; border-radius: 9px; background: color-mix(in srgb, var(--project-color) 13%, var(--surface)); color: color-mix(in srgb, var(--project-color) 60%, var(--foreground)); }

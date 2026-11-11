@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentWorkspace, ExecutionEnvironment, ExecutionSelection } from "@agent-workspace/contracts/chat";
-import type { GitStatusResponse } from "@agent-workspace/contracts/inspector";
+import { executionPolicySchema, type ExecutionPolicy } from "@agent-workspace/contracts/pm-references";
 import { FolderIcon, ArrowUpIcon } from "lucide-react";
 import { RadixSelect } from "@/components/ui/radix-select";
 import { Button } from "@agent/components/ui/button";
@@ -91,18 +91,19 @@ export async function updateAgentWorkspace(workspace: AgentWorkspace, patch: { n
 
 export function useExecutionEnvironment(threadId?: string, revision?: number) {
   const key = JSON.stringify([threadId, revision]);
-  const [result, setResult] = useState<{ key: string; environment?: ExecutionEnvironment; error?: string; loading: boolean }>({ key: "", loading: false });
+  const [result, setResult] = useState<{ key: string; environment?: ExecutionEnvironment; executionPolicy?: ExecutionPolicy; error?: string; loading: boolean }>({ key: "", loading: false });
   const [reload, setReload] = useState(0);
   useEffect(() => {
     if (!threadId) { setResult({ key, loading: false }); return; }
     const controller = new AbortController();
     setResult({ key, loading: true });
-    void workspaceClient.json<{ environment: ExecutionEnvironment }>(`/api/chat/threads/${encodeURIComponent(threadId)}/execution`, { signal: controller.signal }).then(({ environment }) => {
-      if (!controller.signal.aborted) setResult({ key, environment, loading: false });
+    void workspaceClient.json<{ environment: ExecutionEnvironment; executionPolicy?: unknown }>(`/api/chat/threads/${encodeURIComponent(threadId)}/execution`, { signal: controller.signal }).then(({ environment, executionPolicy }) => {
+      const policy = executionPolicy === undefined ? undefined : executionPolicySchema.parse(executionPolicy);
+      if (!controller.signal.aborted) setResult({ key, environment, executionPolicy: policy, loading: false });
     }).catch((cause: unknown) => { if (!controller.signal.aborted) setResult({ key, loading: false, error: cause instanceof Error ? cause.message : String(cause) }); });
     return () => controller.abort();
   }, [key, reload]);
-  return { environment: result.key === key ? result.environment : undefined, error: result.key === key ? result.error : undefined, loading: result.key === key ? result.loading : !!threadId, refresh: () => setReload(value => value + 1) };
+  return { environment: result.key === key ? result.environment : undefined, executionPolicy: result.key === key ? result.executionPolicy : undefined, error: result.key === key ? result.error : undefined, loading: result.key === key ? result.loading : !!threadId, refresh: () => setReload(value => value + 1) };
 }
 
 export function ExecutionSelectionDialog({ workspaces, initial = CHAT_ONLY_SELECTION, busy, error, allowChatOnly = true, onSave, onClose }: {
@@ -119,28 +120,6 @@ export function ExecutionSelectionDialog({ workspaces, initial = CHAT_ONLY_SELEC
     {selected && <code>{selected.path}</code>}<Button variant="outline" disabled={busy} onClick={() => setOpening(true)}><FolderIcon />{t("打开其他文件夹", "Open another folder")}</Button>
     {error && <p role="alert" className="text-destructive">{error}</p>}<DialogFooter><Button variant="outline" disabled={busy} onClick={onClose}>{t("取消", "Cancel")}</Button><Button disabled={busy || !valid} onClick={() => onSave(selected ? selected.id === initial.agentWorkspaceId && initial.agentWorkspaceRevision !== null && initial.agentWorkspaceRevision <= selected.revision ? initial : workspaceExecutionSelection(selected) : CHAT_ONLY_SELECTION)}>{t("确认文件夹", "Confirm folder")}</Button></DialogFooter>
   </DialogContent></Dialog>{opening && <OpenFolderDialog onClose={() => setOpening(false)} onOpened={workspace => { setWorkspaceId(workspace.id); setOpening(false); }} />}</>;
-}
-
-export function ExecutionContextBar({ environment, workspace, threadId, error, loading, onConfigure, frozen }: { environment?: ExecutionEnvironment; workspace?: AgentWorkspace; threadId?: string; error?: string; loading: boolean; onConfigure: () => void; frozen: boolean }) {
-  const t = useAgentText();
-  const name = workspace?.name ?? environment?.agentWorkspaceName;
-  const sourcePath = environment?.sourcePath ?? workspace?.path;
-  const executionPath = environment?.executionPath ?? workspace?.path;
-  const branchKey = JSON.stringify([threadId, environment?.agentWorkspaceId, environment?.executionPath]);
-  const [branch, setBranch] = useState<{ key: string; name: string }>();
-  useEffect(() => {
-    if (!threadId || !environment?.agentWorkspaceId || !environment.executionPath) return;
-    const controller = new AbortController();
-    void workspaceClient.json<GitStatusResponse>(`/api/inspector/git?${new URLSearchParams({ threadId })}`, { signal: controller.signal }).then(result => {
-      if (!controller.signal.aborted) setBranch(result.repo && result.branch ? { key: branchKey, name: result.branch } : undefined);
-    }).catch(() => { if (!controller.signal.aborted) setBranch(undefined); });
-    return () => controller.abort();
-  }, [threadId, environment]);
-  return <div className="pm-execution-context" aria-label={t("会话执行上下文", "Session execution context")}><span>Local</span>
-    {loading ? <span role="status">{t("正在核验环境…", "Validating environment…")}</span> : error ? <span role="alert" className="text-destructive">{error}</span> : name ? <><strong>{name}</strong><details className="pm-execution-path"><summary>{environment?.worktree ? t("隔离 Worktree", "Isolated worktree") : t("执行目录", "Execution folder")}</summary><dl><dt>{t("来源目录", "Source folder")}</dt><dd><code>{sourcePath}</code></dd><dt>{t("实际执行目录", "Actual execution folder")}</dt><dd><code>{executionPath}</code></dd>{environment?.worktree && <><dt>Branch</dt><dd>{environment.worktree.branch}</dd></>}</dl></details><code className="truncate" title={executionPath ?? undefined}>{executionPath}</code></> : <span>{t("仅对话 · 无代码环境", "Chat only · no code environment")}</span>}
-    {branch?.key === branchKey && <span title={t("当前会话目录分支", "Branch in the current session folder")}>{branch.name}</span>}
-    <Button size="sm" variant="ghost" onClick={onConfigure}>{frozen ? t("新会话更换文件夹", "New session in another folder") : t("选择文件夹", "Choose folder")}</Button>
-  </div>;
 }
 
 export function ExecutionSelectionField({ value = CHAT_ONLY_SELECTION, disabled = false, allowChatOnly = true, onChange, onAvailabilityChange }: {

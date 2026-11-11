@@ -4,7 +4,7 @@ import { flushThreadSettings } from "@agent/hooks/use-chat-settings";
 import { workspaceClient } from "../network";
 import { agentText } from "../i18n-text.ts";
 import { canSendThread } from "../pm/state";
-import { getPmReferences } from "../pm/pm-chat-bridge";
+import { capturePmReferences, consumePmReferences, type PmReferenceSnapshot } from "../pm/pm-chat-bridge";
 import { getResponseStreamingMode } from "./response-streaming";
 
 const slots = new Map<string, string>();
@@ -44,21 +44,37 @@ export const chatStreams: ResumableClientStorage = {
 
 export class DurableChatTransport extends AssistantChatTransport<UIMessage> {
   constructor() {
+    const outgoing = new Map<string, PmReferenceSnapshot>();
     super({
       api: workspaceClient.url("/api/chat"),
-      fetch: workspaceClient.fetch,
+      fetch: async (input, init) => {
+        const response = await workspaceClient.fetch(input, init);
+        const acceptedId = response.headers.get("x-accepted-input-message-id");
+        if (response.ok && acceptedId && typeof init?.body === "string") {
+          const request = JSON.parse(init.body) as { id?: string };
+          const key = JSON.stringify([request.id, acceptedId]);
+          const snapshot = outgoing.get(key);
+          if (snapshot) { consumePmReferences(snapshot); outgoing.delete(key); }
+          window.dispatchEvent(new CustomEvent("pm-turn-accepted", { detail: { threadId: request.id, messageId: acceptedId } }));
+        }
+        return response;
+      },
       resumable: {
         storage: chatStreams,
         resumeApi: (streamId) =>
           workspaceClient.url(`/api/chat/streams/${encodeURIComponent(streamId)}`),
       },
       prepareSendMessagesRequest: async (options) => {
+        const inputMessage = options.messages.at(-1);
+        const inputKey = JSON.stringify([options.id, inputMessage?.id]);
+        const snapshot = inputMessage?.role === "user" && options.trigger !== "regenerate-message"
+          ? outgoing.get(inputKey) ?? capturePmReferences(options.id) : undefined;
         // Save thread-level settings before accepting a provider request. A
         // failed/conflicting save never silently falls back to a global model.
         const settings = await flushThreadSettings(options.id);
         if (!canSendThread(options.id, options.id, settings.settings.providerInstanceId, settings.settings.model, settings.settings.modelOptions))
           throw new Error(agentText("无法发送：请确认会话执行绑定、Provider 和模型选项均可用。", "Cannot send: check the session execution binding, Provider, and model options."));
-        const pmReferences = getPmReferences(options.id);
+        if (snapshot) outgoing.set(inputKey, snapshot);
         return {
           body: {
             ...options.body,
@@ -71,7 +87,7 @@ export class DurableChatTransport extends AssistantChatTransport<UIMessage> {
             },
             trigger: options.trigger,
             messageId: options.messageId,
-            ...(pmReferences.length ? { pmReferences: [...pmReferences] } : {}),
+            ...(snapshot ? { pmReferences: [...snapshot.references] } : {}),
           },
         };
       },

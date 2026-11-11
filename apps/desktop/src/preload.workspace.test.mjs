@@ -71,11 +71,19 @@ test("workspace preload exposes only the preview and directory allowlists", asyn
 
 test("local folder chooser exposes no renderer-selected path or general desktop action", async () => {
   const { exposed, calls } = loadPreload(join(here, "preload.workspace.cjs"), "desktopWorkspace");
-  assert.deepEqual(Object.keys(exposed).sort(), ["directories", "preview"]);
+  assert.deepEqual(Object.keys(exposed).sort(), ["directories", "preview", "setup"]);
   assert.deepEqual(Object.keys(exposed.directories), ["choose"]);
   assert.equal(Object.isFrozen(exposed.directories), true);
   await exposed.directories.choose({ path: "C:\\untrusted", action: "connect" });
   assert.deepEqual(calls, [{ channel: "desktop:choose-workspace-directory", input: undefined }]);
+});
+
+test("local first-run token bridge maps to one fixed IPC channel", async () => {
+  const { exposed, calls } = loadPreload(join(here, "preload.workspace.cjs"), "desktopWorkspace");
+  assert.deepEqual(Object.keys(exposed.setup), ["token"]);
+  assert.equal(Object.isFrozen(exposed.setup), true);
+  await exposed.setup.token({ path: "C:\\untrusted", token: "foreign" });
+  assert.deepEqual(calls, [{ channel: "desktop:first-run-token", input: undefined }]);
 });
 
 test("workspace preload rejects unknown actions before IPC", async () => {

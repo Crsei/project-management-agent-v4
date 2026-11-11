@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { LocalServer } from "./local-server.mjs";
+import { readSetupStatus } from "./first-run.mjs";
 import { PreviewManager } from "./preview/manager.mjs";
 import { isAllowedPreviewUrl } from "./preview/preview-policy.mjs";
 import { backupDesktop, restoreDesktop } from "./maintenance.mjs";
@@ -17,7 +18,7 @@ import {
   macosWindowButtonPosition, normalizeTitleBarTheme, titleBarOverlay, windowTitleBarOptions,
 } from "./window-chrome.mjs";
 import {
-  absolutePath, initialSetup, publicConfiguration, readLaunchArguments, remoteAddress,
+  absolutePath, publicConfiguration, readLaunchArguments, remoteAddress,
   safeDesktopMessage, sameService, serviceRequestAllowed, trustedConnectionFrame, trustedWorkspaceFrame, workspacePartition,
 } from "./policy.mjs";
 
@@ -62,6 +63,7 @@ let quitPromise;
 let stopPromise;
 let maintenancePromise;
 let changingConnection = false;
+let firstRunTimer = null;
 let externalPrompt = false;
 let configuration;
 let workspaceDirectoryPending = false;
@@ -71,7 +73,7 @@ let windowStates = {};
 let windowStateWrite = Promise.resolve();
 let transientSecrets = [];
 const state = {
-  status: "idle", message: "Choose where your workspace runs.", error: "", details: "", address: "", runtime: "", setupSuggested: true,
+  status: "idle", message: "Choose where your workspace runs.", error: "", details: "", address: "", runtime: "",
 };
 
 function localRunning() {
@@ -87,6 +89,7 @@ function snapshot() {
     developerRuntime: !app.isPackaged,
     installIdentity: installStamp ? { version: installStamp.version, distribution: installStamp.distribution, ownership: installStamp.ownership.installation, updateMechanism: installStamp.updateMechanism } : null,
     workspaceOpen: Boolean(workspaceWindow && !workspaceWindow.isDestroyed()),
+    firstRunPending: Boolean(localServer?.setupPending),
     maintenanceAllowed: !changingConnection && !maintenancePromise && !lifecyclePromise && !quitting && !quitPrompt && !localRunning() && !workspaceSession,
   };
 }
@@ -365,8 +368,13 @@ async function stopConnection() {
   if (stopPromise) return stopPromise;
   stopPromise = (async () => {
     // A cancelled draft guard or failed storage flush must leave services running.
+    stopFirstRunWatch();
     await closeWorkspace();
     const server = localServer;
+    if (server?.setupPending) {
+      try { await server.finalizeSetup(); }
+      catch { /* Setup may still be incomplete; backup remains refused until ready. */ }
+    }
     await server?.stop();
     if (localServer === server) { localServer = null; lifecycleConnection = null; }
   })();
@@ -425,11 +433,37 @@ function normalizeConfiguration(input) {
   return next;
 }
 
+function stopFirstRunWatch() {
+  clearInterval(firstRunTimer);
+  firstRunTimer = null;
+}
+
+function watchFirstRun(server, origin) {
+  stopFirstRunWatch();
+  let polling = false;
+  firstRunTimer = setInterval(async () => {
+    if (polling || localServer !== server || !server.setupPending || quitting) return;
+    polling = true;
+    try {
+      const status = await readSetupStatus(origin);
+      if (status.initialized) {
+        const result = await server.finalizeSetup();
+        if (result?.phase === "ready") {
+          stopFirstRunWatch();
+          publish({ message: "First-run setup is complete. The local workspace is ready." });
+        }
+      }
+    } catch {
+      // Keep retrying while this workspace is connected; a restart also finalizes
+      // a completed setup before services start. Never resubmit account data.
+    } finally { polling = false; }
+  }, 1_500);
+  firstRunTimer.unref?.();
+}
+
 async function connect(input) {
   if (quitting || quitPrompt || changingConnection || maintenancePromise || lifecyclePromise) throw new Error("Another desktop operation is in progress.");
   const next = normalizeConfiguration(input);
-  const setup = next.mode === "local" ? initialSetup(input.setup) : undefined;
-  transientSecrets = setup ? Object.values(setup) : [];
   changingConnection = true;
   let previousStopped = false;
   try {
@@ -453,7 +487,7 @@ async function connect(input) {
         },
       });
       localServer = server;
-      const started = await server.start({ ...next, ...(setup ? { setup } : {}) });
+      const started = await server.start({ ...next });
       if (quitting || localServer !== server) throw new Error("Connection cancelled while stopping.");
       const privateSession = session.fromPartition(workspacePartition("local", started.origin, started.instanceId));
       constrainSession(privateSession, started.origin);
@@ -465,7 +499,11 @@ async function connect(input) {
       if (quitting) throw new Error("Connection cancelled while quitting.");
       await createWorkspace(`${started.origin}/pm`, privateSession, "local");
       if (quitting) return snapshot();
-      publish({ status: "connected", setupSuggested: false, message: "Local workspace ready. Sign in with your PM account. The product switch opens Agent; closing this window keeps local tasks running.", address: started.origin, runtime: started.runtime });
+      const firstRun = started.phase === "pending";
+      if (firstRun) watchFirstRun(server, started.origin);
+      publish({ status: "connected", message: firstRun
+        ? "Local workspace ready. Complete first-run account and workspace setup in the workspace page; the desktop supplies its one-time token."
+        : "Local workspace ready. Sign in with your PM account. The product switch opens Agent; closing this window keeps local tasks running.", address: started.origin, runtime: started.runtime });
     } else {
       const origin = new URL(next.remoteUrl).origin;
       const remoteSession = session.fromPartition(workspacePartition("remote", origin));
@@ -481,6 +519,7 @@ async function connect(input) {
         : "Remote Server reached. Sign in with that Server’s PM account. Agent may also require its access token; no local token is shared.", address: origin, runtime: "" });
     }
   } catch (cause) {
+    stopFirstRunWatch();
     const details = localServer?.diagnostic() || "";
     let stopError = "";
     // Do not repeat a rejected close of the previous workspace during rollback.
@@ -492,7 +531,6 @@ async function connect(input) {
       showConnection();
     }
   } finally {
-    if (setup) setup.password = "";
     transientSecrets = [];
     changingConnection = false;
     publish({});
@@ -571,6 +609,17 @@ function trustedConnection(event) {
 function trustedWorkspace(event) {
   return Boolean(workspaceWindow && !workspaceWindow.isDestroyed() &&
     trustedWorkspaceFrame(event, workspaceWindow.webContents, workspaceUrl));
+}
+
+async function firstRunToken(event) {
+  if (workspaceMode !== "local" || !trustedWorkspace(event))
+    throw new Error("First-run setup is available only in the trusted local workspace.");
+  const pathname = new URL(event.senderFrame.url).pathname;
+  if (pathname !== "/pm" && pathname !== "/pm/")
+    throw new Error("First-run setup is available only on the workspace setup page.");
+  if (!localServer?.setupPending || !localServer.setupToken)
+    throw new Error("First-run setup is not pending.");
+  return localServer.setupToken;
 }
 
 async function chooseWorkspaceDirectory(event) {
@@ -664,7 +713,7 @@ async function maintenance(action, input) {
       const onProgress = message => publish({ message: typeof message === "string" ? message : message?.message || "Maintaining workspace data…" });
       const result = await (restoring ? restoreDesktop : backupDesktop)({ serverRoot, runtimeRoot, ...options, password, ...(restoring ? { allowLegacyUnencrypted, trustedSourceAcknowledged: true } : {}), onProgress });
       if (restoring) await saveConfiguration({ ...configuration, mode: "local", dataDir: result.dataDir, projectRoot: result.projectRoot });
-      publish({ status: "idle", setupSuggested: false, message: restoring ? "Restore complete. Connect Local to sign in to the restored workspace; no existing workspace was overwritten." : "Encrypted backup complete. Keep the backup and its password safe and separate.", details: restoring ? result.dataDir : result.directory, error: "", address: "", runtime: "" });
+      publish({ status: "idle", message: restoring ? "Restore complete. Connect Local to sign in to the restored workspace; no existing workspace was overwritten." : "Encrypted backup complete. Keep the backup and its password safe and separate.", details: restoring ? result.dataDir : result.directory, error: "", address: "", runtime: "" });
     } catch (cause) {
       publish({ status: "error", message: "Maintenance did not complete. Existing workspace data has not been replaced.", error: safeDesktopMessage(cause, transientSecrets) });
     }
@@ -859,7 +908,6 @@ else {
       dataDir, projectRoot: typeof saved.projectRoot === "string" && saved.projectRoot ? saved.projectRoot : join(dataDir, "projects"),
       ...(!app.isPackaged && typeof saved.nodePath === "string" && saved.nodePath !== "node" ? { nodePath: saved.nodePath } : {}),
     }, !app.isPackaged);
-    state.setupSuggested = saved.version !== 2;
     let launch = {};
     try {
       launch = readLaunchArguments(process.argv.slice(1));
@@ -879,6 +927,7 @@ else {
     });
     ipcMain.handle("desktop:preview", previewAction);
     ipcMain.handle("desktop:choose-workspace-directory", chooseWorkspaceDirectory);
+    ipcMain.handle("desktop:first-run-token", firstRunToken);
     ipcMain.handle("desktop:action", desktopAction);
     ipcMain.handle("desktop:titlebar-theme", setTitleBarTheme);
     nativeTheme.on("updated", () => {

@@ -74,20 +74,7 @@
               </div>
               <section id="local-fields" aria-label="本地工作台设置">
                 <p class="notice">已内置 Node 与 PostgreSQL，无需另外安装、准备 Docker、环境文件或手动设置数据库。数据保存在受管的工作台目录中。</p>
-                <fieldset class="setup-fields">
-                  <legend>本地账号与工作区</legend>
-                  <label class="check-row"><input type="checkbox" id="create-account" name="createAccount" aria-describedby="setup-help" aria-controls="account-fields" /><span>创建首次账号与工作区</span></label>
-                  <small id="setup-help">仅用于首次连接全新的空工作台目录；已有账号不会被重置。连接已有工作台时请勿勾选，打开后在 PM 中登录。</small>
-                  <div id="account-fields" hidden>
-                    <div class="account-grid">
-                      <div class="field"><label for="account-name">你的姓名</label><input id="account-name" name="name" maxlength="120" autocomplete="off" placeholder="如何称呼你" /></div>
-                      <div class="field"><label for="workspace-name">工作区名称</label><input id="workspace-name" name="workspaceName" maxlength="120" autocomplete="off" placeholder="为工作区取个名字" /></div>
-                      <div class="field"><label for="account-email">邮箱</label><input id="account-email" name="email" type="email" maxlength="254" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="you@example.com" /></div>
-                      <div class="field"><label for="account-password">密码 <span class="muted">至少 12 个字符</span></label><input id="account-password" name="password" type="password" minlength="12" maxlength="1024" autocomplete="new-password" aria-describedby="password-help" placeholder="设置登录密码" /></div>
-                    </div>
-                    <small id="password-help">密码仅用于创建账号，不会保存在桌面连接设置中。之后请使用此密码在 PM 中登录。</small>
-                  </div>
-                </fieldset>
+                <p class="notice">首次使用全新的空工作台目录时，启动后会在已打开的工作台页面中创建账号与第一个工作区；桌面端会自动提供本机一次性设置令牌，无需在此填写密码。连接已有工作台时，启动后直接使用原账号登录。</p>
 
                 <details id="advanced-settings" class="advanced-settings">
                   <summary><span>高级设置</span><span class="summary-hint">数据目录与运行环境</span></summary>

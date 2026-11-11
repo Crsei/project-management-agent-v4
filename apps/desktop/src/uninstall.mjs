@@ -17,7 +17,7 @@ export const UNINSTALL_GOLDEN = Object.freeze({
   full: Object.freeze({ delete: ["installation:*", "instance:owned-data", "userData:owned-state", "os:shortcuts", "os:registration"], preserve: ["projects:*", "nativeProviderHomes:*", "userData:unknown"] }),
   "data-only": Object.freeze({ delete: ["instance:owned-data", "userData:owned-state"], preserve: ["installation:*", "os:shortcuts", "os:registration", "projects:*", "nativeProviderHomes:*", "userData:unknown"] }),
 });
-const DATA_NAMES = new Set(["postgres", "managed-postgres.json", "service-ports.json", "bootstrap.json", "agent-data", "chat-spaces", "runtime-home", "local-projects.json", "pm-workspaces", "blobs", "backups", ".postgres-owner.json"]);
+const DATA_NAMES = new Set(["postgres", "managed-postgres.json", "service-ports.json", "bootstrap.json", "setup-token.json", "agent-data", "chat-spaces", "runtime-home", "local-projects.json", "pm-workspaces", "blobs", "backups", ".postgres-owner.json"]);
 const USER_STATE_NAMES = new Set(["connection.json", "window-state.json", "Preferences", "Local State", "Network", "Partitions", "Session Storage", "Local Storage", "IndexedDB", "Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache", "blob_storage", "logs", "Crashpad", "Crash Reports", "Dictionaries"]);
 const resourcesPrefix = stamp => stamp.platform === "darwin" ? "Contents/Resources" : "resources";
 const runtimeFile = (path, stamp) => {

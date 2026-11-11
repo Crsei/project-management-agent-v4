@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { agentOutputFrameSchema, commandOutputFrameSchema, type AgentOutputSnapshot, type CommandOutputFrame } from "@agent-workspace/contracts/output";
+import { agentOutputFrameSchema, commandOutputFrameSchema, upsertNativeOutputItem, type AgentOutputSnapshot, type CommandOutputFrame } from "@agent-workspace/contracts/output";
 import { workspaceClient } from "../network";
 import { agentText } from "../i18n-text.ts";
 
@@ -54,9 +54,8 @@ export function useGenerationOutput(generationId: string) {
           }
           if (frame.generationId !== generationId || !current || frame.sequence <= current.sequence) return;
           if (frame.kind === "item") {
-            const index = current.items.findIndex((item) => item.id === frame.item.id);
             const items = [...current.items];
-            if (index < 0) items.push(frame.item); else items[index] = frame.item;
+            upsertNativeOutputItem(items, frame.item);
             current = { ...current, sequence: frame.sequence, items };
             schedule(!["pending", "running", "waiting"].includes(frame.item.status));
           } else {
@@ -68,6 +67,9 @@ export function useGenerationOutput(generationId: string) {
         throw new Error(agentText("输出流已断开，正在重新连接。", "The output stream disconnected; reconnecting."));
       } catch (cause) {
         if (controller.signal.aborted) return;
+        clearTimeout(timer);
+        current = undefined;
+        setSnapshot(undefined);
         setError(cause instanceof Error ? cause.message : String(cause));
         retry = window.setTimeout(() => void connect(), 1000);
       }

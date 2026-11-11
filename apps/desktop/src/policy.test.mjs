@@ -85,7 +85,7 @@ test("launch mode is deliberate and credential-free", () => {
   assert.throws(() => absolutePath("/tmp/data\0secret", "Data directory"));
 });
 
-test("first account setup is explicit, validated and never part of public connection state", () => {
+test("lifecycle fixture account setup is explicit and never part of public connection state", () => {
   const setup = { email: " owner@example.invalid ", name: " Owner ", password: "long local passphrase", workspaceName: " Private workspace " };
   assert.equal(initialSetup(undefined), undefined);
   assert.deepEqual(initialSetup(setup), { email: "owner@example.invalid", name: "Owner", password: setup.password, workspaceName: "Private workspace" });

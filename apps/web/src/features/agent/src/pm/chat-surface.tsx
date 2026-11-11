@@ -19,6 +19,7 @@ import { initializeAgentThread, refreshThreadList } from "../chat/remote-adapter
 import { PmToolCallsProvider } from "../chat/pm-tool-calls";
 import { PmRightPanel } from "./right-panel";
 import { ThreadDetailsPanel } from "./thread-details-panel";
+import { threadActivityPresentation, type ThreadActivity } from "./thread-activity";
 import { TerminalDrawer, TERMINAL_DRAWER_MIN_HEIGHT } from "./terminal-drawer";
 import { ProductSwitcher } from "./product-switcher";
 import { UserMenu } from "./user-menu";
@@ -36,7 +37,7 @@ import SessionSettingsDialog from "../settings/session-settings-dialog";
 import { ShortcutCatalog } from "../settings/input-preferences";
 import { useChatAppearance, useChatBrowserPreferences } from "../settings/browser-preferences";
 import { acceptRemoteThread, availableProviderModel, bindDraftExecution, CHAT_ONLY_SELECTION, canSendThread, refreshAgentWorkspaces, refreshIdentity, refreshProviders, threadExecutionSelection, usePmChatState, workspaceExecutionSelection } from "./state";
-import { OpenFolderDialog, ExecutionContextBar, ExecutionSelectionDialog, updateAgentWorkspace, useExecutionEnvironment } from "./execution-workspace";
+import { OpenFolderDialog, ExecutionSelectionDialog, updateAgentWorkspace, useExecutionEnvironment } from "./execution-workspace";
 import { ExecutionTerminals, useExecutionTerminals, type TerminalDock } from "./execution-terminals";
 import type { StudioAssistRequest } from "./automation/studio-editor";
 import pmTheme from "@/views/pm/dashboards-views.module.css";
@@ -718,7 +719,6 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
       {automationsView ? (automationWorkspace && displayScope
         ? <Suspense fallback={<div className="pm-agent-automation-empty" role="status">{t("正在加载自动化…", "Loading automations…")}</div>}><AutomationPage key={`${state.identity!.actor.id}:${automationWorkspace.id}:${automationWorkspace.version}`} workspace={automationWorkspace} actorId={state.identity!.actor.id} embedded={!!entry} onAssist={assistAutomation} onOpenThread={openAutomationThread} onExit={exitAutomation} onLeaveGuardChange={setAutomationLeaveGuard} onRecheckAccess={() => { void refreshIdentity(); }} /></Suspense>
         : <section className="pm-agent-automation-empty"><ZapIcon /><h1>{t("选择 PM 业务工作区以管理自动化", "Choose a PM business workspace for automations")}</h1>{state.identityError && <p role="alert">{state.identityError}</p>}<Link to="/pm?pick=1" onClick={event => { if (!protectNavigation()) event.preventDefault(); }}>{t("前往 PM 选择业务工作区", "Choose a business workspace in PM")}</Link><Button variant="outline" onClick={exitAutomation}>{t("返回对话", "Back to chat")}</Button></section>) : <>
-      <ExecutionContextBar environment={environment} workspace={currentWorkspace} threadId={remoteId} error={execution.error} loading={execution.loading} onConfigure={configureExecution} frozen={executionFrozen} />
       {settingsError && <div role="alert" className="pm-agent-notice">{t("会话设置未保存，输入已保留：", "Session settings were not saved; your input is kept: ")}{settingsError}<Button size="sm" variant="outline" onClick={() => void retry().catch(() => {})}>{t("重试保存设置", "Retry saving settings")}</Button></div>}
       {(entryObject.task || entryObject.entity) && <div className="pm-agent-notice">{t("入口对象：", "Entry object: ")}<code>{entryObject.task || entryObject.entity}</code> <button type="button" onClick={() => {
         const id = entryObject.task || entryObject.entity;
@@ -741,8 +741,8 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
         saving={settingsSaving}
         saveError={settingsError}
         onRetry={retry}
-        sendUnavailableReason={!currentExecutionSelection ? t("会话缺少执行绑定，请新建会话。", "This session has no execution binding. Start a new session.") : !settingsReady ? t("会话设置尚未就绪或有待保存的更改。", "Session settings are not ready or have unsaved changes.") : execution.error ?? (!canSendThread(localId, remoteId, settings.providerInstanceId, settings.model, settings.modelOptions) ? t("Provider、模型或模型选项当前不可用。", "The Provider, model or model options are unavailable.") : undefined)}
-        composerLeading={<PmComposerReferences />}
+        sendUnavailable={!currentExecutionSelection || !settingsReady || !!execution.error || !canSendThread(localId, remoteId, settings.providerInstanceId, settings.model, settings.modelOptions)}
+        composerLeading={<PmComposerReferences executionPath={environment?.executionPath ?? undefined} chatOnly={currentExecutionSelection?.agentWorkspaceId === null} executionPolicy={execution.executionPolicy} />}
         composerActions={<PmComposerReferenceAction />}
         welcome={{
           title: currentWorkspace ? t(`想在 ${currentWorkspace.name} 中做什么？`, `What do you want to do in ${currentWorkspace.name}?`) : t("你想做什么？", "What do you want to do?"),
@@ -765,8 +765,11 @@ export function PmChatSurface({ runtime, entry, onExpand, onClose, onThreadChang
       onClose={() => setDetailsOpen(false)}
       workspaceName={currentWorkspace?.name}
       threadTitle={title ?? (remoteId ? t("历史会话", "Past session") : t("新会话", "New session"))}
-      path={environment?.executionPath}
-      statusLabel={threadRunning ? t("正在生成", "Generating") : execution.error ?? (execution.loading ? t("正在核验环境", "Validating environment") : environment?.agentWorkspaceId ? environment.agentWorkspaceName ?? "Local" : t("仅对话", "Chat only"))}
+      activity={currentThread?.sidebar.activity}
+      environmentLabel={environment ? environment.agentWorkspaceId ? environment.agentWorkspaceName ?? currentWorkspace?.name ?? t("文件夹环境", "Folder environment") : t("仅对话", "Chat only") : currentWorkspace?.name}
+      environmentPath={environment?.executionPath ?? currentWorkspace?.path}
+      environmentStatus={execution.loading ? t("正在核验环境", "Validating environment") : undefined}
+      environmentError={execution.error}
       onConfigureFiles={configureExecution}
       onSessionSettings={() => setSessionSettingsOpen(true)}
       sessionSettingsDisabled={sessionSettingsDisabled}
@@ -819,18 +822,26 @@ function useSessionRowState() {
   const remoteId = useAuiState((s) => s.threadListItem.remoteId);
   const active = useAuiState((s) => s.threads.mainThreadId === s.threadListItem.id);
   const title = useAuiState((s) => s.threadListItem.title) ?? t("新会话", "New session");
-  const running = useAuiState((s) => s.threadListItem.isRunning);
+  const localRunning = useAuiState((s) => s.threadListItem.isRunning);
   const thread = remoteId ? actions.thread(remoteId) : undefined;
-  return { actions, t, id, title, thread, running: running || !!thread?.sidebar.running, current: active && !actions.automationsView, timestamp: thread && (actions.sortByCreated ? thread.createdAt : thread.updatedAt) };
+  return { actions, t, id, title, thread, activity: thread?.sidebar.activity, running: thread ? thread.sidebar.running : localRunning, current: active && !actions.automationsView, timestamp: thread && (actions.sortByCreated ? thread.createdAt : thread.updatedAt) };
 }
 
 function SessionMenuForThread({ thread, id, title, running, children }: { thread: RemoteThread; id: string; title: string; running: boolean; children: (ellipsis: ReactNode) => ReactElement }) {
   const actions = useContext(SessionActions)!;
   return <SessionMenu thread={thread} title={title} path={actions.path(thread)} disabled={actions.disabled} running={running} filtered={actions.filtered(thread)} onSidebar={(action, options) => actions.onSidebar(thread, action, options)} onRename={() => actions.onAction(id, title, "rename")} onRegenerate={() => actions.onRegenerate(thread)} onCustomSnooze={() => actions.onSnooze(thread)} onFilter={() => actions.onFilter(thread)} onSettings={() => actions.onSettings(thread)} onArchive={() => actions.onArchive(id, thread)} onDelete={() => actions.onAction(id, title, "delete")} onError={actions.onError}>{children}</SessionMenu>;
 }
+export function SessionActivity({ activity, timestamp }: { activity?: ThreadActivity; timestamp?: string }) {
+  const t = useAgentText();
+  const status = threadActivityPresentation(activity, t);
+  return <span className="pm-agent-session-status" data-activity={status.status} data-tone={status.tone} data-priority={status.priority} title={status.label}>
+    {status.status === "idle" ? <><span>{status.label}</span>{timestamp && <time dateTime={timestamp} title={timestamp}>{sessionTime(timestamp, t)}</time>}</> : <>{status.status === "running" && <Loader2Icon className="animate-spin" aria-hidden="true" />}{(status.status === "failed" || status.status === "interrupted") && <CircleAlertIcon aria-hidden="true" />}<span>{status.label}</span></>}
+  </span>;
+}
+
 
 function SessionRow() {
-  const { actions, t, id, title, thread, running, current, timestamp } = useSessionRowState();
+  const { actions, t, id, title, thread, activity, running, current, timestamp } = useSessionRowState();
   const provider = thread ? actions.provider(thread) : undefined;
   const modelName = thread ? actions.modelName(thread) : "";
   const renderRow = (ellipsis?: ReactNode) => <div className="pm-agent-session" data-active={current} tabIndex={thread ? 0 : undefined}>
@@ -841,8 +852,8 @@ function SessionRow() {
           {thread?.executionSelection?.agentWorkspaceId ? <FolderOpenIcon aria-hidden="true" /> : <MessageSquareIcon aria-hidden="true" />}
           <span>{thread ? actions.scopeName(thread) : t("历史会话", "Past session")}</span>
         </span>
-        <span className="pm-agent-session-status" data-running={running || undefined}>
-          {running ? <><Loader2Icon className="animate-spin" aria-hidden="true" /><span>{t("生成中", "Working")}</span></> : <time dateTime={timestamp} title={timestamp}>{sessionTime(timestamp, t)}</time>}
+        <span className="pm-agent-session-indicators">
+          <SessionActivity activity={activity} timestamp={timestamp} />
           {thread?.sidebar.unread && <><span className="pm-session-unread" title={t("未读", "Unread")} aria-hidden="true" /><span className="sr-only">{t("未读", "Unread")}</span></>}
         </span>
       </span>
@@ -859,12 +870,12 @@ function SessionRow() {
 }
 
 function SessionSlimRow() {
-  const { actions, t, id, title, thread, running, current, timestamp } = useSessionRowState();
+  const { actions, t, id, title, thread, activity, running, current, timestamp } = useSessionRowState();
   const renderRow = (ellipsis?: ReactNode) => <div className="pm-agent-session pm-agent-session-slim" data-active={current} tabIndex={thread ? 0 : undefined}>
     <button type="button" className="pm-agent-session-select" disabled={actions.disabled} onClick={() => actions.onSwitch(id)} aria-current={current ? "page" : undefined} title={title}>
       <span className="pm-agent-session-title">{title}</span>
       <span className="pm-agent-session-slim-meta">
-        {running ? <><Loader2Icon className="animate-spin" aria-hidden="true" /><span className="sr-only">{t("正在后台生成", "Generating in background")}</span></> : <time dateTime={timestamp} title={timestamp}>{sessionTime(timestamp, t)}</time>}
+        <SessionActivity activity={activity} timestamp={timestamp} />
         {thread?.sidebar.unread && <><span className="pm-session-unread" title={t("未读", "Unread")} aria-hidden="true" /><span className="sr-only">{t("未读", "Unread")}</span></>}
       </span>
     </button>

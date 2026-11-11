@@ -71,6 +71,7 @@ export function PmReferenceTray({
                 {" · "}
                 <span className={styles.chipTitle}>{reference.title}</span>
                 <small className="text-muted-foreground">{reference.workspaceId}{reference.projectId ? ` / ${reference.projectId}` : ""}</small>
+                <small className="text-muted-foreground">revision {reference.revision ?? t("发送时核验", "Verified on send")}</small>
               </span>
               {availability !== "available" ? (
                 <span className={styles.chipState} data-state={availability} title={t(`PM 核验状态：${availabilityText}`, `PM verification: ${availabilityText}`)}>

@@ -15,6 +15,9 @@ export type PmExecutionIdentity = {
   readonly threadId: string;
   readonly generationId: string;
   readonly messageId: string;
+  readonly inputMessageId?: string;
+  readonly traceId?: string;
+  readonly executionGrantId?: string;
   readonly environment: ExecutionEnvironment;
 };
 export type PmProviderBoundaryError = Error & {

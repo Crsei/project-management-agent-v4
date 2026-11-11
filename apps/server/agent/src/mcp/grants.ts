@@ -1,9 +1,9 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { deleteRecord, listRecords, readRecord, transaction, writeRecord } from '../durable/store.ts';
 import { getThread } from '../durable/threads.ts';
 import type { McpInvocationIdentity, McpServiceIdentity } from '../../../../../packages/infrastructure/src/mcp-service-auth.ts';
 import { trustedMcpOrigin } from '../../../../../packages/infrastructure/src/mcp-service-auth.ts';
-import type { PmToolCallRecord, PmToolTarget } from '@agent-workspace/contracts/pm-tools';
+import type { PmToolCallRecord, PmToolInvocation, PmToolTarget } from '@agent-workspace/contracts/pm-tools';
 
 // McpOAuth PendingCode + EnvironmentAuth MCP sessions adapted to existing Agent SQLite records.
 export const MCP_GRANTS = 'mcp:grants', MCP_CODES = 'mcp:codes', MCP_TOKENS = 'mcp:tokens', MCP_CONSENTS = 'mcp:consents';
@@ -39,6 +39,62 @@ export function putGrant(grant: Grant): void {
   const grants = listRecords<Grant>(MCP_GRANTS);
   if (grants.length >= 4096 || grants.filter(item => item.actorId === grant.actorId && !item.revokedAt).length >= 100) throw new McpAuthError('temporarily_unavailable', 'Revoke an existing client before approving another.', 503);
   writeRecord(MCP_GRANTS, grant.grantId, grant);
+}
+
+/** Durable external execution identity, never a Chat Session or an additional ACL. */
+export const MCP_EXECUTION_ROOTS = 'mcp:execution-roots';
+export type McpExecutionRoot = {
+  executionRoot: 'external'; executionId: string; traceId: string; operationId: string;
+  actorId: string; grantId: string; grantVersion: number; clientHash: string;
+  scope: PmToolTarget; access: McpInvocationIdentity['access']; target?: PmToolTarget;
+  fingerprint: string; policy: 'full'; enforcement: 'audit-only'; createdAt: string;
+};
+/** JSON object key order is not operation identity; array order and every value are. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object')
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(',')}}`;
+  const encoded = JSON.stringify(value);
+  if (encoded === undefined) throw new McpAuthError('invalid_request', 'Operation arguments must contain JSON values.');
+  return encoded;
+}
+function assertExecutionRootGrant(root: McpExecutionRoot, grant: Grant): void {
+  if (root.actorId !== grant.actorId || root.grantId !== grant.grantId || root.grantVersion !== grant.version ||
+      root.clientHash !== grant.clientHash || root.access !== grant.access ||
+      root.scope.workspaceId !== grant.scope.workspaceId || root.scope.projectId !== grant.scope.projectId)
+    throw new McpAuthError('insufficient_scope', 'Original operation is unavailable to this delegation.', 403);
+}
+/** Storage-only after live identity checks; a root never grants authority to execute or read. */
+export function readMcpExecutionRoot(identity: McpInvocationIdentity, operationId: string): McpExecutionRoot {
+  const grant = currentGrant(identity), root = readRecord<McpExecutionRoot>(MCP_EXECUTION_ROOTS, operationId);
+  if (!root) throw new McpAuthError('not_found', 'Original operation is unavailable to this delegation.', 404);
+  assertExecutionRootGrant(root, grant);
+  return root;
+}
+/** Reserve once before dispatch; a surviving root is sufficient to forbid blind redispatch. */
+export function reserveMcpExecutionRoot(identity: McpInvocationIdentity, input: PmToolInvocation): { root: McpExecutionRoot; created: boolean } {
+  const fingerprint = digest(canonicalJson(input));
+  return transaction(() => {
+    const grant = currentGrant(identity);
+    if (input.target && (input.target.workspaceId !== grant.scope.workspaceId ||
+        grant.scope.projectId !== null && input.target.projectId !== grant.scope.projectId))
+      throw new McpAuthError('insufficient_scope', 'PM target exceeds the originating authorization ceiling.', 403);
+    const existing = readRecord<McpExecutionRoot>(MCP_EXECUTION_ROOTS, input.operationId);
+    if (existing) {
+      assertExecutionRootGrant(existing, grant);
+      if (existing.fingerprint !== fingerprint)
+        throw new McpAuthError('invalid_request', 'operationId already belongs to another request.', 409);
+      return { root: existing, created: false };
+    }
+    const root: McpExecutionRoot = {
+      executionRoot: 'external', executionId: randomUUID(), traceId: randomUUID(), operationId: input.operationId,
+      actorId: grant.actorId, grantId: grant.grantId, grantVersion: grant.version, clientHash: grant.clientHash,
+      scope: { ...grant.scope }, access: grant.access, ...(input.target ? { target: { ...input.target } } : {}),
+      fingerprint, policy: 'full', enforcement: 'audit-only', createdAt: new Date().toISOString(),
+    };
+    writeRecord(MCP_EXECUTION_ROOTS, input.operationId, root);
+    return { root, created: true };
+  });
 }
 /** Explicit Session consent never expands a grant's PM or directory ceiling. */
 export function assertMcpThreadEligible(identity: Pick<McpInvocationIdentity, 'scope' | 'actorId'>, threadId: string): void {

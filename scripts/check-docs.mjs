@@ -24,7 +24,7 @@ async function markdownFiles(directory) {
   const result = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const target = path.join(directory, entry.name);
-    if (excluded.has(entry.name) || internalDocument(target)) continue;
+    if (excluded.has(entry.name) || internalDocument(target) || repositoryPath(target) === 'benchmarks/dovspace/outputs') continue;
     if (entry.isDirectory()) result.push(...await markdownFiles(target));
     else if (entry.isFile() && entry.name.endsWith('.md')) result.push(target);
   }

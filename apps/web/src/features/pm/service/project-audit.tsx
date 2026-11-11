@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 import { Activity, ArrowUpRight, FileText, Folder, ListTodo, Lock, MessageSquare, RefreshCw, ShieldAlert, Star } from "lucide-react"
 import { entityKinds, type EntityKind } from "@pm-schema"
 import type { ProjectAuditEntry } from "@contracts"
+import { pmToolCallProjectionSchema } from "@agent-workspace/contracts/pm-tools"
 import { Button } from "@/components/ui/button"
 import { DataRegion } from "@/components/ui/data-region"
 import { useDisplayDateTime } from "@/features/workspace/preference-format"
@@ -111,7 +112,10 @@ export function ProjectAuditHistory({ projectId }: ProjectAuditHistoryProps) {
     </section>
     <section className={styles.detail} aria-label={t("活动详情", "Activity detail")} data-pm-activity-detail>
       {selected && selectedKind
-        ? <div className={styles.entityPane}><ActivityTargetDetail entityId={selected.targetId} entityKind={selectedKind} projectId={projectId} onClose={() => setSelectedId(null)} /></div>
+        ? <div className={styles.entityPane}>
+          {selected.correlation && !query.error && <AuditExecutionLink key={selected.id} entry={selected} />}
+          <ActivityTargetDetail entityId={selected.targetId} entityKind={selectedKind} projectId={projectId} onClose={() => setSelectedId(null)} />
+        </div>
         : <div className={styles.placeholder}>
           <Activity size={24} strokeWidth={1.5} aria-hidden="true" />
           <h2>{t("选择活动以查看对象", "Select an activity to open its entity")}</h2>
@@ -119,6 +123,42 @@ export function ProjectAuditHistory({ projectId }: ProjectAuditHistoryProps) {
         </div>}
     </section>
   </div>
+}
+
+function AuditExecutionLink({ entry }: { entry: ProjectAuditEntry }) {
+  const t = useText()
+  const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string>()
+  const pending = useRef<AbortController | undefined>(undefined)
+  useEffect(() => () => pending.current?.abort(), [])
+  const open = async () => {
+    if (pending.current) return
+    const controller = new AbortController()
+    pending.current = controller
+    setBusy(true); setNotice(undefined)
+    try {
+      const response = await fetch(`/agent/api/pm-tools/calls/${encodeURIComponent(entry.correlation!.operationId)}`, { credentials: "same-origin", redirect: "error", signal: controller.signal })
+      if (!response.ok) throw new Error("Operation unavailable")
+      const record = pmToolCallProjectionSchema.parse(await response.json())
+      if (record.operationId !== entry.correlation!.operationId || record.visibility !== "visible") throw new Error("Operation unavailable")
+      if (controller.signal.aborted) return
+      if (!record.threadId) { setNotice(t("这是外部调用，没有 Agent Session；原操作与命令仍由收据关联。", "This external invocation has no Agent Session; the operation and command remain receipt-linked.")); return }
+      navigate(`/agent/workspace?thread=${encodeURIComponent(record.threadId)}#pm-operation-${encodeURIComponent(record.operationId)}`)
+    } catch {
+      if (!controller.signal.aborted) setNotice(t("原操作当前不可访问或未保存在此 Agent 中；审计记录不授予会话访问权。", "The original operation is currently inaccessible or not stored by this Agent; an audit entry grants no session access."))
+    } finally {
+      pending.current = undefined
+      if (!controller.signal.aborted) setBusy(false)
+    }
+  }
+  return <section className="border-b p-3 text-xs" aria-label={t("执行关联", "Execution links")}>
+    <p className="break-all">operationId: <code>{entry.correlation!.operationId}</code></p>
+    <p className="break-all">traceId: <code>{entry.correlation!.traceId}</code></p>
+    <p className="break-all">commandId: <code>{entry.commandId}</code></p>
+    <Button variant="outline" size="sm" disabled={busy} onClick={() => void open()}>{busy ? t("正在核验…", "Verifying…") : t("定位原 Agent 操作", "Locate original Agent operation")}</Button>
+    {notice && <p role="status">{notice}</p>}
+  </section>
 }
 
 function TargetGlyph({ kind }: { kind: string }) {

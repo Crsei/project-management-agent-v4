@@ -215,14 +215,22 @@ test("thread endpoints expose bounded arguments and isolated change sets", async
     assert.equal(callsBody.items.length, 2);
     assert.deepEqual(callsBody.items[0].arguments, argumentsValue);
     assert.equal(Object.hasOwn(callsBody.items[1], "arguments"), false);
+    assert.equal(callsBody.items[1].status, "unknown", "a stored failure without execution evidence remains pending original-operation proof");
+    assert.deepEqual(callsBody.items[1].certainty, { dispatch: "possibly_sent", evidence: "unresolved" });
 
     const changes = await pmToolRoutes.request(`http://localhost/pm-tools/threads/${thread}/changes`, { headers });
     assert.equal(changes.status, 200);
     const body = await changes.json() as { items: PmChangeSet[] };
-    assert.deepEqual(body.items.map((item) => [item.id, item.kind, item.state, item.summary]), [
-      [operationId, "create", "running", "创建任务 · Route task"],
-      [bulkyId, "update", "failed", "保存文档"],
-    ]);
+    assert.equal(body.items.length, 2);
+    const runningChange = body.items.find(item => item.id === operationId);
+    assert.ok(runningChange);
+    assert.equal(runningChange.kind, "create");
+    assert.equal(runningChange.state, "running");
+    const unresolvedChange = body.items.find(item => item.id === bulkyId);
+    assert.ok(unresolvedChange);
+    assert.equal(unresolvedChange.kind, "update");
+    assert.equal(unresolvedChange.state, "unknown");
+    assert.equal(unresolvedChange.error?.code, "outcome_unknown");
     assert.equal(body.items.every((item) => !("fields" in item)), true);
 
     const foreign = await pmToolRoutes.request(`http://localhost/pm-tools/threads/${other}/changes`, { headers });
@@ -233,8 +241,17 @@ test("thread endpoints expose bounded arguments and isolated change sets", async
     assert.equal((await pmToolRoutes.request("http://localhost/pm-tools/threads/absent/calls", { headers })).status, 404);
 
     globalThis.fetch = (async () => Response.json({ error: "forbidden" }, { status: 403 })) as typeof fetch;
-    assert.equal((await pmToolRoutes.request(`http://localhost/pm-tools/threads/${thread}/changes`, { headers })).status, 403);
-    assert.equal((await pmToolRoutes.request(`http://localhost/pm-tools/threads/${thread}/calls`, { headers })).status, 403);
+    const hiddenCalls = await pmToolRoutes.request(`http://localhost/pm-tools/threads/${thread}/calls`, { headers });
+    assert.equal(hiddenCalls.status, 200);
+    const hiddenBody = await hiddenCalls.json() as { items: Array<Record<string, unknown>> };
+    assert.equal(hiddenBody.items.length, 2);
+    for (const item of hiddenBody.items) {
+      assert.equal(item.visibility, "redacted");
+      assert.deepEqual(Object.keys(item).sort(), ["generationId", "messageId", "operationId", "threadId", "visibility"]);
+    }
+    const hiddenChanges = await pmToolRoutes.request(`http://localhost/pm-tools/threads/${thread}/changes`, { headers });
+    assert.equal(hiddenChanges.status, 200);
+    assert.deepEqual(await hiddenChanges.json(), { items: [] });
   } finally {
     globalThis.fetch = previousFetch;
     closeStore();

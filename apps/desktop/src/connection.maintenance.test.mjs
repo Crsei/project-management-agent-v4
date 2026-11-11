@@ -16,7 +16,7 @@ async function connectionPage() {
     return elements.get(selector);
   };
   const form = element('#connection-form');
-  const names = ['dataDir', 'projectRoot', 'nodePath', 'email', 'name', 'password', 'workspaceName', 'createAccount'];
+  const names = ['dataDir', 'projectRoot', 'nodePath'];
   form.elements = names.map(name => { const value = element(`form:${name}`); value.name = name; return value; });
   form.elements.namedItem = name => element(`form:${name}`);
   form.querySelector = element;

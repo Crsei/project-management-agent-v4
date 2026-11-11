@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { DomainError, type Actor } from '../../../../packages/domain/src/core.ts';
@@ -7,24 +8,21 @@ import { requestHash } from '../../../../packages/application/src/kernel.ts';
 import { agentChatToolDefinitions } from '../../../../packages/application/src/agent-chat-tools.ts';
 import type { SqlExecutor } from '../../../../packages/application/src/ports.ts';
 import { agentChatToolResultSchema } from '../../../../packages/agent-contracts/src/pm-tool-result.ts';
-import { pmToolTargetSchema, type PmToolTarget } from '../../../../packages/agent-contracts/src/pm-tools.ts';
+import { pmToolLinkageSchema, pmToolRequestSchema, pmToolReconcileRequestSchema, pmToolReconcileResultSchema, type PmToolTarget, type PmToolLinkage, type PmToolRequest } from '../../../../packages/agent-contracts/src/pm-tools.ts';
+import { PM_TOOL_RECONCILE_PATH, pmToolRequestHash, verifyPmToolLinkageBearer, verifyPmToolReconcileBearer } from '../../../../packages/infrastructure/src/pm-tool-service-auth.ts';
 import { verifyAutomationServiceBearer } from '../../../../packages/infrastructure/src/automation-execution-client.ts';
 import { withPmAutomationOrigin } from '../../../../packages/application/src/automation-pm-signals.ts';
-import { WorkspaceError } from '../../../../packages/pm-core/index.ts';
 import { CoreScope, type CoreWorkspacePool } from './core-routes.ts';
-import type { AgentChatTools, AgentChatToolContext } from './agent-chat-tools.ts';
+import { agentToolRecoveryIdentitySchema, type AgentChatTools, type AgentChatToolContext, type AgentToolRecoveryIdentity } from './agent-chat-tools.ts';
 import { mcpRequestIdentity, recheckMcpRequest } from '../../../../packages/application/src/mcp-service-auth.ts';
 
-const correlation = z.string().min(1).max(200);
-const requestSchema = z.strictObject({
-  operationId: z.uuid().toLowerCase(), name: z.string().min(1).max(100), arguments: z.unknown(),
-  target: pmToolTargetSchema, threadId: correlation, messageId: correlation, generationId: correlation,
-}).refine(value => value.arguments !== undefined, 'Arguments are required');
-type ToolRequest = z.infer<typeof requestSchema>;
+type ToolRequest = PmToolRequest;
 type OperationRow = {
   operation_id: string; workspace_id: string; actor_id: string; request_hash: string; name: string;
   thread_id: string; message_id: string; generation_id: string; status: 'running' | 'succeeded' | 'failed' | 'unknown';
   result: unknown; error: { code: string; message: string } | null; created_at: Date; finished_at: Date | null;
+  target: PmToolTarget | null; recovery_identity: AgentToolRecoveryIdentity | null;
+  linkage: PmToolLinkage | null; delegation_id: string | null; outcome_evidence: 'pm_result' | 'internal_proof' | null;
 };
 
 /** Independent of PM's retired chat tables; only original business receipts can reconcile an interrupted write. */
@@ -58,27 +56,32 @@ export function registerAgentToolRoutes(app: FastifyInstance, options: {
     return { operationId: row.operation_id, name: row.name, status: row.status, actorId: row.actor_id,
       result: row.result === null ? null : agentChatToolResultSchema.parse(row.result), error: row.error,
       threadId: row.thread_id, messageId: row.message_id, generationId: row.generation_id,
-      target, workspaceId: row.workspace_id, createdAt: row.created_at.toISOString(), finishedAt: row.finished_at?.toISOString() ?? null };
+      target, workspaceId: row.workspace_id, createdAt: row.created_at.toISOString(), finishedAt: row.finished_at?.toISOString() ?? null,
+      visibility: 'visible' as const, certainty: { dispatch: 'possibly_sent' as const, evidence: row.outcome_evidence ?? 'unresolved' as const },
+      commandIds: row.recovery_identity ? [row.recovery_identity.commandId] : [],
+      ...(row.linkage ? { linkage: pmToolLinkageSchema.parse(row.linkage) } : {}) };
   }
-  async function lookup(input: ToolRequest, actor: Actor, workspaceId: string, hash: string): Promise<OperationRow | undefined> {
+  async function lookup(input: ToolRequest, actor: Actor, workspaceId: string, hash: string, delegationId: string | null): Promise<OperationRow | undefined> {
     const row = (await options.database().query<OperationRow>('SELECT * FROM pm_agent_tool_operations WHERE operation_id=$1', [input.operationId])).rows[0];
-    if (row && (row.workspace_id !== workspaceId || row.actor_id !== actor.id || row.request_hash !== hash)) throw new DomainError('agent_tool_identity_conflict', 'Operation ID already represents a different request', 409);
+    if (row && (row.workspace_id !== workspaceId || row.actor_id !== actor.id || row.request_hash !== hash || row.delegation_id !== delegationId))
+      throw new DomainError('agent_tool_identity_conflict', 'Operation ID already represents a different request or delegation', 409);
     return row;
   }
-  async function finish(row: OperationRow, status: OperationRow['status'], result: unknown, error: OperationRow['error']) {
-    const updated = await options.database().query<OperationRow>(`UPDATE pm_agent_tool_operations SET status=$2,result=$3::jsonb,error=$4::jsonb,finished_at=CASE WHEN $2 IN ('succeeded','failed') THEN clock_timestamp() ELSE NULL END WHERE operation_id=$1 AND status IN ('running','unknown') RETURNING *`,
-      [row.operation_id, status, result === null ? null : JSON.stringify(result), error === null ? null : JSON.stringify(error)]);
+  async function finish(row: OperationRow, status: OperationRow['status'], result: unknown, error: OperationRow['error'], evidence: OperationRow['outcome_evidence'] = null) {
+    const updated = await options.database().query<OperationRow>(`UPDATE pm_agent_tool_operations SET status=$2,result=$3::jsonb,error=$4::jsonb,outcome_evidence=$5,finished_at=CASE WHEN $2 IN ('succeeded','failed') THEN clock_timestamp() ELSE NULL END WHERE operation_id=$1
+      AND (status IN ('running','unknown') OR status='failed' AND outcome_evidence IS NULL AND $5='internal_proof') RETURNING *`,
+      [row.operation_id, status, result === null ? null : JSON.stringify(result), error === null ? null : JSON.stringify(error), evidence]);
     return updated.rows[0] ?? (await options.database().query<OperationRow>('SELECT * FROM pm_agent_tool_operations WHERE operation_id=$1', [row.operation_id])).rows[0]!;
   }
-  function failure(error: unknown, write: boolean): { status: 'failed' | 'unknown'; error: { code: string; message: string } } {
-    if (error instanceof DomainError) {
-      // A post-commit authorization/read failure may hide a completed native write.
-      const unknown = error.status >= 500 || /unknown|recovered/i.test(error.code)
-        || (write && ['not_found_or_forbidden', 'permission_denied'].includes(error.code));
-      return { status: unknown ? 'unknown' : 'failed', error: { code: error.code, message: error.message } };
-    }
-    if (error instanceof WorkspaceError && error.status < 500 && !(write && error.status === 404)) return { status: 'failed', error: { code: error.diagnostics[0]?.code ?? 'core_write_rejected', message: error.message } };
-    return { status: 'unknown', error: { code: 'agent_tool_outcome_unknown', message: 'The original operation could not be confirmed; reconcile it without redispatching.' } };
+  const unknownError = { code: 'agent_tool_outcome_unknown', message: 'The original outcome is not confirmed; reconcile it without redispatching.' };
+  async function deliver(request: FastifyRequest, actor: Actor, input: ToolRequest, scope: AgentChatToolContext['scope'], row: OperationRow) {
+    // Execution fact has already been persisted. A delivery denial must never overwrite it.
+    const currentActor = await options.actor(request);
+    if (currentActor.id !== actor.id) throw new DomainError('permission_denied', 'The original actor is no longer authorized', 403);
+    await recheckMcpRequest(options.database(), request);
+    const current = await scopeFor(actor, input.target.workspaceId, input.target, options.database(), input.name);
+    if (scope.projectIds.some(id => !current.projectIds.includes(id))) throw new DomainError('permission_denied', 'The original result is no longer readable', 403);
+    return record(row, input.target);
   }
   const catalog = (tools: AgentChatTools, request: FastifyRequest) => {
     const delegation = mcpRequestIdentity(request);
@@ -107,55 +110,130 @@ export function registerAgentToolRoutes(app: FastifyInstance, options: {
   });
   async function dispatch(request: FastifyRequest, reconcile: boolean) {
     const { workspaceId } = z.object({ workspaceId: z.uuid().toLowerCase() }).parse(request.params);
-    const actor = await options.actor(request), input = requestSchema.parse(request.body);
+    const actor = await options.actor(request), input = pmToolRequestSchema.parse(request.body);
     const credential = request.headers.authorization?.startsWith('Bearer ') ? request.headers.authorization.slice(7) : '';
     const automation = credential.startsWith('pm-automation-v1.') ? verifyAutomationServiceBearer(credential) : null;
     const originated = <T>(operation: () => Promise<T>): Promise<T> => automation ? withPmAutomationOrigin(automation.executionId, operation) : operation();
     const { tools } = getTools();
     await recheckMcpRequest(options.database(), request);
+    const delegationId = mcpRequestIdentity(request)?.grantId ?? null;
     const scope = await scopeFor(actor, workspaceId, input.target, options.database(), input.name);
-    const hash = requestHash({ ...input, workspaceId, actorId: actor.id });
-    let row = await lookup(input, actor, workspaceId, hash);
+    const hash = pmToolRequestHash(input, actor.id);
+    let row = await lookup(input, actor, workspaceId, hash, delegationId);
     if (!row && reconcile) throw new DomainError('not_found_or_forbidden', 'Original operation is not accessible', 404);
     if (!row) {
-      const inserted = await options.database().query<OperationRow>(`INSERT INTO pm_agent_tool_operations(operation_id,workspace_id,actor_id,request_hash,name,thread_id,message_id,generation_id,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'running') ON CONFLICT(operation_id) DO NOTHING RETURNING *`,
-        [input.operationId, workspaceId, actor.id, hash, input.name, input.threadId, input.messageId, input.generationId]);
+      const suppliedProof = request.headers['x-pm-tool-linkage'];
+      const trustedLinkage = input.linkage && typeof suppliedProof === 'string'
+        && verifyPmToolLinkageBearer(suppliedProof, actor.id, hash, input.linkage) ? input.linkage : null;
+      // An unsigned caller can supply a correlation hint, never authoritative trace/actor/source.
+      const linkage: PmToolLinkage | null = trustedLinkage ?? (input.executionRoot === 'external' || input.linkage?.executionRoot === 'external'
+        ? { traceId: randomUUID(), invocationId: input.operationId, executionRoot: 'external', clientKind: delegationId ? 'mcp' : 'api', policy: 'full', enforcement: 'audit-only' } : null);
+      const context: AgentChatToolContext = { actor, workspaceId, threadId: input.threadId, messageId: input.messageId, operationId: input.operationId, scope,
+        ...(linkage ? { linkage } : {}),
+        checkAuthorization: async sql => {
+          await recheckMcpRequest(sql, request);
+          const current = await scopeFor(actor, workspaceId, input.target, sql, input.name);
+          if (scope.projectIds.some(id => !current.projectIds.includes(id))) throw new DomainError('agent_authorization_changed', 'The authorized project scope changed before commit', 403);
+        } };
+      const recovery = tools.recoveryIdentity(input.name, input.arguments, context);
+      const inserted = await options.database().query<OperationRow>(`INSERT INTO pm_agent_tool_operations(operation_id,workspace_id,actor_id,request_hash,name,thread_id,message_id,generation_id,status,target,recovery_identity,linkage,delegation_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,'running',$9::jsonb,$10::jsonb,$11::jsonb,$12) ON CONFLICT(operation_id) DO NOTHING RETURNING *`,
+        [input.operationId, workspaceId, actor.id, hash, input.name, input.threadId, input.messageId, input.generationId, JSON.stringify(input.target),
+          recovery ? JSON.stringify(recovery) : null, linkage ? JSON.stringify(linkage) : null, delegationId]);
       row = inserted.rows[0];
-      if (!row) row = await lookup(input, actor, workspaceId, hash);
+      if (!row) row = await lookup(input, actor, workspaceId, hash, delegationId);
       else {
         active.add(input.operationId);
-        const context: AgentChatToolContext = { actor, workspaceId, threadId: input.threadId, messageId: input.messageId, operationId: input.operationId, scope,
-          checkAuthorization: async sql => {
-            await recheckMcpRequest(sql, request);
-            const current = await scopeFor(actor, workspaceId, input.target, sql, input.name);
-            if (scope.projectIds.some(id => !current.projectIds.includes(id))) throw new DomainError('agent_authorization_changed', 'The authorized project scope changed before the operation was committed', 403);
-          } };
-        try { row = await finish(row, 'succeeded', agentChatToolResultSchema.parse(await originated(() => tools.execute(input.name, input.arguments, context))), null); }
-        catch (error) { const outcome = failure(error, tools.registry.find(tool => tool.name === input.name)?.write ?? false); row = await finish(row, outcome.status, null, outcome.error); }
-        finally { active.delete(input.operationId); }
-        await recheckMcpRequest(options.database(), request);
-        return record(row, input.target);
+        try {
+          const result = agentChatToolResultSchema.parse(await originated(() => tools.execute(input.name, input.arguments, context)));
+          row = await finish(row, 'succeeded', result, null, 'pm_result');
+        } catch (error) {
+          // HTTP/error classes cannot prove a write was rejected. Only original durable evidence may terminate it.
+          const proof = recovery ? await tools.inspectOutcome(recovery, actor.id, workspaceId).catch(() => null) : null;
+          row = !tools.registry.find(tool => tool.name === input.name)?.write && error instanceof DomainError
+            ? await finish(row, 'failed', null, { code: error.code, message: 'The read operation was rejected.' }, 'pm_result')
+            : proof && proof.status !== 'unknown'
+              ? await finish(row, proof.status, null, proof.status === 'failed' ? { code: 'agent_tool_recovered_rejection', message: 'The original command was rejected.' } : null, 'internal_proof')
+              : await finish(row, 'unknown', null, unknownError);
+        } finally { active.delete(input.operationId); }
+        return deliver(request, actor, input, scope, row);
       }
     }
     if (!row) throw new DomainError('agent_tool_outcome_unknown', 'Operation record is unavailable', 503);
-    if (row.status === 'running' && active.has(input.operationId)) { await recheckMcpRequest(options.database(), request); return record(row, input.target); }
+    if (row.status === 'running' && active.has(input.operationId)) return deliver(request, actor, input, scope, row);
+    if (row.status === 'failed' && row.outcome_evidence === null) {
+      // Historical error classes did not prove the dispatch boundary. Revisit this exact request, never batch-promote it.
+      const uncertain = await options.database().query<OperationRow>(
+        `UPDATE pm_agent_tool_operations SET status='unknown',error=$2::jsonb,finished_at=NULL
+         WHERE operation_id=$1 AND status='failed' AND outcome_evidence IS NULL RETURNING *`,
+        [row.operation_id, JSON.stringify(unknownError)]);
+      row = uncertain.rows[0] ?? (await options.database().query<OperationRow>('SELECT * FROM pm_agent_tool_operations WHERE operation_id=$1', [row.operation_id])).rows[0] ?? row;
+    }
     if (row.status === 'running' || row.status === 'unknown') {
-      const context: AgentChatToolContext = { actor, workspaceId, threadId: input.threadId, messageId: input.messageId, operationId: input.operationId, scope };
+      const context: AgentChatToolContext = { actor, workspaceId, threadId: input.threadId, messageId: input.messageId, operationId: input.operationId, scope,
+        ...(row.linkage ? { linkage: row.linkage } : {}) };
       try {
         const recovered = await originated(() => tools.recover(input.name, input.arguments, context));
-        if (recovered) row = await finish(row, 'succeeded', agentChatToolResultSchema.parse(recovered), null);
-        else row = await finish(row, 'unknown', null, { code: 'agent_tool_outcome_unknown', message: 'The original outcome is not yet confirmed; it was not redispatched.' });
+        row = recovered ? await finish(row, 'succeeded', agentChatToolResultSchema.parse(recovered), null, 'pm_result')
+          : await finish(row, 'unknown', null, unknownError);
       } catch (error) {
-        if (error instanceof DomainError && error.code === 'agent_tool_recovered_rejection') {
-          row = await finish(row, 'failed', null, { code: error.code, message: error.message });
-        } else {
-          row = await finish(row, 'unknown', null, { code: 'agent_tool_outcome_unknown', message: 'The original outcome could not be confirmed; it was not redispatched.' });
-        }
+        row = error instanceof DomainError && error.code === 'agent_tool_recovered_rejection'
+          ? await finish(row, 'failed', null, { code: error.code, message: 'The original command was rejected.' }, 'pm_result')
+          : await finish(row, 'unknown', null, unknownError);
       }
     }
-    await recheckMcpRequest(options.database(), request);
-    return record(row, input.target);
+    if (row.status === 'succeeded' && row.result === null) {
+      // Internal proof settles fact, not delivery. Current-authorized reads may restore only the original receipt.
+      const context: AgentChatToolContext = { actor, workspaceId, threadId: input.threadId, messageId: input.messageId, operationId: input.operationId, scope,
+        ...(row.linkage ? { linkage: row.linkage } : {}) };
+      try {
+        const recovered = await originated(() => tools.recover(input.name, input.arguments, context));
+        if (recovered) {
+          const result = agentChatToolResultSchema.parse(recovered);
+          const hydrated = await options.database().query<OperationRow>(
+            `UPDATE pm_agent_tool_operations SET result=$2::jsonb WHERE operation_id=$1 AND status='succeeded' AND result IS NULL RETURNING *`,
+            [row.operation_id, JSON.stringify(result)]);
+          row = hydrated.rows[0] ?? (await options.database().query<OperationRow>('SELECT * FROM pm_agent_tool_operations WHERE operation_id=$1', [row.operation_id])).rows[0] ?? row;
+        }
+      } catch {
+        // Source deletion, changed visibility or recovery outage never demote an already proven commit.
+      }
+    }
+    return deliver(request, actor, input, scope, row);
   }
+  app.post(PM_TOOL_RECONCILE_PATH, { bodyLimit: 4096 }, async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
+    z.strictObject({}).parse(request.query);
+    const proof = pmToolReconcileRequestSchema.parse(request.body);
+    const bearer = request.headers.authorization?.startsWith('Bearer ') ? request.headers.authorization.slice(7) : '';
+    const identity = verifyPmToolReconcileBearer(bearer, request.method, request.url, proof);
+    if (!identity) throw new DomainError('unauthenticated', 'A valid operation-status service proof is required', 401);
+    const sql = options.database();
+    // Atomic durable nonce consumption survives PM restart; the signature cannot be used twice.
+    await sql.query('DELETE FROM pm_agent_tool_service_nonces WHERE expires_at < clock_timestamp()');
+    const consumed = await sql.query(`INSERT INTO pm_agent_tool_service_nonces(nonce,expires_at) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING nonce`,
+      [identity.nonce, new Date(identity.expiresAt)]);
+    if (!consumed.rowCount) throw new DomainError('unauthenticated', 'Service proof was already consumed', 401);
+    let row = (await sql.query<OperationRow>('SELECT * FROM pm_agent_tool_operations WHERE operation_id=$1', [proof.operationId])).rows[0];
+    if (!row || row.workspace_id !== proof.target.workspaceId || row.actor_id !== proof.actorId || row.request_hash !== proof.requestHash
+      || !row.target || requestHash(row.target) !== requestHash(proof.target))
+      throw new DomainError('not_found_or_forbidden', 'Original operation proof is not accessible', 404);
+    let evidence: 'operation' | 'command_receipt' | 'native_journal' | 'unresolved' = 'unresolved';
+    let status: 'succeeded' | 'failed' | 'unknown' = 'unknown';
+    if ((row.status === 'succeeded' || row.status === 'failed') && row.outcome_evidence) {
+      status = row.status; evidence = 'operation';
+    } else if (!(row.status === 'running' && active.has(row.operation_id)) && row.recovery_identity) {
+      try {
+        const recovered = await getTools().tools.inspectOutcome(agentToolRecoveryIdentitySchema.parse(row.recovery_identity), row.actor_id, row.workspace_id);
+        status = recovered.status; evidence = recovered.evidence;
+        if (status !== 'unknown') row = await finish(row, status, null, null, 'internal_proof');
+        if (row.status === 'succeeded' && row.outcome_evidence) status = 'succeeded';
+      } catch { /* Missing/corrupt journals or unavailable storage remain unresolved, never a redispatch. */ }
+    }
+    return pmToolReconcileResultSchema.parse({ ...proof, status, evidence,
+      commandIds: row.recovery_identity ? [row.recovery_identity.commandId] : [],
+      ...(row.linkage ? { linkage: row.linkage } : {}) });
+  });
   app.post('/api/v1/workspaces/:workspaceId/agent-tools/call', async (request, reply) => { reply.header('Cache-Control', 'private, no-store'); return dispatch(request, false); });
   app.post('/api/v1/workspaces/:workspaceId/agent-tools/result', async (request, reply) => { reply.header('Cache-Control', 'private, no-store'); return dispatch(request, true); });
 }

@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "registry": "docs/reference/pm-agent-permission-registry.zh.md",
+  "phases": {
+    "unit": {
+      "proof": "Schema, local identity, native file/journal and safe audit behavior; no PostgreSQL or real client proof.",
+      "files": [
+        "packages/application/tests/agent-chat-tools.test.ts",
+        "packages/application/tests/mcp-service-auth.test.ts",
+        "packages/pm-cli/tests/plugin-distribution.test.ts",
+        "packages/pm-cli/tests/plugin-adapter.test.ts",
+        "packages/pm-core/tests/creation-outcome.test.ts",
+        "apps/server/pm/tests/project-audit.test.ts",
+        "apps/server/pm/tests/pm-tool-service-auth.test.ts",
+        "apps/server/agent/src/access.test.ts",
+        "apps/server/agent/src/agent-workspaces.test.ts",
+        "apps/server/agent/src/paths.test.ts",
+        "apps/server/agent/src/mcp/grants.test.ts",
+        "apps/web/src/features/agent/src/chat/output-presenter.test.ts",
+        "apps/web/src/features/agent/src/pm/pm-chat-bridge.test.ts"
+      ]
+    },
+    "protocol": {
+      "proof": "Real local HTTP/MCP, SQLite and native bridge behavior with isolated protocol fixtures; PM SQL doubles and provider fixtures are not real PostgreSQL, browser or vendor-client acceptance.",
+      "files": [
+        "apps/server/pm/tests/agent-tool-routes.test.ts",
+        "apps/server/pm/tests/agent-reference-routes.test.ts",
+        "apps/server/pm/tests/agent-chat-lifecycle-tools.test.ts",
+        "apps/server/agent/src/pm-tools.test.ts",
+        "apps/server/agent/src/pm-tools-approval.test.ts",
+        "apps/server/agent/src/pm-tool-changes.test.ts",
+        "apps/server/agent/src/pm-tool-certainty.test.ts",
+        "apps/server/agent/src/pm-outcomes.test.ts",
+        "apps/server/agent/src/pm-visibility.test.ts",
+        "apps/server/agent/src/durable/pm-context.test.ts",
+        "apps/server/agent/src/durable/chat-authorization.test.ts",
+        "apps/server/agent/src/durable/chat-runtime.test.ts",
+        "apps/server/agent/src/durable/thread-sidebar.test.ts",
+        "apps/server/agent/src/providers/t3code/execution.test.ts",
+        "apps/server/agent/src/durable/native-output.test.ts",
+        "apps/server/agent/src/mcp/oauth.test.ts",
+        "apps/server/agent/src/mcp/tools.test.ts",
+        "apps/server/agent/src/mcp/server.test.ts",
+        "apps/server/agent/src/mcp-apps/requests.test.ts",
+        "packages/pm-cli/tests/auth.test.ts",
+        "apps/server/gateway.test.ts"
+      ]
+    },
+    "real-db": {
+      "proof": "Existing isolated backend CI stage: owned disposable PostgreSQL/MinIO, complete backend regressions, no local .env. Prebuilt checkout artifacts and the existing CI prerequisites are required; this phase does not build application dist.",
+      "entry": "scripts/check-ci.mjs",
+      "args": ["--stage", "backend", "--baseline"],
+      "requiredCases": [
+        "tests/agent-chat-tools.integration.test.ts",
+        "tests/project-audit.integration.test.ts",
+        "tests/backend.integration.test.ts",
+        "tests/core-creation.integration.test.ts",
+        "tests/agent-execution-workspaces.integration.test.ts"
+      ]
+    }
+  },
+  "externalProof": [
+    {
+      "phase": "browser",
+      "acceptance": ["A5", "A6", "B1", "B4", "C1", "C4"],
+      "requiredEvidence": "Real browser DOM, network/SSE frames, revocation/cache clearing and filtered Provider input; isolated browser profile and isolated accounts/PM fixture. Not supplied by Node protocol fixtures."
+    },
+    {
+      "phase": "client",
+      "acceptance": ["D1", "D2", "D3", "D4", "D5", "D6", "D7"],
+      "requiredEvidence": "Separate actual Codex, Claude, Pi and OpenCode version/OS/profile/install artifact digest, OAuth identity, approval/revocation/original-operation recovery and upgrade/uninstall evidence. No ambient client homes or real credentials may enter this runner."
+    }
+  ]
+}

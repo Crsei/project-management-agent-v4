@@ -5,7 +5,7 @@ import { mcpAppMetadataSchema, mcpAppToolResultSchema } from "./mcp-apps.ts";
  * Copyright (c) 2026 T3 Tools Inc. MIT; see LICENSE.t3code. */
 const id = z.string().min(1).max(512);
 export const outputStatusSchema = z.enum([
-  "pending", "running", "waiting", "completed", "failed", "cancelled", "interrupted",
+  "pending", "running", "waiting", "completed", "failed", "cancelled", "interrupted", "unknown",
 ]);
 export type OutputStatus = z.infer<typeof outputStatusSchema>;
 export const responseStreamingModeSchema = z.enum(["paragraph", "turn"]);
@@ -49,9 +49,18 @@ export const nativeOutputItemSchema = z.object({
     "approval_request", "user_input_request", "notification", "error", "compaction",
   ]),
   status: outputStatusSchema,
+  /** Current-reader projection only; hidden items contain no provider/business payload. */
+  visibility: z.enum(["visible", "redacted", "unavailable"]).optional(),
   title: z.string().optional(),
   parentItemId: id.optional(),
   nativeItemId: z.string().optional(),
+  /** Ordinals are comparable only within this native thread/run/turn scope. */
+  order: z.object({ scope: z.string().min(1), ordinal: z.number().int().nonnegative() }).optional(),
+  /** Missing means unknown, not a final answer. Never inferred from text or position. */
+  phase: z.enum(["commentary", "final_answer"]).optional(),
+  reasoningPart: z.object({ kind: z.enum(["summary", "text"]), index: z.number().int().nonnegative() }).optional(),
+  /** Both timestamps must be provider-backed to advertise a provider duration. */
+  timing: z.object({ source: z.enum(["provider", "observed"]) }).optional(),
   startedAt: z.string().optional(),
   completedAt: z.string().optional(),
   /** Full accumulated text; never an append delta. */
@@ -110,4 +119,40 @@ export type CommandOutputFrame = z.infer<typeof commandOutputFrameSchema>;
 
 export function isOutputActive(status: OutputStatus): boolean {
   return status === "pending" || status === "running" || status === "waiting";
+}
+
+/** Apply cumulative revisions without globally comparing unrelated native ordinals.
+ * Legacy rows keep their arrival order; an existing scope owns only its own slots. */
+export function upsertNativeOutputItem(items: NativeOutputItem[], item: NativeOutputItem): void {
+  const index = items.findIndex((entry) => entry.id === item.id);
+  // A confirmed PM business outcome outlives its provider generation and stale frames.
+  const previousPm = items[index];
+  if (previousPm?.id.startsWith("pm-tool:") && previousPm.status === "completed" && item.visibility !== "redacted" && item.visibility !== "unavailable" && item.status !== "completed") return;
+  if (index >= 0) {
+    const previous = items[index]!;
+    items[index] = item;
+    if (!item.order || (previous.order?.scope === item.order.scope && previous.order.ordinal === item.order.ordinal)) return;
+    const slots: number[] = [];
+    const scoped: NativeOutputItem[] = [];
+    for (let position = 0; position < items.length; position++) {
+      const candidate = items[position]!;
+      if (candidate.order?.scope !== item.order.scope) continue;
+      slots.push(position);
+      scoped.push(candidate);
+    }
+    scoped.sort((a, b) => a.order!.ordinal - b.order!.ordinal);
+    for (let position = 0; position < slots.length; position++) items[slots[position]!] = scoped[position]!;
+    return;
+  }
+  if (item.order) {
+    let last = -1;
+    for (let position = 0; position < items.length; position++) {
+      const order = items[position]!.order;
+      if (order?.scope !== item.order.scope) continue;
+      if (order.ordinal > item.order.ordinal) { items.splice(position, 0, item); return; }
+      last = position;
+    }
+    if (last >= 0) { items.splice(last + 1, 0, item); return; }
+  }
+  items.push(item);
 }

@@ -11,7 +11,7 @@ import { ProviderContinuationRequests } from "@t3tools/provider-core/server/Prov
 import { ProviderEventLoggers, NoOpProviderEventLoggers } from "@t3tools/provider-core/server/ProviderEventLoggers";
 import { ProviderRuntimeHost, type ProviderRuntimeHostService } from "@t3tools/provider-core/server/ProviderRuntimeHost";
 import { CodexDriver, readCodexInstanceInstallation } from "../../../../../../../vendor/t3code/apps/server/src/provider/Drivers/CodexDriver.ts";
-import { layerAppServerClientFactory, readCodexSessionEvidence } from "../../../../../../../vendor/t3code/apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts";
+import { readCodexSessionEvidence } from "../../../../../../../vendor/t3code/apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts";
 import * as ModelManifest from "../../../../../../../vendor/t3code/apps/server/src/provider/ModelManifest.ts";
 import { makePmResetCreditCoordinatorLayer } from "../upstream-services/reset-credit-coordinator.ts";
 import * as CodexInstallation from "../../../../../../../vendor/t3code/apps/server/src/provider/CodexInstallation.ts";
@@ -27,6 +27,7 @@ import type { PmProviderCapabilitiesProjector, PmProviderInstallationMethods } f
 import { pmAdapterBoundaryError } from "../events.ts";
 import type { PmProviderLease } from "../contract.ts";
 import { confirmsProviderNativeHome } from "../native-paths.ts";
+import { pmCodexActivityClientLayer } from "./codex-activity.ts";
 
 export const codexDriver = CodexDriver;
 
@@ -46,7 +47,7 @@ export function makeCodexDriverLayer(context: ProviderDriverContext, runtimeHost
   ).pipe(Layer.provideMerge(platform));
   const manifest = ModelManifest.layer.pipe(Layer.provideMerge(host));
   return Layer.mergeAll(
-    layerAppServerClientFactory,
+    pmCodexActivityClientLayer,
     makePmResetCreditCoordinatorLayer(runtimeHost),
     ModelManifest.layerModelCatalog,
     Layer.effect(CodexInstallation.CodexInstallation, CodexInstallation.makeCodexInstallation({

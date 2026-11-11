@@ -7,10 +7,12 @@ import { afterEach, beforeEach, test } from "node:test";
 import type { UIMessage, UIMessageChunk } from "ai";
 import { chatOnlyExecutionSelection, type ExecutionEnvironment, type ExecutionSelection } from "@agent-workspace/contracts/chat";
 import type { NativeSessionRef, ProviderOptionSelection } from "@agent-workspace/contracts/provider";
+import type { AgentOutputFrame } from "@agent-workspace/contracts/output";
 import { codexAdapter } from "../providers/drivers/codex.ts";
 import { claudeAdapter } from "../providers/drivers/claude.ts";
 import { getThreadUsage } from "../usage/ledger.ts";
 import { createProviderInstance, getStoredInstance, updateProviderInstance } from "../providers/instances.ts";
+import type { ProviderDriverContext } from "../providers/driver-adapter.ts";
 import { chatRoutes } from "../chat.ts";
 import { openAgentWorkspace, updateAgentWorkspace } from "../agent-workspaces.ts";
 import { createUsageSummaryReader } from "../usage/service.ts";
@@ -32,8 +34,8 @@ import {
   type ChatRequest,
 } from "./chat-runtime.ts";
 import { withThreadExecution } from "./engine.ts";
-import { getNativeOutput, respondNativeInteraction, subscribeCommandOutput } from "./native-output.ts";
-import { closeStore, readRecord, transaction, writeRecord } from "./store.ts";
+import { getNativeOutput, respondNativeInteraction, subscribeCommandOutput, subscribeNativeOutput } from "./native-output.ts";
+import { closeStore, listRecords, readRecord, transaction, writeRecord } from "./store.ts";
 import {
   CHAT_FORMAT,
   deleteThread,
@@ -233,6 +235,52 @@ async function drain(id: string): Promise<UIMessageChunk[]> {
   }
   return chunks;
 }
+
+test("structured Chat body excludes completion-only commentary, retains unknown phase and native order, and never trusts a mixed driver result", async () => {
+  await localProvider();
+  configure();
+  const received = Promise.withResolvers<void>();
+  const terminal = Promise.withResolvers<void>();
+  codexAdapter.run = async (_context, options) => {
+    const order = (ordinal: number) => ({ scope: "native-turn", ordinal });
+    options.onEvent?.({ type: "item.upsert", item: { id: "progress", type: "assistant_message", status: "running",
+      order: order(0), text: "Unclassified until completed\n\n" } });
+    options.onText?.("Unclassified until completed\n\n");
+    options.onEvent?.({ type: "item.upsert", item: { id: "tool", type: "command_execution", status: "completed", order: order(1), output: "tool-only" } });
+    options.onEvent?.({ type: "item.upsert", item: { id: "final", type: "assistant_message", status: "completed",
+      order: order(3), phase: "final_answer", text: "Final answer" } });
+    // Same ID is a cumulative correction; phase comes only from explicit evidence.
+    options.onEvent?.({ type: "item.upsert", item: { id: "progress", type: "assistant_message", status: "completed",
+      order: order(0), phase: "commentary", text: "Progress, not an answer" } });
+    options.onEvent?.({ type: "item.upsert", item: { id: "unknown", type: "assistant_message", status: "completed",
+      order: order(2), text: "Unknown phase text" } });
+    received.resolve();
+    await terminal.promise;
+    return { text: "Progress, not an answer\n\nFinal answer\n\nuntrusted convenience suffix" };
+  };
+  let generation: ChatGeneration | undefined;
+  try {
+    generation = await submitChat(request());
+    await received.promise;
+    assert.equal(getChatGeneration(generation.id)?.status, "running");
+    assert.equal(readChatEvents(generation.id).some(event => event.chunk.type === "text-delta"), false);
+    assert.equal(getNativeOutput(generation.id)?.items.find(item => item.id === "progress")?.phase, "commentary");
+    terminal.resolve();
+    const chunks = await drain(generation.id);
+    const body = chunks.filter(chunk => chunk.type === "text-delta").map(chunk => chunk.delta).join("");
+    assert.equal(body, "Unknown phase text\n\nFinal answer");
+    const saved = getThreadHistory(generation.threadId).messages.find(message => message.id === generation!.messageId)!;
+    const savedMessage = saved.content as unknown as UIMessage;
+    assert.equal(savedMessage.parts.filter(part => part.type === "text").map(part => part.text).join(""), body);
+    closeStore();
+    assert.deepEqual(await drain(generation.id), chunks, "Chat replay uses saved chunks, never a provider redispatch.");
+    assert.equal(getNativeOutput(generation.id)?.items.find(item => item.id === "unknown")?.phase, undefined);
+    assert.equal(getChatGeneration(generation.id)?.status, "completed");
+  } finally {
+    terminal.resolve();
+    if (generation) await cancelChat(generation.id);
+  }
+});
 
 test("native events, command output and interaction responses bridge through the active generation", async () => {
   await localProvider();
@@ -755,6 +803,13 @@ test(
       configure();
       updateThread("chat-thread", { settings: { ...getThread("chat-thread")!.settings,
         modelOptions: [{ id: "effort", value: "xhigh" }], interactionMode: "plan" } });
+      // A transfer has an actual retained source Session. A missing source is
+      // intentionally unprovable and must force a clean portable rebuild.
+      configure("merged-child");
+      saveFormattedMessage("merged-child", {
+        id: "merged-source-input", parent_id: null, format: CHAT_FORMAT,
+        content: { role: "user", parts: [{ type: "text", text: "MERGED_REFERENCE_DO_NOT_REEXECUTE" }] },
+      }, true);
       writeRecord(TRANSFERS, "merged-child", {
         id: "transfer-1",
         sourceThreadId: "merged-child",
@@ -776,6 +831,7 @@ test(
         getChatGeneration(generation.id)!.request.transferContext!,
         /MERGED_REFERENCE_DO_NOT_REEXECUTE/,
       );
+      assert.match(provider.prompts[0]!.prompt, /MERGED_REFERENCE_DO_NOT_REEXECUTE/);
       assert.equal(
         transaction(() => consumeTransfers("chat-thread", "another")),
         "",
@@ -1550,7 +1606,7 @@ test("trusted Chat identity reaches native execution and native interrupted is n
   const provider = await localProvider();
   try {
     configure();
-    let identity: { threadId: string; generationId: string; messageId: string; environment: ExecutionEnvironment } | undefined;
+    let identity: ProviderDriverContext["execution"];
     codexAdapter.run = async (context, options) => {
       identity = context.execution;
       assert.ok(context.pmToolBridge);
@@ -1559,7 +1615,14 @@ test("trusted Chat identity reaches native execution and native interrupted is n
     };
     const generation = await submitChat(request());
     await drain(generation.id);
-    assert.deepEqual(identity, { threadId: generation.threadId, generationId: generation.id, messageId: generation.messageId, environment: { ...fixtureEnvironment, frozen: true } });
+    assert.ok(identity);
+    assert.equal(identity.threadId, generation.threadId);
+    assert.equal(identity.generationId, generation.id);
+    assert.equal(identity.messageId, generation.messageId);
+    assert.deepEqual(identity.environment, generation.executionSnapshot?.environment);
+    assert.equal(identity.inputMessageId, generation.inputMessageId);
+    assert.equal(identity.traceId, generation.traceId);
+    assert.equal(identity.executionGrantId, generation.executionGrantId);
     assert.equal(getChatGeneration(generation.id)?.status, "interrupted");
     assert.equal(getNativeOutput(generation.id)?.status, "interrupted");
     assert.equal(getNativeOutput(generation.id)?.items[0].text, "saved partial");
@@ -1570,23 +1633,31 @@ test("trusted Chat identity reaches native execution and native interrupted is n
 });
 
 for (const terminal of ["completed", "cancelled"] as const) {
-  test(`structured native paragraphs reach Chat consumers before ${terminal}, without releasing unfinished text`, { timeout: 10_000 }, async () => {
+  test(`unknown-phase native paragraphs reach timeline consumers before ${terminal}, without being classified as final`, { timeout: 10_000 }, async () => {
     const first = "First native paragraph\n\n";
     const second = "Second native paragraph\n\n";
     const unfinished = "unfinished native tail";
     const provider = await structuredProvider(`${first}unfinished`);
-    let reader: ReadableStreamDefaultReader<UIMessageChunk> | undefined;
+    let reader: ReadableStreamDefaultReader<AgentOutputFrame> | undefined;
     try {
       configure();
       const generation = await submitChat({ ...request(), config: { responseStreamingMode: "paragraph" } });
       await provider.started;
-      reader = subscribeChat(generation.id).getReader();
+      const chat = subscribeChat(generation.id).getReader();
+      const start = (await chat.read()).value;
+      assert.ok(start?.type === "start");
+      assert.deepEqual(start.messageMetadata, { durable: { generationId: generation.id, inputMessageId: generation.inputMessageId,
+        traceId: generation.traceId, executionGrantId: generation.executionGrantId, executionPolicy: generation.executionPolicy, nativeOutput: true } });
+      await chat.cancel();
+      reader = subscribeNativeOutput(generation.id).getReader();
       let observed = "";
       const readUntil = async (text: string) => {
         while (!observed.includes(text)) {
           const chunk = await reader!.read();
           assert.equal(chunk.done, false, "The stream must stay open until the native turn is released.");
-          if (chunk.value?.type === "text-delta") observed += chunk.value.delta;
+          const frame = chunk.value;
+          if (frame?.kind === "snapshot") observed = frame.snapshot.items.find(item => item.id === "native-root")?.text ?? "";
+          else if (frame?.kind === "item" && frame.item.id === "native-root") observed = frame.item.text ?? "";
         }
       };
       await readUntil(first);
@@ -1600,16 +1671,20 @@ for (const terminal of ["completed", "cancelled"] as const) {
       assert.equal(String(observed), `${first}${second}`);
       assert.doesNotMatch(observed, /unfinished|child-only/);
       assert.equal(getNativeOutput(generation.id)?.items.find((item) => item.id === "native-root")?.text, `${first}${second}`);
+      assert.equal(getNativeOutput(generation.id)?.items.find(item => item.id === "native-root")?.phase, undefined);
+      assert.equal(readChatEvents(generation.id).some(event => event.chunk.type === "text-delta"), false);
       if (terminal === "cancelled") await cancelChat(generation.id);
       else provider.finish();
       for (;;) {
         const chunk = await reader.read();
         if (chunk.done) break;
-        if (chunk.value.type === "text-delta") observed += chunk.value.delta;
+        const frame = chunk.value;
+        if (frame.kind === "snapshot") observed = frame.snapshot.items.find(item => item.id === "native-root")?.text ?? "";
+        else if (frame.kind === "item" && frame.item.id === "native-root") observed = frame.item.text ?? "";
       }
+      const replay = await drain(generation.id);
       assert.equal(getChatGeneration(generation.id)?.status, terminal);
       assert.equal(observed, `${first}${second}${unfinished}`);
-      const replay = await drain(generation.id);
       assert.equal(replay.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.delta).join(""), observed);
       assert.match(JSON.stringify(getThreadHistory(generation.threadId)), /unfinished native tail/);
     } finally {
@@ -1688,4 +1763,317 @@ test("directory selection requires CAS and freezes on first execution while meta
   } finally {
     await provider.close();
   }
+});
+
+test("accepted input context is immutable, audit-only and independent of assistant output identity", async () => {
+  const provider = await localProvider();
+  configure();
+  const first = await submitChat(request(), undefined, new Headers({ cookie: "never-persist-this-cookie" }));
+  await drain(first.id);
+  assert.equal(first.inputMessageId, "user-1");
+  assert.notEqual(first.messageId, first.inputMessageId);
+  assert.match(first.traceId!, /^[0-9a-f-]{36}$/);
+  assert.match(first.executionGrantId!, /^[0-9a-f-]{36}$/);
+  assert.deepEqual({ access: first.executionPolicy?.access, mode: first.executionPolicy?.mode }, { access: "full", mode: "audit-only" });
+  const binding = getThreadHistory("chat-thread").messages.find(message => message.id === "user-1")!.turnContext!;
+  assert.equal(binding.messageId, "user-1");
+  assert.deepEqual(binding.pmReferences, []);
+  const grant = readRecord<Record<string, unknown>>("chat:execution-grants", first.executionGrantId!)!;
+  assert.equal(grant.generationId, first.id);
+  assert.doesNotMatch(JSON.stringify(grant), /never-persist-this-cookie|Bearer|pm_v4_session/);
+  assert.equal(networkRequests.length, 0, "No-reference admission and projection remain PM-independent.");
+  const duplicate = await submitChat({ ...request(), idempotencyKey: "lost-response-new-key" });
+  assert.equal(duplicate.id, first.id);
+  assert.equal(provider.prompts.length, 1);
+  await assert.rejects(submitChat({ ...request(), idempotencyKey: "altered", messages: [
+    { ...request().messages[0]!, parts: [{ type: "text", text: "mutated same input" }] },
+  ] }), { code: "idempotency_conflict" });
+  const saved = getThreadHistory("chat-thread").messages.find(message => message.id === "user-1")!;
+  saveFormattedMessage("chat-thread", { ...saved, turnContext: { ...binding, executionGrantId: randomUUID() } }, false, false);
+  assert.deepEqual(getThreadHistory("chat-thread").messages.find(message => message.id === "user-1")!.turnContext, binding);
+  const regenerated = await submitChat({ ...request(), trigger: "regenerate-message", idempotencyKey: "regenerate-original" });
+  await drain(regenerated.id);
+  assert.deepEqual(regenerated.turnContext, binding);
+  assert.equal(regenerated.inputMessageId, first.inputMessageId);
+  assert.notEqual(regenerated.traceId, first.traceId);
+  assert.notEqual(regenerated.executionGrantId, first.executionGrantId);
+  assert.deepEqual(getThreadHistory("chat-thread").messages.find(message => message.id === "user-1")!.turnContext, binding);
+  deleteThread("chat-thread");
+  assert.equal(readRecord("chat:execution-grants", first.executionGrantId!), null);
+  await provider.close();
+});
+
+function pmReferenceFixture(deniedProjects = new Set<string>()) {
+  const actorId = "33333333-3333-4333-8333-333333333333";
+  globalThis.fetch = async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    networkRequests.push(url);
+    const body = JSON.parse(String(init?.body ?? "{}"));
+    if (url.endsWith("/agent-contexts/authorize"))
+      return deniedProjects.has(body.projectId) ? Response.json({ error: "revoked" }, { status: 403 }) : Response.json({ actorId, scope: body });
+    if (url.endsWith("/agent-references/resolve"))
+      return Response.json({ items: body.references.map((reference: Record<string, unknown>) => ({
+        ...reference, title: `metadata-${reference.projectId}`, revision: "revision-1", availability: "available", reason: null,
+      })) });
+    throw new Error(`Unexpected PM fixture path: ${new URL(url).pathname}`);
+  };
+}
+
+test("each native resume and portable turn receives its own frozen cross-workspace reference metadata", async () => {
+  const provider = await localProvider();
+  configure();
+  pmReferenceFixture();
+  const workspaces = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"];
+  const references = [0, 1, 2].map(index => ({
+    workspaceId: workspaces[index % 2]!, projectId: `PRJ-00${index + 1}`, kind: "issue" as const,
+    id: "TASK-001", revision: "revision-1",
+  }));
+  const generations: ChatGeneration[] = [];
+  for (let index = 0; index < references.length; index++) {
+    if (index === 2) {
+      const thread = getThread("chat-thread")!;
+      updateThread("chat-thread", { settings: { ...thread.settings, systemPrompt: "Portable instruction cutover" } });
+    }
+    const messages = getThreadBranch("chat-thread").map(message => ({ id: message.id, ...message.content }) as UIMessage);
+    messages.push({ id: `cross-project-${index}`, role: "user", parts: [{ type: "text", text: `input-${index}` }] });
+    const generation = await submitChat({ id: "chat-thread", messages, pmReferences: [references[index]!] });
+    await drain(generation.id);
+    generations.push(getChatGeneration(generation.id)!);
+    assert.match(provider.prompts[index]!.prompt, new RegExp(references[index]!.projectId));
+    assert.match(provider.prompts[index]!.prompt, /revision-1/);
+    assert.match(provider.prompts[index]!.prompt, /不是历史正文快照/);
+    assert.equal(provider.prompts[index]!.cwd, directory);
+    assert.equal(generation.turnContext?.messageId, `cross-project-${index}`);
+  }
+  assert.equal(generations[0]!.handoff?.mode, "portable");
+  assert.equal(generations[1]!.handoff?.mode, "native");
+  assert.equal(generations[2]!.handoff?.mode, "portable");
+  assert.doesNotMatch(provider.prompts[1]!.prompt, /PRJ-001/);
+  assert.equal(getThreadHistory("chat-thread").messages.find(message => message.id === "cross-project-0")!.turnContext!.pmReferences[0]!.projectId, "PRJ-001");
+  const latest = generations[2]!;
+  await assert.rejects(submitChat({ id: "chat-thread", trigger: "regenerate-message", idempotencyKey: "changed-ref",
+    messages: latest.request.messages, pmReferences: [references[0]!] }), { code: "turn_context_conflict" });
+  await provider.close();
+});
+
+test("stale reference admission is atomic and legacy history never receives an invented context", async () => {
+  const provider = await localProvider();
+  configure();
+  pmReferenceFixture();
+  const legacy = { id: "legacy-user", parent_id: null, format: CHAT_FORMAT,
+    content: { role: "user", parts: [{ type: "text", text: "Legacy readable message" }] } };
+  saveFormattedMessage("chat-thread", legacy, true);
+  assert.equal(getThreadHistory("chat-thread").messages[0]!.turnContext, undefined);
+  const messages: UIMessage[] = [{ id: legacy.id, ...legacy.content } as UIMessage,
+    { id: "stale-user", role: "user", parts: [{ type: "text", text: "Must not execute" }] }];
+  const before = getThreadHistory("chat-thread");
+  await assert.rejects(submitChat({ id: "chat-thread", messages, pmReferences: [{
+    workspaceId: "11111111-1111-4111-8111-111111111111", projectId: "PRJ-001",
+    kind: "issue", id: "TASK-001", revision: "old-revision",
+  }] }), { code: "pm_reference_stale" });
+  assert.deepEqual(getThreadHistory("chat-thread"), before);
+  assert.deepEqual(listChatGenerations("chat-thread"), []);
+  assert.deepEqual(listRecords("chat:execution-grants"), []);
+  assert.equal(provider.prompts.length, 0);
+  const response = await chatRoutes.request("http://localhost/chat/threads/chat-thread/history");
+  const history = await response.json();
+  assert.equal(history.messages[0].turnContext, undefined);
+  await provider.close();
+});
+
+test("confirmed continuation binds a fresh input trace and sends the original frozen reference metadata", async () => {
+  const gate = Promise.withResolvers<void>();
+  const provider = await localProvider(gate.promise);
+  configure();
+  pmReferenceFixture();
+  const first = await submitChat({ ...request(), pmReferences: [{
+    workspaceId: "11111111-1111-4111-8111-111111111111", projectId: "PRJ-001",
+    kind: "issue", id: "TASK-001", revision: "revision-1",
+  }] });
+  await provider.started;
+  await cancelChat(first.id);
+  gate.resolve();
+  const continuation = await continueChat(first.id, true);
+  await drain(continuation.id);
+  assert.notEqual(continuation.inputMessageId, first.inputMessageId);
+  assert.notEqual(continuation.inputMessageId, continuation.messageId);
+  assert.notEqual(continuation.traceId, first.traceId);
+  assert.notEqual(continuation.executionGrantId, first.executionGrantId);
+  assert.deepEqual(continuation.pmReferences, first.pmReferences);
+  assert.match(provider.prompts[1]!.prompt, /PRJ-001/);
+  assert.match(provider.prompts[1]!.prompt, /revision-1/);
+  assert.equal(provider.prompts[1]!.cwd, directory);
+  assert.deepEqual(getThreadHistory("chat-thread").messages.find(message => message.id === first.inputMessageId)!.turnContext, first.turnContext);
+  await provider.close();
+});
+
+test("accepted HTTP response exposes exact server context and ignores forged grant/context metadata", async () => {
+  const provider = await localProvider();
+  configure();
+  const forgedId = randomUUID();
+  const forged = request();
+  forged.messages[0]!.metadata = { turnContext: { executionGrantId: forgedId }, custom: { turnContext: { executionGrantId: forgedId } } };
+  const response = await chatRoutes.request("http://localhost/chat", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...forged, executionGrantId: forgedId, actorId: forgedId }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-accepted-input-message-id"), "user-1");
+  assert.match(response.headers.get("x-turn-trace-id")!, /^[0-9a-f-]{36}$/);
+  await response.text();
+  const generation = listChatGenerations("chat-thread")[0]!;
+  assert.notEqual(generation.executionGrantId, forgedId);
+  const contextResponse = await chatRoutes.request("http://localhost/chat/threads/chat-thread/messages/user-1/context");
+  const context = await contextResponse.json();
+  assert.deepEqual(context.turnContext, generation.turnContext);
+  assert.equal(context.visibility, "visible");
+  const history = await (await chatRoutes.request("http://localhost/chat/threads/chat-thread/history")).json();
+  const user = history.messages.find((message: { id: string }) => message.id === "user-1");
+  assert.deepEqual(user.content.metadata.turnContext, generation.turnContext);
+  assert.equal(user.content.metadata.custom?.turnContext, undefined);
+  const execution = await (await chatRoutes.request("http://localhost/chat/threads/chat-thread/execution")).json();
+  assert.equal(execution.executionPolicy.access, "full");
+  assert.equal(execution.executionPolicy.mode, "audit-only");
+  assert.equal(networkRequests.length, 0);
+  await provider.close();
+});
+
+test("live output, replay, context, fork and next provider input recheck revoked PM content", { timeout: 10000 }, async () => {
+  const provider = await structuredProvider("PRIVATE_PM_BODY\n\n");
+  configure();
+  const denied = new Set<string>();
+  pmReferenceFixture(denied);
+  const first = await submitChat({ ...request(), pmReferences: [{
+    workspaceId: "11111111-1111-4111-8111-111111111111", projectId: "PRJ-001",
+    kind: "issue", id: "TASK-001", revision: "revision-1",
+  }] });
+  await provider.started;
+  const streamResponse = await chatRoutes.request(`http://localhost/chat/generations/${first.id}/output`);
+  const reader = streamResponse.body!.getReader();
+  let initial = "";
+  while (!initial.includes("PRIVATE_PM_BODY")) {
+    const frame = await reader.read();
+    assert.equal(frame.done, false);
+    initial += new TextDecoder().decode(frame.value);
+  }
+  denied.add("PRJ-001");
+  provider.native.emit!("PRIVATE_PM_BODY_AFTER_REVOCATION\n\n");
+  let redacted = "";
+  while (!redacted.includes("no longer accessible")) {
+    const frame = await reader.read();
+    assert.equal(frame.done, false);
+    const text = new TextDecoder().decode(frame.value);
+    assert.doesNotMatch(text, /PRIVATE_PM_BODY|metadata-PRJ-001|TASK-001/);
+    redacted += text;
+  }
+  await reader.cancel();
+  provider.finish();
+  await drain(first.id);
+  updateThread("chat-thread", { title: "PRIVATE_PM_TITLE" });
+  for (const endpoint of ["history", "generations", "messages/user-1/context"]) {
+    const text = await (await chatRoutes.request(`http://localhost/chat/threads/chat-thread/${endpoint}`)).text();
+    assert.doesNotMatch(text, /PRIVATE_PM_BODY|metadata-PRJ-001|TASK-001/);
+  }
+  const replay = await (await chatRoutes.request(`http://localhost/chat/streams/${first.id}`)).text();
+  assert.doesNotMatch(replay, /PRIVATE_PM_BODY|metadata-PRJ-001|TASK-001/);
+  const thread = await (await chatRoutes.request("http://localhost/chat/threads/chat-thread")).json();
+  assert.equal(thread.thread.title, "会话");
+  const fork = await forkChatGeneration(first.id);
+  assert.doesNotMatch(JSON.stringify(getThreadHistory(fork.threadId)), /PRIVATE_PM_BODY|metadata-PRJ-001|TASK-001/);
+  assert.equal(getThread(fork.threadId)!.title, "会话 · 分支");
+  assert.equal(getThreadFork(fork.threadId)!.nativeFork, undefined);
+  let nextPrompt = "";
+  codexAdapter.run = async (_context, options) => {
+    nextPrompt = options.prompt;
+    assert.equal(options.resume, undefined, "Contaminated native context must not be resumed.");
+    return { text: "Fresh portable safe response" };
+  };
+  const messages = getThreadBranch("chat-thread").map(message => ({ id: message.id, ...message.content }) as UIMessage);
+  messages.push({ id: "safe-next-user", role: "user", parts: [{ type: "text", text: "Continue ordinary code chat" }] });
+  const next = await submitChat({ id: "chat-thread", messages });
+  await drain(next.id);
+  assert.equal(getChatGeneration(next.id)!.handoff?.mode, "portable");
+  assert.doesNotMatch(nextPrompt, /PRIVATE_PM_BODY|metadata-PRJ-001|TASK-001/);
+  await provider.close();
+});
+
+test("quoted PM source dependencies redact only the quotation and stay out of portable input and forks", async () => {
+  const provider = await localProvider();
+  configure();
+  const denied = new Set<string>();
+  pmReferenceFixture(denied);
+  const first = await submitChat({ ...request(), pmReferences: [{
+    workspaceId: "11111111-1111-4111-8111-111111111111", projectId: "PRJ-001",
+    kind: "issue", id: "TASK-001", revision: "revision-1",
+  }] });
+  await drain(first.id);
+  const quoted: UIMessage = { id: "quoted-user", role: "user",
+    parts: [{ type: "text", text: "USER_PROSE_STAYS" }],
+    metadata: { custom: { quote: { text: "PRIVATE_QUOTED_BODY", messageId: first.messageId } } } };
+  const second = await submitChat({ id: "chat-thread", messages: [
+    ...getThreadBranch("chat-thread").map(message => ({ id: message.id, ...message.content }) as UIMessage), quoted,
+  ] });
+  await drain(second.id);
+  assert.match(provider.prompts[1]!.prompt, /PRIVATE_QUOTED_BODY/);
+  denied.add("PRJ-001");
+  const projected = await (await chatRoutes.request("http://localhost/chat/threads/chat-thread/history")).json();
+  const visibleUser = projected.messages.find((message: { id: string }) => message.id === quoted.id);
+  assert.match(JSON.stringify(visibleUser.content.parts), /USER_PROSE_STAYS/);
+  assert.equal(visibleUser.content.metadata.custom?.quote, undefined);
+  assert.doesNotMatch(JSON.stringify(projected), /PRIVATE_QUOTED_BODY/);
+  const nextMessages = projected.messages.map((message: { id: string; content: Record<string, unknown> }) =>
+    ({ id: message.id, ...message.content }) as UIMessage);
+  nextMessages.push({ id: "after-quote-revocation", role: "user", parts: [{ type: "text", text: "Continue code only" }] });
+  const next = await submitChat({ id: "chat-thread", messages: nextMessages });
+  await drain(next.id);
+  assert.doesNotMatch(provider.prompts[2]!.prompt, /PRIVATE_QUOTED_BODY/);
+  assert.match(provider.prompts[2]!.prompt, /USER_PROSE_STAYS/);
+  assert.equal(getChatGeneration(next.id)!.handoff?.mode, "portable");
+  const fork = await forkChatGeneration(second.id);
+  assert.doesNotMatch(JSON.stringify(getThreadHistory(fork.threadId)), /PRIVATE_QUOTED_BODY/);
+  await provider.close();
+});
+
+test("revoked source transfer is omitted from model context and never reintroduced by a later fork", async () => {
+  const provider = await localProvider();
+  configure("transfer-parent");
+  const denied = new Set<string>();
+  pmReferenceFixture(denied);
+  const parent = await submitChat(request("transfer-parent", "transfer-parent-user"));
+  await drain(parent.id);
+  const child = await forkChatGeneration(parent.id);
+  const childMessages = getThreadBranch(child.threadId).map(message => ({ id: message.id, ...message.content }) as UIMessage);
+  childMessages.push({ id: "pm-child-user", role: "user", parts: [{ type: "text", text: "Read child PM context" }] });
+  const ordinaryRun = codexAdapter.run;
+  codexAdapter.run = async (_context, options) => {
+    options.onText?.("PRIVATE_TRANSFER_BODY");
+    return { text: "PRIVATE_TRANSFER_BODY" };
+  };
+  const childGeneration = await submitChat({ id: child.threadId, messages: childMessages, pmReferences: [{
+    workspaceId: "11111111-1111-4111-8111-111111111111", projectId: "PRJ-001",
+    kind: "issue", id: "TASK-001", revision: "revision-1",
+  }] });
+  await drain(childGeneration.id);
+  codexAdapter.run = ordinaryRun;
+  const preview = getMergePreview(child.threadId);
+  assert.match(preview.text, /PRIVATE_TRANSFER_BODY/);
+  mergeThread(child.threadId, { confirmed: true, text: preview.text });
+  denied.add("PRJ-001");
+  const parentMessages = getThreadBranch("transfer-parent").map(message => ({ id: message.id, ...message.content }) as UIMessage);
+  parentMessages.push({ id: "consume-transfer-user", role: "user", parts: [{ type: "text", text: "Continue the parent" }] });
+  const next = await submitChat({ id: "transfer-parent", messages: parentMessages });
+  await drain(next.id);
+  assert.match(getChatGeneration(next.id)!.request.transferContext!, /PRIVATE_TRANSFER_BODY/);
+  assert.equal(getChatGeneration(next.id)!.modelInputContext?.transferContext, undefined);
+  assert.doesNotMatch(provider.prompts.at(-1)!.prompt, /PRIVATE_TRANSFER_BODY/);
+  const safeFork = await forkChatGeneration(next.id);
+  assert.doesNotMatch(JSON.stringify(getThreadHistory(safeFork.threadId)), /PRIVATE_TRANSFER_BODY/);
+  // Legacy or prelaunch-failed records have admission evidence but no proven
+  // model snapshot. Their raw transfer must never become a portable fork fallback.
+  const acceptedOnly = getChatGeneration(next.id)!;
+  delete acceptedOnly.modelInputContext;
+  writeRecord("chat:generations", next.id, { ...acceptedOnly, status: "failed", seq: 0, output: undefined });
+  const legacyFork = await forkChatGeneration(next.id);
+  assert.doesNotMatch(JSON.stringify(getThreadHistory(legacyFork.threadId)), /PRIVATE_TRANSFER_BODY/);
+  await provider.close();
 });

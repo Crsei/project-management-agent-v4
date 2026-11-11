@@ -36,11 +36,13 @@ export function createGateway(options: GatewayOptions = {}) {
   const dev = devValue ? upstream(devValue) : undefined;
   const webDist = path.resolve(options.webDist ?? process.env.WEB_DIST ?? path.join(repositoryRoot, 'apps/web/dist'));
 
-  function route(url: string): Destination | undefined {
+  function route(url: string): Destination | null | undefined {
     if (!url.startsWith('/') || url.startsWith('//')) throw new Error('Invalid request target');
     const rawPath = url.split('?', 1)[0]!;
     if (/%2f|%5c/i.test(rawPath)) throw new Error('Encoded path separator');
     const pathname = decodeURIComponent(new URL(url, 'http://gateway.invalid').pathname);
+    // Service-authenticated reconciliation is private even when its path is percent-encoded.
+    if (pathname === '/api/v1/internal' || pathname.startsWith('/api/v1/internal/')) return null;
     // Only the external MCP protocol and OAuth discovery/handshake are public.
     // Grant introspection stays on the private service transport, never this gateway.
     if (pathname === '/mcp' ||
@@ -119,7 +121,8 @@ export function createGateway(options: GatewayOptions = {}) {
   const server = http.createServer((req, res) => {
     try {
       const destination = route(req.url ?? '/');
-      if (destination) proxy(req, res, destination.target, destination.path);
+      if (destination === null) res.writeHead(404, { 'cache-control': 'no-store' }).end();
+      else if (destination) proxy(req, res, destination.target, destination.path);
       else void serveFile(req, res).catch(() => { if (!res.headersSent) res.writeHead(500); res.end(); });
     } catch { res.writeHead(400).end(); }
   });
@@ -129,7 +132,7 @@ export function createGateway(options: GatewayOptions = {}) {
     socket.once('close', () => connections.delete(socket));
   });
   server.on('upgrade', (req, socket: Duplex, head) => {
-    let destination: Destination | undefined;
+    let destination: Destination | null | undefined;
     try { destination = route(req.url ?? '/'); } catch { socket.destroy(); return; }
     if (!destination) { socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n'); return; }
     const transport = destination.target.protocol === 'https:' ? https : http;

@@ -7,17 +7,19 @@
     "t3_project_list": "project/tools.ts: currently granted PM business project catalog, explicitly not repository projects",
     "t3_project_read": "project/tools.ts: granted PM project metadata; no directory initialization or arbitrary path",
     "t3_thread_list": "orchestrator/tools.ts: only explicit grant thread IDs, never global history",
-    "t3_thread_read": "orchestrator/tools.ts: granted persisted Chat history and current generation, bounded offset page",
+    "t3_thread_read": "orchestrator/tools.ts: explicitly granted persisted Chat history and current generation, bounded page after current per-item PM visibility projection",
     "t3_thread_launch": "project/tools.ts: one idle scoped thread, optional explicit catalog-validated provider/model settings; atomic creation plus settings plus grant plus clientRequestId receipt; no worktree or implicit model execution",
     "t3_thread_send": "orchestrator/tools.ts: optional explicit selection persisted via existing settings validators/App invalidation and idle revision-CAS before existing submitChat; durable clientRequestId receipt; unknown never redispatched",
-    "t3_thread_interrupt": "orchestrator/tools.ts: exact authorized generation via cancelThreadChat; cancellation is not rollback"
+    "t3_thread_interrupt": "orchestrator/tools.ts: exact authorized generation via cancelThreadChat; cancellation is not rollback",
+    "pm_get_operation_result": "PM-only original operation query by operationId, bound to its original OAuth delegation; current payload authorization and safe visibility projection; never invokes a business command or exposes internal reconciliation"
   },
   "pmTools": {
     "source": "Existing PM agent-tools registry, not an upstream t3 business toolkit",
     "selection": "Every tool in the current PM-authorized registry; write tools omitted for read-only grants",
-    "input": "{threadId,operationId,arguments}; original tool inputSchema is preserved under arguments",
-    "authority": "callPmTool shared with native bridge; pending_approval retained for protected actions; operationId and argument identity, original receipts and unknown handling preserved",
-    "approval": "Existing PM tools UI; same live PM actor as originating grant plus current delegation scope/full ceiling; revoke denies later approval"
+    "input": "{operationId,target?,arguments}; source registry inputSchema is preserved; only workspace discovery omits target; no Chat thread/message/generation is required or fabricated",
+    "authority": "callPmTool shared with native bridge; durable external executionId/traceId bound to original actor/client/grant and exact input fingerprint before dispatch; same-key repeats only query the original operation",
+    "approval": "New execution records default full/audit-only without new interaction; existing OAuth read-only/full ceilings and explicitly configured PM approval remain enforced; existing browser approval requires the originating PM actor and live delegation",
+    "recovery": "pm_get_operation_result takes only operationId; unknown, lost replies and root-only interruptions never redispatch; original trace survives client retry; revoked/expired grants cannot read result bodies"
   },
   "excluded": {
     "orchestrator": {

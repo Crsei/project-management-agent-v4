@@ -396,7 +396,14 @@ test("native MCP unknown writes retain their operationId and never bypass live r
     const recovered = await send("result", input);
     assert.equal(recovered.body.status, "succeeded");
     assert.equal(recovered.body.operationId, operationId);
-    assert.deepEqual(await send("mcp-call", transport), recovered, "transport retrieval uses the reconciled receipt, not its old unknown snapshot");
+    assert.equal(recovered.body.visibility, "visible", "explicit result delivery uses the current authorized projection");
+    const cachedRecovered = await send("mcp-call", transport);
+    assert.equal(cachedRecovered.status, 200);
+    assert.equal(cachedRecovered.body.status, "succeeded");
+    assert.equal(cachedRecovered.body.operationId, operationId);
+    assert.equal(cachedRecovered.body.actorId, actorId);
+    assert.deepEqual(cachedRecovered.body.target, target);
+    assert.deepEqual(cachedRecovered.body.result, recovered.body.result);
     assert.equal(writes, 1); assert.equal(results, 1);
 
     pauseAuthorization = true;

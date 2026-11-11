@@ -3,7 +3,7 @@ import type { PmToolTarget } from "@agent-workspace/contracts/pm-tools";
 import type { Entity } from "../../../../../../../packages/contracts/src/client";
 import { pmJson, PmApiError, refreshCatalog, usePmChatState } from "./state";
 import type { PmChangeSet, PmIssue, PmReference } from "./pm-types";
-import { clearPmReferences, setPmReferences } from "./pm-chat-bridge";
+import { clearPmReferences, pmReferenceKey, setPmReferences, subscribePmReferenceConsumption } from "./pm-chat-bridge";
 import { agentText } from "../i18n-text.ts";
 
 export const PM_REFERENCE_LIMIT = 20;
@@ -17,6 +17,7 @@ type Value = {
   toggleSelection: (id: string) => void; selectVisible: () => void; clearSelection: () => void;
   addSelectedToReferences: () => void; toggleReference: (issue: PmIssue) => void;
   removeReference: (reference: PmReference) => void; clearReferences: () => void;
+  reuseReferences: (references: readonly PmReference[]) => void;
   selectCurrentIssue: (id: string | null) => void; openPicker: () => void; closePicker: () => void;
   selectTarget: (target: PmToolTarget | null) => void; setChanges: (changes: readonly PmChangeSet[]) => void;
 };
@@ -76,8 +77,14 @@ export function PmIssueWorkspaceProvider({ workspaceId: entryWorkspaceId, projec
     } catch { setReferenceError(agentText("浏览器无法保存引用。", "The browser could not save references.")); }
   }, [referenceKey, references]);
   useEffect(() => {
+    const unsubscribe = subscribePmReferenceConsumption(localThreadId, consumed => {
+      const accepted = new Set(consumed.map(pmReferenceKey));
+      setReferences(current => current.filter(reference => !accepted.has(pmReferenceKey(reference))));
+    });
+    return () => { unsubscribe(); clearPmReferences(localThreadId); };
+  }, [localThreadId]);
+  useEffect(() => {
     setPmReferences(localThreadId, references.map(({ workspaceId, projectId, kind, id, revision }) => ({ workspaceId, projectId, kind, id, revision })));
-    return () => clearPmReferences(localThreadId);
   }, [localThreadId, references]);
 
   const workspace = chatState.catalog?.workspaces.find(item => item.id === workspaceId);
@@ -139,6 +146,12 @@ export function PmIssueWorkspaceProvider({ workspaceId: entryWorkspaceId, projec
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
   const clearReferences = useCallback(() => { setReferences([]); setReferenceError(null); }, []);
   const removeReference = useCallback((reference: PmReference) => { setReferences(previous => previous.filter(item => referenceIdentity(item) !== referenceIdentity(reference))); setReferenceError(null); }, []);
+  const reuseReferences = useCallback((next: readonly PmReference[]) => {
+    const combined = new Map(references.map(reference => [referenceIdentity(reference), reference]));
+    for (const reference of next) combined.set(referenceIdentity(reference), { ...reference, availability: "unverified" });
+    setReferenceError(combined.size > PM_REFERENCE_LIMIT ? agentText(`单次最多引用 ${PM_REFERENCE_LIMIT} 个对象。`, `At most ${PM_REFERENCE_LIMIT} references per message.`) : null);
+    setReferences([...combined.values()].slice(0, PM_REFERENCE_LIMIT));
+  }, [references]);
   const selectTarget = useCallback((next: PmToolTarget | null) => { addSelectedToReferences(); setTarget(next); setQuery(""); setCurrentIssueId(null); }, [addSelectedToReferences]);
   const openPicker = useCallback(() => { setPickerOpen(true); void refreshCatalog().catch(() => {}); }, []);
   const closePicker = useCallback(() => setPickerOpen(false), []);
@@ -148,7 +161,7 @@ export function PmIssueWorkspaceProvider({ workspaceId: entryWorkspaceId, projec
     workspaceId, projectId, workspaceName: workspace?.name ?? null, projectName, issues, filteredIssues: issues, loading, error,
     hasMore, query, selectedIds, references, currentIssueId, currentIssue: issues.find(issue => issue.id === currentIssueId) ?? null,
     changes, pickerOpen, referenceError, setQuery, loadMore, refresh, toggleSelection, selectVisible, clearSelection,
-    addSelectedToReferences, toggleReference, removeReference, clearReferences, selectCurrentIssue: setCurrentIssueId,
+    addSelectedToReferences, toggleReference, removeReference, clearReferences, reuseReferences, selectCurrentIssue: setCurrentIssueId,
     openPicker, closePicker, selectTarget, setChanges,
   };
   return <Context.Provider value={value}>{children}</Context.Provider>;

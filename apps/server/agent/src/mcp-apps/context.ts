@@ -10,6 +10,7 @@ import { deleteRecord, listRecords, readRecord, transaction, writeRecord } from 
 import { loadMcpAppItem } from "./items.ts";
 import { assertMcpThread } from "../mcp/identity.ts";
 import { assertStoredThread, currentGrant, grantIdentity } from "../mcp/grants.ts";
+import { createPmVisibilityProjector, recordPmContentProvenance } from "../pm-visibility.ts";
 
 export const MCP_APP_MODEL_CONTEXT_MAX_BYTES = 16 * 1024;
 const CONTEXTS = "mcp-app-model-context-v1";
@@ -87,6 +88,18 @@ export async function mcpAppContextForTurn(context: ProviderDriverContext, sourc
     } catch (error) {
       if (error instanceof DurableError && error.status === 404) continue;
       throw error;
+    }
+    if (context.authorizeMcpAppContext) {
+      if (!await context.authorizeMcpAppContext(entry.app.producing)) continue;
+    } else {
+      // Old in-memory callers have no request credentials. Clean non-PM Apps
+      // remain usable; PM-derived cached content must never use a permissive fallback.
+      const projection = await createPmVisibilityProjector(entry.app.producing.threadId, new Headers());
+      const producing = projection.generation({ id: entry.app.producing.generationId, pmVisibility: undefined as string | undefined });
+      if (producing.pmVisibility) continue;
+      recordPmContentProvenance({ threadId: context.execution.threadId, generationId: context.execution.generationId,
+        messageIds: [context.execution.messageId], operationIds: projection.provenance.operationIds,
+        targets: projection.provenance.targets, authorities: projection.provenance.authorities ?? [] });
     }
     result.push({ key: `mcp_app_${entry.app.producing.itemId.replace(/[^\w.-]/g, "_")}`, text: entry.text });
   }

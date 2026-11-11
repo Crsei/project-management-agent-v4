@@ -37,6 +37,7 @@ import { useAgentText } from "@agent/src/i18n";
 import { CancelGeneration } from "@agent/src/chat/cancel-generation";
 import { OutputTimeline } from "@agent/src/chat/output-timeline";
 import { useHistoryLoadOutcome } from "@agent/src/chat/remote-adapter";
+import { PmMessageContext } from "@agent/src/pm/pm-composer-references";
 import { setResponseStreamingMode, useResponseStreamingMode } from "@agent/src/chat/response-streaming";
 import { ComposerUsage } from "@agent/src/usage/ComposerUsage";
 import { consumeUsageLimitsCommand } from "@agent/src/usage/ComposerUsageModel";
@@ -113,7 +114,7 @@ export type ThreadProps = {
   composerLeading?: ReactNode;
   composerActions?: ReactNode;
   welcome?: { title: string; alternateLabel?: string; onAlternate?: () => void; freshlyCreated?: boolean };
-  sendUnavailableReason?: string;
+  sendUnavailable?: boolean;
 };
 
 export const Thread: FC<ThreadProps> = (props) => {
@@ -182,7 +183,7 @@ export const Thread: FC<ThreadProps> = (props) => {
           <div data-slot="aui_message-group" className="mb-16 flex flex-col gap-y-7 empty:hidden">
             <ThreadPrimitive.Messages>{() => <ThreadMessage
               providerInstanceId={props.providerInstanceId}
-              actionsDisabled={!!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailableReason || history.status === "error" || historyMissing}
+              actionsDisabled={!!props.disabled || !!props.saving || !!props.saveError || !!props.sendUnavailable || history.status === "error" || historyMissing}
             />}</ThreadPrimitive.Messages>
           </div>
 
@@ -288,23 +289,6 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
   const aui = useAui();
   const [limitsRequest, setLimitsRequest] = useState(0);
   const suggestions = useComposerSuggestions(props.providerInstanceId, !!props.disabled || props.historyBlocked);
-  const unavailableReason = useAuiState((s) => {
-    if (s.composer.isEmpty || s.composer.canSend || s.thread.isRunning) return undefined;
-    if (s.thread.isDisabled) return "restoring" as const;
-    if (s.thread.isSendDisabled) return "send-disabled" as const;
-    if (s.composer.submission) return "preparing" as const;
-    return "blocked" as const;
-  });
-  const unavailable =
-    unavailableReason === "restoring"
-      ? t("会话正在恢复或不可用。", "This session is restoring or unavailable.")
-      : unavailableReason === "send-disabled"
-        ? props.sendUnavailableReason ?? t("发送暂不可用，请重新读取会话设置和作用域。", "Sending is unavailable; reload the session settings and scope.")
-        : unavailableReason === "preparing"
-          ? t("正在准备消息附件。", "Preparing message attachments.")
-          : unavailableReason === "blocked"
-            ? t("消息暂时无法发送，请检查附件或语音状态。", "Messages cannot be sent right now; check attachment or voice status.")
-            : undefined;
   const handleUsageCommand = () => consumeUsageLimitsCommand(aui.composer, () => setLimitsRequest((request) => request + 1));
   const handleSendCommand = () => handleUsageCommand() || !suggestions.beforeSend();
   return (
@@ -342,7 +326,6 @@ const Composer: FC<ThreadProps & { historyBlocked: boolean }> = (props) => {
             cancelOnEscape={false}
           />
           <ComposerAction {...props} historyBlocked={props.historyBlocked || suggestions.blocked} onUsageCommand={handleSendCommand} />
-          {unavailable && <p role="status" className="px-2 text-xs text-muted-foreground">{unavailable}</p>}
           <ComposerUsage providerInstanceId={props.providerInstanceId} limitsRequest={limitsRequest} onCloseLimits={() => setLimitsRequest(0)} />
         </div>
       </ComposerPrimitive.AttachmentDropzone>
@@ -679,6 +662,7 @@ const UserMessage: FC<{ actionsDisabled: boolean }> = ({ actionsDisabled }) => {
         <div className="aui-user-message-content peer bg-secondary text-foreground rounded-(--bubble-radius) px-4 py-2 text-sm leading-6 wrap-break-word empty:hidden">
           <MessagePrimitive.Parts />
         </div>
+        <PmMessageContext />
         <MessagePrimitive.Quote>
           {({ text }) => (
             <QuoteBlock.Root className="mt-1 ms-1 max-w-[min(100%,42rem)]">

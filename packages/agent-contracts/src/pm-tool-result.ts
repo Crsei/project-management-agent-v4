@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pmToolLinkageSchema } from "./pm-tool-linkage.ts";
 
 const identifier = z.string().min(1).max(200);
 const timestamp = z.iso.datetime({ offset: true });
@@ -25,6 +26,7 @@ export const agentChatToolRelationSchema = z.strictObject({ sourceId: identifier
 export type AgentChatToolRelation = z.infer<typeof agentChatToolRelationSchema>;
 export const agentChatToolReceiptSchema = z.strictObject({
   kind: z.enum(["command", "core"]), operationId: identifier, commandId: identifier, action: identifier, targetId: z.string().nullable(), revision: z.string().nullable(),
+  linkage: pmToolLinkageSchema.optional(),
 });
 export type AgentChatToolReceipt = z.infer<typeof agentChatToolReceiptSchema>;
 const resultFields = { nextCursor: z.string().nullable(), truncated: z.boolean(), sources: z.array(agentChatContextSourceSchema), receipt: agentChatToolReceiptSchema.optional() };

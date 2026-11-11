@@ -5,17 +5,19 @@ import * as Schema from "effect/Schema";
 import { McpSchema } from "effect/ai";
 import { agentCatalogSchema } from "../../../../../packages/contracts/src/agent-file-areas.ts";
 import { threadSettingsSchema, executionSelectionSchema, chatOnlyExecutionSelection } from "@agent-workspace/contracts/chat";
-import { pmToolTargetSchema } from "@agent-workspace/contracts/pm-tools";
-import { publicThread, publicChatGeneration } from "../chat.ts";
+import { pmToolInvocationSchema, pmToolTargetSchema } from "@agent-workspace/contracts/pm-tools";
+import { publicThread, publicAuthorizedThread, publicChatGeneration } from "../chat.ts";
 import { ensureThread, getThread, getThreadHistory, getThreadBranch, updateThread } from "../durable/threads.ts";
 import { cancelThreadChat, getActiveChat, getChatGeneration, listChatGenerations, submitChat, type ChatRequest } from "../durable/chat-runtime.ts";
 import { readRecord, transaction, writeRecord } from "../durable/store.ts";
 import { listStoredInstances } from "../providers/instances.ts";
 import { getProviderModels, resolveProviderModelOptions } from "../providers/catalog.ts";
-import { callPmTool, listPmTools, destructivePmToolNames } from "../pm-tools.ts";
+import { callPmTool, listPmTools, readPmToolOperation, destructivePmToolNames } from "../pm-tools.ts";
 import { assertMcpIdentity, assertMcpThread, grantMcpThread, mcpIdentityHeaders, type McpInvocationIdentity } from "./identity.ts";
 import { closeMcpAppSession } from "../mcp-apps/live.ts";
 import { resolveAgentExecution } from "../durable/agent-execution.ts";
+import { readMcpExecutionRoot, reserveMcpExecutionRoot, type McpExecutionRoot } from "./grants.ts";
+import { createPmVisibilityProjector } from "../pm-visibility.ts";
 
 // Adapted from copied mcp/toolkits/{orchestrator,project}/tools.ts and handlers.ts.
 // PM project IDs identify business projects, NOT upstream repository projects or arbitrary cwd.
@@ -31,6 +33,7 @@ const schemas = {
   t3_thread_launch: z.strictObject({ clientRequestId: id, title: z.string().trim().min(1).max(256), executionSelection: executionSelectionSchema.optional(), providerInstanceId: id.optional(), modelId: id.optional() }),
   t3_thread_send: z.strictObject({ threadId: id, clientRequestId: id, text: z.string().min(1).max(120000), providerInstanceId: id.optional(), modelId: id.optional() }),
   t3_thread_interrupt: z.strictObject({ threadId: id, generationId: id }),
+  pm_get_operation_result: z.strictObject({ operationId: z.uuid().toLowerCase() }),
 };
 const descriptions: Record<keyof typeof schemas, string> = {
   orchestrator_capabilities: "Read enabled Provider/model catalogs. No provider login, native session, configuration, or secrets are returned.",
@@ -41,6 +44,7 @@ const descriptions: Record<keyof typeof schemas, string> = {
   t3_thread_launch: "Create one idle chat-only Session, with a separate PM delegation ceiling. Directory-backed Sessions cannot be created by PM credentials. Pass providerInstanceId/modelId to save an explicit catalog selection. clientRequestId is required; no model turn is created.",
   t3_thread_send: "Send a message to a granted idle Chat. Optional providerInstanceId/modelId explicitly save a catalog-validated selection using idle revision-CAS before sending. Returns acceptance, not completion. Retry the same clientRequestId only with identical arguments; unknown outcomes are never redispatched.",
   t3_thread_interrupt: "Stop the exact current generation of a granted Chat. Cancellation is not rollback; existing receipts remain authoritative.",
+  pm_get_operation_result: "Read the original PM operation's currently authorized result and server-issued correlation. Requires only its original operationId; never executes or redispatches a business command. Unknown stays unresolved without authoritative evidence.",
 };
 const writes: Readonly<Record<string, true>> = { t3_thread_launch: true, t3_thread_send: true, t3_thread_interrupt: true };
 const decodeToolSchema = Schema.decodeUnknownSync(McpSchema.ToolJson);
@@ -71,10 +75,11 @@ export async function listMcpTools(identity: McpInvocationIdentity): Promise<Mcp
   const tools = applicationTools.filter(tool => identity.access === "full" || !writes[tool.name]);
   for (const tool of await pmCatalog(identity)) {
     if (tool.write && identity.access !== "full") continue;
-    tools.push({ name: tool.name, description: `${tool.description ?? tool.name} Uses the common PM approval/receipt service. Preserve operationId and exact arguments.`,
+    if (tools.some(existing => existing.name === tool.name)) fail("PM tool registry contains a duplicate tool name", 503);
+    tools.push({ name: tool.name, description: `${tool.description ?? tool.name} Uses the common PM approval/receipt service. No Chat Session is required. Preserve operationId and exact arguments; recover using pm_get_operation_result.`,
       inputSchema: decodeToolSchema({ ...tool.inputSchema,
-        properties: { ...(tool.inputSchema.properties as Record<string, unknown>), threadId: { type: "string", minLength: 1 }, operationId: { type: "string", format: "uuid" } },
-        required: [...(tool.inputSchema.required as string[]), "threadId", "operationId"], additionalProperties: false }),
+        properties: { ...(tool.inputSchema.properties as Record<string, unknown>), operationId: { type: "string", format: "uuid" } },
+        required: [...new Set([...((tool.inputSchema.required as string[] | undefined) ?? []), "operationId"])], additionalProperties: false }),
       annotations: { readOnlyHint: !tool.write, destructiveHint: destructivePmToolNames[tool.name] === true, idempotentHint: true, openWorldHint: tool.write } });
   }
   return tools;
@@ -87,6 +92,29 @@ function priorReceipt(key: string, signature: string): Receipt | null {
   const prior = readRecord<Receipt>(receipts, key);
   if (prior && prior.fingerprint !== signature) fail("clientRequestId already belongs to different arguments", 409);
   return prior;
+}
+function externalPmContext(identity: McpInvocationIdentity, root: McpExecutionRoot) {
+  return {
+    executionRoot: "external" as const, executionId: root.executionId, traceId: root.traceId, executionGrantId: root.executionId,
+    delegation: identity, targetCeiling: root.scope,
+    authorizeExecution: async () => { await assertMcpIdentity(identity); },
+  };
+}
+async function publicMcpAcceptance(identity: McpInvocationIdentity, threadId: string, value: unknown): Promise<unknown> {
+  const result = z.object({ status: z.literal("accepted"), generation: z.object({ id, threadId: id }).passthrough() }).parse(value);
+  if (result.generation.threadId !== threadId) fail("Acceptance belongs to another Chat", 409);
+  const projector = await createPmVisibilityProjector(threadId, await mcpIdentityHeaders(identity));
+  await assertMcpThread(identity, threadId);
+  return { status: result.status, generation: projector.generation(result.generation) };
+}
+async function publicMcpCreatedThread(identity: McpInvocationIdentity, value: unknown): Promise<unknown> {
+  const result = z.object({ thread: z.object({ remoteId: id }) }).parse(value);
+  const thread = getThread(result.thread.remoteId);
+  if (!thread) fail("Created Chat is unavailable", 404);
+  await assertMcpThread(identity, thread.remoteId);
+  const projected = await publicAuthorizedThread(thread, await mcpIdentityHeaders(identity));
+  await assertMcpThread(identity, thread.remoteId);
+  return { thread: projected };
 }
 export async function invokeMcpTool(identity: McpInvocationIdentity, name: string, value: unknown): Promise<unknown> {
   await assertMcpIdentity(identity);
@@ -110,7 +138,9 @@ export async function invokeMcpTool(identity: McpInvocationIdentity, name: strin
     const threads = [];
     for (const threadId of identity.threadIds) {
       const thread = getThread(threadId); if (!thread) continue;
-      await assertMcpThread(identity, threadId); threads.push(publicThread(thread));
+      await assertMcpThread(identity, threadId);
+      const projected = await publicAuthorizedThread(thread, await mcpIdentityHeaders(identity));
+      await assertMcpThread(identity, threadId); threads.push(projected);
     }
     threads.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     return { threads: threads.slice(input.cursor, input.cursor + input.limit), nextCursor: input.cursor + input.limit < threads.length ? input.cursor + input.limit : null };
@@ -119,7 +149,12 @@ export async function invokeMcpTool(identity: McpInvocationIdentity, name: strin
     const input = schemas.t3_thread_read.parse(value); await assertMcpThread(identity, input.threadId);
     const thread = getThread(input.threadId); if (!thread) fail("Thread not found", 404);
     const history = getThreadHistory(input.threadId), active = getActiveChat(input.threadId);
-    return { thread: publicThread(thread), headId: history.headId, messages: history.messages.slice(input.cursor, input.cursor + input.limit), nextCursor: input.cursor + input.limit < history.messages.length ? input.cursor + input.limit : null, activeGeneration: active ? publicChatGeneration(active) : null };
+    const projector = await createPmVisibilityProjector(input.threadId, await mcpIdentityHeaders(identity));
+    await assertMcpThread(identity, input.threadId);
+    const messages = projector.history(history.messages);
+    const projectedThread = await publicAuthorizedThread(thread, await mcpIdentityHeaders(identity));
+    await assertMcpThread(identity, input.threadId);
+    return { thread: projectedThread, headId: history.headId, messages: messages.slice(input.cursor, input.cursor + input.limit), nextCursor: input.cursor + input.limit < messages.length ? input.cursor + input.limit : null, activeGeneration: active ? projector.generation(publicChatGeneration(active)) : null };
   }
   if (name === "t3_thread_launch") {
     const input = schemas.t3_thread_launch.parse(value); await catalog(identity);
@@ -128,10 +163,10 @@ export async function invokeMcpTool(identity: McpInvocationIdentity, name: strin
     if (selection.agentWorkspaceId !== null || selection.agentWorkspaceRevision !== null)
       fail("PM MCP credentials confer no Agent directory access; launch must be chat-only");
     const prior = priorReceipt(key, signature);
-    if (prior) return prior.result ?? { status: "unknown", message: "Original Session creation is unresolved; do not redispatch." };
+    if (prior) return prior.result ? publicMcpCreatedThread(identity, prior.result) : { status: "unknown", message: "Original Session creation is unresolved; do not redispatch." };
     const threadId = randomUUID();
     const execution = await resolveAgentExecution(selection, threadId);
-    return transaction(() => {
+    const result = transaction(() => {
       const prior = priorReceipt(key, signature); if (prior) return prior.result;
       if ((input.providerInstanceId === undefined) !== (input.modelId === undefined))
         fail("Explicit launch selection requires both providerInstanceId and modelId", 400);
@@ -148,25 +183,27 @@ export async function invokeMcpTool(identity: McpInvocationIdentity, name: strin
       const result = { thread: publicThread(getThread(threadId)!) };
       writeRecord<Receipt>(receipts, key, { fingerprint: signature, status: "succeeded", result }); return result;
     });
+    return publicMcpCreatedThread(identity, result);
   }
   if (name === "t3_thread_send") {
     const input = schemas.t3_thread_send.parse(value); await assertMcpThread(identity, input.threadId);
     const key = receiptKey(identity, name, input.clientRequestId), signature = fingerprint(input);
     const prior = priorReceipt(key, signature);
     if (prior) {
-      if (prior.result) return prior.result;
+      if (prior.result) return publicMcpAcceptance(identity, input.threadId, prior.result);
       // A process interruption between Chat acceptance and receipt publication is recoverable by its stable request identity.
       const accepted = listChatGenerations(input.threadId).find(generation => generation.request.idempotencyKey === key);
       if (accepted) {
         const result = { status: "accepted", generation: publicChatGeneration(accepted) };
         writeRecord<Receipt>(receipts, key, { fingerprint: signature, status: "succeeded", generationId: accepted.id, result });
-        return result;
+        return publicMcpAcceptance(identity, input.threadId, result);
       }
       return { status: "unknown", message: "Original acceptance is unresolved; do not redispatch." };
     }
     let thread = getThread(input.threadId); if (!thread) fail("Thread not found", 404);
     if (getActiveChat(input.threadId)) fail("Thread is busy; stop it explicitly before changing selection or sending", 409);
     writeRecord<Receipt>(receipts, key, { fingerprint: signature, status: "running" });
+    let result: unknown;
     try {
       if (input.providerInstanceId !== undefined || input.modelId !== undefined) {
         const providerInstanceId = input.providerInstanceId ?? thread.settings.providerInstanceId;
@@ -184,11 +221,12 @@ export async function invokeMcpTool(identity: McpInvocationIdentity, name: strin
       const request: ChatRequest = { id: input.threadId, idempotencyKey: key, config: { providerInstanceId: thread.settings.providerInstanceId, modelName: thread.settings.model, threadSettingsRevision: thread.revision },
         messages: [...getThreadBranch(input.threadId).map(message => ({ id: message.id, ...message.content }) as UIMessage), { id: randomUUID(), role: "user", parts: [{ type: "text", text: input.text }] }] };
       const generation = await submitChat(request, undefined, await mcpIdentityHeaders(identity));
-      const result = { status: "accepted", generation: publicChatGeneration(generation) };
-      writeRecord<Receipt>(receipts, key, { fingerprint: signature, status: "succeeded", generationId: generation.id, result }); return result;
+      result = { status: "accepted", generation: publicChatGeneration(generation) };
+      writeRecord<Receipt>(receipts, key, { fingerprint: signature, status: "succeeded", generationId: generation.id, result });
     } catch (error) {
       writeRecord<Receipt>(receipts, key, { fingerprint: signature, status: "unknown" }); throw error;
     }
+    return publicMcpAcceptance(identity, input.threadId, result);
   }
   if (name === "t3_thread_interrupt") {
     const input = schemas.t3_thread_interrupt.parse(value); await assertMcpThread(identity, input.threadId);
@@ -198,13 +236,20 @@ export async function invokeMcpTool(identity: McpInvocationIdentity, name: strin
     await cancelThreadChat(input.threadId, { generationId: input.generationId });
     return { cancelled: true, generationId: input.generationId, rollback: false };
   }
+  if (name === "pm_get_operation_result") {
+    const input = schemas.pm_get_operation_result.parse(value);
+    const root = readMcpExecutionRoot(identity, input.operationId);
+    return readPmToolOperation(input.operationId, externalPmContext(identity, root));
+  }
   const tool = (await pmCatalog(identity)).find(item => item.name === name);
   if (!tool) fail("Unknown or unauthorized tool", 404);
   if (tool.write) assertMcpWrite(identity);
-  const input = z.strictObject({ threadId: id, operationId: z.uuid(), target: pmToolTargetSchema.optional(), arguments: z.unknown() }).parse(value);
-  await assertMcpThread(identity, input.threadId);
-  return callPmTool({ threadId: input.threadId, messageId: `mcp:${input.operationId}`, generationId: `mcp:${input.operationId}`, delegation: identity,
-    targetCeiling: identity.scope, headers: await mcpIdentityHeaders(identity),
-    authorizeExecution: async () => { if (tool.write) assertMcpWrite(identity); await assertMcpThread(identity, input.threadId); } },
-  { operationId: input.operationId, name, ...(input.target ? { target: input.target } : {}), arguments: input.arguments });
+  const supplied = z.strictObject({ operationId: z.uuid().toLowerCase(), target: pmToolTargetSchema.optional(), arguments: z.unknown() }).parse(value);
+  const input = pmToolInvocationSchema.parse({ ...supplied, name });
+  const { root, created } = reserveMcpExecutionRoot(identity, input);
+  const context = externalPmContext(identity, root);
+  if (!created) return readPmToolOperation(input.operationId, context);
+  await callPmTool({ ...context, headers: await mcpIdentityHeaders(identity),
+    authorizeExecution: async () => { if (tool.write) assertMcpWrite(identity); await assertMcpIdentity(identity); } }, input);
+  return readPmToolOperation(input.operationId, context);
 }

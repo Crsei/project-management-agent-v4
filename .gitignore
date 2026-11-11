@@ -20,6 +20,10 @@ test-results/
 playwright-report/
 storybook-static/
 
+# Benchmark run artifacts and private isolated runtime state
+/benchmarks/dovspace/outputs/
+/benchmarks/dovspace/.runtime/
+
 # cc-switch native build outputs
 apps/server/cc-switch-host/target/
 vendor/cc-switch/src-tauri/target/

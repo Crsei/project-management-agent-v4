@@ -114,7 +114,10 @@
 .pm-agent-session-scope > span { overflow: hidden; text-overflow: ellipsis; }
 .pm-agent-session-status { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pm-agent-session-status > svg { width: 12px; height: 12px; }
-.pm-agent-session-status[data-running="true"] { color: var(--pm-accent); }
+.pm-agent-session-indicators { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; }
+.pm-agent-session-status[data-tone="active"] { color: var(--pm-accent); }
+.pm-agent-session-status[data-tone="warning"] { color: var(--warning, var(--foreground)); }
+.pm-agent-session-status[data-tone="error"] { color: var(--destructive); }
 .pm-agent-session-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 500; color: var(--foreground); }
 .pm-agent-session-footer { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 2px; color: var(--text-muted); font-size: 11px; line-height: 16px; }
 .pm-agent-session-provider { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
@@ -261,11 +264,4 @@ html[data-pm-sidebar-density="compact"] .pm-agent-session-title { font-size: 13p
 .agent-session-dialog [data-slot="input"]:focus-visible,
 .pm-agent-directory-dialog [data-slot="input"]:focus-visible { border-color: var(--border); }
 
-.pm-execution-context { display: flex; position: relative; flex-shrink: 0; align-items: center; flex-wrap: wrap; gap: 5px 9px; padding: 7px 16px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px; line-height: 18px; }
-.pm-execution-context > span, .pm-execution-context > strong { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-execution-path { position: relative; min-width: 0; }
-.pm-execution-path > summary { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-.pm-execution-path[open] { z-index: 20; }
-.pm-execution-path[open] > code, .pm-execution-path[open] > dl { position: absolute; top: 24px; left: 0; width: max-content; max-width: min(520px, 80vw); margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 24px rgb(0 0 0 / 12%); white-space: normal; overflow-wrap: anywhere; }
-.pm-execution-path dd { margin: 0 0 8px; }
 .pm-execution-field { min-width: 0; margin: 8px 0; font-size: 12px; overflow-wrap: anywhere; }

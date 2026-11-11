@@ -62,7 +62,7 @@ function thread(id: string, settings = originalSettings, revision = 0): RemoteTh
     createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z",
     sidebar: {
       revision: 0, pinnedAt: null, settledAt: null, snoozedAt: null, snoozedUntil: null,
-      autoSettle: true, lastVisitedAt: null, unread: false, section: "active", running: false, canSnooze: false,
+      autoSettle: true, lastVisitedAt: null, unread: false, section: "active", running: false, activity: { status: "idle" }, canSnooze: false,
     },
   };
 }

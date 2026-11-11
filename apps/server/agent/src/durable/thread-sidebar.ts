@@ -1,5 +1,5 @@
 import type { ThreadSidebar, ThreadSidebarAction } from "@agent-workspace/contracts/chat";
-import { getNativeOutput } from "./native-output.ts";
+import { getNativeOutput, isNativeInteractionRespondable } from "./native-output.ts";
 import { isChatActive, listChatGenerations } from "./chat-runtime.ts";
 import { DurableError } from "./errors.ts";
 import { readRecord, transaction, writeRecord } from "./store.ts";
@@ -33,18 +33,31 @@ const readSidebar = (id: string): SidebarRecord => ({ ...defaults(), ...readReco
 
 function facts(thread: ThreadMetadata) {
   const generations = listChatGenerations(thread.remoteId);
-  const running = generations.some(isChatActive);
-  const pending = generations.filter(isChatActive).some((generation) =>
-    getNativeOutput(generation.id)?.items.some((item) =>
-      item.status === "waiting" && item.request != null) ?? false,
-  );
-  return { generations, running, pending, queued: generations.some((generation) => generation.status === "queued") };
+  const active = generations.filter(isChatActive);
+  let activity: ThreadSidebar["activity"] | undefined;
+  for (const kind of ["approval", "user_input"] as const) {
+    const waiting = active.find(generation => getNativeOutput(generation.id)?.items.some(item =>
+      item.status === "waiting" && item.request?.kind === kind && item.request.respondable
+      && isNativeInteractionRespondable(generation.id, item.request.id)));
+    if (waiting) {
+      activity = { status: kind === "approval" ? "waiting_approval" : "waiting_input", generationId: waiting.id };
+      break;
+    }
+  }
+  const executing = active.find(generation => generation.status === "running") ?? active[0];
+  const latest = generations[0];
+  activity ??= executing ? { status: executing.status === "queued" ? "queued" : "running", generationId: executing.id }
+    : latest ? { status: latest.status === "completed" ? "idle" : latest.status, generationId: latest.id }
+    : { status: "idle" };
+  return { generations, running: active.length > 0, activity,
+    pending: activity.status === "waiting_approval" || activity.status === "waiting_input",
+    queued: active.some(generation => generation.status === "queued") };
 }
 
 /** Reconcile timer, request, failure and inactivity edges atomically on every read. */
 function reconcile(thread: ThreadMetadata, now: string): { record: SidebarRecord; view: ThreadSidebar } {
   let record = readSidebar(thread.remoteId);
-  const { generations, running, pending, queued } = facts(thread);
+  const { generations, running, pending, queued, activity: executionActivity } = facts(thread);
   const latest = generations[0];
   const nowMs = Date.parse(now);
   // A new user-submitted turn reactivates a settled thread and explicitly wakes
@@ -91,7 +104,7 @@ function reconcile(thread: ThreadMetadata, now: string): { record: SidebarRecord
     snoozedAt: record.snoozedAt, snoozedUntil: record.snoozedUntil,
     autoSettle: record.autoSettle, lastVisitedAt: record.lastVisitedAt, unread,
     section: record.snoozedUntil ? "snoozed" : record.settledAt ? "settled" : record.pinnedAt ? "pinned" : "active",
-    running, canSnooze: !pending && !queued,
+    running, activity: executionActivity, canSnooze: !pending && !queued,
   } };
 }
 

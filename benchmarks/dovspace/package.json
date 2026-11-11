@@ -1,0 +1,25 @@
+{
+  "name": "@dovspace/bench-lite",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "bench": "node --conditions=development cli.ts",
+    "bench:list": "node --conditions=development cli.ts list",
+    "bench:fixtures:reset": "node --conditions=development cli.ts fixtures reset",
+    "bench:run": "node --conditions=development cli.ts run",
+    "bench:smoke": "node --conditions=development cli.ts smoke",
+    "bench:compare": "node --conditions=development cli.ts compare",
+    "bench:report": "node --conditions=development cli.ts report",
+    "bench:calibrate": "node --conditions=development cli.ts calibrate",
+    "bench:protocol:calibrate": "node --conditions=development runners/protocol-calibration.ts",
+    "typecheck": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+    "lint": "../../node_modules/.bin/oxlint --deny-warnings cli.ts benchmark.config.ts adapters calibration fixtures graders isolation reports runners schemas tasks",
+    "test": "node --conditions=development --test adapters/agent-chat.test.ts adapters/sse.test.ts runners/artifacts.test.ts runners/checkpoints.test.ts runners/context.test.ts runners/index.test.ts runners/rework.test.ts runners/telemetry.test.ts reports/cli.test.ts reports/files.test.ts reports/reports.test.ts fixtures/snapshot.test.ts isolation/broker.test.ts isolation/filesystem.test.ts schemas/types.test.ts calibration/graders.test.ts",
+    "test:integration": "node --conditions=development --test fixtures/lifecycle.integration.test.ts"
+  }
+}

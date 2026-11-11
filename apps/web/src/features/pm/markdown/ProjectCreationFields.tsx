@@ -83,7 +83,6 @@ export function ProjectCreationFields({ values, body, disabled, en, errors, onCh
   const previewColor = PROJECT_COLORS.find(value => value === color) ?? PROJECT_COLORS[0];
 
   return <div className="project-creation-fields">
-    <p className="project-creation-intro">{t('项目将同一项工作的任务、文件和对话汇集在一起。', 'Projects hold tasks, files, and conversations for one body of work.')}</p>
     <div className="project-creation-name-row">
       <span className="project-creation-preview" style={{ '--project-color': previewColor } as CSSProperties} aria-hidden="true"><PreviewIcon size={19} /></span>
       <label htmlFor={`${uid}-name`}><ProjectFieldLabel required en={en}>{t('项目名称', 'Project name')}</ProjectFieldLabel><ProjectInput id={`${uid}-name`} name="title" data-testid="new-task-title" aria-label={t('项目名称', 'Project name')} {...errorProps('title')} value={String(values.title ?? '')} disabled={disabled} required autoFocus placeholder={t('例如：网站改版', 'e.g. Website Redesign')} onChange={event => onChange({ title: event.target.value })} />{fieldError('title')}</label>
@@ -119,7 +118,7 @@ export function ProjectCreationFields({ values, body, disabled, en, errors, onCh
       </fieldset>
     </div>
     <div className="project-creation-metadata">
-      <label htmlFor={`${uid}-team`}><ProjectFieldLabel en={en}>{t('团队', 'Team')}</ProjectFieldLabel><RadixSelect id={`${uid}-team`} disabled aria-label={t('团队（创建后关联）', 'Team (link after creation)')} aria-describedby={`${uid}-team-hint`}><option>{t('创建后关联', 'Link after creation')}</option></RadixSelect></label>
+      <label htmlFor={`${uid}-team`}><ProjectFieldLabel en={en}>{t('团队', 'Team')}</ProjectFieldLabel><RadixSelect id={`${uid}-team`} disabled aria-label={t('团队（创建后关联）', 'Team (link after creation)')}><option>{t('创建后关联', 'Link after creation')}</option></RadixSelect></label>
       <label htmlFor={`${uid}-owner`}><ProjectFieldLabel en={en}>{t('负责人', 'Lead')}</ProjectFieldLabel><RadixSelect id={`${uid}-owner`} name="owner" data-testid="field-owner" aria-label={t('项目负责人', 'Project lead')} {...errorProps('owner')} value={owner} disabled={disabled || !canReadDirectory || !!directory.error || !directory.data} onChange={event => onChange({ owner: event.target.value || null })}>
         <option value="">{t('未分配', 'Unassigned')}</option>
         {owner && !members.some(member => member.userId === owner) && <option value={owner} disabled>{t('草稿负责人待确认', 'Draft lead unavailable')} · {owner}</option>}
@@ -127,7 +126,6 @@ export function ProjectCreationFields({ values, body, disabled, en, errors, onCh
       </RadixSelect>{fieldError('owner')}</label>
       <label htmlFor={`${uid}-due`}><ProjectFieldLabel en={en}>{t('目标日期', 'Target date')}</ProjectFieldLabel><ProjectInput id={`${uid}-due`} name="due" data-testid="field-due" aria-label={t('项目目标日期', 'Project target date')} pickerLabel={t('选择项目目标日期', 'Choose project target date')} type="date" {...errorProps('due')} value={String(values.due ?? '')} disabled={disabled} onChange={event => onChange({ due: event.target.value || null })} />{fieldError('due')}</label>
     </div>
-    <p className="project-creation-hint" id={`${uid}-team-hint`}>{t('团队关联需独立保存，请在创建后的项目设置中关联；关联不会授予访问权限。', 'Link teams in project settings after creation. Team assignments are saved separately and do not grant access.')}</p>
     {!canReadDirectory && <p className="project-creation-hint" role="status">{t('当前账号无成员目录读取权限，负责人选择不可用；可先不分配，不会自动授予成员权限。', 'Lead selection requires member-directory access. You may leave the lead unassigned; no member permissions are granted automatically.')}</p>}
     {canReadDirectory && directory.isPending && <p className="project-creation-hint" role="status">{t('正在读取有权访问新项目的成员…', 'Reading members authorized to access new projects…')}</p>}
     {directory.error && <div className="creation-alert" role="alert"><p>{t('成员目录读取失败，无法确认可选负责人；原草稿保留，不会以样例成员代替。', 'The member directory could not be read. Lead selection is unavailable; your draft is retained without sample members.')}</p><p>{directory.error.message}</p><button type="button" className="secondary-button" disabled={directory.isFetching} onClick={() => { void directory.refetch(); }}>{t('重新读取成员', 'Read members again')}</button></div>}

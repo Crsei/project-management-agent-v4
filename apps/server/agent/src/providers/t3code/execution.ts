@@ -31,6 +31,7 @@ import { assertPmContinuationCursor, bindPmContinuationSink, decodePmNativeHisto
 import { closeMcpAppSession, retainMcpAppSession } from "../../mcp-apps/live.ts";
 import { mcpAppContextForDispatch, mcpAppContextForTurn } from "../../mcp-apps/context.ts";
 import { autoApproveApprovals } from "../../approval-mode.ts";
+import { readPmCodexActivity } from "./families/codex-activity.ts";
 
 /** Single application instance, configured by parent lifecycle assembly. No driver or protocol registry here. */
 export function makePmProviderExecutionService(host: PmProviderHostService, runtimeHost: ProviderRuntimeHostService): PmProviderExecutionService {
@@ -188,6 +189,7 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
           onEvent: (event) => { try { options.onEvent?.(event); } catch (error) { callbackFailure ??= error; throw error; } },
           canRespond: Boolean(options.onRequest),
           rootThreadId: threadId,
+          itemEvidence: context.driver === "codex" ? item => readPmCodexActivity(runtime.providerSessionId, item) : undefined,
           isRootItem: (item) => item.threadId === threadId && (item.providerThreadId === null || item.providerThreadId === thread?.id),
           isLiveRequest: (request) => request.responseCapability.type === "live" && request.responseCapability.providerSessionId === runtime.providerSessionId,
           mcpAppIdentity: context.execution && context.authorizeMcpApp && !context.pmAnalysis && runtime.mcpApps
@@ -245,14 +247,16 @@ export function makePmProviderExecutionService(host: PmProviderHostService, runt
             const currentThread = thread;
             await assertCurrent();
             const ordinal = nextPmProviderTurnOrdinal(turns.values());
-            const { message: _message, userMessageText: _userMessageText, ...turn } = startInput;
+            const { message: _message, userMessageText: _userMessageText, appContext: _previousAppContext, ...turn } = startInput;
+            const continuationAppContext = await mcpAppContextForTurn(context, source);
             const isCurrent = lease.assertCurrent.pipe(
               Effect.andThen(runtimeHost.read({ threadId, providerInstanceId: lease.instance.instanceId })),
               Effect.map((binding) => !stopped && !observed.end && !firstFailure && binding?.executionId === runId),
             );
             const adopt = Effect.flatMap(isCurrent, (current) => current
               ? adoptBuffered({ context, lease, runtime, request,
-                turn: { ...turn, providerThread: currentThread, providerTurnOrdinal: ordinal }, isCurrent })
+                turn: { ...turn, ...(continuationAppContext.length ? { appContext: continuationAppContext } : {}),
+                  providerThread: currentThread, providerTurnOrdinal: ordinal }, isCurrent })
               : Effect.succeed(false));
             if (request.dispatchIfCurrent) {
               const result = await runOperation(request.dispatchIfCurrent(adopt));

@@ -124,6 +124,10 @@
   font-size: 12px;
 }
 
+.facts dd[data-tone="warning"] { color: var(--warning, var(--foreground)); }
+.facts dd[data-tone="error"], .environmentError { color: var(--destructive); }
+.facts dd[data-tone="active"] { color: var(--info, var(--foreground)); }
+
 .actions {
   display: grid;
   gap: 6px;

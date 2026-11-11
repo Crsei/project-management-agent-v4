@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DomainError, type Actor, type Capability } from '../../domain/src/core.ts';
 import type { Entity, FileRecord } from '../../pm-schema/index.ts';
-import { pmToolTargetSchema } from '../../agent-contracts/src/pm-tools.ts';
+import { pmToolTargetSchema, type PmToolLinkage } from '../../agent-contracts/src/pm-tools.ts';
 import type { SqlExecutor } from './ports.ts';
 
 const id = z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/).max(80);
@@ -86,6 +86,8 @@ export type AgentChatToolContext = {
   messageId: string;
   operationId: string;
   scope: AgentChatToolScope;
+  /** Trusted execution evidence; full/audit-only, never an additional authorization gate. */
+  linkage?: PmToolLinkage;
   signal?: AbortSignal;
   /** Recheck the current PM actor and project scope inside the native mutation lock. */
   checkAuthorization?: (sql: SqlExecutor) => Promise<void>;

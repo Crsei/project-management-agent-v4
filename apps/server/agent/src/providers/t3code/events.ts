@@ -1,7 +1,7 @@
 import * as DateTime from "effect/DateTime";
 import type { OrchestrationV2RuntimeRequest, OrchestrationV2TurnItem, OrchestrationV2ConversationMessage, OrchestrationV2PlanArtifact, OrchestrationV2Subagent } from "@t3tools/contracts";
 import type { ProviderAdapterV2Event } from "@t3tools/provider-core/server/ProviderAdapter";
-import type { NativeInteractionRequest, NativeOutputEvent, NativeOutputItem } from "@agent-workspace/contracts/output";
+import { upsertNativeOutputItem, type NativeInteractionRequest, type NativeOutputEvent, type NativeOutputItem } from "@agent-workspace/contracts/output";
 import { normalizeToolValue } from "../../durable/native-output.ts";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import { classifyProviderError } from "../errors.ts";
@@ -27,6 +27,7 @@ export function makePmEventAdapter(input: {
   isRootItem?: (item: OrchestrationV2TurnItem) => boolean;
   isLiveRequest?: (request: OrchestrationV2RuntimeRequest) => boolean;
   rootThreadId?: string;
+  itemEvidence?: (item: OrchestrationV2TurnItem) => Partial<NativeOutputItem>;
   mcpAppIdentity?: (item: OrchestrationV2TurnItem) => McpAppProducingIdentity | undefined;
 }) {
   const items = new Map<string, NativeOutputItem>();
@@ -45,7 +46,7 @@ export function makePmEventAdapter(input: {
     const previous = items.get(item.id);
     items.set(item.id, item);
     input.onEvent?.({ type: "item.upsert", item });
-    if (item.type === "assistant_message" && rootAssistantIds.has(item.id)) {
+    if (item.type === "assistant_message" && rootAssistantIds.has(item.id) && item.phase !== "commentary") {
       const before = previous?.text ?? "";
       const after = item.text ?? "";
       if (after.startsWith(before) && after.length > before.length) input.onText?.(after.slice(before.length));
@@ -58,7 +59,7 @@ export function makePmEventAdapter(input: {
       model: child.model ?? child.modelSelection?.model,
       text: child.progress ?? (child.promptOmitted ? items.get(id)?.text ?? fallback?.text : child.prompt),
       output: child.resultOmitted ? items.get(id)?.output ?? fallback?.output : child.result ?? undefined,
-      startedAt: pmEventTime(child.startedAt), completedAt: pmEventTime(child.completedAt) });
+      startedAt: pmEventTime(child.startedAt), completedAt: pmEventTime(child.completedAt), timing: { source: "observed" } });
   };
   const projectRequest = (id: string) => {
     const source = requests.get(id);
@@ -102,6 +103,9 @@ export function makePmEventAdapter(input: {
       ...(source.parentItemId === null ? {} : { parentItemId: source.parentItemId }),
       ...(source.nativeItemRef?.nativeId == null ? {} : { nativeItemId: source.nativeItemRef.nativeId }),
       startedAt: pmEventTime(source.startedAt), completedAt: pmEventTime(source.completedAt),
+      order: { scope: JSON.stringify([source.threadId, source.runId, source.providerThreadId, source.providerTurnId ?? source.nodeId ?? source.id]), ordinal: source.ordinal },
+      timing: { source: "observed" },
+      ...input.itemEvidence?.(source),
     };
     switch (source.type) {
       case "user_message": return;
@@ -164,7 +168,11 @@ export function makePmEventAdapter(input: {
   };
   return {
     items, sourceItems, messages, requests,
-    finalText: () => [...items.values()].filter((item) => rootAssistantIds.has(item.id)).map((item) => item.text ?? "").join("\n\n"),
+    finalText: () => {
+      const ordered: NativeOutputItem[] = [];
+      for (const item of items.values()) upsertNativeOutputItem(ordered, item);
+      return ordered.filter((item) => rootAssistantIds.has(item.id) && item.phase !== "commentary").map((item) => item.text ?? "").join("\n\n");
+    },
     pendingBodies: () => [...sourceItems.values()].filter((item) => (item.type === "assistant_message" && item.textOmitted && !messages.has(item.messageId))
       || ((item.type === "command_execution" || item.type === "dynamic_tool") && item.outputOmitted)
       || (item.type === "subagent" && ((item.promptOmitted && items.get(item.id)?.text === undefined)

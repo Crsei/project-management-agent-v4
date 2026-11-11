@@ -89,7 +89,7 @@ test("forged or inaccessible reference targets fail closed", async () => {
   await assert.rejects(resolvePmReferences([{ ...reference, workspaceId: "forged" }], credentials));
 });
 
-test("revoked/deleted references reject admission; pinned stale references stay traceable", async () => {
+test("revoked/deleted/stale references reject admission; resolver never substitutes current for pinned metadata", async () => {
   for (const value of ["forbidden", "deleted"] as const) {
     availability = value;
     const resolved = await resolvePmReferences([reference], credentials);
@@ -98,9 +98,19 @@ test("revoked/deleted references reject admission; pinned stale references stay 
   }
   availability = "stale";
   const resolved = await resolvePmReferences([{ ...reference, revision: "pinned-revision" }], credentials);
-  assert.doesNotThrow(() => assertResolvedReferences(resolved));
+  assert.throws(() => assertResolvedReferences(resolved), { code: "pm_reference_stale" });
+  await assert.rejects(resolvePmReferenceOperations([{ ...reference, revision: "pinned-revision" }], credentials), { code: "pm_reference_stale" });
+  availability = "available";
+  await assert.rejects(resolvePmReferences([{ ...reference, revision: "old-revision" }], credentials), { code: "pm_reference_stale" });
   const prompt = pmContextPromptLine(resolved)!;
   assert.match(prompt, /TASK-001/); assert.match(prompt, /PRJ-001/); assert.match(prompt, new RegExp(workspaceId));
   assert.doesNotMatch(prompt, /pm_v4_session|Bearer|cookie|http:\/\//);
   assert.match(prompt, /不得假设代码目录包含/);
+});
+
+test("available metadata requires a revision and explicitly disclaims historic body snapshots", async () => {
+  const resolved = await resolvePmReferences([reference], credentials);
+  assert.throws(() => assertResolvedReferences([{ ...resolved[0]!, revision: null }]), { code: "pm_reference_invalid" });
+  assert.match(pmContextPromptLine(resolved)!, /不是历史正文快照/);
+  assert.doesNotThrow(() => assertResolvedReferences(resolved));
 });

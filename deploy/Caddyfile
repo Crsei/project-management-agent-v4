@@ -41,6 +41,14 @@
 		file_server
 	}
 
+	# PM service-only proof/reconciliation must never reach the generic public API proxy.
+	# Caddy's path matcher compares the decoded request path.
+	@pmInternal path /api/v1/internal /api/v1/internal/*
+	handle @pmInternal {
+		header Cache-Control "no-store"
+		respond "Not Found" 404
+	}
+
 	@api path /api /api/* /health /health/* /openapi.json
 	handle @api {
 		reverse_proxy {$PM_API_UPSTREAM:api:4194} {

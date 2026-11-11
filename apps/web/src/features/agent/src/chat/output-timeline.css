@@ -1,5 +1,13 @@
 .native-timeline { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
 .native-answer { min-width: 0; overflow-wrap: anywhere; }
+.native-progress { margin-block: .25rem; padding-inline-start: .65rem; border-inline-start: 2px solid var(--border); color: var(--text-secondary, var(--foreground)); font-size: .875rem; }
+.native-progress-label { color: var(--muted-foreground); font-size: .7rem; }
+.native-visible-details { min-width: 0; padding: .5rem .3rem; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.native-reasoning-summary { display: flex; min-width: 0; align-items: baseline; gap: .5rem; }
+.native-activity-label { flex-shrink: 0; color: var(--muted-foreground); }
+.native-reasoning-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary, var(--foreground)); }
+.native-group-counts { font-size: .7rem; color: var(--muted-foreground); }
+.native-reasoning-part + .native-reasoning-part { border-top: 1px solid var(--border); margin-top: .5rem; padding-top: .5rem; }
 .native-output-card { border: 1px solid var(--color-border, #d7dbe0); border-radius: .65rem; padding: .55rem .7rem; min-width: 0; content-visibility: auto; contain-intrinsic-size: auto 64px; font-size: .8rem; }
 .native-output-card header { display: flex; gap: .5rem; align-items: baseline; justify-content: space-between; }
 .native-output-card header button { background: transparent; border: 0; padding: 0; text-align: left; font-weight: 600; cursor: pointer; min-width: 0; overflow-wrap: anywhere; }

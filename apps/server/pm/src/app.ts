@@ -444,9 +444,15 @@ export function buildApp(options: { logger?: boolean; databaseUrl?: string; blob
   });
   app.get('/api/v1/workspaces/:workspaceId/projects/:projectId/audit', async request => {
     const scope = z.strictObject({ workspaceId: uuid, projectId: z.string().regex(/^[A-Z][A-Z0-9]*-\d+$/) }).parse(request.params);
-    const query = z.strictObject({ cursor: z.string().min(1).max(2048).optional(), limit: z.string().regex(/^\d{1,3}$/).transform(Number).optional() }).parse(request.query);
+    const query = z.strictObject({ cursor: z.string().min(1).max(2048).optional(), limit: z.string().regex(/^\d{1,3}$/).transform(Number).optional(),
+      commandId: z.string().optional(), operationId: z.string().optional() }).parse(request.query);
     const options = projectAuditOptionsSchema.parse(query);
-    return dashboardRead(request, scope.workspaceId, ctx => readProjectAudit(ctx, scope.projectId, { limit: options.limit, ...(options.cursor === undefined ? {} : { cursor: options.cursor }) }));
+    return dashboardRead(request, scope.workspaceId, ctx => readProjectAudit(ctx, scope.projectId, {
+      limit: options.limit,
+      ...(options.cursor === undefined ? {} : { cursor: options.cursor }),
+      ...(options.commandId === undefined ? {} : { commandId: options.commandId }),
+      ...(options.operationId === undefined ? {} : { operationId: options.operationId }),
+    }));
   });
   app.get('/api/v1/workspaces/:workspaceId/tasks/:taskId/comments', async request => {
     const scope = z.strictObject({ workspaceId: uuid, taskId: taskCommentIdSchema }).parse(request.params);

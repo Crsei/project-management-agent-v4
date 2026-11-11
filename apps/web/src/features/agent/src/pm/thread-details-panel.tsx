@@ -2,14 +2,18 @@ import { useId } from "react";
 import { FolderOpenIcon, SlidersHorizontalIcon, XIcon } from "lucide-react";
 import styles from "./thread-details-panel.module.css";
 import { useAgentText } from "../i18n";
+import { threadActivityPresentation, type ThreadActivity } from "./thread-activity";
 
 export function ThreadDetailsPanel({
   open,
   onClose,
   workspaceName,
   threadTitle,
-  path,
-  statusLabel,
+  activity,
+  environmentLabel,
+  environmentPath,
+  environmentStatus,
+  environmentError,
   onConfigureFiles,
   onSessionSettings,
   sessionSettingsDisabled,
@@ -18,14 +22,18 @@ export function ThreadDetailsPanel({
   onClose: () => void;
   workspaceName?: string;
   threadTitle?: string;
-  path?: string | null;
-  statusLabel: string;
+  activity?: ThreadActivity;
+  environmentLabel?: string;
+  environmentPath?: string;
+  environmentStatus?: string;
+  environmentError?: string;
   onConfigureFiles?: () => void;
   onSessionSettings: () => void;
   sessionSettingsDisabled: boolean;
 }) {
   const t = useAgentText();
   const headingId = useId();
+  const status = threadActivityPresentation(activity, t);
   if (!open) return null;
 
   return <section className={`pm-agent-thread-details ${styles.root}`} aria-labelledby={headingId}>
@@ -37,8 +45,8 @@ export function ThreadDetailsPanel({
       <dl className={styles.facts}>
         <div><dt>{t("工作区", "Workspace")}</dt><dd>{workspaceName || "—"}</dd></div>
         <div><dt>{t("会话", "Session")}</dt><dd>{threadTitle || "—"}</dd></div>
-        <div><dt>{t("实际执行目录", "Actual execution folder")}</dt><dd><code>{path || t("仅对话 · 无代码目录", "Chat only · no code folder")}</code></dd></div>
-        <div><dt>{t("状态", "Status")}</dt><dd>{statusLabel}</dd></div>
+        <div><dt>{t("状态", "Status")}</dt><dd data-activity={status.status} data-tone={status.tone} data-priority={status.priority}>{status.label}</dd></div>
+        <div><dt>{t("执行环境", "Execution environment")}</dt><dd>{environmentLabel || "—"}</dd>{environmentPath && <dd><code>{environmentPath}</code></dd>}{environmentStatus && <dd>{environmentStatus}</dd>}{environmentError && <dd role="alert" className={styles.environmentError}>{environmentError}</dd>}</div>
       </dl>
       <div className={styles.actions} role="group" aria-label={t("会话操作", "Session actions")}>
         <button type="button" className={styles.action} disabled={!onConfigureFiles} onClick={onConfigureFiles}>

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "dovspace-pm",
+  "version": "0.1.0",
+  "description": "Dovspace project, issue and task planning workflows through the authoritative PM MCP gateway.",
+  "author": { "name": "Dovspace contributors" },
+  "license": "AGPL-3.0-only",
+  "keywords": ["project-management", "issues", "planning", "mcp"]
+}

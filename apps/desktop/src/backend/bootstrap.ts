@@ -1,26 +1,32 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { unlink } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import type { Pool, PoolClient } from 'pg';
 import { createPool, migrate } from '../../../../packages/infrastructure/src/database.ts';
-import { createUser, createWorkspace } from '../../../../packages/infrastructure/src/auth.ts';
+import { createWorkspace } from '../../../../packages/infrastructure/src/auth.ts';
 import { LocalBlobStore } from '../../../../packages/infrastructure/src/blobs.ts';
 import { bindStorage } from '../../../../packages/infrastructure/src/blob-storage-maintenance.ts';
 import { assertStorageMarker, readStorageBinding, readStorageMarker } from '../../../../packages/infrastructure/src/blob-storage-binding.ts';
+import { getInstanceSetupStatus, prepareInstanceSetup } from '../../../../packages/infrastructure/src/instance-setup.ts';
 import { initializeNovaWorkspaceSample, queueNovaWorkspaceSample, type WorkspaceSampleOptions } from '../../../../packages/application/src/workspace-samples.ts';
 import { readManagedPostgresState } from '../managed-postgres.mjs';
 import { ensurePrivateDirectory, readPrivateJson, writePrivateJson } from '../private-state.mjs';
 
-const setupSchema = z.strictObject({ email: z.email().max(254).transform(value => value.trim().toLowerCase()), password: z.string().min(12).max(256), name: z.string().trim().min(1).max(200), workspaceName: z.string().trim().min(1).max(200) });
+const setupTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const bootstrapSchema = z.strictObject({
   formatVersion: z.literal(1), instanceId: z.uuid(), phase: z.enum(['pending', 'ready']),
-  storeId: z.uuid(), operationId: z.uuid(), email: z.email().max(254), name: z.string().min(1).max(200), workspaceName: z.string().min(1).max(200),
+  storeId: z.uuid(), operationId: z.uuid(),
+  email: z.email().max(254).nullable(), name: z.string().min(1).max(200).nullable(), workspaceName: z.string().min(1).max(200).nullable(),
   userId: z.uuid().nullable(), workspaceId: z.uuid().nullable(),
-}).refine(value => value.phase !== 'ready' || Boolean(value.userId && value.workspaceId), 'Ready bootstrap requires account and workspace identities');
+}).refine(value => value.phase !== 'ready' || Boolean(value.userId && value.workspaceId && value.email && value.name && value.workspaceName), 'Ready bootstrap requires account and workspace identities');
 export type BootstrapState = z.infer<typeof bootstrapSchema>;
 export function validateBootstrapState(value: unknown): BootstrapState { return bootstrapSchema.parse(value); }
-export type BootstrapInput = { databaseUrl: string; dataDir: string; projectRoot: string; setup?: z.infer<typeof setupSchema> };
+export type BootstrapInput = { databaseUrl: string; dataDir: string; projectRoot: string };
+export type BootstrapResult =
+  | { phase: 'pending'; instanceId: string }
+  | { phase: 'ready'; instanceId: string; userId: string; workspaceId: string; initialized: boolean };
 type Anchor = { instance_id: string; store_id: string; user_id: string | null; workspace_id: string | null };
 const anchorTable = `CREATE TABLE desktop_bootstrap (
   singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
@@ -38,6 +44,32 @@ async function accountAndWorkspaceExist(sql: PoolClient, state: BootstrapState):
   if (!state.userId || !state.workspaceId) mismatch();
   const result = await sql.query('SELECT 1 FROM users u CROSS JOIN workspaces w WHERE u.id=$1 AND w.id=$2', [state.userId, state.workspaceId]);
   if (result.rowCount !== 1) mismatch();
+}
+async function readOrCreateSetupToken(dataDir: string): Promise<string> {
+  const filename = join(dataDir, 'setup-token.json');
+  let saved = await readPrivateJson(filename, 1024);
+  if (saved === null) {
+    const token = randomBytes(32).toString('base64url');
+    try { await writePrivateJson(filename, { token }, { exclusive: true }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+    saved = await readPrivateJson(filename, 1024);
+  }
+  const token = setupTokenSchema.safeParse(saved?.token);
+  if (!token.success) throw new Error('Private desktop setup token is invalid. Restore the original token file; do not rotate a pending setup token.');
+  return token.data;
+}
+async function ensureStorageBinding(pool: Pool, dataDir: string, state: BootstrapState): Promise<void> {
+  const provider = new LocalBlobStore(join(dataDir, 'blobs'));
+  const binding = await readStorageBinding(pool);
+  if (!binding) {
+    // bindStorage permits only the exact predeclared marker on a crash retry. Unknown
+    // marker/bytes and existing references fail; an existing binding is never rebound.
+    await bindStorage({ pool, provider, locator: { provider: 'local', root: provider.root }, mode: 'new', stopped: true, storeId: state.storeId, operationId: state.operationId });
+  }
+  await assertBoundStorage(pool, dataDir, state.storeId);
+}
+async function removeSetupToken(dataDir: string): Promise<void> {
+  await unlink(join(dataDir, 'setup-token.json')).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; });
 }
 async function assertBoundStorage(pool: Pool, dataDir: string, storeId: string): Promise<void> {
   const locator = { provider: 'local' as const, root: join(dataDir, 'blobs') };
@@ -59,7 +91,7 @@ async function assertManagedServer(sql: PoolClient, dataDir: string): Promise<vo
 }
 
 /** All authority and password hashing remain in the existing infrastructure APIs. */
-export async function bootstrapDesktop(input: BootstrapInput): Promise<{ instanceId: string; userId: string; workspaceId: string; initialized: boolean }> {
+export async function bootstrapDesktop(input: BootstrapInput & { live?: boolean }): Promise<BootstrapResult> {
   const dataDir = resolve(input.dataDir);
   const sample: WorkspaceSampleOptions = { coreRoot: join(dataDir, 'pm-workspaces'), localProjects: { enabled: true, dataRoot: dataDir, defaultParent: resolve(input.projectRoot), allowedRoots: [resolve(input.projectRoot)], backupRoot: join(dataDir, 'backups'), coreRoot: join(dataDir, 'pm-workspaces') } };
   const ownership = await readManagedPostgresState(dataDir);
@@ -76,15 +108,13 @@ export async function bootstrapDesktop(input: BootstrapInput): Promise<{ instanc
     const saved = await readPrivateJson(filename);
     let state: BootstrapState | null = saved ? validateBootstrapState(saved) : null;
     if (state && state.instanceId !== ownership.instanceId) mismatch();
-    const initialized = state?.phase !== 'ready';
     await migrate(pool);
     const exists = await tableExists(sql);
     if (!state) {
       const occupied = await sql.query<{ users: string; workspaces: string }>('SELECT (SELECT count(*) FROM users)::text AS users,(SELECT count(*) FROM workspaces)::text AS workspaces');
       if (exists || occupied.rows[0]?.users !== '0' || occupied.rows[0]?.workspaces !== '0') mismatch();
-      const setup = setupSchema.parse(input.setup);
-      state = { formatVersion: 1, instanceId: ownership.instanceId, phase: 'pending', storeId: randomUUID(), operationId: randomUUID(), email: setup.email, name: setup.name, workspaceName: setup.workspaceName, userId: null, workspaceId: null };
-      // Written before the first account side effect; the initial password is deliberately absent.
+      state = { formatVersion: 1, instanceId: ownership.instanceId, phase: 'pending', storeId: randomUUID(), operationId: randomUUID(), email: null, name: null, workspaceName: null, userId: null, workspaceId: null };
+      // Written before first-run setup can create an account; no password is stored.
       await writePrivateJson(filename, state, { exclusive: true });
     }
     if (!exists) {
@@ -104,45 +134,61 @@ export async function bootstrapDesktop(input: BootstrapInput): Promise<{ instanc
       if (anchor.user_id !== state.userId || anchor.workspace_id !== state.workspaceId) mismatch();
       await accountAndWorkspaceExist(sql, state);
       await assertBoundStorage(pool, dataDir, state.storeId);
-      return { instanceId: state.instanceId, userId: state.userId!, workspaceId: state.workspaceId!, initialized: false };
+      await removeSetupToken(dataDir).catch(() => undefined);
+      return { phase: 'ready', instanceId: state.instanceId, userId: state.userId!, workspaceId: state.workspaceId!, initialized: false };
     }
-    // Pending recovery can adopt only this one predeclared account, never reset its password.
-    const users = await sql.query<{ id: string; email: string }>('SELECT id,email FROM users ORDER BY id');
-    if (users.rows.length > 1 || (users.rows[0] && users.rows[0].email !== state.email)) mismatch();
+    // First-run setup is completed through the ordinary HTTP setup service. This
+    // process only prepares it, then adopts the one account/workspace it created.
+    const users = await sql.query<{ id: string; email: string; name: string }>('SELECT id,email,name FROM users ORDER BY id');
+    const workspaces = await sql.query<{ id: string; owner_id: string; name: string }>('SELECT id,owner_id,name FROM workspaces ORDER BY id');
+    if (users.rows.length > 1 || workspaces.rows.length > 1) mismatch();
+    if (state.email && users.rows.length && users.rows[0]!.email !== state.email) mismatch();
     let userId = anchor.user_id ?? state.userId ?? users.rows[0]?.id;
     if (userId) {
       if (users.rows[0]?.id !== userId || (state.userId && state.userId !== userId) || (anchor.user_id && anchor.user_id !== userId)) mismatch();
-    } else {
-      const setup = setupSchema.parse(input.setup);
-      if (setup.email !== state.email) throw new Error('Resume setup with the original account email');
-      userId = (await createUser(pool, { email: state.email, password: setup.password, name: state.name })).id;
     }
-    await sql.query('UPDATE desktop_bootstrap SET user_id=$1 WHERE singleton=true', [userId]);
-    state = { ...state, userId };
-    await writePrivateJson(filename, state);
-    const workspaces = await sql.query<{ id: string; owner_id: string }>('SELECT id,owner_id FROM workspaces ORDER BY id');
-    if (workspaces.rows.length > 1 || (workspaces.rows[0] && workspaces.rows[0].owner_id !== userId)) mismatch();
+    if (!userId && workspaces.rows.length) mismatch();
     let workspaceId = anchor.workspace_id ?? state.workspaceId ?? workspaces.rows[0]?.id;
+    let workspaceName = workspaces.rows[0]?.name ?? null;
     if (workspaceId) {
-      if (workspaces.rows[0]?.id !== workspaceId || (state.workspaceId && state.workspaceId !== workspaceId) || (anchor.workspace_id && anchor.workspace_id !== workspaceId)) mismatch();
-    } else workspaceId = (await createWorkspace(pool, userId, state.workspaceName, { prepare: (client, workspace) => queueNovaWorkspaceSample(client, workspace.id, workspace.ownerId, workspace.name, sample) })).id;
+      if (!userId || workspaces.rows[0]?.id !== workspaceId || workspaces.rows[0]?.owner_id !== userId || (state.workspaceId && state.workspaceId !== workspaceId) || (anchor.workspace_id && anchor.workspace_id !== workspaceId)) mismatch();
+    }
+    // Legacy pending recovery can finish a workspace after its account, but only
+    // when that account was predeclared by the previous bootstrap metadata.
+    if (userId && !workspaceId) {
+      if (!state.workspaceName) mismatch();
+      workspaceName = state.workspaceName;
+      workspaceId = (await createWorkspace(pool, userId, state.workspaceName, { prepare: (client, workspace) => queueNovaWorkspaceSample(client, workspace.id, workspace.ownerId, workspace.name, sample) })).id;
+    }
+    if (!userId) {
+      if (state.userId || state.workspaceId || workspaces.rows.length) mismatch();
+      // A previous version predeclared account fields before creating the account.
+      // No account exists, so release those uncommitted declarations to the HTTP
+      // setup service rather than requiring the removed desktop password form.
+      if (state.email || state.name || state.workspaceName) {
+        state = { ...state, email: null, name: null, workspaceName: null };
+        await writePrivateJson(filename, state);
+      }
+      if ((await getInstanceSetupStatus(sql)).initialized) mismatch();
+      const token = await readOrCreateSetupToken(dataDir);
+      await prepareInstanceSetup(pool, token);
+      for (const name of ['agent-data', 'pm-workspaces', 'blobs', 'chat-spaces', 'projects']) await ensurePrivateDirectory(join(dataDir, name));
+      await ensureStorageBinding(pool, dataDir, state);
+      return { phase: 'pending', instanceId: state.instanceId };
+    }
+    if (!workspaceId) mismatch();
     if ((await sql.query('SELECT 1 FROM memberships WHERE workspace_id=$1 AND user_id=$2', [workspaceId, userId])).rowCount !== 1) mismatch();
-    await sql.query('UPDATE desktop_bootstrap SET workspace_id=$1 WHERE singleton=true', [workspaceId]);
-    state = { ...state, workspaceId };
+    await sql.query('UPDATE desktop_bootstrap SET user_id=$1,workspace_id=$2 WHERE singleton=true', [userId, workspaceId]);
+    state = { ...state, userId, workspaceId, email: users.rows[0]!.email, name: users.rows[0]!.name, workspaceName: workspaceName! };
     await writePrivateJson(filename, state);
     for (const name of ['agent-data', 'pm-workspaces', 'blobs', 'chat-spaces', 'projects']) await ensurePrivateDirectory(join(dataDir, name));
-    const provider = new LocalBlobStore(join(dataDir, 'blobs'));
-    const binding = await readStorageBinding(pool);
-    if (!binding) {
-      // bindStorage permits only the exact predeclared marker on a crash retry. Unknown
-      // marker/bytes and existing references fail; an existing binding is never rebound.
-      await bindStorage({ pool, provider, locator: { provider: 'local', root: provider.root }, mode: 'new', stopped: true, storeId: state.storeId, operationId: state.operationId });
-    }
-    await assertBoundStorage(pool, dataDir, state.storeId);
+    if (input.live) await assertBoundStorage(pool, dataDir, state.storeId);
+    else await ensureStorageBinding(pool, dataDir, state);
     await initializeNovaWorkspaceSample(pool, workspaceId, sample);
+    await removeSetupToken(dataDir).catch(() => undefined);
     state = { ...state, phase: 'ready' };
     await writePrivateJson(filename, state);
-    return { instanceId: state.instanceId, userId, workspaceId, initialized };
+    return { phase: 'ready', instanceId: state.instanceId, userId, workspaceId, initialized: true };
   } finally {
     await sql.query("SELECT pg_advisory_unlock(hashtextextended('pm:desktop-bootstrap',724631))").catch(() => undefined);
     sql.release(); await pool.end();
@@ -186,7 +232,7 @@ async function main(): Promise<void> {
     bytes += chunk.toString('utf8');
     if (Buffer.byteLength(bytes) > 16_384) throw new Error('Desktop bootstrap input is too large');
   }
-  const input = z.strictObject({ databaseUrl: z.string().min(1), dataDir: z.string().min(1), projectRoot: z.string().min(1), setup: setupSchema.optional() }).parse(JSON.parse(bytes));
+  const input = z.strictObject({ databaseUrl: z.string().min(1), dataDir: z.string().min(1), projectRoot: z.string().min(1), live: z.boolean().optional() }).parse(JSON.parse(bytes));
   const result = await bootstrapDesktop(input);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }

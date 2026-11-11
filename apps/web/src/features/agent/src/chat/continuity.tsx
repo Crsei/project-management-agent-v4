@@ -157,7 +157,7 @@ export function ChatContinuity({ runtime, canContinue }: { runtime: AssistantRun
     latest &&
     ["interrupted", "failed", "cancelled"].includes(latest.status) &&
     !latest.continuationId;
-  if (!latest && !error) return null;
+  if (!active && !resumable && !error) return null;
   return (
     <section
       aria-label={t("聊天连续性", "Chat continuity")}
@@ -270,11 +270,6 @@ export function ChatContinuity({ runtime, canContinue }: { runtime: AssistantRun
             </>
           )}
         </>
-      )}
-      {!active && !resumable && latest?.handoff && (
-        <span title={latest.handoff.reason}>
-          {latest.handoff.mode === "portable" ? t("已使用保存上下文移交", "Handed off using saved context") : t("已使用原生会话连续性", "Used native session continuity")}
-        </span>
       )}
       {error && (
         <span role="alert" className="text-destructive basis-full break-words">

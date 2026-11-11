@@ -10,6 +10,8 @@ Provider 在 `/agent/settings/providers` 配置，原生 Home 留空时沿用服
 
 文件夹支持重命名显示名称、关闭和重新打开；关闭只隐藏列表，不删除代码或 Sessions，也不改变已绑定目录身份。会话行支持右键或省略号菜单：Pin、Settle、Snooze、重命名、隔离生成标题、未读、文件夹筛选、Auto-settle、复制、选择文件夹、Archive 与 Delete。各文件夹内按“置顶 / 活跃 / 稍后提醒 / 已归置”组织，每行显示目录、时间、标题及 Provider；侧栏导航不改绑当前会话。归置不是归档，更不代表 PM 工作完成。状态由服务端持久化并用独立 revision 防止覆盖；自动归置为默认 3 天无活动，不在运行成功时立即执行。归档可从 `/agent/settings/history` 恢复，运行中不能归档；删除沿用现有停止生成后再明确确认的流程，且不可恢复。标题重生成仅对具备隔离无工具调用能力的 Codex / Claude 开放，不修改原消息或原生会话游标。
 
+侧栏、主区和会话详情沿用同一 Session 标题；重命名不改执行目录。侧栏和详情的活动状态读取服务端 generation 与仍可响应的请求：区分排队、运行、等待审批／输入、失败、取消、中断和空闲，不再以旧 RunLedger 或目录名代表当前活动。详情中的文件夹、路径及环境核验另列；运行结束后不继续显示等待或思考动画。
+
 主页保留自动化独立导航行、设置／用量／快捷键工具栏，以及顶栏面包屑和面板开关。右侧 Files / Git 复用单标签，Browser 可以新增多个标签；Terminal 是同一组服务端终端的单一视图，可在右侧和底部停靠，不另建第二套进程。Files surface 采用 t3code 的文件展示布局：可切换的项目文件树、文件类型图标、全项目文件搜索、目录展开／折叠、面包屑与语法高亮只读源码，Markdown 可切换渲染、源码可自动换行；二进制文件继续明确拒绝，不新增写入能力。右侧面板标签支持关闭、排序、最大化和窄屏抽屉；底部终端抽屉与右侧终端只显示终端内容，并以一条横线与上方内容分隔，不显示范围、实例、状态或操作按钮。隐藏或切换停靠只断开视图，不重启服务端 PTY。底部高度可调整，`Ctrl / ⌘ + J` 切换显示。
 
 Browser surface 使用单行浏览器工具栏：后退／前进／刷新、地址栏、元素选择／截图／浮层／菜单；地址栏按 Enter 打开 URL，非 URL 文本在新标签页搜索。跨域页面以 iframe 打开；同源地址不在沙箱中预览，改为引导至新标签页。最近使用记录只存在本机浏览器 localStorage（最多 12 条），可删除或清空；跨域 iframe 明确禁用元素选择、截图和浮层。v4 公共入口是 `3224`，v3 的 `3223` 不共享登录或数据。内嵌页保留展开、关闭和返回 PM 上下文。
@@ -22,11 +24,20 @@ Browser surface 使用单行浏览器工具栏：后退／前进／刷新、地�
 
 安全边界：连接窗口仍禁用 webview；只有工作区窗口启用 `webviewTag`，`will-attach-webview` 校验 partition、http(s) URL 和预置 preload，并强制 `sandbox:true`、`nodeIntegration:false`、`webviewTag:false`。preview session 只允许 http(s)/data/blob/ws，权限只允许剪贴板写入和全屏；IPC 只接受工作区主 frame 且必须是当前工作区 origin。纯 Web（`3224`）没有这些原生能力，继续使用 iframe fallback，元素选择/截图/浮动预览按钮会显示“仅桌面版可用”。服务端无头浏览器流尚未接入。
 
-新会话及成功读取的空历史显示当前文件夹名称和居中输入框，纯对话不伪造 PM 项目名；已有消息时输入框停靠底部。Composer 左侧排列模型、原生能力选项和交互模式，右侧放任务引用、附件、可选听写及发送/停止；引用芯片仅在存在引用时占行。历史读取失败明确阻止发送并提供“刷新重试”，不冒充空会话；刷新仍遵循现有文字草稿恢复和附件/引用丢失提醒，不新增持久化协议。
+新会话及成功读取的空历史显示当前文件夹名称和居中输入框，纯对话不伪造 PM 项目名；已有消息时输入框停靠底部。Composer 左侧排列模型、原生能力选项和交互模式，右侧放任务引用、附件、可选听写及发送/停止；上方的 PM Context 区域分别显示本次消息引用、工作目录和只读执行策略。历史读取失败明确阻止发送并提供“刷新重试”，不冒充空会话；刷新仍遵循现有文字草稿恢复和附件/引用丢失提醒。
 
 当前只面向本机单操作者适配；尚未按 PM 成员建立 Agent 会话所有权隔离。不要将目录绑定视作多用户授权或文件沙箱，也不要据此开放公网使用。本次不新增权限体系；PM 工具继续逐次核验原有身份、成员能力与业务边界。
 
 PM 中“Agent 助手”是文字与向下箭头合并的圆角下拉按钮：点击后先显示当前项目已配置的快捷自动化，菜单最下方“前往 Agent Chat”进入独立 Chat，并保留返回 PM 地址和明确的业务引用入口，不把 PM 范围设为 Session 所有者或代码目录。菜单也提供自动化管理页与运行历史。配置方法、确认规则与原请求核对见[PM Agent 助手快捷执行](automations.md#pm-agent-助手快捷执行)。快捷执行不自动发送 Chat 消息，也不以 Run 成功完成业务任务。
+
+#### 本次消息上下文与新增记录策略
+
+- **Session** 保存消息、Provider、执行目录和历史，不归属于某个 PM 项目。同一 Session 的不同消息可以引用不同已授权工作区／项目；引用不改变代码目录。
+- **TurnContext** 在服务端受理输入用户消息时冻结，包含 threadId、输入 messageId、明确 PM 引用及 revision，以及可选的服务端执行记录引用。它不绑定 assistant 输出 messageId。引用只是受理时核验的元数据，不是历史正文快照或操作许可；旧版本不匹配时要求显式刷新，不拿当前正文冒充旧版本。
+- **新增执行策略固定为 `full / audit-only`**：自动记录与提醒，不新增允许／拒绝选择、逐次放行、额外启用开关或基于新增 grant 范围／时间字段的操作限制。`executionGrantId` 只引用服务端来源记录；客户端不能声明 actor、grant 或权限。既有认证、PM 成员／项目权限、OAuth 委托与撤权、目录身份、revision／CAS、幂等及明确配置的审批仍生效。
+- 发送前捕获本次引用；服务端受理成功后只清除这批草稿，保留发送期间新增或重新选择的引用。受理前失败保留草稿；结果未知不盲目重发。历史消息的“本条消息的 PM 上下文”从服务端读取冻结快照，“复用到下一条消息”只复制引用到草稿，不恢复权限或改变目录；无需先选择 Provider。
+- 会话与持久化仍沿用 Agent Chat，整体统一设计尚未收口。本次消息级不可变绑定不代表该设计已经完成。
+
 
 #### PM 文档、代码目录与终端
 
@@ -119,8 +130,8 @@ MCP、Skills 与交互 Apps 的源码能力须与实例部署、实际账号及�
 - **目标与保存位置：** 后端内部保留配置记录，不再作为用户绑定流程。兼容且尚未启动的上下文可以扩展绑定；已启动的管理服务不因新增目标被关闭，新目标使用独立上下文。实例 revision 更新且原生根未变时原位重新核验，保留定义、事件订阅和待重新加载状态。跨 Home 的物理根重叠、已登记根的符号链接改指等冲突明确拒绝，不自动搬迁或导出旧配置，也不删除已有定义和 Skills。共享目录的影响显示在目标详情。没有支持扩展管理的 Provider 时，MCP 仍可浏览公开目录，Skills 明确显示尚未读取，入口引导至 Provider 设置，而不是要求额外授权。
 - **新增 Provider 与已保存配置：** 保留 `context` 的页面只重新核验所选上下文的原生归属，同时单独读取全部已启用实例，Provider 选择器仍可显式切换到新 OpenCode 的独立上下文。无关的已登记外部宿主上下文不会阻止访问，也不会被自动扩张或重新绑定；所选上下文失效、目录变化或真实归属冲突仍拒绝，不静默改选其他配置。不为合并列表重启活跃管理服务。远程／自定义 OpenCode 无法可靠映射本机扩展目录时显示不可管理原因，不静默消失，也不凭 loopback 地址假定拥有本机 Home。
 - **保留的边界：** 仅已有 Provider 的正常管理使用上述直接流程；宿主登记的外部 CLI 仍使用其明确登记/绑定流程，不开放浏览器任意路径。旧的明确配置链接仍访问原数据；项目私有配置仍受 PM 身份与范围检查，不导出到原生 Home。MCP 自身的 API Key / OAuth 和项目工具审批不因配置页面简化而取消。事件流断开时暂停新写入，重连只重读状态，不重放操作；结果不明确时先刷新核对，配置变更不会自动重启活跃原生会话。
-- **外部连接：** MCP 设置的“外部访问”（`/agent/settings/mcp-servers?section=external`）提供连接地址与已授权客户端撤销。部署未配置或元数据读取失败时明确显示外部访问尚未就绪，下方仍保留 PM 登录及已有授权的查看／撤销；不把读取失败当作没有授权。外部 HTTP MCP 客户端经 `/connect-agent` 完成 PM 登录主体同意、授权码与 S256 交换，再访问 `/mcp`。默认只读，明确选择 PM 工作区／项目上限及纯对话线程；目录型 Session 不接受外部委托，线程中的 PM 引用和工具历史也须在授权上限内。full 不绕过既有审批；外部 token 不可登录普通 PM／Agent API，也不能枚举同项目的全部历史。
-- **原生工具：** 工具注册在本机读取真实 schema，不为启动普通代码会话访问 PM。`pm_list_workspaces` 只发现当前授权的业务 ID／名称，不选择目录或 Session 所有者；其他 PM 工具每次明确携带 `target: { workspaceId, projectId }`，可在同一 Session 内访问多个已授权目标。PM 不可用时工具明确失败，普通代码环境仍可用。当前成员能力、审批、revision、幂等与原结果核对不变；Chat 成功不会完成 WorkItem。OpenCode 的单 transport、Pi 的 generation-owned 扩展、OMP 的单 `pm_tools` Host Tools 桥仍有各自限制。
+- **外部连接：** MCP 设置的“外部访问”（`/agent/settings/mcp-servers?section=external`）提供连接地址与已授权客户端撤销。部署未配置或元数据读取失败时明确显示外部访问尚未就绪，下方仍保留 PM 登录及已有授权的查看／撤销；不把读取失败当作没有授权。外部 HTTP MCP 客户端经 `/connect-agent` 完成既有 PM 登录主体同意、授权码与 S256 交换，再访问 `/mcp`。原 OAuth 默认只读与明确工作区／项目上限不被新增 full/audit-only 记录扩张。直接 PM 工具使用独立外部执行根，无需创建 Chat Session；访问 Chat 仍须原有显式纯对话线程委托，不能取得代码目录权限。可访问 Session 中失权的 PM 项目结果逐项占位，其他已授权结果保留。full 不绕过既有审批；外部 token 不可登录普通 PM／Agent API，也不能枚举同项目的全部历史。
+- **原生工具：** 工具注册在本机读取真实 schema，不为启动普通代码会话访问 PM。`pm_list_workspaces` 只发现当前授权的业务 ID／名称，不选择目录或 Session 所有者；其他 PM 工具每次明确携带 `target: { workspaceId, projectId }`，可在同一 Session 内访问多个已授权目标。PM 不可用时未派发的请求拒绝；已可能派发但没有权威结果的调用保持 unknown，不能仅凭 HTTP 状态码确定失败。普通代码环境仍可用。当前成员能力、审批、revision、幂等与原结果核对不变；Chat 成功不会完成 WorkItem。OpenCode 的单 transport、Pi 的 generation-owned 扩展、OMP 的单 `pm_tools` Host Tools 桥仍有各自限制。
 - **Skills 与文件引用：** 全页和 PM 内嵌 Chat 共用 Composer 的 `@` 文件、`$` 原生 Skill 与 `/` commands 建议列表及引用 chip；目录在输入、执行环境或实例变化时自动读取，Composer 不提供目录工具栏或 session 重启按钮。`@` 只搜索同一服务端核验的 Session 执行目录，跳过忽略目录与符号链接，不回落 PM 文档、来源目录或父仓库；选中后插入可移除的相对 Markdown 链接，发送内容不额外注入正文。Skill 目录绑定 Provider 实例／revision 和同一 cwd；失败、pending、空目录在建议菜单分别展示，禁用及不可由用户调用的条目不能选。原生安装／修改仍在各 Provider 支持的位置进行；既有 WorkspaceSkill 指令块不再从 Composer 进入，且不是通用 Skill 协议。
 - **Provider 差异：** Codex 使用 `skills/list` 与原生 mention；Claude 保留 frontmatter／最后一个 Skill 展开；OpenCode 1.x 文本／命令与 2.x 结构化 IDs 不混同，目录只借用当前已授权且匹配的 live session，不为刷新启动插件／MCP；Grok／Pi 使用 leading mention，Cursor／FX／Antigravity 按各自发现和分派语义。Muse 只公布原生 commands，ACP Registry 只调用当前会话实际公布的 commands（虚拟 skill URI 不当作文件）；OMP 目录可见不等于可调用，Skill 调用禁用，命令仅开放既有 `session` 白名单。逐家真实账号／Skill 行为尚未全部验收。
 - **MCP Apps：** 当前原生交互能力由 Codex adapter 提供；其他 Provider 保留真实工具结果，不假造 App 支持。类型化 producing item 绑定原 Server／thread／session；成功工具结果结束后可保留 live session，停止、配置／范围变化、显式重启、撤权或服务关闭使相应能力失效。历史可读不代表仍可交互，打开 App 不隐式启动新模型轮次。frame 使用 `sandbox="allow-scripts allow-forms"`，不含 `allow-same-origin`；工具确认不能替代服务端授权。App 模型上下文按产生项替换／清除，仅在匹配的有效范围／session 内送入后续轮次。
@@ -128,6 +139,45 @@ MCP、Skills 与交互 Apps 的源码能力须与实例部署、实际账号及�
 **部署前提：** Agent 配置固定可信 `MCP_PUBLIC_ORIGIN`，用于 OAuth issuer／公开地址，不从任意 Host／Forwarded 猜测。PM 配置私有 `PM_MCP_AGENT_URL` 指向可达 Agent；仅可回退已有 `PM_AUTOMATION_AGENT_URL`，没有猜测 localhost 的默认值。PM 与 Agent 使用既有服务端 `PM_AUTOMATION_SERVICE_SECRET`，MCP 委托采用独立 `pm-mcp-service-v1` 域／audience，不能把秘密放入 `VITE_*`、iframe 或外部 token。网关需显式代理 `/mcp`、OAuth 发现／授权端点及连接页，不能公开 `/internal`；公网客户端还需可信 HTTPS 与可达地址。本轮不自动配置公网，也不将单操作者 Chat 宣称为多用户隔离产品。
 
 撤销会拒绝后续访问并使相应 live 能力失效，但不承诺 Agent SQLite 与 PM PostgreSQL 跨存储原子撤销，也不把取消视作已提交动作回滚。离线备份的 `--secrets exclude` **和** `include` 都会使导出副本中的 MCP grants／tokens／consent 与 App model context 失效，不修改源数据库；恢复后须重新授权，不能恢复 live App 会话。
+
+#### PM 工具结果、可见性与命令审计
+
+执行事实与当前读者能否查看结果独立：
+
+| 执行结果 | 含义与界面 |
+| --- | --- |
+| `pending_approval` | 既有部署审批模式要求批准；不是新增记录策略产生的门槛 |
+| `running` | 正在执行 |
+| `succeeded` | PM 已确认提交；展示当前有权读取的结果、原收据与命令关联 |
+| `failed` | 已证明未成功；不把未知 HTTP 错误当作证明 |
+| `unknown` | 是否提交尚未确认；显示“待核实”，没有失败结论、运行计时或执行重试 |
+
+“核对原操作”始终使用原 operationId，不再执行一次。取消生成不回滚已提交业务；确认成功后，旧失败帧、结果读取失败或撤权不会将事实降级。旧 failed 没有可信结果证据时按未核实处理，不批量猜测成功。
+
+PM 内部 `/api/v1/internal/agent-tools/reconcile` 只提供原身份／目标／请求摘要绑定的最小执行证明，使用既有服务端密钥、独立用途签名与持久单次 nonce；公开网关拒绝该路径。撤权后内部仍可核对事实，但不能向失权用户返回正文、参数、错误详情或收据。缺少服务签名密钥时，普通合法工具不因新增关联而被阻止；记录 `pm_linkage_unavailable` 提醒，不能伪称跨服务关联或内部核对已经可用。
+
+历史、工具卡、native output／SSE、命令输出、MCP/App、引用与后续模型输入均按当前权限投影；失权内容不只在 UI 遮盖。受污染的原生上下文不能继续用于续聊／压缩／fork；可见工具项与不可访问的生成正文分开处理。
+
+工具事件、PM 收据与业务变更仍是不同记录。traceId 关联输入消息、generation／外部执行根、operation 与原 commandId／revision；收据卡可按精确 commandId + operationId 查询现有 PM 审计，审计页可反查仍有权访问的原工具调用。审计继续要求既有 `audit.read` 与项目权限，仅公开白名单字段，不保存任意参数／正文或用文件观测冒充操作者审计。权限代码清单和分层验证入口见[统一权限登记](../reference/pm-agent-permission-registry.zh.md)。
+
+#### 可安装的 dovspace-pm 能力包
+
+包源码及逐客户端步骤见 [dovspace-pm README](../../plugins/dovspace-pm/README.md)。它从同一个 PM registry 导出工具能力与共享 Skills，提供 Agent Plugins 1.0.0、Codex、Claude、Pi 和 OpenCode 薄适配，不新增业务执行系统。
+
+```sh
+# PRIVATE_DIR 必须是显式存在、归当前用户所有的私有绝对目录
+pnpm pm plugin generate --root "$PRIVATE_DIR" --origin http://127.0.0.1:3224
+pnpm pm plugin install --root "$PRIVATE_DIR" --origin http://127.0.0.1:3224
+pnpm pm plugin update --root "$PRIVATE_DIR" --origin http://127.0.0.1:3224
+pnpm pm plugin uninstall --root "$PRIVATE_DIR"
+```
+
+`generate` 与 `install` 都写入该 root 下的自有 `dovspace-pm` 包，首次生成／安装二选一；已有包使用 `update`。更新／卸载按完整自有 hash 清单核验，不覆盖用户改动或自动改写外部客户端 Home。卸载不撤销 OAuth、不删除 PM 历史。安装策略默认 full/audit-only，不增加放行选择；客户端原有身份认证与 OAuth 同意仍是独立前提。
+
+CLI 的 `plugin tools`、`plugin workspaces`、`plugin call --file ORIGINAL_REQUEST.json`、`plugin result --file ORIGINAL_REQUEST.json` 复用既有 PM 登录和原生业务通道；不借外部 OAuth token 登录普通 API，也不声称经过 Agent 的 ask 队列。首次发送前保存 origin + operationId 的私有记录；同键重复调用／进程重启只查原结果，不换键重派。
+
+精确客户端版本、加载方式与真实授权／执行证据分别记录。配置加载、schema 检查和协议夹具不是四客户端闭环验收；公共 OAuth 发现不可用时不能宣称插件已连接。OpenCode 2.x 排查应使用 README 的原生只读 API／明确命令面板，不能把裸 `/mcps` 输入 Composer 当作无模型诊断。Plugin Manager、SDK／第三方可执行宿主与事件订阅仍是独立条件式后续范围，未自动启用。
+
 
 
 
@@ -138,15 +188,18 @@ MCP、Skills 与交互 Apps 的源码能力须与实例部署、实际账号及�
 
 #### Provider 运行输出
 
-原生驱动共用按 generation 排序的输出投影；前端按原生协议实际事件显示回复、可折叠思考、工具输入/结果、命令终端、文件 diff、搜索、计划、子代理、上下文压缩与失败状态，未报告的能力不补造。旧历史继续原有正文显示，新输出不会再重复显示一份纯文本回复。
+原生驱动共用按 generation 保存的事件输出投影；前端以实际到达的 Thinking / Action / Output 交错活动流显示回复、可折叠思考、工具输入/结果、命令终端、文件 diff、搜索、计划、子代理、上下文压缩与失败状态，不要求固定三段循环。旧历史继续原有正文显示，新输出不会再重复显示一份纯文本回复。
 
+- 有原生顺序信息时，仅在同一排序域内恢复条目顺序；同 id 累积更新替换原项，不按文本去重，不比较不同轮次的 ordinal。缺少顺序信息的旧历史保留原顺序。
+- 思考块仅展示 Provider 实际提供的摘要／文本，相邻且关联一致的条目可合并；没有摘要时不补造内部推理。连续工具可折叠为操作组，正文、错误、提问、计划及独立 PM 收据／MCP App 保留边界。手动展开或收起不会被流更新反复覆盖；该显示偏好仅在当前页面内有界保留，不新增持久化协议。
+- 明确的 Codex `commentary` 显示为进度更新，`final_answer` 保留最终回答语义；未知 phase 不猜测为最终。Run 是否结束仍由 generation 生命周期决定，文本或单个工具完成不代表整轮完成。只有 Provider 提供可信起止时间时才显示精确耗时，不把投影首次观察时间伪装成模型耗时。
 - Composer“更多输入选项”中的“逐段 / 整轮”只改变显示时机。逐段按完整 Markdown 边界约 400ms 释放；整轮在结束时展示正文，工具过程仍实时显示；错误和取消保留已收到的内容。
 - 输出投影保存在 Agent SQLite，SSE 以序号和完整快照恢复；断开页面不取消原生执行。条目更新约 50ms 合并，慢消费者重置为快照，不无限积压。
 - 命令仅在展开时单独订阅，约 100ms 合并输出；折叠释放订阅但不停止命令。终端处理 ANSI、回车覆盖和跨块控制序列，尾部有界且标明截断，最终结果持久保存。工具没有实时命令协议时只显示实际最终结果。
 - Codex、OpenCode、Grok、Muse 的明确**信息提问**可回答或取消；重复、过期和不匹配回答被拒绝，服务重启后失去原生回调的请求不可回答。回答本身不写入输出投影。原有命令/文件/权限审批默认继续拒绝；Pi 通用扩展 UI、ACP 含义不明确的 elicitation 不自动当成安全提问放行。
 - 部署开关 `AGENT_APPROVAL_MODE`：默认 `ask` 保留人工审批；`auto-approve` 时 assistant-ui 工具审批、PM 破坏性工具审批与原生权限审批全部自动放行并直接执行，审批代码与端点保留。该开关不改变 PM 业务校验，也不表示 WorkItem 完成。
 
-端点、源码归属、各驱动限制和验收记录见[运行输出说明](project-management.md)。该功能不新增 PM 权限或业务完成规则；受控原生协议验证不代表真实供应商账号和模型已验收。
+本轮改进范围、接口合同与核验标准见[活动流执行计划](../reference/agent-activity-stream-plan.zh.md)。该功能不新增 PM 权限或业务完成规则；受控原生协议验证不代表真实供应商账号和模型已验收。会话与持久化尚未统一设计，仍暂沿用 Agent Chat 的保存方式。
 
 #### Usage 用量与额度
 

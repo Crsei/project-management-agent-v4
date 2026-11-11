@@ -18,6 +18,19 @@ import styles from "./pm-auth-page.module.css"
 type Phase = "loading" | "idle" | "submitting" | "checking" | "unknown"
 const isAnonymous = (error: unknown) => error instanceof ApiError && error.status === 401
 
+type DesktopSetupBridge = { token: () => Promise<string | null> }
+/** Electron local workspaces expose this narrow bridge; browsers and remote
+ * workspaces fall back to entering the deployment-provided token manually. */
+async function desktopSetupToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null
+  const bridge = (window as Window & { desktopWorkspace?: { setup?: DesktopSetupBridge } }).desktopWorkspace?.setup
+  if (!bridge || typeof bridge.token !== "function") return null
+  try {
+    const token = await bridge.token()
+    return typeof token === "string" && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : null
+  } catch { return null }
+}
+
 /** Setup uses the ordinary PM client and session refresh. No setup inputs enter
  * query caches, route state, persistent drafts, or the command journal. */
 export function PmFirstUsePage() {
@@ -174,6 +187,7 @@ function PmSetupForm({ busy, checking, failure, submitted, onSubmit }: {
   const [password, setPassword] = useState("")
   const [workspaceName, setWorkspaceName] = useState("")
   const [setupToken, setSetupToken] = useState("")
+  const [desktopToken, setDesktopToken] = useState(false)
   const [visible, setVisible] = useState(false)
   const [attempted, setAttempted] = useState(false)
   const nameInput = useRef<HTMLInputElement>(null)
@@ -181,6 +195,15 @@ function PmSetupForm({ busy, checking, failure, submitted, onSubmit }: {
   const passwordInput = useRef<HTMLInputElement>(null)
   const workspaceInput = useRef<HTMLInputElement>(null)
   const tokenInput = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    let active = true
+    void desktopSetupToken().then(token => {
+      if (!active || !token) return
+      setSetupToken(current => current || token)
+      setDesktopToken(true)
+    })
+    return () => { active = false }
+  }, [])
   const nameError = !name.trim() || name.trim().length > 200 ? t("请输入姓名（最多 200 个字符）。", "Enter your name (up to 200 characters).") : null
   const emailError = email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? t("请输入有效的邮箱地址（最多 254 个字符）。", "Enter a valid email address (up to 254 characters).") : null
   const passwordError = password.length < 12 || password.length > 256 ? t("密码须为 12–256 个字符。", "Use a password of 12–256 characters.") : null
@@ -196,7 +219,7 @@ function PmSetupForm({ busy, checking, failure, submitted, onSubmit }: {
     if (first) { first[1].current?.focus(); return }
     const request = { name: name.trim(), email: email.trim(), password, workspaceName: workspaceName.trim(), setupToken }
     setPassword("")
-    setSetupToken("")
+    if (!desktopToken) setSetupToken("")
     setVisible(false)
     setAttempted(false)
     void onSubmit(request)
@@ -215,7 +238,8 @@ function PmSetupForm({ busy, checking, failure, submitted, onSubmit }: {
           <Button type="button" variant="ghost" size="icon" aria-label={visible ? t("隐藏密码", "Hide password") : t("显示密码", "Show password")} aria-pressed={visible} aria-controls={props.id} onClick={() => setVisible(value => !value)}>{visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}</Button>
         </div>}</Field>
         <Field label={t("工作区名称", "Workspace name")} required error={attempted ? workspaceError : null}>{props => <Input {...props} ref={workspaceInput} name="workspaceName" autoComplete="organization" maxLength={200} value={workspaceName} onChange={event => setWorkspaceName(event.target.value)} />}</Field>
-        <Field label={t("一次性设置令牌", "One-time setup token")} required description={t("由部署管理员提供，请勿放入网址或分享给其他人。", "Provided by your deployment administrator. Never place it in a URL or share it.")} error={attempted ? tokenError : null}>{props => <Input {...props} ref={tokenInput} name="setupToken" type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={43} value={setupToken} onChange={event => setSetupToken(event.target.value)} />}</Field>
+        <Field label={t("一次性设置令牌", "One-time setup token")} required description={t("由部署管理员提供，请勿放入网址或分享给其他人。", "Provided by your deployment administrator. Never place it in a URL or share it.")} error={attempted ? tokenError : null}>{props => <Input {...props} ref={tokenInput} name="setupToken" type="password" autoComplete="off" autoCapitalize="none" spellCheck={false} maxLength={43} value={setupToken} onChange={event => { setDesktopToken(false); setSetupToken(event.target.value) }} />}</Field>
+        {desktopToken && <p className={styles.hint} role="status">{t("桌面端已自动填入本机一次性设置令牌；令牌不会进入网址、历史记录或本地存储。", "The desktop app filled in this machine's one-time setup token; it is never placed in a URL, history, or local storage.")}</p>}
         <Button type="submit" className={styles.submit} loading={busy} disabled={busy}>{checking ? t("正在核对设置和会话…", "Checking setup and session…") : busy ? t("正在设置…", "Setting up…") : t("创建账号与工作区", "Create account and workspace")}{!busy && <ArrowRight size={16} aria-hidden="true" />}</Button>
       </fieldset>
     </form>
