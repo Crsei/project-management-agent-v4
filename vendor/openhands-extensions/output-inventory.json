@@ -9,7 +9,7 @@
   "hostBuildInputs": [
     {
       "path": "package.json",
-      "sha256": "808e639a49bd11ed7c76d44c40fa905eb0f8dcfbc8b4fee9b936e62f5110112d",
+      "sha256": "6d6bec6129c11752ecbbe3dc4d684acbe60e38b1d3abc1957fb77eb1d42112c7",
       "bytes": 6930,
       "mode": 420
     },
