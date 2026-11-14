@@ -12,14 +12,14 @@ import { appUrl, sourceUrl } from "../lib/site";
     <div class="container hero-inner">
       <p class="eyebrow hero-eyebrow">PROJECTS. PEOPLE. AGENTS.</p>
       <h1>项目管理，<br />与编码 Agent，<br /><span>终于在一起。</span></h1>
-      <p class="hero-sub">从项目计划到代码交付，一个工作台就够了。<br class="desktop-break" />连接你常用的 Agent，使用你自己的账号。</p>
+      <p class="hero-sub">项目、任务、Markdown 与 Agent Chat，同一个工作台。<br class="desktop-break" />在可信本机自托管，使用你自己的模型账号。</p>
       <div class="hero-actions">
-        <a class="btn btn-primary btn-lg" href="/download/"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" /></svg>获取 PM Agent</a>
+        <a class="btn btn-primary btn-lg" href="/get-started/">开始自托管 <span aria-hidden="true">↗</span></a>
         <a class="source-link" href={sourceUrl ?? '#open-source'}>为你的工作流而构建 <span aria-hidden="true">↗</span></a>
         <p class="hero-platforms">Web 工作台 <span>·</span> 桌面应用</p>
       </div>
       <figure class="product-preview" aria-label="产品界面截图预留区域">
-        <div class="preview-bar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>PM Agent</span><span>WORKSPACE</span></div>
+        <div class="preview-bar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Dovspace</span><span>WORKSPACE</span></div>
         <div class="preview-empty"><span class="preview-monogram" aria-hidden="true">PM</span><p>你的项目，你的 Agent。</p><span class="preview-caption">产品界面截图预留</span></div>
       </figure>
       <div class="product-labels"><span>项目与任务</span><span>Agent 对话</span><span>文件与终端</span><span>代码交付</span></div>
@@ -28,7 +28,7 @@ import { appUrl, sourceUrl } from "../lib/site";
 
   <section id="agents" class="section">
     <div class="container">
-      <div class="section-head"><p class="eyebrow">YOUR AGENTS, TOGETHER</p><h2>选你喜欢的 Agent。<br />不必更换工作台。</h2><p>Claude Code、Codex、OpenCode、Cursor、Grok、Antigravity。<br class="desktop-break" />连接现有账号，在同一个地方继续工作。</p></div>
+      <div class="section-head"><p class="eyebrow">YOUR AGENTS, TOGETHER</p><h2>选择 Provider，<br />在同一工作台里工作。</h2><p>界面提供多种 Provider 适配入口。<br class="desktop-break" />实际可用性取决于本机 CLI、账号、模型与对应能力验收；图标不代表合作或全部功能已验证。</p></div>
       <div class="harness-grid">
         {agents.map((agent) => <div class="harness"><img src={`/harnesses/${agent.icon}`} alt="" width="28" height="28" loading="lazy" /><div><h3>{agent.name}</h3><p>{agent.tag}</p></div></div>)}
       </div>
@@ -38,16 +38,16 @@ import { appUrl, sourceUrl } from "../lib/site";
 
   <section class="section workflow-section">
     <div class="container split">
-      <div class="workflow-visual" role="img" aria-label="工作流示意：项目计划、任务开发、代码与 CI、人工审核">
-        <div class="workflow-head"><span class="status-dot"></span> PROJECT → DELIVERY <span>工作流示意</span></div>
+      <div class="workflow-visual" role="img" aria-label="使用流程示意：项目计划、Agent 会话、结果核对；不是交付工作台截图">
+        <div class="workflow-head"><span class="status-dot"></span> PLAN → VERIFY <span>使用流程示意</span></div>
         <ol class="workflow-steps">
           <li><span class="step-number">01</span><div><strong>项目计划</strong><span>需求、任务与文档</span></div><span class="step-tag">Plan</span></li>
           <li><span class="step-number">02</span><div><strong>Agent 开发</strong><span>对话、文件与终端</span></div><span class="step-tag">Build</span></li>
-          <li><span class="step-number">03</span><div><strong>代码交付</strong><span>分支、Draft PR 与 CI</span></div><span class="step-tag">Review</span></li>
+          <li><span class="step-number">03</span><div><strong>结果核对</strong><span>原操作收据与业务状态</span></div><span class="step-tag">Verify</span></li>
         </ol>
         <div class="workflow-bottom"><span>交付留痕，人工确认。</span><span aria-hidden="true">↗</span></div>
       </div>
-      <div class="section-head"><p class="eyebrow">LESS SWITCHING. MORE BUILDING.</p><h2>从想法，<br />到可以审核的代码。</h2><p>把项目、任务、文档和 Agent 会话放在一起。规划下一步，查看代码变更，跟进每一次交付。</p><ul class="checklist"><li>项目与任务，多种视图</li><li>会话旁直接查看文件、Git 和终端</li><li>任务工作流与 Draft PR 交付</li></ul><a class="text-link" href={appUrl}>进入工作台 <span aria-hidden="true">↗</span></a></div>
+      <div class="section-head"><p class="eyebrow">LESS SWITCHING. MORE BUILDING.</p><h2>从项目计划，<br />到可核对的结果。</h2><p>把项目、任务、文档和 Agent 会话放在一起。PM 授权与 Agent 执行身份独立；Run 成功不等于任务完成。</p><ul class="checklist"><li>项目与任务，多种视图</li><li>同一执行目录的文件、Git 和终端</li><li>未知写入先核对原操作，不盲目重发</li></ul><p>任务详情的交付工作台目前隐藏；不将后端保留能力表述为已开放页面。</p><a class="text-link" href={appUrl}>进入工作台 <span aria-hidden="true">↗</span></a></div>
     </div>
   </section>
 
@@ -58,8 +58,9 @@ import { appUrl, sourceUrl } from "../lib/site";
         <div class="terminal tile"><div class="terminal-bar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>~/pm-agent</span></div><div class="terminal-body"><p class="terminal-comment"># 在已初始化的项目中</p><p><span class="prompt">$</span> pnpm install --frozen-lockfile</p><p><span class="prompt">$</span> pnpm dev:v4</p><p class="terminal-comment"># 修改代码，预览你的工作台。</p><p><span class="prompt">$</span> <span class="caret" aria-hidden="true"></span></p></div></div>
         <div class="open-pitch tile"><ul><li><strong>界面属于你。</strong><span>调整布局，让项目与会话更顺手。</span></li><li><strong>Agent 由你选择。</strong><span>连接自己的 Provider、模型和工具。</span></li><li><strong>运行在自己的环境。</strong><span>使用本地部署或连接自己的服务。</span></li></ul><div class="open-actions">{sourceUrl ? <a class="btn btn-primary" href={sourceUrl} target="_blank" rel="noopener noreferrer">浏览源代码 ↗</a> : <><span class="btn btn-disabled" aria-disabled="true">源码地址待补充</span><span class="small-note">公开仓库链接预留</span></>}</div></div>
       </div>
+      <p class="small-note">项目自有代码采用 AGPL-3.0-only；第三方材料保留原许可。公开仓库首页不是当前运行版本或安装包的对应源码证明，具体以 commit／发行清单为准。字体、素材与正式发行门禁见 <a href="/THIRD_PARTY_NOTICES.txt">第三方说明</a>。</p>
     </div>
   </section>
 
-  <section class="section final-cta"><div class="container"><p class="eyebrow">ONE WORKSPACE. YOUR AGENTS.</p><h2>让项目向前。<br />让 Agent 动手。</h2><p>把计划、对话与交付，放回同一个地方。</p><div class="cta-actions"><a class="btn btn-primary btn-lg" href="/download/">获取 PM Agent <span aria-hidden="true">↓</span></a><a class="btn btn-ghost btn-lg" href={appUrl}>打开工作台 <span aria-hidden="true">↗</span></a></div></div></section>
+  <section class="section final-cta"><div class="container"><p class="eyebrow">ONE WORKSPACE. YOUR AGENTS.</p><h2>让项目向前。<br />让结果可核对。</h2><p>先了解安全边界，再启动你自己的 Dovspace。</p><div class="cta-actions"><a class="btn btn-primary btn-lg" href="/get-started/">开始自托管 <span aria-hidden="true">↗</span></a><a class="btn btn-ghost btn-lg" href={appUrl}>打开工作台 <span aria-hidden="true">↗</span></a></div></div></section>
 </V4Layout>

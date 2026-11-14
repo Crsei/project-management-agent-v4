@@ -1,98 +1,79 @@
 ---
 import GuideLayout from '../layouts/GuideLayout.astro';
-
 const contents = [
-  { id: 'trust', label: 'A single trust boundary' },
-  { id: 'remote', label: 'Remote access' },
-  { id: 'execution', label: 'Execution and recovery' },
-  { id: 'context', label: 'Fork and context transfer' },
-  { id: 'background', label: 'Background work' },
-  { id: 'data', label: 'Data and backups' },
-  { id: 'inspectors', label: 'Inspector boundaries' },
+  { id: 'trust', label: '四种身份与权限' },
+  { id: 'remote', label: '本机访问边界' },
+  { id: 'execution', label: '取消与未知结果' },
+  { id: 'context', label: '会话与目录' },
+  { id: 'background', label: '后台工作' },
+  { id: 'data', label: '数据与备份' },
+  { id: 'inspectors', label: '文件、终端与浏览器' },
 ];
 ---
-
-<GuideLayout
-  title="Know where the boundaries are."
-  description="A durable record is useful only when its limits are clear. Read this before sharing access, scheduling work, or relying on a recovered execution."
-  eyebrow="Security / Operations"
-  contents={contents}
->
+<GuideLayout title="安全与运维边界" description="区分 PM 账号、Agent 操作者、Provider 账号与主机权限。明确取消、未知结果和备份的限制，不把持久记录当作执行保证。" eyebrow="安全 / 运维" contents={contents}>
   <section id="trust">
-    <h2>One workspace. One trust boundary.</h2>
-    <p><strong>agent-workspace is a single-user, single-server-process application.</strong> Every authorized browser shares the same workspace and the local authority of that server. An access token is not a separate user account.</p>
-    <div class="callout callout-warning">
-      <strong>Access includes a real shell.</strong>
-      <p>The terminal runs with the server process’s operating-system permissions. Provider CLIs can execute tools against the project. Do not share access with anyone you would not trust at that machine.</p>
-    </div>
-    <p>There is no multi-tenant isolation, per-user RBAC, billing system, or automatic Git worktree sandbox. Run with an appropriately restricted operating-system account, protect the host, and review which directories and credentials it can access.</p>
-    <p>The marketing website is separate static content. Merely viewing it does not authenticate you to a workspace, open a model connection, or start a background execution.</p>
+    <h2>身份独立，权限不能互相替代</h2>
+    <dl class="definition-list">
+      <div><dt>PM 账号</dt><dd>管理成员、工作区与项目授权；业务工具逐次核验当前身份、权限、revision 和操作边界。</dd></div>
+      <div><dt>Agent 操作者</dt><dd>独立访问验证，当前面向可信本机单操作者；尚未按 PM 成员隔离会话所有权。持有 Agent 令牌不等于拥有 PM 项目权限。</dd></div>
+      <div><dt>Provider／原生 CLI</dt><dd>使用实际配置的模型账号与原生环境，和 PM 登录、Agent 访问令牌不是同一种身份。账号、额度与原生能力须单独验收。</dd></div>
+      <div><dt>主机执行身份</dt><dd>Terminal 和原生工具拥有服务进程的本机权限。目录选择、cwd 与允许根不是文件系统沙箱。</dd></div>
+    </dl>
+    <div class="callout callout-warning"><strong>不是生产多租户 Agent 平台。</strong><p>PM 授权不能代替 Agent 会话隔离。只向你信任其操作该机器的人授予 Agent 访问，使用受限系统账号并保护主机、文件和凭据。</p></div>
+    <p>宣传站是独立静态内容，浏览页面不会获得任何工作台身份或执行权限。</p>
   </section>
-
   <section id="remote">
-    <h2>Keep loopback local. Protect remote access.</h2>
-    <p>The server defaults to loopback. To deliberately expose it, configure <code>AGENT_WORKSPACE_ACCESS_TOKEN</code> with a strong random value of at least 32 characters before setting <code>HOST=0.0.0.0</code> or another non-loopback address.</p>
+    <h2>保持本机边界，不直接开放公网</h2>
+    <p>默认工作台入口为 <code>http://127.0.0.1:3224/pm</code>。Agent 可通过服务端 <code>AGENT_WORKSPACE_ACCESS_TOKEN</code> 配置至少 32 字符的独立强随机令牌；同源检查和访问令牌不能补足多用户隔离。</p>
     <ul>
-      <li>Use a trusted <strong>HTTPS reverse proxy</strong>. Preserve Host and Origin, support event streaming and WebSocket upgrades, and do not expose an unprotected upstream port.</li>
-      <li>Users enter the token in the workspace. The server uses an HttpOnly, SameSite=Strict session cookie; the token is not stored in localStorage. Rotating the server token invalidates old sessions.</li>
-      <li>Keep the token on the server. Never put it in <code>VITE_</code> / <code>PUBLIC_</code> variables, website URLs, source commits, or static build output.</li>
-      <li>All token holders have the same workspace authority. Same-origin checks and a token do not replace host security or user isolation.</li>
+      <li>PM 与 Agent 使用独立 HttpOnly、SameSite=Strict Cookie；不要在公开 URL、前端变量、日志或源码中放置任何令牌。</li>
+      <li>启用访问验证不改变既有执行审批模式或 PM 权限。CLI 本地注销不能冒充服务端按会话撤销。</li>
+      <li>OAuth 的本地发现地址配置不等于真实外部客户端授权、委托或撤权已通过。外部接入仍须逐项配置和验收。</li>
+      <li>反向代理、TLS 或容器端口映射不会自动解决会话隔离；不要将它们描述为公网安全上线证明。</li>
     </ul>
-    <p>The desktop shell permits HTTP for loopback connections, but requires HTTPS for non-local remote servers. A remote server executes on its own host; selecting remote mode does not move your local project there.</p>
+    <p>当前桌面只支持本地工作台，不提供远程连接。不要沿用旧版本的远程启动示例。</p>
   </section>
-
   <section id="execution">
-    <h2>Persistence is not uninterrupted execution.</h2>
-    <p>Once accepted, requests, snapshots, events, and results are recorded server-side. Refreshing, navigating away, or closing a browser tab stops the subscription—not the accepted run. Reconnect to read the stored state.</p>
+    <h2>取消不回滚，未知结果先核对</h2>
     <ul>
-      <li><strong>Server restart:</strong> unfinished executions become interrupted. Confirmed output remains. A continuation is a new run; the old outcome is not rewritten as success.</li>
-      <li><strong>Cancellation:</strong> the explicit Stop action requests cancellation. It cannot undo file changes, external tool effects, or charges that have already occurred.</li>
-      <li><strong>Continuation:</strong> completed workflow step outputs can be reused, but an unfinished CLI step may already have changed the world. Inspect files and Git before approving an unsafe replay.</li>
-      <li><strong>Concurrency:</strong> chat and workflows share a per-thread execution lock. Different threads can run concurrently and may still touch the same working directory.</li>
-      <li><strong>External effects:</strong> the application does not promise exactly-once execution of external side effects.</li>
+      <li><strong>离开页面：</strong>关闭页面或停止订阅不等于取消服务端已受理的生成；重新连接后读取实际状态。</li>
+      <li><strong>停止：</strong>明确的 Stop 请求取消生成，不能撤销已经发生的文件改动、业务写入、外部工具副作用或费用。</li>
+      <li><strong>服务重启：</strong>不承诺生成和 PTY 无损续跑；读取真实中断状态，核对文件、原操作收据及当前结果。</li>
+      <li><strong>丢响应／超时：</strong>使用原 operationId 或原请求身份查询，不换键重发未知写入，不以看板暂时缺项推断失败。</li>
+      <li><strong>外部副作用：</strong>不保证 exactly-once。恢复与继续执行均不能成为静默重放的理由。</li>
     </ul>
-    <p>Missing credentials, a provider outage, or an incompatible native session is an error to inspect—not permission to silently swap accounts or replay a request. Provider-native behavior depends on the installed compatible CLI, account, and session boundary.</p>
+    <p>模型回复、CLI 退出 0、Run 成功、CI 通过、审核通过和工作项完成是不同事实。任务完成遵循当前 Markdown 工作流和原生授权动作，不增加“必须先审核”的历史规则。</p>
   </section>
-
   <section id="context">
-    <h2>A conversation branch is not a file sandbox.</h2>
-    <p>Fork preserves the parent thread and recorded run. Where compatible native provider boundaries exist, the application can use native fork behavior; otherwise it uses a bounded context handoff or reports that the operation is unsupported.</p>
-    <p><strong>Branches share the project working directory by default.</strong> They do not automatically create Git worktrees, restore files, or isolate simultaneous edits. Arrange separate working directories yourself if the work needs that isolation.</p>
-    <p>Merge back is a <strong>previewed, explicitly confirmed context transfer</strong> to the direct parent thread. It is not a Git merge or cherry-pick. The parent consumes it once on the next explicitly requested execution; transferring context does not automatically start that execution.</p>
+    <h2>会话分支不是代码隔离</h2>
+    <p>Agent 文件夹与 PM 工作区／项目独立。普通会话可能使用同一目录；fork／上下文交接不自动创建 Git worktree，也不回滚代码。只有明确受管交付收据证明的环境才能称为对应 Worktree。</p>
+    <p>原生 resume、fork、compaction 等行为取决于实际 Provider 与会话边界，不因为 UI 有入口就宣称已验收。不兼容时保留明确错误和原历史，不暗中换账号。</p>
+    <p><strong>会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口。</strong>候选方案不代表已完成迁移、跨存储原子事务或高可用恢复。</p>
   </section>
-
   <section id="background">
-    <h2>Background means “while the server is running.”</h2>
-    <p>Schedules, quota recovery, and PR polling depend on a live server process and a working provider or GitHub connection. They cannot execute while the computer is off or the service is stopped.</p>
-    <dl class="definition-list">
-      <div><dt>Schedules</dt><dd>Use the server timezone. Missed occurrences follow skip or coalesce policy rather than replaying the whole downtime backlog. A dispatch receipt means queued, not succeeded.</dd></div>
-      <div><dt>Quota recovery</dt><dd>Requires explicit authorization, an eligible limit classification, and a valid provider reset time. Unknown reset times are not guessed. Uncertain CLI side effects can require manual continuation.</dd></div>
-      <div><dt>PR Watch</dt><dd>Requires the server’s GitHub credentials or <code>gh</code> login and network access. It establishes a baseline, deduplicates changes, and queues work. PR text is untrusted external input, not additional tool authority or automatic merge approval.</dd></div>
-      <div><dt>Desktop lifecycle</dt><dd>Closing the workspace window and quitting the application are different. The desktop host can keep its local server running after the workspace window closes; quitting stops that managed server. See the <a href="/desktop/#lifecycle">desktop lifecycle guide</a>.</dd></div>
-    </dl>
-    <p>No daemon installation or automatic updater is included. If always-on operation matters, operate the server under your own process supervisor and monitor the actual run outcomes.</p>
+    <h2>后台执行依赖正在运行的服务</h2>
+    <p>自动化、Worker、触发与外部集成依赖对应角色和真实配置。机器休眠、关机或服务停止时，不承诺继续执行；派发收据也不等于成功。</p>
+    <p>SMTP、私有 S3、Webhook 和 IM 必须单独配置、授权并验证。健康检查或配置存在不能替代真实供应商和接收器验收。</p>
+    <p>桌面关闭窗口、断开连接和退出有不同生命周期及草稿确认；具体见<a href="/desktop/#lifecycle">桌面说明</a>。应用内更新器已接入，但公开更新可用性依赖合格发行材料，不表示有独立常驻系统服务。</p>
   </section>
-
   <section id="data">
-    <h2>Protect the data directory as a secret.</h2>
-    <p><code>AGENT_WORKSPACE_DATA_DIR</code> selects persistent Agent data; v3 defaults to this checkout’s <code>.local/agent-data</code>, never the old global directory. It contains <code>workspace.sqlite</code> and Provider state. Explicit CLI homes must be v3-owned. Browser preferences are not a backup of this data.</p>
+    <h2>备份覆盖完整权威数据，而不只是网页</h2>
+    <p>PM PostgreSQL、权威 Markdown／恢复台账、附件与 Agent SQLite 分属不同存储；它们不是全系统原子事务。Agent 默认数据位于本实例 <code>.local/agent-data</code>，不要借用其他副本或同时运行多个目录所有者。</p>
     <ol class="instruction-list">
-      <li>Stop the owning server before backing up or moving its data.</li>
-      <li>Copy the complete data directory and any separate CLI homes to storage protected as carefully as the original credentials.</li>
-      <li>Keep directory ownership and permissions restrictive. Do not assume database or credential files are encrypted at rest.</li>
-      <li>Restart one server owner with the same explicit data and project paths. Do not point two processes at the same data directory.</li>
+      <li>遵循部署手册停止对应服务，取得一致恢复点；保留目录身份、存储绑定、归档清单和原操作记录。</li>
+      <li>按秘密保护数据库、恢复 journal、附件、Provider 状态和备份；其中可能包含原正文、密钥与执行历史。</li>
+      <li>Agent 离线备份的 <code>exclude</code> 模式清除导出副本中的原生 continuation、执行／待 fork 环境引用；不会修改源数据或删除历史业务证据。</li>
+      <li>应用内备份不等于外部 Provider Home、项目源码和浏览器本地状态的完整备份；恢复后重新核对外部目录、账号和 MCP 授权，不自动重放历史。</li>
     </ol>
-    <p>Credentials and configured environment values are held on the server, not returned as full values to the Web settings interface. This does not remove your responsibility to protect the filesystem, logs, shell sessions, and host backups.</p>
-    <p>Resource revisions detect stale saves and preserve drafts for explicit conflict handling. Legacy browser-data import is not cross-device synchronization or a promise of compatibility with archived applications.</p>
+    <p>桌面加密备份有版本／系统与可信来源限制；加密完整性不证明作者可信，SQL 恢复不是沙箱。详细边界见<a href="/desktop/#backup">桌面备份说明</a>和所选源码版本的部署手册。</p>
   </section>
-
   <section id="inspectors">
-    <h2>Inspectors have different authority.</h2>
+    <h2>查看界面不扩大执行权限</h2>
     <dl class="definition-list">
-      <div><dt>Files and Git</dt><dd>Read-only inspection of the configured project root. Text previews, directory trees, and diffs have size limits and may be truncated. Reading a diff does not apply it.</dd></div>
-      <div><dt>Terminal</dt><dd>A real local PTY per WebSocket connection, not a durable background job or a sandbox. Disconnecting the terminal socket ends that PTY; this is separate from the durable model execution queue.</dd></div>
-      <div><dt>Browser preview</dt><dd>A client-side iframe, not a server proxy. A site can refuse framing through CSP or X-Frame-Options. Same-origin privileges are disabled by default; only enable them for trusted local content.</dd></div>
+      <div><dt>Files 与 Git</dt><dd>按当前 Session 解析同一实际目录；只读源码／diff 展示不等于执行或合并，边界与截断须按界面提示核对。</dd></div>
+      <div><dt>Terminal</dt><dd>服务端 PTY 可在当前服务进程内重新附着；隐藏或移动面板不销毁进程。不跨 Agent 服务重启恢复，不重放未知输入。</dd></div>
+      <div><dt>Browser</dt><dd>Web 使用受限 iframe；同源页面引导至新标签页。桌面本地工作区的原生预览是独立能力，不把纯 Web 描述成已具备桌面截图／元素选择。</dd></div>
     </dl>
-    <p>Understand the execution boundary first, then <a href="/get-started/">set up your workspace</a>. No interface status, animation, or successful dispatch can substitute for checking the server’s final result.</p>
+    <p>了解这些边界后再<a href="/get-started/">开始自托管</a>。最终结果必须通过实际记录、业务状态和产物核对。</p>
   </section>
 </GuideLayout>

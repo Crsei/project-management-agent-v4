@@ -1,6 +1,6 @@
 ---
 import '../styles/global.css';
-import { workspaceLabel, workspaceNote, workspaceUrl } from '../lib/site';
+import { appLabel, appNote, appUrl, sourceUrl } from '../lib/site';
 
 interface Props {
   title: string;
@@ -9,49 +9,45 @@ interface Props {
 
 const { title, description } = Astro.props;
 const navigation = [
-  { href: '/', label: 'Product' },
-  { href: '/get-started/', label: 'Self-host' },
-  { href: '/desktop/', label: 'Desktop' },
-  { href: '/security/', label: 'Operations' },
+  { href: '/', label: '产品' },
+  { href: '/get-started/', label: '自托管' },
+  { href: '/desktop/', label: '桌面' },
+  { href: '/download/', label: '下载状态' },
+  { href: '/security/', label: '安全与运维' },
 ];
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
     <meta name="theme-color" content="#fafaf9" />
-    <meta name="robots" content="noindex" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content={`${title} — agent-workspace`} />
+    <meta property="og:title" content={`${title} — Dovspace`} />
     <meta property="og:description" content={description} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>{title} — agent-workspace</title>
+    <title>{title} — Dovspace</title>
   </head>
   <body>
-    <a class="skip-link" href="#main-content">Skip to content</a>
-    <div class="legacy-banner" role="note">
-      <strong>历史 v3 指南</strong>
-      <span>当前项目为 v4。新营销首页：<a href="/">返回 PM Agent v4</a>。</span>
-    </div>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
     <header class="site-header">
       <div class="container header-inner">
-        <a class="wordmark" href="/" aria-label="agent-workspace home">
+        <a class="wordmark" href="/" aria-label="Dovspace 首页">
           <svg viewBox="0 0 24 24" width="25" height="25" fill="none" aria-hidden="true">
             <path d="M2 2h8v8H2zm12 0h8v8h-8zM2 14h8v8H2z" fill="currentColor" />
             <path d="M14 14h8v8h-8z" fill="var(--accent)" />
           </svg>
-          <span>agent<span class="wordmark-separator">-</span>workspace</span>
+          <span>Dovspace</span>
         </a>
-        <nav class="primary-navigation" aria-label="Main navigation">
+        <nav class="primary-navigation" aria-label="主要导航">
           {navigation.map(({ href, label }) => (
             <a href={href} aria-current={Astro.url.pathname === href ? 'page' : undefined}>{label}</a>
           ))}
         </nav>
-        <a class="button button-small button-outline header-entry" href={workspaceUrl}>
-          {workspaceLabel}<span aria-hidden="true">↗</span>
+        <a class="button button-small button-outline header-entry" href={appUrl}>
+          {appLabel}<span aria-hidden="true">↗</span>
         </a>
       </div>
     </header>
@@ -62,49 +58,22 @@ const navigation = [
       <div class="container">
         <div class="footer-top">
           <div>
-            <a class="footer-name" href="/">agent-workspace</a>
-            <p>A single-user workspace. On infrastructure you control.</p>
+            <a class="footer-name" href="/">Dovspace</a>
+            <p>可信本机、单操作者的项目与 Agent 工作台。</p>
           </div>
-          <nav aria-label="Footer navigation">
-            <a href="/get-started/">Getting started</a>
-            <a href="/desktop/">Desktop builds</a>
-            <a href="/security/">Security &amp; limits</a>
+          <nav aria-label="页脚导航">
+            <a href="/get-started/">自托管入门</a>
+            <a href="/desktop/">桌面说明</a>
+            <a href="/security/">安全与限制</a>
+            {sourceUrl && <a href={sourceUrl}>源码仓库 ↗</a>}
+            <a href="/THIRD_PARTY_NOTICES.txt">第三方说明</a>
           </nav>
         </div>
         <div class="footer-bottom">
-          <p>Web · Server · Desktop. No hosted account required.</p>
-          <p>{workspaceNote}</p>
+          <p>PM 账号与 Agent 操作者身份独立，不提供公网多租户隔离。</p>
+          <p>{appNote}</p>
         </div>
       </div>
     </footer>
   </body>
 </html>
-
-<style>
-  .legacy-banner {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 4px 12px;
-    padding: 8px 16px;
-    background: #232322;
-    color: #fafaf9;
-    font-size: 12px;
-    text-align: center;
-  }
-
-  .legacy-banner strong {
-    color: #de9a7b;
-    font-family: "SFMono-Regular", Consolas, monospace;
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .legacy-banner a {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-</style>

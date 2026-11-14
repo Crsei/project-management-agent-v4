@@ -3,7 +3,7 @@ import "../styles/v4.css";
 import { appUrl, sourceUrl } from "../lib/site";
 interface Props { title?: string; description?: string }
 const {
-  title = "PM Agent · 项目与 Agent，同一个工作台",
+  title = "Dovspace · 项目与 Agent，同一个工作台",
   description = "把项目、任务与编码 Agent 放在一起。连接你常用的 Agent，在自己的工作台里规划、开发与交付。",
 } = Astro.props;
 ---
@@ -24,9 +24,10 @@ const {
     <a class="skip-link" href="#main-content">跳到主要内容</a>
     <header class="nav">
       <div class="container nav-inner">
-        <a href="/" class="brand" aria-label="PM Agent 首页"><span class="brand-mark">PM</span><span>Agent</span></a>
+        <a href="/" class="brand" aria-label="Dovspace 首页"><span class="brand-mark" aria-hidden="true">D</span><span>Dovspace</span></a>
         <nav class="nav-links" aria-label="主要导航">
-          <a class="nav-agents" href="/#agents">Agents</a>
+          <a class="nav-agents" href="/#agents">Agent</a>
+          <a href="/get-started/">自托管</a>
           <a href="/#open-source">开源</a>
           <a href="/download/" aria-current={Astro.url.pathname.startsWith('/download') ? 'page' : undefined}>下载</a>
           <a class="nav-workspace" href={appUrl}>打开工作台 <span aria-hidden="true">↗</span></a>
@@ -36,9 +37,12 @@ const {
     <main id="main-content" tabindex="-1"><slot /></main>
     <footer class="footer">
       <div class="container footer-inner">
-        <a class="footer-brand" href="/">PM Agent <span>项目与 Agent，同一个工作台。</span></a>
+        <a class="footer-brand" href="/">Dovspace <span>项目与 Agent，同一个工作台。</span></a>
         <nav aria-label="页脚导航">
-          <a href="/#agents">Agents</a>
+          <a href="/get-started/">自托管</a>
+          <a href="/desktop/">桌面说明</a>
+          <a href="/security/">安全与限制</a>
+          <a href="/THIRD_PARTY_NOTICES.txt">第三方说明</a>
           {sourceUrl ? <a href={sourceUrl} target="_blank" rel="noopener noreferrer">源码 ↗</a> : <a href="/#open-source">开源</a>}
           <a href="/download/">下载</a>
           <a href={appUrl}>工作台 ↗</a>

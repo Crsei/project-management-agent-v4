@@ -19,14 +19,14 @@ const { title, description, eyebrow, contents } = Astro.props;
   </section>
   <div class="guide-layout container">
     <aside class="guide-sidebar">
-      <nav aria-label="On this page">
-        <p class="eyebrow">On this page</p>
+      <nav aria-label="本页目录">
+        <p class="eyebrow">本页目录</p>
         <ol>
           {contents.map(({ id, label }) => <li><a href={`#${id}`}>{label}</a></li>)}
         </ol>
       </nav>
-      <a class="text-link" href="/get-started/">Self-host guide <span aria-hidden="true">↗</span></a>
-      <a class="text-link" href="/security/">Security &amp; limits <span aria-hidden="true">↗</span></a>
+      <a class="text-link" href="/get-started/">自托管入门 <span aria-hidden="true">↗</span></a>
+      <a class="text-link" href="/security/">安全与限制 <span aria-hidden="true">↗</span></a>
     </aside>
     <article class="prose">
       <slot />

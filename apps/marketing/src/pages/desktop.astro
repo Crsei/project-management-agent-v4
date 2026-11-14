@@ -2,104 +2,78 @@
 import CommandBlock from '../components/CommandBlock.astro';
 import GuideLayout from '../layouts/GuideLayout.astro';
 import { desktopReleaseUrl } from '../lib/site';
-
 const contents = [
-  { id: 'requirements', label: 'Requirements' },
-  { id: 'source', label: 'Run from source' },
-  { id: 'build', label: 'Package and install' },
-  { id: 'connect', label: 'Local or remote' },
-  { id: 'lifecycle', label: 'Close versus quit' },
-  { id: 'updates', label: 'Updates and limitations' },
+  { id: 'requirements', label: '支持目标与前提' },
+  { id: 'source', label: '源码开发' },
+  { id: 'build', label: '原生构建与发行' },
+  { id: 'connect', label: '本地工作台' },
+  { id: 'lifecycle', label: '窗口与服务生命周期' },
+  { id: 'updates', label: '应用内更新' },
+  { id: 'backup', label: '备份与恢复' },
 ];
 ---
-
-<GuideLayout
-  title="Your workspace, with a desktop home."
-  description="Electron hosts the existing Web workspace. Use a managed local server or connect to your own remote one—the server remains the execution authority."
-  eyebrow="Desktop / Build & install"
-  contents={contents}
->
+<GuideLayout title="Dovspace 桌面说明" description="桌面复用同一工作台，管理独立本地服务与数据库。构建目标、更新器接入和实际原生验收是不同事实。" eyebrow="桌面 / 构建与使用" contents={contents}>
   <div class="release-notice">
-    {desktopReleaseUrl ? (
-      <>
-        <strong>A release link is configured for this website.</strong>
-        <p>Check that release’s operating-system, architecture, signing, and installation notes. A configured link is not a claim that every platform has an installer.</p>
-        <a class="button button-primary" href={desktopReleaseUrl}>View configured releases <span aria-hidden="true">↗</span></a>
-      </>
-    ) : (
-      <>
-        <strong>No prebuilt download is configured here.</strong>
-        <p>You can build a real application directory from the source checkout below. There is no placeholder installer or implied signed release.</p>
-        <a class="text-link" href="#build">Go to package instructions <span aria-hidden="true">↓</span></a>
-      </>
-    )}
+    <strong>当前版本的正式发行与原生安装验收尚未闭合。</strong>
+    <p>以下说明当前源码能力，不代表已有合格安装包。{desktopReleaseUrl && <a href={desktopReleaseUrl}>核对配置的发行页 ↗</a>} 配置发行链接不证明任一平台可安装；下载状态见<a href="/download/">下载页</a>。</p>
   </div>
-
   <section id="requirements">
-    <h2>What you need</h2>
-    <ul>
-      <li>The independent v3 source checkout, <strong>pnpm 11.9.0</strong>, and <strong>Node.js 24 LTS</strong>.</li>
-      <li>A graphical desktop session with Electron’s required system libraries and working OS sandbox support. A headless shell alone cannot display the application.</li>
-      <li>A compatible Node executable at runtime for a managed local server. It is an explicit external prerequisite, not bundled inside the desktop app. Use Connection Settings to select it, or set an absolute <code>AGENT_WORKSPACE_NODE</code> path.</li>
-      <li>Your provider configuration for local execution, or access to an already running remote workspace server.</li>
-    </ul>
-    <p>Packaging targets the build host’s operating system and architecture. It does not produce cross-platform installers, code signatures, notarization, or an auto-update service.</p>
-  </section>
-
-  <section id="source">
-    <h2>01 / Launch from the checkout</h2>
-    <CommandBlock label="From the monorepo root" code={`pnpm install
-pnpm build:v3
-pnpm --filter @agent-workspace/desktop build
-pnpm --filter @agent-workspace/desktop runtime:install
-pnpm --filter @agent-workspace/desktop start --remote=http://127.0.0.1:3223`} />
-    <p>Initialize and start the full v3 services using the getting-started guide first. The desktop shell defaults to the public v3 connection, where PM login and scope resolution share one origin. The desktop build itself does not download Electron; <code>runtime:install</code> explicitly downloads the official executable. No credentials are bundled.</p>
-    <p>Once Web and Server are built, <code>pnpm --filter @agent-workspace/desktop dev</code> rebuilds the shell and launches it. It does not replace the Web / Server development commands.</p>
-  </section>
-
-  <section id="build">
-    <h2>02 / Package a distributable application</h2>
-    <CommandBlock label="From an installed monorepo checkout" code="pnpm --filter @agent-workspace/desktop package" />
-    <p>This command builds the contracts, client runtime, Agent server, Agent Web app and desktop shell, then stages production Agent dependencies. It requires network access for Electron. The output is an <strong>application directory</strong> under <code>apps/agent-desktop/release/</code>, not an installer or a bundled PM deployment.</p>
+    <h2>构建目标不等于验收通过</h2>
     <dl class="artifact-list">
-      <div><dt>Linux</dt><dd><code>Agent Workspace-linux-&lt;arch&gt;/Agent Workspace</code></dd></div>
-      <div><dt>Windows</dt><dd><code>Agent Workspace-win32-&lt;arch&gt;/Agent Workspace.exe</code></dd></div>
-      <div><dt>macOS</dt><dd><code>Agent Workspace-darwin-&lt;arch&gt;/Agent Workspace.app</code></dd></div>
+      <div><dt>Windows x64</dt><dd>NSIS <code>.exe</code>；unsigned preview 仅用于测试，不提供 Windows ARM64。</dd></div>
+      <div><dt>macOS arm64／x64</dt><dd><code>.dmg</code>／<code>.zip</code>；最低 macOS 15，签名、公证和真实安装须在对应平台验收。</dd></div>
+      <div><dt>Linux</dt><dd>仅用于隔离冒烟，不发布 Linux 桌面安装包；源码 Web 自托管见<a href="/get-started/">入门指南</a>。</dd></div>
     </dl>
-    <ol class="instruction-list">
-      <li>Build on the target OS and architecture. The folder suffix reflects that host, such as <code>linux-x64</code> or <code>darwin-arm64</code>.</li>
-      <li>Copy the <strong>entire output directory</strong> to the destination computer or installation location. Preserve executable permissions and all bundled resources; do not copy only the executable.</li>
-      <li>Install a compatible Node runtime and the platform’s required desktop libraries. Launch the executable on Linux / Windows, or open the <code>.app</code> on macOS.</li>
-      <li>Follow your operating system’s trust and application-signing policy. Unsigned builds may be blocked or warn; this project does not provide a signing or notarization service.</li>
-    </ol>
-    <CommandBlock label="Example: launch a Linux x64 build from the checkout root" code={'"apps/agent-desktop/release/Agent Workspace-linux-x64/Agent Workspace" --remote=http://127.0.0.1:3223'} />
-    <p>If the host cannot launch Electron or lacks sandbox support, use the <a href="/get-started/">browser-based self-host setup</a> on a supported host instead. Do not disable the Electron sandbox to work around an unsupported environment.</p>
+    <p>安装后的本地模式随包提供 Node 24.21.0 与 PostgreSQL 16.15，不依赖用户预装 Docker、Node 或 PostgreSQL。随包 Node 不提供 npm／npx；Git、Provider CLI、账号及项目工具仍需操作者单独配置。</p>
   </section>
-
+  <section id="source">
+    <h2>源码开发</h2>
+    <p>使用独立 v4 检出及 Node 24.21.0、pnpm 11.9.0；准备所选平台的原生工具链和可用 GUI。无图形会话的 shell 不代表 Electron 可运行，不禁用沙箱绕过错误。</p>
+    <CommandBlock label="开发调试：独立检出根目录" code={`node scripts/doctor.mjs
+pnpm install --frozen-lockfile
+pnpm --filter @agent-workspace/desktop runtime:prepare
+pnpm --filter @agent-workspace/desktop runtime:install
+pnpm build:v4
+pnpm build:desktop
+pnpm --filter @agent-workspace/desktop start`} />
+    <p>运行库和 Electron 下载是显式准备步骤，不会在启动应用时自动补装。不要使用旧远程模式参数，当前桌面只提供本地工作台。</p>
+  </section>
+  <section id="build">
+    <h2>原生构建与发行材料</h2>
+    <p>在匹配 OS／CPU 的<strong>独立原生构建检出</strong>执行；打包会重建 Web／Agent／desktop，不在当前服务使用的检出覆盖运行产物。除原生编译工具外，需要支持 NSIS、7z 和 ZIP 的完整 7-Zip；macOS 还需要系统镜像与签名工具。</p>
+    <CommandBlock label="匹配目标平台的原生检出" code={`node scripts/doctor.mjs
+pnpm install --frozen-lockfile
+pnpm --filter @agent-workspace/desktop runtime:prepare
+pnpm --filter @agent-workspace/desktop package`} />
+    <p>默认生成 unsigned 测试包，输出 <code>apps/desktop/releases/&lt;version&gt;/&lt;platform&gt;-&lt;arch&gt;/&lt;unsigned|signed&gt;/</code>。<code>package:signed</code> 为独立模式，需要真实证书与公证材料，缺失即失败而不降级。</p>
+    <p>每组交付须核对安装器、版本／commit、<code>desktop-package.json</code>、<code>desktop-verification.json</code>、<code>SHA256SUMS</code>、对应源码与 legal 材料，以及清单要求的安全／更新材料。历史构建、Actions artifact、draft Release 或 Linux 包结构检查不能替代当前原生安装、升级、卸载和 GUI 验收。</p>
+    <p>字体／素材权利、最终产物许可与对应源码仍须闭合，见<a href="/THIRD_PARTY_NOTICES.txt">第三方说明</a>。构建不自动发布，公开仓库首页也不替代安装包对应 commit 的完整源码。</p>
+  </section>
   <section id="connect">
-    <h2>03 / Choose where execution lives</h2>
-    <dl class="definition-list">
-      <div><dt>Local managed</dt><dd>The desktop host starts the bundled server against your configured project and persistent data directories, waits for its listening address, and loads the workspace. The local service uses an ephemeral port and host-managed access credentials.</dd></div>
-      <div><dt>Explicit remote</dt><dd>Enter your workspace server URL in Connection Settings. Use HTTPS for any non-loopback host; HTTP is allowed only on loopback. Remote mode does not start a second local execution server or upload your local project.</dd></div>
-    </dl>
-    <p>Checkout local mode uses <code>.local/agent-data</code>; a packaged app uses its independent v3 app-data directory. It never reuses the old global Agent data. <strong>Do not run two Agent servers against the same data directory.</strong></p>
-    <p>The default connection is the full public v3 server at <code>http://127.0.0.1:3223</code>. Managed local mode only hosts the bundled Agent server; it does not deploy PM or proxy the PM catalog. Use the public v3 connection for the integrated workspace/project chat. Packaged local project defaults live under v3 app data, not the application installation folder.</p>
-    <p>Directory and Node selections persist. Explicit <code>--data-dir</code>, <code>--project-root</code>, and <code>--node</code> arguments override environment values; environment values override saved selections. Supported environment names are <code>AGENT_WORKSPACE_DATA_DIR</code>, <code>AGENT_WORKSPACE_PROJECT_ROOT</code>, and <code>AGENT_WORKSPACE_NODE</code>.</p>
-    <CommandBlock label="Explicit local mode, after building the shell" code="pnpm --filter @agent-workspace/desktop start --local" />
-    <CommandBlock label="Remote mode: replace the example with your own HTTPS server" code="pnpm --filter @agent-workspace/desktop start --remote=https://workspace.example.com" />
-    <p>Authenticate to the remote workspace itself when prompted. Do not embed access tokens or provider keys in URLs. Read the <a href="/security/#remote">remote-access requirements</a> before exposing a server.</p>
+    <h2>本地工作台，与开发实例分开</h2>
+    <p>桌面管理私有 PostgreSQL、PM、Worker、Agent 与同源网关，不再是仅托管 Agent 的壳。连接页按“本地工作台 → 设置连接 → 进入工作台”引导；不会读取开发实例的环境或复制其数据库、账号、全局 CLI 凭据。</p>
+    <p>空工作台在 Web 首次设置页创建账号与工作区，设置令牌通过受限桌面桥传入，不进入 URL。已有工作台使用原账号；服务失败不是空实例。新工作区的 Nova 示例项目是独立脱敏模板，不复制其他实例业务数据。</p>
+    <p>默认数据目录仍使用 Electron 用户数据目录中的 <code>PM Agent v4/workspace</code>；这是保留的安装数据标识，不是展示品牌或新目录迁移。自定义目录需通过所有权、身份与权限核验，不共享同一数据目录。</p>
   </section>
-
   <section id="lifecycle">
-    <h2>Closing a window is not quitting.</h2>
-    <p><strong>Close the workspace window:</strong> the desktop application remains available through its connection window, and the managed local server can continue accepted work. Use <strong>Open Workspace</strong> to return.</p>
-    <p><strong>Choose Quit:</strong> after confirmation, the host shuts down its local managed server. Local schedules and runs cannot keep executing once that process exits. A remote server is not stopped by quitting the desktop client.</p>
-    <p>The machine must remain awake, with a live server, for automation to run. No hidden system daemon continues work after application exit. Reopening uses the server’s normal interruption and explicit-continuation rules.</p>
+    <h2>关闭窗口、断开与退出分别核对</h2>
+    <p>工作区的关闭、断开或退出遵循未保存草稿确认。取消会保留窗口及本地服务；明确离开后才继续原生命周期清理。退出本地宿主会停止受管服务，机器关机后没有隐藏后台进程继续执行。</p>
+    <p>服务或数据库停机失败须保留错误与所有权记录，不强杀其他项目进程、不伪报停机成功。重新连接后按实际记录核对中断与未知结果，不自动重放写入。</p>
   </section>
-
   <section id="updates">
-    <h2>Updates are deliberate, too.</h2>
-    <p>There is no automatic background updater. To replace a source-built package, quit the local host, back up the persistent data directory and any external CLI homes, rebuild from the desired source revision, and replace the application directory. Keep your data and project paths stable.</p>
-    <p>The shell does not add multi-user permissions, Git worktree isolation, SSH / WSL management, or guaranteed execution during sleep. It loads the same workspace and inherits the <a href="/security/">server’s security and operational limits</a>.</p>
+    <h2>已有更新客户端，但正式更新仍有发行门槛</h2>
+    <p>桌面更新源固定为 <a href="https://github.com/Crsei/project-management-agent-v4/releases">GitHub Releases</a>，不读取操作者 GitHub token。启动时自动检查，也可手动检查；网络失败不是“已是最新”。没有更新客户端的旧包须先手动安装基线版本。</p>
+    <ol class="instruction-list">
+      <li>显式点击“下载更新”才下载完整安装器，核对摘要、准确 tag／commit、平台、签名模式和数据兼容指纹。</li>
+      <li>显式选择“重启并安装…”后，再确认停止本地任务、保存草稿、刷新客户端状态与受管服务正常停机。普通退出不会自动安装。</li>
+      <li>preview 与稳定通道不混用，不降级；draft 不作为可用更新。Windows unsigned preview 仅测试；未签名 macOS 不启用应用内更新。</li>
+    </ol>
+    <p>当前版本的许可、签名／公证及原生验收仍需独立完成。会话与持久化统一设计尚未收口，更新不能承诺运行中会话、终端无损跨重启。</p>
+  </section>
+  <section id="backup">
+    <h2>停服备份，可信来源恢复</h2>
+    <p>在连接窗口进入“管理本地数据”，仅断开连接且本地服务停止后执行。新备份使用口令加密，至少 12 字符；不保存口令，遗失无法恢复。备份覆盖 PM 数据库、登记项目核心、附件、应用拥有的聊天文件与 Agent 离线数据。</p>
+    <p>恢复要求新空目标、匹配应用版本／操作系统与逐次确认可信来源；加密不证明作者可信，SQL 恢复也不是沙箱。旧未加密格式需独立确认。恢复后手动连接，不自动进入工作台或重放执行。</p>
+    <p>备份不包含完整外部源码树、Provider Home、浏览器 Cookie／localStorage 或未确认客户端日志。外部目录重新关联、账号重新核对、MCP 授权重新批准。完整范围见所选源码版本的 <code>docs/guides/desktop.md</code>。</p>
   </section>
 </GuideLayout>

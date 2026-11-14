@@ -1,93 +1,85 @@
 ---
 import CommandBlock from '../components/CommandBlock.astro';
 import GuideLayout from '../layouts/GuideLayout.astro';
-import { workspaceLabel, workspaceNote, workspaceUrl } from '../lib/site';
-
-const providerSettingsUrl = new URL('/agent/settings/providers', workspaceUrl).href;
+import { appLabel, appNote, appUrl, agentWorkspaceUrl, sourceUrl } from '../lib/site';
+const providerSettingsUrl = new URL('/agent/settings/providers', appUrl).href;
 const contents = [
-  { id: 'requirements', label: 'Before you start' },
-  { id: 'run', label: 'Build and run' },
-  { id: 'first-run', label: 'Connect a provider' },
-  { id: 'scope', label: 'PM scope and directories' },
-  { id: 'development', label: 'Development mode' },
-  { id: 'website', label: 'Run this website' },
+  { id: 'requirements', label: '开始之前' },
+  { id: 'run', label: '全新安装' },
+  { id: 'existing', label: '已有实例' },
+  { id: 'first-run', label: '连接 Provider' },
+  { id: 'scope', label: 'PM 与 Agent 目录' },
+  { id: 'development', label: '开发模式' },
+  { id: 'website', label: '独立宣传站' },
 ];
 ---
-
-<GuideLayout
-  title="A workspace on your terms."
-  description="Build from your source checkout, start a local server, and connect the providers you already use. No hosted account is required."
-  eyebrow="Self-host / Getting started"
-  contents={contents}
->
+<GuideLayout title="开始自托管 Dovspace" description="在可信本机运行项目与 Agent 工作台。全新安装、已有账号和 Provider 配置分开进行，不导入其他实例的凭据或数据。" eyebrow="自托管 / 入门" contents={contents}>
   <section id="requirements">
-    <h2>Before you start</h2>
-    <p>Use the independent <strong>project-management-agent-v3</strong> checkout. Run the commands below from its root—the directory containing <code>pnpm-workspace.yaml</code>, <code>apps/</code>, and <code>packages/</code>. Do not reuse another installation’s environment, database, or Provider homes.</p>
+    <h2>开始之前</h2>
+    <p>使用独立的 <strong>project-management-agent-v4</strong> 检出，从包含 <code>pnpm-workspace.yaml</code> 的仓库根目录执行命令。{sourceUrl && <a href={sourceUrl}>查看公开源码仓库 ↗</a>} 仓库首页不证明某个安装包对应的源码版本；请核对具体 commit 和发行清单。</p>
     <ul>
-      <li><strong>Node.js 24 LTS.</strong> The Agent server uses Node’s native SQLite implementation. Local PM also requires Docker Compose for its dedicated PostgreSQL.</li>
-      <li><strong>pnpm 11.9.0</strong>, as declared by the root package manager field.</li>
-      <li><strong>A provider account</strong> for model execution. An API key or compatible, authenticated Codex / Claude CLI is needed; model usage can incur the provider’s charges.</li>
-      <li><strong>A PM workspace/project file area you trust.</strong> Configure an allowed directory explicitly; accepted chat requests resolve the actual CLI working directory from PM.</li>
+      <li>源码运行使用 <strong>Linux、Node 24.21.0、pnpm 11.9.0</strong>、原生编译工具和 Docker Compose。</li>
+      <li>PM 数据库、Markdown、附件与 Agent 数据必须属于本实例，不复用其他副本的目录或端口。</li>
+      <li>执行模型需要相应 Provider、原生 CLI 或 API 配置与有效账号，调用可能计费；安装成功不表示账号已就绪。</li>
     </ul>
-    <p>Read the <a href="/security/">security and operational boundaries</a> before enabling remote access. This is a single-user environment, not a multi-user service.</p>
+    <p>这是可信本机、单操作者的自托管工作台，不是生产多租户 Agent 平台。先阅读<a href="/security/">安全与运维边界</a>，不要直接开放公网。</p>
   </section>
-
   <section id="run">
-    <h2>01 / Build and run</h2>
-    <CommandBlock label="Fresh v3 installation, from the repository root" code={`pnpm install --frozen-lockfile
+    <h2>01 / 全新空实例安装</h2>
+    <p>以下流程仅适用于<strong>全新空数据库与空存储</strong>。已有实例不要执行 <code>storage bind --new</code>，也不要重新初始化。</p>
+    <CommandBlock label="全新 v4 安装：仓库根目录" code={`node scripts/doctor.mjs
+pnpm install --frozen-lockfile
 pnpm setup:local
 pnpm db:up
 pnpm db:migrate
 pnpm bootstrap
+pnpm build:v4
 pnpm storage bind --new --stopped --target-config .local/blob-target.json
-pnpm build:v3
 pnpm services:start
 pnpm services:status`} />
-    <p>The public entry is <a href="http://127.0.0.1:3223/agent/workspace"><code>http://127.0.0.1:3223/agent/workspace</code></a>. The service manager owns this checkout’s PM API, Worker, Agent API and both Web processes. The bind command above is only for a new empty installation; existing data requires the documented adopt/maintenance procedure.</p>
-    <p>Agent data defaults to this checkout’s <code>.local/agent-data</code>. Keep it stable across restarts and run only one Agent server per data directory. No global CLI credentials are imported implicitly.</p>
-    <p>Stop the service before backing up that directory. Back up any separately configured CLI home as well. Rebuilding the Web app is not a backup of your conversations, runs, or credentials.</p>
-    <a class="button button-primary" href={workspaceUrl}>{workspaceLabel}<span aria-hidden="true">↗</span></a>
-    <p class="entry-note">{workspaceNote}</p>
+    <p>默认入口为 <a href="http://127.0.0.1:3224/pm"><code>http://127.0.0.1:3224/pm</code></a>；PM API 为 4194、Agent API 为 4325、Web 开发上游为 4326、PostgreSQL 为 55444。启动前核对端口、进程归属和工作目录，不接管其他服务。</p>
+    <p><code>bootstrap</code> 只在尚无账号和工作区时准备私有 <code>.local/setup-token</code>（0600），数据库仅保存摘要。在 Web 首次设置页输入令牌、姓名、邮箱、密码及工作区名称；不生成默认明文密码，不读取或迁入旧访问文件。已有账号或工作区即关闭设置。响应未知时先核对原结果，不盲目重新初始化。</p>
+    <a class="button button-primary" href={appUrl}>{appLabel}<span aria-hidden="true">↗</span></a>
+    <p class="entry-note">{appNote}</p>
   </section>
-
+  <section id="existing">
+    <h2>02 / 已有实例与账号</h2>
+    <p>使用原账号登录，再从真实授权列表选择工作区；没有公开注册或默认账号。服务不可用不等于空实例，不重置密码、不删除数据来绕过错误。</p>
+    <p>升级前阅读所选源码版本的根 README、<code>docs/guides/getting-started.md</code> 和 <code>deploy/README.md</code>，准备一致的数据库、Markdown、附件和 Agent 备份。已有存储遵循原绑定／维护流程，不套用新建命令。网页重建不是数据备份。</p>
+  </section>
   <section id="first-run">
-    <h2>02 / Connect a provider</h2>
+    <h2>03 / 连接 Provider</h2>
     <ol class="instruction-list">
-      <li>Open <a href={providerSettingsUrl}>Provider settings</a> in your running workspace. If remote access is protected, enter your workspace access token first.</li>
-      <li>Create or edit a DeepSeek, OpenAI, or Anthropic API instance, or a Codex / Claude CLI instance. Supply its server-side credentials and endpoint or CLI configuration.</li>
-      <li>Choose the instance and model for a thread. Send a small request deliberately; a provider call may be billable.</li>
-      <li>Select a real PM workspace/project scope and configure its file area before creating a scoped conversation.</li>
+      <li>进入 <a href={agentWorkspaceUrl}>Agent Chat</a>。若启用了独立 Agent 访问验证，输入操作者令牌；PM 登录不能代替该身份。</li>
+      <li>打开 <a href={providerSettingsUrl}>Provider 设置</a>，按所选实例配置有效账号、原生 CLI／Home 或 API 端点；只选择当前支持的模型和能力。</li>
+      <li>显式发送一条小请求，核对真实响应及费用。健康检查、配置保存和 Provider 图标不证明模型可用。</li>
     </ol>
-    <p>API credentials can also be supplied through server-side <code>DEEPSEEK_API_KEY</code>, <code>OPENAI_API_KEY</code>, or <code>ANTHROPIC_API_KEY</code> fallback variables. Keep them in the root private <code>.env.agent</code> or the Agent server environment. Never prefix secrets with <code>VITE_</code> or <code>PUBLIC_</code>.</p>
-    <p>Missing credentials do not silently switch you to a different provider. Check the recorded error and correct the instance. Native resume and fork require a compatible CLI and session boundary; API-backed models use normalized conversation context instead.</p>
+    <p>原生 Home 留空时遵循服务端 CLI 环境和账号，受管 ChatGPT 使用应用私有账号状态；不要把两者当成同一凭据来源。秘密仅留在私有服务端配置，不进入 <code>VITE_</code>／<code>PUBLIC_</code>、URL 或源码。</p>
+    <p>失败不会授权自动切换账号、模型或重放未知写入。原生 resume、fork 等能力依赖实际 Provider、版本与会话边界。</p>
   </section>
-
   <section id="scope">
-    <h2>03 / Select PM scope and a file area</h2>
-    <p>Log into PM at the same public origin and open Agent Chat from its product switch. The Session sidebar lists real authorized workspaces and projects, including empty groups. Configure workspace and project file areas through their directory controls.</p>
-    <p>The server validates the selected scope and directory when accepting a request. CLI execution uses that directory snapshot; API-only models are not presented as having local file tools. This is not a new permission system or sandbox, and no chat outcome automatically completes a PM task. The v3 chat shell does not expose the source application’s workflow/automation/inspector navigation.</p>
+    <h2>04 / 区分 PM 目标与 Agent 文件夹</h2>
+    <p>PM 工作区／项目决定业务授权；Agent Workspace 则对应服务器上已有的独立绝对路径文件夹，不绑定 PM 项目。打开文件夹后创建 Session，也可以新建“仅对话”会话。首次执行受理后目录绑定冻结，更换执行环境需要新 Session。</p>
+    <p>Files、Git、Provider 与 Session Terminal 使用同一实际执行目录；PM 资料通过明确目标的工具和引用访问。选择同名项目不会自动改绑代码目录。允许根和目录核验不是文件沙箱，也不扩大 PM 权限。</p>
+    <p>模型回复、Run 成功和任务完成是不同事实。任务状态由原生授权动作和当前 Markdown 工作流决定；任务详情目前不显示交付工作台。会话与持久化仍暂沿用 Agent Chat，统一设计尚未收口。</p>
   </section>
-
   <section id="development">
-    <h2>Develop the Web app and server</h2>
-    <CommandBlock label="After setup, migration, bootstrap and storage binding" code="pnpm dev:v3" />
-    <p>This starts all five independent v3 processes. Open <a href="http://127.0.0.1:3223/agent/workspace"><code>http://127.0.0.1:3223/agent/workspace</code></a>. Web HMR is enabled; restart after backend changes. Streams and terminal WebSockets retain same-origin access checks.</p>
-    <p>Keep the root server environment and data directory in place. Do not copy provider credentials into the Web app. For an Electron host of the same application, follow the <a href="/desktop/">desktop build guide</a>.</p>
+    <h2>开发模式</h2>
+    <CommandBlock label="完成初始化与存储绑定后" code="pnpm dev:v4" />
+    <p>开发入口仍为 <code>http://127.0.0.1:3224/pm</code>。切换 built／dev 模式前，只停止本项目拥有的服务；后端变更需重启对应角色。不要在服务使用中的检出运行会覆盖其产物的桌面打包，另见<a href="/desktop/">桌面说明</a>。</p>
   </section>
-
   <section id="website">
-    <h2>This website is a separate application</h2>
-    <p>The marketing site is Astro-generated static HTML and CSS. It does not import server workers, read provider credentials, connect to an execution API, or run tasks when somebody visits a page.</p>
-    <CommandBlock label="Independent marketing commands, from the monorepo root" code={`pnpm dev:marketing
-# Or typecheck and generate static output, then preview it:
+    <h2>宣传站是独立静态应用</h2>
+    <p>浏览宣传页不会登录工作台、调用模型或启动后台执行。静态站不部署 PM／Agent，也不会自动保护工作台服务。</p>
+    <CommandBlock label="仓库根目录的宣传站命令" code={`pnpm dev:marketing
+# 类型检查、静态构建与本地预览
 pnpm typecheck:marketing
 pnpm build:marketing
 pnpm preview:marketing`} />
-    <p>Development and preview use <a href="http://127.0.0.1:4330"><code>http://127.0.0.1:4330</code></a>. Static output is in <code>apps/marketing/dist/</code>; deploy that directory with a static host. Preview is not an execution server.</p>
-    <p>Optional public build-time values belong in <code>apps/marketing/.env</code>. Never put credentials there.</p>
-    <CommandBlock label="Public website configuration—not secrets" code={`PUBLIC_WORKSPACE_URL=http://127.0.0.1:3223/agent/workspace
-# Optional, only after publishing a real HTTPS release:
+    <p>开发／预览使用 <code>http://127.0.0.1:4330/</code>，产物为 <code>apps/marketing/dist/</code>。只部署到明确指定的静态站入口，不覆盖 3224 工作台；本地预览不是正式公网部署。</p>
+    <CommandBlock label="apps/marketing/.env：仅公开构建变量" code={`PUBLIC_APP_URL=http://127.0.0.1:3224/pm
+PUBLIC_SOURCE_URL=https://github.com/Crsei/project-management-agent-v4
 PUBLIC_DESKTOP_RELEASE_URL=`} />
-    <p><code>PUBLIC_WORKSPACE_URL</code> must be an absolute HTTP(S) URL without embedded credentials. It changes the workspace entry links, not the setup guide’s documented local defaults. Rebuild after changing it. Without a valid HTTPS desktop release URL, desktop entry points lead to real source-build instructions instead of a download button.</p>
+    <p><code>PUBLIC_APP_URL</code> 使用不含凭据的绝对 HTTP(S) 地址。旧 <code>PUBLIC_WORKSPACE_URL</code> 已移除，请迁移到新变量并重新构建。源码与发行地址须为实际 HTTPS 地址；未发布合格安装包时不填下载地址。配置链接不等于发行验收。</p>
   </section>
 </GuideLayout>
