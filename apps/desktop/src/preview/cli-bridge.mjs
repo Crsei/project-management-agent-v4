@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
-import { realpath, unlink } from 'node:fs/promises';
+import { lstat, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { assertPrivatePath, readPrivateJson, writePrivateJson } from '../private-state.mjs';
 
@@ -34,7 +34,10 @@ export function parseBrowserCliAction(input, expected) {
 export async function startBrowserCliBridge({ descriptorFile, serviceUrl, execute }) {
   const target = new URL(serviceUrl);
   if (target.protocol !== 'http:' || !['127.0.0.1', '[::1]', 'localhost'].includes(target.hostname) || target.pathname !== '/agent' || target.search || target.hash || target.username || target.password) throw new Error('Browser CLI requires the existing local desktop Agent gateway.');
-  if (resolve(descriptorFile) !== descriptorFile || await realpath(dirname(descriptorFile)) !== dirname(descriptorFile)) throw new Error('Browser descriptor directory cannot be redirected.');
+  // Reject relative paths and a descriptor directory that is itself a link or
+  // junction. Canonical spelling (for example Windows short names) is not a
+  // redirect; the actual filesystem link bit is what matters here.
+  if (resolve(descriptorFile) !== descriptorFile || (await lstat(dirname(descriptorFile))).isSymbolicLink()) throw new Error('Browser descriptor directory cannot be redirected.');
   await assertPrivatePath(dirname(descriptorFile), true);
   const instanceId = randomUUID(), token = randomBytes(32).toString('hex');
   const expectedAuthorization = Buffer.from(`Bearer ${token}`);
